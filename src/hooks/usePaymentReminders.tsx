@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { format, addDays } from 'date-fns';
@@ -15,6 +15,28 @@ interface PaymentReminder {
 
 export function usePaymentReminders() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Buscar IDs de lembretes já lidos
+  const { data: lembretesLidos = [] } = useQuery({
+    queryKey: ['lembretes-lidos', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('lembretes_lidos')
+        .select('pagamento_id')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Erro ao buscar lembretes lidos:', error);
+        return [];
+      }
+
+      return data.map((l) => l.pagamento_id);
+    },
+    enabled: !!user,
+  });
 
   const { data: reminders = [], isLoading } = useQuery({
     queryKey: ['payment-reminders', user?.id],
@@ -54,17 +76,58 @@ export function usePaymentReminders() {
       })) as PaymentReminder[];
     },
     enabled: !!user,
-    refetchInterval: 5 * 60 * 1000, // Atualiza a cada 5 minutos
+    refetchInterval: 5 * 60 * 1000,
   });
 
-  const lembretesHoje = reminders.filter((r) => r.tipo === 'hoje');
-  const lembretesTresDias = reminders.filter((r) => r.tipo === 'tres_dias');
+  // Filtrar lembretes não lidos
+  const lembretesNaoLidos = reminders.filter(
+    (r) => !lembretesLidos.includes(r.id)
+  );
+
+  // Mutation para marcar como lido
+  const marcarComoLido = useMutation({
+    mutationFn: async (pagamentoId: string) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { error } = await supabase
+        .from('lembretes_lidos')
+        .insert({ user_id: user.id, pagamento_id: pagamentoId });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos'] });
+    },
+  });
+
+  // Mutation para desmarcar (mostrar novamente)
+  const desmarcarLido = useMutation({
+    mutationFn: async (pagamentoId: string) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { error } = await supabase
+        .from('lembretes_lidos')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('pagamento_id', pagamentoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos'] });
+    },
+  });
+
+  const lembretesHoje = lembretesNaoLidos.filter((r) => r.tipo === 'hoje');
+  const lembretesTresDias = lembretesNaoLidos.filter((r) => r.tipo === 'tres_dias');
 
   return {
-    reminders,
+    reminders: lembretesNaoLidos,
     lembretesHoje,
     lembretesTresDias,
     isLoading,
-    temLembretes: reminders.length > 0,
+    temLembretes: lembretesNaoLidos.length > 0,
+    marcarComoLido: marcarComoLido.mutate,
+    desmarcarLido: desmarcarLido.mutate,
   };
 }

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, X } from 'lucide-react';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/popover';
 
 export function PaymentReminders() {
-  const { lembretesHoje, lembretesTresDias, temLembretes, isLoading } = usePaymentReminders();
+  const { lembretesHoje, lembretesTresDias, temLembretes, isLoading, marcarComoLido } = usePaymentReminders();
 
   const totalLembretes = lembretesHoje.length + lembretesTresDias.length;
 
@@ -18,6 +18,12 @@ export function PaymentReminders() {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
+  };
+
+  const handleMarcarLido = (e: React.MouseEvent, pagamentoId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    marcarComoLido(pagamentoId);
   };
 
   if (isLoading) {
@@ -56,23 +62,36 @@ export function PaymentReminders() {
                 </h4>
                 <div className="space-y-2">
                   {lembretesHoje.map((lembrete) => (
-                    <Link
+                    <div
                       key={lembrete.id}
-                      to={`/acordos/${lembrete.acordo_id}`}
-                      className="flex items-center justify-between p-2 rounded-lg bg-destructive/10 hover:bg-destructive/20 transition-colors"
+                      className="flex items-center gap-2 p-2 rounded-lg bg-destructive/10 hover:bg-destructive/20 transition-colors"
                     >
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-foreground text-sm block truncate">
-                          {lembrete.cliente_nome}
+                      <Link
+                        to={`/acordos/${lembrete.acordo_id}`}
+                        className="flex items-center justify-between flex-1 min-w-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-foreground text-sm block truncate">
+                            {lembrete.cliente_nome}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            Parcela {lembrete.numero_parcela}
+                          </span>
+                        </div>
+                        <span className="font-semibold text-foreground text-sm ml-2">
+                          {formatCurrency(lembrete.valor_parcela)}
                         </span>
-                        <span className="text-muted-foreground text-xs">
-                          Parcela {lembrete.numero_parcela}
-                        </span>
-                      </div>
-                      <span className="font-semibold text-foreground text-sm ml-2">
-                        {formatCurrency(lembrete.valor_parcela)}
-                      </span>
-                    </Link>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 hover:bg-destructive/30"
+                        onClick={(e) => handleMarcarLido(e, lembrete.id)}
+                        title="Marcar como lido"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -86,23 +105,36 @@ export function PaymentReminders() {
                 </h4>
                 <div className="space-y-2">
                   {lembretesTresDias.map((lembrete) => (
-                    <Link
+                    <div
                       key={lembrete.id}
-                      to={`/acordos/${lembrete.acordo_id}`}
-                      className="flex items-center justify-between p-2 rounded-lg bg-warning/10 hover:bg-warning/20 transition-colors"
+                      className="flex items-center gap-2 p-2 rounded-lg bg-warning/10 hover:bg-warning/20 transition-colors"
                     >
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-foreground text-sm block truncate">
-                          {lembrete.cliente_nome}
+                      <Link
+                        to={`/acordos/${lembrete.acordo_id}`}
+                        className="flex items-center justify-between flex-1 min-w-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-foreground text-sm block truncate">
+                            {lembrete.cliente_nome}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            Parcela {lembrete.numero_parcela}
+                          </span>
+                        </div>
+                        <span className="font-semibold text-foreground text-sm ml-2">
+                          {formatCurrency(lembrete.valor_parcela)}
                         </span>
-                        <span className="text-muted-foreground text-xs">
-                          Parcela {lembrete.numero_parcela}
-                        </span>
-                      </div>
-                      <span className="font-semibold text-foreground text-sm ml-2">
-                        {formatCurrency(lembrete.valor_parcela)}
-                      </span>
-                    </Link>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 hover:bg-warning/30"
+                        onClick={(e) => handleMarcarLido(e, lembrete.id)}
+                        title="Marcar como lido"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               </div>

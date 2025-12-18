@@ -71,6 +71,35 @@ export type Database = {
         }
         Relationships: []
       }
+      lembretes_lidos: {
+        Row: {
+          criado_em: string
+          id: string
+          pagamento_id: string
+          user_id: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          pagamento_id: string
+          user_id: string
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          pagamento_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lembretes_lidos_pagamento_id_fkey"
+            columns: ["pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "pagamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pagamentos: {
         Row: {
           acordo_id: string
