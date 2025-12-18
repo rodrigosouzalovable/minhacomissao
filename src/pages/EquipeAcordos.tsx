@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +33,7 @@ interface TeamMember {
 
 export default function EquipeAcordos() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [acordos, setAcordos] = useState<AcordoComFuncionario[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,39 +46,76 @@ export default function EquipeAcordos() {
       if (!user) return;
 
       try {
-        // Buscar membros da equipe
-        const { data: members, error: membersError } = await supabase
-          .from('team_members')
-          .select('funcionario_id')
-          .eq('gestor_id', user.id);
+        let funcionarioIds: string[] = [];
+        let validMembers: TeamMember[] = [];
 
-        if (membersError) throw membersError;
-        
-        if (!members || members.length === 0) {
+        if (isAdmin) {
+          // Admin vê todos os funcionários e seus acordos
+          const { data: allRoles, error: rolesError } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .eq('role', 'funcionario');
+
+          if (rolesError) throw rolesError;
+
+          funcionarioIds = (allRoles || []).map(r => r.user_id);
+
+          if (funcionarioIds.length > 0) {
+            const { data: profiles, error: profilesError } = await supabase
+              .from('profiles')
+              .select('id, nome, email');
+
+            if (profilesError) throw profilesError;
+
+            validMembers = (profiles || [])
+              .filter(p => funcionarioIds.includes(p.id))
+              .map(p => ({
+                funcionario_id: p.id,
+                nome: p.nome,
+                email: p.email
+              }));
+          }
+        } else {
+          // Gestor vê apenas membros da sua equipe
+          const { data: members, error: membersError } = await supabase
+            .from('team_members')
+            .select('funcionario_id')
+            .eq('gestor_id', user.id);
+
+          if (membersError) throw membersError;
+          
+          if (!members || members.length === 0) {
+            setAcordos([]);
+            setTeamMembers([]);
+            setLoading(false);
+            return;
+          }
+
+          funcionarioIds = members.map(m => m.funcionario_id);
+
+          const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, nome, email')
+            .in('id', funcionarioIds);
+
+          if (profilesError) throw profilesError;
+
+          validMembers = (profiles || []).map(p => ({
+            funcionario_id: p.id,
+            nome: p.nome,
+            email: p.email
+          }));
+        }
+
+        setTeamMembers(validMembers);
+
+        if (funcionarioIds.length === 0) {
           setAcordos([]);
-          setTeamMembers([]);
           setLoading(false);
           return;
         }
 
-        const funcionarioIds = members.map(m => m.funcionario_id);
-
-        // Buscar perfis dos funcionários
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, nome, email')
-          .in('id', funcionarioIds);
-
-        if (profilesError) throw profilesError;
-
-        const validMembers: TeamMember[] = (profiles || []).map(p => ({
-          funcionario_id: p.id,
-          nome: p.nome,
-          email: p.email
-        }));
-        setTeamMembers(validMembers);
-
-        // Buscar acordos de todos os membros da equipe
+        // Buscar acordos de todos os funcionários
         const { data: acordosData, error: acordosError } = await supabase
           .from('acordos')
           .select('*')
@@ -103,7 +142,7 @@ export default function EquipeAcordos() {
     }
 
     loadTeamData();
-  }, [user]);
+  }, [user, isAdmin]);
 
   const filteredAcordos = acordos.filter(acordo => {
     const matchesSearch = 
