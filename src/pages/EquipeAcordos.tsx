@@ -1,0 +1,322 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { Search, FileText, Users, DollarSign, Clock } from 'lucide-react';
+
+interface AcordoComFuncionario {
+  id: string;
+  cliente_nome: string;
+  valor_total: number;
+  valor_parcela: number;
+  parcelas: number;
+  dias_atraso: number;
+  comissao_total: number;
+  status: string;
+  criado_em: string;
+  user_id: string;
+  funcionario_nome?: string;
+}
+
+interface TeamMember {
+  funcionario_id: string;
+  nome: string;
+  email: string;
+}
+
+export default function EquipeAcordos() {
+  const { user } = useAuth();
+  const [acordos, setAcordos] = useState<AcordoComFuncionario[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [memberFilter, setMemberFilter] = useState<string>('todos');
+
+  useEffect(() => {
+    async function loadTeamData() {
+      if (!user) return;
+
+      try {
+        // Buscar membros da equipe
+        const { data: members, error: membersError } = await supabase
+          .from('team_members')
+          .select('funcionario_id')
+          .eq('gestor_id', user.id);
+
+        if (membersError) throw membersError;
+        
+        if (!members || members.length === 0) {
+          setAcordos([]);
+          setTeamMembers([]);
+          setLoading(false);
+          return;
+        }
+
+        const funcionarioIds = members.map(m => m.funcionario_id);
+
+        // Buscar perfis dos funcionários
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, nome, email')
+          .in('id', funcionarioIds);
+
+        if (profilesError) throw profilesError;
+
+        const validMembers: TeamMember[] = (profiles || []).map(p => ({
+          funcionario_id: p.id,
+          nome: p.nome,
+          email: p.email
+        }));
+        setTeamMembers(validMembers);
+
+        // Buscar acordos de todos os membros da equipe
+        const { data: acordosData, error: acordosError } = await supabase
+          .from('acordos')
+          .select('*')
+          .in('user_id', funcionarioIds)
+          .order('criado_em', { ascending: false });
+
+        if (acordosError) throw acordosError;
+
+        // Mapear acordos com nomes dos funcionários
+        const acordosComNome = (acordosData || []).map(acordo => {
+          const member = validMembers.find(m => m.funcionario_id === acordo.user_id);
+          return {
+            ...acordo,
+            funcionario_nome: member?.nome || 'Desconhecido'
+          };
+        });
+
+        setAcordos(acordosComNome);
+      } catch (error) {
+        console.error('Erro ao carregar dados da equipe:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadTeamData();
+  }, [user]);
+
+  const filteredAcordos = acordos.filter(acordo => {
+    const matchesSearch = 
+      acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
+      acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
+    const matchesMember = memberFilter === 'todos' || acordo.user_id === memberFilter;
+    return matchesSearch && matchesStatus && matchesMember;
+  });
+
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'ativo': return 'default';
+      case 'concluido': return 'secondary';
+      case 'cancelado': return 'destructive';
+      default: return 'outline';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'ativo': return 'Ativo';
+      case 'concluido': return 'Concluído';
+      case 'cancelado': return 'Cancelado';
+      default: return status;
+    }
+  };
+
+  // Calcular estatísticas
+  const totalAcordos = acordos.length;
+  const acordosAtivos = acordos.filter(a => a.status === 'ativo').length;
+  const comissaoTotal = acordos.reduce((sum, a) => sum + Number(a.comissao_total), 0);
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return (
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Acordos da Equipe</h1>
+            <p className="text-muted-foreground">
+              {teamMembers.length} funcionário(s) na sua equipe
+            </p>
+          </div>
+        </div>
+
+        {/* Cards de resumo */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Membros da Equipe
+              </CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{teamMembers.length}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total de Acordos
+              </CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalAcordos}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Acordos Ativos
+              </CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{acordosAtivos}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Comissão Total
+              </CardTitle>
+              <DollarSign className="h-4 w-4 text-secondary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-secondary">
+                {formatarMoeda(comissaoTotal)}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filtros */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por cliente ou funcionário..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={memberFilter} onValueChange={setMemberFilter}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Funcionário" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os funcionários</SelectItem>
+              {teamMembers.map((member) => (
+                <SelectItem key={member.funcionario_id} value={member.funcionario_id}>
+                  {member.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="ativo">Ativos</SelectItem>
+              <SelectItem value="concluido">Concluídos</SelectItem>
+              <SelectItem value="cancelado">Cancelados</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Lista de acordos */}
+        {teamMembers.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Nenhum funcionário na equipe</h3>
+              <p className="text-muted-foreground text-center">
+                Peça ao administrador para associar funcionários à sua equipe.
+              </p>
+            </CardContent>
+          </Card>
+        ) : filteredAcordos.length > 0 ? (
+          <div className="grid gap-4">
+            {filteredAcordos.map((acordo) => (
+              <Link key={acordo.id} to={`/acordos/${acordo.id}`}>
+                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          <FileText className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">{acordo.cliente_nome}</h3>
+                          <p className="text-sm text-primary font-medium">
+                            {acordo.funcionario_nome}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {acordo.parcelas}x de {formatarMoeda(acordo.valor_parcela)} • {acordo.dias_atraso} dias em atraso
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Criado em {formatarData(acordo.criado_em)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:items-end gap-2">
+                        <Badge variant={getStatusVariant(acordo.status)}>
+                          {getStatusLabel(acordo.status)}
+                        </Badge>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Valor Total</p>
+                          <p className="font-semibold">{formatarMoeda(acordo.valor_total)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Comissão</p>
+                          <p className="font-semibold text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Nenhum acordo encontrado</h3>
+              <p className="text-muted-foreground text-center">
+                {search || statusFilter !== 'todos' || memberFilter !== 'todos'
+                  ? 'Tente ajustar os filtros'
+                  : 'Sua equipe ainda não possui acordos cadastrados'}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </AppLayout>
+  );
+}

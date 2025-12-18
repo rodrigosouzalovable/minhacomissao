@@ -14,6 +14,7 @@ import AcordoDetalhe from "./pages/AcordoDetalhe";
 import Comissoes from "./pages/Comissoes";
 import AdminUsuarios from "./pages/AdminUsuarios";
 import AdminEquipes from "./pages/AdminEquipes";
+import EquipeAcordos from "./pages/EquipeAcordos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -65,6 +66,25 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function GestorRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { isGestor, isAdmin, loading: roleLoading } = useUserRole();
+  
+  if (loading || roleLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  }
+  
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  if (!isGestor && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <>{children}</>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -80,6 +100,7 @@ const App = () => (
             <Route path="/acordos/novo" element={<ProtectedRoute><NovoAcordo /></ProtectedRoute>} />
             <Route path="/acordos/:id" element={<ProtectedRoute><AcordoDetalhe /></ProtectedRoute>} />
             <Route path="/comissoes" element={<ProtectedRoute><Comissoes /></ProtectedRoute>} />
+            <Route path="/equipe/acordos" element={<GestorRoute><EquipeAcordos /></GestorRoute>} />
             <Route path="/admin/usuarios" element={<AdminRoute><AdminUsuarios /></AdminRoute>} />
             <Route path="/admin/equipes" element={<AdminRoute><AdminEquipes /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
