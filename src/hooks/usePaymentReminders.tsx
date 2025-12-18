@@ -79,9 +79,12 @@ export function usePaymentReminders() {
     refetchInterval: 5 * 60 * 1000,
   });
 
-  // Filtrar lembretes não lidos
+  // Filtrar lembretes não lidos e lidos
   const lembretesNaoLidos = reminders.filter(
     (r) => !lembretesLidos.includes(r.id)
+  );
+  const lembretesJaLidos = reminders.filter(
+    (r) => lembretesLidos.includes(r.id)
   );
 
   // Mutation para marcar como lido
@@ -134,6 +137,7 @@ export function usePaymentReminders() {
     reminders: lembretesNaoLidos,
     lembretesHoje,
     lembretesTresDias,
+    lembretesJaLidos,
     isLoading,
     temLembretes: lembretesNaoLidos.length > 0,
     marcarComoLido: marcarComoLido.mutate,
