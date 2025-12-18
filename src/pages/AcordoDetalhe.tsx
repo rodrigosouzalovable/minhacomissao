@@ -22,21 +22,42 @@ export default function AcordoDetalhe() {
   const [acordo, setAcordo] = useState<Acordo | null>(null);
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [funcionarioNome, setFuncionarioNome] = useState<string | null>(null);
+
+  // Verifica se o usuário logado é o dono do acordo
+  const isOwner = acordo?.user_id === user?.id;
 
   useEffect(() => {
     async function loadAcordo() {
       if (!user || !id) return;
 
       try {
+        // RLS cuida do acesso - gestores/admins podem ver acordos da equipe
         const { data: acordoData, error: acordoError } = await supabase
           .from('acordos')
           .select('*')
           .eq('id', id)
-          .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (acordoError) throw acordoError;
+        if (!acordoData) {
+          navigate('/acordos');
+          return;
+        }
         setAcordo(acordoData);
+
+        // Se não for o dono, buscar nome do funcionário
+        if (acordoData.user_id !== user.id) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('nome')
+            .eq('id', acordoData.user_id)
+            .maybeSingle();
+          
+          if (profileData) {
+            setFuncionarioNome(profileData.nome);
+          }
+        }
 
         const { data: pagamentosData, error: pagamentosError } = await supabase
           .from('pagamentos')
@@ -122,17 +143,18 @@ export default function AcordoDetalhe() {
     <AppLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/acordos')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(isOwner ? '/acordos' : '/equipe/acordos')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
             <h1 className="text-2xl font-bold">{acordo.cliente_nome}</h1>
             <p className="text-muted-foreground">
+              {funcionarioNome && <span className="text-primary font-medium">{funcionarioNome} • </span>}
               Acordo criado em {formatarData(acordo.criado_em)}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {acordo.status === 'ativo' && (
+            {isOwner && acordo.status === 'ativo' && (
               <Button
                 variant="outline"
                 size="sm"
@@ -141,6 +163,11 @@ export default function AcordoDetalhe() {
                 <Pencil className="h-4 w-4 mr-1" />
                 Editar
               </Button>
+            )}
+            {!isOwner && (
+              <Badge variant="outline" className="text-sm">
+                Somente Leitura
+              </Badge>
             )}
             <Badge
               variant={
@@ -311,7 +338,7 @@ export default function AcordoDetalhe() {
                         Comissão: {formatarMoeda(pagamento.comissao_parcela)}
                       </p>
                     </div>
-                    {pagamento.status === 'pendente' && (
+                    {pagamento.status === 'pendente' && isOwner && (
                       <Button
                         size="sm"
                         onClick={() => marcarComoPago(pagamento.id)}
