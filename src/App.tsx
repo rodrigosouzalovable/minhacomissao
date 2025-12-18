@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Acordos from "./pages/Acordos";
 import NovoAcordo from "./pages/NovoAcordo";
 import AcordoDetalhe from "./pages/AcordoDetalhe";
+import EditarAcordo from "./pages/EditarAcordo";
 import Comissoes from "./pages/Comissoes";
 import AdminUsuarios from "./pages/AdminUsuarios";
 import AdminEquipes from "./pages/AdminEquipes";
@@ -99,6 +100,7 @@ const App = () => (
             <Route path="/acordos" element={<ProtectedRoute><Acordos /></ProtectedRoute>} />
             <Route path="/acordos/novo" element={<ProtectedRoute><NovoAcordo /></ProtectedRoute>} />
             <Route path="/acordos/:id" element={<ProtectedRoute><AcordoDetalhe /></ProtectedRoute>} />
+            <Route path="/acordos/:id/editar" element={<ProtectedRoute><EditarAcordo /></ProtectedRoute>} />
             <Route path="/comissoes" element={<ProtectedRoute><Comissoes /></ProtectedRoute>} />
             <Route path="/equipe/acordos" element={<GestorRoute><EquipeAcordos /></GestorRoute>} />
             <Route path="/admin/usuarios" element={<AdminRoute><AdminUsuarios /></AdminRoute>} />

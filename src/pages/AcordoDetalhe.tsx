@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil } from 'lucide-react';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
@@ -131,16 +131,28 @@ export default function AcordoDetalhe() {
               Acordo criado em {formatarData(acordo.criado_em)}
             </p>
           </div>
-          <Badge
-            variant={
-              acordo.status === 'ativo' ? 'default' :
-              acordo.status === 'concluido' ? 'secondary' : 'destructive'
-            }
-            className="text-sm"
-          >
-            {acordo.status === 'ativo' ? 'Ativo' :
-             acordo.status === 'concluido' ? 'Concluído' : 'Cancelado'}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {acordo.status === 'ativo' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Editar
+              </Button>
+            )}
+            <Badge
+              variant={
+                acordo.status === 'ativo' ? 'default' :
+                acordo.status === 'concluido' ? 'secondary' : 'destructive'
+              }
+              className="text-sm"
+            >
+              {acordo.status === 'ativo' ? 'Ativo' :
+               acordo.status === 'concluido' ? 'Concluído' : 'Cancelado'}
+            </Badge>
+          </div>
         </div>
 
         {/* Cards de resumo */}
