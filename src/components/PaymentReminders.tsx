@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, X } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { Button } from '@/components/ui/button';
 import {
@@ -85,11 +85,11 @@ export function PaymentReminders() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 shrink-0 hover:bg-destructive/30"
+                        className="h-6 w-6 shrink-0 hover:bg-green-500/30 hover:text-green-600"
                         onClick={(e) => handleMarcarLido(e, lembrete.id)}
-                        title="Marcar como lido"
+                        title="Marcar como visto"
                       >
-                        <X className="h-3 w-3" />
+                        <Check className="h-3 w-3" />
                       </Button>
                     </div>
                   ))}
@@ -128,11 +128,11 @@ export function PaymentReminders() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 shrink-0 hover:bg-warning/30"
+                        className="h-6 w-6 shrink-0 hover:bg-green-500/30 hover:text-green-600"
                         onClick={(e) => handleMarcarLido(e, lembrete.id)}
-                        title="Marcar como lido"
+                        title="Marcar como visto"
                       >
-                        <X className="h-3 w-3" />
+                        <Check className="h-3 w-3" />
                       </Button>
                     </div>
                   ))}
