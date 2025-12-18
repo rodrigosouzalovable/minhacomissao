@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { ArrowLeft, Check, Clock, Calendar, User, DollarSign } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone } from 'lucide-react';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
@@ -226,6 +226,31 @@ export default function AcordoDetalhe() {
                 <p className="font-medium text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
               </div>
             </div>
+            {(acordo.cliente_cpf || acordo.cliente_telefone) && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium mb-2">Dados do Cliente</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {acordo.cliente_cpf && (
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">CPF</p>
+                        <p className="font-medium">{acordo.cliente_cpf}</p>
+                      </div>
+                    </div>
+                  )}
+                  {acordo.cliente_telefone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Telefone</p>
+                        <p className="font-medium">{acordo.cliente_telefone}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {acordo.observacoes && (
               <div className="mt-4 pt-4 border-t">
                 <p className="text-sm text-muted-foreground">Observações</p>
