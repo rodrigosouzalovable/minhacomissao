@@ -15,12 +15,35 @@ import { ArrowLeft, Calculator } from 'lucide-react';
 
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
+  clienteCpf: z.string().max(14, 'CPF inválido').optional(),
+  clienteTelefone: z.string().max(15, 'Telefone inválido').optional(),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
   dataPrimeiroPagamento: z.string().min(1, 'Data é obrigatória'),
   diasAtraso: z.number().int().min(0, 'Dias em atraso não pode ser negativo').max(9999),
   observacoes: z.string().max(1000, 'Observações muito longas').optional(),
 });
+
+// Funções de máscara
+const formatCpf = (value: string) => {
+  const numbers = value.replace(/\D/g, '').slice(0, 11);
+  return numbers
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+const formatPhone = (value: string) => {
+  const numbers = value.replace(/\D/g, '').slice(0, 11);
+  if (numbers.length <= 10) {
+    return numbers
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return numbers
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+};
 
 export default function NovoAcordo() {
   const { user } = useAuth();
@@ -30,6 +53,8 @@ export default function NovoAcordo() {
   
   const [form, setForm] = useState({
     clienteNome: '',
+    clienteCpf: '',
+    clienteTelefone: '',
     valorTotal: '',
     parcelas: '',
     dataPrimeiroPagamento: '',
@@ -58,6 +83,8 @@ export default function NovoAcordo() {
     try {
       const validated = acordoSchema.parse({
         clienteNome: form.clienteNome.trim(),
+        clienteCpf: form.clienteCpf.trim() || undefined,
+        clienteTelefone: form.clienteTelefone.trim() || undefined,
         valorTotal: parseFloat(form.valorTotal),
         parcelas: parseInt(form.parcelas),
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
@@ -71,6 +98,8 @@ export default function NovoAcordo() {
         .insert({
           user_id: user.id,
           cliente_nome: validated.clienteNome,
+          cliente_cpf: validated.clienteCpf || null,
+          cliente_telefone: validated.clienteTelefone || null,
           valor_total: validated.valorTotal,
           parcelas: validated.parcelas,
           valor_parcela: calculo.valorParcela,
@@ -146,8 +175,8 @@ export default function NovoAcordo() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Dados do Acordo</CardTitle>
-              <CardDescription>Preencha as informações do acordo com o cliente</CardDescription>
+              <CardTitle>Dados do Cliente</CardTitle>
+              <CardDescription>Informações do cliente do acordo</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -161,6 +190,38 @@ export default function NovoAcordo() {
                 />
               </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="clienteCpf">CPF</Label>
+                  <Input
+                    id="clienteCpf"
+                    placeholder="000.000.000-00"
+                    value={form.clienteCpf}
+                    onChange={(e) => setForm({ ...form, clienteCpf: formatCpf(e.target.value) })}
+                    maxLength={14}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="clienteTelefone">Telefone</Label>
+                  <Input
+                    id="clienteTelefone"
+                    placeholder="(00) 00000-0000"
+                    value={form.clienteTelefone}
+                    onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
+                    maxLength={15}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Dados do Acordo</CardTitle>
+              <CardDescription>Preencha as informações do acordo</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="valorTotal">Valor Total (R$) *</Label>

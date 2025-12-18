@@ -8,14 +8,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User } from 'lucide-react';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
 
 export default function Acordos() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [acordos, setAcordos] = useState<Acordo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -44,8 +57,47 @@ export default function Acordos() {
     loadAcordos();
   }, [user]);
 
+  const handleDelete = async (acordoId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      // Primeiro, deletar os pagamentos associados
+      const { error: pagamentosError } = await supabase
+        .from('pagamentos')
+        .delete()
+        .eq('acordo_id', acordoId);
+
+      if (pagamentosError) throw pagamentosError;
+
+      // Depois, deletar o acordo
+      const { error: acordoError } = await supabase
+        .from('acordos')
+        .delete()
+        .eq('id', acordoId);
+
+      if (acordoError) throw acordoError;
+
+      // Atualizar lista local
+      setAcordos(prev => prev.filter(a => a.id !== acordoId));
+
+      toast({
+        title: 'Acordo excluído',
+        description: 'O acordo foi removido com sucesso.',
+      });
+    } catch (error) {
+      console.error('Erro ao excluir acordo:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao excluir',
+        description: 'Não foi possível excluir o acordo.',
+      });
+    }
+  };
+
   const filteredAcordos = acordos.filter(acordo => {
-    const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
+      (acordo.cliente_cpf && acordo.cliente_cpf.includes(search));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -96,7 +148,7 @@ export default function Acordos() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por cliente..."
+              placeholder="Buscar por cliente ou CPF..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
@@ -129,7 +181,23 @@ export default function Acordos() {
                         </div>
                         <div>
                           <h3 className="font-semibold">{acordo.cliente_nome}</h3>
-                          <p className="text-sm text-muted-foreground">
+                          {(acordo.cliente_cpf || acordo.cliente_telefone) && (
+                            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mt-1">
+                              {acordo.cliente_cpf && (
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  {acordo.cliente_cpf}
+                                </span>
+                              )}
+                              {acordo.cliente_telefone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {acordo.cliente_telefone}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <p className="text-sm text-muted-foreground mt-1">
                             {acordo.parcelas}x de {formatarMoeda(acordo.valor_parcela)} • {acordo.dias_atraso} dias em atraso
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
@@ -138,9 +206,40 @@ export default function Acordos() {
                         </div>
                       </div>
                       <div className="flex flex-col sm:items-end gap-2">
-                        <Badge variant={getStatusVariant(acordo.status)}>
-                          {getStatusLabel(acordo.status)}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={getStatusVariant(acordo.status)}>
+                            {getStatusLabel(acordo.status)}
+                          </Badge>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={(e) => e.preventDefault()}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir acordo?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. O acordo com <strong>{acordo.cliente_nome}</strong> e todas as suas parcelas serão excluídos permanentemente.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  onClick={(e) => handleDelete(acordo.id, e)}
+                                >
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                         <div className="text-right">
                           <p className="text-sm text-muted-foreground">Valor Total</p>
                           <p className="font-semibold">{formatarMoeda(acordo.valor_total)}</p>

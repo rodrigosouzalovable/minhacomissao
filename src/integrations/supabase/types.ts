@@ -17,7 +17,9 @@ export type Database = {
       acordos: {
         Row: {
           atualizado_em: string
+          cliente_cpf: string | null
           cliente_nome: string
+          cliente_telefone: string | null
           comissao_total: number
           criado_em: string
           data_primeiro_pagamento: string
@@ -33,7 +35,9 @@ export type Database = {
         }
         Insert: {
           atualizado_em?: string
+          cliente_cpf?: string | null
           cliente_nome: string
+          cliente_telefone?: string | null
           comissao_total: number
           criado_em?: string
           data_primeiro_pagamento: string
@@ -49,7 +53,9 @@ export type Database = {
         }
         Update: {
           atualizado_em?: string
+          cliente_cpf?: string | null
           cliente_nome?: string
+          cliente_telefone?: string | null
           comissao_total?: number
           criado_em?: string
           data_primeiro_pagamento?: string
