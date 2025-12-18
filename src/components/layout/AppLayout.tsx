@@ -65,14 +65,19 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-primary text-primary-foreground p-4 flex items-center justify-between">
         <h1 className="text-lg font-bold">MINHA COMISSÃO</h1>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="text-primary-foreground hover:bg-primary/80"
-        >
-          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="text-primary-foreground">
+            <PaymentReminders />
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="text-primary-foreground hover:bg-primary/80"
+          >
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
+        </div>
       </header>
 
       {/* Mobile Menu Overlay */}
@@ -86,9 +91,12 @@ export function AppLayout({ children }: AppLayoutProps) {
         "lg:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6">
-          <h1 className="text-xl font-bold">MINHA COMISSÃO</h1>
-          <p className="text-sm opacity-80 mt-1">{user?.email}</p>
+        <div className="p-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold">MINHA COMISSÃO</h1>
+            <p className="text-sm opacity-80 mt-1">{user?.email}</p>
+          </div>
+          <PaymentReminders />
         </div>
 
         <nav className="mt-4 px-4">
@@ -129,7 +137,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content */}
       <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
-        <PaymentReminders />
         <div className="p-6">
           {children}
         </div>
