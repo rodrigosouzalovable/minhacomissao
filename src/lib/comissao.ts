@@ -58,7 +58,9 @@ export function gerarParcelas(
   dataPrimeiroPagamento: Date,
   numeroParcelas: number,
   valorParcela: number,
-  comissaoPorParcela: number
+  comissaoPorParcela: number,
+  valorEntrada?: number,
+  comissaoEntrada?: number
 ) {
   const parcelas = [];
   
@@ -66,11 +68,14 @@ export function gerarParcelas(
     const dataPrevista = new Date(dataPrimeiroPagamento);
     dataPrevista.setMonth(dataPrevista.getMonth() + i);
     
+    // Se é a primeira parcela e tem entrada definida, usa os valores de entrada
+    const isEntrada = i === 0 && valorEntrada !== undefined;
+    
     parcelas.push({
       numero_parcela: i + 1,
       data_prevista: dataPrevista.toISOString().split('T')[0],
-      valor_parcela: valorParcela,
-      comissao_parcela: comissaoPorParcela,
+      valor_parcela: isEntrada ? valorEntrada : valorParcela,
+      comissao_parcela: isEntrada && comissaoEntrada !== undefined ? comissaoEntrada : comissaoPorParcela,
       status: 'pendente' as const
     });
   }

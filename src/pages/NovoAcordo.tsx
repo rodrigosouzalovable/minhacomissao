@@ -60,19 +60,63 @@ export default function NovoAcordo() {
     dataPrimeiroPagamento: '',
     diasAtraso: '',
     observacoes: '',
+    valorEntrada: '',
+    valorDemaisParcelas: '',
   });
 
   // Cálculo automático da comissão
   const calculo = useMemo(() => {
-    const valorTotal = parseFloat(form.valorTotal) || 0;
-    const parcelas = parseInt(form.parcelas) || 1;
+    const parcelas = parseInt(form.parcelas) || 0;
     const diasAtraso = parseInt(form.diasAtraso) || 0;
+    const valorEntrada = parseFloat(form.valorEntrada) || 0;
+    const valorDemaisParcelas = parseFloat(form.valorDemaisParcelas) || 0;
+    const valorTotalManual = parseFloat(form.valorTotal) || 0;
 
-    if (valorTotal > 0 && parcelas > 0 && diasAtraso >= 0) {
-      return calcularComissao(valorTotal, parcelas, diasAtraso);
+    if (parcelas <= 0 || diasAtraso < 0) return null;
+
+    // Se entrada e demais parcelas foram preenchidos, calcula valor total
+    const usarEntrada = valorEntrada > 0 && valorDemaisParcelas > 0;
+    const valorTotal = usarEntrada
+      ? valorEntrada + (valorDemaisParcelas * (parcelas - 1))
+      : valorTotalManual;
+
+    if (valorTotal <= 0) return null;
+
+    const { percentual } = calcularComissao(valorTotal, parcelas, diasAtraso);
+
+    if (usarEntrada) {
+      const comissaoEntrada = valorEntrada * (percentual / 100);
+      const comissaoDemais = valorDemaisParcelas * (percentual / 100);
+      const comissaoTotal = comissaoEntrada + (comissaoDemais * (parcelas - 1));
+
+      return {
+        percentual,
+        valorTotal: Math.round(valorTotal * 100) / 100,
+        valorEntrada,
+        valorDemaisParcelas,
+        valorParcela: valorDemaisParcelas, // Para compatibilidade
+        comissaoEntrada: Math.round(comissaoEntrada * 100) / 100,
+        comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
+        comissaoPorParcela: Math.round(comissaoDemais * 100) / 100, // Para compatibilidade
+        comissaoTotal: Math.round(comissaoTotal * 100) / 100,
+        usarEntrada: true as const,
+      };
+    } else {
+      const base = calcularComissao(valorTotal, parcelas, diasAtraso);
+      return {
+        percentual: base.percentual,
+        valorTotal,
+        valorEntrada: 0,
+        valorDemaisParcelas: base.valorParcela,
+        valorParcela: base.valorParcela,
+        comissaoEntrada: 0,
+        comissaoDemaisParcelas: base.comissaoPorParcela,
+        comissaoPorParcela: base.comissaoPorParcela,
+        comissaoTotal: base.comissaoTotal,
+        usarEntrada: false as const,
+      };
     }
-    return null;
-  }, [form.valorTotal, form.parcelas, form.diasAtraso]);
+  }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorEntrada, form.valorDemaisParcelas]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,12 +129,17 @@ export default function NovoAcordo() {
         clienteNome: form.clienteNome.trim(),
         clienteCpf: form.clienteCpf.trim() || undefined,
         clienteTelefone: form.clienteTelefone.trim() || undefined,
-        valorTotal: parseFloat(form.valorTotal),
+        valorTotal: calculo.valorTotal,
         parcelas: parseInt(form.parcelas),
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
         observacoes: form.observacoes.trim() || undefined,
       });
+
+      // Determinar valores para o banco de dados
+      const valorParcelaDb = calculo.usarEntrada 
+        ? calculo.valorDemaisParcelas 
+        : calculo.valorParcela;
 
       // Criar acordo
       const { data: acordo, error: acordoError } = await supabase
@@ -102,7 +151,7 @@ export default function NovoAcordo() {
           cliente_telefone: validated.clienteTelefone || null,
           valor_total: validated.valorTotal,
           parcelas: validated.parcelas,
-          valor_parcela: calculo.valorParcela,
+          valor_parcela: valorParcelaDb,
           data_primeiro_pagamento: validated.dataPrimeiroPagamento,
           dias_atraso: validated.diasAtraso,
           percentual_comissao: calculo.percentual,
@@ -115,12 +164,21 @@ export default function NovoAcordo() {
       if (acordoError) throw acordoError;
 
       // Gerar parcelas
-      const parcelas = gerarParcelas(
-        new Date(validated.dataPrimeiroPagamento),
-        validated.parcelas,
-        calculo.valorParcela,
-        calculo.comissaoPorParcela
-      );
+      const parcelas = calculo.usarEntrada
+        ? gerarParcelas(
+            new Date(validated.dataPrimeiroPagamento),
+            validated.parcelas,
+            calculo.valorDemaisParcelas,
+            calculo.comissaoDemaisParcelas,
+            calculo.valorEntrada,
+            calculo.comissaoEntrada
+          )
+        : gerarParcelas(
+            new Date(validated.dataPrimeiroPagamento),
+            validated.parcelas,
+            calculo.valorParcela,
+            calculo.comissaoPorParcela
+          );
 
       const { error: parcelasError } = await supabase
         .from('pagamentos')
@@ -222,9 +280,50 @@ export default function NovoAcordo() {
               <CardDescription>Preencha as informações do acordo</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              {/* Campos de Entrada e Demais Parcelas */}
+              <div className="p-3 rounded-lg bg-muted/50 space-y-4">
+                <p className="text-sm text-muted-foreground font-medium">Opção 1: Entrada + Parcelas</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="valorEntrada">Valor da Entrada (R$)</Label>
+                    <Input
+                      id="valorEntrada"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      value={form.valorEntrada}
+                      onChange={(e) => setForm({ ...form, valorEntrada: e.target.value, valorTotal: '' })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas (R$)</Label>
+                    <Input
+                      id="valorDemaisParcelas"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      value={form.valorDemaisParcelas}
+                      onChange={(e) => setForm({ ...form, valorDemaisParcelas: e.target.value, valorTotal: '' })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Separador */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 border-t" />
+                <span className="text-xs text-muted-foreground">OU</span>
+                <div className="flex-1 border-t" />
+              </div>
+
+              {/* Valor Total */}
+              <div className="p-3 rounded-lg bg-muted/50 space-y-4">
+                <p className="text-sm text-muted-foreground font-medium">Opção 2: Valor Total (parcelas iguais)</p>
                 <div className="space-y-2">
-                  <Label htmlFor="valorTotal">Valor Total (R$) *</Label>
+                  <Label htmlFor="valorTotal">Valor Total (R$)</Label>
                   <Input
                     id="valorTotal"
                     type="number"
@@ -232,11 +331,12 @@ export default function NovoAcordo() {
                     min="0.01"
                     placeholder="0,00"
                     value={form.valorTotal}
-                    onChange={(e) => setForm({ ...form, valorTotal: e.target.value })}
-                    required
+                    onChange={(e) => setForm({ ...form, valorTotal: e.target.value, valorEntrada: '', valorDemaisParcelas: '' })}
                   />
                 </div>
+              </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="parcelas">Número de Parcelas *</Label>
                   <Input
@@ -250,9 +350,7 @@ export default function NovoAcordo() {
                     required
                   />
                 </div>
-              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="dataPrimeiroPagamento">Data do 1º Pagamento *</Label>
                   <Input
@@ -263,6 +361,9 @@ export default function NovoAcordo() {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
 
                 <div className="space-y-2">
                   <Label htmlFor="diasAtraso">Dias em Atraso *</Label>
@@ -302,19 +403,46 @@ export default function NovoAcordo() {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Valor da Parcela</p>
-                    <p className="text-lg font-semibold">{formatarMoeda(calculo.valorParcela)}</p>
-                  </div>
+                  {calculo.usarEntrada ? (
+                    <>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Valor da Entrada</p>
+                        <p className="text-lg font-semibold">{formatarMoeda(calculo.valorEntrada)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Valor das Demais Parcelas</p>
+                        <p className="text-lg font-semibold">{formatarMoeda(calculo.valorDemaisParcelas)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Comissão Entrada</p>
+                        <p className="text-lg font-semibold">{formatarMoeda(calculo.comissaoEntrada)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Comissão por Parcela</p>
+                        <p className="text-lg font-semibold">{formatarMoeda(calculo.comissaoDemaisParcelas)}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Valor da Parcela</p>
+                        <p className="text-lg font-semibold">{formatarMoeda(calculo.valorParcela)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Comissão por Parcela</p>
+                        <p className="text-lg font-semibold">{formatarMoeda(calculo.comissaoPorParcela)}</p>
+                      </div>
+                    </>
+                  )}
                   <div>
                     <p className="text-sm text-muted-foreground">Faixa de Atraso</p>
                     <p className="text-lg font-semibold">{calculo.percentual}%</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Comissão por Parcela</p>
-                    <p className="text-lg font-semibold">{formatarMoeda(calculo.comissaoPorParcela)}</p>
+                    <p className="text-sm text-muted-foreground">Valor Total</p>
+                    <p className="text-lg font-semibold">{formatarMoeda(calculo.valorTotal)}</p>
                   </div>
-                  <div>
+                  <div className="sm:col-span-2">
                     <p className="text-sm text-muted-foreground">Comissão Total</p>
                     <p className="text-xl font-bold text-secondary">{formatarMoeda(calculo.comissaoTotal)}</p>
                   </div>
