@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { PaymentReminders } from '@/components/PaymentReminders';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -128,6 +129,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content */}
       <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
+        <PaymentReminders />
         <div className="p-6">
           {children}
         </div>
