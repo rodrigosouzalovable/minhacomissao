@@ -133,6 +133,27 @@ export type Database = {
         }
         Relationships: []
       }
+      team_members: {
+        Row: {
+          criado_em: string
+          funcionario_id: string
+          gestor_id: string
+          id: string
+        }
+        Insert: {
+          criado_em?: string
+          funcionario_id: string
+          gestor_id: string
+          id?: string
+        }
+        Update: {
+          criado_em?: string
+          funcionario_id?: string
+          gestor_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           criado_em: string

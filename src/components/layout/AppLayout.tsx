@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
@@ -9,7 +10,10 @@ import {
   DollarSign,
   LogOut,
   Menu,
-  X
+  X,
+  Users,
+  UserCog,
+  UsersRound
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -18,18 +22,31 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/acordos', label: 'Meus Acordos', icon: FileText },
   { href: '/acordos/novo', label: 'Novo Acordo', icon: PlusCircle },
   { href: '/comissoes', label: 'Minhas Comissões', icon: DollarSign },
+  { href: '/admin/usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
+  { href: '/admin/equipes', label: 'Equipes', icon: UsersRound, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useUserRole();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Filter nav items based on role
+  const filteredNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
 
   const handleSignOut = async () => {
     await signOut();
@@ -68,7 +85,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         <nav className="mt-4 px-4">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
             
