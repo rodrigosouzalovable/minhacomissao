@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText, Trash2, Phone, User } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User, Download } from 'lucide-react';
+import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
@@ -93,6 +94,47 @@ export default function Acordos() {
     }
   };
 
+  const handleExportarExcel = () => {
+    const dadosParaExportar = filteredAcordos.map(acordo => ({
+      cliente_nome: acordo.cliente_nome,
+      cliente_cpf: acordo.cliente_cpf || '-',
+      cliente_telefone: acordo.cliente_telefone || '-',
+      parcelas: acordo.parcelas,
+      valor_parcela: acordo.valor_parcela,
+      valor_total: acordo.valor_total,
+      comissao_total: acordo.comissao_total,
+      percentual_comissao: `${acordo.percentual_comissao}%`,
+      dias_atraso: acordo.dias_atraso,
+      status: getStatusLabel(acordo.status),
+      data_primeiro_pagamento: formatarData(acordo.data_primeiro_pagamento),
+      criado_em: formatarData(acordo.criado_em),
+      observacoes: acordo.observacoes || '-'
+    }));
+
+    const colunas: { chave: keyof typeof dadosParaExportar[0]; titulo: string }[] = [
+      { chave: 'cliente_nome', titulo: 'Cliente' },
+      { chave: 'cliente_cpf', titulo: 'CPF' },
+      { chave: 'cliente_telefone', titulo: 'Telefone' },
+      { chave: 'parcelas', titulo: 'Parcelas' },
+      { chave: 'valor_parcela', titulo: 'Valor Parcela (R$)' },
+      { chave: 'valor_total', titulo: 'Valor Total (R$)' },
+      { chave: 'comissao_total', titulo: 'Comissão Total (R$)' },
+      { chave: 'percentual_comissao', titulo: '% Comissão' },
+      { chave: 'dias_atraso', titulo: 'Dias em Atraso' },
+      { chave: 'status', titulo: 'Status' },
+      { chave: 'data_primeiro_pagamento', titulo: 'Primeiro Pagamento' },
+      { chave: 'criado_em', titulo: 'Data Criação' },
+      { chave: 'observacoes', titulo: 'Observações' }
+    ];
+
+    exportarParaExcel(dadosParaExportar, colunas, 'acordos');
+
+    toast({
+      title: 'Exportação concluída',
+      description: `${filteredAcordos.length} acordo(s) exportado(s) para Excel.`,
+    });
+  };
+
   const filteredAcordos = acordos.filter(acordo => {
     const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
       (acordo.cliente_cpf && acordo.cliente_cpf.includes(search));
@@ -133,12 +175,18 @@ export default function Acordos() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-2xl font-bold">Meus Acordos</h1>
-          <Button asChild>
-            <Link to="/acordos/novo">
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Novo Acordo
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExportarExcel} disabled={filteredAcordos.length === 0}>
+              <Download className="h-4 w-4 mr-2" />
+              Exportar Excel
+            </Button>
+            <Button asChild>
+              <Link to="/acordos/novo">
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Novo Acordo
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {/* Filtros */}
