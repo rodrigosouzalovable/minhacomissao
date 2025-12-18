@@ -96,7 +96,12 @@ export function usePaymentReminders() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos'] });
+      // Recarrega os IDs lidos e, por consequência, a lista filtrada na UI
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
+    },
+    onError: (error) => {
+      console.error('Erro ao marcar lembrete como visto:', error);
     },
   });
 
@@ -114,7 +119,11 @@ export function usePaymentReminders() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos'] });
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
+    },
+    onError: (error) => {
+      console.error('Erro ao desmarcar lembrete como visto:', error);
     },
   });
 

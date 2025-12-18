@@ -85,7 +85,7 @@ export function PaymentReminders() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 shrink-0 hover:bg-green-500/30 hover:text-green-600"
+                        className="h-6 w-6 shrink-0 hover:bg-accent hover:text-accent-foreground"
                         onClick={(e) => handleMarcarLido(e, lembrete.id)}
                         title="Marcar como visto"
                       >
@@ -128,7 +128,7 @@ export function PaymentReminders() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 shrink-0 hover:bg-green-500/30 hover:text-green-600"
+                        className="h-6 w-6 shrink-0 hover:bg-accent hover:text-accent-foreground"
                         onClick={(e) => handleMarcarLido(e, lembrete.id)}
                         title="Marcar como visto"
                       >
