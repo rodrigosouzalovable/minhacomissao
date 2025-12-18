@@ -27,6 +27,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
+  gestorOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -34,19 +35,24 @@ const navItems: NavItem[] = [
   { href: '/acordos', label: 'Meus Acordos', icon: FileText },
   { href: '/acordos/novo', label: 'Novo Acordo', icon: PlusCircle },
   { href: '/comissoes', label: 'Minhas Comissões', icon: DollarSign },
+  { href: '/equipe/acordos', label: 'Acordos da Equipe', icon: Users, gestorOnly: true },
   { href: '/admin/usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
   { href: '/admin/equipes', label: 'Equipes', icon: UsersRound, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isGestor } = useUserRole();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Filter nav items based on role
-  const filteredNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+  const filteredNavItems = navItems.filter((item) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.gestorOnly && !isGestor && !isAdmin) return false;
+    return true;
+  });
 
   const handleSignOut = async () => {
     await signOut();
