@@ -13,6 +13,7 @@ import {
   X,
   Users,
   UserCog,
+  User,
   UsersRound
 } from 'lucide-react';
 import { useState } from 'react';
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { href: '/acordos', label: 'Meus Acordos', icon: FileText },
   { href: '/acordos/novo', label: 'Novo Acordo', icon: PlusCircle },
   { href: '/comissoes', label: 'Minhas Comissões', icon: DollarSign },
+  { href: '/conta', label: 'Minha Conta', icon: User },
   { href: '/equipe/acordos', label: 'Acordos da Equipe', icon: Users, gestorOnly: true },
   { href: '/admin/usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
   { href: '/admin/equipes', label: 'Equipes', icon: UsersRound, adminOnly: true },
