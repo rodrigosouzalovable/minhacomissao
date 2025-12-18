@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound } from 'lucide-react';
+import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -50,6 +51,7 @@ export default function AdminUsuarios() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
+  const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -119,6 +121,43 @@ export default function AdminUsuarios() {
     const newRole = selectedRole[userId];
     if (newRole) {
       updateRoleMutation.mutate({ userId, newRole });
+    }
+  };
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const response = await supabase.functions.invoke('reset-user-password', {
+        body: { userId, newPassword },
+      });
+
+      if (response.error) throw response.error;
+      if (!response.data.success) throw new Error(response.data.error);
+      
+      return response.data;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Senha redefinida',
+        description: 'A senha do usuário foi redefinida com sucesso.',
+      });
+      setResetPasswordUser(null);
+    },
+    onError: (error: Error) => {
+      console.error('Error resetting password:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível redefinir a senha.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleResetPassword = (newPassword: string) => {
+    if (resetPasswordUser) {
+      resetPasswordMutation.mutate({ userId: resetPasswordUser.id, newPassword });
     }
   };
 
@@ -225,7 +264,7 @@ export default function AdminUsuarios() {
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="space-x-2">
                         <Button
                           size="sm"
                           onClick={() => handleSaveRole(user.id)}
@@ -236,6 +275,14 @@ export default function AdminUsuarios() {
                           }
                         >
                           Salvar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setResetPasswordUser(user)}
+                        >
+                          <KeyRound className="h-4 w-4 mr-1" />
+                          Senha
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -249,6 +296,14 @@ export default function AdminUsuarios() {
             )}
           </CardContent>
         </Card>
+
+        <ResetPasswordDialog
+          open={!!resetPasswordUser}
+          onOpenChange={(open) => !open && setResetPasswordUser(null)}
+          userName={resetPasswordUser?.nome ?? ''}
+          onConfirm={handleResetPassword}
+          isLoading={resetPasswordMutation.isPending}
+        />
       </div>
     </AppLayout>
   );
