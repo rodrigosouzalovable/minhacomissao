@@ -33,6 +33,7 @@ export default function Acordos() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [acordoParaExcluir, setAcordoParaExcluir] = useState<Acordo | null>(null);
 
   useEffect(() => {
     async function loadAcordos() {
@@ -57,10 +58,7 @@ export default function Acordos() {
     loadAcordos();
   }, [user]);
 
-  const handleDelete = async (acordoId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
+  const handleDelete = async (acordoId: string) => {
     try {
       // Primeiro, deletar os pagamentos associados
       const { error: pagamentosError } = await supabase
@@ -210,38 +208,18 @@ export default function Acordos() {
                           <Badge variant={getStatusVariant(acordo.status)}>
                             {getStatusLabel(acordo.status)}
                           </Badge>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir acordo?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Esta ação não pode ser desfeita. O acordo com <strong>{acordo.cliente_nome}</strong> e todas as suas parcelas serão excluídos permanentemente.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  onClick={(e) => handleDelete(acordo.id, e)}
-                                >
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setAcordoParaExcluir(acordo);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-muted-foreground">Valor Total</p>
@@ -280,6 +258,32 @@ export default function Acordos() {
           </Card>
         )}
       </div>
+
+      {/* Dialog de confirmação de exclusão */}
+      <AlertDialog open={!!acordoParaExcluir} onOpenChange={(open) => !open && setAcordoParaExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir acordo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O acordo com <strong>{acordoParaExcluir?.cliente_nome}</strong> e todas as suas parcelas serão excluídos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAcordoParaExcluir(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (acordoParaExcluir) {
+                  handleDelete(acordoParaExcluir.id);
+                  setAcordoParaExcluir(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
