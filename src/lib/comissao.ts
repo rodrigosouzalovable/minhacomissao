@@ -38,8 +38,19 @@ export function formatarMoeda(valor: number): string {
   }).format(valor);
 }
 
-export function formatarData(data: string | Date): string {
-  const d = typeof data === 'string' ? new Date(data + 'T00:00:00') : data;
+export function formatarData(data: string | Date | null | undefined): string {
+  if (!data) return '-';
+  
+  let d: Date;
+  if (typeof data === 'string') {
+    // Se já contém 'T' (timestamp ISO), usa direto. Senão, adiciona T00:00:00
+    d = data.includes('T') ? new Date(data) : new Date(data + 'T00:00:00');
+  } else {
+    d = data;
+  }
+  
+  if (isNaN(d.getTime())) return '-';
+  
   return new Intl.DateTimeFormat('pt-BR').format(d);
 }
 
