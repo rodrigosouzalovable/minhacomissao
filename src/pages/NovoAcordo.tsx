@@ -19,8 +19,8 @@ const acordoSchema = z.object({
   clienteTelefone: z.string().min(10, 'Telefone é obrigatório').max(15, 'Telefone inválido'),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
-  valorPrimeiraParcela: z.number().positive('Valor da primeira parcela é obrigatório'),
-  valorDemaisParcelas: z.number().positive('Valor das demais parcelas é obrigatório'),
+  valorPrimeiraParcela: z.number().nonnegative().optional(),
+  valorDemaisParcelas: z.number().nonnegative().optional(),
   dataPrimeiroPagamento: z.string().min(1, 'Data é obrigatória'),
   diasAtraso: z.number().int().min(0, 'Dias em atraso não pode ser negativo').max(9999),
   observacoes: z.string().max(1000, 'Observações muito longas').optional(),
@@ -223,14 +223,28 @@ export default function NovoAcordo() {
     setIsLoading(true);
 
     try {
+      const numParcelas = parseInt(form.parcelas);
+      const valorPrimeiraParcela = parseCurrency(form.valorPrimeiraParcela);
+      const valorDemaisParcelas = parseCurrency(form.valorDemaisParcelas);
+
+      // Validação condicional: se parcelas > 1, exige valores das parcelas
+      if (numParcelas > 1) {
+        if (!form.valorPrimeiraParcela || valorPrimeiraParcela <= 0) {
+          throw new Error('Valor da primeira parcela é obrigatório para acordos com mais de 1 parcela');
+        }
+        if (!form.valorDemaisParcelas || valorDemaisParcelas <= 0) {
+          throw new Error('Valor das demais parcelas é obrigatório para acordos com mais de 1 parcela');
+        }
+      }
+
       const validated = acordoSchema.parse({
         clienteNome: form.clienteNome.trim(),
         clienteCpf: form.clienteCpf.trim(),
         clienteTelefone: form.clienteTelefone.trim(),
         valorTotal: calculo.valorTotal,
-        parcelas: parseInt(form.parcelas),
-        valorPrimeiraParcela: parseCurrency(form.valorPrimeiraParcela),
-        valorDemaisParcelas: parseCurrency(form.valorDemaisParcelas),
+        parcelas: numParcelas,
+        valorPrimeiraParcela: valorPrimeiraParcela || undefined,
+        valorDemaisParcelas: valorDemaisParcelas || undefined,
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
         observacoes: form.observacoes.trim() || undefined,
@@ -302,6 +316,12 @@ export default function NovoAcordo() {
           variant: 'destructive',
           title: 'Dados inválidos',
           description: err.errors[0].message,
+        });
+      } else if (err instanceof Error) {
+        toast({
+          variant: 'destructive',
+          title: 'Dados inválidos',
+          description: err.message,
         });
       } else {
         toast({
@@ -408,26 +428,30 @@ export default function NovoAcordo() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela (R$) *</Label>
+                  <Label htmlFor="valorPrimeiraParcela">
+                    Valor da Primeira Parcela (R$) {parseInt(form.parcelas) !== 1 && '*'}
+                  </Label>
                   <Input
                     id="valorPrimeiraParcela"
                     placeholder="Ex: 149,25"
                     value={form.valorPrimeiraParcela}
                     onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorPrimeiraParcela')}
                     onBlur={() => handleCurrencyWithCentsBlur('valorPrimeiraParcela')}
-                    required
+                    required={parseInt(form.parcelas) !== 1}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas (R$) *</Label>
+                  <Label htmlFor="valorDemaisParcelas">
+                    Valor das Demais Parcelas (R$) {parseInt(form.parcelas) !== 1 && '*'}
+                  </Label>
                   <Input
                     id="valorDemaisParcelas"
                     placeholder="Ex: 300,50"
                     value={form.valorDemaisParcelas}
                     onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorDemaisParcelas')}
                     onBlur={() => handleCurrencyWithCentsBlur('valorDemaisParcelas')}
-                    required
+                    required={parseInt(form.parcelas) !== 1}
                   />
                 </div>
               </div>
@@ -553,7 +577,13 @@ export default function NovoAcordo() {
             <Button
               type="submit"
               className="flex-1"
-              disabled={isLoading || !calculo || !form.clienteCpf || !form.clienteTelefone || !form.valorPrimeiraParcela || !form.valorDemaisParcelas}
+              disabled={
+                isLoading || 
+                !calculo || 
+                !form.clienteCpf || 
+                !form.clienteTelefone || 
+                (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas))
+              }
             >
               {isLoading ? 'Salvando...' : 'Criar Acordo'}
             </Button>
