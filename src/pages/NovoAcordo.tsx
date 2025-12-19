@@ -74,6 +74,19 @@ export default function NovoAcordo() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [nomeError, setNomeError] = useState('');
+
+  const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    const filteredValue = formatNome(rawValue);
+    
+    if (/\d/.test(rawValue)) {
+      setNomeError('Este campo aceita apenas letras');
+      setTimeout(() => setNomeError(''), 3000);
+    }
+    
+    setForm({ ...form, clienteNome: filteredValue });
+  };
   
   const [form, setForm] = useState({
     clienteNome: '',
@@ -257,9 +270,13 @@ export default function NovoAcordo() {
                   id="clienteNome"
                   placeholder="Nome completo do cliente"
                   value={form.clienteNome}
-                  onChange={(e) => setForm({ ...form, clienteNome: formatNome(e.target.value) })}
+                  onChange={handleNomeChange}
                   required
+                  className={nomeError ? 'border-destructive' : ''}
                 />
+                {nomeError && (
+                  <p className="text-sm text-destructive">{nomeError}</p>
+                )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
