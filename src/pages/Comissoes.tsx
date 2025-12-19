@@ -1,67 +1,99 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { DollarSign, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, CheckCircle, Percent } from 'lucide-react';
 
-interface PagamentoComAcordo {
+interface Acordo {
   id: string;
+  cliente_nome: string;
+  cliente_cpf: string | null;
+  valor_total: number;
+  comissao_total: number;
+  parcelas: number;
+  status: string;
+}
+
+interface Pagamento {
+  id: string;
+  acordo_id: string;
   numero_parcela: number;
-  data_prevista: string;
-  data_paga: string | null;
   valor_parcela: number;
   comissao_parcela: number;
+  data_prevista: string;
+  data_paga: string | null;
   status: string;
-  acordos: {
-    cliente_nome: string;
-  };
 }
 
 export default function Comissoes() {
   const { user } = useAuth();
-  const [pagamentos, setPagamentos] = useState<PagamentoComAcordo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState<'todas' | 'pagas'>('todas');
 
-  useEffect(() => {
-    async function loadComissoes() {
-      if (!user) return;
+  const { data: acordos, isLoading: loadingAcordos } = useQuery({
+    queryKey: ['meus-acordos', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('acordos')
+        .select('id, cliente_nome, cliente_cpf, valor_total, comissao_total, parcelas, status')
+        .eq('user_id', user!.id)
+        .order('criado_em', { ascending: false });
 
-      try {
-        const { data, error } = await supabase
-          .from('pagamentos')
-          .select(`
-            id,
-            numero_parcela,
-            data_prevista,
-            data_paga,
-            valor_parcela,
-            comissao_parcela,
-            status,
-            acordos!inner (
-              cliente_nome,
-              user_id
-            )
-          `)
-          .eq('acordos.user_id', user.id)
-          .order('data_paga', { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return data as Acordo[];
+    },
+    enabled: !!user,
+  });
 
-        if (error) throw error;
-        
-        // Type assertion after fetching
-        const typedData = data as unknown as PagamentoComAcordo[];
-        setPagamentos(typedData || []);
-      } catch (error) {
-        console.error('Erro ao carregar comissões:', error);
-      } finally {
-        setLoading(false);
-      }
+  const { data: pagamentos, isLoading: loadingPagamentos } = useQuery({
+    queryKey: ['meus-pagamentos', acordos?.map(a => a.id)],
+    queryFn: async () => {
+      if (!acordos || acordos.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('pagamentos')
+        .select('id, acordo_id, numero_parcela, valor_parcela, comissao_parcela, data_prevista, data_paga, status')
+        .in('acordo_id', acordos.map(a => a.id))
+        .order('numero_parcela', { ascending: true });
+
+      if (error) throw error;
+      return data as Pagamento[];
+    },
+    enabled: !!acordos && acordos.length > 0,
+  });
+
+  const loading = loadingAcordos || loadingPagamentos;
+
+  // Calcular totais
+  const totalComissao = pagamentos?.reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
+  const totalPaga = pagamentos?.filter(p => p.status === 'pago').reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
+  const totalPendente = pagamentos?.filter(p => p.status === 'pendente').reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
+  const percentualRecebido = totalComissao > 0 ? (totalPaga / totalComissao) * 100 : 0;
+
+  // Agrupar acordos por CPF
+  const acordosPorCpf = acordos?.reduce((acc, acordo) => {
+    const cpf = acordo.cliente_cpf || 'Sem CPF';
+    if (!acc[cpf]) {
+      acc[cpf] = [];
     }
+    acc[cpf].push(acordo);
+    return acc;
+  }, {} as Record<string, Acordo[]>) || {};
 
-    loadComissoes();
-  }, [user]);
+  // Filtrar pagamentos
+  const pagamentosFiltrados = filtro === 'pagas' 
+    ? pagamentos?.filter(p => p.status === 'pago') 
+    : pagamentos;
+
+  const getPagamentosDoAcordo = (acordoId: string) => {
+    return pagamentosFiltrados?.filter(p => p.acordo_id === acordoId) || [];
+  };
 
   if (loading) {
     return (
@@ -73,27 +105,20 @@ export default function Comissoes() {
     );
   }
 
-  const pagamentosPagos = pagamentos.filter(p => p.status === 'pago');
-  const pagamentosPendentes = pagamentos.filter(p => p.status === 'pendente');
-  
-  const totalRecebido = pagamentosPagos.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
-  const totalPendente = pagamentosPendentes.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
-  const totalGeral = totalRecebido + totalPendente;
-
   return (
     <AppLayout>
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">Minhas Comissões</h1>
 
         {/* Cards de resumo */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <TrendingUp className="h-8 w-8 text-primary" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Geral</p>
-                  <p className="text-2xl font-bold">{formatarMoeda(totalGeral)}</p>
+                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="text-2xl font-bold">{formatarMoeda(totalComissao)}</p>
                 </div>
               </div>
             </CardContent>
@@ -104,8 +129,8 @@ export default function Comissoes() {
               <div className="flex items-center gap-3">
                 <CheckCircle className="h-8 w-8 text-secondary" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Recebido</p>
-                  <p className="text-2xl font-bold text-secondary">{formatarMoeda(totalRecebido)}</p>
+                  <p className="text-sm text-muted-foreground">Paga</p>
+                  <p className="text-2xl font-bold text-secondary">{formatarMoeda(totalPaga)}</p>
                 </div>
               </div>
             </CardContent>
@@ -122,99 +147,132 @@ export default function Comissoes() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <Percent className="h-8 w-8 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">% Recebido</p>
+                  <p className="text-2xl font-bold">{percentualRecebido.toFixed(1)}%</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Histórico de comissões recebidas */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-secondary" />
-              Comissões Recebidas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pagamentosPagos.length > 0 ? (
-              <div className="space-y-3">
-                {pagamentosPagos.map((pagamento) => (
-                  <div
-                    key={pagamento.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-secondary/5 border border-secondary/20"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 bg-secondary/20 rounded-full">
-                        <DollarSign className="h-4 w-4 text-secondary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{pagamento.acordos.cliente_nome}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Parcela {pagamento.numero_parcela} • Pago em {formatarData(pagamento.data_paga!)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-secondary">
-                        {formatarMoeda(pagamento.comissao_parcela)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">
-                Nenhuma comissão recebida ainda
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Tabs de filtro */}
+        <Tabs value={filtro} onValueChange={(v) => setFiltro(v as 'todas' | 'pagas')}>
+          <TabsList>
+            <TabsTrigger value="todas">Todas as Parcelas</TabsTrigger>
+            <TabsTrigger value="pagas">Somente Pagas</TabsTrigger>
+          </TabsList>
 
-        {/* Comissões pendentes */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-warning" />
-              Comissões Pendentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pagamentosPendentes.length > 0 ? (
-              <div className="space-y-3">
-                {pagamentosPendentes.slice(0, 10).map((pagamento) => (
-                  <div
-                    key={pagamento.id}
-                    className="flex items-center justify-between p-4 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 bg-muted rounded-full">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{pagamento.acordos.cliente_nome}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Parcela {pagamento.numero_parcela} • Vencimento: {formatarData(pagamento.data_prevista)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-warning">
-                        {formatarMoeda(pagamento.comissao_parcela)}
-                      </p>
-                      <Badge variant="outline">Pendente</Badge>
-                    </div>
-                  </div>
-                ))}
-                {pagamentosPendentes.length > 10 && (
-                  <p className="text-center text-muted-foreground text-sm">
-                    E mais {pagamentosPendentes.length - 10} parcelas pendentes...
+          <TabsContent value={filtro} className="mt-4">
+            {Object.keys(acordosPorCpf).length === 0 ? (
+              <Card>
+                <CardContent className="py-8">
+                  <p className="text-center text-muted-foreground">
+                    Nenhum acordo encontrado
                   </p>
-                )}
-              </div>
+                </CardContent>
+              </Card>
             ) : (
-              <p className="text-center text-muted-foreground py-8">
-                Nenhuma comissão pendente
-              </p>
+              <div className="space-y-4">
+                {Object.entries(acordosPorCpf).map(([cpf, acordosDoCpf]) => (
+                  <Card key={cpf}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">
+                        CPF: {cpf}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Accordion type="multiple" className="w-full">
+                        {acordosDoCpf.map((acordo) => {
+                          const pagamentosAcordo = getPagamentosDoAcordo(acordo.id);
+                          const comissaoAcordo = pagamentosAcordo.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+                          
+                          if (filtro === 'pagas' && pagamentosAcordo.length === 0) {
+                            return null;
+                          }
+
+                          return (
+                            <AccordionItem key={acordo.id} value={acordo.id}>
+                              <AccordionTrigger className="hover:no-underline">
+                                <div className="flex flex-wrap items-center gap-2 text-left">
+                                  <span className="font-semibold">{acordo.cliente_nome}</span>
+                                  <Badge variant="outline">{acordo.parcelas} parcelas</Badge>
+                                  <Badge variant="secondary">Total: {formatarMoeda(acordo.valor_total)}</Badge>
+                                  <Badge>Comissão: {formatarMoeda(acordo.comissao_total)}</Badge>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                {pagamentosAcordo.length > 0 ? (
+                                  <div className="space-y-4">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Parcela</TableHead>
+                                          <TableHead>Valor</TableHead>
+                                          <TableHead>Comissão</TableHead>
+                                          <TableHead>Vencimento</TableHead>
+                                          <TableHead>Pagamento</TableHead>
+                                          <TableHead>Status</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {pagamentosAcordo.map((pagamento) => (
+                                          <TableRow key={pagamento.id}>
+                                            <TableCell>{pagamento.numero_parcela}/{acordo.parcelas}</TableCell>
+                                            <TableCell>{formatarMoeda(pagamento.valor_parcela)}</TableCell>
+                                            <TableCell className="font-medium">{formatarMoeda(pagamento.comissao_parcela)}</TableCell>
+                                            <TableCell>{formatarData(pagamento.data_prevista)}</TableCell>
+                                            <TableCell>
+                                              {pagamento.data_paga ? formatarData(pagamento.data_paga) : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                              {pagamento.status === 'pago' ? (
+                                                <Badge className="bg-secondary text-secondary-foreground">
+                                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                                  Pago
+                                                </Badge>
+                                              ) : (
+                                                <Badge variant="outline">
+                                                  <Clock className="h-3 w-3 mr-1" />
+                                                  Pendente
+                                                </Badge>
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                    <div className="flex justify-end">
+                                      <div className="text-right">
+                                        <p className="text-sm text-muted-foreground">Comissão do acordo</p>
+                                        <p className="text-lg font-bold">{formatarMoeda(comissaoAcordo)}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-muted-foreground text-center py-4">
+                                    {filtro === 'pagas' 
+                                      ? 'Nenhuma parcela paga neste acordo'
+                                      : 'Nenhuma parcela encontrada'}
+                                  </p>
+                                )}
+                              </AccordionContent>
+                            </AccordionItem>
+                          );
+                        })}
+                      </Accordion>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );
