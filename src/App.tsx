@@ -17,6 +17,7 @@ import AdminUsuarios from "./pages/AdminUsuarios";
 import AdminEquipes from "./pages/AdminEquipes";
 import EquipeAcordos from "./pages/EquipeAcordos";
 import MinhaConta from "./pages/MinhaConta";
+import UsuarioComissoes from "./pages/UsuarioComissoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -106,6 +107,7 @@ const App = () => (
             <Route path="/conta" element={<ProtectedRoute><MinhaConta /></ProtectedRoute>} />
             <Route path="/equipe/acordos" element={<GestorRoute><EquipeAcordos /></GestorRoute>} />
             <Route path="/admin/usuarios" element={<AdminRoute><AdminUsuarios /></AdminRoute>} />
+            <Route path="/admin/usuarios/:userId/comissoes" element={<AdminRoute><UsuarioComissoes /></AdminRoute>} />
             <Route path="/admin/equipes" element={<AdminRoute><AdminEquipes /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
