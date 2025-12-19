@@ -21,8 +21,9 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign } from 'lucide-react';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
+import { ComissaoDialog } from '@/components/ComissaoDialog';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -52,6 +53,7 @@ export default function AdminUsuarios() {
   const queryClient = useQueryClient();
   const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
+  const [comissaoUser, setComissaoUser] = useState<UserWithRole | null>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -284,6 +286,14 @@ export default function AdminUsuarios() {
                           <KeyRound className="h-4 w-4 mr-1" />
                           Senha
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setComissaoUser(user)}
+                        >
+                          <DollarSign className="h-4 w-4 mr-1" />
+                          Comissões
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -303,6 +313,13 @@ export default function AdminUsuarios() {
           userName={resetPasswordUser?.nome ?? ''}
           onConfirm={handleResetPassword}
           isLoading={resetPasswordMutation.isPending}
+        />
+
+        <ComissaoDialog
+          open={!!comissaoUser}
+          onOpenChange={(open) => !open && setComissaoUser(null)}
+          userId={comissaoUser?.id ?? ''}
+          userName={comissaoUser?.nome ?? ''}
         />
       </div>
     </AppLayout>
