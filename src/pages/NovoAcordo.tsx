@@ -25,6 +25,11 @@ const acordoSchema = z.object({
 });
 
 // Funções de máscara
+const formatNome = (value: string) => {
+  // Permite apenas letras (maiúsculas/minúsculas), acentos e espaços
+  return value.replace(/[^a-zA-ZÀ-ÿ\s]/g, '');
+};
+
 const formatCpf = (value: string) => {
   const numbers = value.replace(/\D/g, '').slice(0, 11);
   return numbers
@@ -43,6 +48,25 @@ const formatPhone = (value: string) => {
   return numbers
     .replace(/(\d{2})(\d)/, '($1) $2')
     .replace(/(\d{5})(\d)/, '$1-$2');
+};
+
+const formatCurrency = (value: string) => {
+  // Remove tudo exceto números
+  const numbers = value.replace(/\D/g, '');
+  
+  // Converte para número (centavos)
+  const amount = parseInt(numbers || '0', 10);
+  
+  // Formata como moeda brasileira
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(amount / 100);
+};
+
+const parseCurrency = (value: string): number => {
+  const numbers = value.replace(/\D/g, '');
+  return parseInt(numbers || '0', 10) / 100;
 };
 
 export default function NovoAcordo() {
@@ -68,9 +92,9 @@ export default function NovoAcordo() {
   const calculo = useMemo(() => {
     const parcelas = parseInt(form.parcelas) || 0;
     const diasAtraso = parseInt(form.diasAtraso) || 0;
-    const valorTotal = parseFloat(form.valorTotal) || 0;
-    const valorPrimeiraParcela = parseFloat(form.valorPrimeiraParcela) || 0;
-    const valorDemaisParcelas = parseFloat(form.valorDemaisParcelas) || 0;
+    const valorTotal = parseCurrency(form.valorTotal);
+    const valorPrimeiraParcela = parseCurrency(form.valorPrimeiraParcela);
+    const valorDemaisParcelas = parseCurrency(form.valorDemaisParcelas);
 
     if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0) return null;
 
@@ -233,7 +257,7 @@ export default function NovoAcordo() {
                   id="clienteNome"
                   placeholder="Nome completo do cliente"
                   value={form.clienteNome}
-                  onChange={(e) => setForm({ ...form, clienteNome: e.target.value })}
+                  onChange={(e) => setForm({ ...form, clienteNome: formatNome(e.target.value) })}
                   required
                 />
               </div>
@@ -274,12 +298,9 @@ export default function NovoAcordo() {
                 <Label htmlFor="valorTotal">Valor Total do Acordo (R$) *</Label>
                 <Input
                   id="valorTotal"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="0,00"
+                  placeholder="R$ 0,00"
                   value={form.valorTotal}
-                  onChange={(e) => setForm({ ...form, valorTotal: e.target.value })}
+                  onChange={(e) => setForm({ ...form, valorTotal: formatCurrency(e.target.value) })}
                   required
                 />
               </div>
@@ -303,12 +324,9 @@ export default function NovoAcordo() {
                   <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela (R$)</Label>
                   <Input
                     id="valorPrimeiraParcela"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Opcional - deixe vazio para dividir igualmente"
+                    placeholder="R$ 0,00 (opcional)"
                     value={form.valorPrimeiraParcela}
-                    onChange={(e) => setForm({ ...form, valorPrimeiraParcela: e.target.value })}
+                    onChange={(e) => setForm({ ...form, valorPrimeiraParcela: formatCurrency(e.target.value) })}
                   />
                 </div>
 
@@ -316,12 +334,9 @@ export default function NovoAcordo() {
                   <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas (R$)</Label>
                   <Input
                     id="valorDemaisParcelas"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Opcional - deixe vazio para dividir igualmente"
+                    placeholder="R$ 0,00 (opcional)"
                     value={form.valorDemaisParcelas}
-                    onChange={(e) => setForm({ ...form, valorDemaisParcelas: e.target.value })}
+                    onChange={(e) => setForm({ ...form, valorDemaisParcelas: formatCurrency(e.target.value) })}
                   />
                 </div>
               </div>
