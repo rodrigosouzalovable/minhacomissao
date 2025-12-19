@@ -15,10 +15,12 @@ import { ArrowLeft, Calculator } from 'lucide-react';
 
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
-  clienteCpf: z.string().max(14, 'CPF inválido').optional(),
-  clienteTelefone: z.string().max(15, 'Telefone inválido').optional(),
+  clienteCpf: z.string().min(11, 'CPF é obrigatório').max(14, 'CPF inválido'),
+  clienteTelefone: z.string().min(10, 'Telefone é obrigatório').max(15, 'Telefone inválido'),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
+  valorPrimeiraParcela: z.number().positive('Valor da primeira parcela é obrigatório'),
+  valorDemaisParcelas: z.number().positive('Valor das demais parcelas é obrigatório'),
   dataPrimeiroPagamento: z.string().min(1, 'Data é obrigatória'),
   diasAtraso: z.number().int().min(0, 'Dias em atraso não pode ser negativo').max(9999),
   observacoes: z.string().max(1000, 'Observações muito longas').optional(),
@@ -223,10 +225,12 @@ export default function NovoAcordo() {
     try {
       const validated = acordoSchema.parse({
         clienteNome: form.clienteNome.trim(),
-        clienteCpf: form.clienteCpf.trim() || undefined,
-        clienteTelefone: form.clienteTelefone.trim() || undefined,
+        clienteCpf: form.clienteCpf.trim(),
+        clienteTelefone: form.clienteTelefone.trim(),
         valorTotal: calculo.valorTotal,
         parcelas: parseInt(form.parcelas),
+        valorPrimeiraParcela: parseCurrency(form.valorPrimeiraParcela),
+        valorDemaisParcelas: parseCurrency(form.valorDemaisParcelas),
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
         observacoes: form.observacoes.trim() || undefined,
@@ -345,24 +349,26 @@ export default function NovoAcordo() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="clienteCpf">CPF</Label>
+                  <Label htmlFor="clienteCpf">CPF *</Label>
                   <Input
                     id="clienteCpf"
                     placeholder="000.000.000-00"
                     value={form.clienteCpf}
                     onChange={(e) => setForm({ ...form, clienteCpf: formatCpf(e.target.value) })}
                     maxLength={14}
+                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="clienteTelefone">Telefone</Label>
+                  <Label htmlFor="clienteTelefone">Telefone *</Label>
                   <Input
                     id="clienteTelefone"
                     placeholder="(00) 00000-0000"
                     value={form.clienteTelefone}
                     onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
                     maxLength={15}
+                    required
                   />
                 </div>
               </div>
@@ -402,24 +408,26 @@ export default function NovoAcordo() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela (R$)</Label>
+                  <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela (R$) *</Label>
                   <Input
                     id="valorPrimeiraParcela"
-                    placeholder="Opcional (ex: 149,25)"
+                    placeholder="Ex: 149,25"
                     value={form.valorPrimeiraParcela}
                     onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorPrimeiraParcela')}
                     onBlur={() => handleCurrencyWithCentsBlur('valorPrimeiraParcela')}
+                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas (R$)</Label>
+                  <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas (R$) *</Label>
                   <Input
                     id="valorDemaisParcelas"
-                    placeholder="Opcional (ex: 300,50)"
+                    placeholder="Ex: 300,50"
                     value={form.valorDemaisParcelas}
                     onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorDemaisParcelas')}
                     onBlur={() => handleCurrencyWithCentsBlur('valorDemaisParcelas')}
+                    required
                   />
                 </div>
               </div>
@@ -545,7 +553,7 @@ export default function NovoAcordo() {
             <Button
               type="submit"
               className="flex-1"
-              disabled={isLoading || !calculo}
+              disabled={isLoading || !calculo || !form.clienteCpf || !form.clienteTelefone || !form.valorPrimeiraParcela || !form.valorDemaisParcelas}
             >
               {isLoading ? 'Salvando...' : 'Criar Acordo'}
             </Button>
