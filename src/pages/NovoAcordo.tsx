@@ -54,19 +54,21 @@ const formatCurrency = (value: string) => {
   // Remove tudo exceto números
   const numbers = value.replace(/\D/g, '');
   
-  // Converte para número (centavos)
+  // Converte para número (reais inteiros)
   const amount = parseInt(numbers || '0', 10);
   
   // Formata como moeda brasileira
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(amount / 100);
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 };
 
 const parseCurrency = (value: string): number => {
   const numbers = value.replace(/\D/g, '');
-  return parseInt(numbers || '0', 10) / 100;
+  return parseInt(numbers || '0', 10);
 };
 
 export default function NovoAcordo() {
