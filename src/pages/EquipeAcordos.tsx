@@ -40,6 +40,7 @@ export default function EquipeAcordos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [memberFilter, setMemberFilter] = useState<string>('todos');
+  const [comissaoPaga, setComissaoPaga] = useState(0);
 
   useEffect(() => {
     async function loadTeamData() {
@@ -134,6 +135,21 @@ export default function EquipeAcordos() {
         });
 
         setAcordos(acordosComNome);
+
+        // Buscar pagamentos pagos dos acordos da equipe
+        const acordoIds = (acordosData || []).map(a => a.id);
+        if (acordoIds.length > 0) {
+          const { data: pagamentosPagos, error: pagamentosError } = await supabase
+            .from('pagamentos')
+            .select('comissao_parcela')
+            .in('acordo_id', acordoIds)
+            .eq('status', 'pago');
+
+          if (!pagamentosError && pagamentosPagos) {
+            const totalPago = pagamentosPagos.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+            setComissaoPaga(totalPago);
+          }
+        }
       } catch (error) {
         console.error('Erro ao carregar dados da equipe:', error);
       } finally {
@@ -199,7 +215,7 @@ export default function EquipeAcordos() {
         </div>
 
         {/* Cards de resumo */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -246,6 +262,20 @@ export default function EquipeAcordos() {
             <CardContent>
               <div className="text-2xl font-bold text-secondary">
                 {formatarMoeda(comissaoTotal)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Comissões Pagas
+              </CardTitle>
+              <DollarSign className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-500">
+                {formatarMoeda(comissaoPaga)}
               </div>
             </CardContent>
           </Card>
