@@ -8,8 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { DollarSign, TrendingUp, Clock, CheckCircle, Percent } from 'lucide-react';
+import { exportarParaExcel } from '@/lib/exportExcel';
+import { TrendingUp, Clock, CheckCircle, Percent, Download } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Acordo {
   id: string;
@@ -95,6 +98,44 @@ export default function Comissoes() {
     return pagamentosFiltrados?.filter(p => p.acordo_id === acordoId) || [];
   };
 
+  const handleExportarExcel = () => {
+    if (!pagamentos || !acordos || pagamentos.length === 0) {
+      toast.error('Não há dados para exportar');
+      return;
+    }
+
+    const dadosExport = pagamentos.map(p => {
+      const acordo = acordos.find(a => a.id === p.acordo_id);
+      return {
+        cliente_nome: acordo?.cliente_nome || '',
+        cliente_cpf: acordo?.cliente_cpf || 'Sem CPF',
+        parcela: `${p.numero_parcela}/${acordo?.parcelas || 0}`,
+        valor_parcela: formatarMoeda(p.valor_parcela),
+        comissao: formatarMoeda(p.comissao_parcela),
+        vencimento: formatarData(p.data_prevista),
+        pagamento: p.data_paga ? formatarData(p.data_paga) : '-',
+        status: p.status === 'pago' ? 'Pago' : 'Pendente',
+      };
+    });
+
+    exportarParaExcel(
+      dadosExport,
+      [
+        { chave: 'cliente_nome', titulo: 'Cliente' },
+        { chave: 'cliente_cpf', titulo: 'CPF' },
+        { chave: 'parcela', titulo: 'Parcela' },
+        { chave: 'valor_parcela', titulo: 'Valor' },
+        { chave: 'comissao', titulo: 'Comissão' },
+        { chave: 'vencimento', titulo: 'Vencimento' },
+        { chave: 'pagamento', titulo: 'Pagamento' },
+        { chave: 'status', titulo: 'Status' },
+      ],
+      'minhas-comissoes'
+    );
+
+    toast.success('Relatório exportado com sucesso!');
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -108,7 +149,13 @@ export default function Comissoes() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Minhas Comissões</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Minhas Comissões</h1>
+          <Button onClick={handleExportarExcel} variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Exportar Excel
+          </Button>
+        </div>
 
         {/* Cards de resumo */}
         <div className="grid gap-4 md:grid-cols-4">
