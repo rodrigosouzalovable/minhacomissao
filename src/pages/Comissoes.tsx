@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
-import { TrendingUp, Clock, CheckCircle, Percent, Download } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Percent, Download, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Acordo {
@@ -77,6 +77,7 @@ export default function Comissoes() {
   const totalComissao = pagamentos?.reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
   const totalPaga = pagamentos?.filter(p => p.status === 'pago').reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
   const totalPendente = pagamentos?.filter(p => p.status === 'pendente').reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
+  const totalValorParcelasPagas = pagamentos?.filter(p => p.status === 'pago').reduce((sum, p) => sum + Number(p.valor_parcela), 0) || 0;
   const percentualRecebido = totalComissao > 0 ? (totalPaga / totalComissao) * 100 : 0;
 
   // Agrupar acordos por CPF
@@ -158,7 +159,7 @@ export default function Comissoes() {
         </div>
 
         {/* Cards de resumo */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -178,6 +179,18 @@ export default function Comissoes() {
                 <div>
                   <p className="text-sm text-muted-foreground">Paga</p>
                   <p className="text-2xl font-bold text-secondary">{formatarMoeda(totalPaga)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <DollarSign className="h-8 w-8 text-secondary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Parcelas Pagas</p>
+                  <p className="text-2xl font-bold text-secondary">{formatarMoeda(totalValorParcelasPagas)}</p>
                 </div>
               </div>
             </CardContent>
