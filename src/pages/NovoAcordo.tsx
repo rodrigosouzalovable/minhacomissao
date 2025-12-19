@@ -97,20 +97,35 @@ export default function NovoAcordo() {
     observacoes: '',
   });
 
-  // Handler para mudança de campo de moeda (aceita apenas números durante digitação)
-  const handleCurrencyChange = (value: string, field: 'valorTotal') => {
-    const numbers = value.replace(/\D/g, '');
-    setForm({ ...form, [field]: numbers });
-  };
-
-  // Handler para formatar ao sair do campo (valor total - sem centavos)
-  const handleCurrencyBlur = (field: 'valorTotal') => {
-    const value = form[field];
-    const numbers = value.replace(/\D/g, '');
-    const amount = parseInt(numbers || '0', 10);
+  // Handler para formatação em tempo real do valor total (com centavos)
+  const handleCurrencyRealtime = (value: string, field: 'valorTotal') => {
+    // Remove "R$ " e espaços iniciais
+    let cleaned = value.replace(/^R\$\s*/, '');
     
-    if (amount > 0) {
-      setForm({ ...form, [field]: formatCurrencyDisplay(amount) });
+    // Remove tudo exceto números e vírgula
+    cleaned = cleaned.replace(/[^\d,]/g, '');
+    
+    // Permite apenas uma vírgula
+    const parts = cleaned.split(',');
+    if (parts.length > 2) {
+      cleaned = parts[0] + ',' + parts.slice(1).join('');
+    }
+    
+    // Limita a 2 casas decimais após a vírgula
+    if (parts.length === 2 && parts[1].length > 2) {
+      cleaned = parts[0] + ',' + parts[1].slice(0, 2);
+    }
+    
+    // Formata a parte inteira com pontos de milhar
+    if (parts[0]) {
+      const intPart = parts[0].replace(/\D/g, '');
+      const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      cleaned = parts.length === 2 ? formatted + ',' + parts[1] : formatted;
+    }
+    
+    // Adiciona "R$ " no início se tiver valor
+    if (cleaned) {
+      setForm({ ...form, [field]: 'R$ ' + cleaned });
     } else {
       setForm({ ...form, [field]: '' });
     }
@@ -364,10 +379,9 @@ export default function NovoAcordo() {
                 <Label htmlFor="valorTotal">Valor Total do Acordo (R$) *</Label>
                 <Input
                   id="valorTotal"
-                  placeholder="Digite o valor (ex: 3582)"
+                  placeholder="Digite o valor (ex: 2094,96)"
                   value={form.valorTotal}
-                  onChange={(e) => handleCurrencyChange(e.target.value, 'valorTotal')}
-                  onBlur={() => handleCurrencyBlur('valorTotal')}
+                  onChange={(e) => handleCurrencyRealtime(e.target.value, 'valorTotal')}
                   required
                 />
               </div>
