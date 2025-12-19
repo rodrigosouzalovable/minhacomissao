@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +24,6 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Users, Shield, UserCheck, KeyRound, DollarSign } from 'lucide-react';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
-import { ComissaoDialog } from '@/components/ComissaoDialog';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -51,9 +51,9 @@ const roleBadgeVariants: Record<AppRole, 'default' | 'secondary' | 'destructive'
 export default function AdminUsuarios() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
-  const [comissaoUser, setComissaoUser] = useState<UserWithRole | null>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -266,34 +266,40 @@ export default function AdminUsuarios() {
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="space-x-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleSaveRole(user.id)}
-                          disabled={
-                            !selectedRole[user.id] ||
-                            selectedRole[user.id] === user.role ||
-                            updateRoleMutation.isPending
-                          }
-                        >
-                          Salvar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setResetPasswordUser(user)}
-                        >
-                          <KeyRound className="h-4 w-4 mr-1" />
-                          Senha
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setComissaoUser(user)}
-                        >
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          Comissões
-                        </Button>
+                      <TableCell>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveRole(user.id)}
+                              disabled={
+                                !selectedRole[user.id] ||
+                                selectedRole[user.id] === user.role ||
+                                updateRoleMutation.isPending
+                              }
+                            >
+                              Salvar
+                            </Button>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setResetPasswordUser(user)}
+                            >
+                              <KeyRound className="h-4 w-4 mr-1" />
+                              Senha
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate(`/admin/usuarios/${user.id}/comissoes`)}
+                            >
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              Comissões
+                            </Button>
+                          </div>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -315,12 +321,6 @@ export default function AdminUsuarios() {
           isLoading={resetPasswordMutation.isPending}
         />
 
-        <ComissaoDialog
-          open={!!comissaoUser}
-          onOpenChange={(open) => !open && setComissaoUser(null)}
-          userId={comissaoUser?.id ?? ''}
-          userName={comissaoUser?.nome ?? ''}
-        />
       </div>
     </AppLayout>
   );
