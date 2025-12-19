@@ -50,20 +50,13 @@ const formatPhone = (value: string) => {
     .replace(/(\d{5})(\d)/, '$1-$2');
 };
 
-const formatCurrency = (value: string) => {
-  // Remove tudo exceto números
-  const numbers = value.replace(/\D/g, '');
-  
-  // Converte para número (reais inteiros)
-  const amount = parseInt(numbers || '0', 10);
-  
-  // Formata como moeda brasileira
+const formatCurrencyDisplay = (value: number): string => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(value);
 };
 
 const parseCurrency = (value: string): number => {
@@ -102,6 +95,25 @@ export default function NovoAcordo() {
     diasAtraso: '',
     observacoes: '',
   });
+
+  // Handler para mudança de campo de moeda (aceita apenas números durante digitação)
+  const handleCurrencyChange = (value: string, field: 'valorTotal' | 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
+    const numbers = value.replace(/\D/g, '');
+    setForm({ ...form, [field]: numbers });
+  };
+
+  // Handler para formatar ao sair do campo
+  const handleCurrencyBlur = (field: 'valorTotal' | 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
+    const value = form[field];
+    const numbers = value.replace(/\D/g, '');
+    const amount = parseInt(numbers || '0', 10);
+    
+    if (amount > 0) {
+      setForm({ ...form, [field]: formatCurrencyDisplay(amount) });
+    } else {
+      setForm({ ...form, [field]: '' });
+    }
+  };
 
   // Cálculo automático da comissão
   const calculo = useMemo(() => {
@@ -317,9 +329,10 @@ export default function NovoAcordo() {
                 <Label htmlFor="valorTotal">Valor Total do Acordo (R$) *</Label>
                 <Input
                   id="valorTotal"
-                  placeholder="R$ 0,00"
+                  placeholder="Digite o valor (ex: 3582)"
                   value={form.valorTotal}
-                  onChange={(e) => setForm({ ...form, valorTotal: formatCurrency(e.target.value) })}
+                  onChange={(e) => handleCurrencyChange(e.target.value, 'valorTotal')}
+                  onBlur={() => handleCurrencyBlur('valorTotal')}
                   required
                 />
               </div>
@@ -343,19 +356,21 @@ export default function NovoAcordo() {
                   <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela (R$)</Label>
                   <Input
                     id="valorPrimeiraParcela"
-                    placeholder="R$ 0,00 (opcional)"
+                    placeholder="Opcional (ex: 500)"
                     value={form.valorPrimeiraParcela}
-                    onChange={(e) => setForm({ ...form, valorPrimeiraParcela: formatCurrency(e.target.value) })}
+                    onChange={(e) => handleCurrencyChange(e.target.value, 'valorPrimeiraParcela')}
+                    onBlur={() => handleCurrencyBlur('valorPrimeiraParcela')}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas (R$)</Label>
                   <Input
-                    id="valorDemaisParcelas"
-                    placeholder="R$ 0,00 (opcional)"
+                    id="valorDemaisParcela"
+                    placeholder="Opcional (ex: 300)"
                     value={form.valorDemaisParcelas}
-                    onChange={(e) => setForm({ ...form, valorDemaisParcelas: formatCurrency(e.target.value) })}
+                    onChange={(e) => handleCurrencyChange(e.target.value, 'valorDemaisParcelas')}
+                    onBlur={() => handleCurrencyBlur('valorDemaisParcelas')}
                   />
                 </div>
               </div>
