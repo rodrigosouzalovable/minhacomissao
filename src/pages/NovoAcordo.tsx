@@ -60,8 +60,9 @@ const formatCurrencyDisplay = (value: number): string => {
 };
 
 const parseCurrency = (value: string): number => {
-  const numbers = value.replace(/\D/g, '');
-  return parseInt(numbers || '0', 10);
+  // Remove "R$", espaços e pontos de milhar, converte vírgula para ponto decimal
+  const cleaned = value.replace(/[R$\s.]/g, '').replace(',', '.');
+  return parseFloat(cleaned) || 0;
 };
 
 export default function NovoAcordo() {
@@ -97,16 +98,50 @@ export default function NovoAcordo() {
   });
 
   // Handler para mudança de campo de moeda (aceita apenas números durante digitação)
-  const handleCurrencyChange = (value: string, field: 'valorTotal' | 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
+  const handleCurrencyChange = (value: string, field: 'valorTotal') => {
     const numbers = value.replace(/\D/g, '');
     setForm({ ...form, [field]: numbers });
   };
 
-  // Handler para formatar ao sair do campo
-  const handleCurrencyBlur = (field: 'valorTotal' | 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
+  // Handler para formatar ao sair do campo (valor total - sem centavos)
+  const handleCurrencyBlur = (field: 'valorTotal') => {
     const value = form[field];
     const numbers = value.replace(/\D/g, '');
     const amount = parseInt(numbers || '0', 10);
+    
+    if (amount > 0) {
+      setForm({ ...form, [field]: formatCurrencyDisplay(amount) });
+    } else {
+      setForm({ ...form, [field]: '' });
+    }
+  };
+
+  // Handler para campos com centavos (parcelas) - aceita números e vírgula
+  const handleCurrencyWithCentsChange = (value: string, field: 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
+    // Remove tudo exceto números e vírgula
+    let cleaned = value.replace(/[^\d,]/g, '');
+    
+    // Permite apenas uma vírgula
+    const parts = cleaned.split(',');
+    if (parts.length > 2) {
+      cleaned = parts[0] + ',' + parts.slice(1).join('');
+    }
+    
+    // Limita a 2 casas decimais após a vírgula
+    if (parts.length === 2 && parts[1].length > 2) {
+      cleaned = parts[0] + ',' + parts[1].slice(0, 2);
+    }
+    
+    setForm({ ...form, [field]: cleaned });
+  };
+
+  // Handler para formatar ao sair do campo (parcelas - com centavos)
+  const handleCurrencyWithCentsBlur = (field: 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
+    const value = form[field];
+    
+    // Converte "149,25" para número 149.25
+    const normalized = value.replace(',', '.');
+    const amount = parseFloat(normalized) || 0;
     
     if (amount > 0) {
       setForm({ ...form, [field]: formatCurrencyDisplay(amount) });
@@ -356,21 +391,21 @@ export default function NovoAcordo() {
                   <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela (R$)</Label>
                   <Input
                     id="valorPrimeiraParcela"
-                    placeholder="Opcional (ex: 500)"
+                    placeholder="Opcional (ex: 149,25)"
                     value={form.valorPrimeiraParcela}
-                    onChange={(e) => handleCurrencyChange(e.target.value, 'valorPrimeiraParcela')}
-                    onBlur={() => handleCurrencyBlur('valorPrimeiraParcela')}
+                    onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorPrimeiraParcela')}
+                    onBlur={() => handleCurrencyWithCentsBlur('valorPrimeiraParcela')}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas (R$)</Label>
                   <Input
-                    id="valorDemaisParcela"
-                    placeholder="Opcional (ex: 300)"
+                    id="valorDemaisParcelas"
+                    placeholder="Opcional (ex: 300,50)"
                     value={form.valorDemaisParcelas}
-                    onChange={(e) => handleCurrencyChange(e.target.value, 'valorDemaisParcelas')}
-                    onBlur={() => handleCurrencyBlur('valorDemaisParcelas')}
+                    onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorDemaisParcelas')}
+                    onBlur={() => handleCurrencyWithCentsBlur('valorDemaisParcelas')}
                   />
                 </div>
               </div>
