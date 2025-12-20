@@ -287,13 +287,13 @@ export default function EquipeAcordos() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-xs font-medium text-muted-foreground">
                 Comissão Total
               </CardTitle>
               <DollarSign className="h-4 w-4 text-secondary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-secondary">
+              <div className={`${isAdmin && showEmpresaCards ? 'text-lg' : 'text-2xl'} font-bold text-secondary`}>
                 {formatarMoeda(comissaoTotal)}
               </div>
             </CardContent>
@@ -301,13 +301,13 @@ export default function EquipeAcordos() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-xs font-medium text-muted-foreground">
                 Comissões Pagas
               </CardTitle>
               <DollarSign className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-500">
+              <div className={`${isAdmin && showEmpresaCards ? 'text-lg' : 'text-2xl'} font-bold text-green-500`}>
                 {formatarMoeda(comissaoPaga)}
               </div>
             </CardContent>
@@ -323,7 +323,7 @@ export default function EquipeAcordos() {
                   <Building2 className="h-4 w-4 text-blue-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-bold text-blue-500">
+                  <div className="text-lg font-bold text-blue-500">
                     {formatarMoeda(comissaoEmpresaTotal)}
                   </div>
                 </CardContent>
@@ -337,7 +337,7 @@ export default function EquipeAcordos() {
                   <Building2 className="h-4 w-4 text-emerald-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-bold text-emerald-500">
+                  <div className="text-lg font-bold text-emerald-500">
                     {formatarMoeda(comissaoEmpresaPaga)}
                   </div>
                 </CardContent>
