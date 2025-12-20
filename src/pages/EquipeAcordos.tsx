@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { Search, FileText, Users, DollarSign, Clock } from 'lucide-react';
+import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import { Search, FileText, Users, DollarSign, Clock, Building2 } from 'lucide-react';
 
 interface AcordoComFuncionario {
   id: string;
@@ -41,6 +41,8 @@ export default function EquipeAcordos() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [memberFilter, setMemberFilter] = useState<string>('todos');
   const [comissaoPaga, setComissaoPaga] = useState(0);
+  const [comissaoEmpresaTotal, setComissaoEmpresaTotal] = useState(0);
+  const [comissaoEmpresaPaga, setComissaoEmpresaPaga] = useState(0);
 
   useEffect(() => {
     async function loadTeamData() {
@@ -136,18 +138,36 @@ export default function EquipeAcordos() {
 
         setAcordos(acordosComNome);
 
+        // Calcular comissão total da empresa
+        const totalEmpresa = (acordosData || []).reduce((sum, acordo) => {
+          const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
+          return sum + (Number(acordo.valor_total) * percentualEmpresa / 100);
+        }, 0);
+        setComissaoEmpresaTotal(totalEmpresa);
+
         // Buscar pagamentos pagos dos acordos da equipe
         const acordoIds = (acordosData || []).map(a => a.id);
         if (acordoIds.length > 0) {
           const { data: pagamentosPagos, error: pagamentosError } = await supabase
             .from('pagamentos')
-            .select('comissao_parcela')
+            .select('comissao_parcela, valor_parcela, acordo_id')
             .in('acordo_id', acordoIds)
             .eq('status', 'pago');
 
           if (!pagamentosError && pagamentosPagos) {
             const totalPago = pagamentosPagos.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
             setComissaoPaga(totalPago);
+
+            // Calcular comissão da empresa para parcelas pagas
+            const totalEmpresaPago = pagamentosPagos.reduce((sum, pag) => {
+              const acordo = acordosData?.find(a => a.id === pag.acordo_id);
+              if (acordo) {
+                const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
+                return sum + (Number(pag.valor_parcela) * percentualEmpresa / 100);
+              }
+              return sum;
+            }, 0);
+            setComissaoEmpresaPaga(totalEmpresaPago);
           }
         }
       } catch (error) {
@@ -215,7 +235,7 @@ export default function EquipeAcordos() {
         </div>
 
         {/* Cards de resumo */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-7' : 'lg:grid-cols-5'}`}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -279,6 +299,38 @@ export default function EquipeAcordos() {
               </div>
             </CardContent>
           </Card>
+
+          {isAdmin && (
+            <>
+              <Card className="border-blue-500/30 bg-blue-500/5">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Comissão Empresa (Total)
+                  </CardTitle>
+                  <Building2 className="h-4 w-4 text-blue-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-500">
+                    {formatarMoeda(comissaoEmpresaTotal)}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-emerald-500/30 bg-emerald-500/5">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Comissão Empresa (Paga)
+                  </CardTitle>
+                  <Building2 className="h-4 w-4 text-emerald-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-emerald-500">
+                    {formatarMoeda(comissaoEmpresaPaga)}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
         {/* Filtros */}
