@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
-import { Search, FileText, Users, DollarSign, Clock, Building2 } from 'lucide-react';
+import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface AcordoComFuncionario {
   id: string;
@@ -43,6 +44,7 @@ export default function EquipeAcordos() {
   const [comissaoPaga, setComissaoPaga] = useState(0);
   const [comissaoEmpresaTotal, setComissaoEmpresaTotal] = useState(0);
   const [comissaoEmpresaPaga, setComissaoEmpresaPaga] = useState(0);
+  const [showEmpresaCards, setShowEmpresaCards] = useState(false);
 
   useEffect(() => {
     async function loadTeamData() {
@@ -232,10 +234,21 @@ export default function EquipeAcordos() {
               {teamMembers.length} funcionário(s) na sua equipe
             </p>
           </div>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEmpresaCards(!showEmpresaCards)}
+              className="gap-2"
+            >
+              {showEmpresaCards ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showEmpresaCards ? 'Ocultar Empresa' : 'Ver Empresa'}
+            </Button>
+          )}
         </div>
 
         {/* Cards de resumo */}
-        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-7' : 'lg:grid-cols-5'}`}>
+        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin && showEmpresaCards ? 'lg:grid-cols-7' : 'lg:grid-cols-5'}`}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -300,17 +313,17 @@ export default function EquipeAcordos() {
             </CardContent>
           </Card>
 
-          {isAdmin && (
+          {isAdmin && showEmpresaCards && (
             <>
               <Card className="border-blue-500/30 bg-blue-500/5">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Comissão Empresa (Total)
+                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                    Empresa (Total)
                   </CardTitle>
                   <Building2 className="h-4 w-4 text-blue-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-blue-500">
+                  <div className="text-xl font-bold text-blue-500">
                     {formatarMoeda(comissaoEmpresaTotal)}
                   </div>
                 </CardContent>
@@ -318,13 +331,13 @@ export default function EquipeAcordos() {
 
               <Card className="border-emerald-500/30 bg-emerald-500/5">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Comissão Empresa (Paga)
+                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                    Empresa (Paga)
                   </CardTitle>
                   <Building2 className="h-4 w-4 text-emerald-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-emerald-500">
+                  <div className="text-xl font-bold text-emerald-500">
                     {formatarMoeda(comissaoEmpresaPaga)}
                   </div>
                 </CardContent>
