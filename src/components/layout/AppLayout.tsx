@@ -14,7 +14,8 @@ import {
   Users,
   UserCog,
   User,
-  UsersRound
+  UsersRound,
+  RotateCcw
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/acordos', label: 'Meus Acordos', icon: FileText },
   { href: '/acordos/novo', label: 'Novo Acordo', icon: PlusCircle },
+  { href: '/retornos', label: 'Retornos', icon: RotateCcw },
   { href: '/comissoes', label: 'Minhas Comissões', icon: DollarSign },
   { href: '/equipe/acordos', label: 'Acordos da Equipe', icon: Users, gestorOnly: true },
   { href: '/admin/usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },

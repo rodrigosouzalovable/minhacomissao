@@ -168,6 +168,45 @@ export type Database = {
         }
         Relationships: []
       }
+      retornos: {
+        Row: {
+          atualizado_em: string
+          cliente_cpf: string
+          cliente_nome: string
+          cliente_telefone: string
+          criado_em: string
+          data_retorno: string
+          id: string
+          observacao: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          cliente_cpf: string
+          cliente_nome: string
+          cliente_telefone: string
+          criado_em?: string
+          data_retorno: string
+          id?: string
+          observacao?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          cliente_cpf?: string
+          cliente_nome?: string
+          cliente_telefone?: string
+          criado_em?: string
+          data_retorno?: string
+          id?: string
+          observacao?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       team_members: {
         Row: {
           criado_em: string
