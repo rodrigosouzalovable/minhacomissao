@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
-import { TrendingUp, Clock, CheckCircle, Percent, Download, DollarSign } from 'lucide-react';
+import { Clock, CheckCircle, Download, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Acordo {
@@ -74,11 +74,8 @@ export default function Comissoes() {
   const loading = loadingAcordos || loadingPagamentos;
 
   // Calcular totais
-  const totalComissao = pagamentos?.reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
   const totalPaga = pagamentos?.filter(p => p.status === 'pago').reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
-  const totalPendente = pagamentos?.filter(p => p.status === 'pendente').reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
   const totalValorParcelasPagas = pagamentos?.filter(p => p.status === 'pago').reduce((sum, p) => sum + Number(p.valor_parcela), 0) || 0;
-  const percentualRecebido = totalComissao > 0 ? (totalPaga / totalComissao) * 100 : 0;
 
   // Agrupar acordos por CPF
   const acordosPorCpf = acordos?.reduce((acc, acordo) => {
@@ -159,37 +156,13 @@ export default function Comissoes() {
         </div>
 
         {/* Cards de resumo */}
-        <div className="grid gap-4 md:grid-cols-5">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-8 w-8 text-primary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold">{formatarMoeda(totalComissao)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="h-8 w-8 text-secondary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Paga</p>
-                  <p className="text-2xl font-bold text-secondary">{formatarMoeda(totalPaga)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
+        <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <DollarSign className="h-8 w-8 text-secondary" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Parcelas Pagas</p>
+                  <p className="text-sm text-muted-foreground">Total Parcelas Pagas</p>
                   <p className="text-2xl font-bold text-secondary">{formatarMoeda(totalValorParcelasPagas)}</p>
                 </div>
               </div>
@@ -199,22 +172,10 @@ export default function Comissoes() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <Clock className="h-8 w-8 text-warning" />
+                <CheckCircle className="h-8 w-8 text-green-500" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Pendente</p>
-                  <p className="text-2xl font-bold text-warning">{formatarMoeda(totalPendente)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Percent className="h-8 w-8 text-primary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">% Recebido</p>
-                  <p className="text-2xl font-bold">{percentualRecebido.toFixed(1)}%</p>
+                  <p className="text-sm text-muted-foreground">Comissão Parcelas Pagas</p>
+                  <p className="text-2xl font-bold text-green-500">{formatarMoeda(totalPaga)}</p>
                 </div>
               </div>
             </CardContent>
