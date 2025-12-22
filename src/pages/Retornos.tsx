@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -68,6 +68,7 @@ export default function Retornos() {
   const [retornos, setRetornos] = useState<Retorno[]>([]);
   const [loadingRetornos, setLoadingRetornos] = useState(true);
   const [nomeError, setNomeError] = useState('');
+  const [showForm, setShowForm] = useState(false);
 
   // Audio recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -254,7 +255,8 @@ export default function Retornos() {
         dataRetorno: '',
       });
 
-      // Refresh list
+      // Hide form and refresh list
+      setShowForm(false);
       fetchRetornos();
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -348,126 +350,144 @@ export default function Retornos() {
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold">Retornos</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-2xl font-bold">Retornos</h1>
+          </div>
+          
+          {retornos.length > 0 && !showForm && (
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Agendar Retorno
+            </Button>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Dados do Cliente</CardTitle>
-              <CardDescription>Informações do cliente para retorno</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="clienteNome">Nome do Cliente *</Label>
-                <Input
-                  id="clienteNome"
-                  placeholder="Nome completo do cliente"
-                  value={form.clienteNome}
-                  onChange={handleNomeChange}
-                  required
-                  className={nomeError ? 'border-destructive' : ''}
-                />
-                {nomeError && (
-                  <p className="text-sm text-destructive">{nomeError}</p>
-                )}
+        {(retornos.length === 0 || showForm) && (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {showForm && (
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  Cancelar
+                </Button>
               </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
+            )}
+            <Card>
+              <CardHeader>
+                <CardTitle>Dados do Cliente</CardTitle>
+                <CardDescription>Informações do cliente para retorno</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="clienteCpf">CPF *</Label>
+                  <Label htmlFor="clienteNome">Nome do Cliente *</Label>
                   <Input
-                    id="clienteCpf"
-                    placeholder="000.000.000-00"
-                    value={form.clienteCpf}
-                    onChange={(e) => setForm({ ...form, clienteCpf: formatCpf(e.target.value) })}
-                    maxLength={14}
+                    id="clienteNome"
+                    placeholder="Nome completo do cliente"
+                    value={form.clienteNome}
+                    onChange={handleNomeChange}
+                    required
+                    className={nomeError ? 'border-destructive' : ''}
+                  />
+                  {nomeError && (
+                    <p className="text-sm text-destructive">{nomeError}</p>
+                  )}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="clienteCpf">CPF *</Label>
+                    <Input
+                      id="clienteCpf"
+                      placeholder="000.000.000-00"
+                      value={form.clienteCpf}
+                      onChange={(e) => setForm({ ...form, clienteCpf: formatCpf(e.target.value) })}
+                      maxLength={14}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="clienteTelefone">Telefone *</Label>
+                    <Input
+                      id="clienteTelefone"
+                      placeholder="(00) 00000-0000"
+                      value={form.clienteTelefone}
+                      onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
+                      maxLength={15}
+                      required
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Lembrete de Retorno</CardTitle>
+                <CardDescription>Adicione uma observação e a data de retorno</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="observacao">Observação</Label>
+                  <div className="relative">
+                    <Textarea
+                      id="observacao"
+                      placeholder="Digite ou grave um áudio com sua observação de retorno..."
+                      value={form.observacao}
+                      onChange={(e) => setForm({ ...form, observacao: e.target.value })}
+                      rows={4}
+                      className="pr-12"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={isRecording ? 'destructive' : 'outline'}
+                      className="absolute right-2 top-2"
+                      onClick={isRecording ? stopRecording : startRecording}
+                      disabled={isTranscribing}
+                    >
+                      {isTranscribing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isRecording ? (
+                        <MicOff className="h-4 w-4" />
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {isRecording && (
+                    <p className="text-sm text-muted-foreground animate-pulse">
+                      🔴 Gravando... Clique no microfone para parar
+                    </p>
+                  )}
+                  {isTranscribing && (
+                    <p className="text-sm text-muted-foreground">
+                      Transcrevendo áudio...
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dataRetorno">Data de Retorno *</Label>
+                  <Input
+                    id="dataRetorno"
+                    type="date"
+                    value={form.dataRetorno}
+                    onChange={(e) => setForm({ ...form, dataRetorno: e.target.value })}
                     required
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="clienteTelefone">Telefone *</Label>
-                  <Input
-                    id="clienteTelefone"
-                    placeholder="(00) 00000-0000"
-                    value={form.clienteTelefone}
-                    onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
-                    maxLength={15}
-                    required
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Lembrete de Retorno</CardTitle>
-              <CardDescription>Adicione uma observação e a data de retorno</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="observacao">Observação</Label>
-                <div className="relative">
-                  <Textarea
-                    id="observacao"
-                    placeholder="Digite ou grave um áudio com sua observação de retorno..."
-                    value={form.observacao}
-                    onChange={(e) => setForm({ ...form, observacao: e.target.value })}
-                    rows={4}
-                    className="pr-12"
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant={isRecording ? 'destructive' : 'outline'}
-                    className="absolute right-2 top-2"
-                    onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isTranscribing}
-                  >
-                    {isTranscribing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : isRecording ? (
-                      <MicOff className="h-4 w-4" />
-                    ) : (
-                      <Mic className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                {isRecording && (
-                  <p className="text-sm text-muted-foreground animate-pulse">
-                    🔴 Gravando... Clique no microfone para parar
-                  </p>
-                )}
-                {isTranscribing && (
-                  <p className="text-sm text-muted-foreground">
-                    Transcrevendo áudio...
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="dataRetorno">Data de Retorno *</Label>
-                <Input
-                  id="dataRetorno"
-                  type="date"
-                  value={form.dataRetorno}
-                  onChange={(e) => setForm({ ...form, dataRetorno: e.target.value })}
-                  required
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Cadastrando...' : 'Cadastrar Retorno'}
-              </Button>
-            </CardContent>
-          </Card>
-        </form>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Cadastrando...' : 'Cadastrar Retorno'}
+                </Button>
+              </CardContent>
+            </Card>
+          </form>
+        )}
 
         {/* Lista de Retornos */}
         <div className="space-y-4">
