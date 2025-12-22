@@ -97,15 +97,15 @@ export function AppLayout({ children }: AppLayoutProps) {
         "lg:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src={acordosIcon} alt="Meus Acordos" className="h-8 w-8" />
-            <div>
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <img src={acordosIcon} alt="Meus Acordos" className="h-8 w-8" />
               <h1 className="text-xl font-bold">MEUS ACORDOS</h1>
-              <p className="text-sm opacity-80 mt-1">{user?.email}</p>
             </div>
+            <PaymentReminders />
           </div>
-          <PaymentReminders />
+          <p className="text-sm opacity-80 mt-2 ml-10">{user?.email}</p>
         </div>
 
         <nav className="mt-4 px-4">
