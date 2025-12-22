@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import successSound from '@/assets/success-sound.mp3';
 import { useAuth } from '@/hooks/useAuth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,6 +89,10 @@ export default function AcordoDetalhe() {
         .eq('id', pagamentoId);
 
       if (error) throw error;
+
+      // Reproduzir som de sucesso
+      const audio = new Audio(successSound);
+      audio.play().catch(err => console.log('Erro ao reproduzir som:', err));
 
       setPagamentos(prev =>
         prev.map(p =>
