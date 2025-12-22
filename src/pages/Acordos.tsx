@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +18,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
@@ -27,6 +27,120 @@ import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
 
+// Componente para exibir cada card de acordo
+function AcordoCard({ 
+  acordo, 
+  onDelete, 
+  getStatusVariant, 
+  getStatusLabel 
+}: { 
+  acordo: Acordo; 
+  onDelete: () => void;
+  getStatusVariant: (status: string) => "default" | "secondary" | "destructive" | "outline";
+  getStatusLabel: (status: string) => string;
+}) {
+  return (
+    <Link to={`/acordos/${acordo.id}`}>
+      <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <FileText className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">{acordo.cliente_nome}</h3>
+                {(acordo.cliente_cpf || acordo.cliente_telefone) && (
+                  <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mt-1">
+                    {acordo.cliente_cpf && (
+                      <span className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {acordo.cliente_cpf}
+                      </span>
+                    )}
+                    {acordo.cliente_telefone && (
+                      <span className="flex items-center gap-1">
+                        <Phone className="h-3 w-3" />
+                        {acordo.cliente_telefone}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <p className="text-sm text-muted-foreground mt-1">
+                  {acordo.parcelas}x de {formatarMoeda(acordo.valor_parcela)} • {acordo.dias_atraso} dias em atraso
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Criado em {formatarData(acordo.criado_em)}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:items-end gap-2">
+              <div className="flex items-center gap-2">
+                <Badge variant={getStatusVariant(acordo.status)}>
+                  {getStatusLabel(acordo.status)}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Valor Total</p>
+                <p className="font-semibold">{formatarMoeda(acordo.valor_total)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Comissão</p>
+                <p className="font-semibold text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+// Componente para estado vazio
+function EmptyState({ 
+  search, 
+  statusFilter, 
+  message = "Nenhum acordo encontrado" 
+}: { 
+  search: string; 
+  statusFilter: string; 
+  message?: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center py-12">
+        <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold mb-2">{message}</h3>
+        <p className="text-muted-foreground text-center mb-4">
+          {search || statusFilter !== 'todos'
+            ? 'Tente ajustar os filtros'
+            : 'Comece cadastrando seu primeiro acordo'}
+        </p>
+        {!search && statusFilter === 'todos' && (
+          <Button asChild>
+            <Link to="/acordos/novo">
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Novo Acordo
+            </Link>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Acordos() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -35,20 +149,34 @@ export default function Acordos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [acordoParaExcluir, setAcordoParaExcluir] = useState<Acordo | null>(null);
+  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados'>('negociados');
+  const [acordosComPagamentosPagos, setAcordosComPagamentosPagos] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function loadAcordos() {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
+        // Carregar acordos
+        const { data: acordosData, error: acordosError } = await supabase
           .from('acordos')
           .select('*')
           .eq('user_id', user.id)
           .order('criado_em', { ascending: false });
 
-        if (error) throw error;
-        setAcordos(data || []);
+        if (acordosError) throw acordosError;
+        setAcordos(acordosData || []);
+
+        // Carregar IDs de acordos que têm parcelas pagas
+        const { data: pagamentosPagos, error: pagamentosError } = await supabase
+          .from('pagamentos')
+          .select('acordo_id')
+          .eq('status', 'pago');
+
+        if (pagamentosError) throw pagamentosError;
+        
+        const idsComPagamentos = new Set(pagamentosPagos?.map(p => p.acordo_id) || []);
+        setAcordosComPagamentosPagos(idsComPagamentos);
       } catch (error) {
         console.error('Erro ao carregar acordos:', error);
       } finally {
@@ -94,8 +222,8 @@ export default function Acordos() {
     }
   };
 
-  const handleExportarExcel = () => {
-    const dadosParaExportar = filteredAcordos.map(acordo => ({
+  const handleExportarExcel = (acordosParaExportar: Acordo[]) => {
+    const dadosParaExportar = acordosParaExportar.map(acordo => ({
       cliente_nome: acordo.cliente_nome,
       cliente_cpf: acordo.cliente_cpf || '-',
       cliente_telefone: acordo.cliente_telefone || '-',
@@ -127,11 +255,12 @@ export default function Acordos() {
       { chave: 'observacoes', titulo: 'Observações' }
     ];
 
-    exportarParaExcel(dadosParaExportar, colunas, 'acordos');
+    const nomeArquivo = abaAtiva === 'pagos' ? 'acordos_pagos' : 'acordos_negociados';
+    exportarParaExcel(dadosParaExportar, colunas, nomeArquivo);
 
     toast({
       title: 'Exportação concluída',
-      description: `${filteredAcordos.length} acordo(s) exportado(s) para Excel.`,
+      description: `${acordosParaExportar.length} acordo(s) exportado(s) para Excel.`,
     });
   };
 
@@ -141,6 +270,18 @@ export default function Acordos() {
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Acordos Pagos: têm pelo menos 1 parcela paga
+  const acordosPagos = filteredAcordos.filter(acordo => 
+    acordosComPagamentosPagos.has(acordo.id)
+  );
+
+  // Acordos Negociados: não têm nenhuma parcela paga ainda
+  const acordosNegociados = filteredAcordos.filter(acordo => 
+    !acordosComPagamentosPagos.has(acordo.id)
+  );
+
+  const acordosExibidos = abaAtiva === 'pagos' ? acordosPagos : acordosNegociados;
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -176,7 +317,7 @@ export default function Acordos() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-2xl font-bold">Meus Acordos</h1>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExportarExcel} disabled={filteredAcordos.length === 0}>
+            <Button variant="outline" onClick={() => handleExportarExcel(acordosExibidos)} disabled={acordosExibidos.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Exportar Excel
             </Button>
@@ -213,98 +354,53 @@ export default function Acordos() {
           </Select>
         </div>
 
-        {/* Lista de acordos */}
-        {filteredAcordos.length > 0 ? (
-          <div className="grid gap-4">
-            {filteredAcordos.map((acordo) => (
-              <Link key={acordo.id} to={`/acordos/${acordo.id}`}>
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="p-2 bg-primary/10 rounded-lg">
-                          <FileText className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold">{acordo.cliente_nome}</h3>
-                          {(acordo.cliente_cpf || acordo.cliente_telefone) && (
-                            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mt-1">
-                              {acordo.cliente_cpf && (
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  {acordo.cliente_cpf}
-                                </span>
-                              )}
-                              {acordo.cliente_telefone && (
-                                <span className="flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {acordo.cliente_telefone}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {acordo.parcelas}x de {formatarMoeda(acordo.valor_parcela)} • {acordo.dias_atraso} dias em atraso
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Criado em {formatarData(acordo.criado_em)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col sm:items-end gap-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={getStatusVariant(acordo.status)}>
-                            {getStatusLabel(acordo.status)}
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setAcordoParaExcluir(acordo);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-muted-foreground">Valor Total</p>
-                          <p className="font-semibold">{formatarMoeda(acordo.valor_total)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-muted-foreground">Comissão</p>
-                          <p className="font-semibold text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Nenhum acordo encontrado</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                {search || statusFilter !== 'todos'
-                  ? 'Tente ajustar os filtros'
-                  : 'Comece cadastrando seu primeiro acordo'}
-              </p>
-              {!search && statusFilter === 'todos' && (
-                <Button asChild>
-                  <Link to="/acordos/novo">
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Novo Acordo
-                  </Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        {/* Abas de acordos */}
+        <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'pagos' | 'negociados')}>
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="negociados">
+              Acordos Negociados ({acordosNegociados.length})
+            </TabsTrigger>
+            <TabsTrigger value="pagos">
+              Acordos Pagos ({acordosPagos.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="negociados">
+            {acordosNegociados.length > 0 ? (
+              <div className="grid gap-4">
+                {acordosNegociados.map((acordo) => (
+                  <AcordoCard 
+                    key={acordo.id} 
+                    acordo={acordo} 
+                    onDelete={() => setAcordoParaExcluir(acordo)}
+                    getStatusVariant={getStatusVariant}
+                    getStatusLabel={getStatusLabel}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState search={search} statusFilter={statusFilter} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="pagos">
+            {acordosPagos.length > 0 ? (
+              <div className="grid gap-4">
+                {acordosPagos.map((acordo) => (
+                  <AcordoCard 
+                    key={acordo.id} 
+                    acordo={acordo} 
+                    onDelete={() => setAcordoParaExcluir(acordo)}
+                    getStatusVariant={getStatusVariant}
+                    getStatusLabel={getStatusLabel}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo com pagamentos realizados" />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Dialog de confirmação de exclusão */}
