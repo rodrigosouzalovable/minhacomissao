@@ -19,6 +19,7 @@ import {
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
+import acordosIcon from '@/assets/acordos-icon.png';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -66,7 +67,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="min-h-screen bg-background">
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-primary text-primary-foreground p-4 flex items-center justify-between">
-        <h1 className="text-lg font-bold">MINHA COMISSÃO</h1>
+        <div className="flex items-center gap-2">
+          <img src={acordosIcon} alt="Meus Acordos" className="h-6 w-6" />
+          <h1 className="text-lg font-bold">MEUS ACORDOS</h1>
+        </div>
         <div className="flex items-center gap-2">
           <div className="text-primary-foreground">
             <PaymentReminders />
@@ -94,9 +98,12 @@ export function AppLayout({ children }: AppLayoutProps) {
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">MINHA COMISSÃO</h1>
-            <p className="text-sm opacity-80 mt-1">{user?.email}</p>
+          <div className="flex items-center gap-2">
+            <img src={acordosIcon} alt="Meus Acordos" className="h-8 w-8" />
+            <div>
+              <h1 className="text-xl font-bold">MEUS ACORDOS</h1>
+              <p className="text-sm opacity-80 mt-1">{user?.email}</p>
+            </div>
           </div>
           <PaymentReminders />
         </div>
