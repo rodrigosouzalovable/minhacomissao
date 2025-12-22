@@ -18,6 +18,7 @@ import AdminEquipes from "./pages/AdminEquipes";
 import EquipeAcordos from "./pages/EquipeAcordos";
 import MinhaConta from "./pages/MinhaConta";
 import UsuarioComissoes from "./pages/UsuarioComissoes";
+import Retornos from "./pages/Retornos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -103,6 +104,7 @@ const App = () => (
             <Route path="/acordos/novo" element={<ProtectedRoute><NovoAcordo /></ProtectedRoute>} />
             <Route path="/acordos/:id" element={<ProtectedRoute><AcordoDetalhe /></ProtectedRoute>} />
             <Route path="/acordos/:id/editar" element={<ProtectedRoute><EditarAcordo /></ProtectedRoute>} />
+            <Route path="/retornos" element={<ProtectedRoute><Retornos /></ProtectedRoute>} />
             <Route path="/comissoes" element={<ProtectedRoute><Comissoes /></ProtectedRoute>} />
             <Route path="/conta" element={<ProtectedRoute><MinhaConta /></ProtectedRoute>} />
             <Route path="/equipe/acordos" element={<GestorRoute><EquipeAcordos /></GestorRoute>} />
