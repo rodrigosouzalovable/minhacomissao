@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X } from 'lucide-react';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
@@ -122,6 +122,46 @@ export default function AcordoDetalhe() {
         variant: 'destructive',
         title: 'Erro',
         description: 'Não foi possível atualizar a parcela.',
+      });
+    }
+  };
+
+  const desmarcarComoPago = async (pagamentoId: string) => {
+    try {
+      const { error } = await supabase
+        .from('pagamentos')
+        .update({ status: 'pendente', data_paga: null })
+        .eq('id', pagamentoId);
+
+      if (error) throw error;
+
+      setPagamentos(prev =>
+        prev.map(p =>
+          p.id === pagamentoId
+            ? { ...p, status: 'pendente', data_paga: null }
+            : p
+        )
+      );
+
+      // Se o acordo estava concluído, voltar para ativo
+      if (acordo?.status === 'concluido') {
+        await supabase
+          .from('acordos')
+          .update({ status: 'ativo' })
+          .eq('id', acordo.id);
+        
+        setAcordo({ ...acordo, status: 'ativo' });
+      }
+
+      toast({
+        title: 'Parcela desmarcada',
+        description: 'O pagamento foi revertido para pendente.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível desmarcar a parcela.',
       });
     }
   };
@@ -351,7 +391,18 @@ export default function AcordoDetalhe() {
                         Marcar Pago
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && (
+                    {pagamento.status === 'pago' && isOwner && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => desmarcarComoPago(pagamento.id)}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Desmarcar
+                      </Button>
+                    )}
+                    {pagamento.status === 'pago' && !isOwner && (
                       <Badge variant="secondary">Pago</Badge>
                     )}
                   </div>
