@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import acordosIcon from '@/assets/acordos-icon.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -186,8 +187,11 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-primary">MINHA COMISSÃO</CardTitle>
-          <CardDescription>Sistema de gestão de comissões</CardDescription>
+          <div className="flex items-center justify-center gap-2">
+            <img src={acordosIcon} alt="Meus Acordos" className="h-8 w-8" />
+            <CardTitle className="text-2xl font-bold text-primary">MEUS ACORDOS</CardTitle>
+          </div>
+          <CardDescription>Sistema de Gestão de Acordos e Comissões</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login">
