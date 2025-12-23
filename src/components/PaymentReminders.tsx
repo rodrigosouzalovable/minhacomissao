@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone } from 'lucide-react';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,16 +23,16 @@ export function PaymentReminders() {
     }).format(value);
   };
 
-  const handleMarcarLido = (e: React.MouseEvent, pagamentoId: string) => {
+  const handleMarcarLido = (e: React.MouseEvent, lembreteId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    marcarComoLido(pagamentoId);
+    marcarComoLido(lembreteId);
   };
 
-  const handleDesmarcarLido = (e: React.MouseEvent, pagamentoId: string) => {
+  const handleDesmarcarLido = (e: React.MouseEvent, lembreteId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    desmarcarLido(pagamentoId);
+    desmarcarLido(lembreteId);
   };
 
   if (isLoading) {
@@ -42,6 +42,95 @@ export function PaymentReminders() {
       </Button>
     );
   }
+
+  const renderLembreteItem = (lembrete: any, bgClass: string, hoverClass: string) => {
+    const isPagamento = lembrete.categoria === 'pagamento';
+    const linkTo = isPagamento ? `/acordos/${lembrete.acordo_id}` : '/retornos';
+
+    return (
+      <div
+        key={lembrete.id}
+        className={`flex items-center gap-2 p-2 rounded-lg ${bgClass} ${hoverClass} transition-colors`}
+      >
+        <Link
+          to={linkTo}
+          className="flex items-center justify-between flex-1 min-w-0"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              {!isPagamento && <Phone className="h-3 w-3 text-primary shrink-0" />}
+              <span className="font-medium text-foreground text-sm block truncate">
+                {lembrete.cliente_nome}
+              </span>
+            </div>
+            <span className="text-muted-foreground text-xs">
+              {isPagamento ? `Parcela ${lembrete.numero_parcela}` : 'Retorno agendado'}
+            </span>
+          </div>
+          {isPagamento && lembrete.valor_parcela && (
+            <span className="font-semibold text-foreground text-sm ml-2">
+              {formatCurrency(lembrete.valor_parcela)}
+            </span>
+          )}
+        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0 hover:bg-accent hover:text-accent-foreground"
+          onClick={(e) => handleMarcarLido(e, lembrete.id)}
+          title="Marcar como visto"
+        >
+          <Check className="h-3 w-3" />
+        </Button>
+      </div>
+    );
+  };
+
+  const renderHistoricoItem = (lembrete: any) => {
+    const isPagamento = lembrete.categoria === 'pagamento';
+    const linkTo = isPagamento ? `/acordos/${lembrete.acordo_id}` : '/retornos';
+
+    return (
+      <div
+        key={lembrete.id}
+        className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+      >
+        <Link
+          to={linkTo}
+          className="flex items-center justify-between flex-1 min-w-0"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              {!isPagamento && <Phone className="h-3 w-3 text-primary shrink-0" />}
+              <span className="font-medium text-foreground text-sm block truncate">
+                {lembrete.cliente_nome}
+              </span>
+            </div>
+            <span className="text-muted-foreground text-xs">
+              {isPagamento 
+                ? `Parcela ${lembrete.numero_parcela} • ${lembrete.tipo === 'hoje' ? 'Vence hoje' : 'Vence em 3 dias'}`
+                : `Retorno • ${lembrete.tipo === 'hoje' ? 'Hoje' : 'Em 3 dias'}`
+              }
+            </span>
+          </div>
+          {isPagamento && lembrete.valor_parcela && (
+            <span className="font-semibold text-foreground text-sm ml-2">
+              {formatCurrency(lembrete.valor_parcela)}
+            </span>
+          )}
+        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0 hover:bg-accent hover:text-accent-foreground"
+          onClick={(e) => handleDesmarcarLido(e, lembrete.id)}
+          title="Mostrar novamente"
+        >
+          <RotateCcw className="h-3 w-3" />
+        </Button>
+      </div>
+    );
+  };
 
   return (
     <Popover>
@@ -93,38 +182,9 @@ export function PaymentReminders() {
                       Vence hoje
                     </h4>
                     <div className="space-y-2">
-                      {lembretesHoje.map((lembrete) => (
-                        <div
-                          key={lembrete.id}
-                          className="flex items-center gap-2 p-2 rounded-lg bg-destructive/10 hover:bg-destructive/20 transition-colors"
-                        >
-                          <Link
-                            to={`/acordos/${lembrete.acordo_id}`}
-                            className="flex items-center justify-between flex-1 min-w-0"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <span className="font-medium text-foreground text-sm block truncate">
-                                {lembrete.cliente_nome}
-                              </span>
-                              <span className="text-muted-foreground text-xs">
-                                Parcela {lembrete.numero_parcela}
-                              </span>
-                            </div>
-                            <span className="font-semibold text-foreground text-sm ml-2">
-                              {formatCurrency(lembrete.valor_parcela)}
-                            </span>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 hover:bg-accent hover:text-accent-foreground"
-                            onClick={(e) => handleMarcarLido(e, lembrete.id)}
-                            title="Marcar como visto"
-                          >
-                            <Check className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
+                      {lembretesHoje.map((lembrete) => 
+                        renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20')
+                      )}
                     </div>
                   </div>
                 )}
@@ -136,38 +196,9 @@ export function PaymentReminders() {
                       Vence em 3 dias
                     </h4>
                     <div className="space-y-2">
-                      {lembretesTresDias.map((lembrete) => (
-                        <div
-                          key={lembrete.id}
-                          className="flex items-center gap-2 p-2 rounded-lg bg-warning/10 hover:bg-warning/20 transition-colors"
-                        >
-                          <Link
-                            to={`/acordos/${lembrete.acordo_id}`}
-                            className="flex items-center justify-between flex-1 min-w-0"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <span className="font-medium text-foreground text-sm block truncate">
-                                {lembrete.cliente_nome}
-                              </span>
-                              <span className="text-muted-foreground text-xs">
-                                Parcela {lembrete.numero_parcela}
-                              </span>
-                            </div>
-                            <span className="font-semibold text-foreground text-sm ml-2">
-                              {formatCurrency(lembrete.valor_parcela)}
-                            </span>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 hover:bg-accent hover:text-accent-foreground"
-                            onClick={(e) => handleMarcarLido(e, lembrete.id)}
-                            title="Marcar como visto"
-                          >
-                            <Check className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
+                      {lembretesTresDias.map((lembrete) => 
+                        renderLembreteItem(lembrete, 'bg-warning/10', 'hover:bg-warning/20')
+                      )}
                     </div>
                   </div>
                 )}
@@ -184,38 +215,7 @@ export function PaymentReminders() {
             ) : (
               <div className="max-h-80 overflow-y-auto p-3">
                 <div className="space-y-2">
-                  {lembretesJaLidos.map((lembrete) => (
-                    <div
-                      key={lembrete.id}
-                      className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                    >
-                      <Link
-                        to={`/acordos/${lembrete.acordo_id}`}
-                        className="flex items-center justify-between flex-1 min-w-0"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <span className="font-medium text-foreground text-sm block truncate">
-                            {lembrete.cliente_nome}
-                          </span>
-                          <span className="text-muted-foreground text-xs">
-                            Parcela {lembrete.numero_parcela} • {lembrete.tipo === 'hoje' ? 'Vence hoje' : 'Vence em 3 dias'}
-                          </span>
-                        </div>
-                        <span className="font-semibold text-foreground text-sm ml-2">
-                          {formatCurrency(lembrete.valor_parcela)}
-                        </span>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 shrink-0 hover:bg-accent hover:text-accent-foreground"
-                        onClick={(e) => handleDesmarcarLido(e, lembrete.id)}
-                        title="Mostrar novamente"
-                      >
-                        <RotateCcw className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
+                  {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
                 </div>
               </div>
             )}
