@@ -5,12 +5,15 @@ import { format, addDays } from 'date-fns';
 
 interface PaymentReminder {
   id: string;
-  acordo_id: string;
-  numero_parcela: number;
+  acordo_id?: string;
+  numero_parcela?: number;
   data_prevista: string;
-  valor_parcela: number;
+  valor_parcela?: number;
   cliente_nome: string;
+  cliente_telefone?: string;
+  observacao?: string;
   tipo: 'hoje' | 'tres_dias';
+  categoria: 'pagamento' | 'retorno';
 }
 
 export function usePaymentReminders() {
@@ -38,7 +41,8 @@ export function usePaymentReminders() {
     enabled: !!user,
   });
 
-  const { data: reminders = [], isLoading } = useQuery({
+  // Buscar pagamentos pendentes
+  const { data: pagamentos = [], isLoading: isLoadingPagamentos } = useQuery({
     queryKey: ['payment-reminders', user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -61,7 +65,7 @@ export function usePaymentReminders() {
         .or(`data_prevista.eq.${hoje},data_prevista.eq.${tresDias}`);
 
       if (error) {
-        console.error('Erro ao buscar lembretes:', error);
+        console.error('Erro ao buscar lembretes de pagamentos:', error);
         return [];
       }
 
@@ -73,17 +77,58 @@ export function usePaymentReminders() {
         valor_parcela: pagamento.valor_parcela,
         cliente_nome: pagamento.acordos.cliente_nome,
         tipo: pagamento.data_prevista === hoje ? 'hoje' : 'tres_dias',
+        categoria: 'pagamento',
       })) as PaymentReminder[];
     },
     enabled: !!user,
     refetchInterval: 5 * 60 * 1000,
   });
 
+  // Buscar retornos pendentes
+  const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
+    queryKey: ['retorno-reminders', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const hoje = format(new Date(), 'yyyy-MM-dd');
+      const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
+
+      const { data, error } = await supabase
+        .from('retornos')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'pendente')
+        .or(`data_retorno.eq.${hoje},data_retorno.eq.${tresDias}`);
+
+      if (error) {
+        console.error('Erro ao buscar lembretes de retornos:', error);
+        return [];
+      }
+
+      return (data || []).map((retorno) => ({
+        id: retorno.id,
+        data_prevista: retorno.data_retorno,
+        cliente_nome: retorno.cliente_nome,
+        cliente_telefone: retorno.cliente_telefone,
+        observacao: retorno.observacao,
+        tipo: retorno.data_retorno === hoje ? 'hoje' : 'tres_dias',
+        categoria: 'retorno',
+      })) as PaymentReminder[];
+    },
+    enabled: !!user,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const isLoading = isLoadingPagamentos || isLoadingRetornos;
+
+  // Combinar pagamentos e retornos
+  const todosLembretes = [...pagamentos, ...retornos];
+
   // Filtrar lembretes não lidos e lidos
-  const lembretesNaoLidos = reminders.filter(
+  const lembretesNaoLidos = todosLembretes.filter(
     (r) => !lembretesLidos.includes(r.id)
   );
-  const lembretesJaLidos = reminders.filter(
+  const lembretesJaLidos = todosLembretes.filter(
     (r) => lembretesLidos.includes(r.id)
   );
 
@@ -99,9 +144,9 @@ export function usePaymentReminders() {
       if (error) throw error;
     },
     onSuccess: () => {
-      // Recarrega os IDs lidos e, por consequência, a lista filtrada na UI
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
     },
     onError: (error) => {
       console.error('Erro ao marcar lembrete como visto:', error);
@@ -124,6 +169,7 @@ export function usePaymentReminders() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
     },
     onError: (error) => {
       console.error('Erro ao desmarcar lembrete como visto:', error);
