@@ -12,7 +12,7 @@ interface PaymentReminder {
   cliente_nome: string;
   cliente_telefone?: string;
   observacao?: string;
-  tipo: 'hoje' | 'tres_dias';
+  tipo: 'hoje' | 'tres_dias' | 'vencido';
   categoria: 'pagamento' | 'retorno';
 }
 
@@ -41,7 +41,7 @@ export function usePaymentReminders() {
     enabled: !!user,
   });
 
-  // Buscar pagamentos pendentes
+  // Buscar pagamentos pendentes (hoje e 3 dias)
   const { data: pagamentos = [], isLoading: isLoadingPagamentos } = useQuery({
     queryKey: ['payment-reminders', user?.id],
     queryFn: async () => {
@@ -84,6 +84,48 @@ export function usePaymentReminders() {
     refetchInterval: 5 * 60 * 1000,
   });
 
+  // Buscar parcelas vencidas (data_prevista < hoje)
+  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
+    queryKey: ['overdue-reminders', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const hoje = format(new Date(), 'yyyy-MM-dd');
+
+      const { data, error } = await supabase
+        .from('pagamentos')
+        .select(`
+          id,
+          acordo_id,
+          numero_parcela,
+          data_prevista,
+          valor_parcela,
+          acordos!inner(cliente_nome, user_id)
+        `)
+        .eq('status', 'pendente')
+        .eq('acordos.user_id', user.id)
+        .lt('data_prevista', hoje);
+
+      if (error) {
+        console.error('Erro ao buscar parcelas vencidas:', error);
+        return [];
+      }
+
+      return (data || []).map((pagamento: any) => ({
+        id: pagamento.id,
+        acordo_id: pagamento.acordo_id,
+        numero_parcela: pagamento.numero_parcela,
+        data_prevista: pagamento.data_prevista,
+        valor_parcela: pagamento.valor_parcela,
+        cliente_nome: pagamento.acordos.cliente_nome,
+        tipo: 'vencido',
+        categoria: 'pagamento',
+      })) as PaymentReminder[];
+    },
+    enabled: !!user,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
     queryKey: ['retorno-reminders', user?.id],
@@ -119,10 +161,10 @@ export function usePaymentReminders() {
     refetchInterval: 5 * 60 * 1000,
   });
 
-  const isLoading = isLoadingPagamentos || isLoadingRetornos;
+  const isLoading = isLoadingPagamentos || isLoadingRetornos || isLoadingVencidas;
 
-  // Combinar pagamentos e retornos
-  const todosLembretes = [...pagamentos, ...retornos];
+  // Combinar pagamentos, retornos e parcelas vencidas
+  const todosLembretes = [...pagamentos, ...retornos, ...parcelasVencidas];
 
   // Filtrar lembretes não lidos e lidos
   const lembretesNaoLidos = todosLembretes.filter(
@@ -147,6 +189,7 @@ export function usePaymentReminders() {
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['overdue-reminders', user?.id] });
     },
     onError: (error) => {
       console.error('Erro ao marcar lembrete como visto:', error);
@@ -170,17 +213,20 @@ export function usePaymentReminders() {
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['overdue-reminders', user?.id] });
     },
     onError: (error) => {
       console.error('Erro ao desmarcar lembrete como visto:', error);
     },
   });
 
+  const lembretesVencidos = lembretesNaoLidos.filter((r) => r.tipo === 'vencido');
   const lembretesHoje = lembretesNaoLidos.filter((r) => r.tipo === 'hoje');
   const lembretesTresDias = lembretesNaoLidos.filter((r) => r.tipo === 'tres_dias');
 
   return {
     reminders: lembretesNaoLidos,
+    lembretesVencidos,
     lembretesHoje,
     lembretesTresDias,
     lembretesJaLidos,
