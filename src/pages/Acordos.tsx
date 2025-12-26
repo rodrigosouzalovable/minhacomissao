@@ -149,8 +149,9 @@ export default function Acordos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [acordoParaExcluir, setAcordoParaExcluir] = useState<Acordo | null>(null);
-  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados'>('negociados');
+  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'vencidos'>('negociados');
   const [acordosComPagamentosPagos, setAcordosComPagamentosPagos] = useState<Set<string>>(new Set());
+  const [acordosComParcelasVencidas, setAcordosComParcelasVencidas] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function loadAcordos() {
@@ -177,6 +178,19 @@ export default function Acordos() {
         
         const idsComPagamentos = new Set(pagamentosPagos?.map(p => p.acordo_id) || []);
         setAcordosComPagamentosPagos(idsComPagamentos);
+
+        // Carregar IDs de acordos que têm parcelas vencidas (pendentes com data_prevista < hoje)
+        const hoje = new Date().toISOString().split('T')[0];
+        const { data: pagamentosPendentes, error: pendentesError } = await supabase
+          .from('pagamentos')
+          .select('acordo_id, data_prevista')
+          .eq('status', 'pendente')
+          .lt('data_prevista', hoje);
+
+        if (pendentesError) throw pendentesError;
+
+        const idsComVencidas = new Set(pagamentosPendentes?.map(p => p.acordo_id) || []);
+        setAcordosComParcelasVencidas(idsComVencidas);
       } catch (error) {
         console.error('Erro ao carregar acordos:', error);
       } finally {
@@ -255,7 +269,7 @@ export default function Acordos() {
       { chave: 'observacoes', titulo: 'Observações' }
     ];
 
-    const nomeArquivo = abaAtiva === 'pagos' ? 'acordos_pagos' : 'acordos_negociados';
+    const nomeArquivo = abaAtiva === 'pagos' ? 'acordos_pagos' : abaAtiva === 'vencidos' ? 'parcelas_vencidas' : 'acordos_negociados';
     exportarParaExcel(dadosParaExportar, colunas, nomeArquivo);
 
     toast({
@@ -281,7 +295,12 @@ export default function Acordos() {
     !acordosComPagamentosPagos.has(acordo.id)
   );
 
-  const acordosExibidos = abaAtiva === 'pagos' ? acordosPagos : acordosNegociados;
+  // Acordos com Parcelas Vencidas: têm pelo menos 1 parcela pendente com data_prevista < hoje
+  const acordosVencidos = filteredAcordos.filter(acordo => 
+    acordosComParcelasVencidas.has(acordo.id)
+  );
+
+  const acordosExibidos = abaAtiva === 'pagos' ? acordosPagos : abaAtiva === 'vencidos' ? acordosVencidos : acordosNegociados;
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -355,13 +374,16 @@ export default function Acordos() {
         </div>
 
         {/* Abas de acordos */}
-        <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'pagos' | 'negociados')}>
-          <TabsList className="grid w-full grid-cols-2 mb-4">
+        <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'pagos' | 'negociados' | 'vencidos')}>
+          <TabsList className="grid w-full grid-cols-3 mb-4">
             <TabsTrigger value="negociados">
               Acordos Negociados ({acordosNegociados.length})
             </TabsTrigger>
             <TabsTrigger value="pagos">
               Acordos Pagos ({acordosPagos.length})
+            </TabsTrigger>
+            <TabsTrigger value="vencidos">
+              Parcelas Vencidas ({acordosVencidos.length})
             </TabsTrigger>
           </TabsList>
 
@@ -398,6 +420,24 @@ export default function Acordos() {
               </div>
             ) : (
               <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo com pagamentos realizados" />
+            )}
+          </TabsContent>
+
+          <TabsContent value="vencidos">
+            {acordosVencidos.length > 0 ? (
+              <div className="grid gap-4">
+                {acordosVencidos.map((acordo) => (
+                  <AcordoCard 
+                    key={acordo.id} 
+                    acordo={acordo} 
+                    onDelete={() => setAcordoParaExcluir(acordo)}
+                    getStatusVariant={getStatusVariant}
+                    getStatusLabel={getStatusLabel}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela vencida encontrada" />
             )}
           </TabsContent>
         </Tabs>
