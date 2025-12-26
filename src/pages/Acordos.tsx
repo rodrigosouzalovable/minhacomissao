@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText, Trash2, Phone, User, Download } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send } from 'lucide-react';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 
@@ -32,12 +32,14 @@ function AcordoCard({
   acordo, 
   onDelete, 
   getStatusVariant, 
-  getStatusLabel 
+  getStatusLabel,
+  isNegociado = false
 }: { 
-  acordo: Acordo; 
+  acordo: Acordo;
   onDelete: () => void;
   getStatusVariant: (status: string) => "default" | "secondary" | "destructive" | "outline";
   getStatusLabel: (status: string) => string;
+  isNegociado?: boolean;
 }) {
   return (
     <Link to={`/acordos/${acordo.id}`}>
@@ -75,7 +77,29 @@ function AcordoCard({
               </div>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Flag de status do boleto - apenas para acordos negociados */}
+                {isNegociado && (
+                  <Badge 
+                    variant="outline"
+                    className={acordo.boleto_enviado 
+                      ? "bg-secondary/20 text-secondary border-secondary/30" 
+                      : "bg-warning/20 text-warning border-warning/30"
+                    }
+                  >
+                    {acordo.boleto_enviado ? (
+                      <>
+                        <Send className="h-3 w-3 mr-1" />
+                        Boleto Enviado
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="h-3 w-3 mr-1" />
+                        Aguardando envio do boleto
+                      </>
+                    )}
+                  </Badge>
+                )}
                 <Badge variant={getStatusVariant(acordo.status)}>
                   {getStatusLabel(acordo.status)}
                 </Badge>
@@ -397,6 +421,7 @@ export default function Acordos() {
                     onDelete={() => setAcordoParaExcluir(acordo)}
                     getStatusVariant={getStatusVariant}
                     getStatusLabel={getStatusLabel}
+                    isNegociado={true}
                   />
                 ))}
               </div>

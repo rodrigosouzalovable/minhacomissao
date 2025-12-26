@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send } from 'lucide-react';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
@@ -78,6 +78,36 @@ export default function AcordoDetalhe() {
 
     loadAcordo();
   }, [user, id, navigate]);
+
+  const marcarBoletoEnviado = async () => {
+    if (!acordo) return;
+    
+    try {
+      const novoStatus = !acordo.boleto_enviado;
+      
+      const { error } = await supabase
+        .from('acordos')
+        .update({ boleto_enviado: novoStatus })
+        .eq('id', acordo.id);
+
+      if (error) throw error;
+
+      setAcordo({ ...acordo, boleto_enviado: novoStatus });
+      
+      toast({
+        title: novoStatus ? 'Boleto marcado como enviado!' : 'Status do boleto atualizado',
+        description: novoStatus 
+          ? 'O cliente foi notificado sobre o boleto.' 
+          : 'O boleto foi desmarcado.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível atualizar o status do boleto.',
+      });
+    }
+  };
 
   const marcarComoPago = async (pagamentoId: string) => {
     try {
@@ -200,14 +230,33 @@ export default function AcordoDetalhe() {
           </div>
           <div className="flex items-center gap-2">
             {isOwner && acordo.status === 'ativo' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
-              >
-                <Pencil className="h-4 w-4 mr-1" />
-                Editar
-              </Button>
+              <>
+                <Button
+                  variant={acordo.boleto_enviado ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={marcarBoletoEnviado}
+                >
+                  {acordo.boleto_enviado ? (
+                    <>
+                      <Check className="h-4 w-4 mr-1" />
+                      Boleto Enviado
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-1" />
+                      Boleto Enviado
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Editar
+                </Button>
+              </>
             )}
             {!isOwner && (
               <Badge variant="outline" className="text-sm">

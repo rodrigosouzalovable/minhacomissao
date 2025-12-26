@@ -17,6 +17,7 @@ export type Database = {
       acordos: {
         Row: {
           atualizado_em: string
+          boleto_enviado: boolean
           cliente_cpf: string | null
           cliente_nome: string
           cliente_telefone: string | null
@@ -35,6 +36,7 @@ export type Database = {
         }
         Insert: {
           atualizado_em?: string
+          boleto_enviado?: boolean
           cliente_cpf?: string | null
           cliente_nome: string
           cliente_telefone?: string | null
@@ -53,6 +55,7 @@ export type Database = {
         }
         Update: {
           atualizado_em?: string
+          boleto_enviado?: boolean
           cliente_cpf?: string | null
           cliente_nome?: string
           cliente_telefone?: string | null
