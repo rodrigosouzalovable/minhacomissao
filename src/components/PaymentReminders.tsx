@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle } from 'lucide-react';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,10 +11,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export function PaymentReminders() {
-  const { lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
+  const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const [activeTab, setActiveTab] = useState('pendentes');
 
-  const totalLembretes = lembretesHoje.length + lembretesTresDias.length;
+  const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -108,7 +108,7 @@ export function PaymentReminders() {
             </div>
             <span className="text-muted-foreground text-xs">
               {isPagamento 
-                ? `Parcela ${lembrete.numero_parcela} • ${lembrete.tipo === 'hoje' ? 'Vence hoje' : 'Vence em 3 dias'}`
+                ? `Parcela ${lembrete.numero_parcela} • ${lembrete.tipo === 'vencido' ? 'Vencida' : lembrete.tipo === 'hoje' ? 'Vence hoje' : 'Vence em 3 dias'}`
                 : `Retorno • ${lembrete.tipo === 'hoje' ? 'Hoje' : 'Em 3 dias'}`
               }
             </span>
@@ -175,6 +175,20 @@ export function PaymentReminders() {
               </div>
             ) : (
               <div className="max-h-80 overflow-y-auto">
+                {lembretesVencidos.length > 0 && (
+                  <div className="p-3 border-b border-border">
+                    <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
+                      <XCircle className="h-4 w-4" />
+                      Parcelas Vencidas ({lembretesVencidos.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {lembretesVencidos.map((lembrete) => 
+                        renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20')
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {lembretesHoje.length > 0 && (
                   <div className="p-3 border-b border-border">
                     <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
