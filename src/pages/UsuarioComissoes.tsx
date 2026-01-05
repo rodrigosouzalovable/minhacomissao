@@ -21,6 +21,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { DateRangePicker } from '@/components/DateRangePicker';
 import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 
@@ -49,6 +50,8 @@ export default function UsuarioComissoes() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const [filtro, setFiltro] = useState<'todas' | 'pagas'>('todas');
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
   // Buscar perfil do usuário
   const { data: profile } = useQuery({
@@ -101,9 +104,32 @@ export default function UsuarioComissoes() {
     enabled: !!acordos && acordos.length > 0,
   });
 
-  // Calcular totais
-  const comissaoTotal = pagamentos?.reduce((acc, p) => acc + Number(p.comissao_parcela), 0) ?? 0;
-  const comissaoPaga = pagamentos?.filter(p => p.status === 'pago').reduce((acc, p) => acc + Number(p.comissao_parcela), 0) ?? 0;
+  // Filtrar pagamentos por período (usando data_paga)
+  const pagamentosFiltradosPorPeriodo = pagamentos?.filter(p => {
+    // Só filtra por período se houver data de pagamento
+    if (!p.data_paga) return true; // Pendentes passam (serão filtrados depois se necessário)
+    
+    const dataPaga = new Date(p.data_paga + 'T00:00:00');
+    
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      if (dataPaga < start) return false;
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      if (dataPaga > end) return false;
+    }
+    
+    return true;
+  });
+
+  // Calcular totais (considerando o filtro de período)
+  const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
+  const comissaoTotal = pagamentosFiltradosPorPeriodo?.reduce((acc, p) => acc + Number(p.comissao_parcela), 0) ?? 0;
+  const comissaoPaga = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
   const comissaoPendente = comissaoTotal - comissaoPaga;
   const percentualRecebido = comissaoTotal > 0 
     ? (comissaoPaga / comissaoTotal) * 100 
@@ -119,9 +145,9 @@ export default function UsuarioComissoes() {
     return acc;
   }, {} as Record<string, Acordo[]>) ?? {};
 
-  // Filtrar pagamentos
+  // Filtrar pagamentos por status
   const getPagamentosDoAcordo = (acordoId: string) => {
-    const pagamentosAcordo = pagamentos?.filter(p => p.acordo_id === acordoId) ?? [];
+    const pagamentosAcordo = pagamentosFiltradosPorPeriodo?.filter(p => p.acordo_id === acordoId) ?? [];
     if (filtro === 'pagas') {
       return pagamentosAcordo.filter(p => p.status === 'pago');
     }
@@ -145,6 +171,21 @@ export default function UsuarioComissoes() {
             </p>
           </div>
         </div>
+
+        {/* Filtro por período */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-muted-foreground">Filtrar por data de pagamento:</p>
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
