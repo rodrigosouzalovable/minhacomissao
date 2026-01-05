@@ -9,6 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DateRangePicker } from '@/components/DateRangePicker';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Clock, CheckCircle, Download, DollarSign } from 'lucide-react';
@@ -38,6 +39,8 @@ interface Pagamento {
 export default function Comissoes() {
   const { user } = useAuth();
   const [filtro, setFiltro] = useState<'todas' | 'pagas'>('todas');
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
   const { data: acordos, isLoading: loadingAcordos } = useQuery({
     queryKey: ['meus-acordos', user?.id],
@@ -73,9 +76,32 @@ export default function Comissoes() {
 
   const loading = loadingAcordos || loadingPagamentos;
 
-  // Calcular totais
-  const totalPaga = pagamentos?.filter(p => p.status === 'pago').reduce((sum, p) => sum + Number(p.comissao_parcela), 0) || 0;
-  const totalValorParcelasPagas = pagamentos?.filter(p => p.status === 'pago').reduce((sum, p) => sum + Number(p.valor_parcela), 0) || 0;
+  // Filtrar pagamentos por período (usando data_paga)
+  const pagamentosFiltradosPorPeriodo = pagamentos?.filter(p => {
+    // Só filtra por período se houver data de pagamento
+    if (!p.data_paga) return true; // Pendentes passam (serão filtrados depois se necessário)
+    
+    const dataPaga = new Date(p.data_paga + 'T00:00:00');
+    
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      if (dataPaga < start) return false;
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      if (dataPaga > end) return false;
+    }
+    
+    return true;
+  });
+
+  // Calcular totais (apenas parcelas pagas no período)
+  const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
+  const totalPaga = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+  const totalValorParcelasPagas = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
   // Agrupar acordos por CPF
   const acordosPorCpf = acordos?.reduce((acc, acordo) => {
@@ -87,22 +113,22 @@ export default function Comissoes() {
     return acc;
   }, {} as Record<string, Acordo[]>) || {};
 
-  // Filtrar pagamentos
+  // Filtrar pagamentos por status (todas/pagas)
   const pagamentosFiltrados = filtro === 'pagas' 
-    ? pagamentos?.filter(p => p.status === 'pago') 
-    : pagamentos;
+    ? pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') 
+    : pagamentosFiltradosPorPeriodo;
 
   const getPagamentosDoAcordo = (acordoId: string) => {
     return pagamentosFiltrados?.filter(p => p.acordo_id === acordoId) || [];
   };
 
   const handleExportarExcel = () => {
-    if (!pagamentos || !acordos || pagamentos.length === 0) {
+    if (!pagamentosFiltrados || !acordos || pagamentosFiltrados.length === 0) {
       toast.error('Não há dados para exportar');
       return;
     }
 
-    const dadosExport = pagamentos.map(p => {
+    const dadosExport = pagamentosFiltrados.map(p => {
       const acordo = acordos.find(a => a.id === p.acordo_id);
       return {
         cliente_nome: acordo?.cliente_nome || '',
@@ -147,13 +173,28 @@ export default function Comissoes() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">Minhas Comissões</h1>
           <Button onClick={handleExportarExcel} variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Exportar Excel
           </Button>
         </div>
+
+        {/* Filtro por período */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-muted-foreground">Filtrar por data de pagamento:</p>
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Cards de resumo */}
         <div className="grid gap-4 md:grid-cols-2">
