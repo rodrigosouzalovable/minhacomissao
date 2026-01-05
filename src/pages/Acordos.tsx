@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -43,7 +44,11 @@ function AcordoCard({
 }) {
   return (
     <Link to={`/acordos/${acordo.id}`}>
-      <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+      <Card className={cn(
+        "hover:border-primary/50 transition-all cursor-pointer",
+        isNegociado && !acordo.boleto_enviado && 
+          "border-warning/50 bg-warning/5 ring-2 ring-warning/20 shadow-md"
+      )}>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
