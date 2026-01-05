@@ -28,7 +28,8 @@ import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
 
-const MENSAGEM_WHATSAPP = 'Olá tudo bem? Meu nome é Rodrigo e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.';
+const gerarMensagemWhatsApp = (nomeCliente: string) => 
+  `Olá tudo bem ${nomeCliente}? Meu nome é Rodrigo e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
 
 // Componente para exibir cada card de acordo
 function AcordoCard({ 
@@ -223,7 +224,7 @@ export default function Acordos() {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
           telefone: acordo.cliente_telefone,
-          mensagem: MENSAGEM_WHATSAPP
+          mensagem: gerarMensagemWhatsApp(acordo.cliente_nome)
         }
       });
 
