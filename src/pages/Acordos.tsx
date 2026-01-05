@@ -47,7 +47,7 @@ function AcordoCard({
       <Card className={cn(
         "hover:border-primary/50 transition-all cursor-pointer",
         isNegociado && !acordo.boleto_enviado && 
-          "border-warning/50 bg-warning/5 ring-2 ring-warning/20 shadow-md"
+          "border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50 ring-2 ring-orange-300 shadow-lg shadow-orange-200/50 animate-pulse dark:from-orange-950/30 dark:to-amber-950/30 dark:border-orange-500 dark:ring-orange-400/50 dark:shadow-orange-500/20"
       )}>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
