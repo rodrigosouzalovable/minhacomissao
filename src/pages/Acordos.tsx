@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,26 +22,33 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2 } from 'lucide-react';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
 
+const MENSAGEM_WHATSAPP = 'Olá tudo bem? Meu nome é Rodrigo e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.';
+
 // Componente para exibir cada card de acordo
 function AcordoCard({ 
   acordo, 
-  onDelete, 
+  onDelete,
+  onEnviarWhatsApp,
+  enviandoWhatsApp,
   getStatusVariant, 
   getStatusLabel,
   isNegociado = false
 }: { 
   acordo: Acordo;
   onDelete: () => void;
+  onEnviarWhatsApp: (acordo: Acordo) => void;
+  enviandoWhatsApp: string | null;
   getStatusVariant: (status: string) => "default" | "secondary" | "destructive" | "outline";
   getStatusLabel: (status: string) => string;
   isNegociado?: boolean;
 }) {
+  const isEnviando = enviandoWhatsApp === acordo.id;
   return (
     <Link to={`/acordos/${acordo.id}`}>
       <Card className={cn(
@@ -108,6 +115,24 @@ function AcordoCard({
                 <Badge variant={getStatusVariant(acordo.status)}>
                   {getStatusLabel(acordo.status)}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onEnviarWhatsApp(acordo);
+                  }}
+                  disabled={isEnviando || !acordo.cliente_telefone}
+                  title={acordo.cliente_telefone ? "Enviar WhatsApp" : "Telefone não cadastrado"}
+                >
+                  {isEnviando ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4" />
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -181,6 +206,48 @@ export default function Acordos() {
   const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'vencidos'>('negociados');
   const [acordosComPagamentosPagos, setAcordosComPagamentosPagos] = useState<Set<string>>(new Set());
   const [acordosComParcelasVencidas, setAcordosComParcelasVencidas] = useState<Set<string>>(new Set());
+  const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
+
+  const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
+    if (!acordo.cliente_telefone) {
+      toast({
+        variant: 'destructive',
+        title: 'Telefone não cadastrado',
+        description: 'Este cliente não possui telefone cadastrado.',
+      });
+      return;
+    }
+
+    setEnviandoWhatsApp(acordo.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          telefone: acordo.cliente_telefone,
+          mensagem: MENSAGEM_WHATSAPP
+        }
+      });
+
+      if (error) throw error;
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao enviar mensagem');
+      }
+
+      toast({
+        title: 'Mensagem enviada!',
+        description: `WhatsApp enviado para ${acordo.cliente_nome}`,
+      });
+    } catch (error) {
+      console.error('Erro ao enviar WhatsApp:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao enviar',
+        description: 'Não foi possível enviar a mensagem via WhatsApp.',
+      });
+    } finally {
+      setEnviandoWhatsApp(null);
+    }
+  }, [toast]);
 
   useEffect(() => {
     async function loadAcordos() {
@@ -424,6 +491,8 @@ export default function Acordos() {
                     key={acordo.id} 
                     acordo={acordo} 
                     onDelete={() => setAcordoParaExcluir(acordo)}
+                    onEnviarWhatsApp={handleEnviarWhatsApp}
+                    enviandoWhatsApp={enviandoWhatsApp}
                     getStatusVariant={getStatusVariant}
                     getStatusLabel={getStatusLabel}
                     isNegociado={true}
@@ -443,6 +512,8 @@ export default function Acordos() {
                     key={acordo.id} 
                     acordo={acordo} 
                     onDelete={() => setAcordoParaExcluir(acordo)}
+                    onEnviarWhatsApp={handleEnviarWhatsApp}
+                    enviandoWhatsApp={enviandoWhatsApp}
                     getStatusVariant={getStatusVariant}
                     getStatusLabel={getStatusLabel}
                   />
@@ -461,6 +532,8 @@ export default function Acordos() {
                     key={acordo.id} 
                     acordo={acordo} 
                     onDelete={() => setAcordoParaExcluir(acordo)}
+                    onEnviarWhatsApp={handleEnviarWhatsApp}
+                    enviandoWhatsApp={enviandoWhatsApp}
                     getStatusVariant={getStatusVariant}
                     getStatusLabel={getStatusLabel}
                   />
