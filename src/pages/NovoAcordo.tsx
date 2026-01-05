@@ -67,9 +67,6 @@ const parseCurrency = (value: string): number => {
   return parseFloat(cleaned) || 0;
 };
 
-const gerarMensagemWhatsApp = (nomeCliente: string) => 
-  `Olá tudo bem ${nomeCliente}? Meu nome é Rodrigo e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
-
 export default function NovoAcordo() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -307,21 +304,6 @@ export default function NovoAcordo() {
 
       if (parcelasError) throw parcelasError;
 
-      // Enviar mensagem automática via WhatsApp (se houver telefone)
-      if (validated.clienteTelefone) {
-        try {
-          await supabase.functions.invoke('send-whatsapp', {
-            body: {
-              telefone: validated.clienteTelefone,
-              mensagem: gerarMensagemWhatsApp(validated.clienteNome)
-            }
-          });
-          console.log('Mensagem WhatsApp enviada automaticamente');
-        } catch (whatsappError) {
-          // Não bloqueia a criação do acordo se o WhatsApp falhar
-          console.error('Erro ao enviar WhatsApp automático:', whatsappError);
-        }
-      }
 
       toast({
         title: 'Acordo criado!',
