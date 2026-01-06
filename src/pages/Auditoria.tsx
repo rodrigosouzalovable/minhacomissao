@@ -312,7 +312,6 @@ export default function Auditoria() {
       'Valor Planilha': d.valorPlanilha,
       'Valor Sistema': d.valorSistema,
       'Comissão Planilha': d.comissaoPlanilha,
-      'Comissão Sistema': d.comissaoSistema,
       'Data Planilha': d.dataPlanilha,
       'Data Sistema': d.dataSistema,
     }));
@@ -330,7 +329,6 @@ export default function Auditoria() {
       { wch: 15 }, // Valor Planilha
       { wch: 15 }, // Valor Sistema
       { wch: 18 }, // Comissão Planilha
-      { wch: 18 }, // Comissão Sistema
       { wch: 15 }, // Data Planilha
       { wch: 15 }, // Data Sistema
     ];
@@ -438,7 +436,6 @@ export default function Auditoria() {
                           <TableHead className="text-right">Valor Plan.</TableHead>
                           <TableHead className="text-right">Valor Sist.</TableHead>
                           <TableHead className="text-right">Com. Plan.</TableHead>
-                          <TableHead className="text-right">Com. Sist.</TableHead>
                           <TableHead>Data Plan.</TableHead>
                           <TableHead>Data Sist.</TableHead>
                         </TableRow>
@@ -457,7 +454,6 @@ export default function Auditoria() {
                             <TableCell className="text-right">{formatarMoeda(d.valorPlanilha)}</TableCell>
                             <TableCell className="text-right">{formatarMoeda(d.valorSistema)}</TableCell>
                             <TableCell className="text-right">{formatarMoeda(d.comissaoPlanilha)}</TableCell>
-                            <TableCell className="text-right">{formatarMoeda(d.comissaoSistema)}</TableCell>
                             <TableCell>{d.dataPlanilha}</TableCell>
                             <TableCell>{d.dataSistema}</TableCell>
                           </TableRow>
