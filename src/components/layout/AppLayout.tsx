@@ -15,7 +15,8 @@ import {
   UserCog,
   User,
   UsersRound,
-  RotateCcw
+  RotateCcw,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
   { href: '/equipe/acordos', label: 'Acordos da Equipe', icon: Users, gestorOnly: true },
   { href: '/admin/usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
   { href: '/admin/equipes', label: 'Equipes', icon: UsersRound, adminOnly: true },
+  { href: '/admin/auditoria', label: 'Auditoria', icon: FileSpreadsheet, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
