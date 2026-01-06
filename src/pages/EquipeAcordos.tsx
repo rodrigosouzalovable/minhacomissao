@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
+  cliente_cpf?: string;
   valor_total: number;
   valor_parcela: number;
   parcelas: number;
@@ -49,33 +50,80 @@ export default function EquipeAcordos() {
   const [comissaoEmpresaPaga, setComissaoEmpresaPaga] = useState(0);
   const [showEmpresaCards, setShowEmpresaCards] = useState(false);
 
-  const handleExportarAcordosPagos = () => {
-    const acordosPagos = acordos.filter(acordo => acordo.status === 'concluido');
-    
-    if (acordosPagos.length === 0) {
+  const handleExportarAcordosPagos = async () => {
+    try {
+      const acordoIds = acordos.map(a => a.id);
+      
+      if (acordoIds.length === 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Nenhum acordo encontrado',
+          description: 'Não há acordos para exportar.',
+        });
+        return;
+      }
+
+      // Buscar TODAS as parcelas pagas
+      const { data: parcelasPagas, error } = await supabase
+        .from('pagamentos')
+        .select('numero_parcela, valor_parcela, comissao_parcela, acordo_id')
+        .in('acordo_id', acordoIds)
+        .eq('status', 'pago');
+
+      if (error) throw error;
+
+      if (!parcelasPagas || parcelasPagas.length === 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Nenhuma parcela paga',
+          description: 'Não há parcelas pagas para exportar.',
+        });
+        return;
+      }
+
+      // Combinar com dados do acordo e calcular comissão do escritório
+      const dadosExport = parcelasPagas.map(parcela => {
+        const acordo = acordos.find(a => a.id === parcela.acordo_id);
+        const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo?.dias_atraso || 0);
+        const comissaoEscritorio = Number(parcela.valor_parcela) * percentualEmpresa / 100;
+
+        return {
+          cpf: acordo?.cliente_cpf || '',
+          cliente: acordo?.cliente_nome || '',
+          valor_total: acordo?.valor_total || 0,
+          valor_parcela: parcela.valor_parcela,
+          numero_parcela: parcela.numero_parcela,
+          comissao_funcionario: parcela.comissao_parcela,
+          comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
+          dias_atraso: acordo?.dias_atraso || 0,
+        };
+      });
+
+      const colunas = [
+        { chave: 'cpf' as const, titulo: 'CPF' },
+        { chave: 'cliente' as const, titulo: 'Cliente' },
+        { chave: 'valor_total' as const, titulo: 'Valor Total' },
+        { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
+        { chave: 'numero_parcela' as const, titulo: 'Nº Parcela' },
+        { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
+        { chave: 'comissao_escritorio' as const, titulo: 'Comissão Escritório' },
+        { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
+      ];
+
+      exportarParaExcel(dadosExport, colunas, 'parcelas-pagas-equipe');
+
+      toast({
+        title: 'Download iniciado!',
+        description: `Exportando ${dadosExport.length} parcela(s) paga(s).`,
+      });
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
       toast({
         variant: 'destructive',
-        title: 'Nenhum acordo pago',
-        description: 'Não há acordos pagos para exportar.',
+        title: 'Erro ao exportar',
+        description: 'Ocorreu um erro ao gerar o arquivo.',
       });
-      return;
     }
-
-    const colunas = [
-      { chave: 'cliente_nome' as const, titulo: 'Cliente' },
-      { chave: 'funcionario_nome' as const, titulo: 'Funcionário' },
-      { chave: 'valor_total' as const, titulo: 'Valor Total' },
-      { chave: 'parcelas' as const, titulo: 'Parcelas' },
-      { chave: 'comissao_total' as const, titulo: 'Comissão Total' },
-      { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
-    ];
-
-    exportarParaExcel(acordosPagos, colunas, 'acordos-pagos-equipe');
-
-    toast({
-      title: 'Download iniciado!',
-      description: `Exportando ${acordosPagos.length} acordo(s) pago(s).`,
-    });
   };
 
   useEffect(() => {
