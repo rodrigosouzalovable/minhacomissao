@@ -23,6 +23,7 @@ interface Acordo {
   comissao_total: number;
   parcelas: number;
   status: string;
+  dias_atraso: number;
 }
 
 interface Pagamento {
@@ -47,7 +48,7 @@ export default function Comissoes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('acordos')
-        .select('id, cliente_nome, cliente_cpf, valor_total, comissao_total, parcelas, status')
+        .select('id, cliente_nome, cliente_cpf, valor_total, comissao_total, parcelas, status, dias_atraso')
         .eq('user_id', user!.id)
         .order('criado_em', { ascending: false });
 
@@ -123,41 +124,40 @@ export default function Comissoes() {
   };
 
   const handleExportarExcel = () => {
-    if (!pagamentosFiltrados || !acordos || pagamentosFiltrados.length === 0) {
-      toast.error('Não há dados para exportar');
+    // Filtrar apenas parcelas pagas no período
+    const parcelasPagas = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
+    
+    if (parcelasPagas.length === 0) {
+      toast.error('Nenhuma parcela paga para exportar no período selecionado');
       return;
     }
 
-    const dadosExport = pagamentosFiltrados.map(p => {
-      const acordo = acordos.find(a => a.id === p.acordo_id);
+    const dadosExport = parcelasPagas.map(parcela => {
+      const acordo = acordos?.find(a => a.id === parcela.acordo_id);
       return {
-        cliente_nome: acordo?.cliente_nome || '',
-        cliente_cpf: acordo?.cliente_cpf || 'Sem CPF',
-        parcela: `${p.numero_parcela}/${acordo?.parcelas || 0}`,
-        valor_parcela: formatarMoeda(p.valor_parcela),
-        comissao: formatarMoeda(p.comissao_parcela),
-        vencimento: formatarData(p.data_prevista),
-        pagamento: p.data_paga ? formatarData(p.data_paga) : '-',
-        status: p.status === 'pago' ? 'Pago' : 'Pendente',
+        cpf: acordo?.cliente_cpf || '',
+        cliente: acordo?.cliente_nome || '',
+        valor_total: acordo?.valor_total || 0,
+        valor_parcela: parcela.valor_parcela,
+        numero_parcela: parcela.numero_parcela,
+        comissao_funcionario: parcela.comissao_parcela,
+        dias_atraso: acordo?.dias_atraso || 0,
       };
     });
 
-    exportarParaExcel(
-      dadosExport,
-      [
-        { chave: 'cliente_nome', titulo: 'Cliente' },
-        { chave: 'cliente_cpf', titulo: 'CPF' },
-        { chave: 'parcela', titulo: 'Parcela' },
-        { chave: 'valor_parcela', titulo: 'Valor' },
-        { chave: 'comissao', titulo: 'Comissão' },
-        { chave: 'vencimento', titulo: 'Vencimento' },
-        { chave: 'pagamento', titulo: 'Pagamento' },
-        { chave: 'status', titulo: 'Status' },
-      ],
-      'minhas-comissoes'
-    );
+    // SEM COLUNA DE COMISSÃO DO ESCRITÓRIO - funcionário não pode ver
+    const colunas = [
+      { chave: 'cpf' as const, titulo: 'CPF' },
+      { chave: 'cliente' as const, titulo: 'Cliente' },
+      { chave: 'valor_total' as const, titulo: 'Valor Total' },
+      { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
+      { chave: 'numero_parcela' as const, titulo: 'Nº Parcela' },
+      { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
+      { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
+    ];
 
-    toast.success('Relatório exportado com sucesso!');
+    exportarParaExcel(dadosExport, colunas, 'minhas-comissoes');
+    toast.success(`Exportando ${dadosExport.length} parcela(s) paga(s)!`);
   };
 
   if (loading) {
@@ -177,7 +177,7 @@ export default function Comissoes() {
           <h1 className="text-2xl font-bold">Minhas Comissões</h1>
           <Button onClick={handleExportarExcel} variant="outline">
             <Download className="h-4 w-4 mr-2" />
-            Exportar Excel
+            Exportar Pagos
           </Button>
         </div>
 
