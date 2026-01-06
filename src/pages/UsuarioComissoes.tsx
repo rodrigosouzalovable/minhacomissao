@@ -22,8 +22,10 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp } from 'lucide-react';
-import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp, Download } from 'lucide-react';
+import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import { exportarParaExcel } from '@/lib/exportExcel';
+import { useToast } from '@/hooks/use-toast';
 
 interface Acordo {
   id: string;
@@ -33,6 +35,7 @@ interface Acordo {
   comissao_total: number;
   parcelas: number;
   status: string;
+  dias_atraso: number;
 }
 
 interface Pagamento {
@@ -49,6 +52,7 @@ interface Pagamento {
 export default function UsuarioComissoes() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [filtro, setFiltro] = useState<'todas' | 'pagas'>('todas');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
@@ -154,22 +158,78 @@ export default function UsuarioComissoes() {
     return pagamentosAcordo;
   };
 
+  // Função de exportar Excel (COM comissão do escritório - apenas admin vê)
+  const handleExportarExcel = () => {
+    const parcelasPagas = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
+    
+    if (parcelasPagas.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Nenhuma parcela paga',
+        description: 'Não há parcelas pagas para exportar no período selecionado.',
+      });
+      return;
+    }
+
+    const dadosExport = parcelasPagas.map(parcela => {
+      const acordo = acordos?.find(a => a.id === parcela.acordo_id);
+      const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo?.dias_atraso || 0);
+      const comissaoEscritorio = Number(parcela.valor_parcela) * percentualEmpresa / 100;
+
+      return {
+        cpf: acordo?.cliente_cpf || '',
+        cliente: acordo?.cliente_nome || '',
+        valor_total: acordo?.valor_total || 0,
+        valor_parcela: parcela.valor_parcela,
+        numero_parcela: parcela.numero_parcela,
+        comissao_funcionario: parcela.comissao_parcela,
+        comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
+        dias_atraso: acordo?.dias_atraso || 0,
+      };
+    });
+
+    const colunas = [
+      { chave: 'cpf' as const, titulo: 'CPF' },
+      { chave: 'cliente' as const, titulo: 'Cliente' },
+      { chave: 'valor_total' as const, titulo: 'Valor Total' },
+      { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
+      { chave: 'numero_parcela' as const, titulo: 'Nº Parcela' },
+      { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
+      { chave: 'comissao_escritorio' as const, titulo: 'Comissão Escritório' },
+      { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
+    ];
+
+    const nomeArquivo = `comissoes-${profile?.nome?.replace(/\s+/g, '-').toLowerCase() || 'usuario'}`;
+    exportarParaExcel(dadosExport, colunas, nomeArquivo);
+
+    toast({
+      title: 'Download iniciado!',
+      description: `Exportando ${dadosExport.length} parcela(s) paga(s).`,
+    });
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/admin/usuarios')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Comissões - {profile?.nome ?? 'Carregando...'}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Visualização detalhada de comissões por acordo
-            </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/admin/usuarios')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">
+                Comissões - {profile?.nome ?? 'Carregando...'}
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Visualização detalhada de comissões por acordo
+              </p>
+            </div>
           </div>
+          <Button onClick={handleExportarExcel} variant="outline" className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Exportar Pagos
+          </Button>
         </div>
 
         {/* Filtro por período */}
