@@ -11,7 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { calcularComissao, formatarMoeda, gerarParcelas, tabelaComissoes } from '@/lib/comissao';
 import { z } from 'zod';
-import { ArrowLeft, Calculator } from 'lucide-react';
+import { ArrowLeft, Calculator, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
@@ -216,6 +217,28 @@ export default function NovoAcordo() {
     }
   }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorPrimeiraParcela, form.valorDemaisParcelas]);
 
+  // Validação da soma das parcelas
+  const validacaoSomaParcelas = useMemo(() => {
+    const numParcelas = parseInt(form.parcelas) || 0;
+    const valorTotal = parseCurrency(form.valorTotal);
+    const valorPrimeira = parseCurrency(form.valorPrimeiraParcela);
+    const valorDemais = parseCurrency(form.valorDemaisParcelas);
+
+    // Só valida se tiver mais de 1 parcela e valores preenchidos
+    if (numParcelas <= 1 || valorPrimeira <= 0 || valorDemais <= 0) {
+      return { valido: true, diferenca: 0, somaParcelas: 0 };
+    }
+
+    // Soma = primeira + (demais × (parcelas - 1))
+    const somaParcelas = valorPrimeira + (valorDemais * (numParcelas - 1));
+    const diferenca = Math.abs(somaParcelas - valorTotal);
+    
+    // Tolerância de R$ 0,01 para erros de arredondamento
+    const valido = diferenca <= 0.01;
+
+    return { valido, diferenca, somaParcelas };
+  }, [form.parcelas, form.valorTotal, form.valorPrimeiraParcela, form.valorDemaisParcelas]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !calculo) return;
@@ -234,6 +257,10 @@ export default function NovoAcordo() {
         }
         if (!form.valorDemaisParcelas || valorDemaisParcelas <= 0) {
           throw new Error('Valor das demais parcelas é obrigatório para acordos com mais de 1 parcela');
+        }
+        // Validação da soma das parcelas
+        if (!validacaoSomaParcelas.valido) {
+          throw new Error('A soma das parcelas não confere com o valor total do acordo');
         }
       }
 
@@ -457,6 +484,19 @@ export default function NovoAcordo() {
                 </div>
               </div>
 
+              {/* Alerta de validação da soma das parcelas */}
+              {!validacaoSomaParcelas.valido && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Valores não conferem</AlertTitle>
+                  <AlertDescription>
+                    A soma das parcelas ({formatarMoeda(validacaoSomaParcelas.somaParcelas)}) 
+                    é diferente do valor total do acordo ({formatarMoeda(parseCurrency(form.valorTotal))}).
+                    Diferença: {formatarMoeda(validacaoSomaParcelas.diferenca)}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="dataPrimeiroPagamento">Data do 1º Pagamento *</Label>
@@ -583,7 +623,8 @@ export default function NovoAcordo() {
                 !calculo || 
                 !form.clienteCpf || 
                 !form.clienteTelefone || 
-                (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas))
+                (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas)) ||
+                !validacaoSomaParcelas.valido
               }
             >
               {isLoading ? 'Salvando...' : 'Criar Acordo'}
