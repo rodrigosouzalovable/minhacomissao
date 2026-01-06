@@ -22,7 +22,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -54,6 +55,7 @@ export default function AdminUsuarios() {
   const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -88,6 +90,12 @@ export default function AdminUsuarios() {
       return usersWithRoles;
     },
   });
+
+  // Filtrar usuários por nome ou email
+  const filteredUsers = users?.filter(user =>
+    user.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  ) ?? [];
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: AppRole }) => {
@@ -222,15 +230,24 @@ export default function AdminUsuarios() {
 
         {/* Users Table */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle>Usuários</CardTitle>
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="text-center py-8 text-muted-foreground">
                 Carregando usuários...
               </div>
-            ) : users && users.length > 0 ? (
+            ) : filteredUsers.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -242,7 +259,7 @@ export default function AdminUsuarios() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
+                  {filteredUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.nome}</TableCell>
                       <TableCell>{user.email}</TableCell>
