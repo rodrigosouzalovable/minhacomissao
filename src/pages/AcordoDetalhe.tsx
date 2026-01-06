@@ -29,6 +29,8 @@ export default function AcordoDetalhe() {
   const [funcionarioNome, setFuncionarioNome] = useState<string | null>(null);
   const [editandoDataPagamento, setEditandoDataPagamento] = useState<string | null>(null);
   const [novaDataPagamento, setNovaDataPagamento] = useState<string>('');
+  const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
+  const [novaComissao, setNovaComissao] = useState<string>('');
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
@@ -228,6 +230,37 @@ export default function AcordoDetalhe() {
         variant: 'destructive',
         title: 'Erro',
         description: 'Não foi possível atualizar a data.',
+      });
+    }
+  };
+
+  const atualizarComissaoParcela = async (pagamentoId: string, novoValor: number) => {
+    try {
+      const { error } = await supabase
+        .from('pagamentos')
+        .update({ comissao_parcela: novoValor })
+        .eq('id', pagamentoId);
+
+      if (error) throw error;
+
+      setPagamentos(prev =>
+        prev.map(p =>
+          p.id === pagamentoId ? { ...p, comissao_parcela: novoValor } : p
+        )
+      );
+
+      setEditandoComissao(null);
+      setNovaComissao('');
+
+      toast({
+        title: 'Comissão atualizada!',
+        description: `Novo valor: ${formatarMoeda(novoValor)}`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível atualizar a comissão.',
       });
     }
   };
@@ -526,9 +559,59 @@ export default function AcordoDetalhe() {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="font-medium">{formatarMoeda(pagamento.valor_parcela)}</p>
-                      <p className="text-sm text-secondary">
-                        Comissão: {formatarMoeda(pagamento.comissao_parcela)}
-                      </p>
+                      {editandoComissao === pagamento.id ? (
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-sm text-muted-foreground">R$</span>
+                          <Input
+                            type="text"
+                            value={novaComissao}
+                            onChange={(e) => setNovaComissao(e.target.value)}
+                            className="h-6 w-20 text-sm text-right"
+                            placeholder="0,00"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-secondary hover:text-secondary"
+                            onClick={() => {
+                              const valor = parseFloat(novaComissao.replace(',', '.'));
+                              if (!isNaN(valor)) {
+                                atualizarComissaoParcela(pagamento.id, valor);
+                              }
+                            }}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => {
+                              setEditandoComissao(null);
+                              setNovaComissao('');
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-secondary flex items-center gap-1 justify-end">
+                          Comissão: {formatarMoeda(pagamento.comissao_parcela)}
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={() => {
+                                setEditandoComissao(pagamento.id);
+                                setNovaComissao(String(pagamento.comissao_parcela).replace('.', ','));
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </p>
+                      )}
                     </div>
                     {pagamento.status === 'pendente' && isOwner && (
                       <Button
