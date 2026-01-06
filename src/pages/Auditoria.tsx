@@ -9,15 +9,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { FileSpreadsheet, Upload, Download, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
 
 interface LinhaImportada {
   cpf: string;
   nomeCliente: string;
-  faixaAtraso: string;
+  faixaAtraso: number;
   dataPagamento: string;
   valorPago: number;
-  comissao: number;
+  comissaoEscritorio: number;
 }
 
 interface PagamentoSistema {
@@ -142,13 +142,18 @@ export default function Auditoria() {
         const row = jsonData[i];
         if (!row || !row[0]) continue; // Pular linhas vazias
 
+        const diasAtraso = parseInt(String(row[2] || '0'), 10);
+        const valorPago = parseValorNumerico(row[4]);
+        const percentualEmpresa = calcularPercentualComissaoEmpresa(diasAtraso);
+        const comissaoEscritorio = valorPago * (percentualEmpresa / 100);
+
         linhasImportadas.push({
           cpf: normalizarCPF(row[0]),
           nomeCliente: String(row[1] || '').trim(),
-          faixaAtraso: String(row[2] || ''),
+          faixaAtraso: diasAtraso,
           dataPagamento: parseDataExcel(row[3]),
-          valorPago: parseValorNumerico(row[4]),
-          comissao: parseValorNumerico(row[5]),
+          valorPago: valorPago,
+          comissaoEscritorio: Math.round(comissaoEscritorio * 100) / 100,
         });
       }
 
@@ -207,7 +212,7 @@ export default function Auditoria() {
             tipoDivergencia: 'CPF não encontrado no sistema',
             valorPlanilha: linha.valorPago,
             valorSistema: 0,
-            comissaoPlanilha: linha.comissao,
+            comissaoPlanilha: linha.comissaoEscritorio,
             comissaoSistema: 0,
             dataPlanilha: linha.dataPagamento,
             dataSistema: '-',
@@ -232,7 +237,7 @@ export default function Auditoria() {
               divergencias.push('Valor divergente');
             }
             
-            if (!compararValores(linha.comissao, pagSistema.comissaoParcela)) {
+            if (!compararValores(linha.comissaoEscritorio, pagSistema.comissaoParcela)) {
               divergencias.push('Comissão divergente');
             }
 
@@ -244,7 +249,7 @@ export default function Auditoria() {
                 tipoDivergencia: divergencias.join(', '),
                 valorPlanilha: linha.valorPago,
                 valorSistema: pagSistema.valorParcela,
-                comissaoPlanilha: linha.comissao,
+                comissaoPlanilha: linha.comissaoEscritorio,
                 comissaoSistema: pagSistema.comissaoParcela,
                 dataPlanilha: linha.dataPagamento,
                 dataSistema: dataSistemaFormatada,
@@ -265,7 +270,7 @@ export default function Auditoria() {
             tipoDivergencia: 'Data de pagamento não encontrada',
             valorPlanilha: linha.valorPago,
             valorSistema: 0,
-            comissaoPlanilha: linha.comissao,
+            comissaoPlanilha: linha.comissaoEscritorio,
             comissaoSistema: 0,
             dataPlanilha: linha.dataPagamento,
             dataSistema: '-',
