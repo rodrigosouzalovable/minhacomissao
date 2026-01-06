@@ -18,6 +18,7 @@ import AdminEquipes from "./pages/AdminEquipes";
 import EquipeAcordos from "./pages/EquipeAcordos";
 import MinhaConta from "./pages/MinhaConta";
 import UsuarioComissoes from "./pages/UsuarioComissoes";
+import NovoAcordoAdmin from "./pages/NovoAcordoAdmin";
 import Retornos from "./pages/Retornos";
 import NotFound from "./pages/NotFound";
 
@@ -110,6 +111,7 @@ const App = () => (
             <Route path="/equipe/acordos" element={<GestorRoute><EquipeAcordos /></GestorRoute>} />
             <Route path="/admin/usuarios" element={<AdminRoute><AdminUsuarios /></AdminRoute>} />
             <Route path="/admin/usuarios/:userId/comissoes" element={<AdminRoute><UsuarioComissoes /></AdminRoute>} />
+            <Route path="/admin/usuarios/:userId/novo-acordo" element={<AdminRoute><NovoAcordoAdmin /></AdminRoute>} />
             <Route path="/admin/equipes" element={<AdminRoute><AdminEquipes /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
