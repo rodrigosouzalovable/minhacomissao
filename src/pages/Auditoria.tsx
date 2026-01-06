@@ -17,7 +17,7 @@ interface LinhaImportada {
   faixaAtraso: number;
   dataPagamento: string;
   valorPago: number;
-  comissaoEscritorio: number;
+  comissao: number; // Valor literal da coluna F (Receita)
 }
 
 interface PagamentoSistema {
@@ -142,18 +142,13 @@ export default function Auditoria() {
         const row = jsonData[i];
         if (!row || !row[0]) continue; // Pular linhas vazias
 
-        const diasAtraso = parseInt(String(row[2] || '0'), 10);
-        const valorPago = parseValorNumerico(row[4]);
-        const percentualEmpresa = calcularPercentualComissaoEmpresa(diasAtraso);
-        const comissaoEscritorio = valorPago * (percentualEmpresa / 100);
-
         linhasImportadas.push({
           cpf: normalizarCPF(row[0]),
           nomeCliente: String(row[1] || '').trim(),
-          faixaAtraso: diasAtraso,
+          faixaAtraso: parseInt(String(row[2] || '0'), 10),
           dataPagamento: parseDataExcel(row[3]),
-          valorPago: valorPago,
-          comissaoEscritorio: Math.round(comissaoEscritorio * 100) / 100,
+          valorPago: parseValorNumerico(row[4]),
+          comissao: parseValorNumerico(row[5]), // Valor literal da coluna F (Receita)
         });
       }
 
@@ -212,7 +207,7 @@ export default function Auditoria() {
             tipoDivergencia: 'CPF não encontrado no sistema',
             valorPlanilha: linha.valorPago,
             valorSistema: 0,
-            comissaoPlanilha: linha.comissaoEscritorio,
+            comissaoPlanilha: linha.comissao,
             comissaoSistema: 0,
             dataPlanilha: linha.dataPagamento,
             dataSistema: '-',
@@ -237,7 +232,12 @@ export default function Auditoria() {
               divergencias.push('Valor divergente');
             }
             
-            if (!compararValores(linha.comissaoEscritorio, pagSistema.comissaoParcela)) {
+            // Calcular comissão do escritório esperada pelo SISTEMA
+            const percentualEmpresa = calcularPercentualComissaoEmpresa(pagSistema.diasAtraso);
+            const comissaoEscritorioSistema = Math.round(pagSistema.valorParcela * (percentualEmpresa / 100) * 100) / 100;
+            
+            // Comparar valor da planilha (coluna F) com comissão do escritório do sistema
+            if (!compararValores(linha.comissao, comissaoEscritorioSistema)) {
               divergencias.push('Comissão divergente');
             }
 
@@ -249,8 +249,8 @@ export default function Auditoria() {
                 tipoDivergencia: divergencias.join(', '),
                 valorPlanilha: linha.valorPago,
                 valorSistema: pagSistema.valorParcela,
-                comissaoPlanilha: linha.comissaoEscritorio,
-                comissaoSistema: pagSistema.comissaoParcela,
+                comissaoPlanilha: linha.comissao,
+                comissaoSistema: comissaoEscritorioSistema,
                 dataPlanilha: linha.dataPagamento,
                 dataSistema: dataSistemaFormatada,
               });
@@ -270,7 +270,7 @@ export default function Auditoria() {
             tipoDivergencia: 'Data de pagamento não encontrada',
             valorPlanilha: linha.valorPago,
             valorSistema: 0,
-            comissaoPlanilha: linha.comissaoEscritorio,
+            comissaoPlanilha: linha.comissao,
             comissaoSistema: 0,
             dataPlanilha: linha.dataPagamento,
             dataSistema: '-',
