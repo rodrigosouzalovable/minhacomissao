@@ -7,6 +7,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send } from 'lucide-react';
@@ -24,6 +25,8 @@ export default function AcordoDetalhe() {
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [funcionarioNome, setFuncionarioNome] = useState<string | null>(null);
+  const [editandoDataPagamento, setEditandoDataPagamento] = useState<string | null>(null);
+  const [novaDataPagamento, setNovaDataPagamento] = useState<string>('');
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
@@ -192,6 +195,37 @@ export default function AcordoDetalhe() {
         variant: 'destructive',
         title: 'Erro',
         description: 'Não foi possível desmarcar a parcela.',
+      });
+    }
+  };
+
+  const atualizarDataPagamento = async (pagamentoId: string, novaData: string) => {
+    try {
+      const { error } = await supabase
+        .from('pagamentos')
+        .update({ data_paga: novaData })
+        .eq('id', pagamentoId);
+
+      if (error) throw error;
+
+      setPagamentos(prev =>
+        prev.map(p =>
+          p.id === pagamentoId ? { ...p, data_paga: novaData } : p
+        )
+      );
+
+      setEditandoDataPagamento(null);
+      setNovaDataPagamento('');
+
+      toast({
+        title: 'Data atualizada!',
+        description: 'A data de pagamento foi corrigida.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível atualizar a data.',
       });
     }
   };
@@ -419,10 +453,61 @@ export default function AcordoDetalhe() {
                     </div>
                     <div>
                       <p className="font-medium">Parcela {pagamento.numero_parcela}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Vencimento: {formatarData(pagamento.data_prevista)}
-                        {pagamento.data_paga && ` • Pago em: ${formatarData(pagamento.data_paga)}`}
-                      </p>
+                      <div className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
+                        <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
+                        {pagamento.status === 'pago' && pagamento.data_paga && (
+                          <>
+                            <span>•</span>
+                            {editandoDataPagamento === pagamento.id ? (
+                              <span className="flex items-center gap-1">
+                                <span>Pago em:</span>
+                                <Input
+                                  type="date"
+                                  value={novaDataPagamento}
+                                  onChange={(e) => setNovaDataPagamento(e.target.value)}
+                                  className="h-7 w-36 text-sm"
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0 text-secondary hover:text-secondary"
+                                  onClick={() => atualizarDataPagamento(pagamento.id, novaDataPagamento)}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => {
+                                    setEditandoDataPagamento(null);
+                                    setNovaDataPagamento('');
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1">
+                                <span>Pago em: {formatarData(pagamento.data_paga)}</span>
+                                {isOwner && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 w-5 p-0"
+                                    onClick={() => {
+                                      setEditandoDataPagamento(pagamento.id);
+                                      setNovaDataPagamento(pagamento.data_paga || '');
+                                    }}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
