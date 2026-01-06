@@ -22,7 +22,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp, Download, Search, ExternalLink } from 'lucide-react';
+import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp, Download, Search, ExternalLink, PlusCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
@@ -234,10 +234,16 @@ export default function UsuarioComissoes() {
               </p>
             </div>
           </div>
-          <Button onClick={handleExportarExcel} variant="outline" className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Exportar Pagos
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => navigate(`/admin/usuarios/${userId}/novo-acordo`)} className="flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              Novo Acordo
+            </Button>
+            <Button onClick={handleExportarExcel} variant="outline" className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Exportar Pagos
+            </Button>
+          </div>
         </div>
 
         {/* Filtro por período e busca */}
