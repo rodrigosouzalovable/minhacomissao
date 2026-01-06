@@ -181,9 +181,10 @@ export default function EditarAcordo() {
 
       if (acordoError) throw acordoError;
 
-      // Se não há parcelas pagas, regenerar todas as parcelas
-      if (!hasParcelasPagas) {
-        // Deletar parcelas pendentes
+      // Admin pode regenerar parcelas mesmo com parcelas pagas (mantendo as pagas)
+      // Funcionário só pode regenerar se não houver parcelas pagas
+      if (!hasParcelasPagas || isAdmin) {
+        // Deletar apenas parcelas pendentes
         const { error: deleteError } = await supabase
           .from('pagamentos')
           .delete()
@@ -192,28 +193,43 @@ export default function EditarAcordo() {
 
         if (deleteError) throw deleteError;
 
-        // Gerar novas parcelas
-        const parcelas = gerarParcelas(
-          new Date(validated.dataPrimeiroPagamento),
-          validated.parcelas,
-          calculo.valorParcela,
-          calculo.comissaoPorParcela
-        );
-
-        const { error: parcelasError } = await supabase
+        // Contar parcelas pagas para ajustar numeração
+        const { data: parcelasPagas } = await supabase
           .from('pagamentos')
-          .insert(
-            parcelas.map(p => ({
-              acordo_id: id,
-              numero_parcela: p.numero_parcela,
-              data_prevista: p.data_prevista,
-              valor_parcela: p.valor_parcela,
-              comissao_parcela: p.comissao_parcela,
-              status: p.status,
-            }))
-          );
+          .select('numero_parcela')
+          .eq('acordo_id', id)
+          .eq('status', 'pago');
 
-        if (parcelasError) throw parcelasError;
+        const quantidadePagas = parcelasPagas?.length || 0;
+        const parcelasRestantes = validated.parcelas - quantidadePagas;
+
+        if (parcelasRestantes > 0) {
+          // Gerar apenas parcelas pendentes
+          const novasParcelas = gerarParcelas(
+            new Date(validated.dataPrimeiroPagamento),
+            parcelasRestantes,
+            calculo.valorParcela,
+            calculo.comissaoPorParcela
+          ).map((p, index) => ({
+            ...p,
+            numero_parcela: quantidadePagas + index + 1
+          }));
+
+          const { error: parcelasError } = await supabase
+            .from('pagamentos')
+            .insert(
+              novasParcelas.map(p => ({
+                acordo_id: id,
+                numero_parcela: p.numero_parcela,
+                data_prevista: p.data_prevista,
+                valor_parcela: p.valor_parcela,
+                comissao_parcela: p.comissao_parcela,
+                status: p.status,
+              }))
+            );
+
+          if (parcelasError) throw parcelasError;
+        }
       }
 
       toast({
@@ -261,7 +277,7 @@ export default function EditarAcordo() {
           <h1 className="text-2xl font-bold">Editar Acordo</h1>
         </div>
 
-        {hasParcelasPagas && (
+        {hasParcelasPagas && !isAdmin && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
@@ -318,7 +334,7 @@ export default function EditarAcordo() {
             <CardHeader>
               <CardTitle>Dados do Acordo</CardTitle>
               <CardDescription>
-                {hasParcelasPagas 
+                {hasParcelasPagas && !isAdmin
                   ? 'Campos financeiros bloqueados devido a parcelas pagas' 
                   : 'Edite as informações do acordo'}
               </CardDescription>
@@ -335,7 +351,7 @@ export default function EditarAcordo() {
                     placeholder="0,00"
                     value={form.valorTotal}
                     onChange={(e) => setForm({ ...form, valorTotal: e.target.value })}
-                    disabled={hasParcelasPagas}
+                    disabled={hasParcelasPagas && !isAdmin}
                     required
                   />
                 </div>
@@ -350,7 +366,7 @@ export default function EditarAcordo() {
                     placeholder="1"
                     value={form.parcelas}
                     onChange={(e) => setForm({ ...form, parcelas: e.target.value })}
-                    disabled={hasParcelasPagas}
+                    disabled={hasParcelasPagas && !isAdmin}
                     required
                   />
                 </div>
@@ -364,7 +380,7 @@ export default function EditarAcordo() {
                     type="date"
                     value={form.dataPrimeiroPagamento}
                     onChange={(e) => setForm({ ...form, dataPrimeiroPagamento: e.target.value })}
-                    disabled={hasParcelasPagas}
+                    disabled={hasParcelasPagas && !isAdmin}
                     required
                   />
                 </div>
@@ -378,7 +394,7 @@ export default function EditarAcordo() {
                     placeholder="0"
                     value={form.diasAtraso}
                     onChange={(e) => setForm({ ...form, diasAtraso: e.target.value })}
-                    disabled={hasParcelasPagas}
+                    disabled={hasParcelasPagas && !isAdmin}
                     required
                   />
                 </div>
@@ -430,7 +446,7 @@ export default function EditarAcordo() {
           )}
 
           {/* Tabela de referência */}
-          {!hasParcelasPagas && (
+          {(!hasParcelasPagas || isAdmin) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">Tabela de Comissões</CardTitle>
