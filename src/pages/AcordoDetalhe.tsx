@@ -11,7 +11,18 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Tables } from '@/integrations/supabase/types';
 
 type Acordo = Tables<'acordos'>;
@@ -265,6 +276,42 @@ export default function AcordoDetalhe() {
     }
   };
 
+  const handleExcluirAcordo = async () => {
+    if (!acordo) return;
+    
+    try {
+      // Primeiro, deletar os pagamentos associados
+      const { error: pagamentosError } = await supabase
+        .from('pagamentos')
+        .delete()
+        .eq('acordo_id', acordo.id);
+
+      if (pagamentosError) throw pagamentosError;
+
+      // Depois, deletar o acordo
+      const { error: acordoError } = await supabase
+        .from('acordos')
+        .delete()
+        .eq('id', acordo.id);
+
+      if (acordoError) throw acordoError;
+
+      toast({
+        title: 'Acordo excluído',
+        description: 'O acordo foi removido com sucesso.',
+      });
+
+      navigate('/equipe/acordos');
+    } catch (error) {
+      console.error('Erro ao excluir acordo:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao excluir',
+        description: 'Não foi possível excluir o acordo.',
+      });
+    }
+  };
+
   if (loading || !acordo) {
     return (
       <AppLayout>
@@ -337,6 +384,32 @@ export default function AcordoDetalhe() {
                 <Pencil className="h-4 w-4 mr-1" />
                 Editar
               </Button>
+            )}
+            {/* Botão de excluir apenas para Admin */}
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Excluir
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tem certeza que deseja excluir o acordo de <strong>{acordo.cliente_nome}</strong>?
+                      Esta ação não pode ser desfeita e todos os pagamentos associados serão removidos.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleExcluirAcordo}>
+                      Excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
             {!isOwner && !isAdmin && (
               <Badge variant="outline" className="text-sm">
