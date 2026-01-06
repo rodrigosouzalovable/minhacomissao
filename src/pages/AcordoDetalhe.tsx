@@ -536,7 +536,7 @@ export default function AcordoDetalhe() {
                             ) : (
                               <span className="flex items-center gap-1">
                                 <span>Pago em: {formatarData(pagamento.data_paga)}</span>
-                                {isOwner && (
+                                {(isOwner || isAdmin) && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
