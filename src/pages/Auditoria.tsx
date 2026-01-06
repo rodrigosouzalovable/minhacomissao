@@ -441,6 +441,7 @@ export default function Auditoria() {
                           <TableHead className="text-right">Valor Plan.</TableHead>
                           <TableHead className="text-right">Valor Sist.</TableHead>
                           <TableHead className="text-right">Com. Plan.</TableHead>
+                          <TableHead className="text-right">Com. Sist.</TableHead>
                           <TableHead>Data Plan.</TableHead>
                           <TableHead>Data Sist.</TableHead>
                         </TableRow>
@@ -459,6 +460,7 @@ export default function Auditoria() {
                             <TableCell className="text-right">{formatarMoeda(d.valorPlanilha)}</TableCell>
                             <TableCell className="text-right">{formatarMoeda(d.valorSistema)}</TableCell>
                             <TableCell className="text-right">{formatarMoeda(d.comissaoPlanilha)}</TableCell>
+                            <TableCell className="text-right">{formatarMoeda(d.comissaoSistema)}</TableCell>
                             <TableCell>{d.dataPlanilha}</TableCell>
                             <TableCell>{d.dataSistema}</TableCell>
                           </TableRow>
