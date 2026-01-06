@@ -393,8 +393,8 @@ export default function UsuarioComissoes() {
                                     <TableHead>Parcela</TableHead>
                                     <TableHead>Valor</TableHead>
                                     <TableHead>Comissão</TableHead>
-                                    <TableHead>Vencimento</TableHead>
-                                    <TableHead>Pagamento</TableHead>
+                                    <TableHead>Comissão Escritório</TableHead>
+                                    <TableHead>Data do Pagamento</TableHead>
                                     <TableHead>Status</TableHead>
                                   </TableRow>
                                 </TableHeader>
@@ -406,10 +406,10 @@ export default function UsuarioComissoes() {
                                       </TableCell>
                                       <TableCell>{formatarMoeda(pagamento.valor_parcela)}</TableCell>
                                       <TableCell>{formatarMoeda(pagamento.comissao_parcela)}</TableCell>
-                                      <TableCell>{formatarData(pagamento.data_prevista)}</TableCell>
                                       <TableCell>
-                                        {pagamento.data_paga ? formatarData(pagamento.data_paga) : '-'}
+                                        {formatarMoeda(Number(pagamento.valor_parcela) * calcularPercentualComissaoEmpresa(acordo.dias_atraso) / 100)}
                                       </TableCell>
+                                      <TableCell>{formatarData(pagamento.data_prevista)}</TableCell>
                                       <TableCell>
                                         <Badge 
                                           variant={pagamento.status === 'pago' ? 'default' : 'secondary'}
