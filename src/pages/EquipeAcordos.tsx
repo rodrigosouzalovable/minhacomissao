@@ -9,8 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
-import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff } from 'lucide-react';
+import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { exportarParaExcel } from '@/lib/exportExcel';
+import { useToast } from '@/hooks/use-toast';
 
 interface AcordoComFuncionario {
   id: string;
@@ -35,6 +37,7 @@ interface TeamMember {
 export default function EquipeAcordos() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { toast } = useToast();
   const [acordos, setAcordos] = useState<AcordoComFuncionario[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +48,35 @@ export default function EquipeAcordos() {
   const [comissaoEmpresaTotal, setComissaoEmpresaTotal] = useState(0);
   const [comissaoEmpresaPaga, setComissaoEmpresaPaga] = useState(0);
   const [showEmpresaCards, setShowEmpresaCards] = useState(false);
+
+  const handleExportarAcordosPagos = () => {
+    const acordosPagos = acordos.filter(acordo => acordo.status === 'concluido');
+    
+    if (acordosPagos.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Nenhum acordo pago',
+        description: 'Não há acordos pagos para exportar.',
+      });
+      return;
+    }
+
+    const colunas = [
+      { chave: 'cliente_nome' as const, titulo: 'Cliente' },
+      { chave: 'funcionario_nome' as const, titulo: 'Funcionário' },
+      { chave: 'valor_total' as const, titulo: 'Valor Total' },
+      { chave: 'parcelas' as const, titulo: 'Parcelas' },
+      { chave: 'comissao_total' as const, titulo: 'Comissão Total' },
+      { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
+    ];
+
+    exportarParaExcel(acordosPagos, colunas, 'acordos-pagos-equipe');
+
+    toast({
+      title: 'Download iniciado!',
+      description: `Exportando ${acordosPagos.length} acordo(s) pago(s).`,
+    });
+  };
 
   useEffect(() => {
     async function loadTeamData() {
@@ -234,17 +266,28 @@ export default function EquipeAcordos() {
               {teamMembers.length} funcionário(s) na sua equipe
             </p>
           </div>
-          {isAdmin && (
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowEmpresaCards(!showEmpresaCards)}
+              onClick={handleExportarAcordosPagos}
               className="gap-2"
             >
-              {showEmpresaCards ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              {showEmpresaCards ? 'Ocultar Empresa' : 'Ver Empresa'}
+              <Download className="h-4 w-4" />
+              Exportar Pagos
             </Button>
-          )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEmpresaCards(!showEmpresaCards)}
+                className="gap-2"
+              >
+                {showEmpresaCards ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showEmpresaCards ? 'Ocultar Empresa' : 'Ver Empresa'}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Cards de resumo */}
