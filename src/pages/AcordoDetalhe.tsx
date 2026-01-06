@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import successSound from '@/assets/success-sound.mp3';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ type Pagamento = Tables<'pagamentos'>;
 export default function AcordoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [acordo, setAcordo] = useState<Acordo | null>(null);
@@ -292,7 +294,18 @@ export default function AcordoDetalhe() {
                 </Button>
               </>
             )}
-            {!isOwner && (
+            {/* Admin pode editar qualquer acordo */}
+            {!isOwner && isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Editar
+              </Button>
+            )}
+            {!isOwner && !isAdmin && (
               <Badge variant="outline" className="text-sm">
                 Somente Leitura
               </Badge>

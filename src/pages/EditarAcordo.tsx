@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ const formatPhone = (value: string) => {
 export default function EditarAcordo() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -71,12 +73,17 @@ export default function EditarAcordo() {
       if (!user || !id) return;
 
       try {
-        const { data: acordo, error: acordoError } = await supabase
+        // Admin pode editar qualquer acordo, funcionário apenas os seus
+        let query = supabase
           .from('acordos')
           .select('*')
-          .eq('id', id)
-          .eq('user_id', user.id)
-          .single();
+          .eq('id', id);
+
+        if (!isAdmin) {
+          query = query.eq('user_id', user.id);
+        }
+
+        const { data: acordo, error: acordoError } = await query.single();
 
         if (acordoError) throw acordoError;
 
@@ -148,7 +155,8 @@ export default function EditarAcordo() {
       });
 
       // Atualizar acordo
-      const { error: acordoError } = await supabase
+      // Admin pode atualizar qualquer acordo
+      let updateQuery = supabase
         .from('acordos')
         .update({
           cliente_nome: validated.clienteNome,
@@ -163,8 +171,13 @@ export default function EditarAcordo() {
           comissao_total: calculo.comissaoTotal,
           observacoes: validated.observacoes || null,
         })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('id', id);
+
+      if (!isAdmin) {
+        updateQuery = updateQuery.eq('user_id', user.id);
+      }
+
+      const { error: acordoError } = await updateQuery;
 
       if (acordoError) throw acordoError;
 
