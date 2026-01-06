@@ -613,7 +613,7 @@ export default function AcordoDetalhe() {
                         </p>
                       )}
                     </div>
-                    {pagamento.status === 'pendente' && isOwner && (
+                    {pagamento.status === 'pendente' && (isOwner || isAdmin) && (
                       <Button
                         size="sm"
                         onClick={() => marcarComoPago(pagamento.id)}
@@ -621,7 +621,7 @@ export default function AcordoDetalhe() {
                         Marcar Pago
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && isOwner && (
+                    {pagamento.status === 'pago' && (isOwner || isAdmin) && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -632,7 +632,7 @@ export default function AcordoDetalhe() {
                         Desmarcar
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && !isOwner && (
+                    {pagamento.status === 'pago' && !isOwner && !isAdmin && (
                       <Badge variant="secondary">Pago</Badge>
                     )}
                   </div>
