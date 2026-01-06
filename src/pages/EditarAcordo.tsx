@@ -49,7 +49,7 @@ const formatPhone = (value: string) => {
 export default function EditarAcordo() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: loadingRole } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -70,7 +70,7 @@ export default function EditarAcordo() {
   // Carregar dados do acordo
   useEffect(() => {
     async function loadAcordo() {
-      if (!user || !id) return;
+      if (!user || !id || loadingRole) return;
 
       try {
         // Admin pode editar qualquer acordo, funcionário apenas os seus
@@ -122,7 +122,7 @@ export default function EditarAcordo() {
     }
 
     loadAcordo();
-  }, [user, id, navigate, toast]);
+  }, [user, id, navigate, toast, isAdmin, loadingRole]);
 
   // Cálculo automático da comissão
   const calculo = useMemo(() => {
@@ -241,7 +241,7 @@ export default function EditarAcordo() {
     }
   };
 
-  if (loadingData) {
+  if (loadingData || loadingRole) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-[400px]">
