@@ -20,6 +20,7 @@ import MinhaConta from "./pages/MinhaConta";
 import UsuarioComissoes from "./pages/UsuarioComissoes";
 import NovoAcordoAdmin from "./pages/NovoAcordoAdmin";
 import Retornos from "./pages/Retornos";
+import Auditoria from "./pages/Auditoria";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -113,6 +114,7 @@ const App = () => (
             <Route path="/admin/usuarios/:userId/comissoes" element={<AdminRoute><UsuarioComissoes /></AdminRoute>} />
             <Route path="/admin/usuarios/:userId/novo-acordo" element={<AdminRoute><NovoAcordoAdmin /></AdminRoute>} />
             <Route path="/admin/equipes" element={<AdminRoute><AdminEquipes /></AdminRoute>} />
+            <Route path="/admin/auditoria" element={<AdminRoute><Auditoria /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
