@@ -9,10 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { calcularComissao, formatarMoeda, gerarParcelas, tabelaComissoes } from '@/lib/comissao';
+import { calcularComissao, formatarMoeda, formatarData, gerarParcelas, tabelaComissoes } from '@/lib/comissao';
 import { z } from 'zod';
-import { ArrowLeft, Calculator, AlertCircle, User } from 'lucide-react';
+import { ArrowLeft, Calculator, AlertCircle, User, CheckCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
@@ -70,6 +72,7 @@ export default function NovoAcordoAdmin() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [parcelasPagas, setParcelasPagas] = useState<Record<number, { pago: boolean; dataPagamento: string }>>({});
   const [nomeError, setNomeError] = useState('');
 
   // Buscar perfil do funcionário
@@ -231,6 +234,45 @@ export default function NovoAcordoAdmin() {
     return { valido, diferenca, somaParcelas };
   }, [form.parcelas, form.valorTotal, form.valorPrimeiraParcela, form.valorDemaisParcelas]);
 
+  // Gerar preview das parcelas para visualização
+  const parcelasPreview = useMemo(() => {
+    if (!calculo || !form.dataPrimeiroPagamento) return [];
+    
+    const dataPrimeiro = new Date(form.dataPrimeiroPagamento + 'T00:00:00');
+    const numParcelas = parseInt(form.parcelas) || 1;
+    
+    return gerarParcelas(
+      dataPrimeiro,
+      numParcelas,
+      calculo.valorDemaisParcelas,
+      calculo.comissaoDemaisParcelas,
+      calculo.valorPrimeiraParcela,
+      calculo.comissaoPrimeiraParcela
+    );
+  }, [calculo, form.dataPrimeiroPagamento, form.parcelas]);
+
+  // Handler para marcar/desmarcar parcela como paga
+  const handleParcelaPagaChange = (numeroParcela: number, pago: boolean, dataPrevista: string) => {
+    setParcelasPagas(prev => ({
+      ...prev,
+      [numeroParcela]: {
+        pago,
+        dataPagamento: pago ? (prev[numeroParcela]?.dataPagamento || dataPrevista) : ''
+      }
+    }));
+  };
+
+  // Handler para alterar data de pagamento
+  const handleDataPagamentoChange = (numeroParcela: number, data: string) => {
+    setParcelasPagas(prev => ({
+      ...prev,
+      [numeroParcela]: {
+        ...prev[numeroParcela],
+        dataPagamento: data
+      }
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId || !calculo) return;
@@ -305,20 +347,36 @@ export default function NovoAcordoAdmin() {
             calculo.comissaoDemaisParcelas
           );
 
+      // Inserir os pagamentos com status baseado nas parcelas marcadas como pagas
+      const pagamentosData = parcelas.map(p => {
+        const parcelaPaga = parcelasPagas[p.numero_parcela];
+        return {
+          acordo_id: acordo.id,
+          numero_parcela: p.numero_parcela,
+          data_prevista: p.data_prevista,
+          valor_parcela: p.valor_parcela,
+          comissao_parcela: p.comissao_parcela,
+          status: parcelaPaga?.pago ? 'pago' : 'pendente',
+          data_paga: parcelaPaga?.pago ? parcelaPaga.dataPagamento : null
+        };
+      });
+
       const { error: parcelasError } = await supabase
         .from('pagamentos')
-        .insert(
-          parcelas.map(p => ({
-            acordo_id: acordo.id,
-            numero_parcela: p.numero_parcela,
-            data_prevista: p.data_prevista,
-            valor_parcela: p.valor_parcela,
-            comissao_parcela: p.comissao_parcela,
-            status: p.status,
-          }))
-        );
+        .insert(pagamentosData);
 
       if (parcelasError) throw parcelasError;
+
+      // Verificar se todas as parcelas foram marcadas como pagas
+      const todasPagas = parcelas.every(p => parcelasPagas[p.numero_parcela]?.pago);
+
+      // Se todas as parcelas foram pagas, atualizar status do acordo para concluído
+      if (todasPagas) {
+        await supabase
+          .from('acordos')
+          .update({ status: 'concluido' })
+          .eq('id', acordo.id);
+      }
 
       toast({
         title: 'Acordo criado!',
@@ -578,6 +636,60 @@ export default function NovoAcordoAdmin() {
                     <p className="text-xl font-bold text-secondary">{formatarMoeda(calculo.comissaoTotal)}</p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {parcelasPreview.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4" />
+                  Parcelas do Acordo
+                </CardTitle>
+                <CardDescription>Marque as parcelas que já foram pagas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Parcela</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Comissão</TableHead>
+                      <TableHead>Data Prevista</TableHead>
+                      <TableHead>Pago?</TableHead>
+                      <TableHead>Data Pagamento</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parcelasPreview.map((parcela) => (
+                      <TableRow key={parcela.numero_parcela}>
+                        <TableCell>{parcela.numero_parcela}/{parcelasPreview.length}</TableCell>
+                        <TableCell>{formatarMoeda(parcela.valor_parcela)}</TableCell>
+                        <TableCell>{formatarMoeda(parcela.comissao_parcela)}</TableCell>
+                        <TableCell>{formatarData(parcela.data_prevista)}</TableCell>
+                        <TableCell>
+                          <Checkbox
+                            checked={parcelasPagas[parcela.numero_parcela]?.pago || false}
+                            onCheckedChange={(checked) => 
+                              handleParcelaPagaChange(parcela.numero_parcela, !!checked, parcela.data_prevista)
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {parcelasPagas[parcela.numero_parcela]?.pago && (
+                            <Input
+                              type="date"
+                              value={parcelasPagas[parcela.numero_parcela]?.dataPagamento || ''}
+                              onChange={(e) => handleDataPagamentoChange(parcela.numero_parcela, e.target.value)}
+                              className="w-36"
+                            />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
