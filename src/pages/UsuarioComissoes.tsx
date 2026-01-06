@@ -22,7 +22,8 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp, Download } from 'lucide-react';
+import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp, Download, Search, ExternalLink } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { useToast } from '@/hooks/use-toast';
@@ -56,6 +57,7 @@ export default function UsuarioComissoes() {
   const [filtro, setFiltro] = useState<'todas' | 'pagas'>('todas');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Buscar perfil do usuário
   const { data: profile } = useQuery({
@@ -139,15 +141,21 @@ export default function UsuarioComissoes() {
     ? (comissaoPaga / comissaoTotal) * 100 
     : 0;
 
+  // Filtrar acordos por nome ou CPF
+  const acordosFiltrados = acordos?.filter(acordo =>
+    acordo.cliente_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (acordo.cliente_cpf && acordo.cliente_cpf.includes(searchTerm))
+  ) ?? [];
+
   // Agrupar acordos por CPF
-  const acordosPorCpf = acordos?.reduce((acc, acordo) => {
+  const acordosPorCpf = acordosFiltrados.reduce((acc, acordo) => {
     const cpf = acordo.cliente_cpf || 'Sem CPF';
     if (!acc[cpf]) {
       acc[cpf] = [];
     }
     acc[cpf].push(acordo);
     return acc;
-  }, {} as Record<string, Acordo[]>) ?? {};
+  }, {} as Record<string, Acordo[]>);
 
   // Filtrar pagamentos por status
   const getPagamentosDoAcordo = (acordoId: string) => {
@@ -232,20 +240,38 @@ export default function UsuarioComissoes() {
           </Button>
         </div>
 
-        {/* Filtro por período */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium text-muted-foreground">Filtrar por data de pagamento:</p>
-              <DateRangePicker
-                startDate={startDate}
-                endDate={endDate}
-                onStartDateChange={setStartDate}
-                onEndDateChange={setEndDate}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        {/* Filtro por período e busca */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium text-muted-foreground">Filtrar por data de pagamento:</p>
+                <DateRangePicker
+                  startDate={startDate}
+                  endDate={endDate}
+                  onStartDateChange={setStartDate}
+                  onEndDateChange={setEndDate}
+                />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium text-muted-foreground">Buscar por nome ou CPF:</p>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Digite o nome ou CPF do cliente..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -334,6 +360,18 @@ export default function UsuarioComissoes() {
                                 <Badge variant="default">
                                   Comissão: {formatarMoeda(comissaoAcordo)}
                                 </Badge>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/acordos/${acordo.id}`);
+                                  }}
+                                >
+                                  <ExternalLink className="h-3 w-3 mr-1" />
+                                  Ver Acordo
+                                </Button>
                               </div>
                             </div>
                           </AccordionTrigger>
