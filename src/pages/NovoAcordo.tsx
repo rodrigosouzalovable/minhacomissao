@@ -17,7 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
   clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine((val) => val.replace(/\D/g, '').length === 11, { message: 'CPF deve ter 11 dígitos' }),
-  clienteTelefone: z.string().min(10, 'Telefone é obrigatório').max(15, 'Telefone inválido'),
+  clienteTelefone: z.string().min(15, 'Telefone incompleto').max(15, 'Telefone inválido').refine((val) => val.replace(/\D/g, '').length === 11, { message: 'Telefone deve ter 11 dígitos' }),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
   valorPrimeiraParcela: z.number().nonnegative().optional(),
@@ -43,6 +43,11 @@ const formatCpf = (value: string) => {
 
 const isCpfCompleto = (cpf: string): boolean => {
   const apenasNumeros = cpf.replace(/\D/g, '');
+  return apenasNumeros.length === 11;
+};
+
+const isTelefoneCompleto = (telefone: string): boolean => {
+  const apenasNumeros = telefone.replace(/\D/g, '');
   return apenasNumeros.length === 11;
 };
 
@@ -80,6 +85,7 @@ export default function NovoAcordo() {
   const [isLoading, setIsLoading] = useState(false);
   const [nomeError, setNomeError] = useState('');
   const [cpfError, setCpfError] = useState('');
+  const [telefoneError, setTelefoneError] = useState('');
 
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
@@ -433,10 +439,23 @@ export default function NovoAcordo() {
                     id="clienteTelefone"
                     placeholder="(00) 00000-0000"
                     value={form.clienteTelefone}
-                    onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
+                    onChange={(e) => {
+                      const formatted = formatPhone(e.target.value);
+                      setForm({ ...form, clienteTelefone: formatted });
+                      if (telefoneError) setTelefoneError('');
+                    }}
+                    onBlur={() => {
+                      if (form.clienteTelefone && !isTelefoneCompleto(form.clienteTelefone)) {
+                        setTelefoneError('Telefone deve ter 11 dígitos');
+                      }
+                    }}
                     maxLength={15}
                     required
+                    className={telefoneError ? 'border-destructive' : ''}
                   />
+                  {telefoneError && (
+                    <p className="text-sm text-destructive">{telefoneError}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -641,7 +660,7 @@ export default function NovoAcordo() {
                 isLoading || 
                 !calculo || 
                 !isCpfCompleto(form.clienteCpf) || 
-                !form.clienteTelefone || 
+                !isTelefoneCompleto(form.clienteTelefone) || 
                 (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas)) ||
                 !validacaoSomaParcelas.valido
               }
