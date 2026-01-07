@@ -255,6 +255,53 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_fila: {
+        Row: {
+          agendado_para: string
+          criado_em: string | null
+          enviado_em: string | null
+          erro_mensagem: string | null
+          id: string
+          mensagem: string
+          pagamento_id: string
+          status: string | null
+          telefone: string
+          tipo_lembrete: string
+        }
+        Insert: {
+          agendado_para: string
+          criado_em?: string | null
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          mensagem: string
+          pagamento_id: string
+          status?: string | null
+          telefone: string
+          tipo_lembrete: string
+        }
+        Update: {
+          agendado_para?: string
+          criado_em?: string | null
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          mensagem?: string
+          pagamento_id?: string
+          status?: string | null
+          telefone?: string
+          tipo_lembrete?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_fila_pagamento_id_fkey"
+            columns: ["pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "pagamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_lembretes_log: {
         Row: {
           enviado_em: string | null
