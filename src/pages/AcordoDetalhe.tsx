@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send, Trash2, MessageCircle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +42,7 @@ export default function AcordoDetalhe() {
   const [novaDataPagamento, setNovaDataPagamento] = useState<string>('');
   const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
   const [novaComissao, setNovaComissao] = useState<string>('');
+  const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
@@ -309,6 +310,58 @@ export default function AcordoDetalhe() {
         title: 'Erro ao excluir',
         description: 'Não foi possível excluir o acordo.',
       });
+    }
+  };
+
+  const enviarLembreteParcela = async (pagamento: Pagamento) => {
+    if (!acordo?.cliente_telefone) {
+      toast({
+        variant: 'destructive',
+        title: 'Telefone não cadastrado',
+        description: 'Este cliente não possui telefone cadastrado.',
+      });
+      return;
+    }
+
+    setEnviandoWhatsApp(pagamento.id);
+
+    try {
+      // Extrair primeiro nome do cliente
+      const primeiroNome = acordo.cliente_nome.split(' ')[0];
+      
+      // Formatar número da parcela (1ª, 2ª, 3ª, etc.)
+      const numeroParcela = `${pagamento.numero_parcela}ª`;
+      
+      // Formatar valor
+      const valorFormatado = formatarMoeda(pagamento.valor_parcela);
+      
+      // Formatar data
+      const dataVencimento = formatarData(pagamento.data_prevista);
+      
+      const mensagem = `Olá ${primeiroNome}, meu nome é Rodrigo e sou do departamento de acordos das Lojas Novo Mundo. Estou entrando em contato para informar que a ${numeroParcela} parcela no valor de ${valorFormatado} vence no dia ${dataVencimento}. Você já possui o boleto ou gostaria que enviássemos novamente?`;
+
+      const { error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          telefone: acordo.cliente_telefone,
+          mensagem
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Mensagem enviada!',
+        description: 'O lembrete foi enviado via WhatsApp.',
+      });
+    } catch (error) {
+      console.error('Erro ao enviar WhatsApp:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao enviar',
+        description: 'Não foi possível enviar a mensagem.',
+      });
+    } finally {
+      setEnviandoWhatsApp(null);
     }
   };
 
@@ -686,6 +739,17 @@ export default function AcordoDetalhe() {
                         </p>
                       )}
                     </div>
+                    {pagamento.status === 'pendente' && acordo.cliente_telefone && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-green-600 hover:bg-green-50 hover:text-green-700 border-green-300"
+                        onClick={() => enviarLembreteParcela(pagamento)}
+                        disabled={enviandoWhatsApp === pagamento.id}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
+                    )}
                     {pagamento.status === 'pendente' && (isOwner || isAdmin) && (
                       <Button
                         size="sm"
