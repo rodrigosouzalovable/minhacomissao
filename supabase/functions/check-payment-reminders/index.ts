@@ -61,14 +61,33 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         success: true, 
         message: 'Nenhuma parcela para notificar',
-        enviados: 0
+        agendados: 0
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    let enviados = 0;
-    let erros = 0;
+    // Calcular horário base para agendamento (8h de Brasília = 11h UTC)
+    const agora = new Date();
+    const horaAtualUTC = agora.getUTCHours();
+    const horaAtualBrasilia = (horaAtualUTC - 3 + 24) % 24;
+    
+    let proximoHorario: Date;
+    
+    // Se já passou das 18h ou ainda não são 8h, agenda para 8h do próximo dia
+    if (horaAtualBrasilia >= 18 || horaAtualBrasilia < 8) {
+      proximoHorario = new Date(agora);
+      if (horaAtualBrasilia >= 18) {
+        proximoHorario.setUTCDate(proximoHorario.getUTCDate() + 1);
+      }
+      proximoHorario.setUTCHours(11, 0, 0, 0); // 8h Brasília = 11h UTC
+    } else {
+      // Está dentro do horário comercial, começa agora
+      proximoHorario = new Date(agora);
+    }
+
+    let agendados = 0;
+    let pulados = 0;
 
     for (const parcela of parcelas) {
       const acordo = parcela.acordos as any;
@@ -76,12 +95,14 @@ serve(async (req) => {
       // Verificar se o acordo está ativo
       if (acordo.status !== 'ativo') {
         console.log(`Acordo ${acordo.id} não está ativo, pulando...`);
+        pulados++;
         continue;
       }
 
       // Verificar se tem telefone cadastrado
       if (!acordo.cliente_telefone) {
         console.log(`Acordo ${acordo.id} sem telefone, pulando...`);
+        pulados++;
         continue;
       }
 
@@ -94,6 +115,7 @@ serve(async (req) => {
 
       if (profileError || !profile?.whatsapp_lembretes_habilitado) {
         console.log(`Usuário ${acordo.user_id} não tem WhatsApp habilitado, pulando...`);
+        pulados++;
         continue;
       }
 
@@ -107,14 +129,28 @@ serve(async (req) => {
 
       if (parcelasPagasError || !parcelasPagas || parcelasPagas.length === 0) {
         console.log(`Acordo ${acordo.id} sem parcelas pagas, pulando...`);
+        pulados++;
         continue;
       }
 
       // Determinar tipo de lembrete
       const tipoLembrete = parcela.data_prevista === hojeStr ? 'dia_vencimento' : '5_dias';
 
-      // Verificar se já foi enviado
-      const { data: logExistente, error: logError } = await supabase
+      // Verificar se já existe na fila ou no log
+      const { data: filaExistente } = await supabase
+        .from('whatsapp_fila')
+        .select('id')
+        .eq('pagamento_id', parcela.id)
+        .eq('tipo_lembrete', tipoLembrete)
+        .single();
+
+      if (filaExistente) {
+        console.log(`Lembrete ${tipoLembrete} já está na fila para parcela ${parcela.id}, pulando...`);
+        pulados++;
+        continue;
+      }
+
+      const { data: logExistente } = await supabase
         .from('whatsapp_lembretes_log')
         .select('id')
         .eq('pagamento_id', parcela.id)
@@ -123,6 +159,7 @@ serve(async (req) => {
 
       if (logExistente) {
         console.log(`Lembrete ${tipoLembrete} já enviado para parcela ${parcela.id}, pulando...`);
+        pulados++;
         continue;
       }
 
@@ -144,79 +181,52 @@ serve(async (req) => {
         mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é Rodrigo, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} vence dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       }
 
-      console.log(`Enviando lembrete ${tipoLembrete} para ${acordo.cliente_telefone}...`);
+      // Formatar telefone
+      const telefoneFormatado = acordo.cliente_telefone.replace(/\D/g, '');
+      const telefoneCompleto = telefoneFormatado.startsWith('55') 
+        ? telefoneFormatado 
+        : `55${telefoneFormatado}`;
 
-      // Enviar WhatsApp
-      try {
-        const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-        const token = Deno.env.get('ZAPI_TOKEN');
-        const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+      // Verificar se o horário agendado passa das 18h (21h UTC)
+      const horaAgendadaUTC = proximoHorario.getUTCHours();
+      const horaAgendadaBrasilia = (horaAgendadaUTC - 3 + 24) % 24;
+      
+      if (horaAgendadaBrasilia >= 18) {
+        // Agenda para 8h do próximo dia
+        proximoHorario.setUTCDate(proximoHorario.getUTCDate() + 1);
+        proximoHorario.setUTCHours(11, 0, 0, 0); // 8h Brasília = 11h UTC
+      }
 
-        if (!instanceId || !token || !clientToken) {
-          throw new Error('Credenciais Z-API não configuradas');
-        }
-
-        // Formatar telefone
-        const telefoneFormatado = acordo.cliente_telefone.replace(/\D/g, '');
-        const telefoneCompleto = telefoneFormatado.startsWith('55') 
-          ? telefoneFormatado 
-          : `55${telefoneFormatado}`;
-
-        const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
-
-        const response = await fetch(zapiUrl, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Client-Token': clientToken
-          },
-          body: JSON.stringify({
-            phone: telefoneCompleto,
-            message: mensagem
-          })
+      // Inserir na fila
+      const { error: insertError } = await supabase
+        .from('whatsapp_fila')
+        .insert({
+          pagamento_id: parcela.id,
+          tipo_lembrete: tipoLembrete,
+          telefone: telefoneCompleto,
+          mensagem: mensagem,
+          agendado_para: proximoHorario.toISOString(),
+          status: 'pendente'
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Erro ao enviar mensagem via Z-API');
-        }
-
-        // Registrar sucesso no log
-        await supabase
-          .from('whatsapp_lembretes_log')
-          .insert({
-            pagamento_id: parcela.id,
-            tipo_lembrete: tipoLembrete,
-            sucesso: true
-          });
-
-        enviados++;
-        console.log(`Lembrete enviado com sucesso para parcela ${parcela.id}`);
-
-      } catch (sendError) {
-        console.error(`Erro ao enviar lembrete para parcela ${parcela.id}:`, sendError);
-        
-        // Registrar erro no log
-        await supabase
-          .from('whatsapp_lembretes_log')
-          .insert({
-            pagamento_id: parcela.id,
-            tipo_lembrete: tipoLembrete,
-            sucesso: false,
-            erro_mensagem: sendError instanceof Error ? sendError.message : 'Erro desconhecido'
-          });
-
-        erros++;
+      if (insertError) {
+        console.error(`Erro ao inserir na fila parcela ${parcela.id}:`, insertError);
+        continue;
       }
+
+      console.log(`Mensagem agendada para ${proximoHorario.toISOString()} - Parcela ${parcela.id}`);
+      agendados++;
+
+      // Avançar 3 minutos para a próxima mensagem
+      proximoHorario = new Date(proximoHorario.getTime() + 3 * 60 * 1000);
     }
 
-    console.log(`Processamento concluído: ${enviados} enviados, ${erros} erros`);
+    console.log(`Processamento concluído: ${agendados} agendados, ${pulados} pulados`);
 
     return new Response(JSON.stringify({ 
       success: true, 
-      enviados,
-      erros,
+      agendados,
+      pulados,
       total: parcelas.length
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

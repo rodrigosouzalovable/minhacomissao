@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.check-payment-reminders]
 verify_jwt = false
+
+[functions.process-whatsapp-queue]
+verify_jwt = false
