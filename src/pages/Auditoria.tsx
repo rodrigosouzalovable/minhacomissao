@@ -156,10 +156,11 @@ export default function Auditoria() {
 
       if (acordosError) throw acordosError;
 
-      // Buscar todos os pagamentos
+      // Buscar todos os pagamentos (aumentando limite padrão de 1000)
       const { data: pagamentos, error: pagamentosError } = await supabase
         .from('pagamentos')
-        .select('acordo_id, valor_parcela, comissao_parcela');
+        .select('acordo_id, valor_parcela, comissao_parcela')
+        .range(0, 10000);
 
       if (pagamentosError) throw pagamentosError;
 
