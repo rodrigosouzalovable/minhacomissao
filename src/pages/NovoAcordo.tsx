@@ -16,7 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
-  clienteCpf: z.string().min(11, 'CPF é obrigatório').max(14, 'CPF inválido'),
+  clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine((val) => val.replace(/\D/g, '').length === 11, { message: 'CPF deve ter 11 dígitos' }),
   clienteTelefone: z.string().min(10, 'Telefone é obrigatório').max(15, 'Telefone inválido'),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
@@ -39,6 +39,11 @@ const formatCpf = (value: string) => {
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+const isCpfCompleto = (cpf: string): boolean => {
+  const apenasNumeros = cpf.replace(/\D/g, '');
+  return apenasNumeros.length === 11;
 };
 
 const formatPhone = (value: string) => {
@@ -74,6 +79,7 @@ export default function NovoAcordo() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [nomeError, setNomeError] = useState('');
+  const [cpfError, setCpfError] = useState('');
 
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
@@ -402,10 +408,23 @@ export default function NovoAcordo() {
                     id="clienteCpf"
                     placeholder="000.000.000-00"
                     value={form.clienteCpf}
-                    onChange={(e) => setForm({ ...form, clienteCpf: formatCpf(e.target.value) })}
+                    onChange={(e) => {
+                      const formatted = formatCpf(e.target.value);
+                      setForm({ ...form, clienteCpf: formatted });
+                      if (cpfError) setCpfError('');
+                    }}
+                    onBlur={() => {
+                      if (form.clienteCpf && !isCpfCompleto(form.clienteCpf)) {
+                        setCpfError('CPF deve ter 11 dígitos');
+                      }
+                    }}
                     maxLength={14}
                     required
+                    className={cpfError ? 'border-destructive' : ''}
                   />
+                  {cpfError && (
+                    <p className="text-sm text-destructive">{cpfError}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -621,7 +640,7 @@ export default function NovoAcordo() {
               disabled={
                 isLoading || 
                 !calculo || 
-                !form.clienteCpf || 
+                !isCpfCompleto(form.clienteCpf) || 
                 !form.clienteTelefone || 
                 (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas)) ||
                 !validacaoSomaParcelas.valido
