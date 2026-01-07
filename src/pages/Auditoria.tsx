@@ -156,13 +156,31 @@ export default function Auditoria() {
 
       if (acordosError) throw acordosError;
 
-      // Buscar todos os pagamentos (aumentando limite padrão de 1000)
-      const { data: pagamentos, error: pagamentosError } = await supabase
-        .from('pagamentos')
-        .select('acordo_id, valor_parcela, comissao_parcela')
-        .range(0, 10000);
+      // Buscar todos os pagamentos usando paginação (limite do Supabase é 1000)
+      let allPagamentos: { acordo_id: string; valor_parcela: number; comissao_parcela: number }[] = [];
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (pagamentosError) throw pagamentosError;
+      while (hasMore) {
+        const { data: batch, error: batchError } = await supabase
+          .from('pagamentos')
+          .select('acordo_id, valor_parcela, comissao_parcela')
+          .order('id', { ascending: true })
+          .range(offset, offset + pageSize - 1);
+
+        if (batchError) throw batchError;
+
+        if (batch && batch.length > 0) {
+          allPagamentos = [...allPagamentos, ...batch];
+          offset += pageSize;
+          hasMore = batch.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const pagamentos = allPagamentos;
 
       // Agrupar pagamentos por acordo
       const pagamentosPorAcordo = new Map<string, { soma: number; qtd: number; somaComissao: number }>();
