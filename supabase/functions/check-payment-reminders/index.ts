@@ -24,11 +24,11 @@ serve(async (req) => {
     hoje.setHours(0, 0, 0, 0);
     const hojeStr = hoje.toISOString().split('T')[0];
     
-    const cincoDias = new Date(hoje);
-    cincoDias.setDate(cincoDias.getDate() + 5);
-    const cincoDiasStr = cincoDias.toISOString().split('T')[0];
+    const tresDias = new Date(hoje);
+    tresDias.setDate(tresDias.getDate() + 3);
+    const tresDiasStr = tresDias.toISOString().split('T')[0];
 
-    console.log(`Verificando parcelas para hoje (${hojeStr}) e 5 dias (${cincoDiasStr})`);
+    console.log(`Verificando parcelas para hoje (${hojeStr}) e 3 dias (${tresDiasStr})`);
 
     // Buscar parcelas pendentes que vencem hoje ou em 5 dias
     const { data: parcelas, error: parcelasError } = await supabase
@@ -48,7 +48,7 @@ serve(async (req) => {
         )
       `)
       .eq('status', 'pendente')
-      .in('data_prevista', [hojeStr, cincoDiasStr]);
+      .in('data_prevista', [hojeStr, tresDiasStr]);
 
     if (parcelasError) {
       console.error('Erro ao buscar parcelas:', parcelasError);
@@ -134,7 +134,7 @@ serve(async (req) => {
       }
 
       // Determinar tipo de lembrete
-      const tipoLembrete = parcela.data_prevista === hojeStr ? 'dia_vencimento' : '5_dias';
+      const tipoLembrete = parcela.data_prevista === hojeStr ? 'dia_vencimento' : '3_dias';
 
       // Verificar se já existe na fila ou no log
       const { data: filaExistente } = await supabase
