@@ -22,7 +22,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign, Search } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
@@ -35,6 +36,7 @@ interface UserWithRole {
   email: string;
   role: AppRole;
   criado_em: string;
+  whatsappHabilitado: boolean;
 }
 
 const roleLabels: Record<AppRole, string> = {
@@ -84,6 +86,7 @@ export default function AdminUsuarios() {
           email: profile.email,
           role: userRole?.role ?? 'funcionario',
           criado_em: profile.criado_em,
+          whatsappHabilitado: profile.whatsapp_lembretes_habilitado ?? false,
         };
       });
 
@@ -133,6 +136,32 @@ export default function AdminUsuarios() {
       updateRoleMutation.mutate({ userId, newRole });
     }
   };
+
+  const updateWhatsappMutation = useMutation({
+    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ whatsapp_lembretes_habilitado: enabled })
+        .eq('id', userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({
+        title: 'Configuração atualizada',
+        description: 'O envio de lembretes via WhatsApp foi atualizado.',
+      });
+    },
+    onError: (error) => {
+      console.error('Error updating whatsapp setting:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível atualizar a configuração.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const resetPasswordMutation = useMutation({
     mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
@@ -255,6 +284,12 @@ export default function AdminUsuarios() {
                     <TableHead>Email</TableHead>
                     <TableHead>Papel Atual</TableHead>
                     <TableHead>Novo Papel</TableHead>
+                    <TableHead className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <MessageCircle className="h-4 w-4" />
+                        WhatsApp
+                      </div>
+                    </TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -282,6 +317,15 @@ export default function AdminUsuarios() {
                             <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
                         </Select>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={user.whatsappHabilitado}
+                          onCheckedChange={(checked) =>
+                            updateWhatsappMutation.mutate({ userId: user.id, enabled: checked })
+                          }
+                          disabled={updateWhatsappMutation.isPending}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-2">

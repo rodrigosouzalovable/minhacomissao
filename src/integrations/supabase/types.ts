@@ -154,6 +154,7 @@ export type Database = {
           email: string
           id: string
           nome: string
+          whatsapp_lembretes_habilitado: boolean
         }
         Insert: {
           atualizado_em?: string
@@ -161,6 +162,7 @@ export type Database = {
           email: string
           id: string
           nome: string
+          whatsapp_lembretes_habilitado?: boolean
         }
         Update: {
           atualizado_em?: string
@@ -168,6 +170,7 @@ export type Database = {
           email?: string
           id?: string
           nome?: string
+          whatsapp_lembretes_habilitado?: boolean
         }
         Relationships: []
       }
@@ -251,6 +254,41 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      whatsapp_lembretes_log: {
+        Row: {
+          enviado_em: string | null
+          erro_mensagem: string | null
+          id: string
+          pagamento_id: string
+          sucesso: boolean | null
+          tipo_lembrete: string
+        }
+        Insert: {
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          pagamento_id: string
+          sucesso?: boolean | null
+          tipo_lembrete: string
+        }
+        Update: {
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          pagamento_id?: string
+          sucesso?: boolean | null
+          tipo_lembrete?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_lembretes_log_pagamento_id_fkey"
+            columns: ["pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "pagamentos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
