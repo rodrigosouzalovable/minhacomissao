@@ -181,11 +181,16 @@ export type Database = {
           cliente_nome: string
           cliente_telefone: string
           criado_em: string
+          data_primeiro_pagamento: string | null
           data_retorno: string
           id: string
+          numero_parcelas: number | null
           observacao: string | null
           status: string
           user_id: string
+          valor_demais_parcelas: number | null
+          valor_primeira_parcela: number | null
+          valor_total: number | null
         }
         Insert: {
           atualizado_em?: string
@@ -193,11 +198,16 @@ export type Database = {
           cliente_nome: string
           cliente_telefone: string
           criado_em?: string
+          data_primeiro_pagamento?: string | null
           data_retorno: string
           id?: string
+          numero_parcelas?: number | null
           observacao?: string | null
           status?: string
           user_id: string
+          valor_demais_parcelas?: number | null
+          valor_primeira_parcela?: number | null
+          valor_total?: number | null
         }
         Update: {
           atualizado_em?: string
@@ -205,11 +215,16 @@ export type Database = {
           cliente_nome?: string
           cliente_telefone?: string
           criado_em?: string
+          data_primeiro_pagamento?: string | null
           data_retorno?: string
           id?: string
+          numero_parcelas?: number | null
           observacao?: string | null
           status?: string
           user_id?: string
+          valor_demais_parcelas?: number | null
+          valor_primeira_parcela?: number | null
+          valor_total?: number | null
         }
         Relationships: []
       }

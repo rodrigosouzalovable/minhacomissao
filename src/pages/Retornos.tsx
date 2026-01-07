@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2, Plus, MessageCircle, DollarSign, Hash, CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -21,6 +21,11 @@ const retornoSchema = z.object({
   clienteTelefone: z.string().min(10, 'Telefone é obrigatório').max(15, 'Telefone inválido'),
   observacao: z.string().max(2000, 'Observação muito longa').optional(),
   dataRetorno: z.string().min(1, 'Data de retorno é obrigatória'),
+  valorTotal: z.number().positive('Valor total deve ser positivo'),
+  numeroParcelas: z.number().int().min(1, 'Mínimo 1 parcela'),
+  valorPrimeiraParcela: z.number().positive('Valor deve ser positivo'),
+  valorDemaisParcelas: z.number().positive('Valor deve ser positivo'),
+  dataPrimeiroPagamento: z.string().min(1, 'Data do primeiro pagamento é obrigatória'),
 });
 
 // Funções de máscara
@@ -48,6 +53,39 @@ const formatPhone = (value: string) => {
     .replace(/(\d{5})(\d)/, '$1-$2');
 };
 
+// Função para formatar valor monetário em tempo real
+const formatCurrencyInput = (value: string): string => {
+  // Remove tudo que não é número
+  const numbers = value.replace(/\D/g, '');
+  
+  if (!numbers) return '';
+  
+  // Converte para número com 2 casas decimais
+  const amount = parseInt(numbers, 10) / 100;
+  
+  // Formata para moeda brasileira
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+};
+
+// Função para converter string formatada para número
+const parseCurrencyToNumber = (value: string): number => {
+  const numbers = value.replace(/\D/g, '');
+  if (!numbers) return 0;
+  return parseInt(numbers, 10) / 100;
+};
+
+// Função para formatar número para exibição
+const formatCurrencyDisplay = (value: number | null): string => {
+  if (value === null || value === undefined) return 'R$ 0,00';
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+};
+
 interface Retorno {
   id: string;
   user_id: string;
@@ -58,6 +96,11 @@ interface Retorno {
   data_retorno: string;
   status: string;
   criado_em: string;
+  valor_total: number | null;
+  numero_parcelas: number | null;
+  valor_primeira_parcela: number | null;
+  valor_demais_parcelas: number | null;
+  data_primeiro_pagamento: string | null;
 }
 
 export default function Retornos() {
@@ -69,6 +112,7 @@ export default function Retornos() {
   const [loadingRetornos, setLoadingRetornos] = useState(true);
   const [nomeError, setNomeError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState<string | null>(null);
 
   // Audio recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -82,6 +126,11 @@ export default function Retornos() {
     clienteTelefone: '',
     observacao: '',
     dataRetorno: '',
+    valorTotal: '',
+    numeroParcelas: '',
+    valorPrimeiraParcela: '',
+    valorDemaisParcelas: '',
+    dataPrimeiroPagamento: '',
   });
 
   // Load retornos
@@ -99,7 +148,7 @@ export default function Retornos() {
         .order('data_retorno', { ascending: true });
 
       if (error) throw error;
-      setRetornos(data || []);
+      setRetornos((data || []) as Retorno[]);
     } catch (error) {
       console.error('Error fetching retornos:', error);
       toast({
@@ -215,6 +264,24 @@ export default function Retornos() {
     }
   };
 
+  // Verifica se todos os campos obrigatórios estão preenchidos
+  const isFormValid = () => {
+    const cpfDigits = form.clienteCpf.replace(/\D/g, '');
+    const telefoneDigits = form.clienteTelefone.replace(/\D/g, '');
+    
+    return (
+      form.clienteNome.trim().length >= 2 &&
+      cpfDigits.length === 11 &&
+      telefoneDigits.length === 11 &&
+      form.dataRetorno &&
+      parseCurrencyToNumber(form.valorTotal) > 0 &&
+      parseInt(form.numeroParcelas) >= 1 &&
+      parseCurrencyToNumber(form.valorPrimeiraParcela) > 0 &&
+      parseCurrencyToNumber(form.valorDemaisParcelas) > 0 &&
+      form.dataPrimeiroPagamento
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -228,6 +295,11 @@ export default function Retornos() {
         clienteTelefone: form.clienteTelefone.trim(),
         observacao: form.observacao.trim() || undefined,
         dataRetorno: form.dataRetorno,
+        valorTotal: parseCurrencyToNumber(form.valorTotal),
+        numeroParcelas: parseInt(form.numeroParcelas),
+        valorPrimeiraParcela: parseCurrencyToNumber(form.valorPrimeiraParcela),
+        valorDemaisParcelas: parseCurrencyToNumber(form.valorDemaisParcelas),
+        dataPrimeiroPagamento: form.dataPrimeiroPagamento,
       });
 
       const { error } = await supabase.from('retornos').insert({
@@ -237,6 +309,11 @@ export default function Retornos() {
         cliente_telefone: validated.clienteTelefone,
         observacao: validated.observacao || null,
         data_retorno: validated.dataRetorno,
+        valor_total: validated.valorTotal,
+        numero_parcelas: validated.numeroParcelas,
+        valor_primeira_parcela: validated.valorPrimeiraParcela,
+        valor_demais_parcelas: validated.valorDemaisParcelas,
+        data_primeiro_pagamento: validated.dataPrimeiroPagamento,
       });
 
       if (error) throw error;
@@ -253,6 +330,11 @@ export default function Retornos() {
         clienteTelefone: '',
         observacao: '',
         dataRetorno: '',
+        valorTotal: '',
+        numeroParcelas: '',
+        valorPrimeiraParcela: '',
+        valorDemaisParcelas: '',
+        dataPrimeiroPagamento: '',
       });
 
       // Hide form and refresh list
@@ -324,6 +406,56 @@ export default function Retornos() {
         title: 'Erro',
         description: 'Não foi possível excluir o retorno.',
       });
+    }
+  };
+
+  const handleEnviarWhatsApp = async (retorno: Retorno) => {
+    if (!retorno.valor_total || !retorno.numero_parcelas || !retorno.valor_primeira_parcela || !retorno.valor_demais_parcelas || !retorno.data_primeiro_pagamento) {
+      toast({
+        variant: 'destructive',
+        title: 'Dados incompletos',
+        description: 'Este retorno não possui todos os dados do acordo.',
+      });
+      return;
+    }
+
+    setSendingWhatsApp(retorno.id);
+
+    try {
+      const primeiroNome = retorno.cliente_nome.split(' ')[0];
+      const dataPagamentoFormatada = format(
+        new Date(retorno.data_primeiro_pagamento + 'T00:00:00'),
+        "dd/MM/yyyy"
+      );
+
+      let mensagem: string;
+
+      if (retorno.numero_parcelas === 1) {
+        mensagem = `Olá ${primeiroNome}, tudo bem? Sou do departamento de confirmação de acordos das Lojas Novo Mundo, e estou entrando em contato para finalizamos o acordo que negociamos no valor de ${formatCurrencyDisplay(retorno.valor_total)} para o dia ${dataPagamentoFormatada}. Posso enviar o boleto para pagamento?`;
+      } else {
+        const parcelasRestantes = retorno.numero_parcelas - 1;
+        mensagem = `Olá ${primeiroNome}, tudo bem? Sou do departamento de confirmação de acordos das Lojas Novo Mundo, e estou entrando em contato para finalizamos o acordo que negociamos no valor de ${formatCurrencyDisplay(retorno.valor_primeira_parcela)} para o dia ${dataPagamentoFormatada} e o restante em ${parcelasRestantes} DE ${formatCurrencyDisplay(retorno.valor_demais_parcelas)} para o dia ${dataPagamentoFormatada}. Gostaria de alterar essa negociação ou posso enviar o boleto para pagamento?`;
+      }
+
+      const { error } = await supabase.functions.invoke('send-whatsapp', {
+        body: { telefone: retorno.cliente_telefone, mensagem },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Mensagem enviada!',
+        description: `WhatsApp enviado para ${primeiroNome}.`,
+      });
+    } catch (error) {
+      console.error('WhatsApp error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao enviar WhatsApp',
+        description: 'Não foi possível enviar a mensagem. Tente novamente.',
+      });
+    } finally {
+      setSendingWhatsApp(null);
     }
   };
 
@@ -424,6 +556,76 @@ export default function Retornos() {
               </CardContent>
             </Card>
 
+            {/* Card de Dados do Acordo */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Dados do Acordo</CardTitle>
+                <CardDescription>Informações do acordo negociado</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="valorTotal">Valor Total *</Label>
+                    <Input
+                      id="valorTotal"
+                      placeholder="R$ 0,00"
+                      value={form.valorTotal}
+                      onChange={(e) => setForm({ ...form, valorTotal: formatCurrencyInput(e.target.value) })}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="numeroParcelas">Número de Parcelas *</Label>
+                    <Input
+                      id="numeroParcelas"
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={form.numeroParcelas}
+                      onChange={(e) => setForm({ ...form, numeroParcelas: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela *</Label>
+                    <Input
+                      id="valorPrimeiraParcela"
+                      placeholder="R$ 0,00"
+                      value={form.valorPrimeiraParcela}
+                      onChange={(e) => setForm({ ...form, valorPrimeiraParcela: formatCurrencyInput(e.target.value) })}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas *</Label>
+                    <Input
+                      id="valorDemaisParcelas"
+                      placeholder="R$ 0,00"
+                      value={form.valorDemaisParcelas}
+                      onChange={(e) => setForm({ ...form, valorDemaisParcelas: formatCurrencyInput(e.target.value) })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dataPrimeiroPagamento">Data do Primeiro Pagamento *</Label>
+                  <Input
+                    id="dataPrimeiroPagamento"
+                    type="date"
+                    value={form.dataPrimeiroPagamento}
+                    onChange={(e) => setForm({ ...form, dataPrimeiroPagamento: e.target.value })}
+                    required
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Lembrete de Retorno</CardTitle>
@@ -481,7 +683,7 @@ export default function Retornos() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading || !isFormValid()}>
                   {isLoading ? 'Cadastrando...' : 'Cadastrar Retorno'}
                 </Button>
               </CardContent>
@@ -537,6 +739,26 @@ export default function Retornos() {
                           </div>
                         </div>
 
+                        {/* Dados do Acordo */}
+                        {retorno.valor_total && (
+                          <div className="mt-3 p-3 bg-muted/50 rounded-lg space-y-1">
+                            <div className="flex items-center gap-2 text-sm">
+                              <DollarSign className="h-3 w-3 text-primary" />
+                              <span className="font-medium">Valor Total: {formatCurrencyDisplay(retorno.valor_total)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Hash className="h-3 w-3" />
+                              <span>{retorno.numero_parcelas}x - 1ª: {formatCurrencyDisplay(retorno.valor_primeira_parcela)} | Demais: {formatCurrencyDisplay(retorno.valor_demais_parcelas)}</span>
+                            </div>
+                            {retorno.data_primeiro_pagamento && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <CalendarDays className="h-3 w-3" />
+                                <span>1º Pagamento: {format(new Date(retorno.data_primeiro_pagamento + 'T00:00:00'), "dd/MM/yyyy")}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {retorno.observacao && (
                           <p className="text-sm mt-2 p-2 bg-muted rounded">
                             {retorno.observacao}
@@ -545,6 +767,22 @@ export default function Retornos() {
                       </div>
 
                       <div className="flex gap-2 sm:flex-col">
+                        {retorno.status !== 'concluido' && retorno.valor_total && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-green-600 hover:bg-green-50 hover:text-green-700"
+                            onClick={() => handleEnviarWhatsApp(retorno)}
+                            disabled={sendingWhatsApp === retorno.id}
+                          >
+                            {sendingWhatsApp === retorno.id ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <MessageCircle className="h-4 w-4 mr-1" />
+                            )}
+                            WhatsApp
+                          </Button>
+                        )}
                         {retorno.status !== 'concluido' && (
                           <Button
                             size="sm"
