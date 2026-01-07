@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,11 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FileSpreadsheet, Upload, Download, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FileSpreadsheet, Upload, Download, AlertTriangle, CheckCircle2, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import { Link } from 'react-router-dom';
 
 interface LinhaImportada {
   cpf: string;
@@ -17,7 +19,7 @@ interface LinhaImportada {
   faixaAtraso: number;
   dataPagamento: string;
   valorPago: number;
-  comissao: number; // Valor literal da coluna F (Receita)
+  comissao: number;
 }
 
 interface PagamentoSistema {
@@ -43,6 +45,21 @@ interface Divergencia {
   dataSistema: string;
 }
 
+interface AcordoDivergente {
+  id: string;
+  clienteNome: string;
+  clienteCpf: string;
+  valorTotal: number;
+  somaParcelas: number;
+  diferencaValor: number;
+  qtdParcelasAcordo: number;
+  qtdParcelasCadastradas: number;
+  comissaoTotal: number;
+  somaComissoes: number;
+  diferencaComissao: number;
+  tiposDivergencia: string[];
+}
+
 const normalizarCPF = (cpf: string): string => {
   return String(cpf || '').replace(/\D/g, '');
 };
@@ -50,7 +67,6 @@ const normalizarCPF = (cpf: string): string => {
 const parseDataExcel = (valor: any): string => {
   if (!valor) return '';
   
-  // Se for número (formato de data do Excel)
   if (typeof valor === 'number') {
     const data = XLSX.SSF.parse_date_code(valor);
     if (data) {
@@ -58,7 +74,6 @@ const parseDataExcel = (valor: any): string => {
     }
   }
   
-  // Se for string, retorna como está
   return String(valor);
 };
 
@@ -66,7 +81,6 @@ const parseValorNumerico = (valor: any): number => {
   if (typeof valor === 'number') return valor;
   if (!valor) return 0;
   
-  // Remove R$, espaços e converte vírgula para ponto
   const limpo = String(valor)
     .replace(/R\$\s?/g, '')
     .replace(/\s/g, '')
@@ -83,18 +97,22 @@ const compararValores = (v1: number, v2: number, tolerancia = 0.01): boolean => 
 const formatarDataParaComparacao = (data: string): string => {
   if (!data) return '';
   
-  // Se já está no formato dd/mm/yyyy
   if (data.includes('/')) {
     return data;
   }
   
-  // Se está no formato yyyy-mm-dd
   if (data.includes('-')) {
     const [ano, mes, dia] = data.split('-');
     return `${dia}/${mes}/${ano}`;
   }
   
   return data;
+};
+
+const formatarCPF = (cpf: string): string => {
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11) return cpf;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 };
 
 export default function Auditoria() {
@@ -106,6 +124,10 @@ export default function Auditoria() {
   const [correspondencias, setCorrespondencias] = useState(0);
   const [processado, setProcessado] = useState(false);
 
+  // Estados para divergências internas
+  const [acordosDivergentes, setAcordosDivergentes] = useState<AcordoDivergente[]>([]);
+  const [carregandoDivergencias, setCarregandoDivergencias] = useState(false);
+
   const handleArquivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -115,6 +137,119 @@ export default function Auditoria() {
       setCorrespondencias(0);
     }
   };
+
+  const buscarDivergenciasInternas = async () => {
+    setCarregandoDivergencias(true);
+    try {
+      // Buscar todos os acordos com suas parcelas
+      const { data: acordos, error: acordosError } = await supabase
+        .from('acordos')
+        .select(`
+          id,
+          cliente_nome,
+          cliente_cpf,
+          valor_total,
+          parcelas,
+          comissao_total
+        `)
+        .order('criado_em', { ascending: false });
+
+      if (acordosError) throw acordosError;
+
+      // Buscar todos os pagamentos
+      const { data: pagamentos, error: pagamentosError } = await supabase
+        .from('pagamentos')
+        .select('acordo_id, valor_parcela, comissao_parcela');
+
+      if (pagamentosError) throw pagamentosError;
+
+      // Agrupar pagamentos por acordo
+      const pagamentosPorAcordo = new Map<string, { soma: number; qtd: number; somaComissao: number }>();
+      for (const pag of pagamentos || []) {
+        const atual = pagamentosPorAcordo.get(pag.acordo_id) || { soma: 0, qtd: 0, somaComissao: 0 };
+        atual.soma += Number(pag.valor_parcela) || 0;
+        atual.qtd += 1;
+        atual.somaComissao += Number(pag.comissao_parcela) || 0;
+        pagamentosPorAcordo.set(pag.acordo_id, atual);
+      }
+
+      // Identificar acordos com divergências
+      const divergentes: AcordoDivergente[] = [];
+      
+      for (const acordo of acordos || []) {
+        const dadosParcelas = pagamentosPorAcordo.get(acordo.id) || { soma: 0, qtd: 0, somaComissao: 0 };
+        const valorTotal = Number(acordo.valor_total) || 0;
+        const somaParcelas = dadosParcelas.soma;
+        const qtdParcelasAcordo = acordo.parcelas || 0;
+        const qtdParcelasCadastradas = dadosParcelas.qtd;
+        const comissaoTotal = Number(acordo.comissao_total) || 0;
+        const somaComissoes = dadosParcelas.somaComissao;
+
+        const diferencaValor = Math.abs(valorTotal - somaParcelas);
+        const diferencaQtdParcelas = Math.abs(qtdParcelasAcordo - qtdParcelasCadastradas);
+        const diferencaComissao = Math.abs(comissaoTotal - somaComissoes);
+
+        const tiposDivergencia: string[] = [];
+
+        // Tolerância de R$ 0,10 para valores
+        if (diferencaValor > 0.10) {
+          tiposDivergencia.push('Valor total divergente');
+        }
+
+        if (diferencaQtdParcelas > 0) {
+          tiposDivergencia.push('Quantidade de parcelas incorreta');
+        }
+
+        if (diferencaComissao > 0.10) {
+          tiposDivergencia.push('Comissão inconsistente');
+        }
+
+        if (tiposDivergencia.length > 0) {
+          divergentes.push({
+            id: acordo.id,
+            clienteNome: acordo.cliente_nome,
+            clienteCpf: acordo.cliente_cpf || '',
+            valorTotal,
+            somaParcelas,
+            diferencaValor,
+            qtdParcelasAcordo,
+            qtdParcelasCadastradas,
+            comissaoTotal,
+            somaComissoes,
+            diferencaComissao,
+            tiposDivergencia,
+          });
+        }
+      }
+
+      setAcordosDivergentes(divergentes);
+
+      if (divergentes.length === 0) {
+        toast({
+          title: 'Nenhuma divergência encontrada',
+          description: 'Todos os acordos estão com valores consistentes.',
+        });
+      } else {
+        toast({
+          title: 'Divergências encontradas',
+          description: `${divergentes.length} acordo(s) com inconsistências.`,
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao buscar divergências:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível buscar as divergências.',
+      });
+    } finally {
+      setCarregandoDivergencias(false);
+    }
+  };
+
+  useEffect(() => {
+    buscarDivergenciasInternas();
+  }, []);
 
   const processarPlanilha = async () => {
     if (!arquivo) {
@@ -129,18 +264,16 @@ export default function Auditoria() {
     setProcessando(true);
 
     try {
-      // Ler arquivo Excel
       const buffer = await arquivo.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-      // Ignorar cabeçalho (primeira linha) e processar dados
       const linhasImportadas: LinhaImportada[] = [];
       for (let i = 1; i < jsonData.length; i++) {
         const row = jsonData[i];
-        if (!row || !row[0]) continue; // Pular linhas vazias
+        if (!row || !row[0]) continue;
 
         linhasImportadas.push({
           cpf: normalizarCPF(row[0]),
@@ -148,13 +281,12 @@ export default function Auditoria() {
           faixaAtraso: parseInt(String(row[2] || '0'), 10),
           dataPagamento: parseDataExcel(row[3]),
           valorPago: parseValorNumerico(row[4]),
-          comissao: parseValorNumerico(row[5]), // Valor literal da coluna F (Receita)
+          comissao: parseValorNumerico(row[5]),
         });
       }
 
       setDadosImportados(linhasImportadas);
 
-      // Buscar todos os pagamentos pagos do sistema
       const { data: pagamentosRaw, error } = await supabase
         .from('pagamentos')
         .select(`
@@ -182,11 +314,9 @@ export default function Auditoria() {
         diasAtraso: p.acordos?.dias_atraso || 0,
       }));
 
-      // Realizar comparação
       const divergenciasEncontradas: Divergencia[] = [];
       let correspondenciasCount = 0;
 
-      // Agrupar pagamentos do sistema por CPF
       const pagamentosPorCPF = new Map<string, PagamentoSistema[]>();
       for (const pag of pagamentosSistema) {
         if (!pag.cpf) continue;
@@ -195,7 +325,6 @@ export default function Auditoria() {
         pagamentosPorCPF.set(pag.cpf, lista);
       }
 
-      // Verificar cada linha da planilha
       for (const linha of linhasImportadas) {
         const pagamentosCliente = pagamentosPorCPF.get(linha.cpf) || [];
 
@@ -215,14 +344,12 @@ export default function Auditoria() {
           continue;
         }
 
-        // Procurar pagamento correspondente por data
         const dataPlanilhaFormatada = linha.dataPagamento;
         let encontrouCorrespondencia = false;
 
         for (const pagSistema of pagamentosCliente) {
           const dataSistemaFormatada = formatarDataParaComparacao(pagSistema.dataPaga || '');
           
-          // Comparar por data
           if (dataPlanilhaFormatada === dataSistemaFormatada) {
             encontrouCorrespondencia = true;
             
@@ -232,11 +359,9 @@ export default function Auditoria() {
               divergencias.push('Valor divergente');
             }
             
-            // Calcular comissão do escritório esperada pelo SISTEMA
             const percentualEmpresa = calcularPercentualComissaoEmpresa(pagSistema.diasAtraso);
             const comissaoEscritorioSistema = Math.round(pagSistema.valorParcela * (percentualEmpresa / 100) * 100) / 100;
             
-            // Comparar valor da planilha (coluna F) com comissão do escritório do sistema
             if (!compararValores(linha.comissao, comissaoEscritorioSistema)) {
               divergencias.push('Comissão divergente');
             }
@@ -262,7 +387,6 @@ export default function Auditoria() {
         }
 
         if (!encontrouCorrespondencia) {
-          // Nenhum pagamento com a mesma data encontrado
           divergenciasEncontradas.push({
             cpf: linha.cpf,
             nomeClientePlanilha: linha.nomeCliente,
@@ -325,17 +449,16 @@ export default function Auditoria() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Divergências');
 
-    // Ajustar largura das colunas
     ws['!cols'] = [
-      { wch: 15 }, // CPF
-      { wch: 30 }, // Nome Planilha
-      { wch: 30 }, // Nome Sistema
-      { wch: 30 }, // Tipo Divergência
-      { wch: 15 }, // Valor Planilha
-      { wch: 15 }, // Valor Sistema
-      { wch: 18 }, // Comissão Planilha
-      { wch: 15 }, // Data Planilha
-      { wch: 15 }, // Data Sistema
+      { wch: 15 },
+      { wch: 30 },
+      { wch: 30 },
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 15 },
     ];
 
     XLSX.writeFile(wb, 'divergencias-auditoria.xlsx');
@@ -343,6 +466,56 @@ export default function Auditoria() {
     toast({
       title: 'Exportação concluída',
       description: 'Arquivo de divergências baixado com sucesso.',
+    });
+  };
+
+  const exportarDivergenciasInternas = () => {
+    if (acordosDivergentes.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Sem dados',
+        description: 'Não há divergências internas para exportar.',
+      });
+      return;
+    }
+
+    const dadosExport = acordosDivergentes.map((a) => ({
+      'Cliente': a.clienteNome,
+      'CPF': formatarCPF(a.clienteCpf),
+      'Tipo de Divergência': a.tiposDivergencia.join(', '),
+      'Valor Total Acordo': a.valorTotal,
+      'Soma das Parcelas': a.somaParcelas,
+      'Diferença Valor': a.diferencaValor,
+      'Parcelas Esperadas': a.qtdParcelasAcordo,
+      'Parcelas Cadastradas': a.qtdParcelasCadastradas,
+      'Comissão Total': a.comissaoTotal,
+      'Soma Comissões': a.somaComissoes,
+      'Diferença Comissão': a.diferencaComissao,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dadosExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Divergências Internas');
+
+    ws['!cols'] = [
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 35 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 18 },
+    ];
+
+    XLSX.writeFile(wb, 'divergencias-internas-acordos.xlsx');
+
+    toast({
+      title: 'Exportação concluída',
+      description: 'Arquivo de divergências internas baixado com sucesso.',
     });
   };
 
@@ -354,137 +527,287 @@ export default function Auditoria() {
           <div>
             <h1 className="text-2xl font-bold">Auditoria de Pagamentos</h1>
             <p className="text-muted-foreground">
-              Compare pagamentos da planilha com os registros do sistema
+              Compare pagamentos e identifique divergências nos acordos
             </p>
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Importar Planilha</CardTitle>
-            <CardDescription>
-              Selecione um arquivo Excel (.xlsx, .xls) com as colunas: CPF, Nome do Cliente, Faixa de Atraso, Data do Pagamento, Valor Pago, Comissão
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleArquivoChange}
-                className="flex-1"
-              />
-              <Button
-                onClick={processarPlanilha}
-                disabled={!arquivo || processando}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {processando ? 'Processando...' : 'Processar e Comparar'}
-              </Button>
-            </div>
-            
-            {arquivo && (
-              <p className="text-sm text-muted-foreground">
-                Arquivo selecionado: {arquivo.name}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <Tabs defaultValue="divergencias-internas" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="divergencias-internas">
+              <AlertCircle className="h-4 w-4 mr-2" />
+              Divergências de Acordos
+              {acordosDivergentes.length > 0 && (
+                <Badge variant="destructive" className="ml-2">
+                  {acordosDivergentes.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="comparacao-planilha">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Comparação com Planilha
+            </TabsTrigger>
+          </TabsList>
 
-        {processado && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardContent className="flex items-center gap-4 pt-6">
-                  <CheckCircle2 className="h-10 w-10 text-green-500" />
-                  <div>
-                    <p className="text-2xl font-bold">{correspondencias}</p>
-                    <p className="text-muted-foreground">Registros correspondentes</p>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="flex items-center gap-4 pt-6">
-                  <AlertTriangle className="h-10 w-10 text-yellow-500" />
-                  <div>
-                    <p className="text-2xl font-bold">{divergencias.length}</p>
-                    <p className="text-muted-foreground">Divergências encontradas</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {divergencias.length > 0 && (
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Divergências Encontradas</CardTitle>
-                    <CardDescription>
-                      Lista de registros com diferenças entre a planilha e o sistema
-                    </CardDescription>
-                  </div>
-                  <Button onClick={exportarDivergencias} variant="outline">
+          <TabsContent value="divergencias-internas" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Acordos com Divergências</h2>
+                <p className="text-sm text-muted-foreground">
+                  Acordos que possuem inconsistências nos valores cadastrados
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={buscarDivergenciasInternas}
+                  disabled={carregandoDivergencias}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${carregandoDivergencias ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </Button>
+                {acordosDivergentes.length > 0 && (
+                  <Button variant="outline" onClick={exportarDivergenciasInternas}>
                     <Download className="h-4 w-4 mr-2" />
                     Exportar Excel
                   </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>CPF</TableHead>
-                          <TableHead>Cliente (Planilha)</TableHead>
-                          <TableHead>Cliente (Sistema)</TableHead>
-                          <TableHead>Divergência</TableHead>
-                          <TableHead className="text-right">Valor Plan.</TableHead>
-                          <TableHead className="text-right">Valor Sist.</TableHead>
-                          <TableHead className="text-right">Com. Plan.</TableHead>
-                          <TableHead className="text-right">Com. Sist.</TableHead>
-                          <TableHead>Data Plan.</TableHead>
-                          <TableHead>Data Sist.</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {divergencias.map((d, index) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-mono text-sm">{d.cpf}</TableCell>
-                            <TableCell>{d.nomeClientePlanilha}</TableCell>
-                            <TableCell>{d.nomeClienteSistema}</TableCell>
-                            <TableCell>
-                              <Badge variant="destructive" className="text-xs">
-                                {d.tipoDivergencia}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">{formatarMoeda(d.valorPlanilha)}</TableCell>
-                            <TableCell className="text-right">{formatarMoeda(d.valorSistema)}</TableCell>
-                            <TableCell className="text-right">{formatarMoeda(d.comissaoPlanilha)}</TableCell>
-                            <TableCell className="text-right">{formatarMoeda(d.comissaoSistema)}</TableCell>
-                            <TableCell>{d.dataPlanilha}</TableCell>
-                            <TableCell>{d.dataSistema}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                )}
+              </div>
+            </div>
+
+            {carregandoDivergencias ? (
+              <Card>
+                <CardContent className="flex items-center justify-center py-10">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
                 </CardContent>
               </Card>
-            )}
-
-            {divergencias.length === 0 && (
+            ) : acordosDivergentes.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-10">
                   <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
-                  <h3 className="text-xl font-semibold">Tudo certo!</h3>
+                  <h3 className="text-xl font-semibold">Nenhuma divergência encontrada</h3>
                   <p className="text-muted-foreground">
-                    Todos os registros da planilha correspondem ao sistema.
+                    Todos os acordos estão com valores consistentes.
                   </p>
                 </CardContent>
               </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {acordosDivergentes.map((acordo) => (
+                  <Card key={acordo.id} className="border-destructive/50">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5 text-destructive" />
+                          <CardTitle className="text-base">{acordo.clienteNome}</CardTitle>
+                        </div>
+                      </div>
+                      {acordo.clienteCpf && (
+                        <CardDescription className="font-mono text-xs">
+                          CPF: {formatarCPF(acordo.clienteCpf)}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex flex-wrap gap-1">
+                        {acordo.tiposDivergencia.map((tipo, idx) => (
+                          <Badge key={idx} variant="destructive" className="text-xs">
+                            {tipo}
+                          </Badge>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        {acordo.diferencaValor > 0.10 && (
+                          <div className="p-2 rounded bg-destructive/10 space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Valor Total:</span>
+                              <span className="font-medium">{formatarMoeda(acordo.valorTotal)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Soma Parcelas:</span>
+                              <span className="font-medium">{formatarMoeda(acordo.somaParcelas)}</span>
+                            </div>
+                            <div className="flex justify-between text-destructive font-medium">
+                              <span>Diferença:</span>
+                              <span>{formatarMoeda(acordo.diferencaValor)}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {acordo.qtdParcelasAcordo !== acordo.qtdParcelasCadastradas && (
+                          <div className="p-2 rounded bg-destructive/10 space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Parcelas Esperadas:</span>
+                              <span className="font-medium">{acordo.qtdParcelasAcordo}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Parcelas Cadastradas:</span>
+                              <span className="font-medium">{acordo.qtdParcelasCadastradas}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {acordo.diferencaComissao > 0.10 && (
+                          <div className="p-2 rounded bg-destructive/10 space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Comissão Total:</span>
+                              <span className="font-medium">{formatarMoeda(acordo.comissaoTotal)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Soma Comissões:</span>
+                              <span className="font-medium">{formatarMoeda(acordo.somaComissoes)}</span>
+                            </div>
+                            <div className="flex justify-between text-destructive font-medium">
+                              <span>Diferença:</span>
+                              <span>{formatarMoeda(acordo.diferencaComissao)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <Button asChild variant="outline" size="sm" className="w-full">
+                        <Link to={`/acordos/${acordo.id}`}>
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Ver Acordo
+                        </Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
-          </>
-        )}
+          </TabsContent>
+
+          <TabsContent value="comparacao-planilha" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Importar Planilha</CardTitle>
+                <CardDescription>
+                  Selecione um arquivo Excel (.xlsx, .xls) com as colunas: CPF, Nome do Cliente, Faixa de Atraso, Data do Pagamento, Valor Pago, Comissão
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleArquivoChange}
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={processarPlanilha}
+                    disabled={!arquivo || processando}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {processando ? 'Processando...' : 'Processar e Comparar'}
+                  </Button>
+                </div>
+                
+                {arquivo && (
+                  <p className="text-sm text-muted-foreground">
+                    Arquivo selecionado: {arquivo.name}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {processado && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardContent className="flex items-center gap-4 pt-6">
+                      <CheckCircle2 className="h-10 w-10 text-green-500" />
+                      <div>
+                        <p className="text-2xl font-bold">{correspondencias}</p>
+                        <p className="text-muted-foreground">Registros correspondentes</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardContent className="flex items-center gap-4 pt-6">
+                      <AlertTriangle className="h-10 w-10 text-yellow-500" />
+                      <div>
+                        <p className="text-2xl font-bold">{divergencias.length}</p>
+                        <p className="text-muted-foreground">Divergências encontradas</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {divergencias.length > 0 && (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle>Divergências Encontradas</CardTitle>
+                        <CardDescription>
+                          Lista de registros com diferenças entre a planilha e o sistema
+                        </CardDescription>
+                      </div>
+                      <Button onClick={exportarDivergencias} variant="outline">
+                        <Download className="h-4 w-4 mr-2" />
+                        Exportar Excel
+                      </Button>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>CPF</TableHead>
+                              <TableHead>Cliente (Planilha)</TableHead>
+                              <TableHead>Cliente (Sistema)</TableHead>
+                              <TableHead>Divergência</TableHead>
+                              <TableHead className="text-right">Valor Plan.</TableHead>
+                              <TableHead className="text-right">Valor Sist.</TableHead>
+                              <TableHead className="text-right">Com. Plan.</TableHead>
+                              <TableHead className="text-right">Com. Sist.</TableHead>
+                              <TableHead>Data Plan.</TableHead>
+                              <TableHead>Data Sist.</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {divergencias.map((d, index) => (
+                              <TableRow key={index}>
+                                <TableCell className="font-mono text-sm">{d.cpf}</TableCell>
+                                <TableCell>{d.nomeClientePlanilha}</TableCell>
+                                <TableCell>{d.nomeClienteSistema}</TableCell>
+                                <TableCell>
+                                  <Badge variant="destructive" className="text-xs">
+                                    {d.tipoDivergencia}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">{formatarMoeda(d.valorPlanilha)}</TableCell>
+                                <TableCell className="text-right">{formatarMoeda(d.valorSistema)}</TableCell>
+                                <TableCell className="text-right">{formatarMoeda(d.comissaoPlanilha)}</TableCell>
+                                <TableCell className="text-right">{formatarMoeda(d.comissaoSistema)}</TableCell>
+                                <TableCell>{d.dataPlanilha}</TableCell>
+                                <TableCell>{d.dataSistema}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {divergencias.length === 0 && (
+                  <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-10">
+                      <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
+                      <h3 className="text-xl font-semibold">Tudo certo!</h3>
+                      <p className="text-muted-foreground">
+                        Todos os registros da planilha correspondem ao sistema.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );
