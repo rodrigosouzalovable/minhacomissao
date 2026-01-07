@@ -204,9 +204,10 @@ export default function Acordos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [acordoParaExcluir, setAcordoParaExcluir] = useState<Acordo | null>(null);
-  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'vencidos'>('negociados');
+  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'proximas' | 'vencidos'>('negociados');
   const [acordosComPagamentosPagos, setAcordosComPagamentosPagos] = useState<Set<string>>(new Set());
   const [acordosComParcelasVencidas, setAcordosComParcelasVencidas] = useState<Set<string>>(new Set());
+  const [acordosComParcelasProximas, setAcordosComParcelasProximas] = useState<Set<string>>(new Set());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
 
   const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
@@ -277,17 +278,35 @@ export default function Acordos() {
         setAcordosComPagamentosPagos(idsComPagamentos);
 
         // Carregar IDs de acordos que têm parcelas vencidas (pendentes com data_prevista < hoje)
-        const hoje = new Date().toISOString().split('T')[0];
+        const hoje = new Date();
+        const hojeStr = hoje.toISOString().split('T')[0];
         const { data: pagamentosPendentes, error: pendentesError } = await supabase
           .from('pagamentos')
           .select('acordo_id, data_prevista')
           .eq('status', 'pendente')
-          .lt('data_prevista', hoje);
+          .lt('data_prevista', hojeStr);
 
         if (pendentesError) throw pendentesError;
 
         const idsComVencidas = new Set(pagamentosPendentes?.map(p => p.acordo_id) || []);
         setAcordosComParcelasVencidas(idsComVencidas);
+
+        // Carregar IDs de acordos que têm parcelas próximas ao vencimento (hoje até +3 dias)
+        const tresDias = new Date(hoje);
+        tresDias.setDate(tresDias.getDate() + 3);
+        const tresDiasStr = tresDias.toISOString().split('T')[0];
+
+        const { data: parcelasProximas, error: proximasError } = await supabase
+          .from('pagamentos')
+          .select('acordo_id, data_prevista')
+          .eq('status', 'pendente')
+          .gte('data_prevista', hojeStr)
+          .lte('data_prevista', tresDiasStr);
+
+        if (proximasError) throw proximasError;
+
+        const idsComProximas = new Set(parcelasProximas?.map(p => p.acordo_id) || []);
+        setAcordosComParcelasProximas(idsComProximas);
       } catch (error) {
         console.error('Erro ao carregar acordos:', error);
       } finally {
@@ -366,7 +385,11 @@ export default function Acordos() {
       { chave: 'observacoes', titulo: 'Observações' }
     ];
 
-    const nomeArquivo = abaAtiva === 'pagos' ? 'acordos_pagos' : abaAtiva === 'vencidos' ? 'parcelas_vencidas' : 'acordos_negociados';
+    const nomeArquivo = 
+      abaAtiva === 'pagos' ? 'acordos_pagos' : 
+      abaAtiva === 'proximas' ? 'parcelas_proximas_vencimento' :
+      abaAtiva === 'vencidos' ? 'parcelas_vencidas' : 
+      'acordos_negociados';
     exportarParaExcel(dadosParaExportar, colunas, nomeArquivo);
 
     toast({
@@ -397,7 +420,16 @@ export default function Acordos() {
     acordosComParcelasVencidas.has(acordo.id)
   );
 
-  const acordosExibidos = abaAtiva === 'pagos' ? acordosPagos : abaAtiva === 'vencidos' ? acordosVencidos : acordosNegociados;
+  // Acordos com Parcelas Próximas ao Vencimento: têm parcelas pendentes vencendo em 0-3 dias
+  const acordosProximos = filteredAcordos.filter(acordo => 
+    acordosComParcelasProximas.has(acordo.id)
+  );
+
+  const acordosExibidos = 
+    abaAtiva === 'pagos' ? acordosPagos : 
+    abaAtiva === 'proximas' ? acordosProximos :
+    abaAtiva === 'vencidos' ? acordosVencidos : 
+    acordosNegociados;
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -471,16 +503,19 @@ export default function Acordos() {
         </div>
 
         {/* Abas de acordos */}
-        <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'pagos' | 'negociados' | 'vencidos')}>
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+        <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'pagos' | 'negociados' | 'proximas' | 'vencidos')}>
+          <TabsList className="grid w-full grid-cols-4 mb-4">
             <TabsTrigger value="negociados">
-              Acordos Negociados ({acordosNegociados.length})
+              Negociados ({acordosNegociados.length})
             </TabsTrigger>
             <TabsTrigger value="pagos">
-              Acordos Pagos ({acordosPagos.length})
+              Pagos ({acordosPagos.length})
+            </TabsTrigger>
+            <TabsTrigger value="proximas">
+              Próximas ao Vencimento ({acordosProximos.length})
             </TabsTrigger>
             <TabsTrigger value="vencidos">
-              Parcelas Vencidas ({acordosVencidos.length})
+              Vencidas ({acordosVencidos.length})
             </TabsTrigger>
           </TabsList>
 
@@ -522,6 +557,26 @@ export default function Acordos() {
               </div>
             ) : (
               <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo com pagamentos realizados" />
+            )}
+          </TabsContent>
+
+          <TabsContent value="proximas">
+            {acordosProximos.length > 0 ? (
+              <div className="grid gap-4">
+                {acordosProximos.map((acordo) => (
+                  <AcordoCard 
+                    key={acordo.id} 
+                    acordo={acordo} 
+                    onDelete={() => setAcordoParaExcluir(acordo)}
+                    onEnviarWhatsApp={handleEnviarWhatsApp}
+                    enviandoWhatsApp={enviandoWhatsApp}
+                    getStatusVariant={getStatusVariant}
+                    getStatusLabel={getStatusLabel}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela próxima ao vencimento" />
             )}
           </TabsContent>
 
