@@ -43,6 +43,8 @@ export default function AcordoDetalhe() {
   const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
   const [novaComissao, setNovaComissao] = useState<string>('');
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
+  const [editandoDataVencimento, setEditandoDataVencimento] = useState<string | null>(null);
+  const [novaDataVencimento, setNovaDataVencimento] = useState<string>('');
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
@@ -309,6 +311,37 @@ export default function AcordoDetalhe() {
         variant: 'destructive',
         title: 'Erro ao excluir',
         description: 'Não foi possível excluir o acordo.',
+      });
+    }
+  };
+
+  const atualizarDataVencimento = async (pagamentoId: string, novaData: string) => {
+    try {
+      const { error } = await supabase
+        .from('pagamentos')
+        .update({ data_prevista: novaData })
+        .eq('id', pagamentoId);
+
+      if (error) throw error;
+
+      setPagamentos(prev =>
+        prev.map(p =>
+          p.id === pagamentoId ? { ...p, data_prevista: novaData } : p
+        )
+      );
+
+      setEditandoDataVencimento(null);
+      setNovaDataVencimento('');
+
+      toast({
+        title: 'Data de vencimento atualizada!',
+        description: 'A data foi corrigida com sucesso.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível atualizar a data de vencimento.',
       });
     }
   };
@@ -626,7 +659,53 @@ export default function AcordoDetalhe() {
                     <div>
                       <p className="font-medium">Parcela {pagamento.numero_parcela}</p>
                       <div className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
-                        <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
+                        {editandoDataVencimento === pagamento.id ? (
+                          <span className="flex items-center gap-1">
+                            <span>Vencimento:</span>
+                            <Input
+                              type="date"
+                              value={novaDataVencimento}
+                              onChange={(e) => setNovaDataVencimento(e.target.value)}
+                              className="h-7 w-36 text-sm"
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-secondary hover:text-secondary"
+                              onClick={() => atualizarDataVencimento(pagamento.id, novaDataVencimento)}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
+                                setEditandoDataVencimento(null);
+                                setNovaDataVencimento('');
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
+                            {(isOwner || isAdmin) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() => {
+                                  setEditandoDataVencimento(pagamento.id);
+                                  setNovaDataVencimento(pagamento.data_prevista);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </span>
+                        )}
                         {pagamento.status === 'pago' && pagamento.data_paga && (
                           <>
                             <span>•</span>
