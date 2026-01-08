@@ -13,7 +13,7 @@ import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Dow
 import { Button } from '@/components/ui/button';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { useToast } from '@/hooks/use-toast';
-
+import { DateRangePicker } from '@/components/DateRangePicker';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
@@ -49,16 +49,18 @@ export default function EquipeAcordos() {
   const [comissaoEmpresaTotal, setComissaoEmpresaTotal] = useState(0);
   const [comissaoEmpresaPaga, setComissaoEmpresaPaga] = useState(0);
   const [showEmpresaCards, setShowEmpresaCards] = useState(false);
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
   const handleExportarAcordosPagos = async () => {
     try {
-      const acordoIds = acordos.map(a => a.id);
+      const acordoIds = filteredAcordos.map(a => a.id);
       
       if (acordoIds.length === 0) {
         toast({
           variant: 'destructive',
           title: 'Nenhum acordo encontrado',
-          description: 'Não há acordos para exportar.',
+          description: 'Não há acordos no período selecionado para exportar.',
         });
         return;
       }
@@ -268,7 +270,24 @@ export default function EquipeAcordos() {
       acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     const matchesMember = memberFilter === 'todos' || acordo.user_id === memberFilter;
-    return matchesSearch && matchesStatus && matchesMember;
+    
+    // Filtro por data de criação
+    let matchesDate = true;
+    if (startDate || endDate) {
+      const acordoDate = new Date(acordo.criado_em);
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        matchesDate = matchesDate && acordoDate >= start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        matchesDate = matchesDate && acordoDate <= end;
+      }
+    }
+    
+    return matchesSearch && matchesStatus && matchesMember && matchesDate;
   });
 
   const getStatusVariant = (status: string) => {
@@ -438,16 +457,23 @@ export default function EquipeAcordos() {
         </div>
 
         {/* Filtros */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cliente ou funcionário..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+        <div className="flex flex-col gap-4">
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+          />
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por cliente ou funcionário..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           <Select value={memberFilter} onValueChange={setMemberFilter}>
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Funcionário" />
@@ -472,6 +498,7 @@ export default function EquipeAcordos() {
               <SelectItem value="cancelado">Cancelados</SelectItem>
             </SelectContent>
           </Select>
+          </div>
         </div>
 
         {/* Lista de acordos */}
