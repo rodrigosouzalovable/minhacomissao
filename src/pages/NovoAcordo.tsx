@@ -597,7 +597,7 @@ export default function NovoAcordo() {
               {empresa === 'mundo_da_moda' && <CardDescription>Comissão paga apenas sobre a 1ª parcela</CardDescription>}
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-sm">
+              <div className={`grid grid-cols-3 gap-2 text-center text-sm ${empresa === 'ume_novo_mundo' ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
                 {(empresa === 'ume_novo_mundo' ? tabelaComissoes : tabelaComissoesMundoDaModa).map(faixa => <div key={faixa.min} className={`p-2 rounded ${calculo && calculo.percentual === faixa.percentual ? 'bg-secondary text-secondary-foreground' : 'bg-muted'}`}>
                     <p className="text-xs text-muted-foreground">
                       {faixa.min}-{faixa.max === 9999 ? '+' : faixa.max}
