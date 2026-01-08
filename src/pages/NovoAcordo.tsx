@@ -13,18 +13,21 @@ import { calcularComissao, calcularComissaoMundoDaModa, calcularPercentualComiss
 import { z } from 'zod';
 import { ArrowLeft, Calculator, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
-  clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine((val) => val.replace(/\D/g, '').length === 11, { message: 'CPF deve ter 11 dígitos' }),
-  clienteTelefone: z.string().min(15, 'Telefone incompleto').max(15, 'Telefone inválido').refine((val) => val.replace(/\D/g, '').length === 11, { message: 'Telefone deve ter 11 dígitos' }),
+  clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine(val => val.replace(/\D/g, '').length === 11, {
+    message: 'CPF deve ter 11 dígitos'
+  }),
+  clienteTelefone: z.string().min(15, 'Telefone incompleto').max(15, 'Telefone inválido').refine(val => val.replace(/\D/g, '').length === 11, {
+    message: 'Telefone deve ter 11 dígitos'
+  }),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
   valorPrimeiraParcela: z.number().nonnegative().optional(),
   valorDemaisParcelas: z.number().nonnegative().optional(),
   dataPrimeiroPagamento: z.string().min(1, 'Data é obrigatória'),
   diasAtraso: z.number().int().min(0, 'Dias em atraso não pode ser negativo').max(9999),
-  observacoes: z.string().max(1000, 'Observações muito longas').optional(),
+  observacoes: z.string().max(1000, 'Observações muito longas').optional()
 });
 
 // Funções de máscara
@@ -32,75 +35,63 @@ const formatNome = (value: string) => {
   // Permite apenas letras (maiúsculas/minúsculas), acentos e espaços
   return value.replace(/[^a-zA-ZÀ-ÿ\s]/g, '');
 };
-
 const formatCpf = (value: string) => {
   const numbers = value.replace(/\D/g, '').slice(0, 11);
-  return numbers
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  return numbers.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 };
-
 const isCpfCompleto = (cpf: string): boolean => {
   const apenasNumeros = cpf.replace(/\D/g, '');
   return apenasNumeros.length === 11;
 };
-
 const isTelefoneCompleto = (telefone: string): boolean => {
   const apenasNumeros = telefone.replace(/\D/g, '');
   return apenasNumeros.length === 11;
 };
-
 const formatPhone = (value: string) => {
   const numbers = value.replace(/\D/g, '').slice(0, 11);
   if (numbers.length <= 10) {
-    return numbers
-      .replace(/(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d{4})(\d)/, '$1-$2');
+    return numbers.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
   }
-  return numbers
-    .replace(/(\d{2})(\d)/, '($1) $2')
-    .replace(/(\d{5})(\d)/, '$1-$2');
+  return numbers.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
 };
-
 const formatCurrencyDisplay = (value: number): string => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(value);
 };
-
 const parseCurrency = (value: string): number => {
   // Remove "R$", espaços e pontos de milhar, converte vírgula para ponto decimal
   const cleaned = value.replace(/[R$\s.]/g, '').replace(',', '.');
   return parseFloat(cleaned) || 0;
 };
-
 export default function NovoAcordo() {
-  const { user } = useAuth();
+  const {
+    user
+  } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const {
+    toast
+  } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [nomeError, setNomeError] = useState('');
   const [cpfError, setCpfError] = useState('');
   const [telefoneError, setTelefoneError] = useState('');
-
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
     const filteredValue = formatNome(rawValue);
-    
     if (/\d/.test(rawValue)) {
       setNomeError('Este campo aceita apenas letras');
       setTimeout(() => setNomeError(''), 3000);
     }
-    
-    setForm({ ...form, clienteNome: filteredValue });
+    setForm({
+      ...form,
+      clienteNome: filteredValue
+    });
   };
-  
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
-  
   const [form, setForm] = useState({
     clienteNome: '',
     clienteCpf: '',
@@ -111,40 +102,46 @@ export default function NovoAcordo() {
     valorDemaisParcelas: '',
     dataPrimeiroPagamento: '',
     diasAtraso: '',
-    observacoes: '',
+    observacoes: ''
   });
 
   // Handler para formatação em tempo real do valor total (com centavos)
   const handleCurrencyRealtime = (value: string, field: 'valorTotal') => {
     // Remove "R$ " e espaços iniciais
     let cleaned = value.replace(/^R\$\s*/, '');
-    
+
     // Remove tudo exceto números e vírgula
     cleaned = cleaned.replace(/[^\d,]/g, '');
-    
+
     // Permite apenas uma vírgula
     const parts = cleaned.split(',');
     if (parts.length > 2) {
       cleaned = parts[0] + ',' + parts.slice(1).join('');
     }
-    
+
     // Limita a 2 casas decimais após a vírgula
     if (parts.length === 2 && parts[1].length > 2) {
       cleaned = parts[0] + ',' + parts[1].slice(0, 2);
     }
-    
+
     // Formata a parte inteira com pontos de milhar
     if (parts[0]) {
       const intPart = parts[0].replace(/\D/g, '');
       const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       cleaned = parts.length === 2 ? formatted + ',' + parts[1] : formatted;
     }
-    
+
     // Adiciona "R$ " no início se tiver valor
     if (cleaned) {
-      setForm({ ...form, [field]: 'R$ ' + cleaned });
+      setForm({
+        ...form,
+        [field]: 'R$ ' + cleaned
+      });
     } else {
-      setForm({ ...form, [field]: '' });
+      setForm({
+        ...form,
+        [field]: ''
+      });
     }
   };
 
@@ -152,33 +149,40 @@ export default function NovoAcordo() {
   const handleCurrencyWithCentsChange = (value: string, field: 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
     // Remove tudo exceto números e vírgula
     let cleaned = value.replace(/[^\d,]/g, '');
-    
+
     // Permite apenas uma vírgula
     const parts = cleaned.split(',');
     if (parts.length > 2) {
       cleaned = parts[0] + ',' + parts.slice(1).join('');
     }
-    
+
     // Limita a 2 casas decimais após a vírgula
     if (parts.length === 2 && parts[1].length > 2) {
       cleaned = parts[0] + ',' + parts[1].slice(0, 2);
     }
-    
-    setForm({ ...form, [field]: cleaned });
+    setForm({
+      ...form,
+      [field]: cleaned
+    });
   };
 
   // Handler para formatar ao sair do campo (parcelas - com centavos)
   const handleCurrencyWithCentsBlur = (field: 'valorPrimeiraParcela' | 'valorDemaisParcelas') => {
     const value = form[field];
-    
+
     // Converte "149,25" para número 149.25
     const normalized = value.replace(',', '.');
     const amount = parseFloat(normalized) || 0;
-    
     if (amount > 0) {
-      setForm({ ...form, [field]: formatCurrencyDisplay(amount) });
+      setForm({
+        ...form,
+        [field]: formatCurrencyDisplay(amount)
+      });
     } else {
-      setForm({ ...form, [field]: '' });
+      setForm({
+        ...form,
+        [field]: ''
+      });
     }
   };
 
@@ -189,7 +193,6 @@ export default function NovoAcordo() {
     const valorTotal = parseCurrency(form.valorTotal);
     const valorPrimeiraParcela = parseCurrency(form.valorPrimeiraParcela);
     const valorDemaisParcelas = parseCurrency(form.valorDemaisParcelas);
-
     if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0) return null;
 
     // Se valores das parcelas foram especificados, usa eles
@@ -199,7 +202,6 @@ export default function NovoAcordo() {
     if (empresa === 'mundo_da_moda') {
       // MUNDO DA MODA: comissão apenas na 1ª parcela
       const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
-      
       if (usarValoresEspecificos) {
         const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
         return {
@@ -208,9 +210,10 @@ export default function NovoAcordo() {
           valorPrimeiraParcela,
           valorDemaisParcelas,
           comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-          comissaoDemaisParcelas: 0, // Sem comissão nas demais
+          comissaoDemaisParcelas: 0,
+          // Sem comissão nas demais
           comissaoTotal: Math.round(comissaoPrimeira * 100) / 100,
-          usarValoresEspecificos: true as const,
+          usarValoresEspecificos: true as const
         };
       } else {
         const valorParcela = valorTotal / parcelas;
@@ -221,20 +224,21 @@ export default function NovoAcordo() {
           valorPrimeiraParcela: valorParcela,
           valorDemaisParcelas: valorParcela,
           comissaoPrimeiraParcela: Math.round(comissaoPrimeiraParcela * 100) / 100,
-          comissaoDemaisParcelas: 0, // Sem comissão nas demais
+          comissaoDemaisParcelas: 0,
+          // Sem comissão nas demais
           comissaoTotal: Math.round(comissaoPrimeiraParcela * 100) / 100,
-          usarValoresEspecificos: false as const,
+          usarValoresEspecificos: false as const
         };
       }
     } else {
       // UME | NOVO MUNDO: comissão em todas as parcelas (comportamento atual)
-      const { percentual } = calcularComissao(valorTotal, parcelas, diasAtraso);
-
+      const {
+        percentual
+      } = calcularComissao(valorTotal, parcelas, diasAtraso);
       if (usarValoresEspecificos) {
         const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
         const comissaoDemais = valorDemaisParcelas * (percentual / 100);
-        const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
-
+        const comissaoTotal = comissaoPrimeira + comissaoDemais * (parcelas - 1);
         return {
           percentual,
           valorTotal,
@@ -243,13 +247,12 @@ export default function NovoAcordo() {
           comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
           comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
           comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: true as const,
+          usarValoresEspecificos: true as const
         };
       } else {
         const valorParcela = valorTotal / parcelas;
         const comissaoPorParcela = valorParcela * (percentual / 100);
         const comissaoTotal = comissaoPorParcela * parcelas;
-
         return {
           percentual,
           valorTotal,
@@ -258,7 +261,7 @@ export default function NovoAcordo() {
           comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
           comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
           comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: false as const,
+          usarValoresEspecificos: false as const
         };
       }
     }
@@ -273,25 +276,29 @@ export default function NovoAcordo() {
 
     // Só valida se tiver mais de 1 parcela e valores preenchidos
     if (numParcelas <= 1 || valorPrimeira <= 0 || valorDemais <= 0) {
-      return { valido: true, diferenca: 0, somaParcelas: 0 };
+      return {
+        valido: true,
+        diferenca: 0,
+        somaParcelas: 0
+      };
     }
 
     // Soma = primeira + (demais × (parcelas - 1))
-    const somaParcelas = valorPrimeira + (valorDemais * (numParcelas - 1));
+    const somaParcelas = valorPrimeira + valorDemais * (numParcelas - 1);
     const diferenca = Math.abs(somaParcelas - valorTotal);
-    
+
     // Tolerância de R$ 0,01 para erros de arredondamento
     const valido = diferenca <= 0.01;
-
-    return { valido, diferenca, somaParcelas };
+    return {
+      valido,
+      diferenca,
+      somaParcelas
+    };
   }, [form.parcelas, form.valorTotal, form.valorPrimeiraParcela, form.valorDemaisParcelas]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !calculo) return;
-    
     setIsLoading(true);
-
     try {
       const numParcelas = parseInt(form.parcelas);
       const valorPrimeiraParcela = parseCurrency(form.valorPrimeiraParcela);
@@ -310,7 +317,6 @@ export default function NovoAcordo() {
           throw new Error('A soma das parcelas não confere com o valor total do acordo');
         }
       }
-
       const validated = acordoSchema.parse({
         clienteNome: form.clienteNome.trim(),
         clienteCpf: form.clienteCpf.trim(),
@@ -321,110 +327,78 @@ export default function NovoAcordo() {
         valorDemaisParcelas: valorDemaisParcelas || undefined,
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
-        observacoes: form.observacoes.trim() || undefined,
+        observacoes: form.observacoes.trim() || undefined
       });
 
       // Criar acordo
-      const { data: acordo, error: acordoError } = await supabase
-        .from('acordos')
-        .insert({
-          user_id: user.id,
-          cliente_nome: validated.clienteNome,
-          cliente_cpf: validated.clienteCpf || null,
-          cliente_telefone: validated.clienteTelefone || null,
-          valor_total: validated.valorTotal,
-          parcelas: validated.parcelas,
-          valor_parcela: calculo.valorDemaisParcelas,
-          data_primeiro_pagamento: validated.dataPrimeiroPagamento,
-          dias_atraso: validated.diasAtraso,
-          percentual_comissao: calculo.percentual,
-          comissao_total: calculo.comissaoTotal,
-          observacoes: validated.observacoes || null,
-          empresa: empresa,
-        })
-        .select()
-        .single();
-
+      const {
+        data: acordo,
+        error: acordoError
+      } = await supabase.from('acordos').insert({
+        user_id: user.id,
+        cliente_nome: validated.clienteNome,
+        cliente_cpf: validated.clienteCpf || null,
+        cliente_telefone: validated.clienteTelefone || null,
+        valor_total: validated.valorTotal,
+        parcelas: validated.parcelas,
+        valor_parcela: calculo.valorDemaisParcelas,
+        data_primeiro_pagamento: validated.dataPrimeiroPagamento,
+        dias_atraso: validated.diasAtraso,
+        percentual_comissao: calculo.percentual,
+        comissao_total: calculo.comissaoTotal,
+        observacoes: validated.observacoes || null,
+        empresa: empresa
+      }).select().single();
       if (acordoError) throw acordoError;
 
       // Gerar parcelas - lógica diferente para cada empresa
       let parcelas;
       if (empresa === 'mundo_da_moda') {
-        parcelas = gerarParcelasMundoDaModa(
-          new Date(validated.dataPrimeiroPagamento),
-          validated.parcelas,
-          calculo.valorDemaisParcelas,
-          calculo.comissaoPrimeiraParcela,
-          calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
-          calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
-        );
+        parcelas = gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoPrimeiraParcela, calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined, calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined);
       } else {
-        parcelas = calculo.usarValoresEspecificos
-          ? gerarParcelas(
-              new Date(validated.dataPrimeiroPagamento),
-              validated.parcelas,
-              calculo.valorDemaisParcelas,
-              calculo.comissaoDemaisParcelas,
-              calculo.valorPrimeiraParcela,
-              calculo.comissaoPrimeiraParcela
-            )
-          : gerarParcelas(
-              new Date(validated.dataPrimeiroPagamento),
-              validated.parcelas,
-              calculo.valorDemaisParcelas,
-              calculo.comissaoDemaisParcelas
-            );
+        parcelas = calculo.usarValoresEspecificos ? gerarParcelas(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas, calculo.valorPrimeiraParcela, calculo.comissaoPrimeiraParcela) : gerarParcelas(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas);
       }
-
-      const { error: parcelasError } = await supabase
-        .from('pagamentos')
-        .insert(
-          parcelas.map(p => ({
-            acordo_id: acordo.id,
-            numero_parcela: p.numero_parcela,
-            data_prevista: p.data_prevista,
-            valor_parcela: p.valor_parcela,
-            comissao_parcela: p.comissao_parcela,
-            status: p.status,
-          }))
-        );
-
+      const {
+        error: parcelasError
+      } = await supabase.from('pagamentos').insert(parcelas.map(p => ({
+        acordo_id: acordo.id,
+        numero_parcela: p.numero_parcela,
+        data_prevista: p.data_prevista,
+        valor_parcela: p.valor_parcela,
+        comissao_parcela: p.comissao_parcela,
+        status: p.status
+      })));
       if (parcelasError) throw parcelasError;
-
-
       toast({
         title: 'Acordo criado!',
-        description: `Acordo com ${validated.clienteNome} cadastrado com sucesso.`,
+        description: `Acordo com ${validated.clienteNome} cadastrado com sucesso.`
       });
-
       navigate(`/acordos/${acordo.id}`);
     } catch (err) {
       if (err instanceof z.ZodError) {
         toast({
           variant: 'destructive',
           title: 'Dados inválidos',
-          description: err.errors[0].message,
+          description: err.errors[0].message
         });
       } else if (err instanceof Error) {
         toast({
           variant: 'destructive',
           title: 'Dados inválidos',
-          description: err.message,
+          description: err.message
         });
       } else {
         toast({
           variant: 'destructive',
           title: 'Erro ao criar acordo',
-          description: 'Tente novamente mais tarde.',
+          description: 'Tente novamente mais tarde.'
         });
       }
     } finally {
       setIsLoading(false);
     }
   };
-
-  return (
-    <AppLayout>
+  return <AppLayout>
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
@@ -442,68 +416,43 @@ export default function NovoAcordo() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="clienteNome">Nome do Cliente *</Label>
-                <Input
-                  id="clienteNome"
-                  placeholder="Nome completo do cliente"
-                  value={form.clienteNome}
-                  onChange={handleNomeChange}
-                  required
-                  className={nomeError ? 'border-destructive' : ''}
-                />
-                {nomeError && (
-                  <p className="text-sm text-destructive">{nomeError}</p>
-                )}
+                <Input id="clienteNome" placeholder="Nome completo do cliente" value={form.clienteNome} onChange={handleNomeChange} required className={nomeError ? 'border-destructive' : ''} />
+                {nomeError && <p className="text-sm text-destructive">{nomeError}</p>}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="clienteCpf">CPF *</Label>
-                  <Input
-                    id="clienteCpf"
-                    placeholder="000.000.000-00"
-                    value={form.clienteCpf}
-                    onChange={(e) => {
-                      const formatted = formatCpf(e.target.value);
-                      setForm({ ...form, clienteCpf: formatted });
-                      if (cpfError) setCpfError('');
-                    }}
-                    onBlur={() => {
-                      if (form.clienteCpf && !isCpfCompleto(form.clienteCpf)) {
-                        setCpfError('CPF deve ter 11 dígitos');
-                      }
-                    }}
-                    maxLength={14}
-                    required
-                    className={cpfError ? 'border-destructive' : ''}
-                  />
-                  {cpfError && (
-                    <p className="text-sm text-destructive">{cpfError}</p>
-                  )}
+                  <Input id="clienteCpf" placeholder="000.000.000-00" value={form.clienteCpf} onChange={e => {
+                  const formatted = formatCpf(e.target.value);
+                  setForm({
+                    ...form,
+                    clienteCpf: formatted
+                  });
+                  if (cpfError) setCpfError('');
+                }} onBlur={() => {
+                  if (form.clienteCpf && !isCpfCompleto(form.clienteCpf)) {
+                    setCpfError('CPF deve ter 11 dígitos');
+                  }
+                }} maxLength={14} required className={cpfError ? 'border-destructive' : ''} />
+                  {cpfError && <p className="text-sm text-destructive">{cpfError}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="clienteTelefone">Telefone *</Label>
-                  <Input
-                    id="clienteTelefone"
-                    placeholder="(00) 00000-0000"
-                    value={form.clienteTelefone}
-                    onChange={(e) => {
-                      const formatted = formatPhone(e.target.value);
-                      setForm({ ...form, clienteTelefone: formatted });
-                      if (telefoneError) setTelefoneError('');
-                    }}
-                    onBlur={() => {
-                      if (form.clienteTelefone && !isTelefoneCompleto(form.clienteTelefone)) {
-                        setTelefoneError('Telefone deve ter 11 dígitos');
-                      }
-                    }}
-                    maxLength={15}
-                    required
-                    className={telefoneError ? 'border-destructive' : ''}
-                  />
-                  {telefoneError && (
-                    <p className="text-sm text-destructive">{telefoneError}</p>
-                  )}
+                  <Input id="clienteTelefone" placeholder="(00) 00000-0000" value={form.clienteTelefone} onChange={e => {
+                  const formatted = formatPhone(e.target.value);
+                  setForm({
+                    ...form,
+                    clienteTelefone: formatted
+                  });
+                  if (telefoneError) setTelefoneError('');
+                }} onBlur={() => {
+                  if (form.clienteTelefone && !isTelefoneCompleto(form.clienteTelefone)) {
+                    setTelefoneError('Telefone deve ter 11 dígitos');
+                  }
+                }} maxLength={15} required className={telefoneError ? 'border-destructive' : ''} />
+                  {telefoneError && <p className="text-sm text-destructive">{telefoneError}</p>}
                 </div>
               </div>
 
@@ -511,28 +460,14 @@ export default function NovoAcordo() {
               <div className="space-y-2">
                 <Label>Empresa *</Label>
                 <div className="flex gap-3">
-                  <Button
-                    type="button"
-                    variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setEmpresa('ume_novo_mundo')}
-                  >
+                  <Button type="button" variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('ume_novo_mundo')}>
                     UME | NOVO MUNDO
                   </Button>
-                  <Button
-                    type="button"
-                    variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setEmpresa('mundo_da_moda')}
-                  >
+                  <Button type="button" variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('mundo_da_moda')}>
                     MUNDO DA MODA
                   </Button>
                 </div>
-                {empresa === 'mundo_da_moda' && (
-                  <p className="text-sm text-muted-foreground">
-                    ⚠️ Comissão calculada apenas sobre a 1ª parcela
-                  </p>
-                )}
+                {empresa === 'mundo_da_moda'}
               </div>
             </CardContent>
           </Card>
@@ -545,27 +480,15 @@ export default function NovoAcordo() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="valorTotal">Valor Total do Acordo (R$) *</Label>
-                <Input
-                  id="valorTotal"
-                  placeholder="Digite o valor (ex: 2094,96)"
-                  value={form.valorTotal}
-                  onChange={(e) => handleCurrencyRealtime(e.target.value, 'valorTotal')}
-                  required
-                />
+                <Input id="valorTotal" placeholder="Digite o valor (ex: 2094,96)" value={form.valorTotal} onChange={e => handleCurrencyRealtime(e.target.value, 'valorTotal')} required />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="parcelas">Número de Parcelas *</Label>
-                <Input
-                  id="parcelas"
-                  type="number"
-                  min="1"
-                  max="120"
-                  placeholder="1"
-                  value={form.parcelas}
-                  onChange={(e) => setForm({ ...form, parcelas: e.target.value })}
-                  required
-                />
+                <Input id="parcelas" type="number" min="1" max="120" placeholder="1" value={form.parcelas} onChange={e => setForm({
+                ...form,
+                parcelas: e.target.value
+              })} required />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -573,34 +496,19 @@ export default function NovoAcordo() {
                   <Label htmlFor="valorPrimeiraParcela">
                     Valor da Primeira Parcela (R$) {parseInt(form.parcelas) !== 1 && '*'}
                   </Label>
-                  <Input
-                    id="valorPrimeiraParcela"
-                    placeholder="Ex: 149,25"
-                    value={form.valorPrimeiraParcela}
-                    onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorPrimeiraParcela')}
-                    onBlur={() => handleCurrencyWithCentsBlur('valorPrimeiraParcela')}
-                    required={parseInt(form.parcelas) !== 1}
-                  />
+                  <Input id="valorPrimeiraParcela" placeholder="Ex: 149,25" value={form.valorPrimeiraParcela} onChange={e => handleCurrencyWithCentsChange(e.target.value, 'valorPrimeiraParcela')} onBlur={() => handleCurrencyWithCentsBlur('valorPrimeiraParcela')} required={parseInt(form.parcelas) !== 1} />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="valorDemaisParcelas">
                     Valor das Demais Parcelas (R$) {parseInt(form.parcelas) !== 1 && '*'}
                   </Label>
-                  <Input
-                    id="valorDemaisParcelas"
-                    placeholder="Ex: 300,50"
-                    value={form.valorDemaisParcelas}
-                    onChange={(e) => handleCurrencyWithCentsChange(e.target.value, 'valorDemaisParcelas')}
-                    onBlur={() => handleCurrencyWithCentsBlur('valorDemaisParcelas')}
-                    required={parseInt(form.parcelas) !== 1}
-                  />
+                  <Input id="valorDemaisParcelas" placeholder="Ex: 300,50" value={form.valorDemaisParcelas} onChange={e => handleCurrencyWithCentsChange(e.target.value, 'valorDemaisParcelas')} onBlur={() => handleCurrencyWithCentsBlur('valorDemaisParcelas')} required={parseInt(form.parcelas) !== 1} />
                 </div>
               </div>
 
               {/* Alerta de validação da soma das parcelas */}
-              {!validacaoSomaParcelas.valido && (
-                <Alert variant="destructive">
+              {!validacaoSomaParcelas.valido && <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Valores não conferem</AlertTitle>
                   <AlertDescription>
@@ -608,51 +516,38 @@ export default function NovoAcordo() {
                     é diferente do valor total do acordo ({formatarMoeda(parseCurrency(form.valorTotal))}).
                     Diferença: {formatarMoeda(validacaoSomaParcelas.diferenca)}
                   </AlertDescription>
-                </Alert>
-              )}
+                </Alert>}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="dataPrimeiroPagamento">Data do 1º Pagamento *</Label>
-                  <Input
-                    id="dataPrimeiroPagamento"
-                    type="date"
-                    value={form.dataPrimeiroPagamento}
-                    onChange={(e) => setForm({ ...form, dataPrimeiroPagamento: e.target.value })}
-                    required
-                  />
+                  <Input id="dataPrimeiroPagamento" type="date" value={form.dataPrimeiroPagamento} onChange={e => setForm({
+                  ...form,
+                  dataPrimeiroPagamento: e.target.value
+                })} required />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="diasAtraso">Dias em Atraso *</Label>
-                  <Input
-                    id="diasAtraso"
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={form.diasAtraso}
-                    onChange={(e) => setForm({ ...form, diasAtraso: e.target.value })}
-                    required
-                  />
+                  <Input id="diasAtraso" type="number" min="0" placeholder="0" value={form.diasAtraso} onChange={e => setForm({
+                  ...form,
+                  diasAtraso: e.target.value
+                })} required />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="observacoes">Observações (opcional)</Label>
-                <Textarea
-                  id="observacoes"
-                  placeholder="Informações adicionais sobre o acordo..."
-                  value={form.observacoes}
-                  onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
-                  rows={3}
-                />
+                <Textarea id="observacoes" placeholder="Informações adicionais sobre o acordo..." value={form.observacoes} onChange={e => setForm({
+                ...form,
+                observacoes: e.target.value
+              })} rows={3} />
               </div>
             </CardContent>
           </Card>
 
           {/* Preview do cálculo */}
-          {calculo && (
-            <Card className="border-secondary/50 bg-secondary/5">
+          {calculo && <Card className="border-secondary/50 bg-secondary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-secondary">
                   <Calculator className="h-5 w-5" />
@@ -691,8 +586,7 @@ export default function NovoAcordo() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
-          )}
+            </Card>}
 
           {/* Tabela de referência */}
           <Card>
@@ -700,82 +594,38 @@ export default function NovoAcordo() {
               <CardTitle className="text-sm">
                 Tabela de Comissões - {empresa === 'ume_novo_mundo' ? 'UME | NOVO MUNDO' : 'MUNDO DA MODA'}
               </CardTitle>
-              {empresa === 'mundo_da_moda' && (
-                <CardDescription>Comissão paga apenas sobre a 1ª parcela</CardDescription>
-              )}
+              {empresa === 'mundo_da_moda' && <CardDescription>Comissão paga apenas sobre a 1ª parcela</CardDescription>}
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center text-sm">
-                {(empresa === 'ume_novo_mundo' ? tabelaComissoes : tabelaComissoesMundoDaModa).map((faixa) => (
-                  <div
-                    key={faixa.min}
-                    className={`p-2 rounded ${
-                      calculo && calculo.percentual === faixa.percentual
-                        ? 'bg-secondary text-secondary-foreground'
-                        : 'bg-muted'
-                    }`}
-                  >
+                {(empresa === 'ume_novo_mundo' ? tabelaComissoes : tabelaComissoesMundoDaModa).map(faixa => <div key={faixa.min} className={`p-2 rounded ${calculo && calculo.percentual === faixa.percentual ? 'bg-secondary text-secondary-foreground' : 'bg-muted'}`}>
                     <p className="text-xs text-muted-foreground">
                       {faixa.min}-{faixa.max === 9999 ? '+' : faixa.max}
                     </p>
                     <p className="font-bold">{faixa.percentual}%</p>
-                  </div>
-                ))}
+                  </div>)}
               </div>
             </CardContent>
           </Card>
 
           <div className="flex gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => navigate(-1)}
-            >
+            <Button type="button" variant="outline" className="flex-1" onClick={() => navigate(-1)}>
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              className="flex-1"
-              disabled={
-                isLoading || 
-                !calculo || 
-                !isCpfCompleto(form.clienteCpf) || 
-                !isTelefoneCompleto(form.clienteTelefone) || 
-                (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas)) ||
-                !validacaoSomaParcelas.valido
-              }
-            >
+            <Button type="submit" className="flex-1" disabled={isLoading || !calculo || !isCpfCompleto(form.clienteCpf) || !isTelefoneCompleto(form.clienteTelefone) || parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas) || !validacaoSomaParcelas.valido}>
               {isLoading ? 'Salvando...' : 'Criar Acordo'}
             </Button>
           </div>
 
           <div className="flex gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => navigate(-1)}
-            >
+            <Button type="button" variant="outline" className="flex-1" onClick={() => navigate(-1)}>
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              className="flex-1"
-              disabled={
-                isLoading || 
-                !calculo || 
-                !isCpfCompleto(form.clienteCpf) || 
-                !isTelefoneCompleto(form.clienteTelefone) || 
-                (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas)) ||
-                !validacaoSomaParcelas.valido
-              }
-            >
+            <Button type="submit" className="flex-1" disabled={isLoading || !calculo || !isCpfCompleto(form.clienteCpf) || !isTelefoneCompleto(form.clienteTelefone) || parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas) || !validacaoSomaParcelas.valido}>
               {isLoading ? 'Salvando...' : 'Criar Acordo'}
             </Button>
           </div>
         </form>
       </div>
-    </AppLayout>
-  );
+    </AppLayout>;
 }
