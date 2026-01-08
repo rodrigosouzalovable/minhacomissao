@@ -43,6 +43,7 @@ interface Divergencia {
   comissaoSistema: number;
   dataPlanilha: string;
   dataSistema: string;
+  pagamentoId?: string;
 }
 
 interface AcordoDivergente {
@@ -127,6 +128,7 @@ export default function Auditoria() {
   // Estados para divergências internas
   const [acordosDivergentes, setAcordosDivergentes] = useState<AcordoDivergente[]>([]);
   const [carregandoDivergencias, setCarregandoDivergencias] = useState(false);
+  const [corrigindo, setCorrigindo] = useState<string | null>(null);
 
   const handleArquivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -270,6 +272,43 @@ export default function Auditoria() {
     buscarDivergenciasInternas();
   }, []);
 
+  const corrigirDataPagamento = async (pagamentoId: string, novaData: string, index: number) => {
+    setCorrigindo(pagamentoId);
+    try {
+      // Converter data de DD/MM/YYYY para YYYY-MM-DD
+      const [dia, mes, ano] = novaData.split('/');
+      const dataFormatada = `${ano}-${mes}-${dia}`;
+
+      const { error } = await supabase
+        .from('pagamentos')
+        .update({ 
+          data_paga: dataFormatada,
+          status: 'pago'
+        })
+        .eq('id', pagamentoId);
+
+      if (error) throw error;
+
+      // Remover a divergência da lista após correção
+      setDivergencias(prev => prev.filter((_, i) => i !== index));
+      setCorrespondencias(prev => prev + 1);
+
+      toast({
+        title: 'Data corrigida!',
+        description: `A data de pagamento foi atualizada para ${novaData}.`,
+      });
+    } catch (error) {
+      console.error('Erro ao corrigir data:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível corrigir a data de pagamento.',
+      });
+    } finally {
+      setCorrigindo(null);
+    }
+  };
+
   const processarPlanilha = async () => {
     if (!arquivo) {
       toast({
@@ -406,17 +445,29 @@ export default function Auditoria() {
         }
 
         if (!encontrouCorrespondencia) {
+          // Buscar parcela pendente para associar à correção
+          const { data: parcelasPendentes } = await supabase
+            .from('pagamentos')
+            .select('id, valor_parcela, acordos!inner(cliente_cpf)')
+            .eq('status', 'pendente')
+            .not('acordos.cliente_cpf', 'is', null);
+          
+          const parcelaPendente = parcelasPendentes?.find(
+            (p: any) => normalizarCPF(p.acordos?.cliente_cpf || '') === linha.cpf
+          );
+
           divergenciasEncontradas.push({
             cpf: linha.cpf,
             nomeClientePlanilha: linha.nomeCliente,
             nomeClienteSistema: pagamentosCliente[0]?.nomeCliente || '-',
             tipoDivergencia: 'Data de pagamento não encontrada',
             valorPlanilha: linha.valorPago,
-            valorSistema: 0,
+            valorSistema: parcelaPendente?.valor_parcela || 0,
             comissaoPlanilha: linha.comissao,
             comissaoSistema: 0,
             dataPlanilha: linha.dataPagamento,
             dataSistema: '-',
+            pagamentoId: parcelaPendente?.id,
           });
         }
       }
@@ -784,6 +835,7 @@ export default function Auditoria() {
                               <TableHead className="text-right">Com. Sist.</TableHead>
                               <TableHead>Data Plan.</TableHead>
                               <TableHead>Data Sist.</TableHead>
+                              <TableHead className="text-center">Ação</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -803,6 +855,25 @@ export default function Auditoria() {
                                 <TableCell className="text-right">{formatarMoeda(d.comissaoSistema)}</TableCell>
                                 <TableCell>{d.dataPlanilha}</TableCell>
                                 <TableCell>{d.dataSistema}</TableCell>
+                                <TableCell className="text-center">
+                                  {d.tipoDivergencia === 'Data de pagamento não encontrada' && d.pagamentoId && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => corrigirDataPagamento(d.pagamentoId!, d.dataPlanilha, index)}
+                                      disabled={corrigindo === d.pagamentoId}
+                                    >
+                                      {corrigindo === d.pagamentoId ? (
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <CheckCircle2 className="h-4 w-4 mr-1" />
+                                          Corrigir
+                                        </>
+                                      )}
+                                    </Button>
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
