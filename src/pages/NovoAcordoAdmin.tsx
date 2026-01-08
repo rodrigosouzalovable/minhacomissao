@@ -791,7 +791,7 @@ export default function NovoAcordoAdmin() {
               )}
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-sm">
+              <div className={`grid grid-cols-3 gap-2 text-center text-sm ${empresa === 'ume_novo_mundo' ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
                 {(empresa === 'ume_novo_mundo' ? tabelaComissoes : tabelaComissoesMundoDaModa).map((faixa) => (
                   <div
                     key={faixa.min}
