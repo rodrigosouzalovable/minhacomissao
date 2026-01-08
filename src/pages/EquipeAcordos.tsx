@@ -45,12 +45,14 @@ export default function EquipeAcordos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [memberFilter, setMemberFilter] = useState<string>('todos');
-  const [comissaoPaga, setComissaoPaga] = useState(0);
-  const [comissaoEmpresaTotal, setComissaoEmpresaTotal] = useState(0);
-  const [comissaoEmpresaPaga, setComissaoEmpresaPaga] = useState(0);
   const [showEmpresaCards, setShowEmpresaCards] = useState(false);
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [pagamentosEquipe, setPagamentosEquipe] = useState<Array<{
+    comissao_parcela: number;
+    valor_parcela: number;
+    acordo_id: string;
+  }>>([]);
 
   const handleExportarAcordosPagos = async () => {
     try {
@@ -222,13 +224,6 @@ export default function EquipeAcordos() {
 
         setAcordos(acordosComNome);
 
-        // Calcular comissão total da empresa
-        const totalEmpresa = (acordosData || []).reduce((sum, acordo) => {
-          const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
-          return sum + (Number(acordo.valor_total) * percentualEmpresa / 100);
-        }, 0);
-        setComissaoEmpresaTotal(totalEmpresa);
-
         // Buscar pagamentos pagos dos acordos da equipe
         const acordoIds = (acordosData || []).map(a => a.id);
         if (acordoIds.length > 0) {
@@ -239,19 +234,7 @@ export default function EquipeAcordos() {
             .eq('status', 'pago');
 
           if (!pagamentosError && pagamentosPagos) {
-            const totalPago = pagamentosPagos.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
-            setComissaoPaga(totalPago);
-
-            // Calcular comissão da empresa para parcelas pagas
-            const totalEmpresaPago = pagamentosPagos.reduce((sum, pag) => {
-              const acordo = acordosData?.find(a => a.id === pag.acordo_id);
-              if (acordo) {
-                const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
-                return sum + (Number(pag.valor_parcela) * percentualEmpresa / 100);
-              }
-              return sum;
-            }, 0);
-            setComissaoEmpresaPaga(totalEmpresaPago);
+            setPagamentosEquipe(pagamentosPagos);
           }
         }
       } catch (error) {
@@ -308,10 +291,33 @@ export default function EquipeAcordos() {
     }
   };
 
-  // Calcular estatísticas
-  const totalAcordos = acordos.length;
-  const acordosAtivos = acordos.filter(a => a.status === 'ativo').length;
-  const comissaoTotal = acordos.reduce((sum, a) => sum + Number(a.comissao_total), 0);
+  // Calcular estatísticas baseadas nos acordos filtrados
+  const totalAcordos = filteredAcordos.length;
+  const acordosAtivos = filteredAcordos.filter(a => a.status === 'ativo').length;
+  const comissaoTotal = filteredAcordos.reduce((sum, a) => sum + Number(a.comissao_total), 0);
+
+  // Calcular comissões filtradas dinamicamente
+  const filteredAcordoIds = filteredAcordos.map(a => a.id);
+
+  const comissaoPaga = pagamentosEquipe
+    .filter(p => filteredAcordoIds.includes(p.acordo_id))
+    .reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+
+  const comissaoEmpresaTotal = filteredAcordos.reduce((sum, acordo) => {
+    const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
+    return sum + (Number(acordo.valor_total) * percentualEmpresa / 100);
+  }, 0);
+
+  const comissaoEmpresaPaga = pagamentosEquipe
+    .filter(p => filteredAcordoIds.includes(p.acordo_id))
+    .reduce((sum, pag) => {
+      const acordo = filteredAcordos.find(a => a.id === pag.acordo_id);
+      if (acordo) {
+        const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
+        return sum + (Number(pag.valor_parcela) * percentualEmpresa / 100);
+      }
+      return sum;
+    }, 0);
 
   if (loading) {
     return (
