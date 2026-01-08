@@ -597,7 +597,7 @@ export default function NovoAcordo() {
               {empresa === 'mundo_da_moda' && <CardDescription>Comissão paga apenas sobre a 1ª parcela</CardDescription>}
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center text-sm">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-sm">
                 {(empresa === 'ume_novo_mundo' ? tabelaComissoes : tabelaComissoesMundoDaModa).map(faixa => <div key={faixa.min} className={`p-2 rounded ${calculo && calculo.percentual === faixa.percentual ? 'bg-secondary text-secondary-foreground' : 'bg-muted'}`}>
                     <p className="text-xs text-muted-foreground">
                       {faixa.min}-{faixa.max === 9999 ? '+' : faixa.max}
@@ -607,15 +607,6 @@ export default function NovoAcordo() {
               </div>
             </CardContent>
           </Card>
-
-          <div className="flex gap-4">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => navigate(-1)}>
-              Cancelar
-            </Button>
-            <Button type="submit" className="flex-1" disabled={isLoading || !calculo || !isCpfCompleto(form.clienteCpf) || !isTelefoneCompleto(form.clienteTelefone) || parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas) || !validacaoSomaParcelas.valido}>
-              {isLoading ? 'Salvando...' : 'Criar Acordo'}
-            </Button>
-          </div>
 
           <div className="flex gap-4">
             <Button type="button" variant="outline" className="flex-1" onClick={() => navigate(-1)}>
