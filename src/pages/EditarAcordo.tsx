@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { calcularComissao, formatarMoeda, gerarParcelas, tabelaComissoes } from '@/lib/comissao';
+import { calcularComissao, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa } from '@/lib/comissao';
 import { z } from 'zod';
 import { ArrowLeft, Calculator, AlertTriangle } from 'lucide-react';
 
@@ -62,6 +62,8 @@ export default function EditarAcordo() {
   const [hasParcelasPagas, setHasParcelasPagas] = useState(false);
   const [cpfError, setCpfError] = useState('');
   
+  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  
   const [form, setForm] = useState({
     clienteNome: '',
     clienteCpf: '',
@@ -104,6 +106,8 @@ export default function EditarAcordo() {
         const temPagas = pagamentos?.some(p => p.status === 'pago') || false;
         setHasParcelasPagas(temPagas);
 
+        setEmpresa((acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo');
+        
         setForm({
           clienteNome: acordo.cliente_nome,
           clienteCpf: acordo.cliente_cpf || '',

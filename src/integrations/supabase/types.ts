@@ -25,6 +25,7 @@ export type Database = {
           criado_em: string
           data_primeiro_pagamento: string
           dias_atraso: number
+          empresa: string
           id: string
           observacoes: string | null
           parcelas: number
@@ -44,6 +45,7 @@ export type Database = {
           criado_em?: string
           data_primeiro_pagamento: string
           dias_atraso: number
+          empresa?: string
           id?: string
           observacoes?: string | null
           parcelas: number
@@ -63,6 +65,7 @@ export type Database = {
           criado_em?: string
           data_primeiro_pagamento?: string
           dias_atraso?: number
+          empresa?: string
           id?: string
           observacoes?: string | null
           parcelas?: number

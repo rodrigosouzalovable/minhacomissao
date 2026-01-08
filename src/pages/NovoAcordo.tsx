@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { calcularComissao, formatarMoeda, gerarParcelas, tabelaComissoes } from '@/lib/comissao';
+import { calcularComissao, calcularComissaoMundoDaModa, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa } from '@/lib/comissao';
 import { z } from 'zod';
 import { ArrowLeft, Calculator, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -98,6 +98,8 @@ export default function NovoAcordo() {
     
     setForm({ ...form, clienteNome: filteredValue });
   };
+  
+  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   
   const [form, setForm] = useState({
     clienteNome: '',
@@ -190,44 +192,77 @@ export default function NovoAcordo() {
 
     if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0) return null;
 
-    const { percentual } = calcularComissao(valorTotal, parcelas, diasAtraso);
-
     // Se valores das parcelas foram especificados, usa eles
     const usarValoresEspecificos = valorPrimeiraParcela > 0 && valorDemaisParcelas > 0;
 
-    if (usarValoresEspecificos) {
-      const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
-      const comissaoDemais = valorDemaisParcelas * (percentual / 100);
-      const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
-
-      return {
-        percentual,
-        valorTotal,
-        valorPrimeiraParcela,
-        valorDemaisParcelas,
-        comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-        comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
-        comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-        usarValoresEspecificos: true as const,
-      };
+    // Lógica diferente para cada empresa
+    if (empresa === 'mundo_da_moda') {
+      // MUNDO DA MODA: comissão apenas na 1ª parcela
+      const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
+      
+      if (usarValoresEspecificos) {
+        const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
+        return {
+          percentual,
+          valorTotal,
+          valorPrimeiraParcela,
+          valorDemaisParcelas,
+          comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
+          comissaoDemaisParcelas: 0, // Sem comissão nas demais
+          comissaoTotal: Math.round(comissaoPrimeira * 100) / 100,
+          usarValoresEspecificos: true as const,
+        };
+      } else {
+        const valorParcela = valorTotal / parcelas;
+        const comissaoPrimeiraParcela = valorParcela * (percentual / 100);
+        return {
+          percentual,
+          valorTotal,
+          valorPrimeiraParcela: valorParcela,
+          valorDemaisParcelas: valorParcela,
+          comissaoPrimeiraParcela: Math.round(comissaoPrimeiraParcela * 100) / 100,
+          comissaoDemaisParcelas: 0, // Sem comissão nas demais
+          comissaoTotal: Math.round(comissaoPrimeiraParcela * 100) / 100,
+          usarValoresEspecificos: false as const,
+        };
+      }
     } else {
-      // Divide igualmente
-      const valorParcela = valorTotal / parcelas;
-      const comissaoPorParcela = valorParcela * (percentual / 100);
-      const comissaoTotal = comissaoPorParcela * parcelas;
+      // UME | NOVO MUNDO: comissão em todas as parcelas (comportamento atual)
+      const { percentual } = calcularComissao(valorTotal, parcelas, diasAtraso);
 
-      return {
-        percentual,
-        valorTotal,
-        valorPrimeiraParcela: valorParcela,
-        valorDemaisParcelas: valorParcela,
-        comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
-        comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
-        comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-        usarValoresEspecificos: false as const,
-      };
+      if (usarValoresEspecificos) {
+        const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
+        const comissaoDemais = valorDemaisParcelas * (percentual / 100);
+        const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
+
+        return {
+          percentual,
+          valorTotal,
+          valorPrimeiraParcela,
+          valorDemaisParcelas,
+          comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
+          comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
+          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
+          usarValoresEspecificos: true as const,
+        };
+      } else {
+        const valorParcela = valorTotal / parcelas;
+        const comissaoPorParcela = valorParcela * (percentual / 100);
+        const comissaoTotal = comissaoPorParcela * parcelas;
+
+        return {
+          percentual,
+          valorTotal,
+          valorPrimeiraParcela: valorParcela,
+          valorDemaisParcelas: valorParcela,
+          comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
+          comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
+          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
+          usarValoresEspecificos: false as const,
+        };
+      }
     }
-  }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorPrimeiraParcela, form.valorDemaisParcelas]);
+  }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorPrimeiraParcela, form.valorDemaisParcelas, empresa]);
 
   // Validação da soma das parcelas
   const validacaoSomaParcelas = useMemo(() => {
@@ -305,28 +340,41 @@ export default function NovoAcordo() {
           percentual_comissao: calculo.percentual,
           comissao_total: calculo.comissaoTotal,
           observacoes: validated.observacoes || null,
+          empresa: empresa,
         })
         .select()
         .single();
 
       if (acordoError) throw acordoError;
 
-      // Gerar parcelas
-      const parcelas = calculo.usarValoresEspecificos
-        ? gerarParcelas(
-            new Date(validated.dataPrimeiroPagamento),
-            validated.parcelas,
-            calculo.valorDemaisParcelas,
-            calculo.comissaoDemaisParcelas,
-            calculo.valorPrimeiraParcela,
-            calculo.comissaoPrimeiraParcela
-          )
-        : gerarParcelas(
-            new Date(validated.dataPrimeiroPagamento),
-            validated.parcelas,
-            calculo.valorDemaisParcelas,
-            calculo.comissaoDemaisParcelas
-          );
+      // Gerar parcelas - lógica diferente para cada empresa
+      let parcelas;
+      if (empresa === 'mundo_da_moda') {
+        parcelas = gerarParcelasMundoDaModa(
+          new Date(validated.dataPrimeiroPagamento),
+          validated.parcelas,
+          calculo.valorDemaisParcelas,
+          calculo.comissaoPrimeiraParcela,
+          calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
+          calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
+        );
+      } else {
+        parcelas = calculo.usarValoresEspecificos
+          ? gerarParcelas(
+              new Date(validated.dataPrimeiroPagamento),
+              validated.parcelas,
+              calculo.valorDemaisParcelas,
+              calculo.comissaoDemaisParcelas,
+              calculo.valorPrimeiraParcela,
+              calculo.comissaoPrimeiraParcela
+            )
+          : gerarParcelas(
+              new Date(validated.dataPrimeiroPagamento),
+              validated.parcelas,
+              calculo.valorDemaisParcelas,
+              calculo.comissaoDemaisParcelas
+            );
+      }
 
       const { error: parcelasError } = await supabase
         .from('pagamentos')
@@ -457,6 +505,34 @@ export default function NovoAcordo() {
                     <p className="text-sm text-destructive">{telefoneError}</p>
                   )}
                 </div>
+              </div>
+
+              {/* Seletor de Empresa */}
+              <div className="space-y-2">
+                <Label>Empresa *</Label>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setEmpresa('ume_novo_mundo')}
+                  >
+                    UME | NOVO MUNDO
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setEmpresa('mundo_da_moda')}
+                  >
+                    MUNDO DA MODA
+                  </Button>
+                </div>
+                {empresa === 'mundo_da_moda' && (
+                  <p className="text-sm text-muted-foreground">
+                    ⚠️ Comissão calculada apenas sobre a 1ª parcela
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -621,11 +697,16 @@ export default function NovoAcordo() {
           {/* Tabela de referência */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Tabela de Comissões</CardTitle>
+              <CardTitle className="text-sm">
+                Tabela de Comissões - {empresa === 'ume_novo_mundo' ? 'UME | NOVO MUNDO' : 'MUNDO DA MODA'}
+              </CardTitle>
+              {empresa === 'mundo_da_moda' && (
+                <CardDescription>Comissão paga apenas sobre a 1ª parcela</CardDescription>
+              )}
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-sm">
-                {tabelaComissoes.map((faixa) => (
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center text-sm">
+                {(empresa === 'ume_novo_mundo' ? tabelaComissoes : tabelaComissoesMundoDaModa).map((faixa) => (
                   <div
                     key={faixa.min}
                     className={`p-2 rounded ${
@@ -643,6 +724,31 @@ export default function NovoAcordo() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => navigate(-1)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={
+                isLoading || 
+                !calculo || 
+                !isCpfCompleto(form.clienteCpf) || 
+                !isTelefoneCompleto(form.clienteTelefone) || 
+                (parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas)) ||
+                !validacaoSomaParcelas.valido
+              }
+            >
+              {isLoading ? 'Salvando...' : 'Criar Acordo'}
+            </Button>
+          </div>
 
           <div className="flex gap-4">
             <Button
