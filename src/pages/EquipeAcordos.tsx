@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
-import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download } from 'lucide-react';
+import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { useToast } from '@/hooks/use-toast';
@@ -53,6 +53,35 @@ export default function EquipeAcordos() {
     valor_parcela: number;
     acordo_id: string;
   }>>([]);
+  const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
+
+  const handleEnviarRelatorio = async () => {
+    try {
+      setEnviandoRelatorio(true);
+      
+      const { data, error } = await supabase.functions.invoke('daily-report-whatsapp');
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast({
+          title: 'Relatório enviado!',
+          description: 'O relatório diário foi enviado para o WhatsApp.',
+        });
+      } else {
+        throw new Error(data?.error || 'Erro ao enviar relatório');
+      }
+    } catch (error) {
+      console.error('Erro ao enviar relatório:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao enviar',
+        description: error instanceof Error ? error.message : 'Não foi possível enviar o relatório.',
+      });
+    } finally {
+      setEnviandoRelatorio(false);
+    }
+  };
 
   const handleExportarAcordosPagos = async () => {
     try {
@@ -349,6 +378,18 @@ export default function EquipeAcordos() {
               <Download className="h-4 w-4" />
               Exportar Pagos
             </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEnviarRelatorio}
+                disabled={enviandoRelatorio}
+                className="gap-2"
+              >
+                <MessageCircle className="h-4 w-4" />
+                {enviandoRelatorio ? 'Enviando...' : 'Enviar Relatório'}
+              </Button>
+            )}
             {isAdmin && (
               <Button
                 variant="outline"
