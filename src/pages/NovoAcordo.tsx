@@ -105,6 +105,23 @@ export default function NovoAcordo() {
     observacoes: ''
   });
 
+  // Função para calcular e preencher automaticamente os valores das parcelas
+  const calcularValoresParcelas = (valorTotalStr: string, parcelasStr: string) => {
+    const valorTotal = parseCurrency(valorTotalStr);
+    const numParcelas = parseInt(parcelasStr) || 0;
+    
+    if (valorTotal > 0 && numParcelas > 0) {
+      const valorParcela = Math.round((valorTotal / numParcelas) * 100) / 100;
+      const valorFormatado = formatCurrencyDisplay(valorParcela);
+      
+      setForm(prev => ({
+        ...prev,
+        valorPrimeiraParcela: valorFormatado,
+        valorDemaisParcelas: valorFormatado
+      }));
+    }
+  };
+
   // Handler para formatação em tempo real do valor total (com centavos)
   const handleCurrencyRealtime = (value: string, field: 'valorTotal') => {
     // Remove "R$ " e espaços iniciais
@@ -133,15 +150,32 @@ export default function NovoAcordo() {
 
     // Adiciona "R$ " no início se tiver valor
     if (cleaned) {
-      setForm({
-        ...form,
-        [field]: 'R$ ' + cleaned
-      });
+      const novoValorTotal = 'R$ ' + cleaned;
+      setForm(prev => ({
+        ...prev,
+        [field]: novoValorTotal
+      }));
+      // Calcular automaticamente os valores das parcelas
+      calcularValoresParcelas(novoValorTotal, form.parcelas);
     } else {
-      setForm({
-        ...form,
+      setForm(prev => ({
+        ...prev,
         [field]: ''
-      });
+      }));
+    }
+  };
+
+  // Handler para número de parcelas com cálculo automático
+  const handleParcelasChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 3);
+    setForm(prev => ({
+      ...prev,
+      parcelas: value
+    }));
+    
+    // Calcular automaticamente quando muda o número de parcelas
+    if (value && form.valorTotal) {
+      calcularValoresParcelas(form.valorTotal, value);
     }
   };
 
@@ -485,10 +519,7 @@ export default function NovoAcordo() {
 
               <div className="space-y-2">
                 <Label htmlFor="parcelas">Número de Parcelas *</Label>
-                <Input id="parcelas" type="number" min="1" max="120" placeholder="1" value={form.parcelas} onChange={e => setForm({
-                ...form,
-                parcelas: e.target.value
-              })} required />
+                <Input id="parcelas" type="text" inputMode="numeric" min="1" max="120" placeholder="1" value={form.parcelas} onChange={handleParcelasChange} required />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
