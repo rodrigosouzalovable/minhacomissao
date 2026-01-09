@@ -28,14 +28,10 @@ serve(async (req) => {
 
     console.log('Data do relatório:', hoje);
 
-    // Buscar acordos lançados hoje com nome do funcionário
+    // Buscar acordos lançados hoje
     const { data: acordosHoje, error: acordosError } = await supabase
       .from('acordos')
-      .select(`
-        id,
-        user_id,
-        profiles!acordos_user_id_fkey (nome)
-      `)
+      .select('id, user_id')
       .gte('criado_em', `${hoje}T00:00:00-03:00`)
       .lte('criado_em', `${hoje}T23:59:59-03:00`);
 
@@ -46,11 +42,29 @@ serve(async (req) => {
 
     console.log('Acordos encontrados hoje:', acordosHoje?.length || 0);
 
+    // Buscar todos os profiles para mapear user_id -> nome
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, nome');
+
+    if (profilesError) {
+      console.error('Erro ao buscar profiles:', profilesError);
+      throw profilesError;
+    }
+
+    // Criar mapa de user_id para nome
+    const profileMap: Record<string, string> = {};
+    if (profiles) {
+      for (const profile of profiles) {
+        profileMap[profile.id] = profile.nome;
+      }
+    }
+
     // Agrupar acordos por funcionário
     const acordosPorFuncionario: Record<string, number> = {};
     if (acordosHoje) {
       for (const acordo of acordosHoje) {
-        const nome = (acordo.profiles as any)?.nome || 'Desconhecido';
+        const nome = profileMap[acordo.user_id] || 'Desconhecido';
         acordosPorFuncionario[nome] = (acordosPorFuncionario[nome] || 0) + 1;
       }
     }
@@ -58,13 +72,7 @@ serve(async (req) => {
     // Buscar parcelas pagas hoje
     const { data: pagamentosHoje, error: pagamentosError } = await supabase
       .from('pagamentos')
-      .select(`
-        valor_parcela,
-        acordos!pagamentos_acordo_id_fkey (
-          user_id,
-          profiles!acordos_user_id_fkey (nome)
-        )
-      `)
+      .select('valor_parcela, acordo_id')
       .eq('data_paga', hoje)
       .eq('status', 'pago');
 
@@ -75,14 +83,37 @@ serve(async (req) => {
 
     console.log('Pagamentos encontrados hoje:', pagamentosHoje?.length || 0);
 
+    // Buscar acordos dos pagamentos para obter user_id
+    const acordoIds = pagamentosHoje?.map(p => p.acordo_id) || [];
+    let acordosDosPagamentos: { id: string; user_id: string }[] = [];
+    
+    if (acordoIds.length > 0) {
+      const { data: acordosData, error: acordosDataError } = await supabase
+        .from('acordos')
+        .select('id, user_id')
+        .in('id', acordoIds);
+
+      if (acordosDataError) {
+        console.error('Erro ao buscar acordos dos pagamentos:', acordosDataError);
+        throw acordosDataError;
+      }
+      acordosDosPagamentos = acordosData || [];
+    }
+
+    // Criar mapa de acordo_id para user_id
+    const acordoUserMap: Record<string, string> = {};
+    for (const acordo of acordosDosPagamentos) {
+      acordoUserMap[acordo.id] = acordo.user_id;
+    }
+
     // Calcular valores por funcionário e total geral
     let totalGeral = 0;
     const valoresPorFuncionario: Record<string, number> = {};
     
     if (pagamentosHoje) {
       for (const pagamento of pagamentosHoje) {
-        const acordo = pagamento.acordos as any;
-        const nome = acordo?.profiles?.nome || 'Desconhecido';
+        const userId = acordoUserMap[pagamento.acordo_id];
+        const nome = userId ? (profileMap[userId] || 'Desconhecido') : 'Desconhecido';
         const valor = Number(pagamento.valor_parcela) || 0;
         
         valoresPorFuncionario[nome] = (valoresPorFuncionario[nome] || 0) + valor;
