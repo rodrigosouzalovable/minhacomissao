@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
@@ -58,6 +59,12 @@ export default function AdminUsuarios() {
   const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Estados para criação de novo usuário
+  const [newUserNome, setNewUserNome] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -194,6 +201,42 @@ export default function AdminUsuarios() {
     },
   });
 
+  // Mutation para criar novo usuário
+  const createUserMutation = useMutation({
+    mutationFn: async ({ nome, email, password }: { nome: string; email: string; password: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const response = await supabase.functions.invoke('create-user-admin', {
+        body: { nome, email, password },
+      });
+
+      if (response.error) throw response.error;
+      if (!response.data.success) throw new Error(response.data.error);
+      
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({
+        title: 'Usuário criado',
+        description: 'O novo usuário foi criado com sucesso.',
+      });
+      // Limpar formulário
+      setNewUserNome('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+    },
+    onError: (error: Error) => {
+      console.error('Error creating user:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível criar o usuário.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleResetPassword = (newPassword: string) => {
     if (resetPasswordUser) {
       resetPasswordMutation.mutate({ userId: resetPasswordUser.id, newPassword });
@@ -256,6 +299,86 @@ export default function AdminUsuarios() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Criar Novo Usuário */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Criar Novo Usuário
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createUserMutation.mutate({
+                  nome: newUserNome,
+                  email: newUserEmail,
+                  password: newUserPassword,
+                });
+              }}
+              className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="newUserNome">Nome Completo</Label>
+                <Input
+                  id="newUserNome"
+                  placeholder="João da Silva"
+                  value={newUserNome}
+                  onChange={(e) => setNewUserNome(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newUserEmail">Email</Label>
+                <Input
+                  id="newUserEmail"
+                  type="email"
+                  placeholder="joao@exemplo.com"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newUserPassword">Senha</Label>
+                <div className="relative">
+                  <Input
+                    id="newUserPassword"
+                    type={showNewUserPassword ? 'text' : 'password'}
+                    placeholder="Mínimo 6 caracteres"
+                    value={newUserPassword}
+                    onChange={(e) => setNewUserPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                  >
+                    {showNewUserPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <Button
+                type="submit"
+                disabled={createUserMutation.isPending}
+                className="w-full"
+              >
+                {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
         {/* Users Table */}
         <Card>
