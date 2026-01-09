@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.create-user-admin]
 verify_jwt = false
+
+[functions.daily-report-whatsapp]
+verify_jwt = false
