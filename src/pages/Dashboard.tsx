@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { PlusCircle, FileText, DollarSign, Clock, CheckCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { MetasMensal } from '@/components/MetasMensal';
 
 interface DashboardData {
   totalAcordos: number;
@@ -28,6 +30,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -119,6 +122,11 @@ export default function Dashboard() {
             </Link>
           </Button>
         </div>
+
+        {/* Seção de Metas - Apenas para Admin */}
+        {isAdmin && (
+          <MetasMensal metaValor={227000} mesAno="2026-01" />
+        )}
 
         {/* Cards de resumo */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
