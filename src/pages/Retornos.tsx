@@ -268,17 +268,28 @@ export default function Retornos() {
   const isFormValid = () => {
     const cpfDigits = form.clienteCpf.replace(/\D/g, '');
     const telefoneDigits = form.clienteTelefone.replace(/\D/g, '');
+    const numParcelas = parseInt(form.numeroParcelas) || 0;
+    const isParcelaUnica = numParcelas === 1;
     
-    return (
+    const camposBasicosValidos = 
       form.clienteNome.trim().length >= 2 &&
       cpfDigits.length === 11 &&
       telefoneDigits.length === 11 &&
       form.dataRetorno &&
       parseCurrencyToNumber(form.valorTotal) > 0 &&
-      parseInt(form.numeroParcelas) >= 1 &&
+      numParcelas >= 1 &&
+      form.dataPrimeiroPagamento;
+
+    // Se for parcela única, não exige os campos de valores das parcelas
+    if (isParcelaUnica) {
+      return camposBasicosValidos;
+    }
+
+    // Se for múltiplas parcelas, exige todos os campos
+    return (
+      camposBasicosValidos &&
       parseCurrencyToNumber(form.valorPrimeiraParcela) > 0 &&
-      parseCurrencyToNumber(form.valorDemaisParcelas) > 0 &&
-      form.dataPrimeiroPagamento
+      parseCurrencyToNumber(form.valorDemaisParcelas) > 0
     );
   };
 
@@ -289,16 +300,21 @@ export default function Retornos() {
     setIsLoading(true);
 
     try {
+      const numParcelas = parseInt(form.numeroParcelas);
+      const isParcelaUnica = numParcelas === 1;
+      const valorTotalNum = parseCurrencyToNumber(form.valorTotal);
+
       const validated = retornoSchema.parse({
         clienteNome: form.clienteNome.trim(),
         clienteCpf: form.clienteCpf.trim(),
         clienteTelefone: form.clienteTelefone.trim(),
         observacao: form.observacao.trim() || undefined,
         dataRetorno: form.dataRetorno,
-        valorTotal: parseCurrencyToNumber(form.valorTotal),
-        numeroParcelas: parseInt(form.numeroParcelas),
-        valorPrimeiraParcela: parseCurrencyToNumber(form.valorPrimeiraParcela),
-        valorDemaisParcelas: parseCurrencyToNumber(form.valorDemaisParcelas),
+        valorTotal: valorTotalNum,
+        numeroParcelas: numParcelas,
+        // Se parcela única, usa o valor total; senão, usa os valores informados
+        valorPrimeiraParcela: isParcelaUnica ? valorTotalNum : parseCurrencyToNumber(form.valorPrimeiraParcela),
+        valorDemaisParcelas: isParcelaUnica ? valorTotalNum : parseCurrencyToNumber(form.valorDemaisParcelas),
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
       });
 
@@ -589,29 +605,31 @@ export default function Retornos() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela *</Label>
-                    <Input
-                      id="valorPrimeiraParcela"
-                      placeholder="R$ 0,00"
-                      value={form.valorPrimeiraParcela}
-                      onChange={(e) => setForm({ ...form, valorPrimeiraParcela: formatCurrencyInput(e.target.value) })}
-                      required
-                    />
-                  </div>
+                {parseInt(form.numeroParcelas) > 1 && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela *</Label>
+                      <Input
+                        id="valorPrimeiraParcela"
+                        placeholder="R$ 0,00"
+                        value={form.valorPrimeiraParcela}
+                        onChange={(e) => setForm({ ...form, valorPrimeiraParcela: formatCurrencyInput(e.target.value) })}
+                        required
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas *</Label>
-                    <Input
-                      id="valorDemaisParcelas"
-                      placeholder="R$ 0,00"
-                      value={form.valorDemaisParcelas}
-                      onChange={(e) => setForm({ ...form, valorDemaisParcelas: formatCurrencyInput(e.target.value) })}
-                      required
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas *</Label>
+                      <Input
+                        id="valorDemaisParcelas"
+                        placeholder="R$ 0,00"
+                        value={form.valorDemaisParcelas}
+                        onChange={(e) => setForm({ ...form, valorDemaisParcelas: formatCurrencyInput(e.target.value) })}
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="dataPrimeiroPagamento">Data do Primeiro Pagamento *</Label>
