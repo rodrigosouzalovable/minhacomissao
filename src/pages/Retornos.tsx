@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { CopyButton } from '@/components/CopyButton';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2, Plus, MessageCircle, DollarSign, Hash, CalendarDays, UserCircle, CheckCircle } from 'lucide-react';
@@ -124,6 +126,7 @@ interface Retorno {
 
 export default function Retornos() {
   const { user } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -132,6 +135,10 @@ export default function Retornos() {
   const [nomeError, setNomeError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState<string | null>(null);
+  
+  // Admin filter states
+  const [funcionarios, setFuncionarios] = useState<{ id: string; nome: string }[]>([]);
+  const [funcionarioFilter, setFuncionarioFilter] = useState<string>('todos');
 
   // Audio recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -152,20 +159,42 @@ export default function Retornos() {
     dataPrimeiroPagamento: '',
   });
 
-  // Load retornos
+  // Load retornos when user and role are ready
   useEffect(() => {
-    if (user) {
+    if (user && !roleLoading) {
       fetchRetornos();
     }
-  }, [user]);
+  }, [user, roleLoading, isAdmin]);
+
+  // Load funcionarios list for admin filter
+  useEffect(() => {
+    if (isAdmin) {
+      fetchFuncionarios();
+    }
+  }, [isAdmin]);
+
+  const fetchFuncionarios = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, nome')
+      .order('nome');
+    
+    if (data) setFuncionarios(data.filter(f => f.nome) as { id: string; nome: string }[]);
+  };
 
   const fetchRetornos = async () => {
     try {
-      // Buscar retornos
-      const { data: retornosData, error: retornosError } = await supabase
+      // Admin vê todos, funcionário vê apenas os seus
+      let query = supabase
         .from('retornos')
         .select('*')
         .order('data_retorno', { ascending: true });
+
+      if (!isAdmin && user) {
+        query = query.eq('user_id', user.id);
+      }
+
+      const { data: retornosData, error: retornosError } = await query;
 
       if (retornosError) throw retornosError;
 
@@ -198,6 +227,11 @@ export default function Retornos() {
       setLoadingRetornos(false);
     }
   };
+
+  // Filter retornos based on selected funcionario
+  const retornosFiltrados = funcionarioFilter === 'todos'
+    ? retornos
+    : retornos.filter(r => r.user_id === funcionarioFilter);
 
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
@@ -547,7 +581,7 @@ export default function Retornos() {
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
               <ArrowLeft className="h-5 w-5" />
@@ -555,12 +589,30 @@ export default function Retornos() {
             <h1 className="text-2xl font-bold">Retornos</h1>
           </div>
           
-          {retornos.length > 0 && !showForm && (
-            <Button onClick={() => setShowForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Agendar Retorno
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {isAdmin && (
+              <Select value={funcionarioFilter} onValueChange={setFuncionarioFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Filtrar por funcionário" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os funcionários</SelectItem>
+                  {funcionarios.map(func => (
+                    <SelectItem key={func.id} value={func.id}>
+                      {func.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            
+            {retornos.length > 0 && !showForm && (
+              <Button onClick={() => setShowForm(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Agendar Retorno
+              </Button>
+            )}
+          </div>
         </div>
 
         {(retornos.length === 0 || showForm) && (
@@ -777,7 +829,7 @@ export default function Retornos() {
         {/* Lista de Retornos */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">
-            Meus Retornos {retornos.length > 0 && `(${retornos.length})`}
+            {isAdmin ? 'Retornos' : 'Meus Retornos'} {retornosFiltrados.length > 0 && `(${retornosFiltrados.length})`}
           </h2>
 
           {loadingRetornos ? (
@@ -786,15 +838,17 @@ export default function Retornos() {
                 <Loader2 className="h-6 w-6 animate-spin" />
               </CardContent>
             </Card>
-          ) : retornos.length === 0 ? (
+          ) : retornosFiltrados.length === 0 ? (
             <Card>
               <CardContent className="text-center py-8 text-muted-foreground">
-                Nenhum retorno cadastrado ainda.
+                {funcionarioFilter !== 'todos' 
+                  ? 'Nenhum retorno encontrado para este funcionário.'
+                  : 'Nenhum retorno cadastrado ainda.'}
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4">
-              {retornos.map((retorno) => (
+              {retornosFiltrados.map((retorno) => (
                 <Card key={retorno.id} className={retorno.status === 'concluido' ? 'opacity-60' : ''}>
                   <CardContent className="pt-6">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
