@@ -414,9 +414,16 @@ export default function Acordos() {
   );
 
   // Acordos Negociados: não têm nenhuma parcela paga ainda
-  const acordosNegociados = filteredAcordos.filter(acordo => 
-    !acordosComPagamentosPagos.has(acordo.id)
-  );
+  // Ordenados para que acordos sem boleto enviado apareçam primeiro
+  const acordosNegociados = filteredAcordos
+    .filter(acordo => !acordosComPagamentosPagos.has(acordo.id))
+    .sort((a, b) => {
+      // Acordos sem boleto enviado vêm primeiro (false/null antes de true)
+      if (a.boleto_enviado === b.boleto_enviado) return 0;
+      if (!a.boleto_enviado && b.boleto_enviado) return -1;
+      if (a.boleto_enviado && !b.boleto_enviado) return 1;
+      return 0;
+    });
 
   // Acordos com Parcelas Vencidas: têm pelo menos 1 parcela pendente com data_prevista < hoje
   const acordosVencidos = filteredAcordos.filter(acordo => 
