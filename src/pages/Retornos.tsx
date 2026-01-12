@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2, Plus, MessageCircle, DollarSign, Hash, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2, Plus, MessageCircle, DollarSign, Hash, CalendarDays, UserCircle, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -116,6 +116,10 @@ interface Retorno {
   valor_primeira_parcela: number | null;
   valor_demais_parcelas: number | null;
   data_primeiro_pagamento: string | null;
+  whatsapp_enviado_em: string | null;
+  profiles?: {
+    nome: string | null;
+  };
 }
 
 export default function Retornos() {
@@ -157,13 +161,32 @@ export default function Retornos() {
 
   const fetchRetornos = async () => {
     try {
-      const { data, error } = await supabase
+      // Buscar retornos
+      const { data: retornosData, error: retornosError } = await supabase
         .from('retornos')
         .select('*')
         .order('data_retorno', { ascending: true });
 
-      if (error) throw error;
-      setRetornos((data || []) as Retorno[]);
+      if (retornosError) throw retornosError;
+
+      // Buscar todos os profiles para mapear id -> nome
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, nome');
+
+      // Mapear profiles por id (que corresponde ao user_id)
+      const profilesMap = new Map<string, string>();
+      (profilesData || []).forEach((p: { id: string; nome: string }) => {
+        if (p.nome) profilesMap.set(p.id, p.nome);
+      });
+
+      // Combinar retornos com profiles
+      const retornosComProfiles = (retornosData || []).map(r => ({
+        ...r,
+        profiles: profilesMap.has(r.user_id) ? { nome: profilesMap.get(r.user_id) || null } : undefined
+      }));
+
+      setRetornos(retornosComProfiles as Retorno[]);
     } catch (error) {
       console.error('Error fetching retornos:', error);
       toast({
@@ -473,6 +496,17 @@ export default function Retornos() {
       });
 
       if (error) throw error;
+
+      // Atualizar o campo whatsapp_enviado_em
+      await supabase
+        .from('retornos')
+        .update({ whatsapp_enviado_em: new Date().toISOString() })
+        .eq('id', retorno.id);
+
+      // Atualizar estado local
+      setRetornos(prev =>
+        prev.map(r => r.id === retorno.id ? { ...r, whatsapp_enviado_em: new Date().toISOString() } : r)
+      );
 
       toast({
         title: 'Mensagem enviada!',
@@ -788,6 +822,12 @@ export default function Retornos() {
                               Retorno: {format(new Date(retorno.data_retorno + 'T00:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                             </span>
                           </div>
+                          {retorno.profiles?.nome && (
+                            <div className="flex items-center gap-2">
+                              <UserCircle className="h-3 w-3" />
+                              <span>Lançado por: {retorno.profiles.nome}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Dados do Acordo */}
@@ -819,20 +859,28 @@ export default function Retornos() {
 
                       <div className="flex gap-2 sm:flex-col">
                         {retorno.status !== 'concluido' && retorno.valor_total && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-green-600 hover:bg-green-50 hover:text-green-700"
-                            onClick={() => handleEnviarWhatsApp(retorno)}
-                            disabled={sendingWhatsApp === retorno.id}
-                          >
-                            {sendingWhatsApp === retorno.id ? (
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            ) : (
-                              <MessageCircle className="h-4 w-4 mr-1" />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-green-600 hover:bg-green-50 hover:text-green-700"
+                              onClick={() => handleEnviarWhatsApp(retorno)}
+                              disabled={sendingWhatsApp === retorno.id}
+                            >
+                              {sendingWhatsApp === retorno.id ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <MessageCircle className="h-4 w-4 mr-1" />
+                              )}
+                              WhatsApp
+                            </Button>
+                            {retorno.whatsapp_enviado_em && (
+                              <Badge variant="secondary" className="text-xs">
+                                <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
+                                Enviado
+                              </Badge>
                             )}
-                            WhatsApp
-                          </Button>
+                          </div>
                         )}
                         {retorno.status !== 'concluido' && (
                           <Button

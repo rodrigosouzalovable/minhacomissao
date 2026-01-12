@@ -194,6 +194,7 @@ export type Database = {
           valor_demais_parcelas: number | null
           valor_primeira_parcela: number | null
           valor_total: number | null
+          whatsapp_enviado_em: string | null
         }
         Insert: {
           atualizado_em?: string
@@ -211,6 +212,7 @@ export type Database = {
           valor_demais_parcelas?: number | null
           valor_primeira_parcela?: number | null
           valor_total?: number | null
+          whatsapp_enviado_em?: string | null
         }
         Update: {
           atualizado_em?: string
@@ -228,6 +230,7 @@ export type Database = {
           valor_demais_parcelas?: number | null
           valor_primeira_parcela?: number | null
           valor_total?: number | null
+          whatsapp_enviado_em?: string | null
         }
         Relationships: []
       }
