@@ -86,6 +86,20 @@ const formatCurrencyDisplay = (value: number | null): string => {
   });
 };
 
+// Função para calcular valores de parcela automaticamente
+const calcularValoresParcelas = (valorTotalStr: string, parcelasStr: string): { valorPrimeiraParcela: string; valorDemaisParcelas: string } => {
+  const valorTotal = parseCurrencyToNumber(valorTotalStr);
+  const numParcelas = parseInt(parcelasStr) || 0;
+  
+  if (valorTotal > 0 && numParcelas > 1) {
+    const valorParcela = valorTotal / numParcelas;
+    const valorFormatado = formatCurrencyDisplay(Math.round(valorParcela * 100) / 100);
+    return { valorPrimeiraParcela: valorFormatado, valorDemaisParcelas: valorFormatado };
+  }
+  
+  return { valorPrimeiraParcela: '', valorDemaisParcelas: '' };
+};
+
 interface Retorno {
   id: string;
   user_id: string;
@@ -586,7 +600,15 @@ export default function Retornos() {
                       id="valorTotal"
                       placeholder="R$ 0,00"
                       value={form.valorTotal}
-                      onChange={(e) => setForm({ ...form, valorTotal: formatCurrencyInput(e.target.value) })}
+                      onChange={(e) => {
+                        const novoValor = formatCurrencyInput(e.target.value);
+                        const calculados = calcularValoresParcelas(novoValor, form.numeroParcelas);
+                        setForm(prev => ({
+                          ...prev,
+                          valorTotal: novoValor,
+                          ...(calculados.valorPrimeiraParcela && calculados),
+                        }));
+                      }}
                       required
                     />
                   </div>
@@ -599,7 +621,15 @@ export default function Retornos() {
                       min="1"
                       placeholder="1"
                       value={form.numeroParcelas}
-                      onChange={(e) => setForm({ ...form, numeroParcelas: e.target.value })}
+                      onChange={(e) => {
+                        const novaParcela = e.target.value;
+                        const calculados = calcularValoresParcelas(form.valorTotal, novaParcela);
+                        setForm(prev => ({
+                          ...prev,
+                          numeroParcelas: novaParcela,
+                          ...(calculados.valorPrimeiraParcela && calculados),
+                        }));
+                      }}
                       required
                     />
                   </div>
