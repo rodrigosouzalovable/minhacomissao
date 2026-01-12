@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -71,12 +72,14 @@ function AcordoCard({
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />
                         {acordo.cliente_cpf}
+                        <CopyButton value={acordo.cliente_cpf} label="CPF" />
                       </span>
                     )}
                     {acordo.cliente_telefone && (
                       <span className="flex items-center gap-1">
                         <Phone className="h-3 w-3" />
                         {acordo.cliente_telefone}
+                        <CopyButton value={acordo.cliente_telefone} label="Telefone" />
                       </span>
                     )}
                   </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -774,10 +775,12 @@ export default function Retornos() {
                           <div className="flex items-center gap-2">
                             <FileText className="h-3 w-3" />
                             <span>CPF: {retorno.cliente_cpf}</span>
+                            <CopyButton value={retorno.cliente_cpf} label="CPF" />
                           </div>
                           <div className="flex items-center gap-2">
                             <Phone className="h-3 w-3" />
                             <span>{retorno.cliente_telefone}</span>
+                            <CopyButton value={retorno.cliente_telefone} label="Telefone" />
                           </div>
                           <div className="flex items-center gap-2">
                             <Calendar className="h-3 w-3" />
