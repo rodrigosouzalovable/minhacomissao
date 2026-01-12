@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import successSound from '@/assets/success-sound.mp3';
@@ -605,18 +606,24 @@ export default function AcordoDetalhe() {
                   {acordo.cliente_cpf && (
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm text-muted-foreground">CPF</p>
-                        <p className="font-medium">{acordo.cliente_cpf}</p>
+                        <div className="flex items-center gap-1">
+                          <p className="font-medium">{acordo.cliente_cpf}</p>
+                          <CopyButton value={acordo.cliente_cpf} label="CPF" />
+                        </div>
                       </div>
                     </div>
                   )}
                   {acordo.cliente_telefone && (
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4 text-muted-foreground" />
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm text-muted-foreground">Telefone</p>
-                        <p className="font-medium">{acordo.cliente_telefone}</p>
+                        <div className="flex items-center gap-1">
+                          <p className="font-medium">{acordo.cliente_telefone}</p>
+                          <CopyButton value={acordo.cliente_telefone} label="Telefone" />
+                        </div>
                       </div>
                     </div>
                   )}
