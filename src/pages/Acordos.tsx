@@ -424,9 +424,10 @@ export default function Acordos() {
     return matchesSearch && matchesStatus;
   });
 
-  // Acordos Pagos: têm pelo menos 1 parcela paga
+  // Acordos Pagos: têm pelo menos 1 parcela paga E NÃO têm parcela vencida
   const acordosPagos = filteredAcordos.filter(acordo => 
-    acordosComPagamentosPagos.has(acordo.id)
+    acordosComPagamentosPagos.has(acordo.id) && 
+    !acordosComParcelasVencidas.has(acordo.id)
   );
 
   // Acordos Negociados: não têm nenhuma parcela paga E não têm parcela vencida
