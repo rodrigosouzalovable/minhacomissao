@@ -40,7 +40,8 @@ function AcordoCard({
   enviandoWhatsApp,
   getStatusVariant, 
   getStatusLabel,
-  isNegociado = false
+  isNegociado = false,
+  isVencido = false
 }: { 
   acordo: Acordo;
   onDelete: () => void;
@@ -49,13 +50,18 @@ function AcordoCard({
   getStatusVariant: (status: string) => "default" | "secondary" | "destructive" | "outline";
   getStatusLabel: (status: string) => string;
   isNegociado?: boolean;
+  isVencido?: boolean;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   return (
     <Link to={`/acordos/${acordo.id}`}>
       <Card className={cn(
         "hover:border-primary/50 transition-all cursor-pointer",
-        isNegociado && !acordo.boleto_enviado && 
+        // VERMELHO - Parcela vencida (prioridade máxima)
+        isNegociado && isVencido && 
+          "border-destructive bg-gradient-to-r from-red-50 to-rose-50 ring-2 ring-destructive/60 shadow-lg shadow-red-200/50 animate-pulse dark:from-red-950/30 dark:to-rose-950/30 dark:border-destructive dark:ring-destructive/50 dark:shadow-red-500/20",
+        // LARANJA - Aguardando boleto (apenas se não vencido)
+        isNegociado && !isVencido && !acordo.boleto_enviado && 
           "border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50 ring-2 ring-orange-300 shadow-lg shadow-orange-200/50 animate-pulse dark:from-orange-950/30 dark:to-amber-950/30 dark:border-orange-500 dark:ring-orange-400/50 dark:shadow-orange-500/20"
       )}>
         <CardContent className="p-4">
@@ -94,8 +100,18 @@ function AcordoCard({
             </div>
             <div className="flex flex-col sm:items-end gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                {/* Flag de status do boleto - apenas para acordos negociados */}
-                {isNegociado && (
+                {/* Badge de Parcela Vencida - prioridade máxima */}
+                {isNegociado && isVencido && (
+                  <Badge 
+                    variant="outline"
+                    className="bg-destructive/20 text-destructive border-destructive/30"
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    Parcela Vencida
+                  </Badge>
+                )}
+                {/* Flag de status do boleto - apenas para acordos negociados não vencidos */}
+                {isNegociado && !isVencido && (
                   <Badge 
                     variant="outline"
                     className={acordo.boleto_enviado 
@@ -414,11 +430,17 @@ export default function Acordos() {
   );
 
   // Acordos Negociados: não têm nenhuma parcela paga ainda
-  // Ordenados para que acordos sem boleto enviado apareçam primeiro
+  // Ordenados: 1º Vencidos (vermelho), 2º Aguardando boleto (laranja), 3º Normais
   const acordosNegociados = filteredAcordos
     .filter(acordo => !acordosComPagamentosPagos.has(acordo.id))
     .sort((a, b) => {
-      // Acordos sem boleto enviado vêm primeiro (false/null antes de true)
+      // 1º: Acordos com parcelas vencidas vêm primeiro (vermelho)
+      const aVencido = acordosComParcelasVencidas.has(a.id);
+      const bVencido = acordosComParcelasVencidas.has(b.id);
+      if (aVencido && !bVencido) return -1;
+      if (!aVencido && bVencido) return 1;
+      
+      // 2º: Acordos sem boleto enviado vêm depois (laranja)
       if (a.boleto_enviado === b.boleto_enviado) return 0;
       if (!a.boleto_enviado && b.boleto_enviado) return -1;
       if (a.boleto_enviado && !b.boleto_enviado) return 1;
@@ -542,6 +564,7 @@ export default function Acordos() {
                     getStatusVariant={getStatusVariant}
                     getStatusLabel={getStatusLabel}
                     isNegociado={true}
+                    isVencido={acordosComParcelasVencidas.has(acordo.id)}
                   />
                 ))}
               </div>
