@@ -96,6 +96,9 @@ function AcordoCard({
                 <p className="text-xs text-muted-foreground mt-1">
                   Criado em {formatarData(acordo.criado_em)}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  Vencimento: {formatarData(acordo.data_primeiro_pagamento)}
+                </p>
               </div>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
