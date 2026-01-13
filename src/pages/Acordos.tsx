@@ -424,21 +424,24 @@ export default function Acordos() {
     return matchesSearch && matchesStatus;
   });
 
-  // Acordos Pagos: têm pelo menos 1 parcela paga E NÃO têm parcela vencida
+  // Acordos Pagos: têm pelo menos 1 parcela paga
   const acordosPagos = filteredAcordos.filter(acordo => 
-    acordosComPagamentosPagos.has(acordo.id) && 
-    !acordosComParcelasVencidas.has(acordo.id)
+    acordosComPagamentosPagos.has(acordo.id)
   );
 
-  // Acordos Negociados: não têm nenhuma parcela paga E não têm parcela vencida
-  // Ordenados: 1º Aguardando boleto (laranja), 2º Boleto enviado
+  // Acordos Negociados: não têm nenhuma parcela paga ainda
+  // Ordenados: 1º Vencidos (vermelho), 2º Aguardando boleto (laranja), 3º Normais
   const acordosNegociados = filteredAcordos
-    .filter(acordo => 
-      !acordosComPagamentosPagos.has(acordo.id) && 
-      !acordosComParcelasVencidas.has(acordo.id)
-    )
+    .filter(acordo => !acordosComPagamentosPagos.has(acordo.id))
     .sort((a, b) => {
-      // 1º: Aguardando envio do boleto vem primeiro (laranja)
+      // 1º: Acordos com parcelas vencidas vêm primeiro (vermelho)
+      const aVencido = acordosComParcelasVencidas.has(a.id);
+      const bVencido = acordosComParcelasVencidas.has(b.id);
+      if (aVencido && !bVencido) return -1;
+      if (!aVencido && bVencido) return 1;
+      
+      // 2º: Acordos sem boleto enviado vêm depois (laranja)
+      if (a.boleto_enviado === b.boleto_enviado) return 0;
       if (!a.boleto_enviado && b.boleto_enviado) return -1;
       if (a.boleto_enviado && !b.boleto_enviado) return 1;
       return 0;
@@ -561,6 +564,7 @@ export default function Acordos() {
                     getStatusVariant={getStatusVariant}
                     getStatusLabel={getStatusLabel}
                     isNegociado={true}
+                    isVencido={acordosComParcelasVencidas.has(acordo.id)}
                   />
                 ))}
               </div>
