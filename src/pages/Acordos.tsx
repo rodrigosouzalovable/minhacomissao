@@ -430,20 +430,24 @@ export default function Acordos() {
   );
 
   // Acordos Negociados: não têm nenhuma parcela paga ainda
-  // Ordenados: 1º Vencidos (vermelho), 2º Aguardando boleto (laranja), 3º Normais
+  // Ordenados: 1º Aguardando boleto (laranja), 2º Vencidos (vermelho), 3º Normais
   const acordosNegociados = filteredAcordos
     .filter(acordo => !acordosComPagamentosPagos.has(acordo.id))
     .sort((a, b) => {
-      // 1º: Acordos com parcelas vencidas vêm primeiro (vermelho)
       const aVencido = acordosComParcelasVencidas.has(a.id);
       const bVencido = acordosComParcelasVencidas.has(b.id);
+      const aAguardandoBoleto = !a.boleto_enviado;
+      const bAguardandoBoleto = !b.boleto_enviado;
+      
+      // 1º: Acordos aguardando envio do boleto vêm primeiro (laranja)
+      if (aAguardandoBoleto && !bAguardandoBoleto) return -1;
+      if (!aAguardandoBoleto && bAguardandoBoleto) return 1;
+      
+      // 2º: Acordos com parcelas vencidas vêm depois (vermelho)
       if (aVencido && !bVencido) return -1;
       if (!aVencido && bVencido) return 1;
       
-      // 2º: Acordos sem boleto enviado vêm depois (laranja)
-      if (a.boleto_enviado === b.boleto_enviado) return 0;
-      if (!a.boleto_enviado && b.boleto_enviado) return -1;
-      if (a.boleto_enviado && !b.boleto_enviado) return 1;
+      // 3º: Acordos normais (boleto enviado, sem vencimento)
       return 0;
     });
 
