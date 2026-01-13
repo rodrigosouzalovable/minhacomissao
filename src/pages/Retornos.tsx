@@ -24,11 +24,11 @@ const retornoSchema = z.object({
   clienteTelefone: z.string().min(10, 'Telefone é obrigatório').max(15, 'Telefone inválido'),
   observacao: z.string().max(2000, 'Observação muito longa').optional(),
   dataRetorno: z.string().min(1, 'Data de retorno é obrigatória'),
-  valorTotal: z.number().positive('Valor total deve ser positivo'),
-  numeroParcelas: z.number().int().min(1, 'Mínimo 1 parcela'),
-  valorPrimeiraParcela: z.number().positive('Valor deve ser positivo'),
-  valorDemaisParcelas: z.number().positive('Valor deve ser positivo'),
-  dataPrimeiroPagamento: z.string().min(1, 'Data do primeiro pagamento é obrigatória'),
+  valorTotal: z.number().positive('Valor total deve ser positivo').optional().nullable(),
+  numeroParcelas: z.number().int().min(1, 'Mínimo 1 parcela').optional().nullable(),
+  valorPrimeiraParcela: z.number().positive('Valor deve ser positivo').optional().nullable(),
+  valorDemaisParcelas: z.number().positive('Valor deve ser positivo').optional().nullable(),
+  dataPrimeiroPagamento: z.string().optional().nullable(),
 });
 
 // Funções de máscara
@@ -340,28 +340,13 @@ export default function Retornos() {
   const isFormValid = () => {
     const cpfDigits = form.clienteCpf.replace(/\D/g, '');
     const telefoneDigits = form.clienteTelefone.replace(/\D/g, '');
-    const numParcelas = parseInt(form.numeroParcelas) || 0;
-    const isParcelaUnica = numParcelas === 1;
     
-    const camposBasicosValidos = 
+    // Apenas campos obrigatórios: dados do cliente + data de retorno
+    return (
       form.clienteNome.trim().length >= 2 &&
       cpfDigits.length === 11 &&
       telefoneDigits.length === 11 &&
-      form.dataRetorno &&
-      parseCurrencyToNumber(form.valorTotal) > 0 &&
-      numParcelas >= 1 &&
-      form.dataPrimeiroPagamento;
-
-    // Se for parcela única, não exige os campos de valores das parcelas
-    if (isParcelaUnica) {
-      return camposBasicosValidos;
-    }
-
-    // Se for múltiplas parcelas, exige todos os campos
-    return (
-      camposBasicosValidos &&
-      parseCurrencyToNumber(form.valorPrimeiraParcela) > 0 &&
-      parseCurrencyToNumber(form.valorDemaisParcelas) > 0
+      form.dataRetorno
     );
   };
 
@@ -372,9 +357,22 @@ export default function Retornos() {
     setIsLoading(true);
 
     try {
-      const numParcelas = parseInt(form.numeroParcelas);
-      const isParcelaUnica = numParcelas === 1;
-      const valorTotalNum = parseCurrencyToNumber(form.valorTotal);
+      const numParcelas = parseInt(form.numeroParcelas) || null;
+      const valorTotalNum = parseCurrencyToNumber(form.valorTotal) || null;
+
+      // Calcular valores de parcela se tiver dados do acordo
+      let valorPrimeiraParcela = null;
+      let valorDemaisParcelas = null;
+      
+      if (valorTotalNum && numParcelas) {
+        if (numParcelas === 1) {
+          valorPrimeiraParcela = valorTotalNum;
+          valorDemaisParcelas = valorTotalNum;
+        } else {
+          valorPrimeiraParcela = parseCurrencyToNumber(form.valorPrimeiraParcela) || null;
+          valorDemaisParcelas = parseCurrencyToNumber(form.valorDemaisParcelas) || null;
+        }
+      }
 
       const validated = retornoSchema.parse({
         clienteNome: form.clienteNome.trim(),
@@ -384,10 +382,9 @@ export default function Retornos() {
         dataRetorno: form.dataRetorno,
         valorTotal: valorTotalNum,
         numeroParcelas: numParcelas,
-        // Se parcela única, usa o valor total; senão, usa os valores informados
-        valorPrimeiraParcela: isParcelaUnica ? valorTotalNum : parseCurrencyToNumber(form.valorPrimeiraParcela),
-        valorDemaisParcelas: isParcelaUnica ? valorTotalNum : parseCurrencyToNumber(form.valorDemaisParcelas),
-        dataPrimeiroPagamento: form.dataPrimeiroPagamento,
+        valorPrimeiraParcela: valorPrimeiraParcela,
+        valorDemaisParcelas: valorDemaisParcelas,
+        dataPrimeiroPagamento: form.dataPrimeiroPagamento || null,
       });
 
       const { error } = await supabase.from('retornos').insert({
@@ -677,12 +674,12 @@ export default function Retornos() {
             <Card>
               <CardHeader>
                 <CardTitle>Dados do Acordo</CardTitle>
-                <CardDescription>Informações do acordo negociado</CardDescription>
+                <CardDescription>Informações do acordo negociado (opcional)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="valorTotal">Valor Total *</Label>
+                    <Label htmlFor="valorTotal">Valor Total</Label>
                     <Input
                       id="valorTotal"
                       placeholder="R$ 0,00"
@@ -696,12 +693,11 @@ export default function Retornos() {
                           ...(calculados.valorPrimeiraParcela && calculados),
                         }));
                       }}
-                      required
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="numeroParcelas">Número de Parcelas *</Label>
+                    <Label htmlFor="numeroParcelas">Número de Parcelas</Label>
                     <Input
                       id="numeroParcelas"
                       type="number"
@@ -717,7 +713,6 @@ export default function Retornos() {
                           ...(calculados.valorPrimeiraParcela && calculados),
                         }));
                       }}
-                      required
                     />
                   </div>
                 </div>
@@ -725,37 +720,34 @@ export default function Retornos() {
                 {parseInt(form.numeroParcelas) > 1 && (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela *</Label>
+                      <Label htmlFor="valorPrimeiraParcela">Valor da Primeira Parcela</Label>
                       <Input
                         id="valorPrimeiraParcela"
                         placeholder="R$ 0,00"
                         value={form.valorPrimeiraParcela}
                         onChange={(e) => setForm({ ...form, valorPrimeiraParcela: formatCurrencyInput(e.target.value) })}
-                        required
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas *</Label>
+                      <Label htmlFor="valorDemaisParcelas">Valor das Demais Parcelas</Label>
                       <Input
                         id="valorDemaisParcelas"
                         placeholder="R$ 0,00"
                         value={form.valorDemaisParcelas}
                         onChange={(e) => setForm({ ...form, valorDemaisParcelas: formatCurrencyInput(e.target.value) })}
-                        required
                       />
                     </div>
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="dataPrimeiroPagamento">Data do Primeiro Pagamento *</Label>
+                  <Label htmlFor="dataPrimeiroPagamento">Data do Primeiro Pagamento</Label>
                   <Input
                     id="dataPrimeiroPagamento"
                     type="date"
                     value={form.dataPrimeiroPagamento}
                     onChange={(e) => setForm({ ...form, dataPrimeiroPagamento: e.target.value })}
-                    required
                   />
                 </div>
               </CardContent>
