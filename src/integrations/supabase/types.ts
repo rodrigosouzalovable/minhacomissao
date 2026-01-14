@@ -77,6 +77,90 @@ export type Database = {
         }
         Relationships: []
       }
+      auditoria_divergencias: {
+        Row: {
+          acordo_id: string | null
+          arquivo_nome: string
+          cpf_planilha: string
+          criado_em: string
+          data_planilha: string | null
+          data_sistema: string | null
+          id: string
+          nome_planilha: string | null
+          nome_sistema: string | null
+          pagamento_id: string | null
+          parcela_planilha: number | null
+          parcela_sistema: number | null
+          receita_planilha: number | null
+          receita_sistema: number | null
+          resolvido: boolean | null
+          resolvido_em: string | null
+          tipo_divergencia: string
+          user_id: string
+          valor_planilha: number | null
+          valor_sistema: number | null
+        }
+        Insert: {
+          acordo_id?: string | null
+          arquivo_nome: string
+          cpf_planilha: string
+          criado_em?: string
+          data_planilha?: string | null
+          data_sistema?: string | null
+          id?: string
+          nome_planilha?: string | null
+          nome_sistema?: string | null
+          pagamento_id?: string | null
+          parcela_planilha?: number | null
+          parcela_sistema?: number | null
+          receita_planilha?: number | null
+          receita_sistema?: number | null
+          resolvido?: boolean | null
+          resolvido_em?: string | null
+          tipo_divergencia: string
+          user_id: string
+          valor_planilha?: number | null
+          valor_sistema?: number | null
+        }
+        Update: {
+          acordo_id?: string | null
+          arquivo_nome?: string
+          cpf_planilha?: string
+          criado_em?: string
+          data_planilha?: string | null
+          data_sistema?: string | null
+          id?: string
+          nome_planilha?: string | null
+          nome_sistema?: string | null
+          pagamento_id?: string | null
+          parcela_planilha?: number | null
+          parcela_sistema?: number | null
+          receita_planilha?: number | null
+          receita_sistema?: number | null
+          resolvido?: boolean | null
+          resolvido_em?: string | null
+          tipo_divergencia?: string
+          user_id?: string
+          valor_planilha?: number | null
+          valor_sistema?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auditoria_divergencias_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_divergencias_pagamento_id_fkey"
+            columns: ["pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "pagamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lembretes_lidos: {
         Row: {
           criado_em: string
