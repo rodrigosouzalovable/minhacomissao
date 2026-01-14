@@ -161,6 +161,83 @@ export type Database = {
           },
         ]
       }
+      gastos_empresa: {
+        Row: {
+          categoria: string
+          criado_em: string
+          data_referencia: string
+          descricao: string | null
+          id: string
+          recorrente: boolean
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria: string
+          criado_em?: string
+          data_referencia: string
+          descricao?: string | null
+          id?: string
+          recorrente?: boolean
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          categoria?: string
+          criado_em?: string
+          data_referencia?: string
+          descricao?: string | null
+          id?: string
+          recorrente?: boolean
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      gastos_funcionarios: {
+        Row: {
+          categoria: string
+          criado_em: string
+          data_referencia: string
+          descricao: string | null
+          funcionario_id: string
+          id: string
+          recorrente: boolean
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria: string
+          criado_em?: string
+          data_referencia: string
+          descricao?: string | null
+          funcionario_id: string
+          id?: string
+          recorrente?: boolean
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          categoria?: string
+          criado_em?: string
+          data_referencia?: string
+          descricao?: string | null
+          funcionario_id?: string
+          id?: string
+          recorrente?: boolean
+          user_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gastos_funcionarios_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lembretes_lidos: {
         Row: {
           criado_em: string
