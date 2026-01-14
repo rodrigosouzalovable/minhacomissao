@@ -113,6 +113,7 @@ const normalizarCPF = (cpf: string): string => {
 const parseDataExcel = (valor: any): string => {
   if (!valor) return '';
   
+  // Se for número serial do Excel
   if (typeof valor === 'number') {
     const data = XLSX.SSF.parse_date_code(valor);
     if (data) {
@@ -120,7 +121,31 @@ const parseDataExcel = (valor: any): string => {
     }
   }
   
-  return String(valor);
+  // Se for string com data e hora (ex: "28/11/2025 16:29:27")
+  const strValor = String(valor).trim();
+  
+  // Extrair apenas a data (antes do espaço) se houver hora
+  const partes = strValor.split(' ');
+  const dataStr = partes[0];
+  
+  // Verificar se está no formato DD/MM/YYYY
+  const regexBR = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+  const matchBR = dataStr.match(regexBR);
+  if (matchBR) {
+    const dia = matchBR[1].padStart(2, '0');
+    const mes = matchBR[2].padStart(2, '0');
+    const ano = matchBR[3];
+    return `${dia}/${mes}/${ano}`;
+  }
+  
+  // Verificar se está no formato YYYY-MM-DD
+  const regexISO = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const matchISO = dataStr.match(regexISO);
+  if (matchISO) {
+    return `${matchISO[3]}/${matchISO[2]}/${matchISO[1]}`;
+  }
+  
+  return dataStr;
 };
 
 const parseValorNumerico = (valor: any): number => {
