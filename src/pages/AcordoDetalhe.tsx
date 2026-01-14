@@ -595,6 +595,12 @@ export default function AcordoDetalhe() {
                 <p className="font-medium">{formatarData(acordo.data_primeiro_pagamento)}</p>
               </div>
               <div>
+                <p className="text-sm text-muted-foreground">Empresa</p>
+                <p className="font-medium">
+                  {acordo.empresa === 'mundo_da_moda' ? 'MUNDO DA MODA' : 'UME | NOVO MUNDO'}
+                </p>
+              </div>
+              <div>
                 <p className="text-sm text-muted-foreground">Comissão Total</p>
                 <p className="font-medium text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
               </div>
