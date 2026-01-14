@@ -21,6 +21,7 @@ import UsuarioComissoes from "./pages/UsuarioComissoes";
 import NovoAcordoAdmin from "./pages/NovoAcordoAdmin";
 import Retornos from "./pages/Retornos";
 import Auditoria from "./pages/Auditoria";
+import Financeiro from "./pages/Financeiro";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -115,6 +116,7 @@ const App = () => (
             <Route path="/admin/usuarios/:userId/novo-acordo" element={<AdminRoute><NovoAcordoAdmin /></AdminRoute>} />
             <Route path="/admin/equipes" element={<AdminRoute><AdminEquipes /></AdminRoute>} />
             <Route path="/admin/auditoria" element={<AdminRoute><Auditoria /></AdminRoute>} />
+            <Route path="/admin/financeiro" element={<AdminRoute><Financeiro /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
