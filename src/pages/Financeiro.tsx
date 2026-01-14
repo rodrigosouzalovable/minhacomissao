@@ -39,6 +39,15 @@ const CATEGORIAS_FUNCIONARIO = [
   'Outros'
 ];
 
+const CATEGORIAS_RECEITA = [
+  'Serviços Extras',
+  'Bonificação',
+  'Rendimentos',
+  'Recuperação de Crédito',
+  'Parcerias',
+  'Outros'
+];
+
 interface GastoEmpresa {
   id: string;
   user_id: string;
@@ -71,6 +80,17 @@ interface Profile {
   email: string | null;
 }
 
+interface ReceitaEmpresa {
+  id: string;
+  user_id: string;
+  categoria: string;
+  descricao: string | null;
+  valor: number;
+  data_referencia: string;
+  recorrente: boolean;
+  criado_em: string;
+}
+
 export default function Financeiro() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -101,6 +121,17 @@ export default function Financeiro() {
   
   // Filter for funcionário tab
   const [filtroFuncionario, setFiltroFuncionario] = useState('todos');
+
+  // Dialog states - Receita
+  const [dialogReceitaOpen, setDialogReceitaOpen] = useState(false);
+  const [editingReceita, setEditingReceita] = useState<ReceitaEmpresa | null>(null);
+  
+  // Form states - Receita
+  const [categoriaReceita, setCategoriaReceita] = useState('');
+  const [descricaoReceita, setDescricaoReceita] = useState('');
+  const [valorReceita, setValorReceita] = useState('');
+  const [dataReferenciaReceita, setDataReferenciaReceita] = useState('');
+  const [recorrenteReceita, setRecorrenteReceita] = useState(false);
 
   // Fetch profiles (funcionários)
   const { data: profiles = [] } = useQuery({
@@ -181,6 +212,28 @@ export default function Financeiro() {
     }
   });
 
+  // Fetch receitas empresa
+  const { data: receitasEmpresa = [] } = useQuery({
+    queryKey: ['receitas-empresa', dataInicio, dataFim],
+    queryFn: async () => {
+      let query = supabase
+        .from('receitas_empresa')
+        .select('*')
+        .order('data_referencia', { ascending: false });
+      
+      if (dataInicio) {
+        query = query.gte('data_referencia', format(dataInicio, 'yyyy-MM-dd'));
+      }
+      if (dataFim) {
+        query = query.lte('data_referencia', format(dataFim, 'yyyy-MM-dd'));
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as ReceitaEmpresa[];
+    }
+  });
+
   // Calculate totals
   const totalGastosEmpresa = useMemo(() => {
     return gastosEmpresa.reduce((acc, g) => acc + Number(g.valor), 0);
@@ -192,13 +245,19 @@ export default function Financeiro() {
 
   const totalGastos = totalGastosEmpresa + totalGastosFuncionarios;
 
-  const totalReceita = useMemo(() => {
+  const totalReceitaComissao = useMemo(() => {
     return pagamentosPagos.reduce((acc, p) => {
       const diasAtraso = p.acordos?.dias_atraso || 0;
       const percentual = calcularPercentualComissaoEmpresa(diasAtraso);
       return acc + (Number(p.valor_parcela) * percentual / 100);
     }, 0);
   }, [pagamentosPagos]);
+
+  const totalReceitasCadastradas = useMemo(() => {
+    return receitasEmpresa.reduce((acc, r) => acc + Number(r.valor), 0);
+  }, [receitasEmpresa]);
+
+  const totalReceita = totalReceitaComissao + totalReceitasCadastradas;
 
   const lucroPrejuizo = totalReceita - totalGastos;
 
@@ -330,6 +389,54 @@ export default function Financeiro() {
     }
   });
 
+  // Receita mutations
+  const addReceitaMutation = useMutation({
+    mutationFn: async (receita: Omit<ReceitaEmpresa, 'id' | 'criado_em'>) => {
+      const { error } = await supabase.from('receitas_empresa').insert(receita);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['receitas-empresa'] });
+      toast({ title: 'Receita adicionada com sucesso!' });
+      resetFormReceita();
+      setDialogReceitaOpen(false);
+    },
+    onError: () => {
+      toast({ title: 'Erro ao adicionar receita', variant: 'destructive' });
+    }
+  });
+
+  const updateReceitaMutation = useMutation({
+    mutationFn: async ({ id, ...receita }: Partial<ReceitaEmpresa> & { id: string }) => {
+      const { error } = await supabase.from('receitas_empresa').update(receita).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['receitas-empresa'] });
+      toast({ title: 'Receita atualizada com sucesso!' });
+      resetFormReceita();
+      setDialogReceitaOpen(false);
+      setEditingReceita(null);
+    },
+    onError: () => {
+      toast({ title: 'Erro ao atualizar receita', variant: 'destructive' });
+    }
+  });
+
+  const deleteReceitaMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('receitas_empresa').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['receitas-empresa'] });
+      toast({ title: 'Receita excluída com sucesso!' });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao excluir receita', variant: 'destructive' });
+    }
+  });
+
   // Form handlers
   const resetFormEmpresa = () => {
     setCategoriaEmpresa('');
@@ -346,6 +453,14 @@ export default function Financeiro() {
     setValorFuncionario('');
     setDataReferenciaFuncionario('');
     setRecorrenteFuncionario(false);
+  };
+
+  const resetFormReceita = () => {
+    setCategoriaReceita('');
+    setDescricaoReceita('');
+    setValorReceita('');
+    setDataReferenciaReceita('');
+    setRecorrenteReceita(false);
   };
 
   const openEditEmpresa = (gasto: GastoEmpresa) => {
@@ -367,6 +482,16 @@ export default function Financeiro() {
     setDataReferenciaFuncionario(gasto.data_referencia);
     setRecorrenteFuncionario(gasto.recorrente);
     setDialogFuncionarioOpen(true);
+  };
+
+  const openEditReceita = (receita: ReceitaEmpresa) => {
+    setEditingReceita(receita);
+    setCategoriaReceita(receita.categoria);
+    setDescricaoReceita(receita.descricao || '');
+    setValorReceita(receita.valor.toString());
+    setDataReferenciaReceita(receita.data_referencia);
+    setRecorrenteReceita(receita.recorrente);
+    setDialogReceitaOpen(true);
   };
 
   const handleSaveEmpresa = async () => {
@@ -433,6 +558,37 @@ export default function Financeiro() {
     }
   };
 
+  const handleSaveReceita = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const valor = parseFloat(valorReceita.replace(',', '.'));
+    if (isNaN(valor) || !categoriaReceita || !dataReferenciaReceita) {
+      toast({ title: 'Preencha todos os campos obrigatórios', variant: 'destructive' });
+      return;
+    }
+
+    if (editingReceita) {
+      updateReceitaMutation.mutate({
+        id: editingReceita.id,
+        categoria: categoriaReceita,
+        descricao: descricaoReceita || null,
+        valor,
+        data_referencia: dataReferenciaReceita,
+        recorrente: recorrenteReceita
+      });
+    } else {
+      addReceitaMutation.mutate({
+        user_id: user.id,
+        categoria: categoriaReceita,
+        descricao: descricaoReceita || null,
+        valor,
+        data_referencia: dataReferenciaReceita,
+        recorrente: recorrenteReceita
+      });
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -453,11 +609,12 @@ export default function Financeiro() {
         </div>
 
         <Tabs defaultValue="resumo" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
+            <TabsTrigger value="receitas">Receitas</TabsTrigger>
             <TabsTrigger value="empresa">Gastos Empresa</TabsTrigger>
             <TabsTrigger value="funcionarios">Gastos Funcionários</TabsTrigger>
-            <TabsTrigger value="analise">Análise por Funcionário</TabsTrigger>
+            <TabsTrigger value="analise">Análise</TabsTrigger>
           </TabsList>
 
           {/* Tab Resumo */}
@@ -483,7 +640,9 @@ export default function Financeiro() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">{formatarMoeda(totalReceita)}</div>
-                  <p className="text-xs text-muted-foreground">Comissão da empresa (parcelas pagas)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Comissão: {formatarMoeda(totalReceitaComissao)} | Outras: {formatarMoeda(totalReceitasCadastradas)}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -571,6 +730,62 @@ export default function Financeiro() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Tab Receitas */}
+          <TabsContent value="receitas" className="space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => { resetFormReceita(); setEditingReceita(null); setDialogReceitaOpen(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Receita
+              </Button>
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Data Ref.</TableHead>
+                      <TableHead>Recorrente</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {receitasEmpresa.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          Nenhuma receita cadastrada
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      receitasEmpresa.map((receita) => (
+                        <TableRow key={receita.id}>
+                          <TableCell className="font-medium">{receita.categoria}</TableCell>
+                          <TableCell>{receita.descricao || '-'}</TableCell>
+                          <TableCell className="text-green-600 font-medium">{formatarMoeda(receita.valor)}</TableCell>
+                          <TableCell>{formatarData(receita.data_referencia)}</TableCell>
+                          <TableCell>{receita.recorrente ? 'Sim' : 'Não'}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="icon" onClick={() => openEditReceita(receita)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => deleteReceitaMutation.mutate(receita.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Tab Gastos Empresa */}
@@ -878,6 +1093,66 @@ export default function Financeiro() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogFuncionarioOpen(false)}>Cancelar</Button>
             <Button onClick={handleSaveFuncionario}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Receita */}
+      <Dialog open={dialogReceitaOpen} onOpenChange={setDialogReceitaOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingReceita ? 'Editar Receita' : 'Nova Receita'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Categoria *</Label>
+              <Select value={categoriaReceita} onValueChange={setCategoriaReceita}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIAS_RECEITA.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Descrição</Label>
+              <Input
+                value={descricaoReceita}
+                onChange={(e) => setDescricaoReceita(e.target.value)}
+                placeholder="Descrição da receita"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Valor *</Label>
+              <Input
+                value={valorReceita}
+                onChange={(e) => setValorReceita(e.target.value)}
+                placeholder="0,00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Data de Referência *</Label>
+              <Input
+                type="date"
+                value={dataReferenciaReceita}
+                onChange={(e) => setDataReferenciaReceita(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="recorrente-receita"
+                checked={recorrenteReceita}
+                onCheckedChange={(checked) => setRecorrenteReceita(checked as boolean)}
+              />
+              <Label htmlFor="recorrente-receita">Receita recorrente (mensal)</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogReceitaOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveReceita}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

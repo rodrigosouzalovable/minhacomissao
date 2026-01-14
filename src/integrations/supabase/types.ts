@@ -338,6 +338,39 @@ export type Database = {
         }
         Relationships: []
       }
+      receitas_empresa: {
+        Row: {
+          categoria: string
+          criado_em: string
+          data_referencia: string
+          descricao: string | null
+          id: string
+          recorrente: boolean
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria: string
+          criado_em?: string
+          data_referencia: string
+          descricao?: string | null
+          id?: string
+          recorrente?: boolean
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          categoria?: string
+          criado_em?: string
+          data_referencia?: string
+          descricao?: string | null
+          id?: string
+          recorrente?: boolean
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       retornos: {
         Row: {
           atualizado_em: string
