@@ -45,7 +45,6 @@ interface PagamentoSistema {
   diasAtraso: number;
   numeroParcela: number;
   acordoId: string;
-  status: string;
 }
 
 interface Divergencia {
@@ -185,42 +184,6 @@ const formatarCPF = (cpf: string): string => {
   const digits = cpf.replace(/\D/g, '');
   if (digits.length !== 11) return cpf;
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
-};
-
-// Função para detectar automaticamente a linha do cabeçalho e mapear colunas
-const detectarCabecalhoEColunas = (jsonData: any[][]): { headerRow: number; columnMap: Record<string, number> } | null => {
-  const colunasEsperadas = ['CPF', 'CNPJ', 'CLIENTE', 'VALOR PAGO', 'RECEITA', 'DATA', 'PARCELA'];
-  
-  for (let i = 0; i < Math.min(jsonData.length, 10); i++) {
-    const row = jsonData[i];
-    if (!row || !Array.isArray(row)) continue;
-    
-    const rowStr = row.map(cell => String(cell || '').toUpperCase().trim());
-    
-    // Verificar se esta linha contém os cabeçalhos esperados
-    const hasCPF = rowStr.some(cell => cell.includes('CPF') || cell.includes('CNPJ'));
-    const hasCliente = rowStr.some(cell => cell.includes('CLIENTE'));
-    const hasParcela = rowStr.some(cell => cell === 'PARCELA');
-    
-    if (hasCPF && hasCliente && hasParcela) {
-      const columnMap: Record<string, number> = {};
-      
-      for (let j = 0; j < rowStr.length; j++) {
-        const cell = rowStr[j];
-        if (cell.includes('CPF') || cell.includes('CNPJ')) columnMap['cpf'] = j;
-        if (cell === 'CLIENTE') columnMap['cliente'] = j;
-        if (cell === 'VALOR PAGO') columnMap['valorPago'] = j;
-        if (cell === 'RECEITA') columnMap['receita'] = j;
-        if (cell === 'DATA') columnMap['data'] = j;
-        if (cell === 'PARCELA') columnMap['parcela'] = j;
-      }
-      
-      console.log('Cabeçalho detectado na linha:', i, columnMap);
-      return { headerRow: i, columnMap };
-    }
-  }
-  
-  return null;
 };
 
 export default function Auditoria() {
@@ -606,77 +569,34 @@ export default function Auditoria() {
     try {
       const buffer = await arquivo.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
-      
-      // Tentar encontrar a aba correta (que contenha cabeçalhos esperados)
-      let jsonData: any[][] = [];
-      let headerInfo: { headerRow: number; columnMap: Record<string, number> } | null = null;
-      
-      for (const sheetName of workbook.SheetNames) {
-        const worksheet = workbook.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-        const detected = detectarCabecalhoEColunas(data);
-        
-        if (detected) {
-          jsonData = data;
-          headerInfo = detected;
-          console.log('Usando aba:', sheetName);
-          break;
-        }
-      }
-      
-      // Fallback: usar índices fixos se não encontrar cabeçalho
-      if (!headerInfo) {
-        console.log('Cabeçalho não detectado, usando índices padrão');
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-        headerInfo = {
-          headerRow: 0,
-          columnMap: {
-            cpf: 1,      // Coluna B
-            cliente: 2,  // Coluna C
-            valorPago: 9, // Coluna J
-            receita: 10,  // Coluna K
-            data: 13,     // Coluna N
-            parcela: 16   // Coluna Q
-          }
-        };
-      }
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-      const { headerRow, columnMap } = headerInfo;
-      const startRow = headerRow + 1;
-      
-      console.log('Iniciando leitura a partir da linha:', startRow);
-      console.log('Total de linhas no Excel:', jsonData.length);
-      console.log('Mapeamento de colunas:', columnMap);
+      // Mapeamento das colunas do Cobmais:
+      // Coluna B (índice 1) = CPF
+      // Coluna C (índice 2) = NOME
+      // Coluna J (índice 9) = VALOR PAGO
+      // Coluna K (índice 10) = RECEITA (comissão escritório)
+      // Coluna N (índice 13) = DATA
+      // Coluna Q (índice 16) = PARCELA
 
       const linhasImportadas: LinhaImportada[] = [];
-      for (let i = startRow; i < jsonData.length; i++) {
+      for (let i = 1; i < jsonData.length; i++) {
         const row = jsonData[i];
-        if (!row) continue;
-        
-        const cpfRaw = row[columnMap.cpf];
-        if (!cpfRaw) continue;
-        
-        const cpfValue = normalizarCPF(cpfRaw);
-        if (!cpfValue || cpfValue.length < 11) continue;
+        if (!row || !row[1]) continue; // CPF está na coluna B (índice 1)
 
-        const parcelaRaw = row[columnMap.parcela];
-        const parcela = parseInt(String(parcelaRaw || '1'), 10) || 1;
+        const cpfValue = normalizarCPF(row[1]);
+        if (!cpfValue || cpfValue.length < 11) continue; // Pular linhas sem CPF válido
 
         linhasImportadas.push({
           cpf: cpfValue,
-          nomeCliente: String(row[columnMap.cliente] || '').trim(),
-          valorPago: parseValorNumerico(row[columnMap.valorPago]),
-          receita: parseValorNumerico(row[columnMap.receita]),
-          dataPagamento: parseDataExcel(row[columnMap.data]),
-          parcela: parcela,
+          nomeCliente: String(row[2] || '').trim(),
+          valorPago: parseValorNumerico(row[9]),
+          receita: parseValorNumerico(row[10]),
+          dataPagamento: parseDataExcel(row[13]),
+          parcela: parseInt(String(row[16] || '1'), 10) || 1,
         });
-      }
-
-      console.log('Linhas importadas:', linhasImportadas.length);
-      if (linhasImportadas.length > 0) {
-        console.log('Exemplo primeira linha:', linhasImportadas[0]);
       }
 
       setDadosImportados(linhasImportadas);
@@ -728,13 +648,12 @@ export default function Auditoria() {
         diasAtraso: p.acordos?.dias_atraso || 0,
         numeroParcela: p.numero_parcela,
         acordoId: p.acordo_id,
-        status: p.status || 'pendente',
       }));
 
       const divergenciasEncontradas: Divergencia[] = [];
       let correspondenciasCount = 0;
 
-      // Agrupar pagamentos por CPF
+      // Agrupar pagamentos por CPF + número da parcela para comparação precisa
       const pagamentosPorCPF = new Map<string, PagamentoSistema[]>();
       for (const pag of pagamentosSistema) {
         if (!pag.cpf) continue;
@@ -743,185 +662,138 @@ export default function Auditoria() {
         pagamentosPorCPF.set(pag.cpf, lista);
       }
 
-      // Agrupar linhas importadas por CPF para comparação por conjunto
-      const linhasPorCPF = new Map<string, LinhaImportada[]>();
-      for (const linha of linhasImportadas) {
-        const lista = linhasPorCPF.get(linha.cpf) || [];
-        lista.push(linha);
-        linhasPorCPF.set(linha.cpf, lista);
-      }
-
       // Função auxiliar para normalizar nomes para comparação
       const normalizarNome = (nome: string): string => {
         return nome
           .toUpperCase()
           .trim()
           .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/\s+/g, ' ');
+          .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+          .replace(/\s+/g, ' '); // Normaliza espaços múltiplos
       };
 
-      // Função para comparar nomes
+      // Função para comparar nomes (verifica se pelo menos o primeiro nome é igual)
       const compararNomes = (nomePlanilha: string, nomeSistema: string): { igual: boolean; detalhe: string } => {
         const p = normalizarNome(nomePlanilha);
         const s = normalizarNome(nomeSistema);
         
-        if (p === s) return { igual: true, detalhe: '' };
+        if (p === s) {
+          return { igual: true, detalhe: '' };
+        }
         
+        // Verificar se pelo menos o primeiro nome é igual
         const primeiroNomePlanilha = p.split(' ')[0];
         const primeiroNomeSistema = s.split(' ')[0];
         
         if (primeiroNomePlanilha === primeiroNomeSistema) {
-          return { igual: true, detalhe: '' };
+          return { igual: true, detalhe: '' }; // Primeiro nome igual, considera OK
         }
         
         return { igual: false, detalhe: `Nome: "${nomePlanilha}" vs "${nomeSistema}"` };
       };
 
-      // ========== COMPARAÇÃO POR CONJUNTO DE PARCELAS PAGAS POR CPF ==========
-      for (const [cpf, linhasCPF] of linhasPorCPF.entries()) {
-        const pagamentosCliente = pagamentosPorCPF.get(cpf) || [];
-        
+      for (const linha of linhasImportadas) {
+        const pagamentosCliente = pagamentosPorCPF.get(linha.cpf) || [];
+
+        // ======== 1. VERIFICAR CPF ========
         if (pagamentosCliente.length === 0) {
-          // CPF não encontrado - registrar cada linha como divergência
-          for (const linha of linhasCPF) {
-            divergenciasEncontradas.push({
-              cpf: linha.cpf,
-              nomeClientePlanilha: linha.nomeCliente,
-              nomeClienteSistema: '-',
-              tipoDivergencia: 'CPF não encontrado no sistema',
-              valorPlanilha: linha.valorPago,
-              valorSistema: 0,
-              receitaPlanilha: linha.receita,
-              receitaSistema: 0,
-              dataPlanilha: linha.dataPagamento,
-              dataSistema: '-',
-              parcelaPlanilha: linha.parcela,
-              parcelaSistema: 0,
-            });
-          }
+          divergenciasEncontradas.push({
+            cpf: linha.cpf,
+            nomeClientePlanilha: linha.nomeCliente,
+            nomeClienteSistema: '-',
+            tipoDivergencia: 'CPF não encontrado no sistema',
+            valorPlanilha: linha.valorPago,
+            valorSistema: 0,
+            receitaPlanilha: linha.receita,
+            receitaSistema: 0,
+            dataPlanilha: linha.dataPagamento,
+            dataSistema: '-',
+            parcelaPlanilha: linha.parcela,
+            parcelaSistema: 0,
+          });
           continue;
         }
 
-        // Parcelas pagas na planilha (conjunto)
-        const parcelasPlanilha = new Set(linhasCPF.map(l => l.parcela));
-        
-        // Parcelas pagas no sistema (status = 'pago')
-        const parcelasPagasSistema = new Set(
-          pagamentosCliente.filter(p => p.status === 'pago').map(p => p.numeroParcela)
-        );
+        // Buscar parcela correspondente pelo número da parcela
+        const parcelaCorrespondente = pagamentosCliente.find(p => p.numeroParcela === linha.parcela);
 
-        // Calcular diferenças
-        const faltandoNoSistema = [...parcelasPlanilha].filter(p => !parcelasPagasSistema.has(p));
-        const sobrandoNoSistema = [...parcelasPagasSistema].filter(p => !parcelasPlanilha.has(p));
-
-        // Se há divergência de conjunto de parcelas
-        if (faltandoNoSistema.length > 0 || sobrandoNoSistema.length > 0) {
-          const nomeCliente = pagamentosCliente[0]?.nomeCliente || linhasCPF[0]?.nomeCliente || '-';
-          const acordoId = pagamentosCliente[0]?.acordoId;
-          
-          let tipoDivergencia = 'Parcelas pagas divergentes: ';
-          tipoDivergencia += `Planilha={${[...parcelasPlanilha].sort((a, b) => a - b).join(',')}} `;
-          tipoDivergencia += `Sistema={${[...parcelasPagasSistema].sort((a, b) => a - b).join(',')}}`;
-          
-          if (faltandoNoSistema.length > 0) {
-            tipoDivergencia += ` | Faltando no sistema: ${faltandoNoSistema.sort((a, b) => a - b).join(', ')}`;
-          }
-          if (sobrandoNoSistema.length > 0) {
-            tipoDivergencia += ` | Sobrando no sistema: ${sobrandoNoSistema.sort((a, b) => a - b).join(', ')}`;
-          }
-
+        // ======== 2. VERIFICAR SE PARCELA EXISTE ========
+        if (!parcelaCorrespondente) {
           divergenciasEncontradas.push({
-            cpf: cpf,
-            nomeClientePlanilha: linhasCPF[0]?.nomeCliente || '-',
-            nomeClienteSistema: nomeCliente,
-            tipoDivergencia: tipoDivergencia,
-            valorPlanilha: linhasCPF.reduce((sum, l) => sum + l.valorPago, 0),
-            valorSistema: pagamentosCliente.filter(p => p.status === 'pago').reduce((sum, p) => sum + p.valorParcela, 0),
-            receitaPlanilha: linhasCPF.reduce((sum, l) => sum + l.receita, 0),
+            cpf: linha.cpf,
+            nomeClientePlanilha: linha.nomeCliente,
+            nomeClienteSistema: pagamentosCliente[0]?.nomeCliente || '-',
+            tipoDivergencia: `Parcela ${linha.parcela} não encontrada no sistema`,
+            valorPlanilha: linha.valorPago,
+            valorSistema: 0,
+            receitaPlanilha: linha.receita,
             receitaSistema: 0,
-            dataPlanilha: linhasCPF.map(l => `P${l.parcela}:${l.dataPagamento}`).join('; '),
-            dataSistema: pagamentosCliente.filter(p => p.status === 'pago').map(p => `P${p.numeroParcela}:${formatarDataParaComparacao(p.dataPaga || '')}`).join('; '),
-            parcelaPlanilha: 0,
+            dataPlanilha: linha.dataPagamento,
+            dataSistema: '-',
+            parcelaPlanilha: linha.parcela,
             parcelaSistema: 0,
-            acordoId: acordoId,
+            acordoId: pagamentosCliente[0]?.acordoId,
           });
+          continue;
         }
 
-        // ========== COMPARAÇÃO LINHA A LINHA (para divergências de valor/data/receita) ==========
-        for (const linha of linhasCPF) {
-          const parcelaCorrespondente = pagamentosCliente.find(p => p.numeroParcela === linha.parcela);
+        // Agora temos CPF e Parcela correspondente - analisar campos restantes
+        const divergenciasDetalhadas: string[] = [];
+        
+        // ======== 3. VERIFICAR NOME DO CLIENTE ========
+        const resultadoNome = compararNomes(linha.nomeCliente, parcelaCorrespondente.nomeCliente);
+        if (!resultadoNome.igual) {
+          divergenciasDetalhadas.push(resultadoNome.detalhe);
+        }
 
-          if (!parcelaCorrespondente) {
-            // Parcela não existe no sistema (já coberto acima como "faltando")
-            continue;
-          }
+        // ======== 4. VERIFICAR VALOR PAGO (Coluna J) ========
+        if (!compararValores(linha.valorPago, parcelaCorrespondente.valorParcela)) {
+          const diffValor = Math.abs(linha.valorPago - parcelaCorrespondente.valorParcela);
+          divergenciasDetalhadas.push(
+            `Valor: R$ ${linha.valorPago.toFixed(2).replace('.', ',')} vs R$ ${parcelaCorrespondente.valorParcela.toFixed(2).replace('.', ',')} (dif: R$ ${diffValor.toFixed(2).replace('.', ',')})`
+          );
+        }
 
-          const divergenciasDetalhadas: string[] = [];
+        // ======== 5. VERIFICAR DATA DE PAGAMENTO (Coluna N) ========
+        const dataPlanilhaFormatada = linha.dataPagamento;
+        const dataSistemaFormatada = formatarDataParaComparacao(parcelaCorrespondente.dataPaga || '');
+        
+        if (dataPlanilhaFormatada && dataSistemaFormatada && dataPlanilhaFormatada !== dataSistemaFormatada) {
+          divergenciasDetalhadas.push(`Data: ${dataPlanilhaFormatada} vs ${dataSistemaFormatada}`);
+        } else if (dataPlanilhaFormatada && !dataSistemaFormatada) {
+          divergenciasDetalhadas.push(`Data de pagamento não encontrada (planilha: ${dataPlanilhaFormatada})`);
+        }
 
-          // Verificar se a planilha indica pago mas sistema não está como pago
-          if (parcelaCorrespondente.status !== 'pago') {
-            divergenciasDetalhadas.push(`Planilha indica pago em ${linha.dataPagamento}, mas sistema está como pendente`);
-          } else {
-            // Ambos estão como "pago", comparar detalhes
-            
-            // Verificar nome
-            const resultadoNome = compararNomes(linha.nomeCliente, parcelaCorrespondente.nomeCliente);
-            if (!resultadoNome.igual) {
-              divergenciasDetalhadas.push(resultadoNome.detalhe);
-            }
+        // ======== 6. VERIFICAR RECEITA/COMISSÃO (Coluna K) ========
+        const percentualEmpresa = calcularPercentualComissaoEmpresa(parcelaCorrespondente.diasAtraso);
+        const receitaSistema = Math.round(parcelaCorrespondente.valorParcela * (percentualEmpresa / 100) * 100) / 100;
+        
+        if (!compararValores(linha.receita, receitaSistema, 0.10)) {
+          divergenciasDetalhadas.push(
+            `Receita: R$ ${linha.receita.toFixed(2).replace('.', ',')} vs R$ ${receitaSistema.toFixed(2).replace('.', ',')}`
+          );
+        }
 
-            // Verificar valor
-            if (!compararValores(linha.valorPago, parcelaCorrespondente.valorParcela)) {
-              const diffValor = Math.abs(linha.valorPago - parcelaCorrespondente.valorParcela);
-              divergenciasDetalhadas.push(
-                `Valor: R$ ${linha.valorPago.toFixed(2).replace('.', ',')} vs R$ ${parcelaCorrespondente.valorParcela.toFixed(2).replace('.', ',')} (dif: R$ ${diffValor.toFixed(2).replace('.', ',')})`
-              );
-            }
-
-            // Verificar data de pagamento
-            const dataPlanilhaFormatada = linha.dataPagamento;
-            const dataSistemaFormatada = formatarDataParaComparacao(parcelaCorrespondente.dataPaga || '');
-            
-            if (dataPlanilhaFormatada && dataSistemaFormatada && dataPlanilhaFormatada !== dataSistemaFormatada) {
-              divergenciasDetalhadas.push(`Data: ${dataPlanilhaFormatada} vs ${dataSistemaFormatada}`);
-            } else if (dataPlanilhaFormatada && !dataSistemaFormatada) {
-              divergenciasDetalhadas.push(`Data de pagamento não encontrada (planilha: ${dataPlanilhaFormatada})`);
-            }
-
-            // Verificar receita/comissão
-            const percentualEmpresa = calcularPercentualComissaoEmpresa(parcelaCorrespondente.diasAtraso);
-            const receitaSistema = Math.round(parcelaCorrespondente.valorParcela * (percentualEmpresa / 100) * 100) / 100;
-            
-            if (!compararValores(linha.receita, receitaSistema, 0.10)) {
-              divergenciasDetalhadas.push(
-                `Receita: R$ ${linha.receita.toFixed(2).replace('.', ',')} vs R$ ${receitaSistema.toFixed(2).replace('.', ',')}`
-              );
-            }
-          }
-
-          // Registrar divergências de detalhes (se não for apenas "parcelas divergentes" já registrado)
-          if (divergenciasDetalhadas.length > 0 && !faltandoNoSistema.includes(linha.parcela)) {
-            divergenciasEncontradas.push({
-              cpf: linha.cpf,
-              nomeClientePlanilha: linha.nomeCliente,
-              nomeClienteSistema: parcelaCorrespondente.nomeCliente,
-              tipoDivergencia: divergenciasDetalhadas.join(' | '),
-              valorPlanilha: linha.valorPago,
-              valorSistema: parcelaCorrespondente.valorParcela,
-              receitaPlanilha: linha.receita,
-              receitaSistema: parcelaCorrespondente.status === 'pago' ? 
-                Math.round(parcelaCorrespondente.valorParcela * (calcularPercentualComissaoEmpresa(parcelaCorrespondente.diasAtraso) / 100) * 100) / 100 : 0,
-              dataPlanilha: linha.dataPagamento,
-              dataSistema: formatarDataParaComparacao(parcelaCorrespondente.dataPaga || '') || '-',
-              parcelaPlanilha: linha.parcela,
-              parcelaSistema: parcelaCorrespondente.numeroParcela,
-              pagamentoId: parcelaCorrespondente.id,
-              acordoId: parcelaCorrespondente.acordoId,
-            });
-          } else if (divergenciasDetalhadas.length === 0 && parcelasPagasSistema.has(linha.parcela)) {
-            correspondenciasCount++;
-          }
+        // Registrar divergências se houver
+        if (divergenciasDetalhadas.length > 0) {
+          divergenciasEncontradas.push({
+            cpf: linha.cpf,
+            nomeClientePlanilha: linha.nomeCliente,
+            nomeClienteSistema: parcelaCorrespondente.nomeCliente,
+            tipoDivergencia: divergenciasDetalhadas.join(' | '),
+            valorPlanilha: linha.valorPago,
+            valorSistema: parcelaCorrespondente.valorParcela,
+            receitaPlanilha: linha.receita,
+            receitaSistema: receitaSistema,
+            dataPlanilha: linha.dataPagamento,
+            dataSistema: dataSistemaFormatada || '-',
+            parcelaPlanilha: linha.parcela,
+            parcelaSistema: parcelaCorrespondente.numeroParcela,
+            pagamentoId: parcelaCorrespondente.id,
+            acordoId: parcelaCorrespondente.acordoId,
+          });
+        } else {
+          correspondenciasCount++;
         }
       }
 
@@ -936,7 +808,7 @@ export default function Auditoria() {
 
       toast({
         title: 'Processamento concluído',
-        description: `${linhasImportadas.length} linhas importadas, ${correspondenciasCount} correspondências, ${divergenciasEncontradas.length} divergências.`,
+        description: `${correspondenciasCount} correspondências, ${divergenciasEncontradas.length} divergências.`,
       });
 
     } catch (error) {
