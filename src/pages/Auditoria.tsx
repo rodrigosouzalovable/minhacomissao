@@ -638,13 +638,57 @@ export default function Auditoria() {
       const divergenciasEncontradas: Divergencia[] = [];
       let correspondenciasCount = 0;
 
-      // Agrupar pagamentos por CPF para busca eficiente
-      const pagamentosPorCPF = new Map<string, PagamentoSistema[]>();
+      // Função robusta para normalizar QUALQUER formato de data para DD/MM/YYYY
+      const normalizarDataParaComparacao = (data: string | null | undefined): string => {
+        if (!data) return '';
+        
+        // Se for string ISO com hora (YYYY-MM-DDTHH:mm:ss...)
+        if (typeof data === 'string' && data.includes('T')) {
+          const parteData = data.split('T')[0]; // Pega só YYYY-MM-DD
+          const [ano, mes, dia] = parteData.split('-');
+          if (ano && mes && dia) {
+            return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`;
+          }
+        }
+        
+        // Se for formato YYYY-MM-DD
+        if (typeof data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data)) {
+          const [ano, mes, dia] = data.split('-');
+          return `${dia}/${mes}/${ano}`;
+        }
+        
+        // Se já estiver em DD/MM/YYYY
+        if (typeof data === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(data)) {
+          return data;
+        }
+        
+        // Tentar extrair data de strings com hora no formato DD/MM/YYYY HH:mm:ss
+        if (typeof data === 'string' && /^\d{2}\/\d{2}\/\d{4}/.test(data)) {
+          return data.substring(0, 10);
+        }
+        
+        return String(data);
+      };
+
+      // Agrupar APENAS pagamentos PAGOS (status='pago' e data_paga preenchida) por CPF
+      const pagamentosPagosPorCPF = new Map<string, PagamentoSistema[]>();
       for (const pag of pagamentosSistema) {
         if (!pag.cpf) continue;
-        const lista = pagamentosPorCPF.get(pag.cpf) || [];
+        // IMPORTANTE: Só considerar pagamentos efetivamente pagos
+        if (pag.status !== 'pago' || !pag.dataPaga) continue;
+        
+        const lista = pagamentosPagosPorCPF.get(pag.cpf) || [];
         lista.push(pag);
-        pagamentosPorCPF.set(pag.cpf, lista);
+        pagamentosPagosPorCPF.set(pag.cpf, lista);
+      }
+
+      // Também manter lista completa para verificar se CPF existe no sistema
+      const todosPagamentosPorCPF = new Map<string, PagamentoSistema[]>();
+      for (const pag of pagamentosSistema) {
+        if (!pag.cpf) continue;
+        const lista = todosPagamentosPorCPF.get(pag.cpf) || [];
+        lista.push(pag);
+        todosPagamentosPorCPF.set(pag.cpf, lista);
       }
 
       // Identificar CPFs com múltiplos acordos para detecção de ambiguidade
@@ -689,36 +733,28 @@ export default function Auditoria() {
       // Controle para registrar ambiguidade apenas uma vez por CPF
       const cpfsAmbiguosRegistrados = new Set<string>();
 
-      // Nova lógica: Para cada linha da planilha, buscar por CPF + Data
+      // Agrupar linhas da planilha por CPF para processamento em lote
+      const linhasPorCPF = new Map<string, LinhaImportada[]>();
       for (const linha of linhasImportadas) {
-        const pagamentosCliente = pagamentosPorCPF.get(linha.cpf) || [];
+        const lista = linhasPorCPF.get(linha.cpf) || [];
+        lista.push(linha);
+        linhasPorCPF.set(linha.cpf, lista);
+      }
+
+      // Processar CPF por CPF usando algoritmo de matching com pool
+      for (const [cpf, linhasCPF] of linhasPorCPF) {
+        const todosPagamentosCliente = todosPagamentosPorCPF.get(cpf) || [];
+        const pagamentosPagosCliente = pagamentosPagosPorCPF.get(cpf) || [];
 
         // ======== 1. VERIFICAR CPF ========
-        if (pagamentosCliente.length === 0) {
-          divergenciasEncontradas.push({
-            cpf: linha.cpf,
-            nomeClientePlanilha: linha.nomeCliente,
-            nomeClienteSistema: '-',
-            tipoDivergencia: 'CPF não encontrado no sistema',
-            valorPlanilha: linha.valorPago,
-            valorSistema: 0,
-            dataPlanilha: linha.dataPagamento,
-            dataSistema: '-',
-          });
-          continue;
-        }
-
-        // ======== 2. VERIFICAR AMBIGUIDADE (MÚLTIPLOS ACORDOS) ========
-        const acordosCliente = acordosPorCPF.get(linha.cpf);
-        if (acordosCliente && acordosCliente.size > 1) {
-          // Registrar ambiguidade apenas uma vez por CPF
-          if (!cpfsAmbiguosRegistrados.has(linha.cpf)) {
-            cpfsAmbiguosRegistrados.add(linha.cpf);
+        if (todosPagamentosCliente.length === 0) {
+          // CPF não existe no sistema
+          for (const linha of linhasCPF) {
             divergenciasEncontradas.push({
               cpf: linha.cpf,
               nomeClientePlanilha: linha.nomeCliente,
-              nomeClienteSistema: pagamentosCliente[0]?.nomeCliente || '-',
-              tipoDivergencia: `⚠️ CPF com ${acordosCliente.size} acordos diferentes - verificação manual necessária`,
+              nomeClienteSistema: '-',
+              tipoDivergencia: 'CPF não encontrado no sistema',
               valorPlanilha: linha.valorPago,
               valorSistema: 0,
               dataPlanilha: linha.dataPagamento,
@@ -728,87 +764,136 @@ export default function Auditoria() {
           continue;
         }
 
-        // ======== 2. BUSCAR PAGAMENTO PELA DATA ========
-        // Procurar um pagamento com a mesma data de pagamento
-        const dataPlanilhaFormatada = linha.dataPagamento;
-        
-        const pagamentoComMesmaData = pagamentosCliente.find(p => {
-          if (!p.dataPaga) return false;
-          const dataSistemaFormatada = formatarDataParaComparacao(p.dataPaga);
-          return dataSistemaFormatada === dataPlanilhaFormatada;
-        });
-
-        // ======== 3. SE DATA NÃO ENCONTRADA ========
-        if (!pagamentoComMesmaData) {
-          // Verificar se existe algum pagamento pago com valor similar
-          const pagamentoPagoSimilar = pagamentosCliente.find(p => 
-            p.status === 'pago' && compararValores(p.valorParcela, linha.valorPago, 0.10)
-          );
-
-          if (pagamentoPagoSimilar) {
-            // Data diferente - divergência de data
-            divergenciasEncontradas.push({
-              cpf: linha.cpf,
-              nomeClientePlanilha: linha.nomeCliente,
-              nomeClienteSistema: pagamentoPagoSimilar.nomeCliente,
-              tipoDivergencia: `Data divergente: planilha ${dataPlanilhaFormatada} vs sistema ${formatarDataParaComparacao(pagamentoPagoSimilar.dataPaga || '')}`,
-              valorPlanilha: linha.valorPago,
-              valorSistema: pagamentoPagoSimilar.valorParcela,
-              dataPlanilha: dataPlanilhaFormatada,
-              dataSistema: formatarDataParaComparacao(pagamentoPagoSimilar.dataPaga || '') || '-',
-              pagamentoId: pagamentoPagoSimilar.id,
-              acordoId: pagamentoPagoSimilar.acordoId,
+        // ======== 2. VERIFICAR AMBIGUIDADE (MÚLTIPLOS ACORDOS) ========
+        const acordosCliente = acordosPorCPF.get(cpf);
+        if (acordosCliente && acordosCliente.size > 1) {
+          if (!cpfsAmbiguosRegistrados.has(cpf)) {
+            cpfsAmbiguosRegistrados.add(cpf);
+            const acordoIds = Array.from(acordosCliente).slice(0, 3).join(', ').substring(0, 50);
+            const qtdPagosPorAcordo = Array.from(acordosCliente).map(acordoId => {
+              const pagos = pagamentosPagosCliente.filter(p => p.acordoId === acordoId).length;
+              return pagos;
             });
-          } else {
-            // Data não encontrada no sistema
             divergenciasEncontradas.push({
-              cpf: linha.cpf,
-              nomeClientePlanilha: linha.nomeCliente,
-              nomeClienteSistema: pagamentosCliente[0]?.nomeCliente || '-',
-              tipoDivergencia: `Pagamento não registrado no sistema (data: ${dataPlanilhaFormatada})`,
-              valorPlanilha: linha.valorPago,
+              cpf: cpf,
+              nomeClientePlanilha: linhasCPF[0]?.nomeCliente || '-',
+              nomeClienteSistema: todosPagamentosCliente[0]?.nomeCliente || '-',
+              tipoDivergencia: `⚠️ CPF com ${acordosCliente.size} acordos - verificação manual. Pagamentos pagos: ${qtdPagosPorAcordo.join(', ')} por acordo`,
+              valorPlanilha: 0,
               valorSistema: 0,
-              dataPlanilha: dataPlanilhaFormatada,
+              dataPlanilha: '-',
               dataSistema: '-',
-              acordoId: pagamentosCliente[0]?.acordoId,
             });
           }
           continue;
         }
 
-        // ======== 4. DATA ENCONTRADA - VERIFICAR OUTROS CAMPOS ========
-        const divergenciasDetalhadas: string[] = [];
-        
-        // Verificar nome do cliente
-        const resultadoNome = compararNomes(linha.nomeCliente, pagamentoComMesmaData.nomeCliente);
-        if (!resultadoNome.igual) {
-          divergenciasDetalhadas.push(resultadoNome.detalhe);
+        // ======== 3. VERIFICAR SE HÁ PAGAMENTOS PAGOS ========
+        if (pagamentosPagosCliente.length === 0) {
+          for (const linha of linhasCPF) {
+            divergenciasEncontradas.push({
+              cpf: linha.cpf,
+              nomeClientePlanilha: linha.nomeCliente,
+              nomeClienteSistema: todosPagamentosCliente[0]?.nomeCliente || '-',
+              tipoDivergencia: `CPF sem pagamentos pagos no sistema (planilha indica pagamento em ${linha.dataPagamento})`,
+              valorPlanilha: linha.valorPago,
+              valorSistema: 0,
+              dataPlanilha: linha.dataPagamento,
+              dataSistema: '-',
+              acordoId: todosPagamentosCliente[0]?.acordoId,
+            });
+          }
+          continue;
         }
 
-        // Verificar valor pago
-        if (!compararValores(linha.valorPago, pagamentoComMesmaData.valorParcela)) {
-          const diffValor = Math.abs(linha.valorPago - pagamentoComMesmaData.valorParcela);
-          divergenciasDetalhadas.push(
-            `Valor: R$ ${linha.valorPago.toFixed(2).replace('.', ',')} vs R$ ${pagamentoComMesmaData.valorParcela.toFixed(2).replace('.', ',')} (dif: R$ ${diffValor.toFixed(2).replace('.', ',')})`
-          );
+        // ======== 4. MATCHING COM POOL (MULTICONJUNTO) ========
+        // Criar pool mutável de pagamentos do sistema para este CPF
+        const poolSistema = pagamentosPagosCliente.map(p => ({
+          ...p,
+          dataNormalizada: normalizarDataParaComparacao(p.dataPaga),
+          usado: false,
+        }));
+
+        // Para cada linha da planilha, tentar encontrar match no pool
+        for (const linha of linhasCPF) {
+          const dataPlanilhaNormalizada = normalizarDataParaComparacao(linha.dataPagamento);
+          
+          // A) Tentar match por DATA + VALOR (tolerância 0.01)
+          let matchEncontrado = false;
+          for (const pagSistema of poolSistema) {
+            if (pagSistema.usado) continue;
+            
+            const datasIguais = pagSistema.dataNormalizada === dataPlanilhaNormalizada;
+            const valoresProximos = Math.abs(pagSistema.valorParcela - linha.valorPago) <= 0.10;
+            
+            if (datasIguais && valoresProximos) {
+              // Match perfeito - marcar como usado e contar correspondência
+              pagSistema.usado = true;
+              correspondenciasCount++;
+              matchEncontrado = true;
+              break;
+            }
+          }
+          
+          if (matchEncontrado) continue;
+
+          // B) Se não achou match perfeito, procurar por VALOR similar (para indicar data divergente)
+          let pagamentoComValorSimilar: typeof poolSistema[0] | null = null;
+          for (const pagSistema of poolSistema) {
+            if (pagSistema.usado) continue;
+            const valoresProximos = Math.abs(pagSistema.valorParcela - linha.valorPago) <= 0.10;
+            if (valoresProximos) {
+              pagamentoComValorSimilar = pagSistema;
+              break;
+            }
+          }
+
+          if (pagamentoComValorSimilar) {
+            // Data divergente - valor igual mas data diferente
+            pagamentoComValorSimilar.usado = true;
+            divergenciasEncontradas.push({
+              cpf: linha.cpf,
+              nomeClientePlanilha: linha.nomeCliente,
+              nomeClienteSistema: pagamentoComValorSimilar.nomeCliente,
+              tipoDivergencia: `📅 DATA DIVERGENTE: Planilha ${dataPlanilhaNormalizada} ≠ Sistema ${pagamentoComValorSimilar.dataNormalizada} (Parcela ${pagamentoComValorSimilar.numeroParcela})`,
+              valorPlanilha: linha.valorPago,
+              valorSistema: pagamentoComValorSimilar.valorParcela,
+              dataPlanilha: dataPlanilhaNormalizada,
+              dataSistema: pagamentoComValorSimilar.dataNormalizada,
+              pagamentoId: pagamentoComValorSimilar.id,
+              acordoId: pagamentoComValorSimilar.acordoId,
+            });
+          } else {
+            // C) Não encontrou nada - pagamento da planilha não existe no sistema
+            divergenciasEncontradas.push({
+              cpf: linha.cpf,
+              nomeClientePlanilha: linha.nomeCliente,
+              nomeClienteSistema: todosPagamentosCliente[0]?.nomeCliente || '-',
+              tipoDivergencia: `❌ Pagamento da planilha NÃO encontrado no sistema (data: ${dataPlanilhaNormalizada}, valor: R$ ${linha.valorPago.toFixed(2).replace('.', ',')})`,
+              valorPlanilha: linha.valorPago,
+              valorSistema: 0,
+              dataPlanilha: dataPlanilhaNormalizada,
+              dataSistema: '-',
+              acordoId: todosPagamentosCliente[0]?.acordoId,
+            });
+          }
         }
 
-        // Registrar divergências se houver
-        if (divergenciasDetalhadas.length > 0) {
+        // ======== 5. SOBRAS NO SISTEMA (pagamentos pagos que não estão na planilha) ========
+        const sobrasDoSistema = poolSistema.filter(p => !p.usado);
+        for (const sobra of sobrasDoSistema) {
           divergenciasEncontradas.push({
-            cpf: linha.cpf,
-            nomeClientePlanilha: linha.nomeCliente,
-            nomeClienteSistema: pagamentoComMesmaData.nomeCliente,
-            tipoDivergencia: divergenciasDetalhadas.join(' | '),
-            valorPlanilha: linha.valorPago,
-            valorSistema: pagamentoComMesmaData.valorParcela,
-            dataPlanilha: dataPlanilhaFormatada,
-            dataSistema: formatarDataParaComparacao(pagamentoComMesmaData.dataPaga || '') || '-',
-            pagamentoId: pagamentoComMesmaData.id,
-            acordoId: pagamentoComMesmaData.acordoId,
+            cpf: cpf,
+            nomeClientePlanilha: '-',
+            nomeClienteSistema: sobra.nomeCliente,
+            tipoDivergencia: `⚠️ Pagamento no SISTEMA não consta na planilha (data: ${sobra.dataNormalizada}, parcela ${sobra.numeroParcela})`,
+            valorPlanilha: 0,
+            valorSistema: sobra.valorParcela,
+            dataPlanilha: '-',
+            dataSistema: sobra.dataNormalizada,
+            pagamentoId: sobra.id,
+            acordoId: sobra.acordoId,
           });
-        } else {
-          correspondenciasCount++;
         }
       }
 
