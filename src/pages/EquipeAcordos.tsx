@@ -52,6 +52,8 @@ export default function EquipeAcordos() {
     comissao_parcela: number;
     valor_parcela: number;
     acordo_id: string;
+    data_paga: string | null;
+    numero_parcela: number;
   }>>([]);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
 
@@ -83,80 +85,82 @@ export default function EquipeAcordos() {
     }
   };
 
-  const handleExportarAcordosPagos = async () => {
-    try {
-      const acordoIds = filteredAcordos.map(a => a.id);
-      
-      if (acordoIds.length === 0) {
-        toast({
-          variant: 'destructive',
-          title: 'Nenhum acordo encontrado',
-          description: 'Não há acordos no período selecionado para exportar.',
-        });
-        return;
-      }
+  // Filtrar pagamentos por data de pagamento (data_paga)
+  const pagamentosFiltradosPorPeriodo = pagamentosEquipe.filter(pag => {
+    if (!pag.data_paga) return false;
+    
+    const dataPagamento = new Date(pag.data_paga);
+    
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      if (dataPagamento < start) return false;
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      if (dataPagamento > end) return false;
+    }
+    
+    return true;
+  });
 
-      // Buscar TODAS as parcelas pagas
-      const { data: parcelasPagas, error } = await supabase
-        .from('pagamentos')
-        .select('numero_parcela, valor_parcela, comissao_parcela, acordo_id')
-        .in('acordo_id', acordoIds)
-        .eq('status', 'pago');
-
-      if (error) throw error;
-
-      if (!parcelasPagas || parcelasPagas.length === 0) {
-        toast({
-          variant: 'destructive',
-          title: 'Nenhuma parcela paga',
-          description: 'Não há parcelas pagas para exportar.',
-        });
-        return;
-      }
-
-      // Combinar com dados do acordo e calcular comissão do escritório
-      const dadosExport = parcelasPagas.map(parcela => {
-        const acordo = acordos.find(a => a.id === parcela.acordo_id);
-        const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo?.dias_atraso || 0);
-        const comissaoEscritorio = Number(parcela.valor_parcela) * percentualEmpresa / 100;
-
-        return {
-          cpf: acordo?.cliente_cpf || '',
-          cliente: acordo?.cliente_nome || '',
-          valor_total: acordo?.valor_total || 0,
-          valor_parcela: parcela.valor_parcela,
-          numero_parcela: parcela.numero_parcela,
-          comissao_funcionario: parcela.comissao_parcela,
-          comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
-          dias_atraso: acordo?.dias_atraso || 0,
-        };
-      });
-
-      const colunas = [
-        { chave: 'cpf' as const, titulo: 'CPF' },
-        { chave: 'cliente' as const, titulo: 'Cliente' },
-        { chave: 'valor_total' as const, titulo: 'Valor Total' },
-        { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
-        { chave: 'numero_parcela' as const, titulo: 'Nº Parcela' },
-        { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
-        { chave: 'comissao_escritorio' as const, titulo: 'Comissão Escritório' },
-        { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
-      ];
-
-      exportarParaExcel(dadosExport, colunas, 'parcelas-pagas-equipe');
-
-      toast({
-        title: 'Download iniciado!',
-        description: `Exportando ${dadosExport.length} parcela(s) paga(s).`,
-      });
-    } catch (error) {
-      console.error('Erro ao exportar:', error);
+  const handleExportarAcordosPagos = () => {
+    if (pagamentosFiltradosPorPeriodo.length === 0) {
       toast({
         variant: 'destructive',
-        title: 'Erro ao exportar',
-        description: 'Ocorreu um erro ao gerar o arquivo.',
+        title: 'Nenhuma parcela encontrada',
+        description: 'Não há parcelas pagas no período selecionado para exportar.',
       });
+      return;
     }
+
+    const dadosExport = pagamentosFiltradosPorPeriodo.map(parcela => {
+      const acordo = acordos.find(a => a.id === parcela.acordo_id);
+      const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo?.dias_atraso || 0);
+      const comissaoEscritorio = Number(parcela.valor_parcela) * percentualEmpresa / 100;
+
+      // Formatar data de pagamento
+      let dataPagamentoFormatada = '';
+      if (parcela.data_paga) {
+        const date = new Date(parcela.data_paga);
+        dataPagamentoFormatada = date.toLocaleDateString('pt-BR');
+      }
+
+      return {
+        cpf: acordo?.cliente_cpf || '',
+        cliente: acordo?.cliente_nome || '',
+        funcionario: acordo?.funcionario_nome || '',
+        valor_total: acordo?.valor_total || 0,
+        valor_parcela: parcela.valor_parcela,
+        numero_parcela: parcela.numero_parcela,
+        data_pagamento: dataPagamentoFormatada,
+        comissao_funcionario: parcela.comissao_parcela,
+        comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
+        dias_atraso: acordo?.dias_atraso || 0,
+      };
+    });
+
+    const colunas = [
+      { chave: 'cpf' as const, titulo: 'CPF' },
+      { chave: 'cliente' as const, titulo: 'Cliente' },
+      { chave: 'funcionario' as const, titulo: 'Funcionário' },
+      { chave: 'valor_total' as const, titulo: 'Valor Total' },
+      { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
+      { chave: 'numero_parcela' as const, titulo: 'Nº Parcela' },
+      { chave: 'data_pagamento' as const, titulo: 'Data Pagamento' },
+      { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
+      { chave: 'comissao_escritorio' as const, titulo: 'Comissão Escritório' },
+      { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
+    ];
+
+    exportarParaExcel(dadosExport, colunas, 'parcelas-pagas-periodo');
+
+    toast({
+      title: 'Download iniciado!',
+      description: `Exportando ${dadosExport.length} parcela(s) paga(s) do período.`,
+    });
   };
 
   useEffect(() => {
@@ -258,7 +262,7 @@ export default function EquipeAcordos() {
         if (acordoIds.length > 0) {
           const { data: pagamentosPagos, error: pagamentosError } = await supabase
             .from('pagamentos')
-            .select('comissao_parcela, valor_parcela, acordo_id')
+            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, numero_parcela')
             .in('acordo_id', acordoIds)
             .eq('status', 'pago');
 
@@ -323,30 +327,22 @@ export default function EquipeAcordos() {
   // Calcular estatísticas baseadas nos acordos filtrados
   const totalAcordos = filteredAcordos.length;
   const acordosAtivos = filteredAcordos.filter(a => a.status === 'ativo').length;
-  const comissaoTotal = filteredAcordos.reduce((sum, a) => sum + Number(a.comissao_total), 0);
 
-  // Calcular comissões filtradas dinamicamente
-  const filteredAcordoIds = filteredAcordos.map(a => a.id);
+  // Calcular soma das parcelas pagas no período (usando pagamentosFiltradosPorPeriodo)
+  const totalParcelasPagasPeriodo = pagamentosFiltradosPorPeriodo.reduce(
+    (sum, p) => sum + Number(p.valor_parcela), 
+    0
+  );
 
-  const comissaoPaga = pagamentosEquipe
-    .filter(p => filteredAcordoIds.includes(p.acordo_id))
-    .reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
-
-  const comissaoEmpresaTotal = filteredAcordos.reduce((sum, acordo) => {
-    const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
-    return sum + (Number(acordo.valor_total) * percentualEmpresa / 100);
+  // Calcular comissão empresa baseada no período
+  const comissaoEmpresaPagaPeriodo = pagamentosFiltradosPorPeriodo.reduce((sum, pag) => {
+    const acordo = acordos.find(a => a.id === pag.acordo_id);
+    if (acordo) {
+      const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
+      return sum + (Number(pag.valor_parcela) * percentualEmpresa / 100);
+    }
+    return sum;
   }, 0);
-
-  const comissaoEmpresaPaga = pagamentosEquipe
-    .filter(p => filteredAcordoIds.includes(p.acordo_id))
-    .reduce((sum, pag) => {
-      const acordo = filteredAcordos.find(a => a.id === pag.acordo_id);
-      if (acordo) {
-        const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
-        return sum + (Number(pag.valor_parcela) * percentualEmpresa / 100);
-      }
-      return sum;
-    }, 0);
 
   if (loading) {
     return (
@@ -405,7 +401,7 @@ export default function EquipeAcordos() {
         </div>
 
         {/* Cards de resumo */}
-        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin && showEmpresaCards ? 'lg:grid-cols-7' : 'lg:grid-cols-5'}`}>
+        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin && showEmpresaCards ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -445,61 +441,31 @@ export default function EquipeAcordos() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs font-medium text-muted-foreground">
-                Comissão Total
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-secondary" />
-            </CardHeader>
-            <CardContent>
-              <div className={`${isAdmin && showEmpresaCards ? 'text-lg' : 'text-2xl'} font-bold text-secondary`}>
-                {formatarMoeda(comissaoTotal)}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                Comissões Pagas
+                Total Parcelas Pagas
               </CardTitle>
               <DollarSign className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
               <div className={`${isAdmin && showEmpresaCards ? 'text-lg' : 'text-2xl'} font-bold text-green-500`}>
-                {formatarMoeda(comissaoPaga)}
+                {formatarMoeda(totalParcelasPagasPeriodo)}
               </div>
             </CardContent>
           </Card>
 
           {isAdmin && showEmpresaCards && (
-            <>
-              <Card className="border-blue-500/30 bg-blue-500/5">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">
-                    Empresa (Total)
-                  </CardTitle>
-                  <Building2 className="h-4 w-4 text-blue-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-lg font-bold text-blue-500">
-                    {formatarMoeda(comissaoEmpresaTotal)}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-emerald-500/30 bg-emerald-500/5">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">
-                    Empresa (Paga)
-                  </CardTitle>
-                  <Building2 className="h-4 w-4 text-emerald-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-lg font-bold text-emerald-500">
-                    {formatarMoeda(comissaoEmpresaPaga)}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
+            <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground">
+                  Empresa (Paga)
+                </CardTitle>
+                <Building2 className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg font-bold text-blue-500">
+                  {formatarMoeda(comissaoEmpresaPagaPeriodo)}
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 
