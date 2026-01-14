@@ -647,6 +647,15 @@ export default function Auditoria() {
         pagamentosPorCPF.set(pag.cpf, lista);
       }
 
+      // Identificar CPFs com múltiplos acordos para detecção de ambiguidade
+      const acordosPorCPF = new Map<string, Set<string>>();
+      for (const pag of pagamentosSistema) {
+        if (!pag.cpf || !pag.acordoId) continue;
+        const acordos = acordosPorCPF.get(pag.cpf) || new Set();
+        acordos.add(pag.acordoId);
+        acordosPorCPF.set(pag.cpf, acordos);
+      }
+
       // Função auxiliar para normalizar nomes para comparação
       const normalizarNome = (nome: string): string => {
         return nome
@@ -677,6 +686,9 @@ export default function Auditoria() {
         return { igual: false, detalhe: `Nome: "${nomePlanilha}" vs "${nomeSistema}"` };
       };
 
+      // Controle para registrar ambiguidade apenas uma vez por CPF
+      const cpfsAmbiguosRegistrados = new Set<string>();
+
       // Nova lógica: Para cada linha da planilha, buscar por CPF + Data
       for (const linha of linhasImportadas) {
         const pagamentosCliente = pagamentosPorCPF.get(linha.cpf) || [];
@@ -693,6 +705,26 @@ export default function Auditoria() {
             dataPlanilha: linha.dataPagamento,
             dataSistema: '-',
           });
+          continue;
+        }
+
+        // ======== 2. VERIFICAR AMBIGUIDADE (MÚLTIPLOS ACORDOS) ========
+        const acordosCliente = acordosPorCPF.get(linha.cpf);
+        if (acordosCliente && acordosCliente.size > 1) {
+          // Registrar ambiguidade apenas uma vez por CPF
+          if (!cpfsAmbiguosRegistrados.has(linha.cpf)) {
+            cpfsAmbiguosRegistrados.add(linha.cpf);
+            divergenciasEncontradas.push({
+              cpf: linha.cpf,
+              nomeClientePlanilha: linha.nomeCliente,
+              nomeClienteSistema: pagamentosCliente[0]?.nomeCliente || '-',
+              tipoDivergencia: `⚠️ CPF com ${acordosCliente.size} acordos diferentes - verificação manual necessária`,
+              valorPlanilha: linha.valorPago,
+              valorSistema: 0,
+              dataPlanilha: linha.dataPagamento,
+              dataSistema: '-',
+            });
+          }
           continue;
         }
 
