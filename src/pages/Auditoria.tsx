@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileSpreadsheet, Upload, Download, AlertTriangle, CheckCircle2, ExternalLink, RefreshCw, AlertCircle, Trash2, History, Eye } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import { formatarMoeda } from '@/lib/comissao';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -25,14 +25,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Interface para linhas importadas do Cobmais
+// Interface para linhas importadas da planilha simplificada
+// Novo formato: Coluna A = CPF, Coluna B = Nome, Coluna C = Valor, Coluna D = Data
 interface LinhaImportada {
-  cpf: string;           // Coluna B
-  nomeCliente: string;   // Coluna C
-  valorPago: number;     // Coluna J
-  receita: number;       // Coluna K (Comissão Escritório)
-  dataPagamento: string; // Coluna N
-  parcela: number;       // Coluna Q
+  cpf: string;           // Coluna A
+  nomeCliente: string;   // Coluna B
+  valorPago: number;     // Coluna C
+  dataPagamento: string; // Coluna D
 }
 
 interface PagamentoSistema {
@@ -45,6 +44,7 @@ interface PagamentoSistema {
   diasAtraso: number;
   numeroParcela: number;
   acordoId: string;
+  status: string;
 }
 
 interface Divergencia {
@@ -54,12 +54,8 @@ interface Divergencia {
   tipoDivergencia: string;
   valorPlanilha: number;
   valorSistema: number;
-  receitaPlanilha: number;
-  receitaSistema: number;
   dataPlanilha: string;
   dataSistema: string;
-  parcelaPlanilha: number;
-  parcelaSistema: number;
   pagamentoId?: string;
   acordoId?: string;
 }
@@ -92,14 +88,10 @@ interface DivergenciaSalva {
   cpf_planilha: string;
   nome_planilha: string | null;
   valor_planilha: number | null;
-  receita_planilha: number | null;
   data_planilha: string | null;
-  parcela_planilha: number | null;
   nome_sistema: string | null;
   valor_sistema: number | null;
-  receita_sistema: number | null;
   data_sistema: string | null;
-  parcela_sistema: number | null;
   tipo_divergencia: string;
   pagamento_id: string | null;
   acordo_id: string | null;
@@ -515,14 +507,10 @@ export default function Auditoria() {
         cpf_planilha: d.cpf,
         nome_planilha: d.nomeClientePlanilha,
         valor_planilha: d.valorPlanilha,
-        receita_planilha: d.receitaPlanilha,
         data_planilha: d.dataPlanilha,
-        parcela_planilha: d.parcelaPlanilha,
         nome_sistema: d.nomeClienteSistema !== '-' ? d.nomeClienteSistema : null,
         valor_sistema: d.valorSistema > 0 ? d.valorSistema : null,
-        receita_sistema: d.receitaSistema > 0 ? d.receitaSistema : null,
         data_sistema: d.dataSistema !== '-' ? d.dataSistema : null,
-        parcela_sistema: d.parcelaSistema > 0 ? d.parcelaSistema : null,
         tipo_divergencia: d.tipoDivergencia,
         pagamento_id: d.pagamentoId || null,
         acordo_id: d.acordoId || null,
@@ -573,29 +561,25 @@ export default function Auditoria() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-      // Mapeamento das colunas do Cobmais:
-      // Coluna B (índice 1) = CPF
-      // Coluna C (índice 2) = NOME
-      // Coluna J (índice 9) = VALOR PAGO
-      // Coluna K (índice 10) = RECEITA (comissão escritório)
-      // Coluna N (índice 13) = DATA
-      // Coluna Q (índice 16) = PARCELA
+      // Novo formato simplificado:
+      // Coluna A (índice 0) = CPF
+      // Coluna B (índice 1) = NOME
+      // Coluna C (índice 2) = VALOR PAGO
+      // Coluna D (índice 3) = DATA
 
       const linhasImportadas: LinhaImportada[] = [];
       for (let i = 1; i < jsonData.length; i++) {
         const row = jsonData[i];
-        if (!row || !row[1]) continue; // CPF está na coluna B (índice 1)
+        if (!row || !row[0]) continue; // CPF está na coluna A (índice 0)
 
-        const cpfValue = normalizarCPF(row[1]);
+        const cpfValue = normalizarCPF(row[0]);
         if (!cpfValue || cpfValue.length < 11) continue; // Pular linhas sem CPF válido
 
         linhasImportadas.push({
           cpf: cpfValue,
-          nomeCliente: String(row[2] || '').trim(),
-          valorPago: parseValorNumerico(row[9]),
-          receita: parseValorNumerico(row[10]),
-          dataPagamento: parseDataExcel(row[13]),
-          parcela: parseInt(String(row[16] || '1'), 10) || 1,
+          nomeCliente: String(row[1] || '').trim(),
+          valorPago: parseValorNumerico(row[2]),
+          dataPagamento: parseDataExcel(row[3]),
         });
       }
 
@@ -648,12 +632,13 @@ export default function Auditoria() {
         diasAtraso: p.acordos?.dias_atraso || 0,
         numeroParcela: p.numero_parcela,
         acordoId: p.acordo_id,
+        status: p.status || 'pendente',
       }));
 
       const divergenciasEncontradas: Divergencia[] = [];
       let correspondenciasCount = 0;
 
-      // Agrupar pagamentos por CPF + número da parcela para comparação precisa
+      // Agrupar pagamentos por CPF para busca eficiente
       const pagamentosPorCPF = new Map<string, PagamentoSistema[]>();
       for (const pag of pagamentosSistema) {
         if (!pag.cpf) continue;
@@ -692,6 +677,7 @@ export default function Auditoria() {
         return { igual: false, detalhe: `Nome: "${nomePlanilha}" vs "${nomeSistema}"` };
       };
 
+      // Nova lógica: Para cada linha da planilha, buscar por CPF + Data
       for (const linha of linhasImportadas) {
         const pagamentosCliente = pagamentosPorCPF.get(linha.cpf) || [];
 
@@ -704,73 +690,74 @@ export default function Auditoria() {
             tipoDivergencia: 'CPF não encontrado no sistema',
             valorPlanilha: linha.valorPago,
             valorSistema: 0,
-            receitaPlanilha: linha.receita,
-            receitaSistema: 0,
             dataPlanilha: linha.dataPagamento,
             dataSistema: '-',
-            parcelaPlanilha: linha.parcela,
-            parcelaSistema: 0,
           });
           continue;
         }
 
-        // Buscar parcela correspondente pelo número da parcela
-        const parcelaCorrespondente = pagamentosCliente.find(p => p.numeroParcela === linha.parcela);
+        // ======== 2. BUSCAR PAGAMENTO PELA DATA ========
+        // Procurar um pagamento com a mesma data de pagamento
+        const dataPlanilhaFormatada = linha.dataPagamento;
+        
+        const pagamentoComMesmaData = pagamentosCliente.find(p => {
+          if (!p.dataPaga) return false;
+          const dataSistemaFormatada = formatarDataParaComparacao(p.dataPaga);
+          return dataSistemaFormatada === dataPlanilhaFormatada;
+        });
 
-        // ======== 2. VERIFICAR SE PARCELA EXISTE ========
-        if (!parcelaCorrespondente) {
-          divergenciasEncontradas.push({
-            cpf: linha.cpf,
-            nomeClientePlanilha: linha.nomeCliente,
-            nomeClienteSistema: pagamentosCliente[0]?.nomeCliente || '-',
-            tipoDivergencia: `Parcela ${linha.parcela} não encontrada no sistema`,
-            valorPlanilha: linha.valorPago,
-            valorSistema: 0,
-            receitaPlanilha: linha.receita,
-            receitaSistema: 0,
-            dataPlanilha: linha.dataPagamento,
-            dataSistema: '-',
-            parcelaPlanilha: linha.parcela,
-            parcelaSistema: 0,
-            acordoId: pagamentosCliente[0]?.acordoId,
-          });
+        // ======== 3. SE DATA NÃO ENCONTRADA ========
+        if (!pagamentoComMesmaData) {
+          // Verificar se existe algum pagamento pago com valor similar
+          const pagamentoPagoSimilar = pagamentosCliente.find(p => 
+            p.status === 'pago' && compararValores(p.valorParcela, linha.valorPago, 0.10)
+          );
+
+          if (pagamentoPagoSimilar) {
+            // Data diferente - divergência de data
+            divergenciasEncontradas.push({
+              cpf: linha.cpf,
+              nomeClientePlanilha: linha.nomeCliente,
+              nomeClienteSistema: pagamentoPagoSimilar.nomeCliente,
+              tipoDivergencia: `Data divergente: planilha ${dataPlanilhaFormatada} vs sistema ${formatarDataParaComparacao(pagamentoPagoSimilar.dataPaga || '')}`,
+              valorPlanilha: linha.valorPago,
+              valorSistema: pagamentoPagoSimilar.valorParcela,
+              dataPlanilha: dataPlanilhaFormatada,
+              dataSistema: formatarDataParaComparacao(pagamentoPagoSimilar.dataPaga || '') || '-',
+              pagamentoId: pagamentoPagoSimilar.id,
+              acordoId: pagamentoPagoSimilar.acordoId,
+            });
+          } else {
+            // Data não encontrada no sistema
+            divergenciasEncontradas.push({
+              cpf: linha.cpf,
+              nomeClientePlanilha: linha.nomeCliente,
+              nomeClienteSistema: pagamentosCliente[0]?.nomeCliente || '-',
+              tipoDivergencia: `Pagamento não registrado no sistema (data: ${dataPlanilhaFormatada})`,
+              valorPlanilha: linha.valorPago,
+              valorSistema: 0,
+              dataPlanilha: dataPlanilhaFormatada,
+              dataSistema: '-',
+              acordoId: pagamentosCliente[0]?.acordoId,
+            });
+          }
           continue;
         }
 
-        // Agora temos CPF e Parcela correspondente - analisar campos restantes
+        // ======== 4. DATA ENCONTRADA - VERIFICAR OUTROS CAMPOS ========
         const divergenciasDetalhadas: string[] = [];
         
-        // ======== 3. VERIFICAR NOME DO CLIENTE ========
-        const resultadoNome = compararNomes(linha.nomeCliente, parcelaCorrespondente.nomeCliente);
+        // Verificar nome do cliente
+        const resultadoNome = compararNomes(linha.nomeCliente, pagamentoComMesmaData.nomeCliente);
         if (!resultadoNome.igual) {
           divergenciasDetalhadas.push(resultadoNome.detalhe);
         }
 
-        // ======== 4. VERIFICAR VALOR PAGO (Coluna J) ========
-        if (!compararValores(linha.valorPago, parcelaCorrespondente.valorParcela)) {
-          const diffValor = Math.abs(linha.valorPago - parcelaCorrespondente.valorParcela);
+        // Verificar valor pago
+        if (!compararValores(linha.valorPago, pagamentoComMesmaData.valorParcela)) {
+          const diffValor = Math.abs(linha.valorPago - pagamentoComMesmaData.valorParcela);
           divergenciasDetalhadas.push(
-            `Valor: R$ ${linha.valorPago.toFixed(2).replace('.', ',')} vs R$ ${parcelaCorrespondente.valorParcela.toFixed(2).replace('.', ',')} (dif: R$ ${diffValor.toFixed(2).replace('.', ',')})`
-          );
-        }
-
-        // ======== 5. VERIFICAR DATA DE PAGAMENTO (Coluna N) ========
-        const dataPlanilhaFormatada = linha.dataPagamento;
-        const dataSistemaFormatada = formatarDataParaComparacao(parcelaCorrespondente.dataPaga || '');
-        
-        if (dataPlanilhaFormatada && dataSistemaFormatada && dataPlanilhaFormatada !== dataSistemaFormatada) {
-          divergenciasDetalhadas.push(`Data: ${dataPlanilhaFormatada} vs ${dataSistemaFormatada}`);
-        } else if (dataPlanilhaFormatada && !dataSistemaFormatada) {
-          divergenciasDetalhadas.push(`Data de pagamento não encontrada (planilha: ${dataPlanilhaFormatada})`);
-        }
-
-        // ======== 6. VERIFICAR RECEITA/COMISSÃO (Coluna K) ========
-        const percentualEmpresa = calcularPercentualComissaoEmpresa(parcelaCorrespondente.diasAtraso);
-        const receitaSistema = Math.round(parcelaCorrespondente.valorParcela * (percentualEmpresa / 100) * 100) / 100;
-        
-        if (!compararValores(linha.receita, receitaSistema, 0.10)) {
-          divergenciasDetalhadas.push(
-            `Receita: R$ ${linha.receita.toFixed(2).replace('.', ',')} vs R$ ${receitaSistema.toFixed(2).replace('.', ',')}`
+            `Valor: R$ ${linha.valorPago.toFixed(2).replace('.', ',')} vs R$ ${pagamentoComMesmaData.valorParcela.toFixed(2).replace('.', ',')} (dif: R$ ${diffValor.toFixed(2).replace('.', ',')})`
           );
         }
 
@@ -779,18 +766,14 @@ export default function Auditoria() {
           divergenciasEncontradas.push({
             cpf: linha.cpf,
             nomeClientePlanilha: linha.nomeCliente,
-            nomeClienteSistema: parcelaCorrespondente.nomeCliente,
+            nomeClienteSistema: pagamentoComMesmaData.nomeCliente,
             tipoDivergencia: divergenciasDetalhadas.join(' | '),
             valorPlanilha: linha.valorPago,
-            valorSistema: parcelaCorrespondente.valorParcela,
-            receitaPlanilha: linha.receita,
-            receitaSistema: receitaSistema,
-            dataPlanilha: linha.dataPagamento,
-            dataSistema: dataSistemaFormatada || '-',
-            parcelaPlanilha: linha.parcela,
-            parcelaSistema: parcelaCorrespondente.numeroParcela,
-            pagamentoId: parcelaCorrespondente.id,
-            acordoId: parcelaCorrespondente.acordoId,
+            valorSistema: pagamentoComMesmaData.valorParcela,
+            dataPlanilha: dataPlanilhaFormatada,
+            dataSistema: formatarDataParaComparacao(pagamentoComMesmaData.dataPaga || '') || '-',
+            pagamentoId: pagamentoComMesmaData.id,
+            acordoId: pagamentoComMesmaData.acordoId,
           });
         } else {
           correspondenciasCount++;
@@ -840,12 +823,8 @@ export default function Auditoria() {
       'Tipo de Divergência': d.tipoDivergencia,
       'Valor Planilha': d.valorPlanilha,
       'Valor Sistema': d.valorSistema,
-      'Receita Planilha': d.receitaPlanilha,
-      'Receita Sistema': d.receitaSistema,
       'Data Planilha': d.dataPlanilha,
       'Data Sistema': d.dataSistema,
-      'Parcela Planilha': d.parcelaPlanilha,
-      'Parcela Sistema': d.parcelaSistema,
     }));
 
     const ws = XLSX.utils.json_to_sheet(dadosExport);
@@ -856,15 +835,11 @@ export default function Auditoria() {
       { wch: 15 },
       { wch: 30 },
       { wch: 30 },
-      { wch: 35 },
+      { wch: 45 },
       { wch: 15 },
       { wch: 15 },
       { wch: 15 },
       { wch: 15 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 12 },
-      { wch: 12 },
     ];
 
     XLSX.writeFile(wb, 'divergencias-auditoria.xlsx');
@@ -967,9 +942,9 @@ export default function Auditoria() {
           <TabsContent value="comparacao-planilha" className="space-y-6 mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Importar Planilha Cobmais</CardTitle>
+                <CardTitle>Importar Planilha</CardTitle>
                 <CardDescription>
-                  Colunas analisadas: CPF (B), Nome (C), Valor Pago (J), Receita (K), Data (N), Parcela (Q)
+                  Formato esperado: Coluna A (CPF), Coluna B (Nome), Coluna C (Valor Pago), Coluna D (Data de Pagamento)
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1054,11 +1029,8 @@ export default function Auditoria() {
                               <TableHead>Cliente (Planilha)</TableHead>
                               <TableHead>Cliente (Sistema)</TableHead>
                               <TableHead>Divergência</TableHead>
-                              <TableHead className="text-center">Parcela</TableHead>
                               <TableHead className="text-right">Valor Plan.</TableHead>
                               <TableHead className="text-right">Valor Sist.</TableHead>
-                              <TableHead className="text-right">Receita Plan.</TableHead>
-                              <TableHead className="text-right">Receita Sist.</TableHead>
                               <TableHead>Data Plan.</TableHead>
                               <TableHead>Data Sist.</TableHead>
                               <TableHead className="text-center">Ação</TableHead>
@@ -1071,20 +1043,12 @@ export default function Auditoria() {
                                 <TableCell>{d.nomeClientePlanilha}</TableCell>
                                 <TableCell>{d.nomeClienteSistema}</TableCell>
                                 <TableCell>
-                                  <Badge variant="destructive" className="text-xs">
+                                  <Badge variant="destructive" className="text-xs whitespace-normal">
                                     {d.tipoDivergencia}
                                   </Badge>
                                 </TableCell>
-                                <TableCell className="text-center">
-                                  {d.parcelaPlanilha}ª
-                                  {d.parcelaSistema > 0 && d.parcelaSistema !== d.parcelaPlanilha && (
-                                    <span className="text-muted-foreground"> / {d.parcelaSistema}ª</span>
-                                  )}
-                                </TableCell>
                                 <TableCell className="text-right">{formatarMoeda(d.valorPlanilha)}</TableCell>
                                 <TableCell className="text-right">{formatarMoeda(d.valorSistema)}</TableCell>
-                                <TableCell className="text-right">{formatarMoeda(d.receitaPlanilha)}</TableCell>
-                                <TableCell className="text-right">{formatarMoeda(d.receitaSistema)}</TableCell>
                                 <TableCell>{d.dataPlanilha}</TableCell>
                                 <TableCell>{d.dataSistema}</TableCell>
                                 <TableCell className="text-center">
@@ -1280,11 +1244,8 @@ export default function Auditoria() {
                           <TableHead>CPF</TableHead>
                           <TableHead>Cliente</TableHead>
                           <TableHead>Divergência</TableHead>
-                          <TableHead className="text-center">Parcela</TableHead>
                           <TableHead className="text-right">Valor Plan.</TableHead>
                           <TableHead className="text-right">Valor Sist.</TableHead>
-                          <TableHead className="text-right">Receita Plan.</TableHead>
-                          <TableHead className="text-right">Receita Sist.</TableHead>
                           <TableHead>Data Plan.</TableHead>
                           <TableHead>Data Sist.</TableHead>
                         </TableRow>
@@ -1295,17 +1256,12 @@ export default function Auditoria() {
                             <TableCell className="font-mono text-sm">{formatarCPF(d.cpf_planilha)}</TableCell>
                             <TableCell>{d.nome_planilha || d.nome_sistema || '-'}</TableCell>
                             <TableCell>
-                              <Badge variant="destructive" className="text-xs">
+                              <Badge variant="destructive" className="text-xs whitespace-normal">
                                 {d.tipo_divergencia}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center">
-                              {d.parcela_planilha}ª
-                            </TableCell>
                             <TableCell className="text-right">{formatarMoeda(d.valor_planilha || 0)}</TableCell>
                             <TableCell className="text-right">{formatarMoeda(d.valor_sistema || 0)}</TableCell>
-                            <TableCell className="text-right">{formatarMoeda(d.receita_planilha || 0)}</TableCell>
-                            <TableCell className="text-right">{formatarMoeda(d.receita_sistema || 0)}</TableCell>
                             <TableCell>{d.data_planilha || '-'}</TableCell>
                             <TableCell>{d.data_sistema || '-'}</TableCell>
                           </TableRow>
