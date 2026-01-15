@@ -57,7 +57,7 @@ export default function EquipeAcordos() {
   }>>([]);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
   const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
-  const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos'>('todos');
+  const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos' | 'quebra_acordo'>('todos');
 
   const handleEnviarRelatorio = async () => {
     try {
@@ -317,7 +317,10 @@ export default function EquipeAcordos() {
     }
 
     // Filtro de visualização (todos vs com parcelas pagas)
-    const matchesViewFilter = viewFilter === 'todos' || acordosComParcelasPagas.has(acordo.id);
+    const matchesViewFilter = 
+      viewFilter === 'todos' || 
+      (viewFilter === 'com_pagos' && acordosComParcelasPagas.has(acordo.id)) ||
+      (viewFilter === 'quebra_acordo' && acordosComQuebraAcordo.has(acordo.id));
     
     return matchesSearch && matchesStatus && matchesMember && matchesDate && matchesViewFilter;
   });
@@ -394,6 +397,13 @@ export default function EquipeAcordos() {
               onClick={() => setViewFilter('com_pagos')}
             >
               Com Parcelas Pagas
+            </Button>
+            <Button
+              variant={viewFilter === 'quebra_acordo' ? 'destructive' : 'outline'}
+              size="sm"
+              onClick={() => setViewFilter('quebra_acordo')}
+            >
+              Quebra de Acordo
             </Button>
             <Button
               variant="outline"
