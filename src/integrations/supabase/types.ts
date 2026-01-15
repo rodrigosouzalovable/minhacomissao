@@ -557,6 +557,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
+      cpf_normalize: { Args: { cpf_input: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -564,6 +566,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_user: { Args: { uid: string }; Returns: boolean }
     }
     Enums: {
       app_role: "funcionario" | "gestor" | "admin"
