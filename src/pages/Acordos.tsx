@@ -29,7 +29,8 @@ function AcordoCard({
   getStatusVariant,
   getStatusLabel,
   isNegociado = false,
-  isVencido = false
+  isVencido = false,
+  isQuebraAcordo = false
 }: {
   acordo: Acordo;
   onDelete: () => void;
@@ -39,6 +40,7 @@ function AcordoCard({
   getStatusLabel: (status: string) => string;
   isNegociado?: boolean;
   isVencido?: boolean;
+  isQuebraAcordo?: boolean;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   return <Link to={`/acordos/${acordo.id}`}>
@@ -80,8 +82,14 @@ function AcordoCard({
             </div>
             <div className="flex flex-col sm:items-end gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                {/* Badge de Parcela Vencida - prioridade máxima */}
-                {isNegociado && isVencido && <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">
+                {/* Badge de QUEBRA DE ACORDO - prioridade máxima */}
+                {isQuebraAcordo && (
+                  <Badge variant="destructive" className="bg-red-600 text-white font-bold">
+                    QUEBRA DE ACORDO
+                  </Badge>
+                )}
+                {/* Badge de Parcela Vencida */}
+                {isNegociado && isVencido && !isQuebraAcordo && <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">
                     <Clock className="h-3 w-3 mr-1" />
                     Parcela Vencida
                   </Badge>}
@@ -170,6 +178,7 @@ export default function Acordos() {
   const [acordosComPagamentosPagos, setAcordosComPagamentosPagos] = useState<Set<string>>(new Set());
   const [acordosComParcelasVencidas, setAcordosComParcelasVencidas] = useState<Set<string>>(new Set());
   const [acordosComParcelasProximas, setAcordosComParcelasProximas] = useState<Set<string>>(new Set());
+  const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
     if (!acordo.cliente_telefone) {
@@ -255,6 +264,38 @@ export default function Acordos() {
         if (proximasError) throw proximasError;
         const idsComProximas = new Set(parcelasProximas?.map(p => p.acordo_id) || []);
         setAcordosComParcelasProximas(idsComProximas);
+
+        // Carregar IDs de acordos com QUEBRA DE ACORDO
+        // (última parcela pendente vencida há mais de 10 dias)
+        const dezDiasAtras = new Date(hoje);
+        dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
+        const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
+        
+        // Buscar todas as parcelas pendentes
+        const { data: todasParcelasPendentes, error: quebraError } = await supabase
+          .from('pagamentos')
+          .select('acordo_id, data_prevista')
+          .eq('status', 'pendente');
+        
+        if (!quebraError && todasParcelasPendentes) {
+          // Agrupar por acordo_id e pegar a MAX data_prevista de cada
+          const ultimaParcelaPorAcordo = new Map<string, string>();
+          todasParcelasPendentes.forEach(p => {
+            const atual = ultimaParcelaPorAcordo.get(p.acordo_id);
+            if (!atual || p.data_prevista > atual) {
+              ultimaParcelaPorAcordo.set(p.acordo_id, p.data_prevista);
+            }
+          });
+          
+          // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
+          const idsComQuebra = new Set<string>();
+          ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
+            if (ultimaData < dezDiasAtrasStr) {
+              idsComQuebra.add(acordoId);
+            }
+          });
+          setAcordosComQuebraAcordo(idsComQuebra);
+        }
       } catch (error) {
         console.error('Erro ao carregar acordos:', error);
       } finally {
@@ -471,25 +512,25 @@ export default function Acordos() {
 
           <TabsContent value="negociados">
             {acordosNegociados.length > 0 ? <div className="grid gap-4">
-                {acordosNegociados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isNegociado={true} isVencido={acordosComParcelasVencidas.has(acordo.id)} />)}
+                {acordosNegociados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isNegociado={true} isVencido={acordosComParcelasVencidas.has(acordo.id)} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} />}
           </TabsContent>
 
           <TabsContent value="pagos">
             {acordosPagos.length > 0 ? <div className="grid gap-4">
-                {acordosPagos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} />)}
+                {acordosPagos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo com pagamentos realizados" />}
           </TabsContent>
 
           <TabsContent value="proximas">
             {acordosProximos.length > 0 ? <div className="grid gap-4">
-                {acordosProximos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} />)}
+                {acordosProximos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela próxima ao vencimento" />}
           </TabsContent>
 
           <TabsContent value="vencidos">
             {acordosVencidos.length > 0 ? <div className="grid gap-4">
-                {acordosVencidos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} />)}
+                {acordosVencidos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela vencida encontrada" />}
           </TabsContent>
         </Tabs>

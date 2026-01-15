@@ -81,6 +81,7 @@ export default function NovoAcordo() {
   const [nomeError, setNomeError] = useState('');
   const [cpfError, setCpfError] = useState('');
   const [cpfDuplicateError, setCpfDuplicateError] = useState('');
+  const [cpfQuebraInfo, setCpfQuebraInfo] = useState('');
   const [checkingCpf, setCheckingCpf] = useState(false);
   const [telefoneError, setTelefoneError] = useState('');
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -480,6 +481,7 @@ export default function NovoAcordo() {
                   });
                   if (cpfError) setCpfError('');
                   if (cpfDuplicateError) setCpfDuplicateError('');
+                  if (cpfQuebraInfo) setCpfQuebraInfo('');
                   
                   // Verificar CPF duplicado quando completo (11 dígitos) e não for admin
                   if (isCpfCompleto(formatted) && !isAdmin) {
@@ -487,7 +489,18 @@ export default function NovoAcordo() {
                     try {
                       const { data: hasDuplicate, error } = await supabase.rpc('cpf_has_acordo', { p_cpf: formatted });
                       if (!error && hasDuplicate) {
-                        setCpfDuplicateError('Este CPF já possui acordo. Contate o administrador.');
+                        // Verificar se o último acordo tem QUEBRA DE ACORDO
+                        const { data: isQuebrado, error: quebraError } = await supabase.rpc('cpf_ultimo_acordo_quebrado', { p_cpf: formatted });
+                        
+                        if (!quebraError && isQuebrado) {
+                          // CPF tem quebra, permitir novo acordo
+                          setCpfQuebraInfo('CPF possui acordo anterior com QUEBRA DE ACORDO. Novo acordo permitido.');
+                          setCpfDuplicateError('');
+                        } else {
+                          // CPF não tem quebra, bloquear
+                          setCpfDuplicateError('Este CPF já possui acordo ativo. Contate o administrador.');
+                          setCpfQuebraInfo('');
+                        }
                       }
                     } catch (err) {
                       console.error('Erro ao verificar CPF:', err);
@@ -499,9 +512,10 @@ export default function NovoAcordo() {
                   if (form.clienteCpf && !isCpfCompleto(form.clienteCpf)) {
                     setCpfError('CPF deve ter 11 dígitos');
                   }
-                }} maxLength={14} required className={cpfError || cpfDuplicateError ? 'border-destructive' : ''} />
+                }} maxLength={14} required className={cpfError || cpfDuplicateError ? 'border-destructive' : cpfQuebraInfo ? 'border-green-500' : ''} />
                   {cpfError && <p className="text-sm text-destructive">{cpfError}</p>}
                   {cpfDuplicateError && <p className="text-sm text-destructive">{cpfDuplicateError}</p>}
+                  {cpfQuebraInfo && <p className="text-sm text-green-600">{cpfQuebraInfo}</p>}
                   {checkingCpf && <p className="text-sm text-muted-foreground">Verificando CPF...</p>}
                 </div>
 

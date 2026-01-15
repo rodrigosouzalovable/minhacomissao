@@ -559,6 +559,7 @@ export type Database = {
     Functions: {
       cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
       cpf_normalize: { Args: { cpf_input: string }; Returns: string }
+      cpf_ultimo_acordo_quebrado: { Args: { p_cpf: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
