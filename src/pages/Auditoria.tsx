@@ -75,6 +75,18 @@ interface AcordoDivergente {
   tiposDivergencia: string[];
 }
 
+interface CpfDuplicado {
+  cpf: string;
+  qtdAcordos: number;
+  acordos: {
+    id: string;
+    clienteNome: string;
+    valorTotal: number;
+    status: string;
+    criadoEm: string;
+  }[];
+}
+
 interface HistoricoAuditoria {
   arquivoNome: string;
   criadoEm: string;
@@ -192,6 +204,7 @@ export default function Auditoria() {
   const [acordosDivergentes, setAcordosDivergentes] = useState<AcordoDivergente[]>([]);
   const [carregandoDivergencias, setCarregandoDivergencias] = useState(false);
   const [corrigindo, setCorrigindo] = useState<string | null>(null);
+  const [cpfsDuplicados, setCpfsDuplicados] = useState<CpfDuplicado[]>([]);
 
   // Estados para histórico
   const [historico, setHistorico] = useState<HistoricoAuditoria[]>([]);
@@ -345,7 +358,9 @@ export default function Auditoria() {
           cliente_cpf,
           valor_total,
           parcelas,
-          comissao_total
+          comissao_total,
+          status,
+          criado_em
         `)
         .order('criado_em', { ascending: false });
 
@@ -434,7 +449,40 @@ export default function Auditoria() {
 
       setAcordosDivergentes(divergentes);
 
-      if (divergentes.length === 0) {
+      // Detectar CPFs duplicados
+      const acordosPorCpf = new Map<string, typeof acordos>();
+      for (const acordo of acordos || []) {
+        const cpfNormalizado = normalizarCPF(acordo.cliente_cpf || '');
+        if (cpfNormalizado.length === 11) {
+          const lista = acordosPorCpf.get(cpfNormalizado) || [];
+          lista.push(acordo);
+          acordosPorCpf.set(cpfNormalizado, lista);
+        }
+      }
+
+      // Filtrar apenas CPFs com mais de 1 acordo
+      const duplicados: CpfDuplicado[] = [];
+      acordosPorCpf.forEach((acordosList, cpf) => {
+        if (acordosList.length > 1) {
+          duplicados.push({
+            cpf,
+            qtdAcordos: acordosList.length,
+            acordos: acordosList.map(a => ({
+              id: a.id,
+              clienteNome: a.cliente_nome,
+              valorTotal: Number(a.valor_total) || 0,
+              status: a.status || 'ativo',
+              criadoEm: a.criado_em,
+            })),
+          });
+        }
+      });
+
+      // Ordenar por quantidade de acordos (mais duplicados primeiro)
+      duplicados.sort((a, b) => b.qtdAcordos - a.qtdAcordos);
+      setCpfsDuplicados(duplicados);
+
+      if (divergentes.length === 0 && duplicados.length === 0) {
         toast({
           title: 'Nenhuma divergência encontrada',
           description: 'Todos os acordos estão com valores consistentes.',
@@ -1017,6 +1065,51 @@ export default function Auditoria() {
     });
   };
 
+  const exportarCpfsDuplicados = () => {
+    if (cpfsDuplicados.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Sem dados',
+        description: 'Não há CPFs duplicados para exportar.',
+      });
+      return;
+    }
+
+    const dadosExport: Record<string, any>[] = [];
+    cpfsDuplicados.forEach(dup => {
+      dup.acordos.forEach((acordo, idx) => {
+        dadosExport.push({
+          'CPF': formatarCPF(dup.cpf),
+          'Qtd Acordos': idx === 0 ? dup.qtdAcordos : '',
+          'Cliente': acordo.clienteNome,
+          'Valor Total': acordo.valorTotal,
+          'Status': acordo.status,
+          'Data Criação': acordo.criadoEm ? new Date(acordo.criadoEm).toLocaleDateString('pt-BR') : '',
+        });
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(dadosExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'CPFs Duplicados');
+
+    ws['!cols'] = [
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 15 },
+    ];
+
+    XLSX.writeFile(wb, 'cpfs-duplicados.xlsx');
+
+    toast({
+      title: 'Exportação concluída',
+      description: 'Arquivo de CPFs duplicados baixado com sucesso.',
+    });
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -1519,6 +1612,84 @@ export default function Auditoria() {
                 ))}
               </div>
             )}
+
+            {/* Seção de CPFs Duplicados */}
+            <div className="space-y-4 mt-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-orange-500" />
+                    CPFs com Acordos Duplicados
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    CPFs que possuem mais de um acordo cadastrado no sistema
+                  </p>
+                </div>
+                {cpfsDuplicados.length > 0 && (
+                  <Button variant="outline" onClick={exportarCpfsDuplicados}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar Duplicados
+                  </Button>
+                )}
+              </div>
+
+              {cpfsDuplicados.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-10">
+                    <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
+                    <h3 className="text-xl font-semibold">Nenhum CPF duplicado</h3>
+                    <p className="text-muted-foreground">
+                      Todos os CPFs possuem apenas um acordo no sistema.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {cpfsDuplicados.map((dup) => (
+                    <Card key={dup.cpf} className="border-orange-500/50">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            <CardTitle className="text-base font-mono">
+                              {formatarCPF(dup.cpf)}
+                            </CardTitle>
+                          </div>
+                          <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                            {dup.qtdAcordos} acordos
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {dup.acordos.map((acordo, idx) => (
+                          <div key={acordo.id} className="p-2 rounded bg-muted/50 space-y-1">
+                            <div className="flex justify-between items-start">
+                              <span className="text-sm font-medium truncate flex-1">
+                                {idx + 1}. {acordo.clienteNome}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>{formatarMoeda(acordo.valorTotal)}</span>
+                              <span>{acordo.criadoEm ? new Date(acordo.criadoEm).toLocaleDateString('pt-BR') : '-'}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <Badge variant={acordo.status === 'concluido' ? 'default' : 'outline'} className="text-xs">
+                                {acordo.status}
+                              </Badge>
+                              <Button asChild variant="ghost" size="sm" className="h-6 px-2">
+                                <Link to={`/acordos/${acordo.id}`}>
+                                  <ExternalLink className="h-3 w-3" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>
