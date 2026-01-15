@@ -80,6 +80,8 @@ export default function NovoAcordo() {
   const [isLoading, setIsLoading] = useState(false);
   const [nomeError, setNomeError] = useState('');
   const [cpfError, setCpfError] = useState('');
+  const [cpfDuplicateError, setCpfDuplicateError] = useState('');
+  const [checkingCpf, setCheckingCpf] = useState(false);
   const [telefoneError, setTelefoneError] = useState('');
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
@@ -366,27 +368,6 @@ export default function NovoAcordo() {
         observacoes: form.observacoes.trim() || undefined
       });
 
-      // Verificar CPF duplicado (apenas para não-admins)
-      if (!isAdmin) {
-        const { data: acordoExistente, error: checkError } = await supabase
-          .from('acordos')
-          .select('id')
-          .eq('cliente_cpf', validated.clienteCpf)
-          .maybeSingle();
-
-        if (checkError) throw checkError;
-
-        if (acordoExistente) {
-          toast({
-            variant: 'destructive',
-            title: 'CPF já cadastrado',
-            description: 'Existe outro acordo com esse CPF. Favor entrar em contato com o administrador.',
-          });
-          setIsLoading(false);
-          return;
-        }
-      }
-
       // Criar acordo
       const {
         data: acordo,
@@ -439,11 +420,22 @@ export default function NovoAcordo() {
           description: err.errors[0].message
         });
       } else if (err instanceof Error) {
-        toast({
-          variant: 'destructive',
-          title: 'Dados inválidos',
-          description: err.message
-        });
+        // Tratar erro do trigger de CPF duplicado
+        const errorMessage = err.message;
+        if (errorMessage.includes('Este CPF já possui acordo')) {
+          setCpfDuplicateError('Este CPF já possui acordo. Contate o administrador.');
+          toast({
+            variant: 'destructive',
+            title: 'CPF já cadastrado',
+            description: 'Este CPF já possui acordo. Contate o administrador.',
+          });
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'Dados inválidos',
+            description: errorMessage
+          });
+        }
       } else {
         toast({
           variant: 'destructive',
@@ -480,19 +472,37 @@ export default function NovoAcordo() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="clienteCpf">CPF *</Label>
-                  <Input id="clienteCpf" placeholder="000.000.000-00" value={form.clienteCpf} onChange={e => {
+                  <Input id="clienteCpf" placeholder="000.000.000-00" value={form.clienteCpf} onChange={async e => {
                   const formatted = formatCpf(e.target.value);
                   setForm({
                     ...form,
                     clienteCpf: formatted
                   });
                   if (cpfError) setCpfError('');
+                  if (cpfDuplicateError) setCpfDuplicateError('');
+                  
+                  // Verificar CPF duplicado quando completo (11 dígitos) e não for admin
+                  if (isCpfCompleto(formatted) && !isAdmin) {
+                    setCheckingCpf(true);
+                    try {
+                      const { data: hasDuplicate, error } = await supabase.rpc('cpf_has_acordo', { p_cpf: formatted });
+                      if (!error && hasDuplicate) {
+                        setCpfDuplicateError('Este CPF já possui acordo. Contate o administrador.');
+                      }
+                    } catch (err) {
+                      console.error('Erro ao verificar CPF:', err);
+                    } finally {
+                      setCheckingCpf(false);
+                    }
+                  }
                 }} onBlur={() => {
                   if (form.clienteCpf && !isCpfCompleto(form.clienteCpf)) {
                     setCpfError('CPF deve ter 11 dígitos');
                   }
-                }} maxLength={14} required className={cpfError ? 'border-destructive' : ''} />
+                }} maxLength={14} required className={cpfError || cpfDuplicateError ? 'border-destructive' : ''} />
                   {cpfError && <p className="text-sm text-destructive">{cpfError}</p>}
+                  {cpfDuplicateError && <p className="text-sm text-destructive">{cpfDuplicateError}</p>}
+                  {checkingCpf && <p className="text-sm text-muted-foreground">Verificando CPF...</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -666,7 +676,7 @@ export default function NovoAcordo() {
             <Button type="button" variant="outline" className="flex-1" onClick={() => navigate(-1)}>
               Cancelar
             </Button>
-            <Button type="submit" className="flex-1" disabled={isLoading || !calculo || !isCpfCompleto(form.clienteCpf) || !isTelefoneCompleto(form.clienteTelefone) || parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas) || !validacaoSomaParcelas.valido}>
+            <Button type="submit" className="flex-1" disabled={isLoading || !calculo || !isCpfCompleto(form.clienteCpf) || !isTelefoneCompleto(form.clienteTelefone) || parseInt(form.parcelas) > 1 && (!form.valorPrimeiraParcela || !form.valorDemaisParcelas) || !validacaoSomaParcelas.valido || !!cpfDuplicateError}>
               {isLoading ? 'Salvando...' : 'Criar Acordo'}
             </Button>
           </div>
