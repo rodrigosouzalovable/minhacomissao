@@ -399,6 +399,31 @@ export default function AcordoDetalhe() {
     }
   };
 
+  const excluirParcela = async (pagamentoId: string, numeroParcela: number) => {
+    try {
+      const { error } = await supabase
+        .from('pagamentos')
+        .delete()
+        .eq('id', pagamentoId);
+
+      if (error) throw error;
+
+      setPagamentos(prev => prev.filter(p => p.id !== pagamentoId));
+
+      toast({
+        title: 'Parcela excluída',
+        description: `A parcela ${numeroParcela} foi removida com sucesso.`,
+      });
+    } catch (error) {
+      console.error('Erro ao excluir parcela:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao excluir',
+        description: 'Não foi possível excluir a parcela.',
+      });
+    }
+  };
+
   if (loading || !acordo) {
     return (
       <AppLayout>
@@ -831,6 +856,34 @@ export default function AcordoDetalhe() {
                         </p>
                       )}
                     </div>
+                    {isAdmin && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir Parcela</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir a parcela {pagamento.numero_parcela}?
+                              Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => excluirParcela(pagamento.id, pagamento.numero_parcela)}>
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                     {pagamento.status === 'pendente' && acordo.cliente_telefone && (
                       <Button
                         size="sm"
