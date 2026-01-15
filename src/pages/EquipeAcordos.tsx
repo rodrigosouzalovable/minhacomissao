@@ -37,7 +37,7 @@ interface TeamMember {
 
 export default function EquipeAcordos() {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { toast } = useToast();
   const [acordos, setAcordos] = useState<AcordoComFuncionario[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -157,7 +157,7 @@ export default function EquipeAcordos() {
 
   useEffect(() => {
     async function loadTeamData() {
-      if (!user) return;
+      if (!user || roleLoading) return;
 
       try {
         let funcionarioIds: string[] = [];
@@ -291,7 +291,7 @@ export default function EquipeAcordos() {
     }
 
     loadTeamData();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, roleLoading]);
 
   const filteredAcordos = acordos.filter(acordo => {
     const matchesSearch = 
