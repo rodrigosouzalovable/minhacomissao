@@ -57,6 +57,7 @@ export default function EquipeAcordos() {
   }>>([]);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
   const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
+  const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos'>('todos');
 
   const handleEnviarRelatorio = async () => {
     try {
@@ -107,60 +108,50 @@ export default function EquipeAcordos() {
     return true;
   });
 
-  const handleExportarAcordosPagos = () => {
-    if (pagamentosFiltradosPorPeriodo.length === 0) {
+  // IDs de acordos que possuem pelo menos uma parcela paga
+  const acordosComParcelasPagas = new Set(
+    pagamentosEquipe.map(p => p.acordo_id)
+  );
+
+  const handleExportar = (acordosParaExportar: AcordoComFuncionario[]) => {
+    if (acordosParaExportar.length === 0) {
       toast({
         variant: 'destructive',
-        title: 'Nenhuma parcela encontrada',
-        description: 'Não há parcelas pagas no período selecionado para exportar.',
+        title: 'Nenhum acordo encontrado',
+        description: 'Não há acordos para exportar com os filtros atuais.',
       });
       return;
     }
 
-    const dadosExport = pagamentosFiltradosPorPeriodo.map(parcela => {
-      const acordo = acordos.find(a => a.id === parcela.acordo_id);
-      const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo?.dias_atraso || 0);
-      const comissaoEscritorio = Number(parcela.valor_parcela) * percentualEmpresa / 100;
-
-      // Formatar data de pagamento
-      let dataPagamentoFormatada = '';
-      if (parcela.data_paga) {
-        const date = new Date(parcela.data_paga);
-        dataPagamentoFormatada = date.toLocaleDateString('pt-BR');
-      }
-
-      return {
-        cpf: acordo?.cliente_cpf || '',
-        cliente: acordo?.cliente_nome || '',
-        funcionario: acordo?.funcionario_nome || '',
-        valor_total: acordo?.valor_total || 0,
-        valor_parcela: parcela.valor_parcela,
-        numero_parcela: parcela.numero_parcela,
-        data_pagamento: dataPagamentoFormatada,
-        comissao_funcionario: parcela.comissao_parcela,
-        comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
-        dias_atraso: acordo?.dias_atraso || 0,
-      };
-    });
+    const dadosExport = acordosParaExportar.map(acordo => ({
+      cpf: acordo.cliente_cpf || '',
+      cliente: acordo.cliente_nome,
+      funcionario: acordo.funcionario_nome || '',
+      valor_total: acordo.valor_total,
+      parcelas: acordo.parcelas,
+      valor_parcela: acordo.valor_parcela,
+      dias_atraso: acordo.dias_atraso,
+      status: getStatusLabel(acordo.status),
+      criado_em: formatarData(acordo.criado_em),
+    }));
 
     const colunas = [
       { chave: 'cpf' as const, titulo: 'CPF' },
       { chave: 'cliente' as const, titulo: 'Cliente' },
       { chave: 'funcionario' as const, titulo: 'Funcionário' },
       { chave: 'valor_total' as const, titulo: 'Valor Total' },
+      { chave: 'parcelas' as const, titulo: 'Parcelas' },
       { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
-      { chave: 'numero_parcela' as const, titulo: 'Nº Parcela' },
-      { chave: 'data_pagamento' as const, titulo: 'Data Pagamento' },
-      { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
-      { chave: 'comissao_escritorio' as const, titulo: 'Comissão Escritório' },
       { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
+      { chave: 'status' as const, titulo: 'Status' },
+      { chave: 'criado_em' as const, titulo: 'Criado em' },
     ];
 
-    exportarParaExcel(dadosExport, colunas, 'parcelas-pagas-periodo');
+    exportarParaExcel(dadosExport, colunas, 'acordos-equipe');
 
     toast({
       title: 'Download iniciado!',
-      description: `Exportando ${dadosExport.length} parcela(s) paga(s) do período.`,
+      description: `Exportando ${dadosExport.length} acordo(s).`,
     });
   };
 
@@ -173,31 +164,20 @@ export default function EquipeAcordos() {
         let validMembers: TeamMember[] = [];
 
         if (isAdmin) {
-          // Admin vê todos os funcionários e seus acordos
-          const { data: allRoles, error: rolesError } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .eq('role', 'funcionario');
+          // Admin vê TODOS os acordos do sistema (incluindo os próprios)
+          const { data: allProfiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, nome, email');
 
-          if (rolesError) throw rolesError;
+          if (profilesError) throw profilesError;
 
-          funcionarioIds = (allRoles || []).map(r => r.user_id);
+          validMembers = (allProfiles || []).map(p => ({
+            funcionario_id: p.id,
+            nome: p.nome,
+            email: p.email
+          }));
 
-          if (funcionarioIds.length > 0) {
-            const { data: profiles, error: profilesError } = await supabase
-              .from('profiles')
-              .select('id, nome, email');
-
-            if (profilesError) throw profilesError;
-
-            validMembers = (profiles || [])
-              .filter(p => funcionarioIds.includes(p.id))
-              .map(p => ({
-                funcionario_id: p.id,
-                nome: p.nome,
-                email: p.email
-              }));
-          }
+          funcionarioIds = validMembers.map(m => m.funcionario_id);
         } else {
           // Gestor vê apenas membros da sua equipe
           const { data: members, error: membersError } = await supabase
@@ -335,8 +315,11 @@ export default function EquipeAcordos() {
         matchesDate = matchesDate && acordoDate <= end;
       }
     }
+
+    // Filtro de visualização (todos vs com parcelas pagas)
+    const matchesViewFilter = viewFilter === 'todos' || acordosComParcelasPagas.has(acordo.id);
     
-    return matchesSearch && matchesStatus && matchesMember && matchesDate;
+    return matchesSearch && matchesStatus && matchesMember && matchesDate && matchesViewFilter;
   });
 
   const getStatusVariant = (status: string) => {
@@ -397,15 +380,29 @@ export default function EquipeAcordos() {
               {teamMembers.length} funcionário(s) na sua equipe
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={viewFilter === 'todos' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewFilter('todos')}
+            >
+              Todos os Acordos
+            </Button>
+            <Button
+              variant={viewFilter === 'com_pagos' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewFilter('com_pagos')}
+            >
+              Com Parcelas Pagas
+            </Button>
             <Button
               variant="outline"
               size="sm"
-              onClick={handleExportarAcordosPagos}
+              onClick={() => handleExportar(filteredAcordos)}
               className="gap-2"
             >
               <Download className="h-4 w-4" />
-              Exportar Pagos
+              Exportar
             </Button>
             {isAdmin && (
               <Button
