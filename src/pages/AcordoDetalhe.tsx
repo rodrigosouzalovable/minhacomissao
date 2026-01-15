@@ -46,6 +46,7 @@ export default function AcordoDetalhe() {
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [editandoDataVencimento, setEditandoDataVencimento] = useState<string | null>(null);
   const [novaDataVencimento, setNovaDataVencimento] = useState<string>('');
+  const [isQuebraAcordo, setIsQuebraAcordo] = useState(false);
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
@@ -90,6 +91,20 @@ export default function AcordoDetalhe() {
 
         if (pagamentosError) throw pagamentosError;
         setPagamentos(pagamentosData || []);
+
+        // Verificar se é QUEBRA DE ACORDO (última parcela pendente vencida há mais de 10 dias)
+        const parcelasPendentes = (pagamentosData || []).filter(p => p.status === 'pendente');
+        if (parcelasPendentes.length > 0) {
+          const ultimaParcelaPendente = parcelasPendentes.reduce((max, p) => 
+            p.data_prevista > max.data_prevista ? p : max
+          );
+          const dezDiasAtras = new Date();
+          dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
+          const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
+          setIsQuebraAcordo(ultimaParcelaPendente.data_prevista < dezDiasAtrasStr);
+        } else {
+          setIsQuebraAcordo(false);
+        }
       } catch (error) {
         console.error('Erro ao carregar acordo:', error);
         navigate('/acordos');
@@ -526,6 +541,11 @@ export default function AcordoDetalhe() {
             {!isOwner && !isAdmin && (
               <Badge variant="outline" className="text-sm">
                 Somente Leitura
+              </Badge>
+            )}
+            {isQuebraAcordo && (
+              <Badge variant="destructive" className="bg-red-600 text-white font-bold text-sm">
+                QUEBRA DE ACORDO
               </Badge>
             )}
             <Badge

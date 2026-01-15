@@ -56,6 +56,7 @@ export default function EquipeAcordos() {
     numero_parcela: number;
   }>>([]);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
+  const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
 
   const handleEnviarRelatorio = async () => {
     try {
@@ -268,6 +269,38 @@ export default function EquipeAcordos() {
 
           if (!pagamentosError && pagamentosPagos) {
             setPagamentosEquipe(pagamentosPagos);
+          }
+
+          // Buscar IDs de acordos com QUEBRA DE ACORDO
+          const { data: todasParcelasPendentes, error: quebraError } = await supabase
+            .from('pagamentos')
+            .select('acordo_id, data_prevista')
+            .in('acordo_id', acordoIds)
+            .eq('status', 'pendente');
+          
+          if (!quebraError && todasParcelasPendentes) {
+            const hoje = new Date();
+            const dezDiasAtras = new Date(hoje);
+            dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
+            const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
+            
+            // Agrupar por acordo_id e pegar a MAX data_prevista de cada
+            const ultimaParcelaPorAcordo = new Map<string, string>();
+            todasParcelasPendentes.forEach(p => {
+              const atual = ultimaParcelaPorAcordo.get(p.acordo_id);
+              if (!atual || p.data_prevista > atual) {
+                ultimaParcelaPorAcordo.set(p.acordo_id, p.data_prevista);
+              }
+            });
+            
+            // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
+            const idsComQuebra = new Set<string>();
+            ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
+              if (ultimaData < dezDiasAtrasStr) {
+                idsComQuebra.add(acordoId);
+              }
+            });
+            setAcordosComQuebraAcordo(idsComQuebra);
           }
         }
       } catch (error) {
@@ -550,9 +583,16 @@ export default function EquipeAcordos() {
                         </div>
                       </div>
                       <div className="flex flex-col sm:items-end gap-2">
-                        <Badge variant={getStatusVariant(acordo.status)}>
-                          {getStatusLabel(acordo.status)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-2">
+                          {acordosComQuebraAcordo.has(acordo.id) && (
+                            <Badge variant="destructive" className="bg-red-600 text-white font-bold">
+                              QUEBRA DE ACORDO
+                            </Badge>
+                          )}
+                          <Badge variant={getStatusVariant(acordo.status)}>
+                            {getStatusLabel(acordo.status)}
+                          </Badge>
+                        </div>
                         <div className="text-right">
                           <p className="text-sm text-muted-foreground">Valor Total</p>
                           <p className="font-semibold">{formatarMoeda(acordo.valor_total)}</p>
