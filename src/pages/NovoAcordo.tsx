@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,7 @@ export default function NovoAcordo() {
   const {
     user
   } = useAuth();
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
   const {
     toast
@@ -363,6 +365,27 @@ export default function NovoAcordo() {
         diasAtraso: parseInt(form.diasAtraso),
         observacoes: form.observacoes.trim() || undefined
       });
+
+      // Verificar CPF duplicado (apenas para não-admins)
+      if (!isAdmin) {
+        const { data: acordoExistente, error: checkError } = await supabase
+          .from('acordos')
+          .select('id')
+          .eq('cliente_cpf', validated.clienteCpf)
+          .maybeSingle();
+
+        if (checkError) throw checkError;
+
+        if (acordoExistente) {
+          toast({
+            variant: 'destructive',
+            title: 'CPF já cadastrado',
+            description: 'Existe outro acordo com esse CPF. Favor entrar em contato com o administrador.',
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
 
       // Criar acordo
       const {
