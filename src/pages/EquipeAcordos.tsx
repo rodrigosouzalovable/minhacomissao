@@ -123,35 +123,83 @@ export default function EquipeAcordos() {
       return;
     }
 
-    const dadosExport = acordosParaExportar.map(acordo => ({
-      cpf: acordo.cliente_cpf || '',
-      cliente: acordo.cliente_nome,
-      funcionario: acordo.funcionario_nome || '',
-      valor_total: acordo.valor_total,
-      parcelas: acordo.parcelas,
-      valor_parcela: acordo.valor_parcela,
-      dias_atraso: acordo.dias_atraso,
-      status: getStatusLabel(acordo.status),
-      criado_em: formatarData(acordo.criado_em),
-    }));
+    // Criar mapa de acordos para busca rápida
+    const acordosMap = new Map(acordosParaExportar.map(a => [a.id, a]));
+    
+    // Filtrar pagamentos que pertencem aos acordos filtrados e estão no período
+    const pagamentosDosAcordos = pagamentosFiltradosPorPeriodo.filter(
+      pag => acordosMap.has(pag.acordo_id)
+    );
+    
+    // Gerar linhas de exportação: uma linha por parcela paga
+    const dadosExportParcelas = pagamentosDosAcordos.map(pag => {
+      const acordo = acordosMap.get(pag.acordo_id)!;
+      return {
+        cpf: acordo.cliente_cpf || '',
+        cliente: acordo.cliente_nome,
+        funcionario: acordo.funcionario_nome || '',
+        parcela: `${pag.numero_parcela}/${acordo.parcelas}`,
+        valor_parcela: pag.valor_parcela,
+        data_pagamento: pag.data_paga ? formatarData(pag.data_paga) : '',
+        comissao: pag.comissao_parcela,
+        valor_total_acordo: acordo.valor_total,
+        dias_atraso: acordo.dias_atraso,
+        status_acordo: getStatusLabel(acordo.status),
+      };
+    });
 
-    const colunas = [
+    // Se não houver parcelas pagas, exportar acordos normalmente
+    if (dadosExportParcelas.length === 0) {
+      const dadosAcordos = acordosParaExportar.map(acordo => ({
+        cpf: acordo.cliente_cpf || '',
+        cliente: acordo.cliente_nome,
+        funcionario: acordo.funcionario_nome || '',
+        valor_total: acordo.valor_total,
+        parcelas: acordo.parcelas,
+        valor_parcela: acordo.valor_parcela,
+        dias_atraso: acordo.dias_atraso,
+        status: getStatusLabel(acordo.status),
+        criado_em: formatarData(acordo.criado_em),
+      }));
+
+      const colunasAcordos = [
+        { chave: 'cpf' as const, titulo: 'CPF' },
+        { chave: 'cliente' as const, titulo: 'Cliente' },
+        { chave: 'funcionario' as const, titulo: 'Funcionário' },
+        { chave: 'valor_total' as const, titulo: 'Valor Total' },
+        { chave: 'parcelas' as const, titulo: 'Parcelas' },
+        { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
+        { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
+        { chave: 'status' as const, titulo: 'Status' },
+        { chave: 'criado_em' as const, titulo: 'Criado em' },
+      ];
+
+      exportarParaExcel(dadosAcordos, colunasAcordos, 'acordos-equipe');
+      toast({
+        title: 'Download iniciado!',
+        description: `Exportando ${dadosAcordos.length} acordo(s) (sem parcelas pagas no período).`,
+      });
+      return;
+    }
+
+    const colunasParcelas = [
       { chave: 'cpf' as const, titulo: 'CPF' },
       { chave: 'cliente' as const, titulo: 'Cliente' },
       { chave: 'funcionario' as const, titulo: 'Funcionário' },
-      { chave: 'valor_total' as const, titulo: 'Valor Total' },
-      { chave: 'parcelas' as const, titulo: 'Parcelas' },
+      { chave: 'parcela' as const, titulo: 'Parcela' },
       { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
+      { chave: 'data_pagamento' as const, titulo: 'Data Pagamento' },
+      { chave: 'comissao' as const, titulo: 'Comissão' },
+      { chave: 'valor_total_acordo' as const, titulo: 'Valor Total Acordo' },
       { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
-      { chave: 'status' as const, titulo: 'Status' },
-      { chave: 'criado_em' as const, titulo: 'Criado em' },
+      { chave: 'status_acordo' as const, titulo: 'Status Acordo' },
     ];
 
-    exportarParaExcel(dadosExport, colunas, 'acordos-equipe');
+    exportarParaExcel(dadosExportParcelas, colunasParcelas, 'parcelas-pagas-equipe');
 
     toast({
       title: 'Download iniciado!',
-      description: `Exportando ${dadosExport.length} acordo(s).`,
+      description: `Exportando ${dadosExportParcelas.length} parcela(s) paga(s).`,
     });
   };
 
