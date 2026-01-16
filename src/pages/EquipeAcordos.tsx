@@ -113,6 +113,11 @@ export default function EquipeAcordos() {
     pagamentosEquipe.map(p => p.acordo_id)
   );
 
+  // IDs de acordos que possuem parcelas pagas dentro do período filtrado
+  const acordosComPagamentoNoPeriodo = new Set(
+    pagamentosFiltradosPorPeriodo.map(p => p.acordo_id)
+  );
+
   const handleExportar = (acordosParaExportar: AcordoComFuncionario[]) => {
     if (acordosParaExportar.length === 0) {
       toast({
@@ -348,20 +353,12 @@ export default function EquipeAcordos() {
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     const matchesMember = memberFilter === 'todos' || acordo.user_id === memberFilter;
     
-    // Filtro por data de criação
+    // Filtro por data de pagamento das parcelas
     let matchesDate = true;
     if (startDate || endDate) {
-      const acordoDate = new Date(acordo.criado_em);
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        matchesDate = matchesDate && acordoDate >= start;
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        matchesDate = matchesDate && acordoDate <= end;
-      }
+      // Se há filtro de data, incluir apenas acordos que possuem
+      // pelo menos uma parcela paga dentro do período
+      matchesDate = acordosComPagamentoNoPeriodo.has(acordo.id);
     }
 
     // Filtro de visualização (todos vs com parcelas pagas)
