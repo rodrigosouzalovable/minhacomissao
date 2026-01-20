@@ -25,6 +25,7 @@ export type Database = {
           criado_em: string
           data_primeiro_pagamento: string
           dias_atraso: number
+          duplicado_verificado: boolean
           empresa: string
           id: string
           observacoes: string | null
@@ -45,6 +46,7 @@ export type Database = {
           criado_em?: string
           data_primeiro_pagamento: string
           dias_atraso: number
+          duplicado_verificado?: boolean
           empresa?: string
           id?: string
           observacoes?: string | null
@@ -65,6 +67,7 @@ export type Database = {
           criado_em?: string
           data_primeiro_pagamento?: string
           dias_atraso?: number
+          duplicado_verificado?: boolean
           empresa?: string
           id?: string
           observacoes?: string | null

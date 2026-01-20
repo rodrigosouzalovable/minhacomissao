@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +37,7 @@ interface Acordo {
   parcelas: number;
   status: string;
   dias_atraso: number;
+  duplicado_verificado?: boolean;
 }
 
 interface Pagamento {
@@ -54,10 +55,36 @@ export default function UsuarioComissoes() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [filtro, setFiltro] = useState<'todas' | 'pagas' | 'duplicados'>('todas');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Mutation para marcar duplicado como verificado
+  const marcarVerificadoMutation = useMutation({
+    mutationFn: async (acordoId: string) => {
+      const { error } = await supabase
+        .from('acordos')
+        .update({ duplicado_verificado: true })
+        .eq('id', acordoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-acordos', userId] });
+      toast({
+        title: 'Acordo marcado como verificado!',
+        description: 'O caso de duplicidade foi resolvido.',
+      });
+    },
+    onError: () => {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao marcar como verificado',
+        description: 'Tente novamente.',
+      });
+    },
+  });
 
   // Buscar perfil do usuário
   const { data: profile } = useQuery({
@@ -375,7 +402,8 @@ export default function UsuarioComissoes() {
             <TabsTrigger value="todas">Todas as Parcelas</TabsTrigger>
             <TabsTrigger value="pagas">Somente Pagas</TabsTrigger>
             <TabsTrigger value="duplicados" className="text-orange-600 data-[state=active]:text-orange-600">
-              Duplicados {acordosDuplicados.length > 0 && `(${acordosDuplicados.length})`}
+              Duplicados {acordosDuplicados.filter(a => !a.duplicado_verificado).length > 0 && 
+                `(${acordosDuplicados.filter(a => !a.duplicado_verificado).length})`}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -439,6 +467,26 @@ export default function UsuarioComissoes() {
                                   <ExternalLink className="h-3 w-3 mr-1" />
                                   Ver Acordo
                                 </Button>
+                                {filtro === 'duplicados' && !acordo.duplicado_verificado && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 border-green-500 text-green-600 hover:bg-green-50"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      marcarVerificadoMutation.mutate(acordo.id);
+                                    }}
+                                    disabled={marcarVerificadoMutation.isPending}
+                                  >
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Verificado
+                                  </Button>
+                                )}
+                                {filtro === 'duplicados' && acordo.duplicado_verificado && (
+                                  <Badge className="bg-green-100 text-green-700 border-green-300">
+                                    ✓ Verificado
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                           </AccordionTrigger>
