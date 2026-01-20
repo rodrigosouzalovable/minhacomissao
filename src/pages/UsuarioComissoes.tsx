@@ -54,7 +54,7 @@ export default function UsuarioComissoes() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [filtro, setFiltro] = useState<'todas' | 'pagas'>('todas');
+  const [filtro, setFiltro] = useState<'todas' | 'pagas' | 'duplicados'>('todas');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
@@ -141,14 +141,64 @@ export default function UsuarioComissoes() {
     ? (comissaoPaga / comissaoTotal) * 100 
     : 0;
 
+  // Normalizar CPF (apenas dígitos)
+  const normalizarCPF = (cpf: string | null) => 
+    (cpf || '').replace(/\D/g, '');
+
+  // Normalizar nome (minúsculo, sem acentos, sem espaços extras)
+  const normalizarNome = (nome: string) => 
+    nome.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
+  // Identificar CPFs duplicados
+  const cpfDuplicados = new Set<string>();
+  const cpfContagem = new Map<string, number>();
+  acordos?.forEach(acordo => {
+    const cpfNorm = normalizarCPF(acordo.cliente_cpf);
+    if (cpfNorm.length === 11) {
+      cpfContagem.set(cpfNorm, (cpfContagem.get(cpfNorm) || 0) + 1);
+    }
+  });
+  cpfContagem.forEach((count, cpf) => {
+    if (count > 1) cpfDuplicados.add(cpf);
+  });
+
+  // Identificar nomes duplicados
+  const nomeDuplicados = new Set<string>();
+  const nomeContagem = new Map<string, number>();
+  acordos?.forEach(acordo => {
+    const nomeNorm = normalizarNome(acordo.cliente_nome);
+    nomeContagem.set(nomeNorm, (nomeContagem.get(nomeNorm) || 0) + 1);
+  });
+  nomeContagem.forEach((count, nome) => {
+    if (count > 1) nomeDuplicados.add(nome);
+  });
+
+  // Filtrar acordos duplicados
+  const acordosDuplicados = acordos?.filter(acordo => {
+    const cpfNorm = normalizarCPF(acordo.cliente_cpf);
+    const nomeNorm = normalizarNome(acordo.cliente_nome);
+    return cpfDuplicados.has(cpfNorm) || nomeDuplicados.has(nomeNorm);
+  }) || [];
+
   // Filtrar acordos por nome ou CPF
   const acordosFiltrados = acordos?.filter(acordo =>
     acordo.cliente_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (acordo.cliente_cpf && acordo.cliente_cpf.includes(searchTerm))
   ) ?? [];
 
+  // Usar acordos filtrados pelo tipo de filtro
+  const acordosParaExibir = filtro === 'duplicados' 
+    ? acordosDuplicados.filter(acordo =>
+        acordo.cliente_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (acordo.cliente_cpf && acordo.cliente_cpf.includes(searchTerm))
+      )
+    : acordosFiltrados;
+
   // Agrupar acordos por CPF
-  const acordosPorCpf = acordosFiltrados.reduce((acc, acordo) => {
+  const acordosPorCpf = acordosParaExibir.reduce((acc, acordo) => {
     const cpf = acordo.cliente_cpf || 'Sem CPF';
     if (!acc[cpf]) {
       acc[cpf] = [];
@@ -320,10 +370,13 @@ export default function UsuarioComissoes() {
         </div>
 
         {/* Filtro */}
-        <Tabs value={filtro} onValueChange={(v) => setFiltro(v as 'todas' | 'pagas')}>
+        <Tabs value={filtro} onValueChange={(v) => setFiltro(v as 'todas' | 'pagas' | 'duplicados')}>
           <TabsList>
             <TabsTrigger value="todas">Todas as Parcelas</TabsTrigger>
             <TabsTrigger value="pagas">Somente Pagas</TabsTrigger>
+            <TabsTrigger value="duplicados" className="text-orange-600 data-[state=active]:text-orange-600">
+              Duplicados {acordosDuplicados.length > 0 && `(${acordosDuplicados.length})`}
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -357,6 +410,14 @@ export default function UsuarioComissoes() {
                             <div className="flex flex-col md:flex-row md:items-center gap-2 text-left w-full pr-4">
                               <span className="font-medium">{acordo.cliente_nome}</span>
                               <div className="flex flex-wrap gap-2">
+                                {filtro === 'duplicados' && (
+                                  <Badge variant="outline" className="border-orange-500 text-orange-600">
+                                    {cpfDuplicados.has(normalizarCPF(acordo.cliente_cpf)) && 'CPF duplicado'}
+                                    {cpfDuplicados.has(normalizarCPF(acordo.cliente_cpf)) && 
+                                     nomeDuplicados.has(normalizarNome(acordo.cliente_nome)) && ' | '}
+                                    {nomeDuplicados.has(normalizarNome(acordo.cliente_nome)) && 'Nome duplicado'}
+                                  </Badge>
+                                )}
                                 <Badge variant="outline">
                                   {acordo.parcelas} parcelas
                                 </Badge>

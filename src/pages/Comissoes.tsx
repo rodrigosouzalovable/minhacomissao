@@ -39,7 +39,7 @@ interface Pagamento {
 
 export default function Comissoes() {
   const { user } = useAuth();
-  const [filtro, setFiltro] = useState<'todas' | 'pagas'>('todas');
+  const [filtro, setFiltro] = useState<'todas' | 'pagas' | 'duplicados'>('todas');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
@@ -104,8 +104,53 @@ export default function Comissoes() {
   const totalPaga = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
   const totalValorParcelasPagas = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
+  // Normalizar CPF (apenas dígitos)
+  const normalizarCPF = (cpf: string | null) => 
+    (cpf || '').replace(/\D/g, '');
+
+  // Normalizar nome (minúsculo, sem acentos, sem espaços extras)
+  const normalizarNome = (nome: string) => 
+    nome.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
+  // Identificar CPFs duplicados
+  const cpfDuplicados = new Set<string>();
+  const cpfContagem = new Map<string, number>();
+  acordos?.forEach(acordo => {
+    const cpfNorm = normalizarCPF(acordo.cliente_cpf);
+    if (cpfNorm.length === 11) {
+      cpfContagem.set(cpfNorm, (cpfContagem.get(cpfNorm) || 0) + 1);
+    }
+  });
+  cpfContagem.forEach((count, cpf) => {
+    if (count > 1) cpfDuplicados.add(cpf);
+  });
+
+  // Identificar nomes duplicados
+  const nomeDuplicados = new Set<string>();
+  const nomeContagem = new Map<string, number>();
+  acordos?.forEach(acordo => {
+    const nomeNorm = normalizarNome(acordo.cliente_nome);
+    nomeContagem.set(nomeNorm, (nomeContagem.get(nomeNorm) || 0) + 1);
+  });
+  nomeContagem.forEach((count, nome) => {
+    if (count > 1) nomeDuplicados.add(nome);
+  });
+
+  // Filtrar acordos duplicados
+  const acordosDuplicados = acordos?.filter(acordo => {
+    const cpfNorm = normalizarCPF(acordo.cliente_cpf);
+    const nomeNorm = normalizarNome(acordo.cliente_nome);
+    return cpfDuplicados.has(cpfNorm) || nomeDuplicados.has(nomeNorm);
+  }) || [];
+
+  // Usar acordos filtrados pelo tipo de filtro
+  const acordosParaExibir = filtro === 'duplicados' ? acordosDuplicados : acordos;
+
   // Agrupar acordos por CPF
-  const acordosPorCpf = acordos?.reduce((acc, acordo) => {
+  const acordosPorCpf = acordosParaExibir?.reduce((acc, acordo) => {
     const cpf = acordo.cliente_cpf || 'Sem CPF';
     if (!acc[cpf]) {
       acc[cpf] = [];
@@ -224,10 +269,13 @@ export default function Comissoes() {
         </div>
 
         {/* Tabs de filtro */}
-        <Tabs value={filtro} onValueChange={(v) => setFiltro(v as 'todas' | 'pagas')}>
+        <Tabs value={filtro} onValueChange={(v) => setFiltro(v as 'todas' | 'pagas' | 'duplicados')}>
           <TabsList>
             <TabsTrigger value="todas">Todas as Parcelas</TabsTrigger>
             <TabsTrigger value="pagas">Somente Pagas</TabsTrigger>
+            <TabsTrigger value="duplicados" className="text-orange-600 data-[state=active]:text-orange-600">
+              Duplicados {acordosDuplicados.length > 0 && `(${acordosDuplicados.length})`}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value={filtro} className="mt-4">
@@ -263,6 +311,14 @@ export default function Comissoes() {
                               <AccordionTrigger className="hover:no-underline">
                                 <div className="flex flex-wrap items-center gap-2 text-left">
                                   <span className="font-semibold">{acordo.cliente_nome}</span>
+                                  {filtro === 'duplicados' && (
+                                    <Badge variant="outline" className="border-orange-500 text-orange-600">
+                                      {cpfDuplicados.has(normalizarCPF(acordo.cliente_cpf)) && 'CPF duplicado'}
+                                      {cpfDuplicados.has(normalizarCPF(acordo.cliente_cpf)) && 
+                                       nomeDuplicados.has(normalizarNome(acordo.cliente_nome)) && ' | '}
+                                      {nomeDuplicados.has(normalizarNome(acordo.cliente_nome)) && 'Nome duplicado'}
+                                    </Badge>
+                                  )}
                                   <Badge variant="outline">{acordo.parcelas} parcelas</Badge>
                                   <Badge variant="secondary">Total: {formatarMoeda(acordo.valor_total)}</Badge>
                                   <Badge>Comissão: {formatarMoeda(acordo.comissao_total)}</Badge>
