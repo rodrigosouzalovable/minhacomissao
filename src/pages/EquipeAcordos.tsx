@@ -139,6 +139,9 @@ export default function EquipeAcordos() {
     // Gerar linhas de exportação: uma linha por parcela paga
     const dadosExportParcelas = pagamentosDosAcordos.map(pag => {
       const acordo = acordosMap.get(pag.acordo_id)!;
+      const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
+      const comissaoEscritorio = Number(pag.valor_parcela) * percentualEmpresa / 100;
+      
       return {
         cpf: acordo.cliente_cpf || '',
         cliente: acordo.cliente_nome,
@@ -146,7 +149,8 @@ export default function EquipeAcordos() {
         parcela: `${pag.numero_parcela}/${acordo.parcelas}`,
         valor_parcela: pag.valor_parcela,
         data_pagamento: pag.data_paga ? formatarData(pag.data_paga) : '',
-        comissao: pag.comissao_parcela,
+        comissao_funcionario: pag.comissao_parcela,
+        comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
         valor_total_acordo: acordo.valor_total,
         dias_atraso: acordo.dias_atraso,
         status_acordo: getStatusLabel(acordo.status),
@@ -194,7 +198,8 @@ export default function EquipeAcordos() {
       { chave: 'parcela' as const, titulo: 'Parcela' },
       { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
       { chave: 'data_pagamento' as const, titulo: 'Data Pagamento' },
-      { chave: 'comissao' as const, titulo: 'Comissão' },
+      { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
+      { chave: 'comissao_escritorio' as const, titulo: 'Comissão Escritório' },
       { chave: 'valor_total_acordo' as const, titulo: 'Valor Total Acordo' },
       { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
       { chave: 'status_acordo' as const, titulo: 'Status Acordo' },
