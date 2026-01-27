@@ -179,6 +179,8 @@ export default function Acordos() {
   const [acordosComParcelasVencidas, setAcordosComParcelasVencidas] = useState<Set<string>>(new Set());
   const [acordosComParcelasProximas, setAcordosComParcelasProximas] = useState<Set<string>>(new Set());
   const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
+  const [dataProximaPorAcordo, setDataProximaPorAcordo] = useState<Map<string, string>>(new Map());
+  const [dataVencidaPorAcordo, setDataVencidaPorAcordo] = useState<Map<string, string>>(new Map());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
     if (!acordo.cliente_telefone) {
@@ -250,8 +252,17 @@ export default function Acordos() {
           error: pendentesError
         } = await supabase.from('pagamentos').select('acordo_id, data_prevista').eq('status', 'pendente').lt('data_prevista', hojeStr);
         if (pendentesError) throw pendentesError;
-        const idsComVencidas = new Set(pagamentosPendentes?.map(p => p.acordo_id) || []);
-        setAcordosComParcelasVencidas(idsComVencidas);
+        
+        // Criar Map com menor data por acordo (mais antiga = mais urgente)
+        const vencidasMap = new Map<string, string>();
+        pagamentosPendentes?.forEach(p => {
+          const atual = vencidasMap.get(p.acordo_id);
+          if (!atual || p.data_prevista < atual) {
+            vencidasMap.set(p.acordo_id, p.data_prevista);
+          }
+        });
+        setDataVencidaPorAcordo(vencidasMap);
+        setAcordosComParcelasVencidas(new Set(vencidasMap.keys()));
 
         // Carregar IDs de acordos que têm parcelas próximas ao vencimento (hoje até +3 dias)
         const tresDias = new Date(hoje);
@@ -262,8 +273,17 @@ export default function Acordos() {
           error: proximasError
         } = await supabase.from('pagamentos').select('acordo_id, data_prevista').eq('status', 'pendente').gte('data_prevista', hojeStr).lte('data_prevista', tresDiasStr);
         if (proximasError) throw proximasError;
-        const idsComProximas = new Set(parcelasProximas?.map(p => p.acordo_id) || []);
-        setAcordosComParcelasProximas(idsComProximas);
+        
+        // Criar Map com menor data por acordo (mais próxima primeiro)
+        const proximasMap = new Map<string, string>();
+        parcelasProximas?.forEach(p => {
+          const atual = proximasMap.get(p.acordo_id);
+          if (!atual || p.data_prevista < atual) {
+            proximasMap.set(p.acordo_id, p.data_prevista);
+          }
+        });
+        setDataProximaPorAcordo(proximasMap);
+        setAcordosComParcelasProximas(new Set(proximasMap.keys()));
 
         // Carregar IDs de acordos com QUEBRA DE ACORDO
         // (última parcela pendente vencida há mais de 10 dias)
@@ -420,10 +440,24 @@ export default function Acordos() {
   });
 
   // Acordos com Parcelas Vencidas: têm pelo menos 1 parcela pendente com data_prevista < hoje
-  const acordosVencidos = filteredAcordos.filter(acordo => acordosComParcelasVencidas.has(acordo.id));
+  // Ordenados pela data mais antiga primeiro (mais urgente)
+  const acordosVencidos = filteredAcordos
+    .filter(acordo => acordosComParcelasVencidas.has(acordo.id))
+    .sort((a, b) => {
+      const dataA = dataVencidaPorAcordo.get(a.id) || '';
+      const dataB = dataVencidaPorAcordo.get(b.id) || '';
+      return dataA.localeCompare(dataB);
+    });
 
   // Acordos com Parcelas Próximas ao Vencimento: têm parcelas pendentes vencendo em 0-3 dias
-  const acordosProximos = filteredAcordos.filter(acordo => acordosComParcelasProximas.has(acordo.id));
+  // Ordenados pela data mais próxima primeiro
+  const acordosProximos = filteredAcordos
+    .filter(acordo => acordosComParcelasProximas.has(acordo.id))
+    .sort((a, b) => {
+      const dataA = dataProximaPorAcordo.get(a.id) || '';
+      const dataB = dataProximaPorAcordo.get(b.id) || '';
+      return dataA.localeCompare(dataB);
+    });
   const acordosExibidos = abaAtiva === 'pagos' ? acordosPagos : abaAtiva === 'proximas' ? acordosProximos : abaAtiva === 'vencidos' ? acordosVencidos : acordosNegociados;
   const getStatusVariant = (status: string) => {
     switch (status) {
