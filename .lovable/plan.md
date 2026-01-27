@@ -1,90 +1,64 @@
 
-## Plano: Ordenar Cards por Data Mais Recente Primeiro
 
-### Objetivo
-Alterar a ordenação dos cards nas abas "Meus Acordos" (Negociados) e "Vencidas" para que apareçam primeiro os acordos com datas de vencimento mais recentes/atuais.
+## Plano: Impedir Navegação ao Clicar no Botão de Copiar
+
+### Problema Identificado
+O componente `CopyButton` está dentro de um `<Link>` que envolve todo o card. Quando o usuário clica no botão de copiar CPF ou Telefone, o evento de clique propaga para o `<Link>` pai, abrindo a ficha do cliente.
+
+### Solução
+Adicionar `e.stopPropagation()` e `e.preventDefault()` no handler de clique do `CopyButton` para impedir a propagação do evento, igual ao que já é feito nos botões de WhatsApp e Excluir.
 
 ---
 
-### Alterações Necessárias
+### Alteração em `src/components/CopyButton.tsx`
 
-#### 1. Aba "Vencidas" - Inverter Ordenação
-
-**Localização:** Linhas 444-450
-
-**Situação Atual:**
+**Situação Atual (linha 14-20):**
 ```typescript
-// Ordenados pela data mais antiga primeiro (mais urgente)
-const acordosVencidos = filteredAcordos
-  .filter(acordo => acordosComParcelasVencidas.has(acordo.id))
-  .sort((a, b) => {
-    const dataA = dataVencidaPorAcordo.get(a.id) || '';
-    const dataB = dataVencidaPorAcordo.get(b.id) || '';
-    return dataA.localeCompare(dataB); // A -> Z (mais antiga primeiro)
-  });
+const handleCopy = async () => {
+  if (!value) return;
+  await navigator.clipboard.writeText(value.replace(/\D/g, ''));
+  setCopied(true);
+  toast.success(`${label || 'Texto'} copiado!`);
+  setTimeout(() => setCopied(false), 2000);
+};
 ```
 
 **Nova Implementação:**
 ```typescript
-// Ordenados pela data mais recente primeiro
-const acordosVencidos = filteredAcordos
-  .filter(acordo => acordosComParcelasVencidas.has(acordo.id))
-  .sort((a, b) => {
-    const dataA = dataVencidaPorAcordo.get(a.id) || '';
-    const dataB = dataVencidaPorAcordo.get(b.id) || '';
-    return dataB.localeCompare(dataA); // Z -> A (mais recente primeiro)
-  });
+const handleCopy = async (e: React.MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!value) return;
+  await navigator.clipboard.writeText(value.replace(/\D/g, ''));
+  setCopied(true);
+  toast.success(`${label || 'Texto'} copiado!`);
+  setTimeout(() => setCopied(false), 2000);
+};
 ```
 
 ---
 
-#### 2. Aba "Meus Acordos" (Negociados) - Adicionar Ordenação por Data
+### Resumo
 
-**Localização:** Linhas 434-440
-
-**Situação Atual:**
-Os acordos negociados são ordenados apenas por status do boleto (aguardando boleto primeiro), sem considerar data de vencimento.
-
-**Nova Implementação:**
-Ordenar por:
-1. Boleto enviado (não enviados primeiro - laranja)
-2. Data do primeiro pagamento (mais recente primeiro)
-
-```typescript
-const acordosNegociados = filteredAcordos
-  .filter(acordo => !acordosComPagamentosPagos.has(acordo.id) && !acordosComParcelasVencidas.has(acordo.id))
-  .sort((a, b) => {
-    // Primeiro critério: acordos sem boleto enviado vêm primeiro
-    if (!a.boleto_enviado && b.boleto_enviado) return -1;
-    if (a.boleto_enviado && !b.boleto_enviado) return 1;
-    
-    // Segundo critério: ordenar por data_primeiro_pagamento (mais recente primeiro)
-    const dataA = a.data_primeiro_pagamento || '';
-    const dataB = b.data_primeiro_pagamento || '';
-    return dataB.localeCompare(dataA); // Z -> A (mais recente primeiro)
-  });
-```
-
----
-
-### Resumo das Alterações
-
-| Aba | Antes | Depois |
-|-----|-------|--------|
-| Meus Acordos | Apenas por boleto enviado | Boleto enviado + data mais recente primeiro |
-| Vencidas | Data mais antiga primeiro | Data mais recente primeiro |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/CopyButton.tsx` | Adicionar parâmetro de evento e chamar `stopPropagation()` + `preventDefault()` |
 
 ---
 
 ### Seção Técnica
 
-**Lógica de ordenação:**
-- `dataA.localeCompare(dataB)` = ordem crescente (A → Z, antiga → recente)
-- `dataB.localeCompare(dataA)` = ordem decrescente (Z → A, recente → antiga)
+**Por que essa solução funciona:**
+- `e.stopPropagation()`: Impede que o evento de clique "suba" para o elemento pai (`<Link>`)
+- `e.preventDefault()`: Previne o comportamento padrão do evento (navegação)
 
-**Campo utilizado:**
-- Negociados: `acordo.data_primeiro_pagamento` (já disponível no objeto Acordo)
-- Vencidas: `dataVencidaPorAcordo.get(acordo.id)` (Map já existente)
+**Padrão existente no código:**
+Os botões de WhatsApp e Excluir já usam essa mesma abordagem (linhas 109-112 e 116-119 do `Acordos.tsx`):
+```typescript
+onClick={e => {
+  e.preventDefault();
+  e.stopPropagation();
+  // ação aqui
+}}
+```
 
-**Arquivos alterados:**
-- `src/pages/Acordos.tsx` (linhas 434-450)
