@@ -432,21 +432,24 @@ export default function Acordos() {
   // Acordos com parcelas vencidas vão exclusivamente para a aba "Vencidas"
   // Ordenados: 1º Aguardando boleto (laranja), 2º Normais
   const acordosNegociados = filteredAcordos.filter(acordo => !acordosComPagamentosPagos.has(acordo.id) && !acordosComParcelasVencidas.has(acordo.id)).sort((a, b) => {
-    // Acordos sem boleto enviado vêm primeiro (laranja)
-    if (a.boleto_enviado === b.boleto_enviado) return 0;
+    // Primeiro critério: acordos sem boleto enviado vêm primeiro (laranja)
     if (!a.boleto_enviado && b.boleto_enviado) return -1;
     if (a.boleto_enviado && !b.boleto_enviado) return 1;
-    return 0;
+    
+    // Segundo critério: ordenar por data_primeiro_pagamento (mais recente primeiro)
+    const dataA = a.data_primeiro_pagamento || '';
+    const dataB = b.data_primeiro_pagamento || '';
+    return dataB.localeCompare(dataA);
   });
 
   // Acordos com Parcelas Vencidas: têm pelo menos 1 parcela pendente com data_prevista < hoje
-  // Ordenados pela data mais antiga primeiro (mais urgente)
+  // Ordenados pela data mais recente primeiro
   const acordosVencidos = filteredAcordos
     .filter(acordo => acordosComParcelasVencidas.has(acordo.id))
     .sort((a, b) => {
       const dataA = dataVencidaPorAcordo.get(a.id) || '';
       const dataB = dataVencidaPorAcordo.get(b.id) || '';
-      return dataA.localeCompare(dataB);
+      return dataB.localeCompare(dataA);
     });
 
   // Acordos com Parcelas Próximas ao Vencimento: têm parcelas pendentes vencendo em 0-3 dias
