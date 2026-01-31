@@ -1,104 +1,90 @@
 
-
-## Plano: Corrigir Cálculo de Total Parcelas Pagas
-
-### Problema Identificado
-
-O card "Total Parcelas Pagas" mostra **R$ 0,00** quando nenhuma data está selecionada. A lógica atual usa `pagamentosFiltradosPorPeriodo` para o cálculo, mas quando não há filtro de data, a lista está retornando vazia por um problema de lógica.
-
-O problema está na **ordem de renderização vs. dados carregados**, ou mais especificamente: quando `startDate` e `endDate` são `undefined`, a lista deveria incluir todos os pagamentos pagos, mas algo está causando um resultado vazio.
-
-### Análise Técnica
-
-Após investigação detalhada:
-
-1. **Banco de dados**: Existem 491 pagamentos pagos totalizando R$ 118.194,26
-2. **Todos os pagamentos pagos** possuem `data_paga` preenchido (não há nulos)
-3. **A lógica de filtro** parece correta, mas pode haver um problema de timing ou inicialização
-
-### Solução Proposta
-
-Modificar a lógica para que:
-1. Quando **nenhuma data está selecionada** (`!startDate && !endDate`), usar `pagamentosEquipe` diretamente (todos os pagamentos pagos)
-2. Quando há **data selecionada**, aplicar o filtro de período
-
-Isso garantirá que o card sempre mostre um valor correto, seja o total geral ou o filtrado por período.
+## Objetivo
+Fazer a página **Acordos da Equipe** voltar a exibir acordos e calcular **Total Parcelas Pagas / Comissão** corretamente quando um período é selecionado (e também sem período), eliminando o cenário atual onde tudo fica **zerado** e “Nenhum acordo encontrado” mesmo existindo pagamentos no banco.
 
 ---
 
-### Alterações em `src/pages/EquipeAcordos.tsx`
+## Diagnóstico (por que está acontecendo)
+Pelos sintomas na tela (membros=6, mas total de acordos=0, total parcelas pagas=R$0,00) e pelo código atual, o problema mais provável é:
 
-**Localização:** Linhas 90-111
+1. A lista `pagamentosEquipe` está ficando **vazia** no front.
+2. Quando você seleciona datas, o filtro `matchesDate = acordosComPagamentoNoPeriodo.has(acordo.id)` depende de `pagamentosFiltradosPorPeriodo`.
+3. Se `pagamentosEquipe` não carregou, então `pagamentosFiltradosPorPeriodo` fica vazio → `acordosComPagamentoNoPeriodo` fica vazio → **todos os acordos são filtrados** e os cards ficam zerados.
 
-**Código Atual:**
-```typescript
-const pagamentosFiltradosPorPeriodo = pagamentosEquipe.filter(pag => {
-  if (!pag.data_paga) return false;
-  
-  const dataPagamentoStr = pag.data_paga.split('T')[0];
-  
-  if (startDate) {
-    const startLocal = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-    if (dataPagamentoStr < startLocal) return false;
-  }
-  
-  if (endDate) {
-    const endLocal = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-    if (dataPagamentoStr > endLocal) return false;
-  }
-  
-  return true;
-});
-```
+A causa raiz mais comum disso nesse tipo de código é que o fetch de pagamentos está usando:
+- `.in('acordo_id', acordoIds)`  
+e `acordoIds` pode gerar uma URL muito grande (muitos UUIDs na query string) e a requisição falha (400/414).  
+Hoje, se essa requisição falhar, o código **não mostra erro pro usuário** e apenas não popula `pagamentosEquipe`, levando ao “0 em tudo”.
 
-**Código Corrigido:**
-```typescript
-// Filtrar pagamentos por data de pagamento (data_paga)
-// Se não há filtro de data, incluir TODOS os pagamentos pagos (não precisa de data_paga)
-const pagamentosFiltradosPorPeriodo = (startDate || endDate)
-  ? pagamentosEquipe.filter(pag => {
-      if (!pag.data_paga) return false;
-      
-      // Extrair apenas a parte da data (YYYY-MM-DD) para evitar problemas de fuso horário
-      const dataPagamentoStr = pag.data_paga.split('T')[0];
-      
-      if (startDate) {
-        // Formatar startDate para YYYY-MM-DD no fuso local
-        const startLocal = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-        if (dataPagamentoStr < startLocal) return false;
-      }
-      
-      if (endDate) {
-        // Formatar endDate para YYYY-MM-DD no fuso local
-        const endLocal = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-        if (dataPagamentoStr > endLocal) return false;
-      }
-      
-      return true;
-    })
-  : pagamentosEquipe; // Quando não há filtro de data, usar todos os pagamentos
-```
+Observação importante: no banco existem pagamentos pagos em 01/2026 (portanto, a UI deveria mostrar dados no seu filtro). Logo o problema é realmente “carregamento/consulta” no front, não “ausência de dados”.
 
 ---
 
-### Por que essa solução funciona
+## Estratégia de correção
+### 1) Trocar o jeito de buscar pagamentos pagos (evitar `.in` com muitos IDs)
+Em vez de filtrar `pagamentos` por uma lista enorme de `acordoIds`, vamos filtrar por `user_id` dos funcionários via join com `acordos`:
 
-| Cenário | Antes (problema) | Depois (corrigido) |
-|---------|------------------|-------------------|
-| Sem filtro de data | Filtra mesmo sem necessidade, pode excluir por edge cases | Usa `pagamentosEquipe` diretamente |
-| Com filtro de data | Aplica filtro com comparação de strings | Mesmo comportamento, sem mudanças |
+- Buscar pagamentos pagos com `pagamentos -> acordos (inner) -> user_id`
+- Filtrar por `funcionarioIds` (que tende a ser bem menor e estável)
+- Continuar retornando apenas os campos necessários: `comissao_parcela`, `valor_parcela`, `acordo_id`, `data_paga`, `numero_parcela`
 
-### Benefícios
+Isso reduz drasticamente o tamanho da URL e evita a falha silenciosa.
 
-1. **Comportamento mais previsível** - sem filtro de data = todos os pagamentos
-2. **Performance** - evita iteração desnecessária quando não há filtro
-3. **Compatibilidade** - mantém o filtro de fuso horário corrigido quando há datas
+### 2) Aplicar a mesma correção na consulta de “quebra de acordo”
+Hoje ela também usa `.in('acordo_id', acordoIds)`. Vamos ajustar para o mesmo padrão (join por `acordos.user_id`), evitando outra possível falha.
+
+### 3) Melhorar o tratamento de erro (para não “falhar silenciosamente”)
+Se a consulta de pagamentos falhar:
+- logar o erro com detalhes
+- mostrar `toast` “Erro ao carregar pagamentos”
+- manter a tela utilizável (e não deixar parecer que é “zero no banco”)
+
+### 4) (Opcional, mas recomendado) Garantir que não há corte de 1000 linhas
+Se no futuro houver mais de 1000 pagamentos, a plataforma pode limitar resultados por padrão. Vamos:
+- definir `.range(0, 9999)` (ou paginação simples) para garantir que os totais reflitam tudo.
 
 ---
 
-### Resumo
+## Mudanças planejadas no código
+### Arquivo: `src/pages/EquipeAcordos.tsx`
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/EquipeAcordos.tsx` | Modificar lógica para usar todos os pagamentos quando não há filtro de data (linhas 90-111) |
+#### A) Substituir o bloco “Buscar pagamentos pagos dos acordos da equipe”
+**Antes (atual):**
+- pega `acordoIds` de todos os acordos
+- faz `pagamentos.in('acordo_id', acordoIds).eq('status','pago')`
+
+**Depois (novo):**
+- faz `pagamentos.select(..., acordos!inner(user_id))`
+- filtra por `.in('acordos.user_id', funcionarioIds)`
+- `.eq('status','pago')`
+- (opcional) `.range(0, 9999)`
+
+E então normaliza o retorno para manter o estado `pagamentosEquipe` no mesmo formato esperado.
+
+#### B) Substituir o bloco “Buscar IDs de acordos com QUEBRA DE ACORDO”
+Mesma ideia: query em `pagamentos` pendentes com join em `acordos`, filtrando por `acordos.user_id IN funcionarioIds`.
+
+#### C) Toast e logs para falhas
+Adicionar `toast({ variant: 'destructive', ... })` quando houver erro em pagamentos/quebra, e também `console.error` com o erro retornado.
+
+---
+
+## Critérios de aceite (como você vai validar)
+1. Abrir **/equipe/acordos** sem selecionar data:
+   - “Total de Acordos” deve ser > 0 (se existirem acordos no banco para essa equipe)
+   - “Total Parcelas Pagas” deve refletir a soma dos pagos (não pode ficar 0 se houver pagos)
+2. Selecionar período **01/01/2026 até 31/01/2026**:
+   - Deve aparecer uma lista (não “Nenhum acordo encontrado”), já que existem pagamentos pagos nesse intervalo.
+   - “Total Parcelas Pagas” deve ficar > 0.
+3. Exportar:
+   - “Exportar” deve gerar parcelas pagas do período (quando houver).
+4. Se houver erro de consulta:
+   - Deve aparecer toast explicando o problema (não ficar tudo zerado sem explicação).
+
+---
+
+## Notas técnicas (para manter compatibilidade com o que já foi feito)
+- Mantemos a lógica de filtro por string `YYYY-MM-DD` (ela continua válida).
+- A correção é focada em **garantir que `pagamentosEquipe` carregue** com consistência.
+- Não altera a regra de negócio do filtro (continua sendo por `data_paga`).
 
