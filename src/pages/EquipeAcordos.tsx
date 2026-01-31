@@ -88,27 +88,29 @@ export default function EquipeAcordos() {
   };
 
   // Filtrar pagamentos por data de pagamento (data_paga)
-  // Usar comparação de strings YYYY-MM-DD para evitar problemas de fuso horário
-  const pagamentosFiltradosPorPeriodo = pagamentosEquipe.filter(pag => {
-    if (!pag.data_paga) return false;
-    
-    // Extrair apenas a parte da data (YYYY-MM-DD)
-    const dataPagamentoStr = pag.data_paga.split('T')[0];
-    
-    if (startDate) {
-      // Formatar startDate para YYYY-MM-DD no fuso local
-      const startLocal = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-      if (dataPagamentoStr < startLocal) return false;
-    }
-    
-    if (endDate) {
-      // Formatar endDate para YYYY-MM-DD no fuso local
-      const endLocal = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-      if (dataPagamentoStr > endLocal) return false;
-    }
-    
-    return true;
-  });
+  // Se não há filtro de data, incluir TODOS os pagamentos pagos
+  const pagamentosFiltradosPorPeriodo = (startDate || endDate)
+    ? pagamentosEquipe.filter(pag => {
+        if (!pag.data_paga) return false;
+        
+        // Extrair apenas a parte da data (YYYY-MM-DD) para evitar problemas de fuso horário
+        const dataPagamentoStr = pag.data_paga.split('T')[0];
+        
+        if (startDate) {
+          // Formatar startDate para YYYY-MM-DD no fuso local
+          const startLocal = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+          if (dataPagamentoStr < startLocal) return false;
+        }
+        
+        if (endDate) {
+          // Formatar endDate para YYYY-MM-DD no fuso local
+          const endLocal = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+          if (dataPagamentoStr > endLocal) return false;
+        }
+        
+        return true;
+      })
+    : pagamentosEquipe; // Quando não há filtro de data, usar todos os pagamentos
 
   // IDs de acordos que possuem pelo menos uma parcela paga
   const acordosComParcelasPagas = new Set(
