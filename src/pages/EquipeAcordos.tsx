@@ -300,27 +300,45 @@ export default function EquipeAcordos() {
 
         setAcordos(acordosComNome);
 
-        // Buscar pagamentos pagos dos acordos da equipe
-        const acordoIds = (acordosData || []).map(a => a.id);
-        if (acordoIds.length > 0) {
+        // Buscar pagamentos pagos via join com acordos (evita URL longa com muitos IDs)
+        if (funcionarioIds.length > 0) {
           const { data: pagamentosPagos, error: pagamentosError } = await supabase
             .from('pagamentos')
-            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, numero_parcela')
-            .in('acordo_id', acordoIds)
-            .eq('status', 'pago');
+            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, numero_parcela, acordos!inner(user_id)')
+            .in('acordos.user_id', funcionarioIds)
+            .eq('status', 'pago')
+            .range(0, 9999);
 
-          if (!pagamentosError && pagamentosPagos) {
-            setPagamentosEquipe(pagamentosPagos);
+          if (pagamentosError) {
+            console.error('Erro ao buscar pagamentos pagos:', pagamentosError);
+            toast({
+              variant: 'destructive',
+              title: 'Erro ao carregar pagamentos',
+              description: 'Não foi possível carregar os pagamentos pagos. Tente novamente.',
+            });
+          } else if (pagamentosPagos) {
+            // Normalizar dados removendo o objeto acordos aninhado
+            const pagamentosNormalizados = pagamentosPagos.map(p => ({
+              comissao_parcela: p.comissao_parcela,
+              valor_parcela: p.valor_parcela,
+              acordo_id: p.acordo_id,
+              data_paga: p.data_paga,
+              numero_parcela: p.numero_parcela,
+            }));
+            setPagamentosEquipe(pagamentosNormalizados);
           }
 
-          // Buscar IDs de acordos com QUEBRA DE ACORDO
+          // Buscar IDs de acordos com QUEBRA DE ACORDO via join
           const { data: todasParcelasPendentes, error: quebraError } = await supabase
             .from('pagamentos')
-            .select('acordo_id, data_prevista')
-            .in('acordo_id', acordoIds)
-            .eq('status', 'pendente');
+            .select('acordo_id, data_prevista, acordos!inner(user_id)')
+            .in('acordos.user_id', funcionarioIds)
+            .eq('status', 'pendente')
+            .range(0, 9999);
           
-          if (!quebraError && todasParcelasPendentes) {
+          if (quebraError) {
+            console.error('Erro ao buscar parcelas pendentes:', quebraError);
+          } else if (todasParcelasPendentes) {
             const hoje = new Date();
             const dezDiasAtras = new Date(hoje);
             dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
