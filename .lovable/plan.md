@@ -1,90 +1,138 @@
 
-## Objetivo
-Fazer a página **Acordos da Equipe** voltar a exibir acordos e calcular **Total Parcelas Pagas / Comissão** corretamente quando um período é selecionado (e também sem período), eliminando o cenário atual onde tudo fica **zerado** e “Nenhum acordo encontrado” mesmo existindo pagamentos no banco.
+## Plano: Adicionar Botão Copiar ao Lado do Nome do Cliente
+
+### Objetivo
+Adicionar um botão de copiar ao lado do nome de cada cliente em todas as páginas onde o nome é exibido, permitindo que o usuário copie o nome rapidamente para a área de transferência.
 
 ---
 
-## Diagnóstico (por que está acontecendo)
-Pelos sintomas na tela (membros=6, mas total de acordos=0, total parcelas pagas=R$0,00) e pelo código atual, o problema mais provável é:
+### Análise dos Locais Afetados
 
-1. A lista `pagamentosEquipe` está ficando **vazia** no front.
-2. Quando você seleciona datas, o filtro `matchesDate = acordosComPagamentoNoPeriodo.has(acordo.id)` depende de `pagamentosFiltradosPorPeriodo`.
-3. Se `pagamentosEquipe` não carregou, então `pagamentosFiltradosPorPeriodo` fica vazio → `acordosComPagamentoNoPeriodo` fica vazio → **todos os acordos são filtrados** e os cards ficam zerados.
+Após análise do código, identifiquei os seguintes locais onde o nome do cliente é exibido e precisa do botão de copiar:
 
-A causa raiz mais comum disso nesse tipo de código é que o fetch de pagamentos está usando:
-- `.in('acordo_id', acordoIds)`  
-e `acordoIds` pode gerar uma URL muito grande (muitos UUIDs na query string) e a requisição falha (400/414).  
-Hoje, se essa requisição falhar, o código **não mostra erro pro usuário** e apenas não popula `pagamentosEquipe`, levando ao “0 em tudo”.
-
-Observação importante: no banco existem pagamentos pagos em 01/2026 (portanto, a UI deveria mostrar dados no seu filtro). Logo o problema é realmente “carregamento/consulta” no front, não “ausência de dados”.
-
----
-
-## Estratégia de correção
-### 1) Trocar o jeito de buscar pagamentos pagos (evitar `.in` com muitos IDs)
-Em vez de filtrar `pagamentos` por uma lista enorme de `acordoIds`, vamos filtrar por `user_id` dos funcionários via join com `acordos`:
-
-- Buscar pagamentos pagos com `pagamentos -> acordos (inner) -> user_id`
-- Filtrar por `funcionarioIds` (que tende a ser bem menor e estável)
-- Continuar retornando apenas os campos necessários: `comissao_parcela`, `valor_parcela`, `acordo_id`, `data_paga`, `numero_parcela`
-
-Isso reduz drasticamente o tamanho da URL e evita a falha silenciosa.
-
-### 2) Aplicar a mesma correção na consulta de “quebra de acordo”
-Hoje ela também usa `.in('acordo_id', acordoIds)`. Vamos ajustar para o mesmo padrão (join por `acordos.user_id`), evitando outra possível falha.
-
-### 3) Melhorar o tratamento de erro (para não “falhar silenciosamente”)
-Se a consulta de pagamentos falhar:
-- logar o erro com detalhes
-- mostrar `toast` “Erro ao carregar pagamentos”
-- manter a tela utilizável (e não deixar parecer que é “zero no banco”)
-
-### 4) (Opcional, mas recomendado) Garantir que não há corte de 1000 linhas
-Se no futuro houver mais de 1000 pagamentos, a plataforma pode limitar resultados por padrão. Vamos:
-- definir `.range(0, 9999)` (ou paginação simples) para garantir que os totais reflitam tudo.
+| Arquivo | Local | Linha Aprox. |
+|---------|-------|--------------|
+| `src/pages/Acordos.tsx` | Card de acordo (AcordoCard) | L59 |
+| `src/pages/AcordoDetalhe.tsx` | Cabeçalho da página (h1) | L468 |
+| `src/pages/Retornos.tsx` | Card de retorno | L850 |
+| `src/pages/EquipeAcordos.tsx` | Card de acordo da equipe | L652 |
+| `src/pages/Comissoes.tsx` | Accordion de acordo | L315 |
+| `src/pages/UsuarioComissoes.tsx` | Accordion de acordo | L441 |
+| `src/components/PaymentReminders.tsx` | Lembrete de pagamento | L63 e L106 |
 
 ---
 
-## Mudanças planejadas no código
-### Arquivo: `src/pages/EquipeAcordos.tsx`
+### Modificação Necessária no CopyButton
 
-#### A) Substituir o bloco “Buscar pagamentos pagos dos acordos da equipe”
-**Antes (atual):**
-- pega `acordoIds` de todos os acordos
-- faz `pagamentos.in('acordo_id', acordoIds).eq('status','pago')`
+O componente `CopyButton` atual remove caracteres não-numéricos (`.replace(/\D/g, '')`), o que é ideal para CPF/telefone mas **não funciona para nomes**. 
 
-**Depois (novo):**
-- faz `pagamentos.select(..., acordos!inner(user_id))`
-- filtra por `.in('acordos.user_id', funcionarioIds)`
-- `.eq('status','pago')`
-- (opcional) `.range(0, 9999)`
+Preciso criar uma prop opcional para desabilitar essa limpeza ou usar o valor diretamente quando for nome:
 
-E então normaliza o retorno para manter o estado `pagamentosEquipe` no mesmo formato esperado.
-
-#### B) Substituir o bloco “Buscar IDs de acordos com QUEBRA DE ACORDO”
-Mesma ideia: query em `pagamentos` pendentes com join em `acordos`, filtrando por `acordos.user_id IN funcionarioIds`.
-
-#### C) Toast e logs para falhas
-Adicionar `toast({ variant: 'destructive', ... })` quando houver erro em pagamentos/quebra, e também `console.error` com o erro retornado.
+**Alteração em `src/components/CopyButton.tsx`:**
+- Adicionar prop `preserveText?: boolean` para manter o texto original
+- Quando `preserveText` for `true`, copiar o valor sem modificação
 
 ---
 
-## Critérios de aceite (como você vai validar)
-1. Abrir **/equipe/acordos** sem selecionar data:
-   - “Total de Acordos” deve ser > 0 (se existirem acordos no banco para essa equipe)
-   - “Total Parcelas Pagas” deve refletir a soma dos pagos (não pode ficar 0 se houver pagos)
-2. Selecionar período **01/01/2026 até 31/01/2026**:
-   - Deve aparecer uma lista (não “Nenhum acordo encontrado”), já que existem pagamentos pagos nesse intervalo.
-   - “Total Parcelas Pagas” deve ficar > 0.
-3. Exportar:
-   - “Exportar” deve gerar parcelas pagas do período (quando houver).
-4. Se houver erro de consulta:
-   - Deve aparecer toast explicando o problema (não ficar tudo zerado sem explicação).
+### Mudanças Detalhadas
+
+#### 1. `src/components/CopyButton.tsx`
+Adicionar prop `preserveText` para permitir cópia de texto sem limpeza:
+
+```typescript
+interface CopyButtonProps {
+  value: string;
+  label?: string;
+  preserveText?: boolean; // Nova prop
+}
+
+// Na função handleCopy:
+const textToCopy = preserveText ? value : value.replace(/\D/g, '');
+await navigator.clipboard.writeText(textToCopy);
+```
+
+#### 2. `src/pages/Acordos.tsx` (linha ~59)
+Adicionar CopyButton ao lado do nome no AcordoCard:
+```tsx
+<h3 className="font-semibold flex items-center gap-1">
+  {acordo.cliente_nome}
+  <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+</h3>
+```
+
+#### 3. `src/pages/AcordoDetalhe.tsx` (linha ~468)
+Adicionar CopyButton ao lado do título h1:
+```tsx
+<h1 className="text-2xl font-bold flex items-center gap-2">
+  {acordo.cliente_nome}
+  <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+</h1>
+```
+
+#### 4. `src/pages/Retornos.tsx` (linha ~850)
+Adicionar CopyButton ao lado do nome no card de retorno:
+```tsx
+<span className="font-semibold flex items-center gap-1">
+  {retorno.cliente_nome}
+  <CopyButton value={retorno.cliente_nome} label="Nome" preserveText />
+</span>
+```
+
+#### 5. `src/pages/EquipeAcordos.tsx` (linha ~652)
+Adicionar CopyButton ao lado do nome no card de acordo da equipe:
+```tsx
+<h3 className="font-semibold flex items-center gap-1">
+  {acordo.cliente_nome}
+  <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+</h3>
+```
+
+#### 6. `src/pages/Comissoes.tsx` (linha ~315)
+Adicionar CopyButton ao lado do nome no accordion:
+```tsx
+<span className="font-semibold flex items-center gap-1">
+  {acordo.cliente_nome}
+  <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+</span>
+```
+
+#### 7. `src/pages/UsuarioComissoes.tsx` (linha ~441)
+Adicionar CopyButton ao lado do nome no accordion:
+```tsx
+<span className="font-medium flex items-center gap-1">
+  {acordo.cliente_nome}
+  <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+</span>
+```
+
+#### 8. `src/components/PaymentReminders.tsx` (linhas ~63 e ~106)
+Adicionar CopyButton ao lado do nome nos lembretes:
+```tsx
+<span className="font-medium text-foreground text-sm block truncate flex items-center gap-1">
+  {lembrete.cliente_nome}
+  <CopyButton value={lembrete.cliente_nome} label="Nome" preserveText />
+</span>
+```
 
 ---
 
-## Notas técnicas (para manter compatibilidade com o que já foi feito)
-- Mantemos a lógica de filtro por string `YYYY-MM-DD` (ela continua válida).
-- A correção é focada em **garantir que `pagamentosEquipe` carregue** com consistência.
-- Não altera a regra de negócio do filtro (continua sendo por `data_paga`).
+### Resumo das Alterações
 
+| Arquivo | Ação |
+|---------|------|
+| `src/components/CopyButton.tsx` | Adicionar prop `preserveText` |
+| `src/pages/Acordos.tsx` | Adicionar CopyButton ao nome |
+| `src/pages/AcordoDetalhe.tsx` | Adicionar CopyButton ao nome |
+| `src/pages/Retornos.tsx` | Adicionar CopyButton ao nome |
+| `src/pages/EquipeAcordos.tsx` | Adicionar CopyButton ao nome |
+| `src/pages/Comissoes.tsx` | Adicionar CopyButton ao nome |
+| `src/pages/UsuarioComissoes.tsx` | Adicionar CopyButton ao nome |
+| `src/components/PaymentReminders.tsx` | Adicionar CopyButton ao nome (2 locais) |
+
+---
+
+### Comportamento Esperado
+- Ao clicar no botão de copiar ao lado do nome, o nome completo do cliente será copiado para a área de transferência
+- Aparecerá um toast "Nome copiado!"
+- O ícone mudará para um check verde por 2 segundos
+- O clique não acionará navegação ou outros eventos (já tem `stopPropagation`)
