@@ -56,7 +56,10 @@ function AcordoCard({
                 <FileText className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold">{acordo.cliente_nome}</h3>
+                <h3 className="font-semibold flex items-center gap-1">
+                  {acordo.cliente_nome}
+                  <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+                </h3>
                 {(acordo.cliente_cpf || acordo.cliente_telefone) && <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mt-1">
                     {acordo.cliente_cpf && <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />

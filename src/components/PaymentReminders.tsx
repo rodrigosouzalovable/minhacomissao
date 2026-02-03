@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle } from 'lucide-react';
+import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { Button } from '@/components/ui/button';
 import {
@@ -59,8 +60,9 @@ export function PaymentReminders() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               {!isPagamento && <Phone className="h-3 w-3 text-primary shrink-0" />}
-              <span className="font-medium text-foreground text-sm block truncate">
+              <span className="font-medium text-foreground text-sm truncate flex items-center gap-1">
                 {lembrete.cliente_nome}
+                <CopyButton value={lembrete.cliente_nome} label="Nome" preserveText />
               </span>
             </div>
             <span className="text-muted-foreground text-xs">
@@ -102,8 +104,9 @@ export function PaymentReminders() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               {!isPagamento && <Phone className="h-3 w-3 text-primary shrink-0" />}
-              <span className="font-medium text-foreground text-sm block truncate">
+              <span className="font-medium text-foreground text-sm truncate flex items-center gap-1">
                 {lembrete.cliente_nome}
+                <CopyButton value={lembrete.cliente_nome} label="Nome" preserveText />
               </span>
             </div>
             <span className="text-muted-foreground text-xs">

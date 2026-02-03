@@ -847,7 +847,10 @@ export default function Retornos() {
                       <div className="space-y-2 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-semibold">{retorno.cliente_nome}</span>
+                          <span className="font-semibold flex items-center gap-1">
+                            {retorno.cliente_nome}
+                            <CopyButton value={retorno.cliente_nome} label="Nome" preserveText />
+                          </span>
                           {getStatusBadge(retorno.status, retorno.data_retorno)}
                         </div>
 
