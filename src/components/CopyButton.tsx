@@ -6,16 +6,18 @@ import { toast } from "sonner";
 interface CopyButtonProps {
   value: string;
   label?: string;
+  preserveText?: boolean;
 }
 
-export const CopyButton = ({ value, label }: CopyButtonProps) => {
+export const CopyButton = ({ value, label, preserveText }: CopyButtonProps) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!value) return;
-    await navigator.clipboard.writeText(value.replace(/\D/g, ''));
+    const textToCopy = preserveText ? value : value.replace(/\D/g, '');
+    await navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     toast.success(`${label || 'Texto'} copiado!`);
     setTimeout(() => setCopied(false), 2000);

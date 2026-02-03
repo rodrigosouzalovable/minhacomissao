@@ -465,7 +465,10 @@ export default function AcordoDetalhe() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">{acordo.cliente_nome}</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              {acordo.cliente_nome}
+              <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+            </h1>
             <p className="text-muted-foreground">
               {funcionarioNome && <span className="text-primary font-medium">{funcionarioNome} • </span>}
               Acordo criado em {formatarData(acordo.criado_em)}

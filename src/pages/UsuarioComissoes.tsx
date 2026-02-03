@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -438,7 +439,10 @@ export default function UsuarioComissoes() {
                         <AccordionItem key={acordo.id} value={acordo.id}>
                           <AccordionTrigger className="hover:no-underline">
                             <div className="flex flex-col md:flex-row md:items-center gap-2 text-left w-full pr-4">
-                              <span className="font-medium">{acordo.cliente_nome}</span>
+                              <span className="font-medium flex items-center gap-1">
+                                {acordo.cliente_nome}
+                                <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+                              </span>
                               <div className="flex flex-wrap gap-2">
                                 {filtro === 'duplicados' && (
                                   <Badge variant="outline" className="border-orange-500 text-orange-600">

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -312,7 +313,10 @@ export default function Comissoes() {
                             <AccordionItem key={acordo.id} value={acordo.id}>
                               <AccordionTrigger className="hover:no-underline">
                                 <div className="flex flex-wrap items-center gap-2 text-left">
-                                  <span className="font-semibold">{acordo.cliente_nome}</span>
+                                  <span className="font-semibold flex items-center gap-1">
+                                    {acordo.cliente_nome}
+                                    <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+                                  </span>
                                   {filtro === 'duplicados' && (
                                     <Badge variant="outline" className="border-orange-500 text-orange-600">
                                       {cpfDuplicados.has(normalizarCPF(acordo.cliente_cpf)) && 'CPF duplicado'}

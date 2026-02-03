@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -649,7 +650,10 @@ export default function EquipeAcordos() {
                           <FileText className="h-6 w-6 text-primary" />
                         </div>
                         <div>
-                          <h3 className="font-semibold">{acordo.cliente_nome}</h3>
+                          <h3 className="font-semibold flex items-center gap-1">
+                            {acordo.cliente_nome}
+                            <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+                          </h3>
                           <p className="text-sm text-primary font-medium">
                             {acordo.funcionario_nome}
                           </p>
