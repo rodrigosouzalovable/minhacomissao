@@ -270,6 +270,30 @@ export type Database = {
           },
         ]
       }
+      metas_mensais: {
+        Row: {
+          atualizado_em: string | null
+          criado_em: string | null
+          id: string
+          mes_ano: string
+          valor: number
+        }
+        Insert: {
+          atualizado_em?: string | null
+          criado_em?: string | null
+          id?: string
+          mes_ano: string
+          valor?: number
+        }
+        Update: {
+          atualizado_em?: string | null
+          criado_em?: string | null
+          id?: string
+          mes_ano?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       pagamentos: {
         Row: {
           acordo_id: string

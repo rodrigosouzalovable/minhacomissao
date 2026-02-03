@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { Target, TrendingUp, Calendar, DollarSign, Users, Trophy, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Target, TrendingUp, Calendar, DollarSign, Users, Trophy, ArrowUp, ArrowDown, Minus, Pencil } from 'lucide-react';
 import { differenceInDays, endOfMonth, format, startOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { useUserRole } from '@/hooks/useUserRole';
+import { toast } from 'sonner';
 
 interface MetasMensalProps {
-  metaValor: number;
   mesAno: string; // formato "2026-01"
 }
 
@@ -29,34 +34,92 @@ interface EvolucaoDiaria {
   metaIdeal: number;
 }
 
-export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
+// Função para calcular dias úteis (segunda a sexta)
+function calcularDiasUteisRestantes(dataInicio: Date, dataFim: Date): number {
+  let diasUteis = 0;
+  const dataAtual = new Date(dataInicio);
+  
+  while (dataAtual <= dataFim) {
+    const diaSemana = dataAtual.getDay();
+    // 0 = Domingo, 6 = Sábado - ignorar finais de semana
+    if (diaSemana !== 0 && diaSemana !== 6) {
+      diasUteis++;
+    }
+    dataAtual.setDate(dataAtual.getDate() + 1);
+  }
+  
+  return diasUteis;
+}
+
+function calcularDiasUteisTotais(dataInicio: Date, dataFim: Date): number {
+  return calcularDiasUteisRestantes(dataInicio, dataFim);
+}
+
+export function MetasMensal({ mesAno }: MetasMensalProps) {
+  const { isAdmin } = useUserRole();
   const [loading, setLoading] = useState(true);
+  const [metaValor, setMetaValor] = useState(0);
   const [totalRecebido, setTotalRecebido] = useState(0);
   const [funcionarios, setFuncionarios] = useState<FuncionarioData[]>([]);
   const [evolucaoDiaria, setEvolucaoDiaria] = useState<EvolucaoDiaria[]>([]);
   const [totalFuncionarios, setTotalFuncionarios] = useState(0);
+  
+  // Estado para edição da meta
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [newMetaValue, setNewMetaValue] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const dataInicio = startOfMonth(parseISO(`${mesAno}-01`));
   const dataFim = endOfMonth(dataInicio);
   const hoje = new Date();
-  const diasRestantes = Math.max(1, differenceInDays(dataFim, hoje) + 1);
+  
+  // Calcular dias úteis restantes (segunda a sexta)
+  const diasUteisRestantes = Math.max(1, calcularDiasUteisRestantes(hoje, dataFim));
+  const diasUteisPassados = calcularDiasUteisRestantes(dataInicio, hoje);
+  const totalDiasUteisMes = calcularDiasUteisTotais(dataInicio, dataFim);
+  
+  // Manter dias corridos para exibição
   const diasPassados = differenceInDays(hoje, dataInicio) + 1;
   const totalDiasMes = differenceInDays(dataFim, dataInicio) + 1;
 
   const valorFaltante = Math.max(0, metaValor - totalRecebido);
-  const valorPorDia = valorFaltante / diasRestantes;
-  const percentualAtingido = (totalRecebido / metaValor) * 100;
-  const percentualTempo = (diasPassados / totalDiasMes) * 100;
+  const valorPorDia = diasUteisRestantes > 0 ? valorFaltante / diasUteisRestantes : 0;
+  const percentualAtingido = metaValor > 0 ? (totalRecebido / metaValor) * 100 : 0;
+  const percentualTempo = totalDiasUteisMes > 0 ? (diasUteisPassados / totalDiasUteisMes) * 100 : 0;
 
   // Projeção baseada no ritmo atual
-  const mediaDiaria = totalRecebido / diasPassados;
-  const projecaoFechamento = mediaDiaria * totalDiasMes;
+  const mediaDiaria = diasUteisPassados > 0 ? totalRecebido / diasUteisPassados : 0;
+  const projecaoFechamento = mediaDiaria * totalDiasUteisMes;
 
   // Ritmo: comparação entre percentual atingido e percentual do tempo
-  const ritmo = percentualAtingido / percentualTempo;
+  const ritmo = percentualTempo > 0 ? percentualAtingido / percentualTempo : 0;
+
+  // Buscar meta do banco de dados
+  useEffect(() => {
+    async function fetchMeta() {
+      const { data, error } = await supabase
+        .from('metas_mensais')
+        .select('valor')
+        .eq('mes_ano', mesAno)
+        .maybeSingle();
+
+      if (!error && data) {
+        setMetaValor(Number(data.valor));
+      } else {
+        setMetaValor(0);
+      }
+    }
+
+    fetchMeta();
+  }, [mesAno]);
 
   useEffect(() => {
     async function fetchData() {
+      if (metaValor === 0) {
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
       
       const dataInicioStr = format(dataInicio, 'yyyy-MM-dd');
@@ -141,17 +204,17 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
           totalRecebido: recebido,
           metaIndividual,
           faltante,
-          porDia: faltante / diasRestantes,
+          porDia: diasUteisRestantes > 0 ? faltante / diasUteisRestantes : 0,
           percentualEquipe: total > 0 ? (recebido / total) * 100 : 0,
         };
       }).sort((a, b) => b.totalRecebido - a.totalRecebido) || [];
 
       setFuncionarios(funcionariosData);
 
-      // Calcular evolução diária
+      // Calcular evolução diária (mantém dias corridos para visualização)
       const evolucao: EvolucaoDiaria[] = [];
       let acumulado = 0;
-      const metaDiaria = metaValor / totalDiasMes;
+      const metaDiaria = metaValor / totalDiasUteisMes;
 
       for (let i = 0; i < diasPassados; i++) {
         const data = new Date(dataInicio);
@@ -159,10 +222,14 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
         const dataStr = format(data, 'yyyy-MM-dd');
         
         acumulado += valoresPorDia[dataStr] || 0;
+        
+        // Calcular quantos dias úteis passaram até esta data
+        const diasUteisAteData = calcularDiasUteisRestantes(dataInicio, data);
+        
         evolucao.push({
           dia: format(data, 'dd/MM'),
           acumulado,
-          metaIdeal: metaDiaria * (i + 1),
+          metaIdeal: metaDiaria * diasUteisAteData,
         });
       }
 
@@ -171,7 +238,64 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
     }
 
     fetchData();
-  }, [mesAno, metaValor]);
+  }, [mesAno, metaValor, dataInicio, dataFim, diasPassados, diasUteisRestantes, totalDiasUteisMes]);
+
+  // Formatação de moeda para input
+  const formatCurrencyInput = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    const number = parseInt(numericValue, 10) / 100;
+    if (isNaN(number)) return '';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(number);
+  };
+
+  const handleMetaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCurrencyInput(e.target.value);
+    setNewMetaValue(formatted);
+  };
+
+  const handleOpenEditDialog = () => {
+    setNewMetaValue(formatCurrency(metaValor));
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveMeta = async () => {
+    setSaving(true);
+    
+    // Extrair valor numérico
+    const numericValue = parseFloat(
+      newMetaValue.replace(/[R$\s.]/g, '').replace(',', '.')
+    );
+    
+    if (isNaN(numericValue) || numericValue <= 0) {
+      toast.error('Valor inválido. Digite um valor maior que zero.');
+      setSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('metas_mensais')
+      .upsert({
+        mes_ano: mesAno,
+        valor: numericValue,
+        atualizado_em: new Date().toISOString(),
+      }, {
+        onConflict: 'mes_ano'
+      });
+
+    if (error) {
+      console.error('Erro ao salvar meta:', error);
+      toast.error('Erro ao salvar meta. Tente novamente.');
+    } else {
+      toast.success('Meta atualizada com sucesso!');
+      setMetaValor(numericValue);
+      setEditDialogOpen(false);
+    }
+    
+    setSaving(false);
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -205,7 +329,9 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
     return `${index + 1}.`;
   };
 
-  if (loading) {
+  const mesNome = format(dataInicio, 'MMMM yyyy', { locale: ptBR });
+
+  if (loading && metaValor > 0) {
     return (
       <Card className="mb-6">
         <CardContent className="p-6">
@@ -219,7 +345,75 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
     );
   }
 
-  const mesNome = format(dataInicio, 'MMMM yyyy', { locale: ptBR });
+  // Se não tem meta definida, mostrar mensagem para definir
+  if (metaValor === 0) {
+    return (
+      <>
+        <Card className="mb-6 border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Target className="h-6 w-6 text-primary" />
+              Meta do Mês - {mesNome.charAt(0).toUpperCase() + mesNome.slice(1)}
+              {isAdmin && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7 ml-1"
+                  onClick={handleOpenEditDialog}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Target className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground mb-4">
+                Nenhuma meta definida para este mês.
+              </p>
+              {isAdmin && (
+                <Button onClick={handleOpenEditDialog}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Definir Meta
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Definir Meta do Mês</DialogTitle>
+              <DialogDescription>
+                Defina o valor da meta para {mesNome.charAt(0).toUpperCase() + mesNome.slice(1)}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="meta-value">Valor da Meta</Label>
+                <Input
+                  id="meta-value"
+                  placeholder="R$ 0,00"
+                  value={newMetaValue}
+                  onChange={handleMetaInputChange}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveMeta} disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   return (
     <div className="space-y-6 mb-8">
@@ -229,6 +423,16 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
           <CardTitle className="flex items-center gap-2 text-xl">
             <Target className="h-6 w-6 text-primary" />
             Meta do Mês - {mesNome.charAt(0).toUpperCase() + mesNome.slice(1)}
+            {isAdmin && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 ml-1"
+                onClick={handleOpenEditDialog}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -301,8 +505,8 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
                 <Calendar className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Dias Restantes</p>
-                <p className="text-xl font-bold text-blue-500">{diasRestantes} dias</p>
+                <p className="text-sm text-muted-foreground">Dias Úteis Restantes</p>
+                <p className="text-xl font-bold text-blue-500">{diasUteisRestantes} dias</p>
               </div>
             </div>
           </CardContent>
@@ -315,7 +519,7 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
                 <Target className="h-5 w-5 text-purple-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Necessário/Dia</p>
+                <p className="text-sm text-muted-foreground">Necessário/Dia Útil</p>
                 <p className="text-xl font-bold text-purple-500">{formatCurrency(valorPorDia)}</p>
               </div>
             </div>
@@ -459,7 +663,7 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
                       <span className="font-medium text-red-500">{formatCurrency(func.faltante)}</span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Por dia: </span>
+                      <span className="text-muted-foreground">Por dia útil: </span>
                       <span className="font-medium text-purple-500">{formatCurrency(func.porDia)}</span>
                     </div>
                   </div>
@@ -469,6 +673,37 @@ export function MetasMensal({ metaValor, mesAno }: MetasMensalProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialog de Edição */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Meta do Mês</DialogTitle>
+            <DialogDescription>
+              Defina o novo valor da meta para {mesNome.charAt(0).toUpperCase() + mesNome.slice(1)}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="meta-value">Valor da Meta</Label>
+              <Input
+                id="meta-value"
+                placeholder="R$ 0,00"
+                value={newMetaValue}
+                onChange={handleMetaInputChange}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveMeta} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
