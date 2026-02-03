@@ -12,8 +12,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { calcularComissao, calcularComissaoMundoDaModa, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa } from '@/lib/comissao';
 import { z } from 'zod';
-import { ArrowLeft, Calculator, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ImageDataExtractor, ExtractedData } from '@/components/ImageDataExtractor';
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
   clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine(val => val.replace(/\D/g, '').length === 11, {
@@ -97,6 +99,7 @@ export default function NovoAcordo() {
     });
   };
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
     clienteNome: '',
     clienteCpf: '',
@@ -109,6 +112,51 @@ export default function NovoAcordo() {
     diasAtraso: '',
     observacoes: ''
   });
+
+  // Handler para dados extraídos pela IA
+  const handleDataExtracted = (data: ExtractedData) => {
+    // Formata CPF se vier sem formatação
+    let formattedCpf = data.cliente_cpf || '';
+    if (formattedCpf && !formattedCpf.includes('.')) {
+      formattedCpf = formatCpf(formattedCpf);
+    }
+
+    // Formata telefone se vier sem formatação
+    let formattedPhone = data.cliente_telefone || '';
+    if (formattedPhone && !formattedPhone.includes('(')) {
+      formattedPhone = formatPhone(formattedPhone);
+    }
+
+    // Formata data de DD/MM/AAAA para YYYY-MM-DD (formato do input date)
+    let formattedDate = '';
+    if (data.data_primeiro_pagamento) {
+      const parts = data.data_primeiro_pagamento.split('/');
+      if (parts.length === 3) {
+        formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+
+    setForm({
+      clienteNome: data.cliente_nome || '',
+      clienteCpf: formattedCpf,
+      clienteTelefone: formattedPhone,
+      valorTotal: data.valor_total ? formatCurrencyDisplay(data.valor_total) : '',
+      parcelas: data.parcelas?.toString() || '',
+      valorPrimeiraParcela: data.valor_parcela ? formatCurrencyDisplay(data.valor_parcela) : '',
+      valorDemaisParcelas: data.valor_parcela ? formatCurrencyDisplay(data.valor_parcela) : '',
+      dataPrimeiroPagamento: formattedDate,
+      diasAtraso: data.dias_atraso?.toString() || '',
+      observacoes: ''
+    });
+
+    // Muda para aba manual para revisão
+    setActiveTab('manual');
+
+    toast({
+      title: 'Dados extraídos!',
+      description: 'Revise as informações na aba "Preencher Manualmente" antes de salvar.',
+    });
+  };
 
   // Função para calcular e preencher automaticamente os valores das parcelas
   const calcularValoresParcelas = (valorTotalStr: string, parcelasStr: string) => {
@@ -457,8 +505,25 @@ export default function NovoAcordo() {
           <h1 className="text-2xl font-bold">Novo Acordo</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Card>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="ai" className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              Preencher com IA
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Preencher Manualmente
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ai" className="space-y-4">
+            <ImageDataExtractor onDataExtracted={handleDataExtracted} />
+          </TabsContent>
+
+          <TabsContent value="manual" className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <Card>
             <CardHeader>
               <CardTitle>Dados do Cliente</CardTitle>
               <CardDescription>Informações do cliente do acordo</CardDescription>
@@ -694,7 +759,9 @@ export default function NovoAcordo() {
               {isLoading ? 'Salvando...' : 'Criar Acordo'}
             </Button>
           </div>
-        </form>
+            </form>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>;
 }
