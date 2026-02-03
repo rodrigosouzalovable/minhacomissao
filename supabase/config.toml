@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.daily-report-whatsapp]
 verify_jwt = false
+
+[functions.extract-acordo-data]
+verify_jwt = false
