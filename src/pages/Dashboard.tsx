@@ -125,7 +125,7 @@ export default function Dashboard() {
 
         {/* Seção de Metas - Apenas para Admin */}
         {isAdmin && (
-          <MetasMensal metaValor={227000} mesAno="2026-01" />
+          <MetasMensal mesAno="2026-02" />
         )}
 
         {/* Cards de resumo */}
