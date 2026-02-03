@@ -249,7 +249,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
     }
 
     fetchData();
-  }, [mesAno, metaValor]);
+  }, [mesAno, metaValor, dataInicio, dataFim, diasPassados, diasUteisRestantes, totalDiasUteisMes]);
 
   // Formatação de moeda para input
   const formatCurrencyInput = (value: string) => {
