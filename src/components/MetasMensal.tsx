@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -69,18 +69,29 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
   const [newMetaValue, setNewMetaValue] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const dataInicio = startOfMonth(parseISO(`${mesAno}-01`));
-  const dataFim = endOfMonth(dataInicio);
-  const hoje = new Date();
+  // Memoizar datas para evitar recriação a cada render
+  const { dataInicio, dataFim, hoje } = useMemo(() => {
+    const inicio = startOfMonth(parseISO(`${mesAno}-01`));
+    const fim = endOfMonth(inicio);
+    const hojeDate = new Date();
+    return { dataInicio: inicio, dataFim: fim, hoje: hojeDate };
+  }, [mesAno]);
   
-  // Calcular dias úteis restantes (segunda a sexta)
-  const diasUteisRestantes = Math.max(1, calcularDiasUteisRestantes(hoje, dataFim));
-  const diasUteisPassados = calcularDiasUteisRestantes(dataInicio, hoje);
-  const totalDiasUteisMes = calcularDiasUteisTotais(dataInicio, dataFim);
-  
-  // Manter dias corridos para exibição
-  const diasPassados = differenceInDays(hoje, dataInicio) + 1;
-  const totalDiasMes = differenceInDays(dataFim, dataInicio) + 1;
+  // Memoizar cálculos de dias
+  const { diasUteisRestantes, diasUteisPassados, totalDiasUteisMes, diasPassados, totalDiasMes } = useMemo(() => {
+    const uteisRestantes = Math.max(1, calcularDiasUteisRestantes(hoje, dataFim));
+    const uteisPassados = calcularDiasUteisRestantes(dataInicio, hoje);
+    const totalUteis = calcularDiasUteisTotais(dataInicio, dataFim);
+    const passados = differenceInDays(hoje, dataInicio) + 1;
+    const total = differenceInDays(dataFim, dataInicio) + 1;
+    return {
+      diasUteisRestantes: uteisRestantes,
+      diasUteisPassados: uteisPassados,
+      totalDiasUteisMes: totalUteis,
+      diasPassados: passados,
+      totalDiasMes: total,
+    };
+  }, [dataInicio, dataFim, hoje]);
 
   const valorFaltante = Math.max(0, metaValor - totalRecebido);
   const valorPorDia = diasUteisRestantes > 0 ? valorFaltante / diasUteisRestantes : 0;
@@ -238,7 +249,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
     }
 
     fetchData();
-  }, [mesAno, metaValor, dataInicio, dataFim, diasPassados, diasUteisRestantes, totalDiasUteisMes]);
+  }, [mesAno, metaValor]);
 
   // Formatação de moeda para input
   const formatCurrencyInput = (value: string) => {
