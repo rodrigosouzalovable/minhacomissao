@@ -186,11 +186,22 @@ export default function Acordos() {
   const [dataProximaPorAcordo, setDataProximaPorAcordo] = useState<Map<string, string>>(new Map());
   const [dataVencidaPorAcordo, setDataVencidaPorAcordo] = useState<Map<string, string>>(new Map());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string>('todos');
+
+  const { data: funcionarios } = useQuery({
+    queryKey: ['funcionarios-list'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('listar_funcionarios' as any);
+      if (error) throw error;
+      return data as { user_id: string; nome: string }[];
+    },
+  });
 
   const { data: acordosHoje } = useQuery({
-    queryKey: ['acordos-hoje-count'],
+    queryKey: ['acordos-hoje-count', selectedUserId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('contar_acordos_hoje' as any);
+      const params = selectedUserId !== 'todos' ? { p_user_id: selectedUserId } : {};
+      const { data, error } = await supabase.rpc('contar_acordos_hoje_por_usuario' as any, params);
       if (error) throw error;
       return data as number;
     },
@@ -519,8 +530,19 @@ export default function Acordos() {
   return <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-         <div className="flex items-center gap-3">
+         <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold">Meus Acordos</h1>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue placeholder="Funcionário" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {funcionarios?.map((f) => (
+                  <SelectItem key={f.user_id} value={f.user_id}>{f.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Badge variant="outline" className="text-sm py-1 px-3">
               <TrendingUp className="h-4 w-4 mr-1" />
               {acordosHoje ?? 0} acordo(s) hoje
