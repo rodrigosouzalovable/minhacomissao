@@ -630,6 +630,7 @@ export default function EquipeAcordos() {
               <SelectItem value="ativo">Ativos</SelectItem>
               <SelectItem value="concluido">Concluídos</SelectItem>
               <SelectItem value="cancelado">Cancelados</SelectItem>
+              <SelectItem value="quebrado">Quebrados</SelectItem>
             </SelectContent>
           </Select>
           </div>
