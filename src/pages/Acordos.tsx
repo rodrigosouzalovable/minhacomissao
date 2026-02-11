@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { CopyButton } from '@/components/CopyButton';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -14,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2 } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp } from 'lucide-react';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 type Acordo = Tables<'acordos'>;
@@ -185,6 +186,16 @@ export default function Acordos() {
   const [dataProximaPorAcordo, setDataProximaPorAcordo] = useState<Map<string, string>>(new Map());
   const [dataVencidaPorAcordo, setDataVencidaPorAcordo] = useState<Map<string, string>>(new Map());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
+
+  const { data: acordosHoje } = useQuery({
+    queryKey: ['acordos-hoje-count'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('contar_acordos_hoje' as any);
+      if (error) throw error;
+      return data as number;
+    },
+  });
+
   const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
     if (!acordo.cliente_telefone) {
       toast({
@@ -499,7 +510,13 @@ export default function Acordos() {
   return <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold">Meus Acordos</h1>
+         <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">Meus Acordos</h1>
+            <Badge variant="outline" className="text-sm py-1 px-3">
+              <TrendingUp className="h-4 w-4 mr-1" />
+              {acordosHoje ?? 0} acordo(s) hoje
+            </Badge>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handleExportarExcel(acordosExibidos)} disabled={acordosExibidos.length === 0}>
               <Download className="h-4 w-4 mr-2" />
