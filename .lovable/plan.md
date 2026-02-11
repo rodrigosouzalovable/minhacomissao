@@ -1,78 +1,47 @@
 
 
-## Plano: Filtro por Funcionario no Contador de Acordos Hoje
+## Plano: Separar aba Vencidas e criar aba Acordos Realizados
 
-### O que muda
+### Resumo
 
-O badge "X acordo(s) hoje" na pagina "Meus Acordos" ganha um seletor de funcionario. Ao selecionar um funcionario, o contador mostra apenas os acordos lancados por aquele funcionario no dia. Por padrao, mostra o total da equipe (comportamento atual).
+A aba "Vencidas" atual sera dividida em duas:
+- **Acordos Realizados** (nova aba): clientes com parcelas vencidas que **nao pagaram nenhuma parcela**
+- **Vencidas** (aba existente): clientes com parcelas vencidas que **ja pagaram alguma parcela** mas deixaram as subsequentes vencerem
 
-### Implementacao
+### Mudancas no codigo (`src/pages/Acordos.tsx`)
 
-#### 1. Nova funcao SQL: `contar_acordos_hoje_por_usuario`
+#### 1. Atualizar o tipo da aba ativa
+Adicionar `'acordos_realizados'` ao tipo union do estado `abaAtiva`.
 
-Criar uma funcao `SECURITY DEFINER` que aceita um `user_id` opcional e retorna a contagem de acordos criados hoje, filtrada por usuario quando informado.
-
-```sql
-CREATE OR REPLACE FUNCTION public.contar_acordos_hoje_por_usuario(p_user_id uuid DEFAULT NULL)
-RETURNS integer
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT COUNT(*)::integer
-  FROM acordos
-  WHERE criado_em >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::timestamp AT TIME ZONE 'America/Sao_Paulo'
-    AND (p_user_id IS NULL OR user_id = p_user_id);
-$$;
+#### 2. Criar a nova lista filtrada
+```
+acordosRealizados = acordos com parcelas vencidas E SEM nenhuma parcela paga
+acordosVencidos = acordos com parcelas vencidas E COM pelo menos 1 parcela paga
 ```
 
-#### 2. Atualizar `Acordos.tsx`
+Logica atual:
+- `acordosVencidos` = todos com parcelas vencidas
 
-- Adicionar estado `selectedUserId` para o funcionario selecionado
-- Buscar lista de usuarios (da tabela `user_roles` + `auth.users` metadata, ou usar uma query nos acordos para pegar nomes unicos)
-- Trocar a chamada RPC de `contar_acordos_hoje` para `contar_acordos_hoje_por_usuario`, passando o `p_user_id` quando selecionado
-- Adicionar um `Select` (dropdown) ao lado do badge, com opcoes:
-  - "Todos" (padrao, sem filtro)
-  - Lista de funcionarios com nome
+Nova logica:
+- `acordosRealizados` = `acordosComParcelasVencidas` E **nao** `acordosComPagamentosPagos`
+- `acordosVencidos` = `acordosComParcelasVencidas` E `acordosComPagamentosPagos`
 
-#### 3. Buscar lista de funcionarios
+#### 3. Atualizar a grid de abas
+De `grid-cols-4` para `grid-cols-5`, com a ordem:
+1. Negociados
+2. Pagos
+3. Proximas ao Vencimento
+4. **Acordos Realizados** (nova)
+5. Vencidas
 
-Usar uma query nos proprios acordos para extrair os user_ids unicos com seus nomes (via join ou metadata), ou criar uma query simples que busque os usuarios que ja lancaram acordos. A abordagem mais simples: buscar direto da tabela `acordos` os `user_id` distintos e cruzar com a tabela de perfis ou user metadata.
+#### 4. Adicionar TabsContent para a nova aba
+Renderizar os cards de `acordosRealizados` com a mesma estrutura das outras abas.
 
-Como o sistema ja tem usuarios na tabela `auth.users` com `raw_user_meta_data->>'nome'`, vou criar uma funcao `SECURITY DEFINER` para listar os funcionarios disponiveis.
+#### 5. Atualizar `acordosExibidos` e exportacao Excel
+Incluir o caso `'acordos_realizados'` no ternario e no nome do arquivo Excel.
 
-```sql
-CREATE OR REPLACE FUNCTION public.listar_funcionarios()
-RETURNS TABLE(user_id uuid, nome text)
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT DISTINCT a.user_id, 
-    COALESCE(u.raw_user_meta_data->>'nome', u.email) as nome
-  FROM acordos a
-  JOIN auth.users u ON u.id = a.user_id
-  ORDER BY nome;
-$$;
-```
+### Arquivos modificados
+- `src/pages/Acordos.tsx`
 
-### Layout da UI
-
-O badge atual sera expandido para incluir um dropdown compacto:
-
-```
-[Meus Acordos]  [Todos v]  [~ 28 acordo(s) hoje]
-```
-
-Ao selecionar um funcionario no dropdown, o contador atualiza automaticamente.
-
-### Detalhes Tecnicos
-
-**Arquivos modificados:**
-- Nova migracao SQL (2 funcoes: `contar_acordos_hoje_por_usuario` e `listar_funcionarios`)
-- `src/pages/Acordos.tsx` -- adicionar dropdown de funcionario e atualizar query do contador
-
-**Dependencias:** Nenhuma nova dependencia necessaria. Usa componentes `Select` e `Badge` ja existentes.
+Nenhuma mudanca no banco de dados e necessaria.
 
