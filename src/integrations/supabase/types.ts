@@ -584,6 +584,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      contar_acordos_hoje: { Args: never; Returns: number }
       cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
       cpf_normalize: { Args: { cpf_input: string }; Returns: string }
       cpf_ultimo_acordo_quebrado: { Args: { p_cpf: string }; Returns: boolean }
