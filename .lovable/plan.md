@@ -1,32 +1,66 @@
 
-## Plano: Atualizar Credenciais da Integração Z-API
 
-### Problema
-As credenciais da Z-API precisam ser atualizadas com novos valores fornecidos pelo usuário.
+## Plano: Contador de Acordos Lançados no Dia
 
-### Valores Fornecidos
-- **Instance ID**: 3ECC691777CBE1B941643A43AB49A453
-- **Instance Token**: 4931031E1641E5FD2D3CAF8B
-- **Client Token (Security Token)**: F221d74fcccd54113a38859a23505d69dS
+### Objetivo
+Adicionar um contador visível na página "Meus Acordos" mostrando quantos acordos foram lançados **no dia por todos os funcionários** do sistema.
 
-### Impacto
-Três funções backend dependem dessas credenciais:
-1. `send-whatsapp` - Envia mensagens WhatsApp sob demanda
-2. `process-whatsapp-queue` - Processa fila de mensagens agendadas
-3. `daily-report-whatsapp` - Envia relatório diário automaticamente
+### Implementação
 
-### Solução
-Atualizar os três secrets armazenados no projeto:
-- `ZAPI_INSTANCE_ID` → `3ECC691777CBE1B941643A43AB49A453`
-- `ZAPI_TOKEN` → `4931031E1641E5FD2D3CAF8B`
-- `ZAPI_CLIENT_TOKEN` → `F221d74fcccd54113a38859a23505d69dS`
+**Arquivo:** `src/pages/Acordos.tsx`
 
-Esses secrets são acessados pelas edge functions via `Deno.env.get()` e são usados para:
-- Construir a URL da API: `https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN}/send-text`
-- Autenticar requests com header `Client-Token`
+### Mudanças
 
-### Resultado Esperado
-- Credenciais atualizadas no backend
-- Todas as três funções WhatsApp funcionando com os novos dados
-- Mensagens sendo enviadas corretamente através da Z-API
-- Relatório diário sendo entregue sem interrupções
+1. **Nova query ao banco** - Buscar a contagem de acordos criados hoje por todos os usuários:
+   - Consulta na tabela `acordos` filtrando por `criado_em >= hoje 00:00:00`
+   - Essa query usa as políticas de acesso existentes. Como funcionários só veem seus próprios acordos, será necessário criar uma **função de banco (RPC)** para retornar a contagem global.
+
+2. **Nova função SQL (RPC)** - `contar_acordos_hoje`:
+   - Função `SECURITY DEFINER` que conta todos os acordos criados hoje
+   - Acessível por qualquer usuário autenticado
+   - Retorna apenas o número (sem expor dados sensíveis)
+
+3. **Componente visual** - Card/Badge no topo da página:
+   - Exibido entre o título "Meus Acordos" e os filtros
+   - Mostra o número de acordos lançados hoje com um ícone
+   - Estilo visual destacado (badge ou mini-card com cor)
+
+### Detalhes Técnicos
+
+**Migration SQL:**
+```sql
+CREATE OR REPLACE FUNCTION contar_acordos_hoje()
+RETURNS integer
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT COUNT(*)::integer
+  FROM acordos
+  WHERE criado_em >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::timestamp AT TIME ZONE 'America/Sao_Paulo';
+$$;
+```
+
+**Frontend - Nova query:**
+```typescript
+const { data: acordosHoje } = useQuery({
+  queryKey: ['acordos-hoje-count'],
+  queryFn: async () => {
+    const { data, error } = await supabase.rpc('contar_acordos_hoje');
+    if (error) throw error;
+    return data as number;
+  },
+});
+```
+
+**Visual - Badge no header:**
+```tsx
+<Badge variant="outline" className="text-sm py-1 px-3">
+  <TrendingUp className="h-4 w-4 mr-1" />
+  {acordosHoje ?? 0} acordo(s) lançado(s) hoje
+</Badge>
+```
+
+### Resultado
+- Todo funcionário verá no topo da página quantos acordos foram lançados no dia pela equipe inteira
+- Atualiza automaticamente ao recarregar a página
+- Seguro: expõe apenas a contagem, sem dados de outros usuários
