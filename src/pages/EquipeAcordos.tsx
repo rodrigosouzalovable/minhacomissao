@@ -345,6 +345,14 @@ export default function EquipeAcordos() {
             dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
             const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
             
+            // Acordos com status 'quebrado' já são quebra de acordo
+            const idsComQuebra = new Set<string>();
+            (acordosData || []).forEach(a => {
+              if (a.status === 'quebrado') {
+                idsComQuebra.add(a.id);
+              }
+            });
+            
             // Agrupar por acordo_id e pegar a MAX data_prevista de cada
             const ultimaParcelaPorAcordo = new Map<string, string>();
             todasParcelasPendentes.forEach(p => {
@@ -355,7 +363,6 @@ export default function EquipeAcordos() {
             });
             
             // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
-            const idsComQuebra = new Set<string>();
             ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
               if (ultimaData < dezDiasAtrasStr) {
                 idsComQuebra.add(acordoId);
@@ -412,6 +419,7 @@ export default function EquipeAcordos() {
       case 'ativo': return 'Ativo';
       case 'concluido': return 'Concluído';
       case 'cancelado': return 'Cancelado';
+      case 'quebrado': return 'Quebrado';
       default: return status;
     }
   };

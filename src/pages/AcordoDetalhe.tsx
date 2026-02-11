@@ -92,18 +92,22 @@ export default function AcordoDetalhe() {
         if (pagamentosError) throw pagamentosError;
         setPagamentos(pagamentosData || []);
 
-        // Verificar se é QUEBRA DE ACORDO (última parcela pendente vencida há mais de 10 dias)
-        const parcelasPendentes = (pagamentosData || []).filter(p => p.status === 'pendente');
-        if (parcelasPendentes.length > 0) {
-          const ultimaParcelaPendente = parcelasPendentes.reduce((max, p) => 
-            p.data_prevista > max.data_prevista ? p : max
-          );
-          const dezDiasAtras = new Date();
-          dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
-          const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
-          setIsQuebraAcordo(ultimaParcelaPendente.data_prevista < dezDiasAtrasStr);
+        // Verificar se é QUEBRA DE ACORDO (status 'quebrado' OU última parcela pendente vencida há mais de 10 dias)
+        if (acordoData.status === 'quebrado') {
+          setIsQuebraAcordo(true);
         } else {
-          setIsQuebraAcordo(false);
+          const parcelasPendentes = (pagamentosData || []).filter(p => p.status === 'pendente');
+          if (parcelasPendentes.length > 0) {
+            const ultimaParcelaPendente = parcelasPendentes.reduce((max, p) => 
+              p.data_prevista > max.data_prevista ? p : max
+            );
+            const dezDiasAtras = new Date();
+            dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
+            const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
+            setIsQuebraAcordo(ultimaParcelaPendente.data_prevista < dezDiasAtrasStr);
+          } else {
+            setIsQuebraAcordo(false);
+          }
         }
       } catch (error) {
         console.error('Erro ao carregar acordo:', error);
@@ -559,7 +563,8 @@ export default function AcordoDetalhe() {
               className="text-sm"
             >
               {acordo.status === 'ativo' ? 'Ativo' :
-               acordo.status === 'concluido' ? 'Concluído' : 'Cancelado'}
+               acordo.status === 'concluido' ? 'Concluído' : 
+               acordo.status === 'quebrado' ? 'Quebrado' : 'Cancelado'}
             </Badge>
           </div>
         </div>

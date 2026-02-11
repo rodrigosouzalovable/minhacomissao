@@ -300,10 +300,18 @@ export default function Acordos() {
         setAcordosComParcelasProximas(new Set(proximasMap.keys()));
 
         // Carregar IDs de acordos com QUEBRA DE ACORDO
-        // (última parcela pendente vencida há mais de 10 dias)
+        // (status 'quebrado' OU última parcela pendente vencida há mais de 10 dias)
         const dezDiasAtras = new Date(hoje);
         dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
         const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
+        
+        // Acordos com status 'quebrado' já são quebra de acordo
+        const idsComQuebra = new Set<string>();
+        (acordosData || []).forEach(a => {
+          if (a.status === 'quebrado') {
+            idsComQuebra.add(a.id);
+          }
+        });
         
         // Buscar todas as parcelas pendentes
         const { data: todasParcelasPendentes, error: quebraError } = await supabase
@@ -322,14 +330,13 @@ export default function Acordos() {
           });
           
           // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
-          const idsComQuebra = new Set<string>();
           ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
             if (ultimaData < dezDiasAtrasStr) {
               idsComQuebra.add(acordoId);
             }
           });
-          setAcordosComQuebraAcordo(idsComQuebra);
         }
+        setAcordosComQuebraAcordo(idsComQuebra);
       } catch (error) {
         console.error('Erro ao carregar acordos:', error);
       } finally {
@@ -496,6 +503,8 @@ export default function Acordos() {
         return 'Concluído';
       case 'cancelado':
         return 'Cancelado';
+      case 'quebrado':
+        return 'Quebrado';
       default:
         return status;
     }
