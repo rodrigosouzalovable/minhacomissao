@@ -178,7 +178,7 @@ export default function Acordos() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [acordoParaExcluir, setAcordoParaExcluir] = useState<Acordo | null>(null);
-  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'proximas' | 'vencidos'>('negociados');
+  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'proximas' | 'acordos_realizados' | 'vencidos'>('negociados');
   const [acordosComPagamentosPagos, setAcordosComPagamentosPagos] = useState<Set<string>>(new Set());
   const [acordosComParcelasVencidas, setAcordosComParcelasVencidas] = useState<Set<string>>(new Set());
   const [acordosComParcelasProximas, setAcordosComParcelasProximas] = useState<Set<string>>(new Set());
@@ -444,7 +444,7 @@ export default function Acordos() {
       chave: 'observacoes',
       titulo: 'Observações'
     }];
-    const nomeArquivo = abaAtiva === 'pagos' ? 'acordos_pagos' : abaAtiva === 'proximas' ? 'parcelas_proximas_vencimento' : abaAtiva === 'vencidos' ? 'parcelas_vencidas' : 'acordos_negociados';
+    const nomeArquivo = abaAtiva === 'pagos' ? 'acordos_pagos' : abaAtiva === 'proximas' ? 'parcelas_proximas_vencimento' : abaAtiva === 'acordos_realizados' ? 'acordos_realizados' : abaAtiva === 'vencidos' ? 'parcelas_vencidas' : 'acordos_negociados';
     exportarParaExcel(dadosParaExportar, colunas, nomeArquivo);
     toast({
       title: 'Exportação concluída',
@@ -474,10 +474,18 @@ export default function Acordos() {
     return dataB.localeCompare(dataA);
   });
 
-  // Acordos com Parcelas Vencidas: têm pelo menos 1 parcela pendente com data_prevista < hoje
-  // Ordenados pela data mais recente primeiro
+  // Acordos Realizados: parcelas vencidas E SEM nenhuma parcela paga
+  const acordosRealizados = filteredAcordos
+    .filter(acordo => acordosComParcelasVencidas.has(acordo.id) && !acordosComPagamentosPagos.has(acordo.id))
+    .sort((a, b) => {
+      const dataA = dataVencidaPorAcordo.get(a.id) || '';
+      const dataB = dataVencidaPorAcordo.get(b.id) || '';
+      return dataB.localeCompare(dataA);
+    });
+
+  // Acordos Vencidos: parcelas vencidas E COM pelo menos 1 parcela paga
   const acordosVencidos = filteredAcordos
-    .filter(acordo => acordosComParcelasVencidas.has(acordo.id))
+    .filter(acordo => acordosComParcelasVencidas.has(acordo.id) && acordosComPagamentosPagos.has(acordo.id))
     .sort((a, b) => {
       const dataA = dataVencidaPorAcordo.get(a.id) || '';
       const dataB = dataVencidaPorAcordo.get(b.id) || '';
@@ -493,7 +501,7 @@ export default function Acordos() {
       const dataB = dataProximaPorAcordo.get(b.id) || '';
       return dataA.localeCompare(dataB);
     });
-  const acordosExibidos = abaAtiva === 'pagos' ? acordosPagos : abaAtiva === 'proximas' ? acordosProximos : abaAtiva === 'vencidos' ? acordosVencidos : acordosNegociados;
+  const acordosExibidos = abaAtiva === 'pagos' ? acordosPagos : abaAtiva === 'proximas' ? acordosProximos : abaAtiva === 'acordos_realizados' ? acordosRealizados : abaAtiva === 'vencidos' ? acordosVencidos : acordosNegociados;
   const getStatusVariant = (status: string) => {
     switch (status) {
       case 'ativo':
@@ -583,8 +591,8 @@ export default function Acordos() {
         </div>
 
         {/* Abas de acordos */}
-        <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as 'pagos' | 'negociados' | 'proximas' | 'vencidos')}>
-          <TabsList className="grid w-full grid-cols-4 mb-4">
+        <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as 'pagos' | 'negociados' | 'proximas' | 'acordos_realizados' | 'vencidos')}>
+          <TabsList className="grid w-full grid-cols-5 mb-4">
             <TabsTrigger value="negociados">
               Negociados ({acordosNegociados.length})
             </TabsTrigger>
@@ -593,6 +601,9 @@ export default function Acordos() {
             </TabsTrigger>
             <TabsTrigger value="proximas">
               Próximas ao Vencimento ({acordosProximos.length})
+            </TabsTrigger>
+            <TabsTrigger value="acordos_realizados">
+              Acordos Realizados ({acordosRealizados.length})
             </TabsTrigger>
             <TabsTrigger value="vencidos">
               Vencidas ({acordosVencidos.length})
@@ -615,6 +626,12 @@ export default function Acordos() {
             {acordosProximos.length > 0 ? <div className="grid gap-4">
                 {acordosProximos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela próxima ao vencimento" />}
+          </TabsContent>
+
+          <TabsContent value="acordos_realizados">
+            {acordosRealizados.length > 0 ? <div className="grid gap-4">
+                {acordosRealizados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
+              </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo realizado sem pagamentos" />}
           </TabsContent>
 
           <TabsContent value="vencidos">
