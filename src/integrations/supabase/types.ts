@@ -585,6 +585,10 @@ export type Database = {
     }
     Functions: {
       contar_acordos_hoje: { Args: never; Returns: number }
+      contar_acordos_hoje_por_usuario: {
+        Args: { p_user_id?: string }
+        Returns: number
+      }
       cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
       cpf_normalize: { Args: { cpf_input: string }; Returns: string }
       cpf_ultimo_acordo_quebrado: { Args: { p_cpf: string }; Returns: boolean }
@@ -596,6 +600,13 @@ export type Database = {
         Returns: boolean
       }
       is_admin_user: { Args: { uid: string }; Returns: boolean }
+      listar_funcionarios: {
+        Args: never
+        Returns: {
+          nome: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "funcionario" | "gestor" | "admin"
