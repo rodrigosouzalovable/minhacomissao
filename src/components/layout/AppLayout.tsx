@@ -48,6 +48,7 @@ const navItems: NavItem[] = [
   { href: '/admin/equipes', label: 'Equipes', icon: UsersRound, adminOnly: true },
   { href: '/admin/auditoria', label: 'Auditoria', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, adminOnly: true },
+  { href: '/admin/importar-devedores', label: 'Importar Devedores', icon: FileSpreadsheet, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {

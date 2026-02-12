@@ -23,6 +23,9 @@ import Retornos from "./pages/Retornos";
 import Auditoria from "./pages/Auditoria";
 import Financeiro from "./pages/Financeiro";
 import NotFound from "./pages/NotFound";
+import PortalConsulta from "./pages/PortalConsulta";
+import ConsultaResultado from "./pages/ConsultaResultado";
+import ImportarDevedores from "./pages/ImportarDevedores";
 
 const queryClient = new QueryClient();
 
@@ -100,7 +103,8 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<PortalConsulta />} />
+            <Route path="/consulta/:cpf" element={<ConsultaResultado />} />
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/acordos" element={<ProtectedRoute><Acordos /></ProtectedRoute>} />
@@ -117,6 +121,7 @@ const App = () => (
             <Route path="/admin/equipes" element={<AdminRoute><AdminEquipes /></AdminRoute>} />
             <Route path="/admin/auditoria" element={<AdminRoute><Auditoria /></AdminRoute>} />
             <Route path="/admin/financeiro" element={<AdminRoute><Financeiro /></AdminRoute>} />
+            <Route path="/admin/importar-devedores" element={<AdminRoute><ImportarDevedores /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
