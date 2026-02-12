@@ -1,31 +1,23 @@
 
 
-## Plano: Substituir "Área Restrita" por ícone personalizado
+## Plano: Simplificar página de login
 
 ### O que será feito
 
-Substituir o link de texto "Área Restrita" no header do portal por um ícone discreto. Como a imagem enviada é apenas uma referência visual do texto atual, será utilizado um ícone do `lucide-react` (por exemplo, `Lock` ou `UserCog`) para representar o acesso restrito.
+Remover a aba "Cadastrar" e o link "Esqueceu sua senha?" da página de login (`src/pages/Auth.tsx`), deixando apenas o formulário de login simples.
 
-### Alteração
+### Alterações no arquivo `src/pages/Auth.tsx`
 
-**Arquivo:** `src/pages/PortalConsulta.tsx` (linha 81)
+1. **Remover o sistema de Tabs** — Substituir o componente `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` por apenas o formulário de login direto
+2. **Remover o botão "Esqueceu sua senha?"** — Eliminar o `Button` com `variant="link"` que ativa o fluxo de reset
+3. **Remover código morto** — Eliminar:
+   - Estado `signupData` e `showResetPassword`/`resetEmail`
+   - Função `handleSignup` e `handleResetPassword`
+   - Schema `signupSchema` e `resetSchema`
+   - Todo o bloco condicional `if (showResetPassword)` com o formulário de recuperação
+   - Imports não utilizados (`Tabs`, `TabsContent`, `TabsList`, `TabsTrigger`)
 
-**De:**
-```
-<a href="/auth" className="text-xs underline" style={{ color: 'rgba(255,255,255,0.5)' }}>Área Restrita</a>
-```
+### Resultado final
 
-**Para:**
-```
-<a href="/auth" className="hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.5)' }} title="Área Restrita" aria-label="Área Restrita">
-  <Lock className="h-5 w-5" />
-</a>
-```
-
-### Detalhes Técnicos
-
-- Importar o ícone `Lock` do `lucide-react` (já instalado)
-- Manter `title` e `aria-label` para acessibilidade (tooltip ao passar o mouse)
-- Remover o texto e underline, deixando apenas o ícone
-- Manter a mesma cor discreta (`rgba(255,255,255,0.5)`) e efeito hover
+A página mostrará apenas: logo + título "MEUS ACORDOS", campos E-mail e Senha, e botão "Entrar".
 
