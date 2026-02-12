@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Phone, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, ChevronRight } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Phone, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, MapPin } from 'lucide-react';
 import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 
@@ -24,8 +25,18 @@ function isValidCpf(cpf: string) {
 const PHONE = '5562981089329';
 const PHONE_DISPLAY = '(62) 98108-9329';
 
+const FAQ_ITEMS = [
+  { q: 'Qual o objetivo do Portal de Acordos?', a: 'O Portal de Acordos tem como objetivo facilitar a renegociação de débitos de forma online, rápida e segura, oferecendo condições especiais para que você regularize sua situação financeira.' },
+  { q: 'Recebi um contato sobre uma oportunidade de negociação. Como consulto?', a: 'Basta digitar seu CPF no campo de consulta na página inicial. Se houver débitos disponíveis para negociação, eles serão exibidos com todos os detalhes para você avaliar.' },
+  { q: 'Meus dados estão seguros?', a: 'Sim. Todas as consultas são sigilosas e seus dados são tratados com total segurança, seguindo as diretrizes da LGPD (Lei Geral de Proteção de Dados).' },
+  { q: 'Como faço para negociar meu débito?', a: 'Após consultar seu CPF e visualizar seus débitos, entre em contato pelo nosso WhatsApp para negociar condições especiais de pagamento diretamente com nossa equipe.' },
+  { q: 'Qual o prazo de resposta?', a: 'Nossa equipe responde em até 24 horas úteis após o contato via WhatsApp.' },
+  { q: 'Quem pode renegociar no portal?', a: 'Qualquer pessoa física que possua débitos registrados em nosso sistema pode consultar e renegociar através do portal.' },
+];
+
 export default function PortalConsulta() {
   const [cpf, setCpf] = useState('');
+  const [faqSearch, setFaqSearch] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -40,83 +51,61 @@ export default function PortalConsulta() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const filteredFaqs = FAQ_ITEMS.filter(
+    (faq) =>
+      faq.q.toLowerCase().includes(faqSearch.toLowerCase()) ||
+      faq.a.toLowerCase().includes(faqSearch.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(135deg, #001a33 0%, #003366 50%, #004080 100%)' }}>
       {/* Header */}
       <header className="px-4 py-3" style={{ background: 'linear-gradient(135deg, #001a33 0%, #002b55 100%)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          {/* Logos */}
           <div className="flex items-center gap-4 sm:gap-6">
-            <img
-              src={logoSouzaRibeiro}
-              alt="Souza e Ribeiro"
-              className="h-10 sm:h-12 w-auto"
-              style={{ filter: 'brightness(0) invert(1)' }}
-            />
+            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-10 sm:h-12 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
             <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.25)' }} />
-            <img
-              src={logoGrupoAltum}
-              alt="Grupo Altum"
-              className="h-10 sm:h-12 w-auto"
-            />
+            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-10 sm:h-12 w-auto" />
           </div>
-
-          {/* Nav Links - desktop */}
           <nav className="hidden md:flex items-center gap-6">
-            <button onClick={() => scrollTo('beneficios')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>
-              Benefícios
-            </button>
-            <button onClick={() => scrollTo('como-funciona')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>
-              Como funciona
-            </button>
-            <button onClick={() => scrollTo('duvidas')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>
-              Dúvidas
-            </button>
+            <button onClick={() => scrollTo('beneficios')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>Benefícios</button>
+            <button onClick={() => scrollTo('quem-somos')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>Quem somos</button>
+            <button onClick={() => scrollTo('como-funciona')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>Como funciona</button>
+            <button onClick={() => scrollTo('duvidas')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>Dúvidas</button>
           </nav>
-
-          {/* Phone + Área Restrita */}
           <div className="flex items-center gap-4">
             <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-2 text-sm font-medium" style={{ color: '#00a86b' }}>
               <Phone className="h-4 w-4" />
               {PHONE_DISPLAY}
             </a>
-            <a href="/auth" className="text-xs underline" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              Área Restrita
-            </a>
+            <a href="/auth" className="text-xs underline" style={{ color: 'rgba(255,255,255,0.5)' }}>Área Restrita</a>
           </div>
         </div>
       </header>
 
-      {/* Hero - Split Layout */}
+      {/* Hero */}
       <section className="flex-1 flex items-center px-4 py-12 sm:py-20">
         <div className="max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          {/* Left Column - Badge + Motivational Text */}
           <div className="text-center lg:text-left">
-            {/* Big Badge */}
             <div className="inline-flex items-center gap-3 rounded-2xl px-6 py-4 mb-8" style={{ background: 'rgba(0,168,107,0.15)', border: '2px solid rgba(0,168,107,0.3)' }}>
               <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{ background: '#00a86b' }}>
                 <HandshakeIcon className="h-7 w-7" style={{ color: '#fff' }} />
               </div>
               <span className="text-xl sm:text-2xl font-bold" style={{ color: '#00a86b' }}>Portal de Acordos</span>
             </div>
-
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4" style={{ color: '#fff' }}>
               Aproveite e coloque sua{' '}
               <span style={{ color: '#00a86b' }}>vida financeira</span>{' '}
               em dia.
             </h1>
-
             <p className="text-lg sm:text-xl mb-6" style={{ color: 'rgba(255,255,255,0.75)' }}>
               Negocie seus débitos com condições especiais e recupere seu nome.
             </p>
-
             <div className="inline-flex items-center gap-2 rounded-full px-5 py-2.5" style={{ background: 'rgba(0,168,107,0.2)', border: '1px solid rgba(0,168,107,0.4)' }}>
               <Star className="h-5 w-5" style={{ color: '#00a86b' }} />
               <span className="text-base font-semibold" style={{ color: '#00a86b' }}>Condições Imperdíveis</span>
             </div>
           </div>
-
-          {/* Right Column - Consultation Card */}
           <div className="flex justify-center lg:justify-end">
             <Card className="w-full max-w-md border-0 shadow-2xl" style={{ background: '#fff' }}>
               <CardContent className="p-8">
@@ -125,34 +114,18 @@ export default function PortalConsulta() {
                     <Search className="h-7 w-7" style={{ color: '#003366' }} />
                   </div>
                   <h2 className="text-2xl font-bold mb-1" style={{ color: '#1a1a2e' }}>Consulte suas dívidas</h2>
-                  <p className="text-sm" style={{ color: '#666' }}>
-                    Digite seu CPF para verificar débitos em aberto
-                  </p>
+                  <p className="text-sm" style={{ color: '#666' }}>Digite seu CPF para verificar débitos em aberto</p>
                 </div>
-
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <Label htmlFor="cpf" className="text-sm font-medium" style={{ color: '#333' }}>CPF</Label>
-                    <Input
-                      id="cpf"
-                      placeholder="000.000.000-00"
-                      value={cpf}
-                      onChange={(e) => setCpf(formatCpfInput(e.target.value))}
-                      className="h-12 text-center text-lg mt-1.5 border-2"
-                      style={{ borderColor: '#e0e0e0', color: '#1a1a2e' }}
-                    />
+                    <Input id="cpf" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(formatCpfInput(e.target.value))} className="h-12 text-center text-lg mt-1.5 border-2" style={{ borderColor: '#e0e0e0', color: '#1a1a2e' }} />
                   </div>
-                  <Button
-                    type="submit"
-                    disabled={!isValidCpf(cpf)}
-                    className="w-full h-12 text-base font-semibold rounded-lg"
-                    style={{ background: '#00a86b', color: '#fff' }}
-                  >
+                  <Button type="submit" disabled={!isValidCpf(cpf)} className="w-full h-12 text-base font-semibold rounded-lg" style={{ background: '#00a86b', color: '#fff' }}>
                     <Search className="h-5 w-5 mr-2" />
                     Consultar
                   </Button>
                 </form>
-
                 <div className="flex items-center gap-2 mt-4 justify-center">
                   <Shield className="h-4 w-4" style={{ color: '#999' }} />
                   <span className="text-xs" style={{ color: '#999' }}>Consulta segura e sigilosa</span>
@@ -187,6 +160,24 @@ export default function PortalConsulta() {
         </div>
       </section>
 
+      {/* Quem Somos */}
+      <section id="quem-somos" className="px-4 py-16" style={{ background: '#fff' }}>
+        <div className="max-w-5xl mx-auto">
+          <h3 className="text-2xl font-bold text-center mb-8" style={{ color: '#1a1a2e' }}>Quem somos</h3>
+          <p className="text-center text-base sm:text-lg max-w-3xl mx-auto mb-10" style={{ color: '#444', lineHeight: 1.8 }}>
+            O Portal de Acordos é a plataforma de gestão e recuperação de crédito da{' '}
+            <strong>Souza e Ribeiro Advogados</strong>, <strong>autorizada e homologada pelo Grupo Altum</strong>,
+            com foco nas melhores oportunidades de negociação para seus clientes.
+            Todo o processo é online, de forma rápida e segura.
+          </p>
+          <div className="flex items-center justify-center gap-8 sm:gap-12">
+            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro Advogados" className="h-12 sm:h-16 w-auto" />
+            <div className="h-12 w-px" style={{ background: '#ddd' }} />
+            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-16 w-auto" style={{ filter: 'brightness(0)' }} />
+          </div>
+        </div>
+      </section>
+
       {/* Como funciona */}
       <section id="como-funciona" className="px-4 py-16" style={{ background: 'rgba(0,0,0,0.2)' }}>
         <div className="max-w-5xl mx-auto">
@@ -211,42 +202,94 @@ export default function PortalConsulta() {
         </div>
       </section>
 
-      {/* Dúvidas */}
-      <section id="duvidas" className="px-4 py-16">
+      {/* Dúvidas Frequentes - Accordion */}
+      <section id="duvidas" className="px-4 py-16" style={{ background: '#f7f8fa' }}>
         <div className="max-w-3xl mx-auto">
-          <h3 className="text-2xl font-bold text-center mb-10" style={{ color: '#fff' }}>Dúvidas frequentes</h3>
-          <div className="space-y-4">
-            {[
-              { q: 'Meus dados estão seguros?', a: 'Sim. Todas as consultas são sigilosas e seus dados são tratados com total segurança.' },
-              { q: 'Como faço para negociar?', a: 'Após consultar seu CPF, entre em contato pelo WhatsApp para negociar condições especiais.' },
-              { q: 'Qual o prazo de resposta?', a: 'Nossa equipe responde em até 24 horas úteis após o contato.' },
-            ].map((faq) => (
-              <div key={faq.q} className="p-5 rounded-xl" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                <div className="flex items-start gap-3">
-                  <HelpCircle className="h-5 w-5 mt-0.5 shrink-0" style={{ color: '#00a86b' }} />
-                  <div>
-                    <h4 className="font-semibold mb-1" style={{ color: '#fff' }}>{faq.q}</h4>
-                    <p className="text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>{faq.a}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <h3 className="text-2xl font-bold text-center mb-2" style={{ color: '#1a1a2e' }}>Perguntas Frequentes</h3>
+          <p className="text-center text-sm mb-8" style={{ color: '#666' }}>Tire suas dúvidas sobre o Portal de Acordos</p>
+
+          <div className="mb-6">
+            <Input
+              placeholder="Buscar pergunta..."
+              value={faqSearch}
+              onChange={(e) => setFaqSearch(e.target.value)}
+              className="h-11 border-2"
+              style={{ borderColor: '#e0e0e0', color: '#1a1a2e', background: '#fff' }}
+            />
           </div>
+
+          <Accordion type="single" collapsible className="space-y-3">
+            {filteredFaqs.map((faq, idx) => (
+              <AccordionItem
+                key={idx}
+                value={`faq-${idx}`}
+                className="rounded-xl border-0 px-5 overflow-hidden"
+                style={{ background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+              >
+                <AccordionTrigger className="text-left font-semibold text-sm sm:text-base hover:no-underline py-4" style={{ color: '#1a1a2e' }}>
+                  <div className="flex items-center gap-3">
+                    <HelpCircle className="h-5 w-5 shrink-0" style={{ color: '#00a86b' }} />
+                    {faq.q}
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-sm pb-4" style={{ color: '#555' }}>
+                  {faq.a}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+            {filteredFaqs.length === 0 && (
+              <p className="text-center text-sm py-6" style={{ color: '#999' }}>Nenhuma pergunta encontrada.</p>
+            )}
+          </Accordion>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="px-4 py-8" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
-        <div className="max-w-5xl mx-auto text-center">
-          <p className="text-sm mb-2" style={{ color: 'rgba(255,255,255,0.65)' }}>
-            Entre em contato:{' '}
-            <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" style={{ color: '#00a86b' }}>
-              {PHONE_DISPLAY}
-            </a>
-          </p>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            © {new Date().getFullYear()} Grupo Altum — Todos os direitos reservados
-          </p>
+      {/* Footer Completo */}
+      <footer style={{ background: '#1a1a2e' }}>
+        {/* Top bar */}
+        <div className="px-4 py-10" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="max-w-5xl mx-auto">
+            {/* Logos */}
+            <div className="flex items-center justify-center gap-6 sm:gap-10 mb-8">
+              <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-10 sm:h-12 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+              <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.2)' }} />
+              <img src={logoGrupoAltum} alt="Grupo Altum" className="h-10 sm:h-12 w-auto" />
+            </div>
+
+            {/* Links + Atendimento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-center sm:text-left">
+              <div>
+                <h4 className="font-semibold text-sm mb-3" style={{ color: 'rgba(255,255,255,0.9)' }}>Links</h4>
+                <div className="flex flex-col gap-2">
+                  <a href="#" className="text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>Política de Privacidade</a>
+                  <a href="#" className="text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>Antifraude</a>
+                </div>
+              </div>
+              <div>
+                <h4 className="font-semibold text-sm mb-3" style={{ color: 'rgba(255,255,255,0.9)' }}>Central de Atendimento</h4>
+                <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
+                  <Phone className="h-4 w-4" />
+                  {PHONE_DISPLAY}
+                </a>
+                <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
+                  <MapPin className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
+                  <span className="text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>Goiânia - GO</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="px-4 py-5">
+          <div className="max-w-5xl mx-auto text-center">
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              Portal de Acordos é um serviço da SOUZA E RIBEIRO ADVOGADOS
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              © {new Date().getFullYear()} Grupo Altum — Todos os direitos reservados
+            </p>
+          </div>
         </div>
       </footer>
 
