@@ -164,6 +164,54 @@ export type Database = {
           },
         ]
       }
+      devedores: {
+        Row: {
+          arquivo_importacao: string | null
+          ativo: boolean
+          atualizado_em: string
+          contrato: string | null
+          cpf: string
+          criado_em: string
+          data_vencimento: string | null
+          descricao: string | null
+          id: string
+          importado_por: string | null
+          nome: string
+          valor_atualizado: number
+          valor_original: number
+        }
+        Insert: {
+          arquivo_importacao?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          contrato?: string | null
+          cpf: string
+          criado_em?: string
+          data_vencimento?: string | null
+          descricao?: string | null
+          id?: string
+          importado_por?: string | null
+          nome: string
+          valor_atualizado?: number
+          valor_original?: number
+        }
+        Update: {
+          arquivo_importacao?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          contrato?: string | null
+          cpf?: string
+          criado_em?: string
+          data_vencimento?: string | null
+          descricao?: string | null
+          id?: string
+          importado_por?: string | null
+          nome?: string
+          valor_atualizado?: number
+          valor_original?: number
+        }
+        Relationships: []
+      }
       gastos_empresa: {
         Row: {
           categoria: string
@@ -584,6 +632,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consultar_debitos_por_cpf: {
+        Args: { p_cpf: string }
+        Returns: {
+          contrato: string
+          cpf: string
+          data_vencimento: string
+          descricao: string
+          id: string
+          nome: string
+          valor_atualizado: number
+          valor_original: number
+        }[]
+      }
       contar_acordos_hoje: { Args: never; Returns: number }
       contar_acordos_hoje_por_usuario: {
         Args: { p_user_id?: string }
