@@ -1,58 +1,75 @@
 
-## Plano: Adicionar Botão "Voltar à Página Principal" na Aba de Autenticação
 
-### Contexto
-O usuário está na página `/auth` e precisa de uma forma visual e intuitiva de retornar à página principal (`/`), que é o portal público de consulta de débitos do Grupo Altum.
+## Plano: Redesign do Portal com Layout "Feirao de Acordos"
 
-### Solução Proposta
+### Objetivo
+Redesenhar a pagina principal (`PortalConsulta.tsx`) para seguir o layout da imagem de referencia, posicionando as logos do Grupo Altum e Souza e Ribeiro no header exatamente como os logos parceiros aparecem na referencia.
 
-**Objetivo**: Adicionar um elemento de navegação discreto mas acessível que permita ao usuário retornar ao portal público a qualquer momento.
+### Layout da Referencia (Feirao de Acordos)
 
-#### 1. Onde Adicionar?
-Adicionar um botão na parte superior do Card de autenticação (acima das abas "Entrar" e "Cadastrar"), similar ao padrão já utilizado no fluxo de "Recuperar Senha" que já possui um `ArrowLeft + "Voltar"`.
+A estrutura visual segue este formato:
 
-#### 2. Implementação no `src/pages/Auth.tsx`
-
-**Adições:**
-- Importar o ícone `Home` do `lucide-react` (já importado `ArrowLeft`, então não há nova dependência)
-- Adicionar um botão acima das abas na seção de login/cadastro
-- O botão será um `variant="ghost"` para não competir visualmente com os botões principais de "Entrar" e "Cadastrar"
-- Usar `navigate('/')` para retornar à página principal
-
-**Três Opções de Posicionamento:**
-1. **Opção A (Recomendada)**: Adicionar um pequeno link/botão no topo do Card, antes do header com o logo
-   - Posicionamento: Acima do Card
-   - Ícone: `Home` ou `ArrowLeft`
-   - Estilo: Botão ghost com texto pequeno
-
-2. **Opção B**: Adicionar dentro do header do Card, alinhado à direita (tipo breadcrumb)
-   - Menos intrusivo
-   - Alinha com o padrão de "Área Restrita" que já existe no portal
-
-3. **Opção C**: Adicionar no final do Card (após as abas)
-   - Menos comum, pero funciona como call-to-action secundária
-
-**Recomendação**: Opção A ou B - manter coerência com o layout existente
-
-#### 3. Conteúdo do Botão
-```
-Ícone: Home ou ArrowLeft
-Texto: "Voltar ao Portal" ou "Voltar à Página Principal"
-Ação: navigate('/')
+```text
++------------------------------------------------------------------+
+| [Logo Parceiro] [Logo Feirao] [Logo Parceiro]  Nav Links  Tel    |
++------------------------------------------------------------------+
+|                                                                  |
+|  [Badge grande com icone                  [Card branco          |
+|   de handshake +                           "Consulte suas       |
+|   "Portal de Acordos"]                     dividas"             |
+|                                            CPF: [______]       |
+|  Texto motivacional:                       [Consultar]          |
+|  "Aproveite e coloque                                           |
+|   sua vida financeira                                           |
+|   em dia."                                ]                     |
+|                                                                  |
+|  "Condicoes                                                      |
+|   Imperdiveis"                                                   |
+|                                                                  |
++------------------------------------------------------------------+
+|  Secoes: Beneficios | Como funciona | Duvidas                    |
++------------------------------------------------------------------+
+|  Footer + WhatsApp flutuante                                     |
++------------------------------------------------------------------+
 ```
 
-#### 4. Aplicar em Todos os Estados
-- Login principal
-- Cadastro
-- Recuperação de Senha
+### O que sera feito
 
-O botão "Voltar ao Login" na tela de recuperação de senha já usa o padrão `ArrowLeft`, portanto seguiremos o mesmo padrão.
+#### 1. Copiar as logos para o projeto
+- `user-uploads://Gemini_Generated_Image_dcmat4dcmat4dcma-removebg-preview_1.png` -> `src/assets/logo-grupo-altum.png` (Logo Grupo Altum)
+- `user-uploads://Design_sem_nome_60_-removebg-preview.png` -> `src/assets/logo-souza-ribeiro.png` (Logo Souza e Ribeiro)
 
-### Arquivos a Modificar
-- `src/pages/Auth.tsx` - Adicionar botão de navegação
+#### 2. Redesenhar o Header
+- Layout horizontal com as duas logos lado a lado (Souza e Ribeiro + Grupo Altum), como na referencia que mostra "Itau Parceiro" + "Feirao de Acordos" + "Viventi"
+- Links de navegacao: Beneficios, Como funciona, Duvidas
+- Telefone de contato no canto direito
+- Fundo com cor solida ou gradiente (estilo laranja da referencia, adaptado para as cores do Grupo Altum - azul escuro)
 
-### Benefícios
-- Melhora a experiência do usuário (UX)
-- Permite transição fácil entre área pública e área restrita
-- Padrão coerente com elementos de navegação já existentes
+#### 3. Redesenhar o Hero Section
+- Layout em duas colunas (split layout):
+  - **Coluna esquerda**: Badge grande estilizado "Portal de Acordos" com icone de handshake + texto motivacional ("Aproveite e coloque sua vida financeira em dia" / "Condicoes Imperdiveis")
+  - **Coluna direita**: Card branco com titulo "Consulte suas dividas", campo CPF e botao "Consultar"
+- Background com gradiente nas cores do Grupo Altum (azul escuro para verde)
+
+#### 4. Manter secoes inferiores
+- Secao "Como funciona" (3 passos)
+- Secao "Beneficios"
+- Footer com contatos
+
+#### 5. Adicionar botao WhatsApp flutuante
+- Botao verde fixo no canto inferior direito (como na referencia)
+- Link direto para `wa.me/5562981089329`
+
+### Detalhes Tecnicos
+
+**Arquivos criados:**
+- `src/assets/logo-grupo-altum.png` (copia do upload)
+- `src/assets/logo-souza-ribeiro.png` (copia do upload)
+
+**Arquivos modificados:**
+- `src/pages/PortalConsulta.tsx` - Redesign completo do layout seguindo a referencia
+
+**Nota sobre a logo do Grupo Altum:** A imagem enviada tem texto branco em fundo transparente, ideal para fundos escuros. Sera posicionada sobre o fundo azul escuro do header.
+
+**Nota sobre a logo Souza e Ribeiro:** A imagem tem texto preto em fundo transparente. No header escuro, sera necessario aplicar um filtro CSS `brightness(0) invert(1)` para tornar branca, ou colocar sobre um fundo claro.
 
