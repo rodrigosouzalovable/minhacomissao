@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Home } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -145,7 +145,18 @@ export default function Auth() {
 
   if (showResetPassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md mb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => navigate('/')}
+          >
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Voltar ao Portal
+          </Button>
+        </div>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-primary">Recuperar Senha</CardTitle>
@@ -184,8 +195,19 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md mb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => navigate('/')}
+          >
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Voltar ao Portal
+          </Button>
+        </div>
+        <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2">
             <img src={acordosIcon} alt="Meus Acordos" className="h-8 w-8" />
