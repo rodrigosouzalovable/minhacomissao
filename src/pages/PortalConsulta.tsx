@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Phone, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, MapPin } from 'lucide-react';
+import { Phone, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, MapPin, Lock } from 'lucide-react';
 import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 
@@ -78,7 +78,9 @@ export default function PortalConsulta() {
               <Phone className="h-4 w-4" />
               {PHONE_DISPLAY}
             </a>
-            <a href="/auth" className="text-xs underline" style={{ color: 'rgba(255,255,255,0.5)' }}>Área Restrita</a>
+            <a href="/auth" className="hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.5)' }} title="Área Restrita" aria-label="Área Restrita">
+              <Lock className="h-5 w-5" />
+            </a>
           </div>
         </div>
       </header>
