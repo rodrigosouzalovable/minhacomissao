@@ -1,23 +1,33 @@
 
+## Plano: Habilitar data de hoje no seletor de data de pagamento
 
-## Resultado da Investigacao
+### Problema
+Na página de negociação de débitos (`ConsultaResultado.tsx`), o calendário para selecionar a data do primeiro pagamento está desabilitando a data de hoje.
 
-Ao testar o fluxo diretamente no preview, **o formulario de parcelamento esta funcionando corretamente**. Ao clicar em "Negociar este debito", o formulario expande mostrando:
+**Causa**: A linha 309 usa `disabled={(date) => date < new Date()}` que compara data COM hora. Isso significa que se for 14/02/2026 às 10:30 AM, a mesma data 14/02/2026 antes das 10:30 AM estará desabilitada.
 
-- Valor de entrada (opcional)
-- Numero de parcelas (select com calculo automatico)
-- Data do primeiro pagamento (date picker)
-- Botao "Confirmar proposta"
+### Solução
+Modificar a função `disabled` no componente `Calendar` para comparar apenas a data (sem considerar a hora), permitindo que o cliente selecione a data de hoje e qualquer data posterior.
 
-### Possivel causa do problema reportado
+### Alteração Específica
+**Arquivo**: `src/pages/ConsultaResultado.tsx`  
+**Linha**: 309
 
-O formulario pode nao ter aparecido para voce por um dos seguintes motivos:
+**De:**
+```typescript
+disabled={(date) => date < new Date()}
+```
 
-1. **Cache do navegador** - A versao antiga da pagina (sem o formulario) pode estar em cache. Tente recarregar a pagina com Ctrl+Shift+R (hard refresh)
-2. **Scroll necessario** - O formulario aparece abaixo do botao, pode ser necessario rolar a pagina para baixo para visualiza-lo
-3. **Build em andamento** - As mudancas podem nao ter sido aplicadas ainda no momento do teste
+**Para:**
+```typescript
+disabled={(date) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
+}}
+```
 
-### Recomendacao
-
-Nenhuma alteracao de codigo e necessaria. Recarregue a pagina e tente clicar novamente em "Negociar este debito". O formulario com todas as opcoes de parcelamento devera aparecer.
-
+### Resultado Esperado
+- Cliente conseguirá selecionar a data de hoje como primeira data de pagamento
+- Datas no futuro continuarão selecionáveis
+- Datas no passado (anteriores a hoje) permanecerão desabilitadas
