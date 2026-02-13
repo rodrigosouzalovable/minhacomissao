@@ -1,33 +1,32 @@
 
-## Plano: Habilitar data de hoje no seletor de data de pagamento
+## Plano: Adicionar logo do Grupo Altum no header da pagina de negociacao
 
-### Problema
-Na página de negociação de débitos (`ConsultaResultado.tsx`), o calendário para selecionar a data do primeiro pagamento está desabilitando a data de hoje.
+### Resumo
+Substituir o placeholder "GA" (quadrado verde com texto) pela logo real do Grupo Altum no header da pagina `ConsultaResultado.tsx`.
 
-**Causa**: A linha 309 usa `disabled={(date) => date < new Date()}` que compara data COM hora. Isso significa que se for 14/02/2026 às 10:30 AM, a mesma data 14/02/2026 antes das 10:30 AM estará desabilitada.
+### Alteracoes
 
-### Solução
-Modificar a função `disabled` no componente `Calendar` para comparar apenas a data (sem considerar a hora), permitindo que o cliente selecione a data de hoje e qualquer data posterior.
+**1. Copiar a logo para o projeto**
+- Copiar o arquivo `Gemini_Generated_Image_dcmat4dcmat4dcma-removebg-preview_1-2.png` para `src/assets/logo-grupo-altum-negociacao.png`
 
-### Alteração Específica
-**Arquivo**: `src/pages/ConsultaResultado.tsx`  
-**Linha**: 309
+**2. Modificar `src/pages/ConsultaResultado.tsx`**
+- Importar a imagem da logo no topo do arquivo
+- Substituir o `<div>` com "GA" por um `<img>` com a logo real
+- Ajustar o tamanho da imagem para caber no header (aproximadamente 40x40px ou auto-height)
 
-**De:**
-```typescript
-disabled={(date) => date < new Date()}
+### Detalhe tecnico
+
+**Trecho atual (header):**
+```tsx
+<div className="h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg" style={{ background: '#00a86b', color: '#fff' }}>GA</div>
 ```
 
-**Para:**
-```typescript
-disabled={(date) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date < today;
-}}
+**Substituir por:**
+```tsx
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-10" />
 ```
 
-### Resultado Esperado
-- Cliente conseguirá selecionar a data de hoje como primeira data de pagamento
-- Datas no futuro continuarão selecionáveis
-- Datas no passado (anteriores a hoje) permanecerão desabilitadas
+Com o import no topo:
+```tsx
+import logoGrupoAltum from '@/assets/logo-grupo-altum-negociacao.png';
+```
