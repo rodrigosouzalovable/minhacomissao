@@ -50,18 +50,24 @@ export default function Antifraude() {
                   <h2 className="text-lg font-bold m-0" style={{ color: '#dc3545' }}>Empréstimos</h2>
                 </div>
                 <p className="mb-3">Deixamos claro para todos os fins de direito que:</p>
-                <ul className="list-none pl-0 space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span style={{ color: '#dc3545' }}>✕</span>
-                    <strong>NÃO oferecemos empréstimos</strong> ou concedemos crédito de qualquer espécie nesta plataforma;
+                <ul className="list-none pl-0 space-y-3">
+                  <li className="flex gap-3 items-start">
+                    <span style={{ color: '#dc3545' }} className="shrink-0 font-bold text-lg">✕</span>
+                    <div className="pt-0.5">
+                      <strong>NÃO oferecemos empréstimos</strong> ou concedemos crédito de qualquer espécie nesta plataforma;
+                    </div>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span style={{ color: '#dc3545' }}>✕</span>
-                    Qualquer contato dessa finalidade é <strong>ilegítimo, fraudulento</strong> e não apresenta qualquer vínculo com esta plataforma;
+                  <li className="flex gap-3 items-start">
+                    <span style={{ color: '#dc3545' }} className="shrink-0 font-bold text-lg">✕</span>
+                    <div className="pt-0.5">
+                      Qualquer contato dessa finalidade é <strong>ilegítimo, fraudulento</strong> e não apresenta qualquer vínculo com esta plataforma;
+                    </div>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span style={{ color: '#dc3545' }}>✕</span>
-                    <strong>NÃO exigimos qualquer tipo de depósito prévio</strong> ou fazemos solicitações desse tipo por meio de correspondentes ou intermediários.
+                  <li className="flex gap-3 items-start">
+                    <span style={{ color: '#dc3545' }} className="shrink-0 font-bold text-lg">✕</span>
+                    <div className="pt-0.5">
+                      <strong>NÃO exigimos qualquer tipo de depósito prévio</strong> ou fazemos solicitações desse tipo por meio de correspondentes ou intermediários.
+                    </div>
                   </li>
                 </ul>
               </div>
