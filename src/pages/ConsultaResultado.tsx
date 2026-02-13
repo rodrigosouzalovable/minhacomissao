@@ -306,7 +306,11 @@ export default function ConsultaResultado() {
                                     mode="single"
                                     selected={neg.dataPrimeiroPagamento}
                                     onSelect={(d) => updateNegociacao(debito.id, { dataPrimeiroPagamento: d })}
-                                    disabled={(date) => date < new Date()}
+                                    disabled={(date) => {
+                                      const today = new Date();
+                                      today.setHours(0, 0, 0, 0);
+                                      return date < today;
+                                    }}
                                     initialFocus
                                     className={cn("p-3 pointer-events-auto")}
                                     locale={ptBR}
