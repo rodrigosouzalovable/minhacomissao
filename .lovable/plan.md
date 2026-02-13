@@ -1,26 +1,49 @@
 
-## Plano: Aumentar a logo da Souza e Ribeiro no header
+## Plano: Criar páginas de Política de Privacidade e Antifraude
 
-### Alteração
-**Arquivo**: `src/pages/PortalConsulta.tsx` (linha 66)
+### Resumo
+Criar duas novas páginas completas com conteúdo jurídico e atualizar os links no footer do portal para direcionar corretamente.
 
-Aumentar o tamanho da logo de Souza e Ribeiro no header de `h-12 sm:h-16` para `h-14 sm:h-20`
+### Páginas a criar
 
-### Novo tamanho:
-- **Mobile**: `h-14` = **56px**
-- **Desktop**: `h-sm:h-20` = **80px**
+**1. `/politica-de-privacidade` - Política de Privacidade**
+Página com o conteúdo completo fornecido, adaptado para "SOUZA E RIBEIRO SOCIEDADE DE ADVOGADOS" (substituindo todas as referências a "Viventi" pelo nome correto da empresa). Incluirá:
+- Tipos de dados pessoais tratados (identificação, navegação, financeiros, cookies etc.)
+- Como os dados são obtidos
+- Finalidades do tratamento
+- Bases legais
+- Comunicação e canais
+- Compartilhamento de dados com terceiros
+- Direitos do titular (seção complementar adicionada)
+- Contato do encarregado/DPO (seção complementar)
 
-### Alteração específica:
+**2. `/antifraude` - Antifraude**
+Página com o conteúdo fornecido sobre empréstimos e boletos, complementada com:
+- Alerta sobre golpes comuns (phishing, links falsos)
+- Orientações de como verificar a autenticidade de contatos
+- Canais oficiais de atendimento
+- Dicas de segurança para o usuário
 
-```tsx
-// De:
-<img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-12 sm:h-16 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+### Estilo visual
+Ambas as páginas seguirão o mesmo padrão visual do portal (cores, header com logos, footer), mantendo a identidade visual consistente.
 
-// Para:
-<img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-14 sm:h-20 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
-```
+### Alterações em arquivos existentes
 
-### Resultado
-- Aumento de 8px no mobile (de 48px para 56px)
-- Aumento de 16px no desktop (de 64px para 80px)
-- Logo mais proeminente no header, mantendo proporção com outros elementos
+**3. `src/pages/PortalConsulta.tsx`** (linhas 266-267)
+Atualizar os links do footer de `href="#"` para as rotas corretas:
+- Política de Privacidade: `/politica-de-privacidade`
+- Antifraude: `/antifraude`
+
+**4. `src/App.tsx`**
+Adicionar as duas novas rotas públicas:
+- `/politica-de-privacidade` → PoliticaPrivacidade
+- `/antifraude` → Antifraude
+
+### Detalhes técnicos
+
+- Criar `src/pages/PoliticaPrivacidade.tsx` com layout completo (header, conteúdo, footer)
+- Criar `src/pages/Antifraude.tsx` com layout completo (header, conteúdo, footer)
+- Reutilizar as mesmas logos e constantes (PHONE, PHONE_DISPLAY) do PortalConsulta
+- Todas as menções a "Viventi" serão substituídas por "Souza e Ribeiro Sociedade de Advogados"
+- Ambas as páginas terão botão de voltar para a página inicial
+- WhatsApp floating button incluído em ambas
