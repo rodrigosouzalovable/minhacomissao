@@ -144,11 +144,8 @@ export default function ConsultaResultado() {
       <header className="border-b px-4 py-3" style={{ borderColor: '#ffffff15' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-10" />
-            <div>
-              <h1 className="text-lg font-bold" style={{ color: '#fff' }}>GRUPO ALTUM</h1>
-              <p className="text-xs" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
-            </div>
+            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-14" />
+            <p className="text-sm" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
           </div>
           <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
             <Phone className="h-4 w-4" />
