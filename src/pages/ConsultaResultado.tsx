@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ArrowLeft, MessageCircle, FileText, Phone, AlertCircle, CalendarIcon, ChevronDown, ChevronUp, Check } from 'lucide-react';
+import logoGrupoAltum from '@/assets/logo-grupo-altum-negociacao.png';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -143,7 +144,7 @@ export default function ConsultaResultado() {
       <header className="border-b px-4 py-3" style={{ borderColor: '#ffffff15' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg" style={{ background: '#00a86b', color: '#fff' }}>GA</div>
+            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-10" />
             <div>
               <h1 className="text-lg font-bold" style={{ color: '#fff' }}>GRUPO ALTUM</h1>
               <p className="text-xs" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
