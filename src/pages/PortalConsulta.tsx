@@ -63,7 +63,7 @@ export default function PortalConsulta() {
       <header className="px-4 py-3" style={{ background: 'linear-gradient(135deg, #001a33 0%, #002b55 100%)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-6">
-            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-12 sm:h-16 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-14 sm:h-20 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
             <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.25)' }} />
             <img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-16 w-auto" />
           </div>
