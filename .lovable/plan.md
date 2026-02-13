@@ -1,49 +1,73 @@
 
-## Plano: Criar páginas de Política de Privacidade e Antifraude
+## Plano: Corrigir formatação dos textos na seção Empréstimos
 
-### Resumo
-Criar duas novas páginas completas com conteúdo jurídico e atualizar os links no footer do portal para direcionar corretamente.
+### Problema Identificado
+Na seção "Empréstimos", os textos das linhas 58-61 estão quebrando de forma estranha, criando uma visual desagradável. O layout `flex items-start gap-2` com textos muito longos causa quebras inadequadas.
 
-### Páginas a criar
+### Solução
+Reformatar a lista de itens da seção "Empréstimos" (linhas 53-66) para:
 
-**1. `/politica-de-privacidade` - Política de Privacidade**
-Página com o conteúdo completo fornecido, adaptado para "SOUZA E RIBEIRO SOCIEDADE DE ADVOGADOS" (substituindo todas as referências a "Viventi" pelo nome correto da empresa). Incluirá:
-- Tipos de dados pessoais tratados (identificação, navegação, financeiros, cookies etc.)
-- Como os dados são obtidos
-- Finalidades do tratamento
-- Bases legais
-- Comunicação e canais
-- Compartilhamento de dados com terceiros
-- Direitos do titular (seção complementar adicionada)
-- Contato do encarregado/DPO (seção complementar)
+1. Melhorar o spacing e distribuição do texto
+2. Usar uma estrutura de grid ou melhor distribuição do layout flexbox
+3. Garantir que palavras-chave em negrito apareçam na mesma linha que seu contexto quando possível
+4. Adicionar melhor visual com padding e alinhamento
 
-**2. `/antifraude` - Antifraude**
-Página com o conteúdo fornecido sobre empréstimos e boletos, complementada com:
-- Alerta sobre golpes comuns (phishing, links falsos)
-- Orientações de como verificar a autenticidade de contatos
-- Canais oficiais de atendimento
-- Dicas de segurança para o usuário
+### Alterações Específicas
 
-### Estilo visual
-Ambas as páginas seguirão o mesmo padrão visual do portal (cores, header com logos, footer), mantendo a identidade visual consistente.
+**Linha 53-66 (seção da lista de Empréstimos):**
 
-### Alterações em arquivos existentes
+Trocar de:
+```tsx
+<ul className="list-none pl-0 space-y-2">
+  <li className="flex items-start gap-2">
+    <span style={{ color: '#dc3545' }}>✕</span>
+    <strong>NÃO oferecemos empréstimos</strong> ou concedemos crédito de qualquer espécie nesta plataforma;
+  </li>
+  <li className="flex items-start gap-2">
+    <span style={{ color: '#dc3545' }}>✕</span>
+    Qualquer contato dessa finalidade é <strong>ilegítimo, fraudulento</strong> e não apresenta qualquer vínculo com esta plataforma;
+  </li>
+  <li className="flex items-start gap-2">
+    <span style={{ color: '#dc3545' }}>✕</span>
+    <strong>NÃO exigimos qualquer tipo de depósito prévio</strong> ou fazemos solicitações desse tipo por meio de correspondentes ou intermediários.
+  </li>
+</ul>
+```
 
-**3. `src/pages/PortalConsulta.tsx`** (linhas 266-267)
-Atualizar os links do footer de `href="#"` para as rotas corretas:
-- Política de Privacidade: `/politica-de-privacidade`
-- Antifraude: `/antifraude`
+Para:
+```tsx
+<ul className="list-none pl-0 space-y-3">
+  <li className="flex gap-3 items-start">
+    <span style={{ color: '#dc3545' }} className="shrink-0 font-bold text-lg">✕</span>
+    <div className="pt-0.5">
+      <strong>NÃO oferecemos empréstimos</strong> ou concedemos crédito de qualquer espécie nesta plataforma;
+    </div>
+  </li>
+  <li className="flex gap-3 items-start">
+    <span style={{ color: '#dc3545' }} className="shrink-0 font-bold text-lg">✕</span>
+    <div className="pt-0.5">
+      Qualquer contato dessa finalidade é <strong>ilegítimo, fraudulento</strong> e não apresenta qualquer vínculo com esta plataforma;
+    </div>
+  </li>
+  <li className="flex gap-3 items-start">
+    <span style={{ color: '#dc3545' }} className="shrink-0 font-bold text-lg">✕</span>
+    <div className="pt-0.5">
+      <strong>NÃO exigimos qualquer tipo de depósito prévio</strong> ou fazemos solicitações desse tipo por meio de correspondentes ou intermediários.
+    </div>
+  </li>
+</ul>
+```
 
-**4. `src/App.tsx`**
-Adicionar as duas novas rotas públicas:
-- `/politica-de-privacidade` → PoliticaPrivacidade
-- `/antifraude` → Antifraude
+### Mudanças Principais
+1. Aumentar spacing entre itens de `space-y-2` para `space-y-3`
+2. Aumentar gap entre ícone e texto de `gap-2` para `gap-3`
+3. Usar `shrink-0` no ícone ✕ para evitar redimensionamento
+4. Envolver o texto em uma `<div>` para melhor controle de layout
+5. Adicionar `pt-0.5` (padding-top) para alinhar melhor o texto com o ícone
+6. Tornar o ícone ✕ mais visível com `font-bold` e `text-lg`
 
-### Detalhes técnicos
-
-- Criar `src/pages/PoliticaPrivacidade.tsx` com layout completo (header, conteúdo, footer)
-- Criar `src/pages/Antifraude.tsx` com layout completo (header, conteúdo, footer)
-- Reutilizar as mesmas logos e constantes (PHONE, PHONE_DISPLAY) do PortalConsulta
-- Todas as menções a "Viventi" serão substituídas por "Souza e Ribeiro Sociedade de Advogados"
-- Ambas as páginas terão botão de voltar para a página inicial
-- WhatsApp floating button incluído em ambas
+### Resultado Esperado
+- Textos com melhor distribuição visual
+- Ícone ✕ bem alinhado com o texto
+- Palavras-chave em negrito aparecem de forma mais clara
+- Layout responsivo mantido
