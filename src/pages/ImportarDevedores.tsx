@@ -11,13 +11,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import * as XLSX from 'xlsx';
 
 interface DevedorRow {
-  nome: string;
   cpf: string;
+  nascimento: string;
+  nome: string;
+  credor: string;
+  contrato: string;
+  atraso: string;
   valor_original: number;
   valor_atualizado: number;
-  descricao: string;
-  contrato: string;
-  data_vencimento: string;
 }
 
 export default function ImportarDevedores() {
@@ -39,30 +40,28 @@ export default function ImportarDevedores() {
       const data = evt.target?.result;
       const workbook = XLSX.read(data, { type: 'binary' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
 
-      const parsed: DevedorRow[] = json.map((row) => {
-        const get = (keys: string[]) => {
-          for (const k of keys) {
-            const val = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
-            if (val !== undefined && val !== null) return String(val);
-          }
-          return '';
-        };
+      // Skip first row (header)
+      const dataRows = json.slice(1);
 
-        const parseNum = (keys: string[]) => {
-          const raw = get(keys).replace(/[^\d.,]/g, '').replace(',', '.');
-          return parseFloat(raw) || 0;
-        };
+      const parseNum = (val: unknown) => {
+        if (val === undefined || val === null) return 0;
+        const raw = String(val).replace(/[^\d.,]/g, '').replace(',', '.');
+        return parseFloat(raw) || 0;
+      };
 
+      const parsed: DevedorRow[] = dataRows.map((row) => {
+        const risco = parseNum(row['G']);
         return {
-          nome: get(['nome', 'Nome', 'NOME', 'nome_cliente', 'Cliente']),
-          cpf: get(['cpf', 'CPF', 'Cpf', 'cpf_cnpj', 'CPF/CNPJ']).replace(/\D/g, ''),
-          valor_original: parseNum(['valor_original', 'Valor Original', 'VALOR_ORIGINAL', 'valor', 'Valor']),
-          valor_atualizado: parseNum(['valor_atualizado', 'Valor Atualizado', 'VALOR_ATUALIZADO', 'valor_atual', 'saldo']),
-          descricao: get(['descricao', 'Descricao', 'Descrição', 'DESCRICAO', 'produto', 'Produto']),
-          contrato: get(['contrato', 'Contrato', 'CONTRATO', 'numero_contrato', 'Numero Contrato']),
-          data_vencimento: get(['data_vencimento', 'Data Vencimento', 'DATA_VENCIMENTO', 'vencimento', 'Vencimento']),
+          cpf: String(row['A'] ?? '').replace(/\D/g, ''),
+          nascimento: String(row['B'] ?? ''),
+          nome: String(row['C'] ?? ''),
+          credor: String(row['D'] ?? ''),
+          contrato: String(row['E'] ?? ''),
+          atraso: String(row['F'] ?? ''),
+          valor_original: risco,
+          valor_atualizado: risco,
         };
       }).filter(r => r.cpf.length >= 11);
 
@@ -79,10 +78,10 @@ export default function ImportarDevedores() {
       nome: r.nome,
       cpf: r.cpf,
       valor_original: r.valor_original,
-      valor_atualizado: r.valor_atualizado || r.valor_original,
-      descricao: r.descricao || null,
+      valor_atualizado: r.valor_atualizado,
+      descricao: r.credor || null,
       contrato: r.contrato || null,
-      data_vencimento: r.data_vencimento || null,
+      data_vencimento: r.nascimento || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
     }));
@@ -116,7 +115,7 @@ export default function ImportarDevedores() {
               Upload de Planilha
             </CardTitle>
             <CardDescription>
-              Envie uma planilha Excel (.xlsx) com as colunas: Nome, CPF, Valor Original, Valor Atualizado, Descrição, Contrato, Data Vencimento
+              Envie uma planilha Excel (.xlsx) com as colunas: A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -170,25 +169,25 @@ export default function ImportarDevedores() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>CPF</TableHead>
-                      <TableHead>Valor Original</TableHead>
-                      <TableHead>Valor Atualizado</TableHead>
-                      <TableHead>Descrição</TableHead>
+                      <TableHead>CPF/CNPJ</TableHead>
+                      <TableHead>Nascimento</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Credor</TableHead>
                       <TableHead>Contrato</TableHead>
-                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Atraso</TableHead>
+                      <TableHead>Risco (R$)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.slice(0, 50).map((row, i) => (
                       <TableRow key={i}>
-                        <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
                         <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
-                        <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
-                        <TableCell>{row.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
-                        <TableCell>{row.descricao || '-'}</TableCell>
+                        <TableCell>{row.nascimento || '-'}</TableCell>
+                        <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                        <TableCell>{row.credor || '-'}</TableCell>
                         <TableCell>{row.contrato || '-'}</TableCell>
-                        <TableCell>{row.data_vencimento || '-'}</TableCell>
+                        <TableCell>{row.atraso || '-'}</TableCell>
+                        <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
