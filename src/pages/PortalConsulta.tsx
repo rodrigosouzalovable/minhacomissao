@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -263,8 +263,8 @@ export default function PortalConsulta() {
               <div>
                 <h4 className="font-semibold text-sm mb-3" style={{ color: 'rgba(255,255,255,0.9)' }}>Links</h4>
                 <div className="flex flex-col gap-2">
-                  <a href="#" className="text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>Política de Privacidade</a>
-                  <a href="#" className="text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>Antifraude</a>
+                  <Link to="/politica-de-privacidade" className="text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>Política de Privacidade</Link>
+                  <Link to="/antifraude" className="text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>Antifraude</Link>
                 </div>
               </div>
               <div>

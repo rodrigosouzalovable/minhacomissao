@@ -26,6 +26,8 @@ import NotFound from "./pages/NotFound";
 import PortalConsulta from "./pages/PortalConsulta";
 import ConsultaResultado from "./pages/ConsultaResultado";
 import ImportarDevedores from "./pages/ImportarDevedores";
+import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
+import AntifraudePage from "./pages/Antifraude";
 
 const queryClient = new QueryClient();
 
@@ -105,6 +107,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<PortalConsulta />} />
             <Route path="/consulta/:cpf" element={<ConsultaResultado />} />
+            <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
+            <Route path="/antifraude" element={<AntifraudePage />} />
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/acordos" element={<ProtectedRoute><Acordos /></ProtectedRoute>} />
