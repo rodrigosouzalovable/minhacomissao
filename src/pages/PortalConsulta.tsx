@@ -63,9 +63,9 @@ export default function PortalConsulta() {
       <header className="px-4 py-3" style={{ background: 'linear-gradient(135deg, #001a33 0%, #002b55 100%)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-6">
-            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-10 sm:h-12 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-12 sm:h-16 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
             <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.25)' }} />
-            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-10 sm:h-12 w-auto" />
+            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-16 w-auto" />
           </div>
           <nav className="hidden md:flex items-center gap-6">
             <button onClick={() => scrollTo('beneficios')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>Benefícios</button>
@@ -173,9 +173,9 @@ export default function PortalConsulta() {
             Todo o processo é online, de forma rápida e segura.
           </p>
           <div className="flex items-center justify-center gap-8 sm:gap-12">
-            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro Advogados" className="h-12 sm:h-16 w-auto" />
+            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro Advogados" className="h-16 sm:h-20 w-auto" />
             <div className="h-12 w-px" style={{ background: '#ddd' }} />
-            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-16 w-auto" style={{ filter: 'brightness(0)' }} />
+            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-16 sm:h-20 w-auto" style={{ filter: 'brightness(0)' }} />
           </div>
         </div>
       </section>
@@ -253,9 +253,9 @@ export default function PortalConsulta() {
           <div className="max-w-5xl mx-auto">
             {/* Logos */}
             <div className="flex items-center justify-center gap-6 sm:gap-10 mb-8">
-              <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-10 sm:h-12 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+              <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-12 sm:h-14 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
               <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.2)' }} />
-              <img src={logoGrupoAltum} alt="Grupo Altum" className="h-10 sm:h-12 w-auto" />
+              <img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-14 w-auto" />
             </div>
 
             {/* Links + Atendimento */}
