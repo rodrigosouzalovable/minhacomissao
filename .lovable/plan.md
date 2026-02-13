@@ -1,28 +1,66 @@
 
+## Plano: Aumentar tamanho das logomarcas na página inicial (PortalConsulta)
 
-## Plano: Ajustar header da pagina de negociacao
+### Resumo
+Aumentar o tamanho das duas logomarcas (Souza e Ribeiro + Grupo Altum) em três seções da página inicial para melhor visibilidade e impacto visual.
 
-### Alteracoes
+### Locais de Alteração
 
-**Arquivo**: `src/pages/ConsultaResultado.tsx` (linhas 144-150)
+**1. Header (linhas 66-68)**
+- Aumentar de `h-10 sm:h-12` para `h-12 sm:h-16`
+- Maior presença no topo da página
 
-Modificar o header para:
-- Aumentar o tamanho da logo de `h-10` para `h-14`
-- Remover o texto "GRUPO ALTUM"
-- Manter apenas "Portal de Negociacao" abaixo da logo
+**2. Seção "Quem Somos" (linhas 176-178)**
+- Aumentar de `h-12 sm:h-16` para `h-16 sm:h-20`
+- Maior destaque das logos junto com a descrição da empresa
 
-**De:**
+**3. Footer (linhas 256-258)**
+- Aumentar de `h-10 sm:h-12` para `h-12 sm:h-14`
+- Melhor proporção no rodapé
+
+### Alterações Específicas
+
+**Header (linhas 66-68):**
 ```tsx
-<img src={logoGrupoAltum} alt="Grupo Altum" className="h-10" />
-<div>
-  <h1 className="text-lg font-bold" style={{ color: '#fff' }}>GRUPO ALTUM</h1>
-  <p className="text-xs" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
-</div>
+// De:
+<img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-10 sm:h-12 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+...
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-10 sm:h-12 w-auto" />
+
+// Para:
+<img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-12 sm:h-16 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+...
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-16 w-auto" />
 ```
 
-**Para:**
+**Seção Quem Somos (linhas 176-178):**
 ```tsx
-<img src={logoGrupoAltum} alt="Grupo Altum" className="h-14" />
-<p className="text-sm" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
+// De:
+<img src={logoSouzaRibeiro} alt="Souza e Ribeiro Advogados" className="h-12 sm:h-16 w-auto" />
+...
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-16 w-auto" style={{ filter: 'brightness(0)' }} />
+
+// Para:
+<img src={logoSouzaRibeiro} alt="Souza e Ribeiro Advogados" className="h-16 sm:h-20 w-auto" />
+...
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-16 sm:h-20 w-auto" style={{ filter: 'brightness(0)' }} />
 ```
 
+**Footer (linhas 256-258):**
+```tsx
+// De:
+<img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-10 sm:h-12 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+...
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-10 sm:h-12 w-auto" />
+
+// Para:
+<img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-12 sm:h-14 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+...
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-14 w-auto" />
+```
+
+### Resultado Esperado
+- Logomarcas mais visíveis e com maior presença visual na página
+- Melhor proporção em relação aos demais elementos
+- Maior impacto na identidade visual do portal (especialmente no header e seção "Quem Somos")
+- Responsive correto em dispositivos móveis (sm) e desktop
