@@ -1,32 +1,28 @@
 
-## Plano: Adicionar logo do Grupo Altum no header da pagina de negociacao
 
-### Resumo
-Substituir o placeholder "GA" (quadrado verde com texto) pela logo real do Grupo Altum no header da pagina `ConsultaResultado.tsx`.
+## Plano: Ajustar header da pagina de negociacao
 
 ### Alteracoes
 
-**1. Copiar a logo para o projeto**
-- Copiar o arquivo `Gemini_Generated_Image_dcmat4dcmat4dcma-removebg-preview_1-2.png` para `src/assets/logo-grupo-altum-negociacao.png`
+**Arquivo**: `src/pages/ConsultaResultado.tsx` (linhas 144-150)
 
-**2. Modificar `src/pages/ConsultaResultado.tsx`**
-- Importar a imagem da logo no topo do arquivo
-- Substituir o `<div>` com "GA" por um `<img>` com a logo real
-- Ajustar o tamanho da imagem para caber no header (aproximadamente 40x40px ou auto-height)
+Modificar o header para:
+- Aumentar o tamanho da logo de `h-10` para `h-14`
+- Remover o texto "GRUPO ALTUM"
+- Manter apenas "Portal de Negociacao" abaixo da logo
 
-### Detalhe tecnico
-
-**Trecho atual (header):**
-```tsx
-<div className="h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg" style={{ background: '#00a86b', color: '#fff' }}>GA</div>
-```
-
-**Substituir por:**
+**De:**
 ```tsx
 <img src={logoGrupoAltum} alt="Grupo Altum" className="h-10" />
+<div>
+  <h1 className="text-lg font-bold" style={{ color: '#fff' }}>GRUPO ALTUM</h1>
+  <p className="text-xs" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
+</div>
 ```
 
-Com o import no topo:
+**Para:**
 ```tsx
-import logoGrupoAltum from '@/assets/logo-grupo-altum-negociacao.png';
+<img src={logoGrupoAltum} alt="Grupo Altum" className="h-14" />
+<p className="text-sm" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
 ```
+
