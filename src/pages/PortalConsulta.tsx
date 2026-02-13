@@ -145,8 +145,8 @@ export default function PortalConsulta() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               { icon: HandshakeIcon, title: 'Negociação facilitada', desc: 'Processo simples e direto pelo WhatsApp.' },
-              { icon: Clock, title: 'Atendimento rápido', desc: 'Resposta em até 24 horas úteis.' },
-              { icon: Shield, title: 'Sigilo garantido', desc: 'Seus dados são tratados com total segurança.' },
+               { icon: Clock, title: 'Atendimento rápido', desc: 'Resposta em até 10 minutos.' },
+               { icon: Shield, title: 'Sigilo garantido', desc: 'Seus dados são tratados com total segurança.' },
             ].map((item) => (
               <div key={item.title} className="flex items-start gap-4 p-5 rounded-xl" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(0,168,107,0.15)' }}>
