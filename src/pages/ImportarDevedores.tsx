@@ -70,6 +70,18 @@ export default function ImportarDevedores() {
     reader.readAsBinaryString(f);
   }, []);
 
+  const parseDate = (raw: string): string | null => {
+    if (!raw) return null;
+    const parts = raw.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      if (day && month && year && year.length === 4) {
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+    }
+    return null;
+  };
+
   const handleImport = async () => {
     if (!user || rows.length === 0) return;
     setImporting(true);
@@ -81,7 +93,7 @@ export default function ImportarDevedores() {
       valor_atualizado: r.valor_atualizado,
       descricao: r.credor || null,
       contrato: r.contrato || null,
-      data_vencimento: r.nascimento || null,
+      data_vencimento: parseDate(r.nascimento),
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
     }));
