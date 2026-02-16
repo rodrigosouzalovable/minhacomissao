@@ -1,84 +1,47 @@
 
+## Mostrar Telefone Importado + Editar/Excluir Eventos
 
-## Reformular Layout da Ficha do Cliente + Registro de Telefones
+### 1. Telefone importado na aba Telefone
 
-### Resumo
+Atualmente, o campo `devedor.telefone` (telefone que veio na importacao da planilha) aparece apenas no cabecalho. Na aba "Telefone", so aparecem registros da tabela `devedor_telefones`.
 
-Redesenhar a pagina `DevedorDetalhe.tsx` para seguir o layout da imagem de referencia, com tres areas principais: cabecalho com dados do cliente, area central com abas (Telefone, Dados) e contratos abaixo, e coluna direita com eventos. Tambem criar uma tabela `devedor_telefones` para armazenar telefones cadastrados.
+**Solucao**: No `TelefoneTab`, receber uma nova prop `telefoneImportado` (string | null). Se existir e nao houver nenhum registro em `devedor_telefones` com o mesmo numero, exibir esse telefone como primeira linha da tabela com uma Badge "Importado" e sem acoes de edicao/exclusao (pois vem do registro original).
 
----
+**Modificacoes em `src/components/devedor/TelefoneTab.tsx`**:
+- Adicionar prop `telefoneImportado?: string | null`
+- Criar uma lista combinada: se `telefoneImportado` existir e seu numero normalizado nao estiver na lista de `telefones`, inserir um item virtual no inicio com tipo "celular", observacao "Importado", sem id
+- Exibir esse item com Badge "Importado" e sem dropdown de acao
 
-### 1. Migracao do Banco de Dados
-
-**Nova tabela `devedor_telefones`:**
-
-```text
-devedor_telefones
------------------------------------------
-id              | uuid PK default gen_random_uuid()
-devedor_cpf     | text NOT NULL (CPF normalizado, para vincular todos os contratos do mesmo cliente)
-numero          | text NOT NULL
-tipo            | text NOT NULL DEFAULT 'celular' (celular, comercial, residencial, outro)
-is_contato      | boolean DEFAULT false
-is_whatsapp     | boolean DEFAULT false
-ativo           | boolean DEFAULT true
-autorizado      | boolean DEFAULT true
-observacao      | text
-ramal           | text
-criado_por      | uuid NOT NULL
-criado_em       | timestamptz DEFAULT now()
-```
-
-RLS: admins ALL, autenticados SELECT/INSERT/UPDATE.
+**Modificacoes em `src/pages/DevedorDetalhe.tsx`**:
+- Passar `telefoneImportado={devedor.telefone}` para o componente `TelefoneTab`
 
 ---
 
-### 2. Redesenhar src/pages/DevedorDetalhe.tsx
+### 2. Editar e Excluir eventos
 
-**Cabecalho (topo):**
-- Nome do cliente em destaque (grande)
-- CPF/CNPJ, Endereco (se houver), botao "Voltar" no canto direito
-- Layout horizontal similar a referencia
+Atualmente cada evento e exibido sem opcoes de edicao ou exclusao.
 
-**Area Central - Abas (usando Tabs):**
-- **Aba "Telefone"**: tabela com colunas Numero, Tipo, Observacao, e dropdown "Acao" (Inativar, Excluir). Botao "+ Novo" abre dialog de cadastro de telefone.
-- **Aba "Dados"**: informacoes gerais do devedor (credor, descricao, etc.)
+**Solucao**: Adicionar um `DropdownMenu` com opcoes "Editar" e "Excluir" em cada card de evento.
 
-**Dialog "Telefone Novo" (ao clicar em "+ Novo"):**
-- Campos em grid 3 colunas:
-  - Telefone (input)
-  - Tel. de Contato (Sim/Nao radio)
-  - Ativo (Sim/Nao radio)
-  - Tipo de Telefone (select: Celular, Comercial, Residencial, Outro)
-  - Whatsapp (Sim/Nao radio)
-  - Autorizado (Sim/Nao radio)
-  - Observacao (textarea)
-  - Ramal (input)
-- Botoes "Fechar" e "Salvar"
+**Modificacoes em `src/pages/DevedorDetalhe.tsx`**:
+- Adicionar estado para controlar dialog de edicao de evento (`editEventoId`, `editEventoTipo`, `editEventoDescricao`)
+- Adicionar funcao `handleDeleteEvento(eventoId)` que faz DELETE na tabela `devedor_eventos` e recarrega
+- Adicionar funcao `handleEditEvento()` que faz UPDATE na tabela `devedor_eventos` com o tipo e descricao editados
+- Em cada card de evento, adicionar um `DropdownMenu` (icone tres pontos) com:
+  - "Editar" - abre dialog de edicao pre-preenchido
+  - "Excluir" - executa exclusao com confirmacao via toast
+- Criar um Dialog de edicao (reutilizando o mesmo layout do dialog de criacao) que permite alterar tipo e descricao do evento
 
-**Secao Contratos (abaixo das abas):**
-- Titulo "Contratos" com "Total em Atraso R$ X" em vermelho ao lado
-- Lista compacta: cada contrato mostra numero, dias de atraso, data de negociacao
-- Linhas expandiveis (collapsible) para ver detalhes
-
-**Coluna Direita - Eventos (permanece similar):**
-- Botao "+ Novo Evento" no topo
-- Timeline de eventos com tipo, descricao, data/hora e autor
+**RLS necessario**: A tabela `devedor_eventos` ja tem politica de INSERT e SELECT para usuarios autenticados, mas nao tem UPDATE nem DELETE. Sera necessaria uma migracao para adicionar:
+- UPDATE policy: usuario autenticado pode atualizar eventos que ele criou (`auth.uid() = criado_por`)
+- DELETE policy: usuario autenticado pode excluir eventos que ele criou (`auth.uid() = criado_por`)
 
 ---
 
-### 3. Detalhes Tecnicos
-
-- Buscar telefones por CPF normalizado (nao por devedor_id) para que todos os contratos do mesmo cliente compartilhem os mesmos telefones
-- Calcular "dias de atraso" a partir de `data_vencimento` usando `differenceInDays(new Date(), vencimento)`
-- Usar `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` do Radix para as abas
-- Usar `DropdownMenu` para o botao "Acao" em cada telefone
-- Formatacao de telefone no input com mascara `(00) 00000-0000`
-
-### Arquivos envolvidos
+### Resumo de arquivos
 
 | Arquivo | Acao |
 |---|---|
-| Migracao SQL | Criar tabela devedor_telefones + RLS |
-| src/pages/DevedorDetalhe.tsx | Reescrever layout completo |
-
+| Migracao SQL | Adicionar RLS UPDATE + DELETE em devedor_eventos para o criador |
+| src/components/devedor/TelefoneTab.tsx | Adicionar prop telefoneImportado e exibir na tabela |
+| src/pages/DevedorDetalhe.tsx | Passar telefoneImportado, adicionar editar/excluir eventos com dialogs |
