@@ -28,7 +28,7 @@ const ESTAGIOS = [
   { value: 'finalizado', label: 'Finalizado' },
 ];
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 20;
 
 export default function Clientes() {
   const [nome, setNome] = useState('');
@@ -68,7 +68,6 @@ export default function Clientes() {
       setResults(data as ClienteRow[]);
       setTotal(count ?? 0);
     }
-    setPage(pageNum);
     setSearched(true);
     setLoading(false);
   };
