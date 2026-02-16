@@ -93,7 +93,7 @@ export default function AdminEquipes() {
   });
 
   // Filter gestores and funcionarios
-  const gestores = usersData?.filter((u) => u.role === 'gestor') ?? [];
+  const gestores = usersData?.filter((u) => u.role === 'gestor' || u.role === 'admin') ?? [];
   const funcionarios = usersData?.filter((u) => u.role === 'funcionario' || u.role === 'admin') ?? [];
 
   // Get profile by id
