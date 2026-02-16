@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,10 +7,11 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History, Users, Eye } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
@@ -46,6 +48,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
 };
 
 export default function ImportarDevedores() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const [credorSelecionado, setCredorSelecionado] = useState<CredorLayout>('padrao');
@@ -53,6 +56,7 @@ export default function ImportarDevedores() {
   const [rows, setRows] = useState<DevedorRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
+  const [grouped, setGrouped] = useState(false);
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -300,67 +304,132 @@ export default function ImportarDevedores() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto max-h-96">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>CPF/CNPJ</TableHead>
-                      {isMontreal ? (
-                        <>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Contrato</TableHead>
-                          <TableHead>Tipo Contrato</TableHead>
-                          <TableHead>Parcela</TableHead>
-                          <TableHead>Vencimento</TableHead>
-                          <TableHead>Valor (R$)</TableHead>
-                          <TableHead>Telefone</TableHead>
-                        </>
-                      ) : (
-                        <>
-                          <TableHead>Nascimento</TableHead>
-                          <TableHead>Cliente</TableHead>
-                          <TableHead>Credor</TableHead>
-                          <TableHead>Contrato</TableHead>
-                          <TableHead>Atraso</TableHead>
-                          <TableHead>Risco (R$)</TableHead>
-                        </>
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.slice(0, 50).map((row, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
+              <div className="flex items-center gap-2 mb-4">
+                <Switch checked={grouped} onCheckedChange={setGrouped} id="group-toggle" />
+                <Label htmlFor="group-toggle" className="flex items-center gap-1 cursor-pointer">
+                  <Users className="h-4 w-4" />
+                  Agrupar por CPF/CNPJ
+                </Label>
+              </div>
+
+              {grouped ? (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {(() => {
+                    const groups = rows.reduce<Record<string, { cpf: string; nome: string; contratos: number; valorTotal: number }>>((acc, row) => {
+                      const cpfNorm = row.cpf.replace(/\D/g, '');
+                      if (!acc[cpfNorm]) {
+                        acc[cpfNorm] = { cpf: row.cpf, nome: row.nome, contratos: 0, valorTotal: 0 };
+                      }
+                      acc[cpfNorm].contratos += 1;
+                      acc[cpfNorm].valorTotal += row.valor_atualizado;
+                      return acc;
+                    }, {});
+
+                    return Object.entries(groups).map(([cpfNorm, g]) => (
+                      <div key={cpfNorm} className="flex items-center justify-between border rounded-lg p-3">
+                        <div>
+                          <p className="font-medium">{g.nome}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{g.cpf}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">
+                              {g.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{g.contratos} contrato{g.contratos !== 1 ? 's' : ''}</p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              const { data } = await supabase
+                                .from('devedores')
+                                .select('id')
+                                .eq('ativo', true)
+                                .limit(1);
+                              const match = data?.find((d: any) => {
+                                return true; // navigate with CPF search
+                              });
+                              // Navigate to first matching devedor by CPF
+                              const { data: devs } = await supabase
+                                .from('devedores')
+                                .select('id, cpf')
+                                .eq('ativo', true);
+                              const found = devs?.find((d: any) => d.cpf.replace(/\D/g, '') === cpfNorm);
+                              if (found) navigate(`/clientes/${found.id}`);
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Ver Ficha
+                          </Button>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-96">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>CPF/CNPJ</TableHead>
                         {isMontreal ? (
                           <>
-                            <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
-                            <TableCell>{row.contrato || '-'}</TableCell>
-                            <TableCell>{row.descricao || '-'}</TableCell>
-                            <TableCell>{row.atraso || '-'}</TableCell>
-                            <TableCell>{row.atraso || '-'}</TableCell>
-                            <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
-                            <TableCell>{row.telefone || '-'}</TableCell>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Contrato</TableHead>
+                            <TableHead>Tipo Contrato</TableHead>
+                            <TableHead>Parcela</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead>Valor (R$)</TableHead>
+                            <TableHead>Telefone</TableHead>
                           </>
                         ) : (
                           <>
-                            <TableCell>{row.nascimento || '-'}</TableCell>
-                            <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
-                            <TableCell>{row.credor || '-'}</TableCell>
-                            <TableCell>{row.contrato || '-'}</TableCell>
-                            <TableCell>{row.atraso || '-'}</TableCell>
-                            <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                            <TableHead>Nascimento</TableHead>
+                            <TableHead>Cliente</TableHead>
+                            <TableHead>Credor</TableHead>
+                            <TableHead>Contrato</TableHead>
+                            <TableHead>Atraso</TableHead>
+                            <TableHead>Risco (R$)</TableHead>
                           </>
                         )}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {rows.length > 50 && (
-                  <p className="text-sm text-muted-foreground text-center py-2">
-                    Mostrando 50 de {rows.length} registros
-                  </p>
-                )}
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.slice(0, 50).map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
+                          {isMontreal ? (
+                            <>
+                              <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                              <TableCell>{row.contrato || '-'}</TableCell>
+                              <TableCell>{row.descricao || '-'}</TableCell>
+                              <TableCell>{row.atraso || '-'}</TableCell>
+                              <TableCell>{row.atraso || '-'}</TableCell>
+                              <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                              <TableCell>{row.telefone || '-'}</TableCell>
+                            </>
+                          ) : (
+                            <>
+                              <TableCell>{row.nascimento || '-'}</TableCell>
+                              <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                              <TableCell>{row.credor || '-'}</TableCell>
+                              <TableCell>{row.contrato || '-'}</TableCell>
+                              <TableCell>{row.atraso || '-'}</TableCell>
+                              <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                            </>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {rows.length > 50 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      Mostrando 50 de {rows.length} registros
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
