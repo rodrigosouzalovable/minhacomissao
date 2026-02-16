@@ -25,6 +25,7 @@ interface TelefoneTabProps {
   cpfNormalizado: string;
   userId: string;
   onRefresh: () => void;
+  telefoneImportado?: string | null;
 }
 
 const tipoLabel: Record<string, string> = {
@@ -34,8 +35,32 @@ const tipoLabel: Record<string, string> = {
   outro: 'Outro',
 };
 
-export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh }: TelefoneTabProps) {
+export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, telefoneImportado }: TelefoneTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Build combined list with imported phone if not already in devedor_telefones
+  const combinedTelefones = (() => {
+    const list: (Telefone & { is_importado?: boolean })[] = [...telefones];
+    if (telefoneImportado) {
+      const normImportado = telefoneImportado.replace(/\D/g, '');
+      const alreadyExists = telefones.some(t => t.numero.replace(/\D/g, '') === normImportado);
+      if (!alreadyExists && normImportado) {
+        list.unshift({
+          id: '__importado__',
+          numero: telefoneImportado,
+          tipo: 'celular',
+          is_contato: false,
+          is_whatsapp: false,
+          ativo: true,
+          autorizado: true,
+          observacao: 'Importado',
+          ramal: null,
+          is_importado: true,
+        } as any);
+      }
+    }
+    return list;
+  })();
 
   const handleInativar = async (id: string, currentAtivo: boolean) => {
     const { error } = await supabase.from('devedor_telefones' as any).update({ ativo: !currentAtivo } as any).eq('id', id);
@@ -56,7 +81,7 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh }: Te
           <Plus className="h-4 w-4 mr-1" /> Novo
         </Button>
       </div>
-      {telefones.length === 0 ? (
+      {combinedTelefones.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-6">Nenhum telefone cadastrado.</p>
       ) : (
         <Table>
@@ -72,33 +97,40 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh }: Te
             </TableRow>
           </TableHeader>
           <TableBody>
-            {telefones.map((tel) => (
-              <TableRow key={tel.id}>
-                <TableCell className="font-mono">{tel.numero}</TableCell>
-                <TableCell>{tipoLabel[tel.tipo] || tel.tipo}</TableCell>
-                <TableCell>{tel.is_whatsapp ? <Badge variant="default">Sim</Badge> : <Badge variant="secondary">Não</Badge>}</TableCell>
-                <TableCell>{tel.is_contato ? 'Sim' : 'Não'}</TableCell>
-                <TableCell>{tel.ativo ? <Badge variant="default">Ativo</Badge> : <Badge variant="destructive">Inativo</Badge>}</TableCell>
-                <TableCell className="max-w-[200px] truncate">{tel.observacao || '-'}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleInativar(tel.id, tel.ativo)}>
-                        {tel.ativo ? 'Inativar' : 'Ativar'}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => handleExcluir(tel.id)}>
-                        Excluir
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
+            {combinedTelefones.map((tel) => {
+              const isImportado = (tel as any).is_importado === true;
+              return (
+                <TableRow key={tel.id}>
+                  <TableCell className="font-mono">{tel.numero}</TableCell>
+                  <TableCell>
+                    {isImportado ? <Badge variant="outline">Importado</Badge> : (tipoLabel[tel.tipo] || tel.tipo)}
+                  </TableCell>
+                  <TableCell>{tel.is_whatsapp ? <Badge variant="default">Sim</Badge> : <Badge variant="secondary">Não</Badge>}</TableCell>
+                  <TableCell>{tel.is_contato ? 'Sim' : 'Não'}</TableCell>
+                  <TableCell>{tel.ativo ? <Badge variant="default">Ativo</Badge> : <Badge variant="destructive">Inativo</Badge>}</TableCell>
+                  <TableCell className="max-w-[200px] truncate">{tel.observacao || '-'}</TableCell>
+                  <TableCell>
+                    {!isImportado && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleInativar(tel.id, tel.ativo)}>
+                            {tel.ativo ? 'Inativar' : 'Ativar'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => handleExcluir(tel.id)}>
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       )}
