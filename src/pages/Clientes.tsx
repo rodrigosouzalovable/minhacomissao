@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, X, Users, SearchX } from 'lucide-react';
+import { Search, X, Users, SearchX, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ClienteRow {
@@ -31,6 +32,7 @@ const ESTAGIOS = [
 const PAGE_SIZE = 20;
 
 export default function Clientes() {
+  const navigate = useNavigate();
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -197,12 +199,13 @@ export default function Clientes() {
                       <TableHead>Contrato</TableHead>
                       <TableHead>Valor (R$)</TableHead>
                       <TableHead>Estágio</TableHead>
+                      <TableHead>Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {results.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-12">
+                        <TableCell colSpan={7} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <SearchX className="h-10 w-10" />
                             <p className="text-lg font-semibold">Cliente não encontrado</p>
@@ -222,6 +225,12 @@ export default function Clientes() {
                             <Badge variant={estagioVariant(row.estagio)}>
                               {ESTAGIOS.find(e => e.value === row.estagio)?.label || row.estagio}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="outline" size="sm" onClick={() => navigate(`/clientes/${row.id}`)}>
+                              <Eye className="h-4 w-4 mr-1" />
+                              Ver Ficha
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))

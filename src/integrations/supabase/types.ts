@@ -164,6 +164,47 @@ export type Database = {
           },
         ]
       }
+      devedor_eventos: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          criado_em: string
+          criado_por: string
+          descricao: string
+          devedor_id: string
+          id: string
+          tipo: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          criado_em?: string
+          criado_por: string
+          descricao?: string
+          devedor_id: string
+          id?: string
+          tipo: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          criado_em?: string
+          criado_por?: string
+          descricao?: string
+          devedor_id?: string
+          id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devedor_eventos_devedor_id_fkey"
+            columns: ["devedor_id"]
+            isOneToOne: false
+            referencedRelation: "devedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       devedores: {
         Row: {
           arquivo_importacao: string | null

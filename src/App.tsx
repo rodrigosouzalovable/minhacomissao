@@ -29,6 +29,7 @@ import ImportarDevedores from "./pages/ImportarDevedores";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import AntifraudePage from "./pages/Antifraude";
 import Clientes from "./pages/Clientes";
+import DevedorDetalhe from "./pages/DevedorDetalhe";
 
 const queryClient = new QueryClient();
 
@@ -118,6 +119,7 @@ const App = () => (
             <Route path="/acordos/:id/editar" element={<ProtectedRoute><EditarAcordo /></ProtectedRoute>} />
             <Route path="/retornos" element={<ProtectedRoute><Retornos /></ProtectedRoute>} />
             <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
+            <Route path="/clientes/:id" element={<ProtectedRoute><DevedorDetalhe /></ProtectedRoute>} />
             <Route path="/comissoes" element={<ProtectedRoute><Comissoes /></ProtectedRoute>} />
             <Route path="/conta" element={<ProtectedRoute><MinhaConta /></ProtectedRoute>} />
             <Route path="/equipe/acordos" element={<GestorRoute><EquipeAcordos /></GestorRoute>} />
