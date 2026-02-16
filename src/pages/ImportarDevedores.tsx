@@ -91,6 +91,7 @@ export default function ImportarDevedores() {
       cpf: r.cpf,
       valor_original: r.valor_original,
       valor_atualizado: r.valor_atualizado,
+      credor: r.credor || null,
       descricao: r.credor || null,
       contrato: r.contrato || null,
       data_vencimento: parseDate(r.nascimento),
