@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { differenceInDays } from 'date-fns';
-import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
 
 interface Devedor {
@@ -74,6 +75,11 @@ export default function DevedorDetalhe() {
   const [eventoFile, setEventoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Edit evento state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editEventoId, setEditEventoId] = useState<string | null>(null);
+  const [editEventoTipo, setEditEventoTipo] = useState('contato_cliente');
+  const [editEventoDescricao, setEditEventoDescricao] = useState('');
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -156,6 +162,29 @@ export default function DevedorDetalhe() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDeleteEvento = async (eventoId: string) => {
+    const { error } = await supabase.from('devedor_eventos').delete().eq('id', eventoId);
+    if (error) toast.error('Erro: ' + error.message);
+    else { toast.success('Evento excluído'); fetchData(); }
+  };
+
+  const handleEditEvento = async () => {
+    if (!editEventoId) return;
+    setSaving(true);
+    const { error } = await supabase.from('devedor_eventos').update({
+      tipo: editEventoTipo, descricao: editEventoDescricao,
+    }).eq('id', editEventoId);
+    if (error) toast.error('Erro: ' + error.message);
+    else { toast.success('Evento atualizado'); setEditDialogOpen(false); fetchData(); }
+    setSaving(false);
+  };
+
+  const openEditEvento = (evt: Evento) => {
+    setEditEventoId(evt.id);
+    setEditEventoTipo(evt.tipo);
+    setEditEventoDescricao(evt.descricao);
+    setEditDialogOpen(true);
+  };
   const totalEmAtraso = contratos.reduce((acc, c) => acc + c.valor_atualizado, 0);
 
   const getDiasAtraso = (dataVencimento: string | null) => {
@@ -226,6 +255,7 @@ export default function DevedorDetalhe() {
                       cpfNormalizado={cpfNorm}
                       userId={user?.id || ''}
                       onRefresh={fetchData}
+                      telefoneImportado={devedor.telefone}
                     />
                   </TabsContent>
                   <TabsContent value="dados">
@@ -353,10 +383,27 @@ export default function DevedorDetalhe() {
                           <Badge variant={evt.tipo === 'anexar_arquivo' ? 'secondary' : 'default'}>
                             {evt.tipo === 'contato_cliente' ? <><Phone className="h-3 w-3 mr-1" /> Contato</> : <><FileText className="h-3 w-3 mr-1" /> Arquivo</>}
                           </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(evt.criado_em).toLocaleDateString('pt-BR')}{' '}
-                            {new Date(evt.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(evt.criado_em).toLocaleDateString('pt-BR')}{' '}
+                              {new Date(evt.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditEvento(evt)}>
+                                  <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteEvento(evt.id)}>
+                                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                         {evt.descricao && <p className="text-sm">{evt.descricao}</p>}
                         {evt.arquivo_url && evt.arquivo_nome && (
@@ -371,6 +418,32 @@ export default function DevedorDetalhe() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Edit Evento Dialog */}
+          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Editar Evento</DialogTitle></DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <Select value={editEventoTipo} onValueChange={setEditEventoTipo}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="contato_cliente">Contato com Cliente</SelectItem>
+                      <SelectItem value="anexar_arquivo">Anexar Arquivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Observação</Label>
+                  <Textarea value={editEventoDescricao} onChange={(e) => setEditEventoDescricao(e.target.value)} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleEditEvento} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </AppLayout>
