@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
@@ -54,6 +55,7 @@ const navItems: NavItem[] = [
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
+  const { abasPermitidas } = useUserPermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -62,6 +64,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const filteredNavItems = navItems.filter((item) => {
     if (item.adminOnly && !isAdmin) return false;
     if (item.gestorOnly && !isGestor && !isAdmin) return false;
+    // Apply tab permissions for non-admin, non-gestor-only items
+    if (!isAdmin && !item.adminOnly && !item.gestorOnly && abasPermitidas) {
+      return abasPermitidas.includes(item.href);
+    }
     return true;
   });
 

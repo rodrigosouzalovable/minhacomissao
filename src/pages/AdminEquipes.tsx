@@ -21,8 +21,9 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Trash2 } from 'lucide-react';
+import { Users, UserPlus, Trash2, Pencil } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
+import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -49,6 +50,7 @@ export default function AdminEquipes() {
   const queryClient = useQueryClient();
   const [selectedGestor, setSelectedGestor] = useState<string>('');
   const [selectedFuncionario, setSelectedFuncionario] = useState<string>('');
+  const [editingUser, setEditingUser] = useState<{ id: string; nome: string } | null>(null);
 
   // Fetch all users with their roles
   const { data: usersData } = useQuery({
@@ -302,14 +304,23 @@ export default function AdminEquipes() {
                                   </TableCell>
                                   <TableCell>{func?.email ?? 'N/A'}</TableCell>
                                   <TableCell>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={() => removeTeamMemberMutation.mutate(member.id)}
-                                      disabled={removeTeamMemberMutation.isPending}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setEditingUser({ id: member.funcionario_id, nome: func?.nome ?? '' })}
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={() => removeTeamMemberMutation.mutate(member.id)}
+                                        disabled={removeTeamMemberMutation.isPending}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               );
@@ -329,6 +340,15 @@ export default function AdminEquipes() {
           </CardContent>
         </Card>
       </div>
+
+      {editingUser && (
+        <EditPermissionsDialog
+          open={!!editingUser}
+          onOpenChange={(open) => !open && setEditingUser(null)}
+          userId={editingUser.id}
+          userName={editingUser.nome}
+        />
+      )}
     </AppLayout>
   );
 }
