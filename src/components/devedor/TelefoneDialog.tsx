@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,13 +27,14 @@ function formatPhone(value: string) {
 
 export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onSaved, initialNumero }: TelefoneDialogProps) {
   const [numero, setNumero] = useState('');
+  const prevOpenRef = useRef(false);
   
-  // Pre-fill when dialog opens with initialNumero
-  const prevOpenRef = useState(false);
-  if (open && !prevOpenRef[0] && initialNumero) {
-    setNumero(formatPhone(initialNumero));
-  }
-  prevOpenRef[0] = open;
+  useEffect(() => {
+    if (open && !prevOpenRef.current && initialNumero) {
+      setNumero(formatPhone(initialNumero));
+    }
+    prevOpenRef.current = open;
+  }, [open, initialNumero]);
   const [tipo, setTipo] = useState('celular');
   const [isContato, setIsContato] = useState('nao');
   const [isWhatsapp, setIsWhatsapp] = useState('nao');
