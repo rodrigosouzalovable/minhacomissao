@@ -205,6 +205,51 @@ export type Database = {
           },
         ]
       }
+      devedor_telefones: {
+        Row: {
+          ativo: boolean | null
+          autorizado: boolean | null
+          criado_em: string | null
+          criado_por: string
+          devedor_cpf: string
+          id: string
+          is_contato: boolean | null
+          is_whatsapp: boolean | null
+          numero: string
+          observacao: string | null
+          ramal: string | null
+          tipo: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          autorizado?: boolean | null
+          criado_em?: string | null
+          criado_por: string
+          devedor_cpf: string
+          id?: string
+          is_contato?: boolean | null
+          is_whatsapp?: boolean | null
+          numero: string
+          observacao?: string | null
+          ramal?: string | null
+          tipo?: string
+        }
+        Update: {
+          ativo?: boolean | null
+          autorizado?: boolean | null
+          criado_em?: string | null
+          criado_por?: string
+          devedor_cpf?: string
+          id?: string
+          is_contato?: boolean | null
+          is_whatsapp?: boolean | null
+          numero?: string
+          observacao?: string | null
+          ramal?: string | null
+          tipo?: string
+        }
+        Relationships: []
+      }
       devedores: {
         Row: {
           arquivo_importacao: string | null
