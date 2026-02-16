@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,16 @@ interface ClienteRow {
   estagio: string;
 }
 
+interface ClienteAgrupado {
+  id: string;
+  nome: string;
+  cpf: string;
+  credor: string | null;
+  qtdContratos: number;
+  valorTotal: number;
+  estagios: string[];
+}
+
 const CREDORES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
 const ESTAGIOS = [
   { value: 'novo', label: 'Novo' },
@@ -38,26 +48,41 @@ export default function Clientes() {
   const [telefone, setTelefone] = useState('');
   const [credor, setCredor] = useState('todos');
   const [estagio, setEstagio] = useState('todos');
-  const [results, setResults] = useState<ClienteRow[]>([]);
-  const [total, setTotal] = useState(0);
+  const [rawResults, setRawResults] = useState<ClienteRow[]>([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const handleSearch = async (pageNum = 0) => {
+  const grouped = useMemo<ClienteAgrupado[]>(() => {
+    const map: Record<string, ClienteAgrupado> = {};
+    for (const row of rawResults) {
+      const cpfNorm = row.cpf.replace(/\D/g, '');
+      if (!map[cpfNorm]) {
+        map[cpfNorm] = { id: row.id, nome: row.nome, cpf: row.cpf, credor: row.credor, qtdContratos: 0, valorTotal: 0, estagios: [] };
+      }
+      map[cpfNorm].qtdContratos += 1;
+      map[cpfNorm].valorTotal += Number(row.valor_atualizado);
+      if (!map[cpfNorm].estagios.includes(row.estagio)) map[cpfNorm].estagios.push(row.estagio);
+    }
+    return Object.values(map);
+  }, [rawResults]);
+
+  const totalPages = Math.ceil(grouped.length / PAGE_SIZE);
+  const paginatedResults = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const handleSearch = async () => {
     if (!nome.trim() && !cpf.trim() && !telefone.trim() && credor === 'todos' && estagio === 'todos') {
       toast.error('Preencha ao menos um filtro para pesquisar.');
       return;
     }
     setLoading(true);
-    setPage(pageNum);
+    setPage(0);
 
     let query = supabase
       .from('devedores')
-      .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio', { count: 'exact' })
+      .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio')
       .eq('ativo', true)
-      .order('criado_em', { ascending: false })
-      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+      .order('criado_em', { ascending: false });
 
     if (nome.trim()) query = query.ilike('nome', `%${nome.trim()}%`);
     if (cpf.trim()) query = query.ilike('cpf', `%${cpf.trim().replace(/\D/g, '')}%`);
@@ -65,11 +90,10 @@ export default function Clientes() {
     if (credor !== 'todos') query = query.eq('credor', credor);
     if (estagio !== 'todos') query = query.eq('estagio', estagio);
 
-    const { data, count, error } = await query;
+    const { data, error } = await query;
 
     if (!error && data) {
-      setResults(data as ClienteRow[]);
-      setTotal(count ?? 0);
+      setRawResults(data as ClienteRow[]);
     }
     setSearched(true);
     setLoading(false);
@@ -81,13 +105,10 @@ export default function Clientes() {
     setTelefone('');
     setCredor('todos');
     setEstagio('todos');
-    setResults([]);
-    setTotal(0);
+    setRawResults([]);
     setPage(0);
     setSearched(false);
   };
-
-  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const estagioVariant = (e: string) => {
     switch (e) {
@@ -117,39 +138,23 @@ export default function Clientes() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
                 <label className="text-sm font-medium mb-1 block">Nome</label>
-                <Input
-                  placeholder="Nome do cliente"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                />
+                <Input placeholder="Nome do cliente" value={nome} onChange={(e) => setNome(e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">CPF/CNPJ</label>
-                <Input
-                  placeholder="CPF ou CNPJ"
-                  value={cpf}
-                  onChange={(e) => setCpf(e.target.value)}
-                />
+                <Input placeholder="CPF ou CNPJ" value={cpf} onChange={(e) => setCpf(e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Telefone</label>
-                <Input
-                  placeholder="Telefone"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                />
+                <Input placeholder="Telefone" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Credor</label>
                 <Select value={credor} onValueChange={setCredor}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
-                    {CREDORES.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
+                    {CREDORES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -158,19 +163,15 @@ export default function Clientes() {
               <div>
                 <label className="text-sm font-medium mb-1 block">Estágio</label>
                 <Select value={estagio} onValueChange={setEstagio}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
-                    {ESTAGIOS.map((e) => (
-                      <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
-                    ))}
+                    {ESTAGIOS.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-end gap-2 lg:col-span-3">
-                <Button onClick={() => handleSearch(0)} disabled={loading}>
+                <Button onClick={() => handleSearch()} disabled={loading}>
                   <Search className="h-4 w-4 mr-1" />
                   {loading ? 'Pesquisando...' : 'Pesquisar'}
                 </Button>
@@ -186,7 +187,7 @@ export default function Clientes() {
         {searched && (
           <Card>
             <CardHeader>
-              <CardTitle>{total} cliente{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}</CardTitle>
+              <CardTitle>{grouped.length} cliente{grouped.length !== 1 ? 's' : ''} encontrado{grouped.length !== 1 ? 's' : ''}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -196,14 +197,14 @@ export default function Clientes() {
                       <TableHead>Nome</TableHead>
                       <TableHead>CPF/CNPJ</TableHead>
                       <TableHead>Credor</TableHead>
-                      <TableHead>Contrato</TableHead>
-                      <TableHead>Valor (R$)</TableHead>
+                      <TableHead>Contratos</TableHead>
+                      <TableHead>Valor Total (R$)</TableHead>
                       <TableHead>Estágio</TableHead>
                       <TableHead>Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {results.length === 0 ? (
+                    {paginatedResults.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -214,17 +215,21 @@ export default function Clientes() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      results.map((row) => (
-                        <TableRow key={row.id}>
+                      paginatedResults.map((row) => (
+                        <TableRow key={row.cpf}>
                           <TableCell className="font-medium">{row.nome}</TableCell>
                           <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
                           <TableCell>{row.credor || '-'}</TableCell>
-                          <TableCell>{row.contrato || '-'}</TableCell>
-                          <TableCell>{row.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                          <TableCell>{row.qtdContratos} contrato{row.qtdContratos !== 1 ? 's' : ''}</TableCell>
+                          <TableCell>{row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                           <TableCell>
-                            <Badge variant={estagioVariant(row.estagio)}>
-                              {ESTAGIOS.find(e => e.value === row.estagio)?.label || row.estagio}
-                            </Badge>
+                            <div className="flex flex-wrap gap-1">
+                              {row.estagios.map((e) => (
+                                <Badge key={e} variant={estagioVariant(e)}>
+                                  {ESTAGIOS.find(es => es.value === e)?.label || e}
+                                </Badge>
+                              ))}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Button variant="outline" size="sm" onClick={() => navigate(`/clientes/${row.id}`)}>
@@ -241,16 +246,10 @@ export default function Clientes() {
 
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Página {page + 1} de {totalPages}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Página {page + 1} de {totalPages}</p>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => handleSearch(page - 1)}>
-                      Anterior
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => handleSearch(page + 1)}>
-                      Próxima
-                    </Button>
+                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Anterior</Button>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Próxima</Button>
                   </div>
                 </div>
               )}
