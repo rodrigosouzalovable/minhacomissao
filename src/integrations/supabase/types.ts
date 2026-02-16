@@ -524,6 +524,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_permissions: {
+        Row: {
+          abas_permitidas: string[]
+          atualizado_em: string
+          criado_em: string
+          empresa: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          abas_permitidas?: string[]
+          atualizado_em?: string
+          criado_em?: string
+          empresa?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          abas_permitidas?: string[]
+          atualizado_em?: string
+          criado_em?: string
+          empresa?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           criado_em: string
