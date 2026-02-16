@@ -177,6 +177,7 @@ export type Database = {
           descricao: string | null
           estagio: string
           id: string
+          importacao_id: string | null
           importado_por: string | null
           nome: string
           telefone: string | null
@@ -195,6 +196,7 @@ export type Database = {
           descricao?: string | null
           estagio?: string
           id?: string
+          importacao_id?: string | null
           importado_por?: string | null
           nome: string
           telefone?: string | null
@@ -213,13 +215,22 @@ export type Database = {
           descricao?: string | null
           estagio?: string
           id?: string
+          importacao_id?: string | null
           importado_por?: string | null
           nome?: string
           telefone?: string | null
           valor_atualizado?: number
           valor_original?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "devedores_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gastos_empresa: {
         Row: {
@@ -297,6 +308,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      importacoes: {
+        Row: {
+          credor: string
+          criado_em: string
+          id: string
+          importado_por: string
+          nome_arquivo: string
+          total_registros: number
+        }
+        Insert: {
+          credor: string
+          criado_em?: string
+          id?: string
+          importado_por: string
+          nome_arquivo: string
+          total_registros?: number
+        }
+        Update: {
+          credor?: string
+          criado_em?: string
+          id?: string
+          importado_por?: string
+          nome_arquivo?: string
+          total_registros?: number
+        }
+        Relationships: []
       }
       lembretes_lidos: {
         Row: {
