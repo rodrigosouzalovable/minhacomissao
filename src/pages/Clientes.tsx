@@ -48,6 +48,7 @@ export default function Clientes() {
       return;
     }
     setLoading(true);
+    setPage(pageNum);
 
     let query = supabase
       .from('devedores')
