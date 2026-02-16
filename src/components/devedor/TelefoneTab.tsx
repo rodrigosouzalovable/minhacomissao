@@ -26,6 +26,7 @@ interface TelefoneTabProps {
   userId: string;
   onRefresh: () => void;
   telefoneImportado?: string | null;
+  devedorId?: string;
 }
 
 const tipoLabel: Record<string, string> = {
@@ -35,8 +36,9 @@ const tipoLabel: Record<string, string> = {
   outro: 'Outro',
 };
 
-export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, telefoneImportado }: TelefoneTabProps) {
+export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, telefoneImportado, devedorId }: TelefoneTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogInitialNumero, setDialogInitialNumero] = useState<string | undefined>(undefined);
 
   // Build combined list with imported phone if not already in devedor_telefones
   const combinedTelefones = (() => {
@@ -72,6 +74,18 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, tele
     const { error } = await supabase.from('devedor_telefones' as any).delete().eq('id', id);
     if (error) toast.error('Erro: ' + error.message);
     else { toast.success('Telefone excluído'); onRefresh(); }
+  };
+
+  const handleExcluirImportado = async () => {
+    if (!devedorId) return;
+    const { error } = await supabase.from('devedores').update({ telefone: null }).eq('id', devedorId);
+    if (error) toast.error('Erro: ' + error.message);
+    else { toast.success('Telefone importado removido'); onRefresh(); }
+  };
+
+  const handleSalvarImportado = (numero: string) => {
+    setDialogInitialNumero(numero);
+    setDialogOpen(true);
   };
 
   return (
@@ -110,23 +124,34 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, tele
                   <TableCell>{tel.ativo ? <Badge variant="default">Ativo</Badge> : <Badge variant="destructive">Inativo</Badge>}</TableCell>
                   <TableCell className="max-w-[200px] truncate">{tel.observacao || '-'}</TableCell>
                   <TableCell>
-                    {!isImportado && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleInativar(tel.id, tel.ativo)}>
-                            {tel.ativo ? 'Inativar' : 'Ativar'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => handleExcluir(tel.id)}>
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {isImportado ? (
+                          <>
+                            <DropdownMenuItem onClick={() => handleSalvarImportado(tel.numero)}>
+                              Salvar como telefone
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={handleExcluirImportado}>
+                              Excluir
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                            <DropdownMenuItem onClick={() => handleInativar(tel.id, tel.ativo)}>
+                              {tel.ativo ? 'Inativar' : 'Ativar'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleExcluir(tel.id)}>
+                              Excluir
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );
@@ -136,10 +161,20 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, tele
       )}
       <TelefoneDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setDialogInitialNumero(undefined);
+        }}
         cpfNormalizado={cpfNormalizado}
         userId={userId}
-        onSaved={onRefresh}
+        onSaved={() => {
+          if (dialogInitialNumero && devedorId) {
+            // After saving imported phone as real record, clear the imported field
+            supabase.from('devedores').update({ telefone: null }).eq('id', devedorId).then(() => {});
+          }
+          onRefresh();
+        }}
+        initialNumero={dialogInitialNumero}
       />
     </div>
   );

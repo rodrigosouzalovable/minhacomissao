@@ -15,6 +15,7 @@ interface TelefoneDialogProps {
   cpfNormalizado: string;
   userId: string;
   onSaved: () => void;
+  initialNumero?: string;
 }
 
 function formatPhone(value: string) {
@@ -24,8 +25,15 @@ function formatPhone(value: string) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
-export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onSaved }: TelefoneDialogProps) {
+export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onSaved, initialNumero }: TelefoneDialogProps) {
   const [numero, setNumero] = useState('');
+  
+  // Pre-fill when dialog opens with initialNumero
+  const prevOpenRef = useState(false);
+  if (open && !prevOpenRef[0] && initialNumero) {
+    setNumero(formatPhone(initialNumero));
+  }
+  prevOpenRef[0] = open;
   const [tipo, setTipo] = useState('celular');
   const [isContato, setIsContato] = useState('nao');
   const [isWhatsapp, setIsWhatsapp] = useState('nao');
