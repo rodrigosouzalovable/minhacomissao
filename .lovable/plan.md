@@ -1,66 +1,84 @@
 
 
-## Agrupar Contratos por CPF/CNPJ na Pagina de Clientes
+## Reformular Layout da Ficha do Cliente + Registro de Telefones
 
-### Problema Atual
-Quando o usuario pesquisa por um credor (ex: MONTREAL), a tabela mostra uma linha para cada contrato, repetindo o mesmo cliente varias vezes (como "BR ELETRON TOCANTINS" aparecendo 7+ vezes com CPFs identicos).
+### Resumo
 
-### Solucao
-Agrupar automaticamente os resultados por CPF/CNPJ apos a busca, exibindo cards individuais por cliente com contratos unificados e valores somados.
+Redesenhar a pagina `DevedorDetalhe.tsx` para seguir o layout da imagem de referencia, com tres areas principais: cabecalho com dados do cliente, area central com abas (Telefone, Dados) e contratos abaixo, e coluna direita com eventos. Tambem criar uma tabela `devedor_telefones` para armazenar telefones cadastrados.
 
-### Modificacoes em src/pages/Clientes.tsx
+---
 
-**1. Buscar todos os registros (sem paginacao no banco)**
-- Remover `.range()` da query para trazer todos os resultados do filtro (limite de 1000 do Supabase)
-- A paginacao sera feita no frontend sobre os dados agrupados
+### 1. Migracao do Banco de Dados
 
-**2. Agrupar resultados por CPF normalizado**
-- Apos receber os dados, aplicar `reduce` para agrupar por CPF (removendo caracteres especiais)
-- Cada grupo tera: nome, cpf, credor, quantidade de contratos, valor total (soma de `valor_atualizado`), id do primeiro registro (para navegacao)
-
-**3. Alterar a tabela de resultados**
-- Remover coluna "Contrato" individual
-- Adicionar coluna "Contratos" mostrando a quantidade (ex: "5 contratos")
-- Coluna "Valor (R$)" mostra o total somado
-- Coluna "Estagio" mostra o estagio predominante ou badge multiplo
-- "Ver Ficha" navega para `/clientes/:id` usando o id do primeiro registro do grupo
-- Contagem de clientes no cabecalho reflete a quantidade de grupos unicos, nao de contratos
-
-**4. Paginacao no frontend**
-- Paginar sobre o array agrupado em vez dos resultados brutos
-- Manter PAGE_SIZE = 20 (agora 20 clientes por pagina, nao 20 contratos)
-
-### Detalhes Tecnicos
+**Nova tabela `devedor_telefones`:**
 
 ```text
-Interface ClienteAgrupado {
-  id: string           // id do primeiro registro (para navegacao)
-  nome: string
-  cpf: string
-  credor: string
-  qtdContratos: number
-  valorTotal: number
-  estagios: string[]   // lista unica de estagios dos contratos
-}
+devedor_telefones
+-----------------------------------------
+id              | uuid PK default gen_random_uuid()
+devedor_cpf     | text NOT NULL (CPF normalizado, para vincular todos os contratos do mesmo cliente)
+numero          | text NOT NULL
+tipo            | text NOT NULL DEFAULT 'celular' (celular, comercial, residencial, outro)
+is_contato      | boolean DEFAULT false
+is_whatsapp     | boolean DEFAULT false
+ativo           | boolean DEFAULT true
+autorizado      | boolean DEFAULT true
+observacao      | text
+ramal           | text
+criado_por      | uuid NOT NULL
+criado_em       | timestamptz DEFAULT now()
 ```
 
-Logica de agrupamento:
-```text
-results.reduce((acc, row) => {
-  const cpfNorm = row.cpf.replace(/\D/g, '');
-  if (!acc[cpfNorm]) {
-    acc[cpfNorm] = { id: row.id, nome: row.nome, cpf: row.cpf, credor: row.credor, qtdContratos: 0, valorTotal: 0, estagios: [] };
-  }
-  acc[cpfNorm].qtdContratos += 1;
-  acc[cpfNorm].valorTotal += row.valor_atualizado;
-  if (!acc[cpfNorm].estagios.includes(row.estagio)) acc[cpfNorm].estagios.push(row.estagio);
-  return acc;
-}, {})
-```
+RLS: admins ALL, autenticados SELECT/INSERT/UPDATE.
 
-### Arquivo envolvido
+---
+
+### 2. Redesenhar src/pages/DevedorDetalhe.tsx
+
+**Cabecalho (topo):**
+- Nome do cliente em destaque (grande)
+- CPF/CNPJ, Endereco (se houver), botao "Voltar" no canto direito
+- Layout horizontal similar a referencia
+
+**Area Central - Abas (usando Tabs):**
+- **Aba "Telefone"**: tabela com colunas Numero, Tipo, Observacao, e dropdown "Acao" (Inativar, Excluir). Botao "+ Novo" abre dialog de cadastro de telefone.
+- **Aba "Dados"**: informacoes gerais do devedor (credor, descricao, etc.)
+
+**Dialog "Telefone Novo" (ao clicar em "+ Novo"):**
+- Campos em grid 3 colunas:
+  - Telefone (input)
+  - Tel. de Contato (Sim/Nao radio)
+  - Ativo (Sim/Nao radio)
+  - Tipo de Telefone (select: Celular, Comercial, Residencial, Outro)
+  - Whatsapp (Sim/Nao radio)
+  - Autorizado (Sim/Nao radio)
+  - Observacao (textarea)
+  - Ramal (input)
+- Botoes "Fechar" e "Salvar"
+
+**Secao Contratos (abaixo das abas):**
+- Titulo "Contratos" com "Total em Atraso R$ X" em vermelho ao lado
+- Lista compacta: cada contrato mostra numero, dias de atraso, data de negociacao
+- Linhas expandiveis (collapsible) para ver detalhes
+
+**Coluna Direita - Eventos (permanece similar):**
+- Botao "+ Novo Evento" no topo
+- Timeline de eventos com tipo, descricao, data/hora e autor
+
+---
+
+### 3. Detalhes Tecnicos
+
+- Buscar telefones por CPF normalizado (nao por devedor_id) para que todos os contratos do mesmo cliente compartilhem os mesmos telefones
+- Calcular "dias de atraso" a partir de `data_vencimento` usando `differenceInDays(new Date(), vencimento)`
+- Usar `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` do Radix para as abas
+- Usar `DropdownMenu` para o botao "Acao" em cada telefone
+- Formatacao de telefone no input com mascara `(00) 00000-0000`
+
+### Arquivos envolvidos
 
 | Arquivo | Acao |
 |---|---|
-| src/pages/Clientes.tsx | Modificar (agrupamento + nova tabela + paginacao frontend) |
+| Migracao SQL | Criar tabela devedor_telefones + RLS |
+| src/pages/DevedorDetalhe.tsx | Reescrever layout completo |
 
