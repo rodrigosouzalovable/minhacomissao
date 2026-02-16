@@ -256,6 +256,7 @@ export default function DevedorDetalhe() {
                       userId={user?.id || ''}
                       onRefresh={fetchData}
                       telefoneImportado={devedor.telefone}
+                      devedorId={devedor.id}
                     />
                   </TabsContent>
                   <TabsContent value="dados">
