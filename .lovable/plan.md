@@ -1,47 +1,41 @@
 
-## Mostrar Telefone Importado + Editar/Excluir Eventos
 
-### 1. Telefone importado na aba Telefone
+## Adicionar Editar/Excluir no telefone importado
 
-Atualmente, o campo `devedor.telefone` (telefone que veio na importacao da planilha) aparece apenas no cabecalho. Na aba "Telefone", so aparecem registros da tabela `devedor_telefones`.
+Atualmente, o telefone importado aparece como uma linha virtual (sem registro real no banco) e nao possui acoes. O usuario quer que ele tenha as mesmas opcoes dos demais telefones.
 
-**Solucao**: No `TelefoneTab`, receber uma nova prop `telefoneImportado` (string | null). Se existir e nao houver nenhum registro em `devedor_telefones` com o mesmo numero, exibir esse telefone como primeira linha da tabela com uma Badge "Importado" e sem acoes de edicao/exclusao (pois vem do registro original).
+### Abordagem
 
-**Modificacoes em `src/components/devedor/TelefoneTab.tsx`**:
-- Adicionar prop `telefoneImportado?: string | null`
-- Criar uma lista combinada: se `telefoneImportado` existir e seu numero normalizado nao estiver na lista de `telefones`, inserir um item virtual no inicio com tipo "celular", observacao "Importado", sem id
-- Exibir esse item com Badge "Importado" e sem dropdown de acao
+Em vez de tratar o telefone importado como item somente-leitura, vamos adicionar ao dropdown dele duas acoes especiais:
 
-**Modificacoes em `src/pages/DevedorDetalhe.tsx`**:
-- Passar `telefoneImportado={devedor.telefone}` para o componente `TelefoneTab`
+1. **Editar**: Abre o dialog `TelefoneDialog` pre-preenchido com o numero importado, permitindo ao usuario salvar como um registro real na tabela `devedor_telefones`. Apos salvar, o telefone deixa de aparecer como "Importado" e passa a ser um registro normal editavel.
 
----
+2. **Excluir**: Limpa o campo `telefone` do registro `devedores` (seta para `null`), removendo o telefone importado da lista.
 
-### 2. Editar e Excluir eventos
+### Modificacoes
 
-Atualmente cada evento e exibido sem opcoes de edicao ou exclusao.
+**`src/components/devedor/TelefoneTab.tsx`**:
+- Remover a condicao `!isImportado` que oculta o dropdown de acoes
+- Para o item importado, exibir no dropdown:
+  - "Salvar como telefone" - abre o TelefoneDialog pre-preenchido com o numero
+  - "Excluir" - chama uma funcao para limpar o telefone do devedor
+- Adicionar prop `devedorId` (string) para identificar o registro do devedor
+- Adicionar funcao `handleExcluirImportado` que faz UPDATE em `devedores` setando `telefone = null`
+- Modificar o `TelefoneDialog` para aceitar um valor inicial opcional (`initialNumero`)
 
-**Solucao**: Adicionar um `DropdownMenu` com opcoes "Editar" e "Excluir" em cada card de evento.
+**`src/components/devedor/TelefoneDialog.tsx`**:
+- Adicionar prop opcional `initialNumero?: string` 
+- Quando `initialNumero` for fornecido, pre-preencher o campo de numero ao abrir o dialog
 
-**Modificacoes em `src/pages/DevedorDetalhe.tsx`**:
-- Adicionar estado para controlar dialog de edicao de evento (`editEventoId`, `editEventoTipo`, `editEventoDescricao`)
-- Adicionar funcao `handleDeleteEvento(eventoId)` que faz DELETE na tabela `devedor_eventos` e recarrega
-- Adicionar funcao `handleEditEvento()` que faz UPDATE na tabela `devedor_eventos` com o tipo e descricao editados
-- Em cada card de evento, adicionar um `DropdownMenu` (icone tres pontos) com:
-  - "Editar" - abre dialog de edicao pre-preenchido
-  - "Excluir" - executa exclusao com confirmacao via toast
-- Criar um Dialog de edicao (reutilizando o mesmo layout do dialog de criacao) que permite alterar tipo e descricao do evento
+**`src/pages/DevedorDetalhe.tsx`**:
+- Passar o `devedorId` (ou o primeiro devedor do grupo) como prop para `TelefoneTab`
 
-**RLS necessario**: A tabela `devedor_eventos` ja tem politica de INSERT e SELECT para usuarios autenticados, mas nao tem UPDATE nem DELETE. Sera necessaria uma migracao para adicionar:
-- UPDATE policy: usuario autenticado pode atualizar eventos que ele criou (`auth.uid() = criado_por`)
-- DELETE policy: usuario autenticado pode excluir eventos que ele criou (`auth.uid() = criado_por`)
+### Detalhes tecnicos
 
----
-
-### Resumo de arquivos
-
-| Arquivo | Acao |
+| Arquivo | Alteracao |
 |---|---|
-| Migracao SQL | Adicionar RLS UPDATE + DELETE em devedor_eventos para o criador |
-| src/components/devedor/TelefoneTab.tsx | Adicionar prop telefoneImportado e exibir na tabela |
-| src/pages/DevedorDetalhe.tsx | Passar telefoneImportado, adicionar editar/excluir eventos com dialogs |
+| `src/components/devedor/TelefoneTab.tsx` | Adicionar dropdown no item importado com "Salvar como telefone" e "Excluir"; adicionar prop `devedorId`; funcao para limpar telefone do devedor |
+| `src/components/devedor/TelefoneDialog.tsx` | Adicionar prop `initialNumero` para pre-preencher o numero |
+| `src/pages/DevedorDetalhe.tsx` | Passar `devedorId` para o `TelefoneTab` |
+
+Nenhuma migracao de banco necessaria -- a tabela `devedores` ja permite UPDATE para admins e o campo `telefone` ja e nullable.
