@@ -1,74 +1,84 @@
 
 
-## Implantacao Completa: Ficha do Devedor + Agrupamento + Eventos
+## Implantacao Completa - Ficha do Devedor, Agrupamento e Eventos
 
 ### Resumo
-Finalizar a implementacao das tres funcionalidades aprovadas: (1) tabela e bucket no banco de dados, (2) agrupamento por CPF no preview de importacao, (3) pagina de ficha do devedor com contratos expandiveis e sistema de eventos.
+
+Executar todas as etapas pendentes de uma vez: migracao do banco, criacao da pagina de ficha do devedor, agrupamento no preview de importacao, e botao "Ver Ficha" na pagina de clientes.
 
 ---
 
-### 1. Migracao no Banco de Dados
+### 1. Migracao do Banco de Dados
 
-Criar a tabela `devedor_eventos` e o bucket de storage `devedor-arquivos`:
+Criar tabela `devedor_eventos` e bucket `devedor-arquivos` com RLS:
 
 ```text
 devedor_eventos
 -----------------------------------------
-id           | uuid PK
+id           | uuid PK default gen_random_uuid()
 devedor_id   | uuid FK -> devedores(id) ON DELETE CASCADE
-tipo         | text (contato_cliente, anexar_arquivo)
-descricao    | text
+tipo         | text NOT NULL
+descricao    | text NOT NULL DEFAULT ''
 arquivo_url  | text (nullable)
 arquivo_nome | text (nullable)
-criado_por   | uuid
-criado_em    | timestamptz
+criado_por   | uuid NOT NULL
+criado_em    | timestamptz NOT NULL DEFAULT now()
 ```
 
-- RLS: admins gerenciam tudo (ALL), usuarios autenticados podem ver (SELECT) e criar (INSERT)
-- Bucket `devedor-arquivos` privado com politicas de upload/download para usuarios autenticados
+Politicas RLS:
+- Admins: ALL (usando has_role)
+- Usuarios autenticados: SELECT e INSERT
+- Anonimos: bloqueados
+
+Bucket `devedor-arquivos` (privado) com politicas de upload e download para usuarios autenticados.
 
 ---
 
-### 2. Modificar ImportarDevedores.tsx
+### 2. Criar src/pages/DevedorDetalhe.tsx
 
-- Adicionar estado `grouped` (boolean) e botao "Agrupar por CPF/CNPJ" no preview
-- Quando ativado, agrupar linhas por CPF usando `reduce`:
-  - Mostrar: CPF, Nome, Qtd Contratos, Valor Total
-  - Cada linha agrupada tera botao "Ver Ficha" (navega para `/clientes/:cpf` apos importacao)
-- Manter toggle para alternar entre visao detalhada e agrupada
-
----
-
-### 3. Criar pagina DevedorDetalhe.tsx (`/clientes/:id`)
+Pagina `/clientes/:id` com layout em duas colunas:
 
 **Cabecalho:**
 - Nome, CPF/CNPJ, telefone, botao Voltar
 
-**Secao Contratos (esquerda):**
-- Total em atraso em destaque
-- Lista de contratos usando `Collapsible` (Radix)
-- Cada contrato mostra: numero, vencimento, valor
-- Botao ocultar/exibir por contrato
+**Coluna Esquerda - Contratos:**
+- Card com "Total em Atraso" em destaque
+- Lista de contratos do mesmo CPF (busca em `devedores` por CPF normalizado)
+- Cada contrato usa Collapsible: mostra numero, vencimento, valor
+- Botao para expandir/recolher
 
-**Secao Eventos (direita):**
+**Coluna Direita - Eventos:**
 - Botao "+ Novo Evento" abre Dialog
-- Select tipo: "Contato com Cliente" ou "Anexar Arquivo"
-- Se "Anexar Arquivo": campo de upload aparece
+- Select: "Contato com Cliente" ou "Anexar Arquivo"
+- Se "Anexar Arquivo": input de upload aparece
 - Textarea para observacao
-- Lista de eventos anteriores (cronologico DESC)
+- Ao salvar: upload do arquivo ao bucket (se houver) + insert em devedor_eventos
+- Lista de eventos anteriores (DESC por criado_em)
 - Eventos de arquivo com link de download
 
 ---
 
-### 4. Modificar App.tsx
+### 3. Modificar src/pages/ImportarDevedores.tsx
 
-- Adicionar rota `/clientes/:id` com ProtectedRoute e componente DevedorDetalhe
+- Adicionar estado `grouped` (boolean) e botao "Agrupar por CPF/CNPJ" no cabecalho do preview
+- Quando ativado, agrupar `rows` por CPF usando reduce:
+  - Exibir: CPF, Nome, Qtd Contratos, Valor Total
+  - Cada card com botao "Ver Ficha" (navega para `/clientes/:devedorId` buscando por CPF)
+- Toggle para alternar entre visao detalhada e agrupada
 
 ---
 
-### 5. Modificar Clientes.tsx
+### 4. Modificar src/pages/Clientes.tsx
 
-- Adicionar botao "Ver Ficha" em cada linha da tabela de resultados, navegando para `/clientes/:id`
+- Adicionar coluna "Acoes" na tabela de resultados
+- Botao "Ver Ficha" em cada linha, navegando para `/clientes/:id`
+
+---
+
+### 5. Modificar src/App.tsx
+
+- Importar DevedorDetalhe
+- Adicionar rota `/clientes/:id` com ProtectedRoute
 
 ---
 
@@ -76,9 +86,9 @@ criado_em    | timestamptz
 
 | Arquivo | Acao |
 |---|---|
-| Migracao SQL | Criar tabela devedor_eventos + bucket |
-| src/pages/DevedorDetalhe.tsx | Criar (pagina completa) |
-| src/pages/ImportarDevedores.tsx | Modificar (agrupamento) |
-| src/pages/Clientes.tsx | Modificar (botao ver ficha) |
+| Migracao SQL | Criar tabela + bucket + RLS |
+| src/pages/DevedorDetalhe.tsx | Criar |
+| src/pages/ImportarDevedores.tsx | Modificar (agrupamento CPF) |
+| src/pages/Clientes.tsx | Modificar (botao Ver Ficha + coluna Acoes) |
 | src/App.tsx | Modificar (nova rota) |
 
