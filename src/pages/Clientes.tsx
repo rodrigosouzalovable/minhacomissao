@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, X, Users } from 'lucide-react';
+import { Search, X, Users, SearchX } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ClienteRow {
   id: string;
@@ -32,7 +33,6 @@ const PAGE_SIZE = 20;
 export default function Clientes() {
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
-  const [telefone, setTelefone] = useState('');
   const [credor, setCredor] = useState('todos');
   const [estagio, setEstagio] = useState('todos');
   const [results, setResults] = useState<ClienteRow[]>([]);
@@ -42,8 +42,11 @@ export default function Clientes() {
   const [searched, setSearched] = useState(false);
 
   const handleSearch = async (pageNum = 0) => {
+    if (!nome.trim() && !cpf.trim() && credor === 'todos' && estagio === 'todos') {
+      toast.error('Preencha ao menos um filtro para pesquisar.');
+      return;
+    }
     setLoading(true);
-    setPage(pageNum);
 
     let query = supabase
       .from('devedores')
@@ -70,7 +73,6 @@ export default function Clientes() {
   const handleClear = () => {
     setNome('');
     setCpf('');
-    setTelefone('');
     setCredor('todos');
     setEstagio('todos');
     setResults([]);
@@ -121,14 +123,6 @@ export default function Clientes() {
                   placeholder="CPF ou CNPJ"
                   value={cpf}
                   onChange={(e) => setCpf(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Telefone</label>
-                <Input
-                  placeholder="Telefone"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
                 />
               </div>
               <div>
@@ -196,8 +190,12 @@ export default function Clientes() {
                   <TableBody>
                     {results.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                          Nenhum cliente encontrado
+                        <TableCell colSpan={6} className="text-center py-12">
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <SearchX className="h-10 w-10" />
+                            <p className="text-lg font-semibold">Cliente não encontrado</p>
+                            <p className="text-sm">Tente ajustar os filtros da pesquisa.</p>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
