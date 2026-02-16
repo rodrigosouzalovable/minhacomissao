@@ -171,9 +171,11 @@ export type Database = {
           atualizado_em: string
           contrato: string | null
           cpf: string
+          credor: string | null
           criado_em: string
           data_vencimento: string | null
           descricao: string | null
+          estagio: string
           id: string
           importado_por: string | null
           nome: string
@@ -186,9 +188,11 @@ export type Database = {
           atualizado_em?: string
           contrato?: string | null
           cpf: string
+          credor?: string | null
           criado_em?: string
           data_vencimento?: string | null
           descricao?: string | null
+          estagio?: string
           id?: string
           importado_por?: string | null
           nome: string
@@ -201,9 +205,11 @@ export type Database = {
           atualizado_em?: string
           contrato?: string | null
           cpf?: string
+          credor?: string | null
           criado_em?: string
           data_vencimento?: string | null
           descricao?: string | null
+          estagio?: string
           id?: string
           importado_por?: string | null
           nome?: string

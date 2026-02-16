@@ -43,6 +43,7 @@ const navItems: NavItem[] = [
   { href: '/acordos', label: 'Meus Acordos', icon: FileText },
   { href: '/acordos/novo', label: 'Novo Acordo', icon: PlusCircle },
   { href: '/retornos', label: 'Retornos', icon: RotateCcw },
+  { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/comissoes', label: 'Minhas Comissões', icon: DollarSign },
   { href: '/equipe/acordos', label: 'Acordos da Equipe', icon: Users, gestorOnly: true },
   { href: '/admin/usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
