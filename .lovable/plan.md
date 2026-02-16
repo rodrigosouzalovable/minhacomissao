@@ -1,21 +1,41 @@
 
 
-## Ajustar proporções do layout da ficha do cliente
+## Adicionar Editar/Excluir no telefone importado
 
-Inverter a proporção entre a coluna esquerda (Telefone/Dados + Contratos) e a coluna direita (Eventos), dando mais espaço aos Eventos.
+Atualmente, o telefone importado aparece como uma linha virtual (sem registro real no banco) e nao possui acoes. O usuario quer que ele tenha as mesmas opcoes dos demais telefones.
 
-### Mudança
+### Abordagem
 
-No arquivo `src/pages/DevedorDetalhe.tsx`, alterar o grid de 3 colunas:
+Em vez de tratar o telefone importado como item somente-leitura, vamos adicionar ao dropdown dele duas acoes especiais:
 
-- **Coluna esquerda** (Telefone + Contratos): de `lg:col-span-2` para `lg:col-span-1`
-- **Coluna direita** (Eventos): de 1 coluna para `lg:col-span-2`
+1. **Editar**: Abre o dialog `TelefoneDialog` pre-preenchido com o numero importado, permitindo ao usuario salvar como um registro real na tabela `devedor_telefones`. Apos salvar, o telefone deixa de aparecer como "Importado" e passa a ser um registro normal editavel.
 
-Isso muda a proporção de 66%/33% para 33%/66%, dando o dobro de espaço para a seção de Eventos.
+2. **Excluir**: Limpa o campo `telefone` do registro `devedores` (seta para `null`), removendo o telefone importado da lista.
 
-### Arquivo alterado
+### Modificacoes
 
-| Arquivo | Alteração |
+**`src/components/devedor/TelefoneTab.tsx`**:
+- Remover a condicao `!isImportado` que oculta o dropdown de acoes
+- Para o item importado, exibir no dropdown:
+  - "Salvar como telefone" - abre o TelefoneDialog pre-preenchido com o numero
+  - "Excluir" - chama uma funcao para limpar o telefone do devedor
+- Adicionar prop `devedorId` (string) para identificar o registro do devedor
+- Adicionar funcao `handleExcluirImportado` que faz UPDATE em `devedores` setando `telefone = null`
+- Modificar o `TelefoneDialog` para aceitar um valor inicial opcional (`initialNumero`)
+
+**`src/components/devedor/TelefoneDialog.tsx`**:
+- Adicionar prop opcional `initialNumero?: string` 
+- Quando `initialNumero` for fornecido, pre-preencher o campo de numero ao abrir o dialog
+
+**`src/pages/DevedorDetalhe.tsx`**:
+- Passar o `devedorId` (ou o primeiro devedor do grupo) como prop para `TelefoneTab`
+
+### Detalhes tecnicos
+
+| Arquivo | Alteracao |
 |---|---|
-| `src/pages/DevedorDetalhe.tsx` | Trocar `lg:col-span-2` da div esquerda para a div direita (Eventos) |
+| `src/components/devedor/TelefoneTab.tsx` | Adicionar dropdown no item importado com "Salvar como telefone" e "Excluir"; adicionar prop `devedorId`; funcao para limpar telefone do devedor |
+| `src/components/devedor/TelefoneDialog.tsx` | Adicionar prop `initialNumero` para pre-preencher o numero |
+| `src/pages/DevedorDetalhe.tsx` | Passar `devedorId` para o `TelefoneTab` |
 
+Nenhuma migracao de banco necessaria -- a tabela `devedores` ja permite UPDATE para admins e o campo `telefone` ja e nullable.
