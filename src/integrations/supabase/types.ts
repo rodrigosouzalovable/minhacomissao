@@ -179,6 +179,7 @@ export type Database = {
           id: string
           importado_por: string | null
           nome: string
+          telefone: string | null
           valor_atualizado: number
           valor_original: number
         }
@@ -196,6 +197,7 @@ export type Database = {
           id?: string
           importado_por?: string | null
           nome: string
+          telefone?: string | null
           valor_atualizado?: number
           valor_original?: number
         }
@@ -213,6 +215,7 @@ export type Database = {
           id?: string
           importado_por?: string | null
           nome?: string
+          telefone?: string | null
           valor_atualizado?: number
           valor_original?: number
         }

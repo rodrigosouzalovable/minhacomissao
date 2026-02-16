@@ -33,6 +33,7 @@ const PAGE_SIZE = 20;
 export default function Clientes() {
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
+  const [telefone, setTelefone] = useState('');
   const [credor, setCredor] = useState('todos');
   const [estagio, setEstagio] = useState('todos');
   const [results, setResults] = useState<ClienteRow[]>([]);
@@ -42,7 +43,7 @@ export default function Clientes() {
   const [searched, setSearched] = useState(false);
 
   const handleSearch = async (pageNum = 0) => {
-    if (!nome.trim() && !cpf.trim() && credor === 'todos' && estagio === 'todos') {
+    if (!nome.trim() && !cpf.trim() && !telefone.trim() && credor === 'todos' && estagio === 'todos') {
       toast.error('Preencha ao menos um filtro para pesquisar.');
       return;
     }
@@ -57,6 +58,7 @@ export default function Clientes() {
 
     if (nome.trim()) query = query.ilike('nome', `%${nome.trim()}%`);
     if (cpf.trim()) query = query.ilike('cpf', `%${cpf.trim().replace(/\D/g, '')}%`);
+    if (telefone.trim()) query = query.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
     if (credor !== 'todos') query = query.eq('credor', credor);
     if (estagio !== 'todos') query = query.eq('estagio', estagio);
 
@@ -73,6 +75,7 @@ export default function Clientes() {
   const handleClear = () => {
     setNome('');
     setCpf('');
+    setTelefone('');
     setCredor('todos');
     setEstagio('todos');
     setResults([]);
@@ -123,6 +126,14 @@ export default function Clientes() {
                   placeholder="CPF ou CNPJ"
                   value={cpf}
                   onChange={(e) => setCpf(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Telefone</label>
+                <Input
+                  placeholder="Telefone"
+                  value={telefone}
+                  onChange={(e) => setTelefone(e.target.value)}
                 />
               </div>
               <div>
