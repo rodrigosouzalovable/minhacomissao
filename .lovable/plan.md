@@ -1,22 +1,22 @@
 
-## Plano: Permitir associar admins como funcionários na gestão de equipes
+## Plano: Permitir admin no dropdown de Gestores
 
 ### Problema
-Na página "Gestão de Equipes", o dropdown "Funcionário" filtra apenas usuários com role `funcionario`. Isso impede que o admin (rodrigo.rs2013@gmail.com) seja associado a um gestor.
+O dropdown "Gestor" filtra apenas usuários com role `gestor`, mas não existe nenhum gestor cadastrado. O admin precisa aparecer como opção de gestor para poder associar funcionários à sua equipe.
 
 ### Solução
-Alterar o filtro na linha 97 de `src/pages/AdminEquipes.tsx` para incluir também usuários com role `admin` no dropdown de funcionários.
+Alterar o filtro de gestores na linha 96 de `src/pages/AdminEquipes.tsx` para incluir também usuários com role `admin`.
 
 ### Alteração
 
-**Arquivo**: `src/pages/AdminEquipes.tsx` (linha 97)
+**Arquivo**: `src/pages/AdminEquipes.tsx` (linha 96)
 
 ```tsx
 // De:
-const funcionarios = usersData?.filter((u) => u.role === 'funcionario') ?? [];
+const gestores = usersData?.filter((u) => u.role === 'gestor') ?? [];
 
 // Para:
-const funcionarios = usersData?.filter((u) => u.role === 'funcionario' || u.role === 'admin') ?? [];
+const gestores = usersData?.filter((u) => u.role === 'gestor' || u.role === 'admin') ?? [];
 ```
 
-Isso fará com que admins apareçam no dropdown "Funcionário" e possam ser associados a gestores, mantendo o restante do fluxo inalterado.
+Isso fará com que o admin apareça no dropdown "Gestor", permitindo associar funcionários diretamente.
