@@ -1,41 +1,39 @@
 
 
-## Adicionar Editar/Excluir no telefone importado
+## Adicionar botao "Editar" no dropdown de telefones cadastrados
 
-Atualmente, o telefone importado aparece como uma linha virtual (sem registro real no banco) e nao possui acoes. O usuario quer que ele tenha as mesmas opcoes dos demais telefones.
+### Objetivo
+
+Adicionar a opcao "Editar" no menu de acoes dos telefones ja cadastrados na tabela `devedor_telefones`, permitindo alterar todos os campos (numero, tipo, whatsapp, contato, ativo, autorizado, observacao, ramal).
 
 ### Abordagem
 
-Em vez de tratar o telefone importado como item somente-leitura, vamos adicionar ao dropdown dele duas acoes especiais:
-
-1. **Editar**: Abre o dialog `TelefoneDialog` pre-preenchido com o numero importado, permitindo ao usuario salvar como um registro real na tabela `devedor_telefones`. Apos salvar, o telefone deixa de aparecer como "Importado" e passa a ser um registro normal editavel.
-
-2. **Excluir**: Limpa o campo `telefone` do registro `devedores` (seta para `null`), removendo o telefone importado da lista.
+Reutilizar o `TelefoneDialog` existente, adicionando suporte ao modo de edicao (UPDATE) alem do modo de criacao (INSERT).
 
 ### Modificacoes
 
-**`src/components/devedor/TelefoneTab.tsx`**:
-- Remover a condicao `!isImportado` que oculta o dropdown de acoes
-- Para o item importado, exibir no dropdown:
-  - "Salvar como telefone" - abre o TelefoneDialog pre-preenchido com o numero
-  - "Excluir" - chama uma funcao para limpar o telefone do devedor
-- Adicionar prop `devedorId` (string) para identificar o registro do devedor
-- Adicionar funcao `handleExcluirImportado` que faz UPDATE em `devedores` setando `telefone = null`
-- Modificar o `TelefoneDialog` para aceitar um valor inicial opcional (`initialNumero`)
-
 **`src/components/devedor/TelefoneDialog.tsx`**:
-- Adicionar prop opcional `initialNumero?: string` 
-- Quando `initialNumero` for fornecido, pre-preencher o campo de numero ao abrir o dialog
+- Adicionar prop opcional `editData` contendo o telefone completo (id, numero, tipo, is_contato, is_whatsapp, ativo, autorizado, observacao, ramal)
+- Quando `editData` for fornecido, pre-preencher todos os campos do formulario ao abrir
+- Alterar o `handleSave` para fazer UPDATE (quando `editData.id` existir) em vez de INSERT
+- Alterar o titulo do dialog para "Editar Telefone" quando em modo edicao
 
-**`src/pages/DevedorDetalhe.tsx`**:
-- Passar o `devedorId` (ou o primeiro devedor do grupo) como prop para `TelefoneTab`
+**`src/components/devedor/TelefoneTab.tsx`**:
+- Adicionar estado `editTelefone` para armazenar o telefone sendo editado
+- Adicionar opcao "Editar" no dropdown dos telefones cadastrados (nao-importados), antes de "Inativar"
+- Ao clicar em "Editar", setar `editTelefone` com os dados do telefone e abrir o dialog
+- Passar `editData` para o `TelefoneDialog`
+- Limpar `editTelefone` ao fechar o dialog
 
-### Detalhes tecnicos
+### RLS
+
+A tabela `devedor_telefones` precisa de uma policy de UPDATE. Sera adicionada uma migracao:
+- UPDATE policy para usuarios autenticados (mesma logica das policies existentes de INSERT/SELECT)
+
+### Resumo de arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/devedor/TelefoneTab.tsx` | Adicionar dropdown no item importado com "Salvar como telefone" e "Excluir"; adicionar prop `devedorId`; funcao para limpar telefone do devedor |
-| `src/components/devedor/TelefoneDialog.tsx` | Adicionar prop `initialNumero` para pre-preencher o numero |
-| `src/pages/DevedorDetalhe.tsx` | Passar `devedorId` para o `TelefoneTab` |
-
-Nenhuma migracao de banco necessaria -- a tabela `devedores` ja permite UPDATE para admins e o campo `telefone` ja e nullable.
+| Migracao SQL | Adicionar RLS UPDATE em devedor_telefones |
+| src/components/devedor/TelefoneDialog.tsx | Suporte a modo edicao com prop editData e logica UPDATE |
+| src/components/devedor/TelefoneTab.tsx | Opcao "Editar" no dropdown, estado editTelefone |
