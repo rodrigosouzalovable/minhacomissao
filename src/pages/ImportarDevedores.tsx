@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,10 +6,14 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 
 type CredorLayout = 'padrao' | 'montreal';
@@ -27,6 +31,15 @@ interface DevedorRow {
   descricao?: string;
 }
 
+interface Importacao {
+  id: string;
+  nome_arquivo: string;
+  credor: string;
+  total_registros: number;
+  importado_por: string;
+  criado_em: string;
+}
+
 const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = CPF/CNPJ, B = Nome/Razão Social, C = Nº Contrato, F = Tipo Contrato, H = Parcela, I = Vencimento, J = Valor, L = Tel Residencial, M = Tel Comercial',
@@ -40,6 +53,25 @@ export default function ImportarDevedores() {
   const [rows, setRows] = useState<DevedorRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
+  const [importacoes, setImportacoes] = useState<Importacao[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const fetchImportacoes = useCallback(async () => {
+    setLoadingHistory(true);
+    const { data, error } = await supabase
+      .from('importacoes' as any)
+      .select('*')
+      .order('criado_em', { ascending: false });
+    if (!error && data) {
+      setImportacoes(data as unknown as Importacao[]);
+    }
+    setLoadingHistory(false);
+  }, []);
+
+  useEffect(() => {
+    fetchImportacoes();
+  }, [fetchImportacoes]);
 
   const handleCredorChange = (value: CredorLayout) => {
     setCredorSelecionado(value);
@@ -126,6 +158,27 @@ export default function ImportarDevedores() {
     if (!user || rows.length === 0) return;
     setImporting(true);
 
+    // 1. Create importacao record
+    const { data: importacao, error: importError } = await supabase
+      .from('importacoes' as any)
+      .insert({
+        nome_arquivo: file?.name || 'unknown',
+        credor: credorSelecionado,
+        total_registros: rows.length,
+        importado_por: user.id,
+      } as any)
+      .select('id')
+      .single();
+
+    if (importError || !importacao) {
+      toast({ title: 'Erro ao registrar importação', description: importError?.message, variant: 'destructive' });
+      setImporting(false);
+      return;
+    }
+
+    const importacaoId = (importacao as any).id;
+
+    // 2. Insert devedores with importacao_id
     const records = rows.map(r => ({
       nome: r.nome,
       cpf: r.cpf,
@@ -138,6 +191,7 @@ export default function ImportarDevedores() {
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
+      importacao_id: importacaoId,
     }));
 
     const { error } = await supabase.from('devedores' as any).insert(records as any);
@@ -147,8 +201,21 @@ export default function ImportarDevedores() {
     } else {
       toast({ title: 'Importação concluída', description: `${rows.length} registros importados com sucesso.` });
       setImported(true);
+      fetchImportacoes();
     }
     setImporting(false);
+  };
+
+  const handleDeleteImportacao = async (id: string) => {
+    setDeleting(id);
+    const { error } = await supabase.from('importacoes' as any).delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Importação excluída', description: 'Todos os devedores associados foram removidos.' });
+      fetchImportacoes();
+    }
+    setDeleting(null);
   };
 
   const handleClear = () => {
@@ -205,7 +272,7 @@ export default function ImportarDevedores() {
         </Card>
 
         {rows.length > 0 && (
-          <Card>
+          <Card className="mb-6">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -297,6 +364,72 @@ export default function ImportarDevedores() {
             </CardContent>
           </Card>
         )}
+
+        {/* Histórico de Importações */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Histórico de Importações
+            </CardTitle>
+            <CardDescription>Planilhas importadas anteriormente. Ao excluir, todos os devedores associados serão removidos.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingHistory ? (
+              <p className="text-sm text-muted-foreground">Carregando...</p>
+            ) : importacoes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma importação registrada.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Arquivo</TableHead>
+                      <TableHead>Credor</TableHead>
+                      <TableHead>Registros</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importacoes.map((imp) => (
+                      <TableRow key={imp.id}>
+                        <TableCell className="font-medium">{imp.nome_arquivo}</TableCell>
+                        <TableCell className="capitalize">{imp.credor}</TableCell>
+                        <TableCell>{imp.total_registros}</TableCell>
+                        <TableCell>{new Date(imp.criado_em).toLocaleDateString('pt-BR')} {new Date(imp.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</TableCell>
+                        <TableCell className="text-right">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" disabled={deleting === imp.id}>
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                {deleting === imp.id ? 'Excluindo...' : 'Excluir'}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir importação?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Isso removerá permanentemente <strong>{imp.total_registros} devedores</strong> importados do arquivo "<strong>{imp.nome_arquivo}</strong>". Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteImportacao(imp.id)}>
+                                  Confirmar Exclusão
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );
