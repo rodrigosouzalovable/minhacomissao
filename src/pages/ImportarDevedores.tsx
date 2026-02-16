@@ -8,7 +8,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import * as XLSX from 'xlsx';
+
+type CredorLayout = 'padrao' | 'montreal';
 
 interface DevedorRow {
   cpf: string;
@@ -19,15 +23,72 @@ interface DevedorRow {
   atraso: string;
   valor_original: number;
   valor_atualizado: number;
+  telefone?: string;
+  descricao?: string;
 }
+
+const DESCRICOES: Record<CredorLayout, string> = {
+  padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
+  montreal: 'A = CPF/CNPJ, B = Nome/Razão Social, C = Nº Contrato, F = Tipo Contrato, H = Parcela, I = Vencimento, J = Valor, L = Tel Residencial, M = Tel Comercial',
+};
 
 export default function ImportarDevedores() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [credorSelecionado, setCredorSelecionado] = useState<CredorLayout>('padrao');
   const [file, setFile] = useState<File | null>(null);
   const [rows, setRows] = useState<DevedorRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
+
+  const handleCredorChange = (value: CredorLayout) => {
+    setCredorSelecionado(value);
+    setFile(null);
+    setRows([]);
+    setImported(false);
+  };
+
+  const parseNum = (val: unknown) => {
+    if (val === undefined || val === null) return 0;
+    const raw = String(val).replace(/[^\d.,]/g, '').replace(',', '.');
+    return parseFloat(raw) || 0;
+  };
+
+  const parsePadrao = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
+    return dataRows.map((row) => {
+      const risco = parseNum(row['G']);
+      return {
+        cpf: String(row['A'] ?? '').replace(/\D/g, ''),
+        nascimento: String(row['B'] ?? ''),
+        nome: String(row['C'] ?? ''),
+        credor: String(row['D'] ?? ''),
+        contrato: String(row['E'] ?? ''),
+        atraso: String(row['F'] ?? ''),
+        valor_original: risco,
+        valor_atualizado: risco,
+      };
+    }).filter(r => r.cpf.length >= 11);
+  };
+
+  const parseMontreal = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
+    return dataRows.map((row) => {
+      const valor = parseNum(row['J']);
+      const telRes = String(row['L'] ?? '').replace(/\D/g, '');
+      const telCom = String(row['M'] ?? '').replace(/\D/g, '');
+      return {
+        cpf: String(row['A'] ?? '').replace(/\D/g, ''),
+        nascimento: '',
+        nome: String(row['B'] ?? ''),
+        credor: 'MONTREAL',
+        contrato: String(row['C'] ?? ''),
+        descricao: String(row['F'] ?? ''),
+        atraso: String(row['H'] ?? ''),
+        valor_original: valor,
+        valor_atualizado: valor,
+        telefone: telRes || telCom || undefined,
+      };
+    }).filter(r => r.cpf.length >= 11);
+  };
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -41,34 +102,13 @@ export default function ImportarDevedores() {
       const workbook = XLSX.read(data, { type: 'binary' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-
-      // Skip first row (header)
       const dataRows = json.slice(1);
 
-      const parseNum = (val: unknown) => {
-        if (val === undefined || val === null) return 0;
-        const raw = String(val).replace(/[^\d.,]/g, '').replace(',', '.');
-        return parseFloat(raw) || 0;
-      };
-
-      const parsed: DevedorRow[] = dataRows.map((row) => {
-        const risco = parseNum(row['G']);
-        return {
-          cpf: String(row['A'] ?? '').replace(/\D/g, ''),
-          nascimento: String(row['B'] ?? ''),
-          nome: String(row['C'] ?? ''),
-          credor: String(row['D'] ?? ''),
-          contrato: String(row['E'] ?? ''),
-          atraso: String(row['F'] ?? ''),
-          valor_original: risco,
-          valor_atualizado: risco,
-        };
-      }).filter(r => r.cpf.length >= 11);
-
+      const parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
       setRows(parsed);
     };
     reader.readAsBinaryString(f);
-  }, []);
+  }, [credorSelecionado]);
 
   const parseDate = (raw: string): string | null => {
     if (!raw) return null;
@@ -92,9 +132,10 @@ export default function ImportarDevedores() {
       valor_original: r.valor_original,
       valor_atualizado: r.valor_atualizado,
       credor: r.credor || null,
-      descricao: r.credor || null,
+      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: parseDate(r.nascimento),
+      data_vencimento: credorSelecionado === 'montreal' ? parseDate(r.atraso) : parseDate(r.nascimento),
+      telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
     }));
@@ -116,6 +157,8 @@ export default function ImportarDevedores() {
     setImported(false);
   };
 
+  const isMontreal = credorSelecionado === 'montreal';
+
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto">
@@ -128,10 +171,22 @@ export default function ImportarDevedores() {
               Upload de Planilha
             </CardTitle>
             <CardDescription>
-              Envie uma planilha Excel (.xlsx) com as colunas: A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)
+              {DESCRICOES[credorSelecionado]}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Credor / Layout da Planilha</Label>
+              <Select value={credorSelecionado} onValueChange={(v) => handleCredorChange(v as CredorLayout)}>
+                <SelectTrigger className="max-w-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="padrao">Padrão</SelectItem>
+                  <SelectItem value="montreal">MONTREAL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center gap-4">
               <Input
                 type="file"
@@ -183,24 +238,52 @@ export default function ImportarDevedores() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>CPF/CNPJ</TableHead>
-                      <TableHead>Nascimento</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Credor</TableHead>
-                      <TableHead>Contrato</TableHead>
-                      <TableHead>Atraso</TableHead>
-                      <TableHead>Risco (R$)</TableHead>
+                      {isMontreal ? (
+                        <>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Contrato</TableHead>
+                          <TableHead>Tipo Contrato</TableHead>
+                          <TableHead>Parcela</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                          <TableHead>Valor (R$)</TableHead>
+                          <TableHead>Telefone</TableHead>
+                        </>
+                      ) : (
+                        <>
+                          <TableHead>Nascimento</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Credor</TableHead>
+                          <TableHead>Contrato</TableHead>
+                          <TableHead>Atraso</TableHead>
+                          <TableHead>Risco (R$)</TableHead>
+                        </>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.slice(0, 50).map((row, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
-                        <TableCell>{row.nascimento || '-'}</TableCell>
-                        <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
-                        <TableCell>{row.credor || '-'}</TableCell>
-                        <TableCell>{row.contrato || '-'}</TableCell>
-                        <TableCell>{row.atraso || '-'}</TableCell>
-                        <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                        {isMontreal ? (
+                          <>
+                            <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                            <TableCell>{row.contrato || '-'}</TableCell>
+                            <TableCell>{row.descricao || '-'}</TableCell>
+                            <TableCell>{row.atraso || '-'}</TableCell>
+                            <TableCell>{row.atraso || '-'}</TableCell>
+                            <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                            <TableCell>{row.telefone || '-'}</TableCell>
+                          </>
+                        ) : (
+                          <>
+                            <TableCell>{row.nascimento || '-'}</TableCell>
+                            <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                            <TableCell>{row.credor || '-'}</TableCell>
+                            <TableCell>{row.contrato || '-'}</TableCell>
+                            <TableCell>{row.atraso || '-'}</TableCell>
+                            <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                          </>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
