@@ -9,6 +9,18 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface EditTelefoneData {
+  id: string;
+  numero: string;
+  tipo: string;
+  is_contato: boolean;
+  is_whatsapp: boolean;
+  ativo: boolean;
+  autorizado: boolean;
+  observacao: string | null;
+  ramal: string | null;
+}
+
 interface TelefoneDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -16,6 +28,7 @@ interface TelefoneDialogProps {
   userId: string;
   onSaved: () => void;
   initialNumero?: string;
+  editData?: EditTelefoneData | null;
 }
 
 function formatPhone(value: string) {
@@ -25,16 +38,10 @@ function formatPhone(value: string) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
-export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onSaved, initialNumero }: TelefoneDialogProps) {
+export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onSaved, initialNumero, editData }: TelefoneDialogProps) {
   const [numero, setNumero] = useState('');
   const prevOpenRef = useRef(false);
   
-  useEffect(() => {
-    if (open && !prevOpenRef.current && initialNumero) {
-      setNumero(formatPhone(initialNumero));
-    }
-    prevOpenRef.current = open;
-  }, [open, initialNumero]);
   const [tipo, setTipo] = useState('celular');
   const [isContato, setIsContato] = useState('nao');
   const [isWhatsapp, setIsWhatsapp] = useState('nao');
@@ -43,6 +50,26 @@ export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onS
   const [observacao, setObservacao] = useState('');
   const [ramal, setRamal] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      if (editData) {
+        setNumero(formatPhone(editData.numero));
+        setTipo(editData.tipo);
+        setIsContato(editData.is_contato ? 'sim' : 'nao');
+        setIsWhatsapp(editData.is_whatsapp ? 'sim' : 'nao');
+        setAtivo(editData.ativo ? 'sim' : 'nao');
+        setAutorizado(editData.autorizado ? 'sim' : 'nao');
+        setObservacao(editData.observacao || '');
+        setRamal(editData.ramal || '');
+      } else if (initialNumero) {
+        setNumero(formatPhone(initialNumero));
+      }
+    }
+    prevOpenRef.current = open;
+  }, [open, initialNumero, editData]);
+
+  const isEditing = !!editData;
 
   const reset = () => {
     setNumero(''); setTipo('celular'); setIsContato('nao'); setIsWhatsapp('nao');
@@ -55,8 +82,8 @@ export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onS
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from('devedor_telefones' as any).insert({
-      devedor_cpf: cpfNormalizado,
+
+    const payload = {
       numero,
       tipo,
       is_contato: isContato === 'sim',
@@ -65,13 +92,23 @@ export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onS
       autorizado: autorizado === 'sim',
       observacao: observacao || null,
       ramal: ramal || null,
-      criado_por: userId,
-    } as any);
+    };
+
+    let error;
+    if (isEditing && editData) {
+      ({ error } = await supabase.from('devedor_telefones' as any).update(payload as any).eq('id', editData.id));
+    } else {
+      ({ error } = await supabase.from('devedor_telefones' as any).insert({
+        ...payload,
+        devedor_cpf: cpfNormalizado,
+        criado_por: userId,
+      } as any));
+    }
 
     if (error) {
       toast.error('Erro ao salvar telefone: ' + error.message);
     } else {
-      toast.success('Telefone cadastrado com sucesso!');
+      toast.success(isEditing ? 'Telefone atualizado com sucesso!' : 'Telefone cadastrado com sucesso!');
       reset();
       onSaved();
       onOpenChange(false);
@@ -83,7 +120,7 @@ export function TelefoneDialog({ open, onOpenChange, cpfNormalizado, userId, onS
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Novo Telefone</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Telefone' : 'Novo Telefone'}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
           <div className="space-y-2">

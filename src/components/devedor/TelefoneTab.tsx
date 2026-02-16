@@ -39,6 +39,7 @@ const tipoLabel: Record<string, string> = {
 export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, telefoneImportado, devedorId }: TelefoneTabProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogInitialNumero, setDialogInitialNumero] = useState<string | undefined>(undefined);
+  const [editTelefone, setEditTelefone] = useState<Telefone | null>(null);
 
   // Build combined list with imported phone if not already in devedor_telefones
   const combinedTelefones = (() => {
@@ -84,7 +85,14 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, tele
   };
 
   const handleSalvarImportado = (numero: string) => {
+    setEditTelefone(null);
     setDialogInitialNumero(numero);
+    setDialogOpen(true);
+  };
+
+  const handleEditar = (tel: Telefone) => {
+    setDialogInitialNumero(undefined);
+    setEditTelefone(tel);
     setDialogOpen(true);
   };
 
@@ -142,6 +150,9 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, tele
                           </>
                         ) : (
                           <>
+                            <DropdownMenuItem onClick={() => handleEditar(tel)}>
+                              Editar
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleInativar(tel.id, tel.ativo)}>
                               {tel.ativo ? 'Inativar' : 'Ativar'}
                             </DropdownMenuItem>
@@ -163,18 +174,21 @@ export function TelefoneTab({ telefones, cpfNormalizado, userId, onRefresh, tele
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
-          if (!open) setDialogInitialNumero(undefined);
+          if (!open) {
+            setDialogInitialNumero(undefined);
+            setEditTelefone(null);
+          }
         }}
         cpfNormalizado={cpfNormalizado}
         userId={userId}
         onSaved={() => {
           if (dialogInitialNumero && devedorId) {
-            // After saving imported phone as real record, clear the imported field
             supabase.from('devedores').update({ telefone: null }).eq('id', devedorId).then(() => {});
           }
           onRefresh();
         }}
         initialNumero={dialogInitialNumero}
+        editData={editTelefone}
       />
     </div>
   );
