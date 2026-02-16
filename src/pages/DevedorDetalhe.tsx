@@ -236,7 +236,7 @@ export default function DevedorDetalhe() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Tabs + Contratos (2 cols) */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-1 space-y-6">
             {/* Tabs */}
             <Card>
               <CardContent className="pt-6">
@@ -331,7 +331,7 @@ export default function DevedorDetalhe() {
           </div>
 
           {/* Right: Eventos */}
-          <div>
+          <div className="lg:col-span-2">
             <Card className="sticky top-4">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
