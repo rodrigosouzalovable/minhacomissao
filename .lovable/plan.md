@@ -1,69 +1,26 @@
 
 
-## Plano: Criar aba "Clientes" com dashboard de pesquisa
+## Correções na aba Clientes
 
-### O que sera feito
+### Problemas identificados
 
-Adicionar uma nova aba "Clientes" no menu lateral, posicionada entre "Retornos" e "Minhas Comissoes", com uma pagina de pesquisa de clientes importados (tabela `devedores`). O layout sera inspirado na imagem de referencia.
+1. **Campo Telefone não filtra nada**: O campo "Telefone" coleta o valor digitado mas nunca é usado na query de busca. Qualquer valor digitado ali é ignorado, retornando todos os resultados.
 
-### Banco de Dados
+2. **Mensagem "Nenhum cliente encontrado"**: Já existe no código, mas precisa ser mais visível/destacada.
 
-A tabela `devedores` ja existe e contem os campos necessarios. Porem, sera preciso adicionar duas colunas:
+### Alterações
 
-- `credor` (text) - para armazenar o credor (MUNDO DA MODA, UME | NOVO MUNDO, MONTREAL). Atualmente o credor e salvo no campo `descricao`.
-- `estagio` (text, default 'novo') - para armazenar o estagio do cliente (Novo, Andamento, Finalizado).
+**Arquivo: `src/pages/Clientes.tsx`**
 
-Tambem sera necessario adicionar uma **RLS policy de SELECT** para usuarios autenticados poderem consultar os devedores.
+1. **Remover o campo Telefone** da interface de pesquisa, já que a tabela `devedores` não possui coluna de telefone. Manter o campo sem funcionalidade confunde o usuário. Alternativamente, se preferir manter o campo para uso futuro, desabilitá-lo visualmente.
 
-Alem disso, corrigir a importacao para salvar o credor no campo `credor` em vez de `descricao`.
+2. **Melhorar a mensagem de "não encontrado"**: Quando a pesquisa retornar 0 resultados, exibir uma mensagem mais clara e destacada: "Cliente não encontrado", com um ícone ilustrativo.
 
-### Alteracoes
+3. **Validar que pelo menos um filtro foi preenchido** antes de permitir a pesquisa, evitando buscas vazias que retornam todos os registros.
 
-**1. Migracao SQL**
-- Adicionar coluna `credor` (text, nullable) na tabela `devedores`
-- Adicionar coluna `estagio` (text, default 'novo') na tabela `devedores`
-- Copiar dados existentes de `descricao` para `credor` onde aplicavel
-- Adicionar RLS policy de SELECT para usuarios autenticados
+### Detalhes técnicos
 
-**2. Novo arquivo: `src/pages/Clientes.tsx`**
-- Pagina com filtros de pesquisa:
-  - Nome (input texto)
-  - CPF/CNPJ (input texto)
-  - Telefone (input texto) - obs: tabela nao tem telefone, campo ficara para busca futura
-  - Credor (dropdown: TODOS, MUNDO DA MODA, UME | NOVO MUNDO, MONTREAL)
-  - Atraso De / Ate (inputs numericos)
-  - Estagios (dropdown multi ou checkboxes: Novo, Andamento, Finalizado)
-- Botao "Pesquisar" que consulta a tabela `devedores` com os filtros aplicados
-- Botao "Limpar" para resetar filtros
-- Tabela de resultados com colunas: Nome, CPF/CNPJ, Credor, Contrato, Atraso, Estagio
-- Paginacao nos resultados
-
-**3. `src/App.tsx`**
-- Importar a pagina `Clientes`
-- Adicionar rota `/clientes` como ProtectedRoute
-
-**4. `src/components/layout/AppLayout.tsx`**
-- Adicionar item de navegacao "Clientes" com icone `Search` entre "Retornos" e "Minhas Comissoes" (path: `/clientes`)
-
-**5. `src/pages/ImportarDevedores.tsx`**
-- Alterar mapeamento da importacao para salvar o credor no novo campo `credor` em vez de `descricao`
-
-**6. `src/hooks/useUserPermissions.tsx`**
-- Adicionar `/clientes` ao array default de `abas_permitidas` (no banco e no hook, se necessario)
-
-### Detalhes tecnicos
-
-```text
-Filtros da pesquisa:
-+------------------+------------------+------------------+------------------+
-| Nome (input)     | CPF/CNPJ (input) | Telefone (input) | Credor (select)  |
-+------------------+------------------+------------------+------------------+
-| Atraso De (input)| Atraso Ate (input)| Estagios (select)| [Pesquisar]     |
-+------------------+------------------+------------------+------------------+
-
-Tabela de resultados:
-| Nome | CPF/CNPJ | Credor | Contrato | Atraso | Estagio |
-```
-
-A consulta ao banco usara filtros com `ilike` para nome e CPF, e filtros exatos para credor e estagio. O campo atraso sera filtrado como texto ou convertido para numerico conforme armazenado.
+- Remover o state `telefone` e o campo de input correspondente
+- Adicionar validação no `handleSearch`: se nenhum filtro foi preenchido (nome, cpf vazios e credor/estagio em "todos"), exibir um toast pedindo para preencher ao menos um filtro
+- Melhorar o bloco de "nenhum resultado" com ícone `SearchX` e texto "Cliente não encontrado"
 
