@@ -1,43 +1,48 @@
 
 
-## Adicionar campo Telefone funcional na aba Clientes
+## Adicionar seletor de Credor na importacao de devedores
 
-### Problema atual
-O campo telefone foi removido porque a tabela `devedores` nao possui uma coluna de telefone, o que fazia com que o filtro nao funcionasse.
+### Resumo
+Adicionar um campo Select antes do upload de arquivo para o usuario escolher o credor. Cada credor tera um mapeamento diferente de colunas da planilha. O layout padrao (atual) sera mantido, e o layout MONTREAL seguira o mapeamento especificado.
 
-### Solucao
-Adicionar uma coluna `telefone` na tabela `devedores` e reintegrar o campo de pesquisa funcional.
+### Interface atualizada
 
-### Alteracoes
+O formulario de importacao tera:
+1. Um seletor de credor (obrigatorio, deve ser selecionado antes do upload)
+2. O campo de upload do arquivo
+3. A descricao das colunas muda dinamicamente conforme o credor selecionado
 
-**1. Migracao SQL**
-- Adicionar coluna `telefone` (text, nullable) na tabela `devedores`
+Opcoes do seletor:
+- **Padrao** (layout atual: A=CPF, B=Nascimento, C=Cliente, D=Credor, E=Contrato, F=Atraso, G=Risco)
+- **MONTREAL** (A=CPF/CNPJ, B=Nome/Razao Social, C=Num Contrato, F=Tipo Contrato, H=Parcela, I=Vencimento, J=Valor, L=Tel Residencial, M=Tel Comercial)
 
-**2. Arquivo: `src/pages/Clientes.tsx`**
-- Restaurar o state `telefone` e o campo de input correspondente
-- Adicionar o filtro `telefone` na query de busca usando `ilike`
-- Incluir `telefone` na validacao de filtros (se telefone estiver preenchido, permitir a pesquisa)
+### Mapeamento MONTREAL
 
-**3. Arquivo: `src/pages/ImportarDevedores.tsx`**
-- Nenhuma alteracao necessaria por enquanto, ja que a planilha de importacao nao possui coluna de telefone. O campo podera ser preenchido manualmente no futuro.
+| Coluna Excel | Campo | Destino no banco |
+|---|---|---|
+| A | CPF/CNPJ | cpf |
+| B | Nome/Razao Social | nome |
+| C | Numero Contrato | contrato |
+| F | Tipo de Contrato | descricao |
+| H | Parcela | atraso (info de parcela) |
+| I | Vencimento | data_vencimento |
+| J | Valor | valor_original e valor_atualizado |
+| L | Telefone Residencial | telefone (prioridade 1) |
+| M | Telefone Comercial | telefone (fallback se L vazio) |
 
-### Detalhes tecnicos
+O credor sera automaticamente definido como "MONTREAL" no registro.
 
-SQL da migracao:
-```sql
-ALTER TABLE public.devedores ADD COLUMN telefone text;
-```
+### Alteracoes tecnicas
 
-Filtro na query:
-```typescript
-if (telefone.trim()) query = query.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
-```
+**Arquivo: `src/pages/ImportarDevedores.tsx`**
 
-Validacao atualizada:
-```typescript
-if (!nome.trim() && !cpf.trim() && !telefone.trim() && credor === 'todos' && estagio === 'todos') {
-  toast.error('Preencha ao menos um filtro para pesquisar.');
-  return;
-}
-```
+1. Adicionar state `credorSelecionado` com opcoes `'padrao' | 'montreal'`
+2. Adicionar interface `DevedorRow` com campo `telefone` opcional
+3. Refatorar `handleFile` para usar o `credorSelecionado` ao mapear colunas:
+   - Se `padrao`: mapeamento atual (A-G)
+   - Se `montreal`: mapeamento A, B, C, F, H, I, J, L, M
+4. No `handleImport`, incluir o campo `telefone` no registro enviado ao banco
+5. Atualizar a descricao do card dinamicamente conforme o credor
+6. Atualizar a tabela de preview para mostrar colunas relevantes ao credor selecionado (incluindo telefone para MONTREAL)
+7. Ao trocar o credor, limpar os dados carregados (rows e file)
 
