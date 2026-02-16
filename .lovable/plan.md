@@ -1,26 +1,43 @@
 
 
-## Correções na aba Clientes
+## Adicionar campo Telefone funcional na aba Clientes
 
-### Problemas identificados
+### Problema atual
+O campo telefone foi removido porque a tabela `devedores` nao possui uma coluna de telefone, o que fazia com que o filtro nao funcionasse.
 
-1. **Campo Telefone não filtra nada**: O campo "Telefone" coleta o valor digitado mas nunca é usado na query de busca. Qualquer valor digitado ali é ignorado, retornando todos os resultados.
+### Solucao
+Adicionar uma coluna `telefone` na tabela `devedores` e reintegrar o campo de pesquisa funcional.
 
-2. **Mensagem "Nenhum cliente encontrado"**: Já existe no código, mas precisa ser mais visível/destacada.
+### Alteracoes
 
-### Alterações
+**1. Migracao SQL**
+- Adicionar coluna `telefone` (text, nullable) na tabela `devedores`
 
-**Arquivo: `src/pages/Clientes.tsx`**
+**2. Arquivo: `src/pages/Clientes.tsx`**
+- Restaurar o state `telefone` e o campo de input correspondente
+- Adicionar o filtro `telefone` na query de busca usando `ilike`
+- Incluir `telefone` na validacao de filtros (se telefone estiver preenchido, permitir a pesquisa)
 
-1. **Remover o campo Telefone** da interface de pesquisa, já que a tabela `devedores` não possui coluna de telefone. Manter o campo sem funcionalidade confunde o usuário. Alternativamente, se preferir manter o campo para uso futuro, desabilitá-lo visualmente.
+**3. Arquivo: `src/pages/ImportarDevedores.tsx`**
+- Nenhuma alteracao necessaria por enquanto, ja que a planilha de importacao nao possui coluna de telefone. O campo podera ser preenchido manualmente no futuro.
 
-2. **Melhorar a mensagem de "não encontrado"**: Quando a pesquisa retornar 0 resultados, exibir uma mensagem mais clara e destacada: "Cliente não encontrado", com um ícone ilustrativo.
+### Detalhes tecnicos
 
-3. **Validar que pelo menos um filtro foi preenchido** antes de permitir a pesquisa, evitando buscas vazias que retornam todos os registros.
+SQL da migracao:
+```sql
+ALTER TABLE public.devedores ADD COLUMN telefone text;
+```
 
-### Detalhes técnicos
+Filtro na query:
+```typescript
+if (telefone.trim()) query = query.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
+```
 
-- Remover o state `telefone` e o campo de input correspondente
-- Adicionar validação no `handleSearch`: se nenhum filtro foi preenchido (nome, cpf vazios e credor/estagio em "todos"), exibir um toast pedindo para preencher ao menos um filtro
-- Melhorar o bloco de "nenhum resultado" com ícone `SearchX` e texto "Cliente não encontrado"
+Validacao atualizada:
+```typescript
+if (!nome.trim() && !cpf.trim() && !telefone.trim() && credor === 'todos' && estagio === 'todos') {
+  toast.error('Preencha ao menos um filtro para pesquisar.');
+  return;
+}
+```
 
