@@ -123,6 +123,7 @@ export default function Clientes() {
         let totalContratos = 0;
         let totalValor = 0;
         const allEstagios: string[] = [];
+        const allCredores: string[] = [];
         let firstId = '';
 
         for (const memberCpf of info.cpfs) {
@@ -133,6 +134,10 @@ export default function Clientes() {
             for (const e of map[memberCpf].estagios) {
               if (!allEstagios.includes(e)) allEstagios.push(e);
             }
+            const memberCredor = map[memberCpf].credor;
+            if (memberCredor && !allCredores.includes(memberCredor)) {
+              allCredores.push(memberCredor);
+            }
             processedCpfs.add(memberCpf);
           }
         }
@@ -142,7 +147,7 @@ export default function Clientes() {
             id: firstId,
             nome: info.nome,
             cpf: info.cpfs.join(', '),
-            credor: null,
+            credor: allCredores.length > 0 ? allCredores.join(', ') : null,
             qtdContratos: totalContratos,
             valorTotal: totalValor,
             estagios: allEstagios,
