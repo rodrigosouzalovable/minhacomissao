@@ -395,6 +395,33 @@ export type Database = {
           },
         ]
       }
+      grupo_empresarial_membros: {
+        Row: {
+          cpf_cnpj: string
+          criado_em: string
+          criado_por: string
+          grupo_id: string
+          id: string
+          nome_grupo: string
+        }
+        Insert: {
+          cpf_cnpj: string
+          criado_em?: string
+          criado_por: string
+          grupo_id?: string
+          id?: string
+          nome_grupo: string
+        }
+        Update: {
+          cpf_cnpj?: string
+          criado_em?: string
+          criado_por?: string
+          grupo_id?: string
+          id?: string
+          nome_grupo?: string
+        }
+        Relationships: []
+      }
       importacoes: {
         Row: {
           credor: string

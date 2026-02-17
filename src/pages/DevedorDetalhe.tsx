@@ -98,20 +98,43 @@ export default function DevedorDetalhe() {
     setCpfNorm(normCpf);
 
     if (normCpf) {
-      // Contracts
+      // Check if this CPF belongs to a business group
+      let allCpfs = [normCpf];
+      const { data: grupoMembro } = await supabase
+        .from('grupo_empresarial_membros' as any)
+        .select('grupo_id')
+        .eq('cpf_cnpj', normCpf)
+        .limit(1);
+
+      if (grupoMembro && (grupoMembro as any[]).length > 0) {
+        const grupoId = (grupoMembro as any[])[0].grupo_id;
+        const { data: allMembros } = await supabase
+          .from('grupo_empresarial_membros' as any)
+          .select('cpf_cnpj')
+          .eq('grupo_id', grupoId);
+        if (allMembros) {
+          allCpfs = (allMembros as any[]).map(m => m.cpf_cnpj);
+        }
+      }
+
+      // Contracts for all CPFs in the group
       const { data: ctrs } = await supabase
         .from('devedores')
         .select('id, nome, cpf, telefone, credor, contrato, valor_original, valor_atualizado, data_vencimento, descricao, estagio')
         .eq('ativo', true)
         .order('criado_em', { ascending: false });
-      if (ctrs) setContratos((ctrs as Devedor[]).filter(c => c.cpf.replace(/\D/g, '') === normCpf));
+      if (ctrs) setContratos((ctrs as Devedor[]).filter(c => allCpfs.includes(c.cpf.replace(/\D/g, ''))));
 
-      // Phones
-      const { data: phones } = await supabase
-        .from('devedor_telefones' as any)
-        .select('*')
-        .eq('devedor_cpf', normCpf);
-      if (phones) setTelefones(phones as unknown as Telefone[]);
+      // Phones for all CPFs in the group
+      const allPhones: Telefone[] = [];
+      for (const cpfItem of allCpfs) {
+        const { data: phones } = await supabase
+          .from('devedor_telefones' as any)
+          .select('*')
+          .eq('devedor_cpf', cpfItem);
+        if (phones) allPhones.push(...(phones as unknown as Telefone[]));
+      }
+      setTelefones(allPhones);
     }
 
     // Events
