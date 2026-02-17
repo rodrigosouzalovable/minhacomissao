@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, X, Users, SearchX, Eye } from 'lucide-react';
+import { Search, X, Users, SearchX, Eye, Link2, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ClienteRow {
   id: string;
@@ -30,6 +35,16 @@ interface ClienteAgrupado {
   qtdContratos: number;
   valorTotal: number;
   estagios: string[];
+  isGrupo?: boolean;
+  grupoId?: string;
+  cpfsGrupo?: string[];
+}
+
+interface GrupoMembro {
+  id: string;
+  grupo_id: string;
+  nome_grupo: string;
+  cpf_cnpj: string;
 }
 
 const CREDORES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
@@ -43,6 +58,8 @@ const PAGE_SIZE = 20;
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const { isAdmin } = useUserRole();
+  const { user } = useAuth();
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -53,7 +70,25 @@ export default function Clientes() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
+  // Grupo empresarial state
+  const [grupos, setGrupos] = useState<GrupoMembro[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedCpfs, setSelectedCpfs] = useState<Set<string>>(new Set());
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [nomeGrupo, setNomeGrupo] = useState('');
+  const [savingGroup, setSavingGroup] = useState(false);
+
+  // Fetch groups on mount
+  useEffect(() => {
+    const fetchGrupos = async () => {
+      const { data } = await supabase.from('grupo_empresarial_membros' as any).select('*');
+      if (data) setGrupos(data as unknown as GrupoMembro[]);
+    };
+    fetchGrupos();
+  }, []);
+
   const grouped = useMemo<ClienteAgrupado[]>(() => {
+    // Step 1: Group by CPF (existing logic)
     const map: Record<string, ClienteAgrupado> = {};
     for (const row of rawResults) {
       const cpfNorm = row.cpf.replace(/\D/g, '');
@@ -64,8 +99,70 @@ export default function Clientes() {
       map[cpfNorm].valorTotal += Number(row.valor_atualizado);
       if (!map[cpfNorm].estagios.includes(row.estagio)) map[cpfNorm].estagios.push(row.estagio);
     }
-    return Object.values(map);
-  }, [rawResults]);
+
+    // Step 2: Merge by grupo_empresarial
+    const cpfToGrupo: Record<string, string> = {};
+    const grupoInfo: Record<string, { nome: string; cpfs: string[] }> = {};
+    for (const g of grupos) {
+      cpfToGrupo[g.cpf_cnpj] = g.grupo_id;
+      if (!grupoInfo[g.grupo_id]) grupoInfo[g.grupo_id] = { nome: g.nome_grupo, cpfs: [] };
+      if (!grupoInfo[g.grupo_id].cpfs.includes(g.cpf_cnpj)) grupoInfo[g.grupo_id].cpfs.push(g.cpf_cnpj);
+    }
+
+    const result: ClienteAgrupado[] = [];
+    const processedGrupos = new Set<string>();
+    const processedCpfs = new Set<string>();
+
+    for (const cpfNorm of Object.keys(map)) {
+      const grupoId = cpfToGrupo[cpfNorm];
+      if (grupoId) {
+        if (processedGrupos.has(grupoId)) continue;
+        processedGrupos.add(grupoId);
+
+        const info = grupoInfo[grupoId];
+        let totalContratos = 0;
+        let totalValor = 0;
+        const allEstagios: string[] = [];
+        let firstId = '';
+
+        for (const memberCpf of info.cpfs) {
+          if (map[memberCpf]) {
+            if (!firstId) firstId = map[memberCpf].id;
+            totalContratos += map[memberCpf].qtdContratos;
+            totalValor += map[memberCpf].valorTotal;
+            for (const e of map[memberCpf].estagios) {
+              if (!allEstagios.includes(e)) allEstagios.push(e);
+            }
+            processedCpfs.add(memberCpf);
+          }
+        }
+
+        if (totalContratos > 0) {
+          result.push({
+            id: firstId,
+            nome: info.nome,
+            cpf: info.cpfs.join(', '),
+            credor: null,
+            qtdContratos: totalContratos,
+            valorTotal: totalValor,
+            estagios: allEstagios,
+            isGrupo: true,
+            grupoId,
+            cpfsGrupo: info.cpfs,
+          });
+        }
+      }
+    }
+
+    // Add non-grouped entries
+    for (const [cpfNorm, entry] of Object.entries(map)) {
+      if (!processedCpfs.has(cpfNorm) && !cpfToGrupo[cpfNorm]) {
+        result.push(entry);
+      }
+    }
+
+    return result;
+  }, [rawResults, grupos]);
 
   const totalPages = Math.ceil(grouped.length / PAGE_SIZE);
   const paginatedResults = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -77,6 +174,8 @@ export default function Clientes() {
     }
     setLoading(true);
     setPage(0);
+    setSelectionMode(false);
+    setSelectedCpfs(new Set());
 
     let query = supabase
       .from('devedores')
@@ -95,6 +194,11 @@ export default function Clientes() {
     if (!error && data) {
       setRawResults(data as ClienteRow[]);
     }
+
+    // Refresh groups
+    const { data: grpData } = await supabase.from('grupo_empresarial_membros' as any).select('*');
+    if (grpData) setGrupos(grpData as unknown as GrupoMembro[]);
+
     setSearched(true);
     setLoading(false);
   };
@@ -108,6 +212,55 @@ export default function Clientes() {
     setRawResults([]);
     setPage(0);
     setSearched(false);
+    setSelectionMode(false);
+    setSelectedCpfs(new Set());
+  };
+
+  const toggleCpfSelection = (cpfNorm: string) => {
+    setSelectedCpfs(prev => {
+      const next = new Set(prev);
+      if (next.has(cpfNorm)) next.delete(cpfNorm);
+      else next.add(cpfNorm);
+      return next;
+    });
+  };
+
+  const handleConfirmGroup = async () => {
+    if (!nomeGrupo.trim()) { toast.error('Informe o nome do grupo.'); return; }
+    if (!user) return;
+    setSavingGroup(true);
+
+    const grupoId = crypto.randomUUID();
+    const inserts = Array.from(selectedCpfs).map(cpfNorm => ({
+      grupo_id: grupoId,
+      nome_grupo: nomeGrupo.trim(),
+      cpf_cnpj: cpfNorm,
+      criado_por: user.id,
+    }));
+
+    const { error } = await supabase.from('grupo_empresarial_membros' as any).insert(inserts as any);
+    if (error) { toast.error('Erro ao criar grupo: ' + error.message); }
+    else {
+      toast.success('Grupo empresarial criado!');
+      setGroupDialogOpen(false);
+      setNomeGrupo('');
+      setSelectionMode(false);
+      setSelectedCpfs(new Set());
+      // Refresh groups
+      const { data: grpData } = await supabase.from('grupo_empresarial_membros' as any).select('*');
+      if (grpData) setGrupos(grpData as unknown as GrupoMembro[]);
+    }
+    setSavingGroup(false);
+  };
+
+  const handleUngroup = async (grupoId: string) => {
+    const { error } = await supabase.from('grupo_empresarial_membros' as any).delete().eq('grupo_id', grupoId);
+    if (error) { toast.error('Erro ao desagrupar: ' + error.message); }
+    else {
+      toast.success('Grupo desfeito!');
+      const { data: grpData } = await supabase.from('grupo_empresarial_membros' as any).select('*');
+      if (grpData) setGrupos(grpData as unknown as GrupoMembro[]);
+    }
   };
 
   const estagioVariant = (e: string) => {
@@ -187,13 +340,40 @@ export default function Clientes() {
         {searched && (
           <Card>
             <CardHeader>
-              <CardTitle>{grouped.length} cliente{grouped.length !== 1 ? 's' : ''} encontrado{grouped.length !== 1 ? 's' : ''}</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>{grouped.length} cliente{grouped.length !== 1 ? 's' : ''} encontrado{grouped.length !== 1 ? 's' : ''}</CardTitle>
+                {isAdmin && grouped.length >= 2 && (
+                  <div className="flex gap-2">
+                    {selectionMode ? (
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={selectedCpfs.size < 2}
+                          onClick={() => setGroupDialogOpen(true)}
+                        >
+                          <Link2 className="h-4 w-4 mr-1" />
+                          Confirmar Agrupamento ({selectedCpfs.size})
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => { setSelectionMode(false); setSelectedCpfs(new Set()); }}>
+                          Cancelar
+                        </Button>
+                      </>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
+                        <Link2 className="h-4 w-4 mr-1" />
+                        Agrupar CNPJs
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {selectionMode && <TableHead className="w-10"></TableHead>}
                       <TableHead>Nome</TableHead>
                       <TableHead>CPF/CNPJ</TableHead>
                       <TableHead>Credor</TableHead>
@@ -206,7 +386,7 @@ export default function Clientes() {
                   <TableBody>
                     {paginatedResults.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-12">
+                        <TableCell colSpan={selectionMode ? 8 : 7} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <SearchX className="h-10 w-10" />
                             <p className="text-lg font-semibold">Cliente não encontrado</p>
@@ -215,30 +395,64 @@ export default function Clientes() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      paginatedResults.map((row) => (
-                        <TableRow key={row.cpf}>
-                          <TableCell className="font-medium">{row.nome}</TableCell>
-                          <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
-                          <TableCell>{row.credor || '-'}</TableCell>
-                          <TableCell>{row.qtdContratos} contrato{row.qtdContratos !== 1 ? 's' : ''}</TableCell>
-                          <TableCell>{row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {row.estagios.map((e) => (
-                                <Badge key={e} variant={estagioVariant(e)}>
-                                  {ESTAGIOS.find(es => es.value === e)?.label || e}
-                                </Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="outline" size="sm" onClick={() => navigate(`/clientes/${row.id}`)}>
-                              <Eye className="h-4 w-4 mr-1" />
-                              Ver Ficha
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      paginatedResults.map((row) => {
+                        const cpfNorm = row.cpf.replace(/\D/g, '');
+                        return (
+                          <TableRow key={row.isGrupo ? row.grupoId : row.cpf}>
+                            {selectionMode && (
+                              <TableCell>
+                                {!row.isGrupo && (
+                                  <Checkbox
+                                    checked={selectedCpfs.has(cpfNorm)}
+                                    onCheckedChange={() => toggleCpfSelection(cpfNorm)}
+                                  />
+                                )}
+                              </TableCell>
+                            )}
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {row.nome}
+                                {row.isGrupo && <Badge variant="secondary">Grupo</Badge>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs max-w-[200px]">
+                              {row.isGrupo ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {row.cpfsGrupo?.map(c => (
+                                    <Badge key={c} variant="outline" className="font-mono text-xs">{c}</Badge>
+                                  ))}
+                                </div>
+                              ) : row.cpf}
+                            </TableCell>
+                            <TableCell>{row.credor || '-'}</TableCell>
+                            <TableCell>{row.qtdContratos} contrato{row.qtdContratos !== 1 ? 's' : ''}</TableCell>
+                            <TableCell>{row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {row.estagios.map((e) => (
+                                  <Badge key={e} variant={estagioVariant(e)}>
+                                    {ESTAGIOS.find(es => es.value === e)?.label || e}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button variant="outline" size="sm" onClick={() => navigate(`/clientes/${row.id}`)}>
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Ver Ficha
+                                </Button>
+                                {isAdmin && row.isGrupo && row.grupoId && (
+                                  <Button variant="outline" size="sm" onClick={() => handleUngroup(row.grupoId!)}>
+                                    <Unlink className="h-4 w-4 mr-1" />
+                                    Desagrupar
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
@@ -256,6 +470,42 @@ export default function Clientes() {
             </CardContent>
           </Card>
         )}
+
+        {/* Dialog para nome do grupo */}
+        <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Criar Grupo Empresarial</DialogTitle>
+              <DialogDescription>
+                Agrupe {selectedCpfs.size} CNPJs em um único grupo empresarial.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Nome do Grupo</Label>
+                <Input
+                  placeholder="Ex: POLLYANE DANTAS ALVES"
+                  value={nomeGrupo}
+                  onChange={(e) => setNomeGrupo(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-xs">CPFs/CNPJs selecionados:</Label>
+                <div className="flex flex-wrap gap-1">
+                  {Array.from(selectedCpfs).map(c => (
+                    <Badge key={c} variant="outline" className="font-mono text-xs">{c}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleConfirmGroup} disabled={savingGroup}>
+                {savingGroup ? 'Salvando...' : 'Criar Grupo'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
