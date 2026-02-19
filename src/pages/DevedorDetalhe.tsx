@@ -281,7 +281,7 @@ export default function DevedorDetalhe() {
               <div>
                 <span className="text-muted-foreground block text-xs">Telefone</span>
                 <div className="flex items-center gap-1">
-                  <span className="font-medium">{devedor.telefone || 'Não informado'}</span>
+                  <span className="font-medium">{telefones.filter(t => t.ativo !== false).length > 0 ? telefones.filter(t => t.ativo !== false)[0].numero : (devedor.telefone || 'Não informado')}</span>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setTelefonesDialogOpen(true)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
