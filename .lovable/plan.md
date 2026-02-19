@@ -1,41 +1,49 @@
 
 
-## Adicionar botao de mostrar/ocultar senha na pagina de login
+## Melhorar layout dos eventos na ficha do cliente
 
-### Alteracao
+### Arquivo: `src/pages/DevedorDetalhe.tsx`
 
-**Arquivo:** `src/pages/Auth.tsx`
+### Problemas atuais
+- Badge de tipo, data/hora e botao de menu ficam apertados numa unica linha
+- Nomes de arquivos longos ultrapassam os limites do card
+- Espacamento entre elementos inconsistente
 
-Adicionar um icone de olho (Eye/EyeOff do lucide-react) dentro do campo de senha para alternar entre `type="password"` e `type="text"`.
+### Alteracoes
 
-### Detalhes tecnicos
+**1. Reorganizar o cabecalho de cada evento**
+- Primeira linha: Badge de tipo (esquerda) + botao de menu (direita)
+- Segunda linha: Data/hora em texto pequeno
 
-1. Adicionar estado `showPassword` (boolean, inicialmente `false`)
-2. Envolver o input de senha em um `div` com `relative`
-3. Adicionar botao com icone `Eye` ou `EyeOff` posicionado absolutamente a direita do input
-4. Alternar o `type` do input entre `"password"` e `"text"` conforme o estado
+**2. Truncar nomes de arquivos longos**
+- Aplicar `truncate` e `max-w` no botao de download para que nomes longos sejam cortados com reticencias
 
-Trecho resultante:
+**3. Melhorar espacamento geral**
+- Ajustar padding e gaps entre elementos para um visual mais limpo
+
+### Trecho resultante (cada evento):
 
 ```tsx
-const [showPassword, setShowPassword] = useState(false);
-
-// No JSX:
-<div className="relative">
-  <Input
-    id="login-password"
-    type={showPassword ? "text" : "password"}
-    ...
-  />
-  <button
-    type="button"
-    onClick={() => setShowPassword(!showPassword)}
-    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-  >
-    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-  </button>
+<div key={evt.id} className="border rounded-lg p-3 space-y-2">
+  <div className="flex items-center justify-between">
+    <Badge variant={...}>
+      {/* icone + tipo */}
+    </Badge>
+    <DropdownMenu>
+      {/* menu de acoes */}
+    </DropdownMenu>
+  </div>
+  <p className="text-xs text-muted-foreground">
+    {/* data e hora */}
+  </p>
+  {evt.descricao && <p className="text-sm">{evt.descricao}</p>}
+  {evt.arquivo_url && (
+    <Button variant="outline" size="sm" className="w-full justify-start truncate">
+      <Download className="h-3 w-3 mr-1 shrink-0" />
+      <span className="truncate">{evt.arquivo_nome}</span>
+    </Button>
+  )}
 </div>
 ```
 
-Imports adicionais: `Eye, EyeOff` do `lucide-react`.
-
+Apenas alteracoes visuais, sem mudanca de logica ou dados.
