@@ -1,34 +1,50 @@
 
 
-## Simplificar cabecalho e remover card de Telefones
+## Reorganizar Contratos no formato de tabela
 
 ### O que sera feito
 
-1. **Remover o card "Telefones"** (linhas 288-305) -- a tabela inteira de telefones com colunas Numero, Tipo, WhatsApp, etc. sera removida da pagina
-2. **Limpar o cabecalho** -- remover os campos "Contrato" e "Descricao" do grid, mantendo apenas CPF/CNPJ, Telefone e Credor
-3. **Adicionar botao de editar/adicionar contato** no cabecalho, ao lado das informacoes de telefone, que abrira um dialog para gerenciar telefones
+Transformar a secao de Contratos para seguir o layout da imagem de referencia, onde cada contrato expandido mostra seus dados em formato de tabela com colunas.
+
+### Layout proposto
+
+**Cabecalho do card (mantido):**
+```text
+v Contratos          Total em Atraso R$ XX.XXX,XX    [Calculo]
+```
+
+**Cada contrato (linha resumida - CollapsibleTrigger):**
+```text
+v 1001118452 *    MAISON DECOR - Atraso: 298    Venc: 27/04/2025
+```
+
+**Contrato expandido (CollapsibleContent) - formato tabela:**
+
+| Numero | Vencimento | Valor | Atraso | Estagio | Descricao |
+|--------|------------|-------|--------|---------|-----------|
+| 1001118452 | 27/04/2025 | 3.051,89 | 298 | novo | ... |
 
 ### Detalhes tecnicos
 
 **Arquivo: `src/pages/DevedorDetalhe.tsx`**
 
-**Cabecalho (linhas 255-284):**
-- Remover o bloco condicional de `devedor.contrato` (linhas 272-277)
-- Remover o bloco condicional de `devedor.descricao` (linhas 278-283)
-- Manter apenas: CPF/CNPJ, Telefone e Credor
-- Adicionar um botao com icone de editar (Pencil ou UserPlus) ao lado do campo Telefone, que abrira o TelefoneDialog existente para adicionar/editar contatos
+1. **Linha resumida do contrato (linhas 324-346):** Reorganizar para mostrar numero do contrato com indicador (bolinha verde/vermelha baseada no estagio), credor, dias de atraso e data de vencimento no formato da imagem: `1001118452 * MAISON DECOR - Atraso: 298 Venc: 27/04/2025`
 
-**Card Telefones (linhas 288-305):**
-- Remover o card inteiro com o componente TelefoneTab
-- O TelefoneTab continuara importado mas sera acessado via dialog ao clicar no botao de editar contato no cabecalho
+2. **Conteudo expandido (linhas 348-356):** Substituir o layout atual de pares chave-valor por uma mini-tabela (usando elementos `table` ou grid) com colunas:
+   - Numero (contrato)
+   - Vencimento (data formatada)
+   - Valor (valor_atualizado formatado)
+   - Atraso (dias)
+   - Estagio (badge)
+   - Descricao (observacao)
 
-**Novo dialog de contatos:**
-- Ao clicar no botao, abre um Dialog contendo o TelefoneTab (reutilizando o componente existente)
-- Isso mantem toda a funcionalidade de gerenciamento de telefones sem ocupar espaco na pagina principal
+3. **Estilo:** Usar `<table>` com classes Tailwind para bordas sutis e alinhamento, similar ao componente Table do shadcn/ui ja disponivel no projeto (`src/components/ui/table.tsx`). Headers em negrito com fundo muted.
+
+4. **Informacoes adicionais na expansao:** Adicionar tambem Valor Original como linha extra ou campo visivel na tabela.
 
 ### Resultado esperado
 
-- Cabecalho limpo com apenas: Nome, CPF/CNPJ, Telefone, Credor e Estagio
-- Botao de editar/adicionar contato visivel no cabecalho
-- Card "Telefones" removido da pagina
-- Funcionalidade de gerenciamento de telefones acessivel via dialog
+- Contratos em formato tabular quando expandidos, similar a imagem de referencia
+- Linha resumida mais informativa com numero, credor, atraso e vencimento
+- Visual mais organizado e profissional para triagem rapida dos contratos
+
