@@ -14,9 +14,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { dataInicial, dataFinal, tipo } = await req.json();
+    const { dataInicial, dataFinal: dataFinalInput, tipo } = await req.json();
 
-    if (!dataInicial || !dataFinal || !tipo) {
+    if (!dataInicial || !dataFinalInput || !tipo) {
       return new Response(JSON.stringify({ error: 'dataInicial, dataFinal e tipo são obrigatórios' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -25,9 +25,24 @@ Deno.serve(async (req) => {
 
     // Validate year range to avoid BCB API errors
     const yearInicial = parseInt(dataInicial.split('-')[0], 10);
-    const yearFinal = parseInt(dataFinal.split('-')[0], 10);
+    const yearFinal = parseInt(dataFinalInput.split('-')[0], 10);
     if (yearInicial < 1990 || yearInicial > 2100 || yearFinal < 1990 || yearFinal > 2100) {
-      return new Response(JSON.stringify({ taxaAcumulada: 0, registros: 0, tipo, error: 'Datas fora do intervalo válido' }), {
+      return new Response(JSON.stringify({ taxaAcumulada: 0, registros: 0, tipo }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Adjust dataFinal to yesterday if it's today (BCB has 1-day lag)
+    let dataFinal = dataFinalInput;
+    const today = new Date().toISOString().split('T')[0];
+    if (dataFinal >= today) {
+      const yesterday = new Date(Date.now() - 86400000);
+      dataFinal = yesterday.toISOString().split('T')[0];
+    }
+
+    // If dataInicial >= dataFinal, return 0 immediately
+    if (dataInicial >= dataFinal) {
+      return new Response(JSON.stringify({ taxaAcumulada: 0, registros: 0, tipo }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -45,6 +60,12 @@ Deno.serve(async (req) => {
     if (!response.ok) {
       const text = await response.text();
       console.error('BCB API error:', response.status, text);
+      // Treat 404 as "no data" instead of error
+      if (response.status === 404) {
+        return new Response(JSON.stringify({ taxaAcumulada: 0, registros: 0, tipo }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       return new Response(JSON.stringify({ error: 'Erro ao consultar API do BCB', details: text }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

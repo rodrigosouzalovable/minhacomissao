@@ -94,9 +94,10 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
 
   const fetchTaxa = useCallback(async () => {
     if (!isValidDate(dataBase)) return;
+    const dataFinal = format(hoje, 'yyyy-MM-dd');
+    if (dataBase >= dataFinal) return;
     setLoadingTaxa(true);
     try {
-      const dataFinal = format(hoje, 'yyyy-MM-dd');
       const { data, error } = await supabase.functions.invoke('consultar-indices', {
         body: { dataInicial: dataBase, dataFinal, tipo: tipoCorrecao },
       });
