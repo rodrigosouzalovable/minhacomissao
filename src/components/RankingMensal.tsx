@@ -48,7 +48,7 @@ export function RankingMensal() {
             Nenhum dado disponível este mês.
           </p>
         ) : (
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="h-[350px]">
             <div className="space-y-2">
               {ranking.map((item, index) => {
                 const percentual = totalEquipe > 0
