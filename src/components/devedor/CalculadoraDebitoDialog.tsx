@@ -12,6 +12,7 @@ import { Calculator, Download, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { differenceInMonths, differenceInDays, format } from 'date-fns';
+import { calcularINPCAcumulado } from '@/lib/inpcData';
 import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 
@@ -92,14 +93,14 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     return year >= 1990 && year <= 2100;
   };
 
-  const fetchTaxa = useCallback(async () => {
+  const fetchSelicTaxa = useCallback(async () => {
     if (!isValidDate(dataBase)) return;
     const dataFinal = format(hoje, 'yyyy-MM-dd');
     if (dataBase >= dataFinal) return;
     setLoadingTaxa(true);
     try {
       const { data, error } = await supabase.functions.invoke('consultar-indices', {
-        body: { dataInicial: dataBase, dataFinal, tipo: tipoCorrecao },
+        body: { dataInicial: dataBase, dataFinal, tipo: 'selic' },
       });
       if (error) throw error;
       if (data?.taxaAcumulada !== undefined) {
@@ -114,13 +115,29 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     } finally {
       setLoadingTaxa(false);
     }
-  }, [dataBase, tipoCorrecao]);
+  }, [dataBase]);
+
+  const calcularTaxa = useCallback(() => {
+    if (!isValidDate(dataBase)) return;
+    const dataFinal = format(hoje, 'yyyy-MM-dd');
+    if (dataBase >= dataFinal) return;
+
+    if (tipoCorrecao === 'inpc') {
+      const taxa = calcularINPCAcumulado(dataBase, dataFinal);
+      setTaxaAcumulada(taxa);
+      const diStr = new Date(dataBase + 'T00:00:00').toLocaleDateString('pt-BR');
+      const dfStr = hoje.toLocaleDateString('pt-BR');
+      setPeriodoConsultado(`${diStr} a ${dfStr}`);
+    } else {
+      fetchSelicTaxa();
+    }
+  }, [dataBase, tipoCorrecao, fetchSelicTaxa]);
 
   useEffect(() => {
     if (open && isValidDate(dataBase)) {
-      fetchTaxa();
+      calcularTaxa();
     }
-  }, [open, tipoCorrecao, dataBase, fetchTaxa]);
+  }, [open, tipoCorrecao, dataBase, calcularTaxa]);
 
   const gerarPDF = () => {
     const doc = new jsPDF();
