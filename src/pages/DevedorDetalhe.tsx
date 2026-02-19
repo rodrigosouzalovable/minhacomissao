@@ -19,6 +19,7 @@ import { differenceInDays } from 'date-fns';
 import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
 import { CalculadoraDebitoDialog } from '@/components/devedor/CalculadoraDebitoDialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface Devedor {
   id: string;
@@ -323,35 +324,51 @@ export default function DevedorDetalhe() {
                       >
                         <CollapsibleTrigger asChild>
                           <div className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                            <div className="flex items-center gap-3 flex-wrap min-w-0">
-                              <div className="min-w-0">
-                                <span className="font-medium text-sm">{contrato.contrato || 'S/ contrato'}</span>
-                                <p className="text-xs text-muted-foreground">{contrato.credor || 'S/ credor'}</p>
-                              </div>
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${contrato.estagio === 'novo' ? 'bg-green-500' : 'bg-destructive'}`} />
+                              <span className="font-medium text-sm">{contrato.contrato || 'S/ contrato'}</span>
+                              <span className="text-sm text-muted-foreground">—</span>
+                              <span className="text-sm">{contrato.credor || 'S/ credor'}</span>
+                              {dias !== null && dias > 0 && (
+                                <span className="text-xs text-muted-foreground">- Atraso: {dias}</span>
+                              )}
                               {contrato.data_vencimento && (
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                <span className="text-xs text-muted-foreground">
                                   Venc: {new Date(contrato.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}
                                 </span>
                               )}
-                              {dias !== null && dias > 0 && (
-                                <Badge variant="destructive" className="text-xs whitespace-nowrap">{dias}d atraso</Badge>
-                              )}
                             </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <span className="font-semibold text-sm whitespace-nowrap">
-                                {contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </span>
+                            <div className="shrink-0">
                               {openContratos[contrato.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </div>
                           </div>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                          <div className="ml-4 mt-2 p-3 border-l-2 border-muted space-y-2 text-sm">
-                            <div className="flex justify-between"><span className="text-muted-foreground">Valor Original</span><span>{contrato.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Valor Atualizado</span><span className="font-semibold">{contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-                            {contrato.data_vencimento && <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><span>{new Date(contrato.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span></div>}
-                            {contrato.descricao && <div className="flex justify-between"><span className="text-muted-foreground">Descrição</span><span>{contrato.descricao}</span></div>}
-                            <div className="flex justify-between"><span className="text-muted-foreground">Estágio</span><Badge variant="secondary">{contrato.estagio}</Badge></div>
+                          <div className="mt-2 border rounded-lg overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/50">
+                                  <TableHead className="text-xs">Número</TableHead>
+                                  <TableHead className="text-xs">Vencimento</TableHead>
+                                  <TableHead className="text-xs">Valor Original</TableHead>
+                                  <TableHead className="text-xs">Valor Atualizado</TableHead>
+                                  <TableHead className="text-xs">Atraso</TableHead>
+                                  <TableHead className="text-xs">Estágio</TableHead>
+                                  <TableHead className="text-xs">Descrição</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                <TableRow>
+                                  <TableCell className="text-xs font-medium">{contrato.contrato || '—'}</TableCell>
+                                  <TableCell className="text-xs">{contrato.data_vencimento ? new Date(contrato.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</TableCell>
+                                  <TableCell className="text-xs">{contrato.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                                  <TableCell className="text-xs font-semibold">{contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                                  <TableCell className="text-xs">{dias !== null && dias > 0 ? `${dias} dias` : '—'}</TableCell>
+                                  <TableCell><Badge variant="secondary" className="text-xs">{contrato.estagio}</Badge></TableCell>
+                                  <TableCell className="text-xs max-w-[200px] truncate">{contrato.descricao || '—'}</TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
