@@ -33,8 +33,8 @@ interface NegociacaoState {
   dataPrimeiroPagamento: Date | undefined;
 }
 
-const PHONE = '5562981089329';
-const PHONE_DISPLAY = '(62) 98108-9329';
+const PHONE = '5562981749600';
+const PHONE_DISPLAY = '(62) 98174-9600';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
