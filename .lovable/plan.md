@@ -1,46 +1,68 @@
 
 
-## Corrigir preenchimento automatico da taxa acumulada (Selic/INPC)
+## Cadastrar indices INPC localmente para calculo automatico
 
-### Problemas identificados
+### Abordagem
 
-1. **Data final usa "hoje"**, mas o BCB ainda nao publicou a taxa do dia atual, causando erro 404
-2. **Quando nao ha `data_vencimento`**, o campo `dataBase` fica vazio ou igual a hoje, resultando em consulta invalida (mesma data inicial e final)
-3. **A Edge Function retorna erro 502** quando o BCB retorna 404, em vez de tratar o erro graciosamente
+Em vez de depender da API do Banco Central (que tem limitacoes de janela de 10 anos e lag de 1 dia), vamos embutir todos os indices mensais do INPC diretamente no sistema. Quando o usuario selecionar INPC, o calculo sera feito localmente e instantaneamente, sem chamada de API.
 
-### Alteracoes necessarias
+A Selic continuara usando a Edge Function (API do BCB), pois eh diaria e nao faz sentido armazenar localmente.
 
-**1. Edge Function `supabase/functions/consultar-indices/index.ts`**
+### Alteracoes
 
-- Usar `dataFinal` como o dia anterior (D-1) quando `dataFinal` for igual a hoje, pois o BCB publica dados com 1 dia de atraso
-- Tratar respostas 404 do BCB como "sem dados" (retornar `taxaAcumulada: 0`) em vez de retornar erro 502
-- Validar que `dataInicial < dataFinal` - se forem iguais ou invertidas, retornar `taxaAcumulada: 0` sem chamar a API
+**1. Novo arquivo `src/lib/inpcData.ts`**
 
-**2. Componente `CalculadoraDebitoDialog.tsx`**
+Criar um arquivo com todos os indices mensais do INPC extraidos da planilha (1979 a 2026), organizados como um mapa `{ "AAAA-MM": taxa }`. Incluir tambem uma funcao `calcularINPCAcumulado(dataInicial, dataFinal)` que:
+- Identifica os meses entre as duas datas
+- Acumula os indices mensais com a formula: produto de (1 + taxa/100) - 1
+- Retorna a taxa acumulada em percentual
 
-- Alterar `fetchTaxa` para usar o dia anterior como `dataFinal` (evitar consultar dados que o BCB ainda nao publicou)
-- Garantir que a taxa eh buscada automaticamente ao:
-  - Abrir o dialog (se tiver data base valida)
-  - Alterar o contrato selecionado
-  - Alterar entre Selic e INPC
-  - Alterar a data base manualmente
-- O campo "Taxa acumulada (%)" continua editavel para ajuste manual, mas sera preenchido automaticamente pela API
+**2. Alterar `src/components/devedor/CalculadoraDebitoDialog.tsx`**
+
+- Importar `calcularINPCAcumulado` do novo arquivo
+- Quando `tipoCorrecao === 'inpc'`: calcular localmente usando a funcao, sem chamar a Edge Function
+- Quando `tipoCorrecao === 'selic'`: manter o comportamento atual (chamar Edge Function)
+- Remover o estado de loading para INPC (calculo eh instantaneo)
+- O campo "Taxa acumulada (%)" continuara editavel para ajuste manual
 
 ### Detalhes tecnicos
 
-**Edge Function - tratamento de erros:**
-- Se BCB retornar 404: retornar `{ taxaAcumulada: 0, registros: 0 }` (sem erro 502)
-- Se `dataInicial >= dataFinal`: retornar `{ taxaAcumulada: 0 }` imediatamente
-- Subtrair 1 dia de `dataFinal` se for a data atual (dados BCB tem lag de 1 dia)
+**Estrutura dos dados INPC:**
+```text
+const INPC_MENSAL: Record<string, number> = {
+  "1979-04": 3.45,
+  "1979-05": 1.76,
+  ...
+  "2025-12": 0.21,
+  "2026-01": 0.39,
+};
+```
 
-**Componente - logica de data:**
-- `dataFinal` no `fetchTaxa`: usar `subDays(hoje, 1)` para garantir que o BCB tenha dados
-- Validacao extra: so chamar API se `dataBase < dataFinal`
+**Funcao de calculo:**
+```text
+function calcularINPCAcumulado(dataInicial: string, dataFinal: string): number {
+  // Iterar meses entre dataInicial e dataFinal
+  // Para cada mes, buscar taxa no mapa
+  // Acumular: fator *= (1 + taxa/100)
+  // Retornar (fator - 1) * 100
+}
+```
+
+**Logica no componente:**
+```text
+if (tipoCorrecao === 'inpc') {
+  const taxa = calcularINPCAcumulado(dataBase, hoje);
+  setTaxaAcumulada(taxa);
+} else {
+  // chamar edge function para Selic
+  fetchTaxa();
+}
+```
 
 ### Resultado esperado
-- Ao abrir a calculadora com um contrato que tem data de vencimento, a taxa Selic ou INPC sera preenchida automaticamente
-- Ao informar manualmente a data base, a taxa sera recalculada automaticamente
-- Ao trocar entre Selic e INPC, a taxa sera atualizada automaticamente
-- O campo permanece editavel para ajustes manuais se necessario
-- Nenhum erro 502 sera exibido ao usuario
+
+- Ao selecionar INPC: taxa acumulada calculada instantaneamente (sem loading, sem erro de API)
+- Ao selecionar Selic: continua consultando a API do BCB
+- Todos os indices de 1979 a 2026 disponiveis no sistema
+- Calculo correto usando acumulacao composta mes a mes
 
