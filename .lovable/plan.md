@@ -1,50 +1,32 @@
 
 
-## Reorganizar Contratos no formato de tabela
+## Mudancas na ficha do cliente
 
-### O que sera feito
+### 1. Badge dinamico: "novo" vira "andamento" quando existem eventos
 
-Transformar a secao de Contratos para seguir o layout da imagem de referencia, onde cada contrato expandido mostra seus dados em formato de tabela com colunas.
+No cabecalho, ao inves de exibir `devedor.estagio` diretamente, calcular o estagio visual:
+- Se `devedor.estagio === 'novo'` **e** `eventos.length > 0`, exibir badge "andamento" (com cor diferente, ex: azul/amarelo)
+- Caso contrario, exibir o estagio original do banco
 
-### Layout proposto
+Isso sera uma mudanca apenas visual (no frontend), sem alterar o valor no banco de dados.
 
-**Cabecalho do card (mantido):**
-```text
-v Contratos          Total em Atraso R$ XX.XXX,XX    [Calculo]
-```
+### 2. Nome do operador nos eventos
 
-**Cada contrato (linha resumida - CollapsibleTrigger):**
-```text
-v 1001118452 *    MAISON DECOR - Atraso: 298    Venc: 27/04/2025
-```
-
-**Contrato expandido (CollapsibleContent) - formato tabela:**
-
-| Numero | Vencimento | Valor | Atraso | Estagio | Descricao |
-|--------|------------|-------|--------|---------|-----------|
-| 1001118452 | 27/04/2025 | 3.051,89 | 298 | novo | ... |
+Atualmente `criado_por` armazena o `user.id`. Para exibir o nome:
+- Ao carregar os eventos, buscar tambem os nomes dos operadores na tabela `profiles` (que tem coluna `nome`)
+- Criar um mapa `userId -> nome` e exibir o nome em cada card de evento, abaixo da data/hora
 
 ### Detalhes tecnicos
 
 **Arquivo: `src/pages/DevedorDetalhe.tsx`**
 
-1. **Linha resumida do contrato (linhas 324-346):** Reorganizar para mostrar numero do contrato com indicador (bolinha verde/vermelha baseada no estagio), credor, dias de atraso e data de vencimento no formato da imagem: `1001118452 * MAISON DECOR - Atraso: 298 Venc: 27/04/2025`
+1. **Estado para nomes de operadores:** Adicionar `operadorNomes: Record<string, string>` para mapear IDs para nomes
 
-2. **Conteudo expandido (linhas 348-356):** Substituir o layout atual de pares chave-valor por uma mini-tabela (usando elementos `table` ou grid) com colunas:
-   - Numero (contrato)
-   - Vencimento (data formatada)
-   - Valor (valor_atualizado formatado)
-   - Atraso (dias)
-   - Estagio (badge)
-   - Descricao (observacao)
+2. **fetchData (linhas 143-149):** Apos carregar eventos, extrair os IDs unicos de `criado_por`, consultar `profiles` para obter os nomes, e salvar no estado
 
-3. **Estilo:** Usar `<table>` com classes Tailwind para bordas sutis e alinhamento, similar ao componente Table do shadcn/ui ja disponivel no projeto (`src/components/ui/table.tsx`). Headers em negrito com fundo muted.
+3. **Badge no cabecalho (linha 250):** Substituir `devedor.estagio` por logica condicional:
+   - `estagio === 'novo' && eventos.length > 0` -> exibir "andamento"
+   - Senao -> manter estagio original
 
-4. **Informacoes adicionais na expansao:** Adicionar tambem Valor Original como linha extra ou campo visivel na tabela.
-
-### Resultado esperado
-
-- Contratos em formato tabular quando expandidos, similar a imagem de referencia
-- Linha resumida mais informativa com numero, credor, atraso e vencimento
-- Visual mais organizado e profissional para triagem rapida dos contratos
+4. **Card de evento (linhas 452-455):** Adicionar o nome do operador na linha de data/hora, algo como: `"12/02/2025 14:30 - por Fulano"`
 
