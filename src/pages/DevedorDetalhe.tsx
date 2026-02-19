@@ -81,6 +81,7 @@ export default function DevedorDetalhe() {
   const [editEventoId, setEditEventoId] = useState<string | null>(null);
   const [editEventoTipo, setEditEventoTipo] = useState('contato_cliente');
   const [editEventoDescricao, setEditEventoDescricao] = useState('');
+  const [telefonesDialogOpen, setTelefonesDialogOpen] = useState(false);
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -252,47 +253,34 @@ export default function DevedorDetalhe() {
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground block text-xs">CPF/CNPJ</span>
                 <span className="font-mono font-medium">{devedor.cpf}</span>
               </div>
-              {devedor.telefone && (
-                <div>
-                  <span className="text-muted-foreground block text-xs">Telefone</span>
-                  <span className="font-medium">{devedor.telefone}</span>
+              <div>
+                <span className="text-muted-foreground block text-xs">Telefone</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-medium">{devedor.telefone || 'Não informado'}</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setTelefonesDialogOpen(true)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
-              )}
+              </div>
               {devedor.credor && (
                 <div>
                   <span className="text-muted-foreground block text-xs">Credor</span>
                   <span className="font-medium">{devedor.credor}</span>
                 </div>
               )}
-              {devedor.contrato && (
-                <div>
-                  <span className="text-muted-foreground block text-xs">Contrato</span>
-                  <span className="font-medium">{devedor.contrato}</span>
-                </div>
-              )}
-              {devedor.descricao && (
-                <div className="col-span-2">
-                  <span className="text-muted-foreground block text-xs">Descrição</span>
-                  <span className="font-medium">{devedor.descricao}</span>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Telefones */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Phone className="h-5 w-5" /> Telefones
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Telefones Dialog */}
+        <Dialog open={telefonesDialogOpen} onOpenChange={setTelefonesDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Phone className="h-5 w-5" /> Gerenciar Telefones</DialogTitle></DialogHeader>
             <TelefoneTab
               telefones={telefones}
               cpfNormalizado={cpfNorm}
@@ -301,8 +289,8 @@ export default function DevedorDetalhe() {
               telefoneImportado={devedor.telefone}
               devedorId={devedor.id}
             />
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Contratos (2 cols) */}
