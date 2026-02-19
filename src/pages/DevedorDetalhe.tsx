@@ -83,6 +83,7 @@ export default function DevedorDetalhe() {
   const [editEventoTipo, setEditEventoTipo] = useState('contato_cliente');
   const [editEventoDescricao, setEditEventoDescricao] = useState('');
   const [telefonesDialogOpen, setTelefonesDialogOpen] = useState(false);
+  const [operadorNomes, setOperadorNomes] = useState<Record<string, string>>({});
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -146,7 +147,23 @@ export default function DevedorDetalhe() {
       .select('*')
       .eq('devedor_id', id)
       .order('criado_em', { ascending: false });
-    if (evts) setEventos(evts as unknown as Evento[]);
+    if (evts) {
+      const eventosData = evts as unknown as Evento[];
+      setEventos(eventosData);
+      // Fetch operator names
+      const uniqueIds = [...new Set(eventosData.map(e => e.criado_por))];
+      if (uniqueIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, nome')
+          .in('id', uniqueIds);
+        if (profiles) {
+          const nomes: Record<string, string> = {};
+          profiles.forEach((p: any) => { nomes[p.id] = p.nome; });
+          setOperadorNomes(nomes);
+        }
+      }
+    }
 
     setLoading(false);
   }, [id]);
@@ -247,7 +264,9 @@ export default function DevedorDetalhe() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold">{devedor.nome}</h1>
-                  <Badge variant="secondary" className="mt-1">{devedor.estagio}</Badge>
+                  <Badge variant={devedor.estagio === 'novo' && eventos.length > 0 ? 'default' : 'secondary'} className="mt-1">
+                    {devedor.estagio === 'novo' && eventos.length > 0 ? 'andamento' : devedor.estagio}
+                  </Badge>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => navigate('/clientes')}>
@@ -452,6 +471,7 @@ export default function DevedorDetalhe() {
                         <p className="text-xs text-muted-foreground">
                           {new Date(evt.criado_em).toLocaleDateString('pt-BR')}{' '}
                           {new Date(evt.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          {operadorNomes[evt.criado_por] && ` - por ${operadorNomes[evt.criado_por]}`}
                         </p>
                         {evt.descricao && <p className="text-sm break-words">{evt.descricao}</p>}
                         {evt.arquivo_url && evt.arquivo_nome && (
