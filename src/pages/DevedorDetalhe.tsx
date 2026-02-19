@@ -312,9 +312,9 @@ export default function DevedorDetalhe() {
           </DialogContent>
         </Dialog>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Contratos (2 cols) */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Contratos */}
+          <div className="space-y-6">
 
             {/* Contratos */}
             <Card>
@@ -346,8 +346,6 @@ export default function DevedorDetalhe() {
                             <div className="flex items-center gap-2 flex-wrap min-w-0">
                               <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${contrato.estagio === 'novo' ? 'bg-green-500' : 'bg-destructive'}`} />
                               <span className="font-medium text-sm">{contrato.contrato || 'S/ contrato'}</span>
-                              <span className="text-sm text-muted-foreground">—</span>
-                              <span className="text-sm">{contrato.credor || 'S/ credor'}</span>
                               {dias !== null && dias > 0 && (
                                 <span className="text-xs text-muted-foreground">- Atraso: {dias}</span>
                               )}
