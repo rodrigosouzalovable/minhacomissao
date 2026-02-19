@@ -4,7 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -238,63 +238,75 @@ export default function DevedorDetalhe() {
         {/* Header */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                   <User className="h-6 w-6 text-primary" />
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold">{devedor.nome}</h1>
-                  <p className="text-sm text-muted-foreground">
-                    CPF/CNPJ: <span className="font-mono">{devedor.cpf}</span>
-                    {devedor.telefone && <> · Tel: {devedor.telefone}</>}
-                  </p>
+                  <Badge variant="secondary" className="mt-1">{devedor.estagio}</Badge>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => navigate('/clientes')}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
             </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground block text-xs">CPF/CNPJ</span>
+                <span className="font-mono font-medium">{devedor.cpf}</span>
+              </div>
+              {devedor.telefone && (
+                <div>
+                  <span className="text-muted-foreground block text-xs">Telefone</span>
+                  <span className="font-medium">{devedor.telefone}</span>
+                </div>
+              )}
+              {devedor.credor && (
+                <div>
+                  <span className="text-muted-foreground block text-xs">Credor</span>
+                  <span className="font-medium">{devedor.credor}</span>
+                </div>
+              )}
+              {devedor.contrato && (
+                <div>
+                  <span className="text-muted-foreground block text-xs">Contrato</span>
+                  <span className="font-medium">{devedor.contrato}</span>
+                </div>
+              )}
+              {devedor.descricao && (
+                <div className="col-span-2">
+                  <span className="text-muted-foreground block text-xs">Descrição</span>
+                  <span className="font-medium">{devedor.descricao}</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Telefones */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Phone className="h-5 w-5" /> Telefones
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TelefoneTab
+              telefones={telefones}
+              cpfNormalizado={cpfNorm}
+              userId={user?.id || ''}
+              onRefresh={fetchData}
+              telefoneImportado={devedor.telefone}
+              devedorId={devedor.id}
+            />
           </CardContent>
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Tabs + Contratos (2 cols) */}
+          {/* Left: Contratos (2 cols) */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Tabs */}
-            <Card>
-              <CardContent className="pt-6">
-                <Tabs defaultValue="telefone">
-                  <TabsList>
-                    <TabsTrigger value="telefone">
-                      <Phone className="h-4 w-4 mr-1" /> Telefone
-                    </TabsTrigger>
-                    <TabsTrigger value="dados">
-                      <FileText className="h-4 w-4 mr-1" /> Dados
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="telefone">
-                    <TelefoneTab
-                      telefones={telefones}
-                      cpfNormalizado={cpfNorm}
-                      userId={user?.id || ''}
-                      onRefresh={fetchData}
-                      telefoneImportado={devedor.telefone}
-                      devedorId={devedor.id}
-                    />
-                  </TabsContent>
-                  <TabsContent value="dados">
-                    <div className="space-y-3 py-2 text-sm">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Nome</span><span>{devedor.nome}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">CPF/CNPJ</span><span className="font-mono">{devedor.cpf}</span></div>
-                      {devedor.credor && <div className="flex justify-between"><span className="text-muted-foreground">Credor</span><span>{devedor.credor}</span></div>}
-                      {devedor.descricao && <div className="flex justify-between"><span className="text-muted-foreground">Descrição</span><span>{devedor.descricao}</span></div>}
-                      <div className="flex justify-between"><span className="text-muted-foreground">Estágio</span><Badge variant="secondary">{devedor.estagio}</Badge></div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
 
             {/* Contratos */}
             <Card>
@@ -323,17 +335,22 @@ export default function DevedorDetalhe() {
                       >
                         <CollapsibleTrigger asChild>
                           <div className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                            <div className="flex items-center gap-4">
-                              <div>
+                            <div className="flex items-center gap-3 flex-wrap min-w-0">
+                              <div className="min-w-0">
                                 <span className="font-medium text-sm">{contrato.contrato || 'S/ contrato'}</span>
                                 <p className="text-xs text-muted-foreground">{contrato.credor || 'S/ credor'}</p>
                               </div>
+                              {contrato.data_vencimento && (
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  Venc: {new Date(contrato.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
                               {dias !== null && dias > 0 && (
-                                <Badge variant="destructive" className="text-xs">{dias} dias atraso</Badge>
+                                <Badge variant="destructive" className="text-xs whitespace-nowrap">{dias}d atraso</Badge>
                               )}
                             </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-semibold text-sm">
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="font-semibold text-sm whitespace-nowrap">
                                 {contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </span>
                               {openContratos[contrato.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
