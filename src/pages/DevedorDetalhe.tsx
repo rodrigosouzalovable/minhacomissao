@@ -402,37 +402,36 @@ export default function DevedorDetalhe() {
                 ) : (
                   <div className="space-y-3">
                     {eventos.map((evt) => (
-                      <div key={evt.id} className="border rounded-lg p-3 space-y-1">
+                      <div key={evt.id} className="border rounded-lg p-3 space-y-2">
                         <div className="flex items-center justify-between">
                           <Badge variant={evt.tipo === 'anexar_arquivo' ? 'secondary' : 'default'}>
                             {evt.tipo === 'contato_cliente' ? <><Phone className="h-3 w-3 mr-1" /> Contato</> : <><FileText className="h-3 w-3 mr-1" /> Arquivo</>}
                           </Badge>
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(evt.criado_em).toLocaleDateString('pt-BR')}{' '}
-                              {new Date(evt.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                  <MoreHorizontal className="h-3.5 w-3.5" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openEditEvento(evt)}>
-                                  <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteEvento(evt.id)}>
-                                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditEvento(evt)}>
+                                <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteEvento(evt.id)}>
+                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                        {evt.descricao && <p className="text-sm">{evt.descricao}</p>}
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(evt.criado_em).toLocaleDateString('pt-BR')}{' '}
+                          {new Date(evt.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {evt.descricao && <p className="text-sm break-words">{evt.descricao}</p>}
                         {evt.arquivo_url && evt.arquivo_nome && (
-                          <Button variant="outline" size="sm" className="mt-1" onClick={() => handleDownload(evt.arquivo_url!, evt.arquivo_nome!)}>
-                            <Download className="h-3 w-3 mr-1" /> {evt.arquivo_nome}
+                          <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => handleDownload(evt.arquivo_url!, evt.arquivo_nome!)}>
+                            <Download className="h-3 w-3 mr-1 shrink-0" />
+                            <span className="truncate">{evt.arquivo_nome}</span>
                           </Button>
                         )}
                       </div>
