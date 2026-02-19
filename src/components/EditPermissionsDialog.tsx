@@ -33,12 +33,14 @@ const AVAILABLE_TABS = [
   { path: '/acordos', label: 'Meus Acordos' },
   { path: '/acordos/novo', label: 'Novo Acordo' },
   { path: '/retornos', label: 'Retornos' },
+  { path: '/clientes', label: 'Clientes' },
   { path: '/comissoes', label: 'Minhas Comissões' },
 ];
 
 const EMPRESAS = [
   { value: 'ume_novo_mundo', label: 'UME / NOVO MUNDO' },
   { value: 'mundo_da_moda', label: 'MUNDO DA MODA' },
+  { value: 'montreal', label: 'MONTREAL' },
 ];
 
 export function EditPermissionsDialog({
