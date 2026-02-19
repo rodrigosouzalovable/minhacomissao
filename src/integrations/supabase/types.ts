@@ -855,6 +855,14 @@ export type Database = {
           user_id: string
         }[]
       }
+      ranking_mensal: {
+        Args: { p_mes_ano?: string }
+        Returns: {
+          nome: string
+          total_recebido: number
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "funcionario" | "gestor" | "admin"

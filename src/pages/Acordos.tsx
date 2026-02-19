@@ -15,7 +15,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 type Acordo = Tables<'acordos'>;
@@ -187,6 +189,7 @@ export default function Acordos() {
   const [dataVencidaPorAcordo, setDataVencidaPorAcordo] = useState<Map<string, string>>(new Map());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('todos');
+  const [rankingAberto, setRankingAberto] = useState(false);
 
   const { data: funcionarios } = useQuery({
     queryKey: ['funcionarios-list'],
@@ -536,6 +539,7 @@ export default function Acordos() {
       </AppLayout>;
   }
   return <AppLayout>
+      <Collapsible open={rankingAberto} onOpenChange={setRankingAberto}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
          <div className="flex items-center gap-3 flex-wrap">
@@ -555,6 +559,12 @@ export default function Acordos() {
               <TrendingUp className="h-4 w-4 mr-1" />
               {acordosHoje ?? 0} acordo(s) hoje
             </Badge>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1">
+                <Trophy className="h-4 w-4" />
+                Ranking
+              </Button>
+            </CollapsibleTrigger>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handleExportarExcel(acordosExibidos)} disabled={acordosExibidos.length === 0}>
@@ -569,6 +579,10 @@ export default function Acordos() {
             </Button>
           </div>
         </div>
+
+        <CollapsibleContent>
+          <RankingMensal />
+        </CollapsibleContent>
 
         {/* Filtros */}
         <div className="flex flex-col sm:flex-row gap-4">
@@ -641,6 +655,7 @@ export default function Acordos() {
           </TabsContent>
         </Tabs>
       </div>
+      </Collapsible>
 
       {/* Dialog de confirmação de exclusão */}
       <AlertDialog open={!!acordoParaExcluir} onOpenChange={open => !open && setAcordoParaExcluir(null)}>
