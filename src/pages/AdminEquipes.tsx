@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Trash2, Pencil } from 'lucide-react';
+import { Users, UserPlus, Trash2, Pencil, Trophy } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
 
@@ -93,6 +93,21 @@ export default function AdminEquipes() {
       return data;
     },
   });
+
+  // Fetch user permissions for credores/ranking display
+  const { data: allPermissions } = useQuery({
+    queryKey: ['all-user-permissions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_permissions')
+        .select('*');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const getPermissions = (userId: string) =>
+    allPermissions?.find((p) => p.user_id === userId) as any;
 
   // Filter gestores and funcionarios
   const gestores = usersData?.filter((u) => u.role === 'gestor' || u.role === 'admin') ?? [];
@@ -291,18 +306,39 @@ export default function AdminEquipes() {
                             <TableRow>
                               <TableHead>Funcionário</TableHead>
                               <TableHead>Email</TableHead>
+                              <TableHead>Credores</TableHead>
+                              <TableHead>Ranking</TableHead>
                               <TableHead className="w-[100px]">Ações</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {team.map((member) => {
                               const func = getProfile(member.funcionario_id);
+                              const perms = getPermissions(member.funcionario_id);
+                              const credores: string[] = perms?.credores ?? [];
+                              const visivelRanking = perms?.visivel_ranking ?? true;
                               return (
                                 <TableRow key={member.id}>
                                   <TableCell className="font-medium">
                                     {func?.nome ?? 'N/A'}
                                   </TableCell>
                                   <TableCell>{func?.email ?? 'N/A'}</TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-wrap gap-1">
+                                      {credores.map((c: string) => (
+                                        <Badge key={c} variant="secondary" className="text-xs">
+                                          {c === 'ume_novo_mundo' ? 'UME' : c === 'mundo_da_moda' ? 'MODA' : 'MONTREAL'}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {visivelRanking ? (
+                                      <Trophy className="h-4 w-4 text-primary" />
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">Oculto</span>
+                                    )}
+                                  </TableCell>
                                   <TableCell>
                                     <div className="flex gap-1">
                                       <Button
