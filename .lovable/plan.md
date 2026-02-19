@@ -1,59 +1,34 @@
 
 
-## Reorganizar layout da ficha do cliente
+## Simplificar cabecalho e remover card de Telefones
 
-### Problema atual
-- O cabecalho mostra Nome, CPF/CNPJ e Telefone de forma simples, mas o usuario quer essas informacoes mais destacadas no quadrante principal
-- A aba "Dados" repete informacoes que ja estao no cabecalho
-- Contratos e Eventos ocupam um layout 2/3 + 1/3 que pode ser melhorado
+### O que sera feito
 
-### Alteracoes propostas
-
-**Arquivo: `src/pages/DevedorDetalhe.tsx`**
-
-**1. Cabecalho expandido com dados estruturados**
-- Manter o card do cabecalho com o nome em destaque
-- Abaixo do nome, exibir CPF/CNPJ, Telefone, Credor e Estagio em campos separados e organizados (grid de 2 ou 3 colunas), com labels claros
-- Remover a aba "Dados" (que era redundante) e mover as informacoes relevantes (credor, descricao, estagio) para o cabecalho
-
-**2. Abas reorganizadas**
-- Remover a aba "Dados" (informacoes agora no cabecalho)
-- A aba "Telefone" continua como esta, mas sem precisar de abas (vira secao direta ja que eh a unica)
-- Ou manter abas adicionando funcionalidades futuras
-
-**3. Layout de Contratos e Eventos**
-- Manter o grid 2/3 + 1/3 mas com visual mais limpo:
-  - **Contratos (esquerda):** adicionar a data de vencimento visivel diretamente no card resumido (sem precisar expandir), junto com o numero do contrato e valor
-  - **Eventos (direita):** manter como esta (ja foi otimizado anteriormente)
+1. **Remover o card "Telefones"** (linhas 288-305) -- a tabela inteira de telefones com colunas Numero, Tipo, WhatsApp, etc. sera removida da pagina
+2. **Limpar o cabecalho** -- remover os campos "Contrato" e "Descricao" do grid, mantendo apenas CPF/CNPJ, Telefone e Credor
+3. **Adicionar botao de editar/adicionar contato** no cabecalho, ao lado das informacoes de telefone, que abrira um dialog para gerenciar telefones
 
 ### Detalhes tecnicos
 
-**Cabecalho - de:**
-```text
-[Avatar] D DECORACOES LTDA
-         CPF/CNPJ: 53566245000147 . Tel: 62981408877
-```
+**Arquivo: `src/pages/DevedorDetalhe.tsx`**
 
-**Cabecalho - para:**
-```text
-[Avatar] D DECORACOES LTDA                    [Voltar]
-         ┌──────────────────┬──────────────────┬──────────────┐
-         │ CPF/CNPJ         │ Telefone         │ Credor       │
-         │ 53566245000147   │ 62981408877      │ MAISON DECOR │
-         └──────────────────┴──────────────────┴──────────────┘
-         Estagio: [novo]   Descricao: ...
-```
+**Cabecalho (linhas 255-284):**
+- Remover o bloco condicional de `devedor.contrato` (linhas 272-277)
+- Remover o bloco condicional de `devedor.descricao` (linhas 278-283)
+- Manter apenas: CPF/CNPJ, Telefone e Credor
+- Adicionar um botao com icone de editar (Pencil ou UserPlus) ao lado do campo Telefone, que abrira o TelefoneDialog existente para adicionar/editar contatos
 
-**Contratos - cada card mostrara:**
-```text
-[1001118452]  MAISON DECOR       Venc: 27/04/2025   [298 dias atraso]   R$ 3.051,89  >
-```
+**Card Telefones (linhas 288-305):**
+- Remover o card inteiro com o componente TelefoneTab
+- O TelefoneTab continuara importado mas sera acessado via dialog ao clicar no botao de editar contato no cabecalho
 
-- Adicionar data de vencimento formatada diretamente na linha do card (sem precisar expandir)
-- Secao de telefones fica logo abaixo do cabecalho, sem abas
+**Novo dialog de contatos:**
+- Ao clicar no botao, abre um Dialog contendo o TelefoneTab (reutilizando o componente existente)
+- Isso mantem toda a funcionalidade de gerenciamento de telefones sem ocupar espaco na pagina principal
 
-**Resumo das mudancas no componente:**
-1. Expandir o card header (linhas 239-258) com grid de campos estruturados (CPF, telefone, credor, estagio, descricao)
-2. Remover TabsList e a aba "Dados" - colocar TelefoneTab diretamente
-3. Nos cards de contrato (linhas 324-341), adicionar a data de vencimento formatada na linha resumida
-4. Manter eventos como estao
+### Resultado esperado
+
+- Cabecalho limpo com apenas: Nome, CPF/CNPJ, Telefone, Credor e Estagio
+- Botao de editar/adicionar contato visivel no cabecalho
+- Card "Telefones" removido da pagina
+- Funcionalidade de gerenciamento de telefones acessivel via dialog
