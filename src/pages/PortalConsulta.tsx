@@ -22,8 +22,8 @@ function isValidCpf(cpf: string) {
   return digits.length === 11;
 }
 
-const PHONE = '5562981089329';
-const PHONE_DISPLAY = '(62) 98108-9329';
+const PHONE = '5562981749600';
+const PHONE_DISPLAY = '(62) 98174-9600';
 
 const FAQ_ITEMS = [
   { q: 'Qual o objetivo do Portal de Acordos?', a: 'O Portal de Acordos tem como objetivo facilitar a renegociação de débitos de forma online, rápida e segura, oferecendo condições especiais para que você regularize sua situação financeira.' },

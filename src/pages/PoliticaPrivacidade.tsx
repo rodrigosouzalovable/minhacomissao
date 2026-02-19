@@ -3,8 +3,8 @@ import { ArrowLeft, Phone, MessageCircle, MapPin, Shield } from 'lucide-react';
 import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 
-const PHONE = '5562981089329';
-const PHONE_DISPLAY = '(62) 98108-9329';
+const PHONE = '5562981749600';
+const PHONE_DISPLAY = '(62) 98174-9600';
 const EMPRESA = 'SOUZA E RIBEIRO SOCIEDADE DE ADVOGADOS';
 
 export default function PoliticaPrivacidade() {
