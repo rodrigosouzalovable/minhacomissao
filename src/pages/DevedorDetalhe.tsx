@@ -320,8 +320,8 @@ export default function DevedorDetalhe() {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5" /> Contratos
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <DollarSign className="h-4 w-4" /> Contratos
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <CalculadoraDebitoDialog contratos={contratos} devedor={devedor} />
