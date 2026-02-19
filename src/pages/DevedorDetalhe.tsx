@@ -333,7 +333,12 @@ export default function DevedorDetalhe() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {contratos.map((contrato) => {
+                  {[...contratos].sort((a, b) => {
+                    if (!a.data_vencimento && !b.data_vencimento) return 0;
+                    if (!a.data_vencimento) return 1;
+                    if (!b.data_vencimento) return -1;
+                    return a.data_vencimento.localeCompare(b.data_vencimento);
+                  }).map((contrato) => {
                     const dias = getDiasAtraso(contrato.data_vencimento);
                     return (
                       <Collapsible
