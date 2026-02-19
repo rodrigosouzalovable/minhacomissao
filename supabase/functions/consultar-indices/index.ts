@@ -23,6 +23,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Validate year range to avoid BCB API errors
+    const yearInicial = parseInt(dataInicial.split('-')[0], 10);
+    const yearFinal = parseInt(dataFinal.split('-')[0], 10);
+    if (yearInicial < 1990 || yearInicial > 2100 || yearFinal < 1990 || yearFinal > 2100) {
+      return new Response(JSON.stringify({ taxaAcumulada: 0, registros: 0, tipo, error: 'Datas fora do intervalo válido' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const diStr = formatDateBR(dataInicial);
     const dfStr = formatDateBR(dataFinal);
 

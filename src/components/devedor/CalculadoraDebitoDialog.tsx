@@ -86,8 +86,14 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
   const totalAtualizado = valorOriginal + multa + juros + correcao;
   const valorParcela = totalAtualizado / parcelas;
 
+  const isValidDate = (d: string) => {
+    if (!d || d.length !== 10) return false;
+    const year = parseInt(d.split('-')[0], 10);
+    return year >= 1990 && year <= 2100;
+  };
+
   const fetchTaxa = useCallback(async () => {
-    if (!dataBase) return;
+    if (!isValidDate(dataBase)) return;
     setLoadingTaxa(true);
     try {
       const dataFinal = format(hoje, 'yyyy-MM-dd');
@@ -110,7 +116,7 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
   }, [dataBase, tipoCorrecao]);
 
   useEffect(() => {
-    if (open && dataBase) {
+    if (open && isValidDate(dataBase)) {
       fetchTaxa();
     }
   }, [open, tipoCorrecao, dataBase, fetchTaxa]);
