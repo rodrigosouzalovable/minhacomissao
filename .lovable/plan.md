@@ -1,15 +1,36 @@
 
+## Atualizar dialog de Editar Permissoes
 
-## Trocar telefone (62) 98108-9329 por (62) 98174-9600
+### Alteracoes no arquivo `src/components/EditPermissionsDialog.tsx`
 
-O numero antigo aparece em 4 arquivos do portal publico. Em cada um, existem duas constantes que serao atualizadas:
+**1. Adicionar aba "Clientes" na lista de abas disponiveis**
 
-| Arquivo | Alteracao |
-|---|---|
-| `src/pages/PortalConsulta.tsx` | `PHONE` de `5562981089329` para `5562981749600` e `PHONE_DISPLAY` de `(62) 98108-9329` para `(62) 98174-9600` |
-| `src/pages/ConsultaResultado.tsx` | Mesma troca |
-| `src/pages/PoliticaPrivacidade.tsx` | Mesma troca |
-| `src/pages/Antifraude.tsx` | Mesma troca |
+A aba `/clientes` (Clientes) existe no menu lateral mas nao aparece no dialog de permissoes. Sera adicionada ao array `AVAILABLE_TABS`:
 
-Sao apenas substituicoes de string, sem impacto em logica ou layout.
+```
+{ path: '/clientes', label: 'Clientes' }
+```
 
+Lista completa apos a alteracao:
+- Minha Conta
+- Dashboard
+- Meus Acordos
+- Novo Acordo
+- Retornos
+- Clientes (nova)
+- Minhas Comissoes
+
+**2. Adicionar credor MONTREAL na lista de empresas**
+
+Sera adicionada uma nova opcao ao array `EMPRESAS`:
+
+```
+{ value: 'montreal', label: 'MONTREAL' }
+```
+
+Lista completa apos a alteracao:
+- UME / NOVO MUNDO
+- MUNDO DA MODA
+- MONTREAL (nova)
+
+Nenhuma alteracao de banco de dados e necessaria, pois o campo `empresa` na tabela `user_permissions` e do tipo texto livre.
