@@ -1,25 +1,61 @@
 
 
-## Atualizar vencimentos dos contratos (RM Barreto)
+## Ranking do Mes na pagina Meus Acordos
 
-### Correspondencia encontrada
+### O que sera feito
 
-Cruzei a coluna Nro Nota da planilha com os ultimos 6 digitos de cada contrato no sistema, e confirmei pelos valores. Todos os 9 registros batem perfeitamente.
+Adicionar um botao "Ranking" ao lado do badge "Acordos Hoje" na pagina Meus Acordos. Ao clicar, ele expande/colapsa um painel mostrando o ranking de todos os funcionarios do mes atual, com medalhas para os 3 primeiros, percentual da equipe e valor total recebido -- identico ao visual da imagem de referencia.
 
-### Atualizacoes a serem feitas
+### Como funciona
 
-| Contrato   | Nota   | Valor         | Vencimento   | ID no sistema                          |
-|------------|--------|---------------|--------------|----------------------------------------|
-| 1001101484 | 101484 | R$ 17.754,00  | 29/02/2024   | ef9c760f-27af-49d8-92b8-a0917ba1d3e0   |
-| 1002101408 | 101408 | R$ 13.325,00  | 29/02/2024   | c593a310-34d5-41ea-8b97-61381217cbed   |
-| 1003101407 | 101407 | R$ 13.325,00  | 29/02/2024   | 444c3a4c-e0dc-4611-9fde-2a4c33ebe068   |
-| 1004101410 | 101410 | R$ 13.325,00  | 29/02/2024   | 33dddf19-98ba-4632-b712-bee745f5e0ae   |
-| 1005101409 | 101409 | R$ 13.325,00  | 29/02/2024   | 458319d7-f804-4636-98e2-f8cddaad2e01   |
-| 1006104335 | 104335 | R$ 13.055,00  | 27/04/2024   | 5b46f92e-8dab-431f-84f7-b7b96a24848a   |
-| 1007104336 | 104336 | R$ 11.779,00  | 27/04/2024   | 26cde266-9b51-4310-b990-550a79a4d4a6   |
-| 1008104337 | 104337 | R$ 11.176,00  | 27/04/2024   | fefd1373-f19b-4384-8884-5799c1cec7fe   |
-| 1009105423 | 105423 | R$ 10.245,00  | 22/05/2024   | 4dc349f3-5b6a-4f30-be11-38b482bcb8bd   |
+1. **Nova funcao SQL (SECURITY DEFINER)**: Criar uma funcao `ranking_mensal` que retorna o ranking de todos os funcionarios (nome, total recebido no mes) sem depender de RLS, permitindo que qualquer funcionario veja os dados da equipe inteira.
+
+2. **Componente RankingMensal**: Novo componente em `src/components/RankingMensal.tsx` que:
+   - Chama a funcao `ranking_mensal` via `supabase.rpc()`
+   - Calcula o percentual da equipe para cada funcionario
+   - Exibe medalhas (ouro, prata, bronze) para os 3 primeiros
+   - Lista os demais com numero de posicao
+   - Mostra nome, percentual e valor em verde
+
+3. **Integracao na pagina Acordos**: Adicionar ao lado do badge "Acordos Hoje":
+   - Um botao "Ranking" com icone de trofeu
+   - Ao clicar, expande/colapsa o componente de ranking usando Collapsible
+   - O painel aparece abaixo da barra de titulo, antes dos filtros
 
 ### Detalhes tecnicos
 
-Executar 9 comandos UPDATE na tabela `devedores` para definir o campo `data_vencimento` de cada registro com a data correspondente da planilha. Nenhuma alteracao de codigo ou schema necessaria -- apenas atualizacao de dados.
+**Migracao SQL:**
+```sql
+CREATE OR REPLACE FUNCTION ranking_mensal(p_mes_ano TEXT DEFAULT NULL)
+RETURNS TABLE(user_id UUID, nome TEXT, total_recebido NUMERIC)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_mes_ano TEXT;
+BEGIN
+  v_mes_ano := COALESCE(p_mes_ano, to_char(NOW(), 'YYYY-MM'));
+  RETURN QUERY
+  SELECT 
+    p.id AS user_id,
+    p.nome,
+    COALESCE(SUM(pg.valor_parcela), 0) AS total_recebido
+  FROM profiles p
+  LEFT JOIN acordos a ON a.user_id = p.id
+  LEFT JOIN pagamentos pg ON pg.acordo_id = a.id 
+    AND pg.status = 'pago'
+    AND pg.data_paga >= (v_mes_ano || '-01')::DATE
+    AND pg.data_paga < ((v_mes_ano || '-01')::DATE + INTERVAL '1 month')
+  GROUP BY p.id, p.nome
+  ORDER BY total_recebido DESC;
+END;
+$$;
+```
+
+**Novo arquivo:** `src/components/RankingMensal.tsx`
+- Query com react-query chamando `supabase.rpc('ranking_mensal')`
+- Layout identico a imagem: card com titulo "Ranking do Mes", icone trofeu, lista com medalhas, scroll vertical
+
+**Alteracao:** `src/pages/Acordos.tsx`
+- Importar RankingMensal e Collapsible
+- Adicionar estado `rankingAberto`
+- Botao com icone Trophy ao lado do badge "Acordos Hoje"
+- Collapsible com o componente RankingMensal abaixo do titulo
