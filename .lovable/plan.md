@@ -1,42 +1,46 @@
 
 
-## Corrigir atualização automática da Selic/INPC na Calculadora de Débito
+## Corrigir preenchimento automatico da taxa acumulada (Selic/INPC)
 
-### Problema identificado
-Os contratos deste cliente (e possivelmente de outros) possuem `data_vencimento` como nulo no banco de dados. Sem data de vencimento, o sistema nao consegue calcular os meses de atraso (mostra "0 meses") nem buscar a taxa acumulada correta do BCB (mostra valores proximos de zero).
+### Problemas identificados
 
-A funcao backend ja funciona corretamente - testei e ela retornou:
-- **Selic acumulada** (jan/2025 a fev/2026): **16,36%**
-- **INPC acumulado** (jan/2025 a fev/2026): **4,30%**
+1. **Data final usa "hoje"**, mas o BCB ainda nao publicou a taxa do dia atual, causando erro 404
+2. **Quando nao ha `data_vencimento`**, o campo `dataBase` fica vazio ou igual a hoje, resultando em consulta invalida (mesma data inicial e final)
+3. **A Edge Function retorna erro 502** quando o BCB retorna 404, em vez de tratar o erro graciosamente
 
 ### Alteracoes necessarias
 
-**Arquivo: `src/components/devedor/CalculadoraDebitoDialog.tsx`**
+**1. Edge Function `supabase/functions/consultar-indices/index.ts`**
 
-1. **Adicionar campo editavel de "Data Base" (data de referencia)**
-   - Quando `data_vencimento` existir, usa como padrao
-   - Quando nao existir, o usuario pode informar manualmente a data de referencia para o calculo
-   - Ao alterar a data, recalcula automaticamente os meses de atraso e busca a nova taxa do BCB
+- Usar `dataFinal` como o dia anterior (D-1) quando `dataFinal` for igual a hoje, pois o BCB publica dados com 1 dia de atraso
+- Tratar respostas 404 do BCB como "sem dados" (retornar `taxaAcumulada: 0`) em vez de retornar erro 502
+- Validar que `dataInicial < dataFinal` - se forem iguais ou invertidas, retornar `taxaAcumulada: 0` sem chamar a API
 
-2. **Recalcular juros e correção automaticamente ao mudar a data**
-   - O `useEffect` ja busca a taxa quando a data muda, mas precisa reagir ao campo de data manual tambem
-   - Meses de atraso recalculados em tempo real com base na data informada
+**2. Componente `CalculadoraDebitoDialog.tsx`**
 
-3. **Melhorar o fluxo de busca da taxa**
-   - Mostrar feedback visual durante a consulta (loading spinner - ja existe)
-   - Exibir o periodo consultado apos retorno ("01/01/2025 a 19/02/2026")
-   - Manter o campo editavel para ajuste manual se necessario
+- Alterar `fetchTaxa` para usar o dia anterior como `dataFinal` (evitar consultar dados que o BCB ainda nao publicou)
+- Garantir que a taxa eh buscada automaticamente ao:
+  - Abrir o dialog (se tiver data base valida)
+  - Alterar o contrato selecionado
+  - Alterar entre Selic e INPC
+  - Alterar a data base manualmente
+- O campo "Taxa acumulada (%)" continua editavel para ajuste manual, mas sera preenchido automaticamente pela API
 
 ### Detalhes tecnicos
 
-- Adicionar state `dataBase` (string) inicializado com `dataVencimento` ou vazio
-- Input tipo `date` para o usuario informar/alterar a data base
-- `mesesAtraso` e `diasAtraso` calculados com base em `dataBase` ao inves de `dataVencimento`
-- `fetchTaxa` usa `dataBase` como `dataInicial`
-- `useEffect` dispara `fetchTaxa` quando `dataBase` ou `tipoCorrecao` mudam
+**Edge Function - tratamento de erros:**
+- Se BCB retornar 404: retornar `{ taxaAcumulada: 0, registros: 0 }` (sem erro 502)
+- Se `dataInicial >= dataFinal`: retornar `{ taxaAcumulada: 0 }` imediatamente
+- Subtrair 1 dia de `dataFinal` se for a data atual (dados BCB tem lag de 1 dia)
+
+**Componente - logica de data:**
+- `dataFinal` no `fetchTaxa`: usar `subDays(hoje, 1)` para garantir que o BCB tenha dados
+- Validacao extra: so chamar API se `dataBase < dataFinal`
 
 ### Resultado esperado
-- Ao abrir a calculadora, se o contrato tiver data de vencimento, busca a taxa automaticamente
-- Se nao tiver, o usuario informa a data e o sistema busca e calcula tudo automaticamente
-- Ao trocar entre Selic e INPC, busca a nova taxa automaticamente
-- Todos os valores (juros, multa, correção, total, parcelas) atualizam em tempo real
+- Ao abrir a calculadora com um contrato que tem data de vencimento, a taxa Selic ou INPC sera preenchida automaticamente
+- Ao informar manualmente a data base, a taxa sera recalculada automaticamente
+- Ao trocar entre Selic e INPC, a taxa sera atualizada automaticamente
+- O campo permanece editavel para ajustes manuais se necessario
+- Nenhum erro 502 sera exibido ao usuario
+
