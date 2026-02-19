@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { differenceInDays } from 'date-fns';
 import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
+import { CalculadoraDebitoDialog } from '@/components/devedor/CalculadoraDebitoDialog';
 
 interface Devedor {
   id: string;
@@ -298,13 +299,16 @@ export default function DevedorDetalhe() {
             {/* Contratos */}
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="h-5 w-5" /> Contratos
                   </CardTitle>
-                  <span className="text-lg font-bold text-destructive">
-                    Total: {totalEmAtraso.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <CalculadoraDebitoDialog contratos={contratos} devedor={devedor} />
+                    <span className="text-lg font-bold text-destructive">
+                      Total: {totalEmAtraso.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
