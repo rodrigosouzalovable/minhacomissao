@@ -10,13 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 
@@ -37,7 +31,7 @@ const AVAILABLE_TABS = [
   { path: '/comissoes', label: 'Minhas Comissões' },
 ];
 
-const EMPRESAS = [
+const CREDORES = [
   { value: 'ume_novo_mundo', label: 'UME / NOVO MUNDO' },
   { value: 'mundo_da_moda', label: 'MUNDO DA MODA' },
   { value: 'montreal', label: 'MONTREAL' },
@@ -54,7 +48,8 @@ export function EditPermissionsDialog({
   const [selectedTabs, setSelectedTabs] = useState<string[]>(
     AVAILABLE_TABS.map((t) => t.path)
   );
-  const [empresa, setEmpresa] = useState('ume_novo_mundo');
+  const [credores, setCredores] = useState<string[]>(['ume_novo_mundo']);
+  const [visivelRanking, setVisivelRanking] = useState(true);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -73,10 +68,12 @@ export function EditPermissionsDialog({
   useEffect(() => {
     if (permissions) {
       setSelectedTabs(permissions.abas_permitidas);
-      setEmpresa(permissions.empresa);
+      setCredores((permissions as any).credores ?? ['ume_novo_mundo']);
+      setVisivelRanking((permissions as any).visivel_ranking ?? true);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
-      setEmpresa('ume_novo_mundo');
+      setCredores(['ume_novo_mundo']);
+      setVisivelRanking(true);
     }
   }, [permissions, open]);
 
@@ -87,8 +84,9 @@ export function EditPermissionsDialog({
           .from('user_permissions')
           .update({
             abas_permitidas: selectedTabs,
-            empresa,
-          })
+            credores,
+            visivel_ranking: visivelRanking,
+          } as any)
           .eq('user_id', userId);
         if (error) throw error;
       } else {
@@ -97,8 +95,9 @@ export function EditPermissionsDialog({
           .insert({
             user_id: userId,
             abas_permitidas: selectedTabs,
-            empresa,
-          });
+            credores,
+            visivel_ranking: visivelRanking,
+          } as any);
         if (error) throw error;
       }
     },
@@ -122,6 +121,12 @@ export function EditPermissionsDialog({
   const toggleTab = (path: string) => {
     setSelectedTabs((prev) =>
       prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
+    );
+  };
+
+  const toggleCredor = (value: string) => {
+    setCredores((prev) =>
+      prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
     );
   };
 
@@ -149,20 +154,28 @@ export function EditPermissionsDialog({
             ))}
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Empresa vinculada</Label>
-            <Select value={empresa} onValueChange={setEmpresa}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EMPRESAS.map((e) => (
-                  <SelectItem key={e.value} value={e.value}>
-                    {e.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Credores vinculados</Label>
+            {CREDORES.map((credor) => (
+              <div key={credor.value} className="flex items-center gap-2">
+                <Checkbox
+                  id={`credor-${credor.value}`}
+                  checked={credores.includes(credor.value)}
+                  onCheckedChange={() => toggleCredor(credor.value)}
+                />
+                <label htmlFor={`credor-${credor.value}`} className="text-sm cursor-pointer">
+                  {credor.label}
+                </label>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Visível no Ranking</Label>
+            <Switch
+              checked={visivelRanking}
+              onCheckedChange={setVisivelRanking}
+            />
           </div>
         </div>
 

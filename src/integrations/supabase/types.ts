@@ -688,26 +688,29 @@ export type Database = {
         Row: {
           abas_permitidas: string[]
           atualizado_em: string
+          credores: string[]
           criado_em: string
-          empresa: string
           id: string
           user_id: string
+          visivel_ranking: boolean
         }
         Insert: {
           abas_permitidas?: string[]
           atualizado_em?: string
+          credores?: string[]
           criado_em?: string
-          empresa?: string
           id?: string
           user_id: string
+          visivel_ranking?: boolean
         }
         Update: {
           abas_permitidas?: string[]
           atualizado_em?: string
+          credores?: string[]
           criado_em?: string
-          empresa?: string
           id?: string
           user_id?: string
+          visivel_ranking?: boolean
         }
         Relationships: []
       }
