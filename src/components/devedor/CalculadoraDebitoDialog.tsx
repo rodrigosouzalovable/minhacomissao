@@ -46,6 +46,8 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
   const [taxaAcumulada, setTaxaAcumulada] = useState<number>(0);
   const [parcelas, setParcelas] = useState<number>(1);
   const [loadingTaxa, setLoadingTaxa] = useState(false);
+  const [dataBase, setDataBase] = useState<string>('');
+  const [periodoConsultado, setPeriodoConsultado] = useState<string>('');
 
   const contratoAtual = contratoSelecionado === 'todos'
     ? null
@@ -63,12 +65,19 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
       }, null)
     : (contratoAtual?.data_vencimento || null);
 
+  // Sync dataBase with dataVencimento when contract changes
+  useEffect(() => {
+    if (dataVencimento) {
+      setDataBase(dataVencimento);
+    }
+  }, [dataVencimento, contratoSelecionado]);
+
   const hoje = new Date();
-  const mesesAtraso = dataVencimento
-    ? Math.max(0, differenceInMonths(hoje, new Date(dataVencimento + 'T00:00:00')))
+  const mesesAtraso = dataBase
+    ? Math.max(0, differenceInMonths(hoje, new Date(dataBase + 'T00:00:00')))
     : 0;
-  const diasAtraso = dataVencimento
-    ? Math.max(0, differenceInDays(hoje, new Date(dataVencimento + 'T00:00:00')))
+  const diasAtraso = dataBase
+    ? Math.max(0, differenceInDays(hoje, new Date(dataBase + 'T00:00:00')))
     : 0;
 
   const multa = valorOriginal * 0.02;
@@ -78,16 +87,19 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
   const valorParcela = totalAtualizado / parcelas;
 
   const fetchTaxa = useCallback(async () => {
-    if (!dataVencimento) return;
+    if (!dataBase) return;
     setLoadingTaxa(true);
     try {
       const dataFinal = format(hoje, 'yyyy-MM-dd');
       const { data, error } = await supabase.functions.invoke('consultar-indices', {
-        body: { dataInicial: dataVencimento, dataFinal, tipo: tipoCorrecao },
+        body: { dataInicial: dataBase, dataFinal, tipo: tipoCorrecao },
       });
       if (error) throw error;
       if (data?.taxaAcumulada !== undefined) {
         setTaxaAcumulada(data.taxaAcumulada);
+        if (data.periodo) {
+          setPeriodoConsultado(`${data.periodo.de} a ${data.periodo.ate}`);
+        }
       }
     } catch (err: any) {
       console.error('Erro ao buscar taxa:', err);
@@ -95,13 +107,13 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     } finally {
       setLoadingTaxa(false);
     }
-  }, [dataVencimento, tipoCorrecao]);
+  }, [dataBase, tipoCorrecao]);
 
   useEffect(() => {
-    if (open && dataVencimento) {
+    if (open && dataBase) {
       fetchTaxa();
     }
-  }, [open, tipoCorrecao, dataVencimento, fetchTaxa]);
+  }, [open, tipoCorrecao, dataBase, fetchTaxa]);
 
   const gerarPDF = () => {
     const doc = new jsPDF();
@@ -130,8 +142,8 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
       doc.text(`Contratos: Todos (${contratos.length})`, 14, y); y += 5;
     }
 
-    if (dataVencimento) {
-      doc.text(`Data de Vencimento: ${new Date(dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}`, 14, y); y += 5;
+    if (dataBase) {
+      doc.text(`Data Base: ${new Date(dataBase + 'T00:00:00').toLocaleDateString('pt-BR')}`, 14, y); y += 5;
       doc.text(`Dias em Atraso: ${diasAtraso}`, 14, y); y += 5;
       doc.text(`Meses em Atraso: ${mesesAtraso}`, 14, y); y += 5;
     }
@@ -240,13 +252,29 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
               <p className="font-semibold text-lg">{fmtBRL(valorOriginal)}</p>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Vencimento / Atraso</Label>
-              <p className="font-medium">
-                {dataVencimento ? new Date(dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'}
-                {diasAtraso > 0 && <Badge variant="destructive" className="ml-2 text-xs">{diasAtraso} dias</Badge>}
-              </p>
+              <Label className="text-xs text-muted-foreground">Data Base (referência)</Label>
+              <Input
+                type="date"
+                value={dataBase}
+                onChange={(e) => setDataBase(e.target.value)}
+                className="w-full"
+              />
             </div>
           </div>
+
+          {dataBase && (
+            <div className="flex items-center gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Atraso: </span>
+                <Badge variant="destructive" className="text-xs">{diasAtraso} dias ({mesesAtraso} meses)</Badge>
+              </div>
+              {periodoConsultado && (
+                <div className="text-muted-foreground text-xs">
+                  Período consultado: {periodoConsultado}
+                </div>
+              )}
+            </div>
+          )}
 
           <Separator />
 
