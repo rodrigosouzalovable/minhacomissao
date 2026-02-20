@@ -455,7 +455,7 @@ export default function Acordos() {
     });
   };
   const filteredAcordos = acordos.filter(acordo => {
-    const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) || acordo.cliente_cpf && acordo.cliente_cpf.includes(search);
+    const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) || (acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
