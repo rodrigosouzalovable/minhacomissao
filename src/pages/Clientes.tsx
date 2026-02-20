@@ -60,8 +60,7 @@ export default function Clientes() {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
   const { user } = useAuth();
-  const [nome, setNome] = useState('');
-  const [cpf, setCpf] = useState('');
+  const [busca, setBusca] = useState('');
   const [telefone, setTelefone] = useState('');
   const [credor, setCredor] = useState('todos');
   const [estagio, setEstagio] = useState('todos');
@@ -173,7 +172,7 @@ export default function Clientes() {
   const paginatedResults = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleSearch = async () => {
-    if (!nome.trim() && !cpf.trim() && !telefone.trim() && credor === 'todos' && estagio === 'todos') {
+    if (!busca.trim() && !telefone.trim() && credor === 'todos' && estagio === 'todos') {
       toast.error('Preencha ao menos um filtro para pesquisar.');
       return;
     }
@@ -188,8 +187,14 @@ export default function Clientes() {
       .eq('ativo', true)
       .order('criado_em', { ascending: false });
 
-    if (nome.trim()) query = query.ilike('nome', `%${nome.trim()}%`);
-    if (cpf.trim()) query = query.ilike('cpf', `%${cpf.trim().replace(/\D/g, '')}%`);
+    if (busca.trim()) {
+      const termLimpo = busca.trim().replace(/\D/g, '');
+      if (termLimpo.length > 0) {
+        query = query.or(`nome.ilike.%${busca.trim()}%,cpf.ilike.%${termLimpo}%`);
+      } else {
+        query = query.ilike('nome', `%${busca.trim()}%`);
+      }
+    }
     if (telefone.trim()) query = query.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
     if (credor !== 'todos') query = query.eq('credor', credor);
     if (estagio !== 'todos') query = query.eq('estagio', estagio);
@@ -209,8 +214,7 @@ export default function Clientes() {
   };
 
   const handleClear = () => {
-    setNome('');
-    setCpf('');
+    setBusca('');
     setTelefone('');
     setCredor('todos');
     setEstagio('todos');
@@ -295,12 +299,8 @@ export default function Clientes() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Nome</label>
-                <Input placeholder="Nome do cliente" value={nome} onChange={(e) => setNome(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">CPF/CNPJ</label>
-                <Input placeholder="CPF ou CNPJ" value={cpf} onChange={(e) => setCpf(e.target.value)} />
+                <label className="text-sm font-medium mb-1 block">Nome ou CPF/CNPJ</label>
+                <Input placeholder="Nome ou CPF/CNPJ" value={busca} onChange={(e) => setBusca(e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Telefone</label>
