@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { differenceInDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
@@ -92,6 +92,12 @@ export default function DevedorDetalhe() {
   // Notificação Extrajudicial state
   const [notifDialogOpen, setNotifDialogOpen] = useState(false);
   const [notifContent, setNotifContent] = useState('');
+
+  // Termo de Acordo state
+  const [termoDialogOpen, setTermoDialogOpen] = useState(false);
+  const [termoInput, setTermoInput] = useState('');
+  const [termoContent, setTermoContent] = useState('');
+  const [termoGenerating, setTermoGenerating] = useState(false);
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -566,6 +572,117 @@ ${bodyContent}
     URL.revokeObjectURL(url);
   };
 
+  const handleGerarTermo = async () => {
+    if (!termoInput.trim()) {
+      toast.error('Descreva os termos do acordo antes de gerar.');
+      return;
+    }
+    setTermoGenerating(true);
+    try {
+      const contratosTexto = contratos.map(c =>
+        `- Contrato: ${c.contrato || 'S/N'} | Valor: R$ ${c.valor_atualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Vencimento: ${c.data_vencimento ? new Date(c.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'}`
+      ).join('\n');
+
+      const { data, error } = await supabase.functions.invoke('gerar-termo-acordo', {
+        body: {
+          descricaoAcordo: termoInput,
+          clienteNome: devedor?.nome,
+          clienteCpf: devedor?.cpf,
+          credor: devedor?.credor,
+          valorTotal: totalEmAtraso,
+          contratos: contratosTexto,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      setTermoContent(data.termo || '');
+      toast.success('Termo gerado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao gerar termo:', err);
+      toast.error('Erro ao gerar termo de acordo. Tente novamente.');
+    } finally {
+      setTermoGenerating(false);
+    }
+  };
+
+  const handleDownloadTermoWord = () => {
+    if (!termoContent) return;
+    const lines = termoContent.split('\n');
+    const bodyContent = lines.map(line => {
+      const trimmed = line.trim();
+      const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if (trimmed === '') return '<p style="margin:0;">&nbsp;</p>';
+      if (trimmed.match(/^CL[ÁA]USULA/i)) return `<p style="margin:12pt 0 4pt 0;"><b>${escaped}</b></p>`;
+      if (trimmed === 'TERMO DE ACORDO EXTRAJUDICIAL') return `<p align="center" style="margin:12pt 0;"><b><u>${escaped}</u></b></p>`;
+      if (trimmed.startsWith('____')) return `<p style="margin:24pt 0 0 0;">${escaped}</p>`;
+      return `<p style="margin:4pt 0;">${escaped}</p>`;
+    }).join('\n');
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<meta name="ProgId" content="Word.Document">
+<meta name="Generator" content="Microsoft Word 15">
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>
+@page Section1 { size: 21cm 29.7cm; margin: 2.5cm; }
+div.Section1 { page: Section1; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; text-align: justify; line-height: 1.5; color: #000000; }
+p { margin: 4pt 0; }
+</style>
+</head>
+<body>
+<div class="Section1">
+${bodyContent}
+</div>
+</body>
+</html>`;
+
+    const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `Termo-Acordo-${devedor?.nome || 'documento'}.doc`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadTermoPDF = () => {
+    if (!termoContent) return;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    const marginLeft = 20;
+    const marginRight = 20;
+    const contentWidth = pageWidth - marginLeft - marginRight;
+    const topMargin = 20;
+    const bottomMargin = 20;
+    const lineHeight = 6;
+
+    const lines = termoContent.split('\n');
+    let y = topMargin;
+
+    for (const rawLine of lines) {
+      const isBold = rawLine.trim().match(/^CL[ÁA]USULA/i) || rawLine.trim() === 'TERMO DE ACORDO EXTRAJUDICIAL';
+      doc.setFontSize(isBold ? 12 : 11);
+      doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+
+      const wrapped = doc.splitTextToSize(rawLine || ' ', contentWidth);
+      for (const wLine of wrapped) {
+        if (y > pageHeight - bottomMargin) {
+          doc.addPage();
+          y = topMargin;
+        }
+        doc.text(wLine, marginLeft, y);
+        y += lineHeight;
+      }
+    }
+
+    doc.save(`Termo-Acordo-${devedor?.nome || 'documento'}.pdf`);
+  };
+
   const getDiasAtraso = (dataVencimento: string | null) => {
     if (!dataVencimento) return null;
     const days = differenceInDays(new Date(), new Date(dataVencimento + 'T00:00:00'));
@@ -608,6 +725,9 @@ ${bodyContent}
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleOpenNotificacao}>
                   <FileText className="h-4 w-4 mr-1" /> Notificação Extrajudicial
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { setTermoContent(''); setTermoInput(''); setTermoDialogOpen(true); }}>
+                  <FileText className="h-4 w-4 mr-1" /> Termo de Acordo
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => navigate('/clientes')}>
                   <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
@@ -679,6 +799,61 @@ ${bodyContent}
               <Button onClick={handleDownloadNotifPDF}>
                 <Download className="h-4 w-4 mr-1" /> Baixar PDF
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Termo de Acordo Dialog */}
+        <Dialog open={termoDialogOpen} onOpenChange={setTermoDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" /> Termo de Acordo
+              </DialogTitle>
+              <DialogDescription>
+                Descreva os termos do acordo feito com o cliente e clique em "GERAR" para criar o documento.
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 min-h-0 space-y-4">
+              {!termoContent ? (
+                <div className="space-y-4 p-1">
+                  <div className="space-y-2">
+                    <Label>Descreva o acordo feito com o cliente</Label>
+                    <Textarea
+                      value={termoInput}
+                      onChange={(e) => setTermoInput(e.target.value)}
+                      placeholder="Ex: O cliente concordou em pagar R$ 5.000,00 em 10 parcelas de R$ 500,00, com primeira parcela em 15/03/2026. Foi concedido desconto de 20% sobre juros..."
+                      className="min-h-[200px]"
+                    />
+                  </div>
+                  <Button onClick={handleGerarTermo} disabled={termoGenerating || !termoInput.trim()} className="w-full">
+                    {termoGenerating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando termo...</> : 'GERAR'}
+                  </Button>
+                </div>
+              ) : (
+                <div className="p-1">
+                  <Textarea
+                    value={termoContent}
+                    onChange={(e) => setTermoContent(e.target.value)}
+                    className="min-h-[400px] font-mono text-sm"
+                  />
+                </div>
+              )}
+            </ScrollArea>
+            <DialogFooter>
+              {termoContent ? (
+                <>
+                  <Button variant="outline" onClick={() => setTermoContent('')}>Voltar</Button>
+                  <Button variant="outline" onClick={handleDownloadTermoWord}>
+                    <Download className="h-4 w-4 mr-1" /> Baixar Word
+                  </Button>
+                  <Button onClick={handleDownloadTermoPDF}>
+                    <Download className="h-4 w-4 mr-1" /> Baixar PDF
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" onClick={() => setTermoDialogOpen(false)}>Fechar</Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
