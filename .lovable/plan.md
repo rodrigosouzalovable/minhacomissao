@@ -1,30 +1,26 @@
 
 
-## Adicionar busca por CPF na pagina Acordos da Equipe
+## Busca por CPF com ou sem formatacao
 
-### Situacao atual
+### Problema
 
-- **Meus Acordos (`Acordos.tsx`)**: Ja busca por nome E CPF. Nenhuma alteracao necessaria.
-- **Acordos da Equipe (`EquipeAcordos.tsx`)**: Busca apenas por nome do cliente e nome do funcionario. Falta o CPF.
+Atualmente a busca por CPF compara o texto digitado diretamente com o valor armazenado. Se o usuario digitar "12345678901" mas o CPF estiver salvo como "123.456.789-01" (ou vice-versa), a busca nao encontra.
 
-### Alteracao
+### Solucao
 
-**Arquivo: `src/pages/EquipeAcordos.tsx`** (linhas 384-387)
+Normalizar ambos os lados (remover pontos e tracos) antes de comparar. Alteracao em dois arquivos:
 
-Adicionar `acordo.cliente_cpf` na logica de filtro de busca:
+**1. `src/pages/EquipeAcordos.tsx`** (linha 387)
 
 ```typescript
 // De:
-const matchesSearch = 
-  acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
-  acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase());
+(acordo.cliente_cpf && acordo.cliente_cpf.includes(search));
 
 // Para:
-const matchesSearch = 
-  acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
-  acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase()) ||
-  (acordo.cliente_cpf && acordo.cliente_cpf.includes(search));
+(acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
 ```
 
-Alteracao simples em uma unica linha, sem impacto em outras funcionalidades.
+**2. `src/pages/Acordos.tsx`** - mesma alteracao no filtro de busca por CPF, normalizando com `.replace(/\D/g, '')` em ambos os lados da comparacao.
+
+Isso permite buscar por "123.456.789-01", "12345678901", ou ate parcial como "123.456".
 
