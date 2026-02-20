@@ -401,17 +401,173 @@ Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
     doc.save(`Notificacao-Extrajudicial-${devedor.nome}.pdf`);
   };
 
-  const handleDownloadNotifWord = () => {
-    const boldKeys = ['NOTIFICAÇÃO EXTRAJUDICIAL', 'EXIGÊNCIA', 'CONSEQUÊNCIAS DO NÃO PAGAMENTO', 'Assunto:'];
-    const htmlLines = notifContent.split('\n').map(line => {
-      const isBold = boldKeys.some(s => line.trim().startsWith(s));
+  const getLogoBase64 = (): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve('');
+      img.src = logoSouzaRibeiro;
+    });
+  };
+
+  const handleDownloadNotifWord = async () => {
+    const logoBase64 = await getLogoBase64();
+    const lines = notifContent.split('\n');
+
+    const formatLine = (line: string): string => {
+      const trimmed = line.trim();
       const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return isBold ? `<b>${escaped}</b><br/>` : `${escaped}<br/>`;
-    }).join('');
+
+      // Separador
+      if (trimmed.startsWith('______')) {
+        return '<hr style="border:none;border-top:1px solid #000;margin:12pt 0;" />';
+      }
+
+      // Título centralizado e sublinhado
+      if (trimmed === 'NOTIFICAÇÃO EXTRAJUDICIAL') {
+        return `<p align="center" style="margin:12pt 0;"><b><u>${escaped}</u></b></p>`;
+      }
+
+      // Assunto em negrito
+      if (trimmed.startsWith('Assunto:')) {
+        return `<p style="margin:6pt 0;"><b>${escaped}</b></p>`;
+      }
+
+      // EXIGÊNCIA sublinhado
+      if (trimmed === 'EXIGÊNCIA') {
+        return `<p style="margin:12pt 0;"><b><u>${escaped}</u></b></p>`;
+      }
+
+      // CONSEQUÊNCIAS em negrito
+      if (trimmed === 'CONSEQUÊNCIAS DO NÃO PAGAMENTO') {
+        return `<p style="margin:12pt 0;"><b>${escaped}</b></p>`;
+      }
+
+      // Bullets com quadrado
+      if (trimmed.startsWith('•')) {
+        const bulletText = escaped.replace(/^•\s*/, '');
+        return `<table border="0" cellspacing="0" cellpadding="0" style="margin:2pt 0 2pt 36pt;"><tr><td valign="top" style="width:18pt;font-size:11pt;">□</td><td style="font-size:11pt;">${bulletText}</td></tr></table>`;
+      }
+
+      // Credor (primeira linha com dados completos - bold até a vírgula do tipo jurídico)
+      if (trimmed.match(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ\s\-\|]+\s*-\s*[A-ZÁÉÍÓÚÂÊÔÃÕÇ\s]+LTDA/i)) {
+        const parts = escaped.match(/^(.+?LTDA\.?)(,.*)$/i);
+        if (parts) {
+          return `<p style="margin:6pt 0;"><b>${parts[1]}</b>${parts[2]}</p>`;
+        }
+        return `<p style="margin:6pt 0;"><b>${escaped}</b></p>`;
+      }
+
+      // "À" destinatário
+      if (trimmed === 'À') {
+        return `<p style="margin:12pt 0 0 0;"><b>${escaped}</b></p>`;
+      }
+
+      // Nome do cliente (linha após "À")
+      if (trimmed.match(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ\s]+LTDA/i) && !trimmed.includes('pessoa jurídica')) {
+        return `<p style="margin:2pt 0;"><b>${escaped}</b></p>`;
+      }
+
+      // "E aos sócios:"
+      if (trimmed.startsWith('E aos sócios:')) {
+        return `<p style="margin:6pt 0;"><b>${escaped}</b></p>`;
+      }
+
+      // Linha vazia
+      if (trimmed === '') {
+        return '<p style="margin:0;">&nbsp;</p>';
+      }
+
+      // Aplicar negrito inline em trechos específicos
+      let processed = escaped;
+      // IMPRORROGÁVEL de 48 (quarenta e oito) horas
+      processed = processed.replace(/(IMPRORROGÁVEL de 48 \(quarenta e oito\) horas)/g, '<b>$1</b>');
+      // "sem novo aviso"
+      processed = processed.replace(/(sem novo aviso)/g, '<b>$1</b>');
+      // "formal e definitivo"
+      processed = processed.replace(/(formal e definitivo)/g, '<b>$1</b>');
+
+      // Assinatura p.p.
+      if (trimmed.startsWith('p.p.')) {
+        return `<p style="margin:2pt 0;"><b>${escaped}</b></p>`;
+      }
+      if (trimmed.startsWith('Rodrigo Ribeiro')) {
+        return `<p style="margin:2pt 0;"><b>${escaped}</b></p>`;
+      }
+
+      // Data (Goiânia-GO,)
+      if (trimmed.startsWith('Goiânia-GO,')) {
+        return `<p style="margin:24pt 0 6pt 0;">${escaped}</p>`;
+      }
+
+      // Linha de assinatura ____
+      if (trimmed.startsWith('____') && !trimmed.startsWith('________________________________________')) {
+        return `<p style="margin:36pt 0 0 0;">${escaped}</p>`;
+      }
+
+      return `<p style="margin:4pt 0;">${processed}</p>`;
+    };
+
+    const bodyContent = lines.map(formatLine).join('\n');
 
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:11pt;line-height:1.5;margin:60px;}</style></head>
-<body>${htmlLines}</body></html>`;
+<head>
+<meta charset="utf-8">
+<meta name="ProgId" content="Word.Document">
+<meta name="Generator" content="Microsoft Word 15">
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>
+@page Section1 {
+  size: 21cm 29.7cm;
+  margin: 2.5cm 2.5cm 3cm 2.5cm;
+  mso-header-margin: 1cm;
+  mso-footer-margin: 1cm;
+  mso-header: h1;
+  mso-footer: f1;
+}
+div.Section1 { page: Section1; }
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11pt;
+  text-align: justify;
+  line-height: 1.5;
+  color: #000000;
+}
+p { margin: 4pt 0; }
+hr { border: none; border-top: 1px solid #000; margin: 12pt 0; }
+table { border-collapse: collapse; }
+</style>
+</head>
+<body>
+<div class="Section1">
+
+<div style="mso-element:header" id="h1">
+<p align="center" style="margin:0;padding:0;">
+${logoBase64 ? `<img src="${logoBase64}" width="200" style="display:block;margin:0 auto;" />` : ''}
+</p>
+<p style="margin:0;">&nbsp;</p>
+</div>
+
+${bodyContent}
+
+<div style="mso-element:footer" id="f1">
+<hr style="border:none;border-top:1px solid #000;margin:6pt 0;" />
+<p align="center" style="font-size:9pt;margin:2pt 0;color:#333;">Rua 24, nº 208, Salas 01 e 02 – Jardim Goiás – Goiânia-GO – CEP: 74810-130</p>
+<p align="center" style="font-size:9pt;margin:2pt 0;color:#333;">Telefone/WhatsApp: (62) 99679-9697 / (62) 99167-2674</p>
+<p align="center" style="font-size:9pt;margin:2pt 0;color:#333;">contato@souzaeribeiro.com.br</p>
+</div>
+
+</div>
+</body>
+</html>`;
 
     const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
