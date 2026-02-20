@@ -1,31 +1,30 @@
 
 
-## Mostrar nome do funcionario na mensagem de CPF duplicado
+## Adicionar busca por CPF na pagina Acordos da Equipe
 
-### O que sera feito
+### Situacao atual
 
-Quando um funcionario tenta cadastrar um acordo com um CPF que ja possui acordo ativo, a mensagem de erro passara a informar o nome do funcionario que ja tem o acordo lancado. Exemplo: "Este CPF ja possui acordo lancado por Joao Silva."
+- **Meus Acordos (`Acordos.tsx`)**: Ja busca por nome E CPF. Nenhuma alteracao necessaria.
+- **Acordos da Equipe (`EquipeAcordos.tsx`)**: Busca apenas por nome do cliente e nome do funcionario. Falta o CPF.
 
-### Alteracoes
+### Alteracao
 
-**1. Migracao SQL - Atualizar a funcao `acordos_block_duplicate_cpf`**
+**Arquivo: `src/pages/EquipeAcordos.tsx`** (linhas 384-387)
 
-Modificar o trigger para buscar o nome do funcionario (da tabela `profiles`) que possui o acordo existente com aquele CPF, e incluir na mensagem de erro:
+Adicionar `acordo.cliente_cpf` na logica de filtro de busca:
 
-```sql
--- Buscar o nome do funcionario do acordo existente
-SELECT p.nome INTO v_nome_funcionario
-FROM acordos a
-JOIN profiles p ON p.id = a.user_id
-WHERE cpf_normalize(a.cliente_cpf) = cpf_normalize(NEW.cliente_cpf)
-AND a.id IS DISTINCT FROM NEW.id
-ORDER BY a.criado_em DESC
-LIMIT 1;
+```typescript
+// De:
+const matchesSearch = 
+  acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
+  acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase());
 
-RAISE EXCEPTION 'Este CPF já possui acordo lançado por %.', v_nome_funcionario;
+// Para:
+const matchesSearch = 
+  acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
+  acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase()) ||
+  (acordo.cliente_cpf && acordo.cliente_cpf.includes(search));
 ```
 
-**2. `src/pages/NovoAcordo.tsx` - Exibir a mensagem do backend**
-
-No bloco `catch` do `handleSubmit`, verificar se o erro vem do trigger (mensagem contendo "Este CPF já possui acordo") e exibir a mensagem exata retornada pelo banco em vez da mensagem generica "Erro ao criar acordo / Tente novamente mais tarde."
+Alteracao simples em uma unica linha, sem impacto em outras funcionalidades.
 
