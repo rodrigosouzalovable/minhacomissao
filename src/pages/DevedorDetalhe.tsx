@@ -413,7 +413,7 @@ Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
   };
 
   const handleDownloadNotifWord = async () => {
-    const logoBase64 = await getLogoBase64();
+    // Logo removido do Word conforme modelo
     const lines = notifContent.split('\n');
 
     const formatLine = (line: string): string => {
@@ -448,7 +448,7 @@ Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
       // Bullets com quadrado
       if (trimmed.startsWith('•')) {
         const bulletText = escaped.replace(/^•\s*/, '');
-        return `<table border="0" cellspacing="0" cellpadding="0" style="margin:2pt 0 2pt 36pt;"><tr><td valign="top" style="width:18pt;font-size:11pt;">□</td><td style="font-size:11pt;">${bulletText}</td></tr></table>`;
+        return `<table border="0" cellspacing="0" cellpadding="0" style="margin:8pt 0 8pt 36pt;"><tr><td valign="top" style="width:18pt;font-size:11pt;">□</td><td style="font-size:11pt;">${bulletText}</td></tr></table>`;
       }
 
       // Credor (primeira linha com dados completos - bold até a vírgula do tipo jurídico)
@@ -544,19 +544,13 @@ table { border-collapse: collapse; }
 <div class="Section1">
 
 <div style="mso-element:header" id="h1">
-<p align="center" style="margin:0;padding:0;">
-${logoBase64 ? `<img src="${logoBase64}" width="200" style="display:block;margin:0 auto;" />` : ''}
-</p>
 <p style="margin:0;">&nbsp;</p>
 </div>
 
 ${bodyContent}
 
 <div style="mso-element:footer" id="f1">
-<hr style="border:none;border-top:1px solid #000;margin:6pt 0;" />
-<p align="center" style="font-size:9pt;margin:2pt 0;color:#333;">Rua 24, nº 208, Salas 01 e 02 – Jardim Goiás – Goiânia-GO – CEP: 74810-130</p>
-<p align="center" style="font-size:9pt;margin:2pt 0;color:#333;">Telefone/WhatsApp: (62) 99679-9697 / (62) 99167-2674</p>
-<p align="center" style="font-size:9pt;margin:2pt 0;color:#333;">contato@souzaeribeiro.com.br</p>
+<p style="margin:0;">&nbsp;</p>
 </div>
 
 </div>
