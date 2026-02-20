@@ -20,6 +20,7 @@ import { differenceInDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
 import { CalculadoraDebitoDialog } from '@/components/devedor/CalculadoraDebitoDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -240,7 +241,6 @@ export default function DevedorDetalhe() {
   const gerarTextoNotificacao = () => {
     const dataAtual = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     const totalOriginal = contratos.reduce((acc, c) => acc + c.valor_original, 0);
-    const totalAtualizado = contratos.reduce((acc, c) => acc + c.valor_atualizado, 0);
     const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const listaContratos = contratos.map((c, i) => {
@@ -248,41 +248,57 @@ export default function DevedorDetalhe() {
       return `${i + 1}. Contrato: ${c.contrato || 'S/N'} | Vencimento: ${venc} | Valor Original: ${fmtBRL(c.valor_original)} | Valor Atualizado: ${fmtBRL(c.valor_atualizado)}`;
     }).join('\n');
 
-    return `${devedor.credor || 'CREDOR NÃO INFORMADO'}
+    return `SOUZA & RIBEIRO
+ADVOCACIA E COBRANÇAS
+
+${devedor.credor || 'CREDOR NÃO INFORMADO'}
 
 NOTIFICAÇÃO EXTRAJUDICIAL
-Assunto: Cobrança de dívida vencida - Intimação para pagamento
+Assunto: Cobrança de dívida vencida – Intimação para pagamento
 
 À
 ${devedor.nome}
 CPF/CNPJ: ${devedor.cpf}
 
-Notificamos Vossa Senhoria acerca da existência de ${contratos.length} título(s) vencido(s) e não pago(s), conforme descritos abaixo, decorrentes de relação contratual firmada com ${devedor.credor || 'o credor'}, cujo valor total originário de: ${fmtBRL(totalOriginal)}, atualizado monetariamente perfaz a quantia de ${fmtBRL(totalAtualizado)}.
+Prezado(a) Cliente,
+
+Notificamos Vossa Senhoria acerca da existência de ${contratos.length} título(s) vencido(s) e não quitados, referentes às mercadorias/serviços contratados, os quais somam o valor total originário de: ${fmtBRL(totalOriginal)}, sendo que, para efeito de negociação, esse valor será corrigido monetariamente, pela Taxa Selic diária, mais juros de mora de 1% (um por cento) ao mês e multa de 2% (dois por cento).
 
 TÍTULOS EM ABERTO:
 ${listaContratos}
 
 EXIGÊNCIA
-Fica concedido o prazo IMPRORROGÁVEL de 48 (quarenta e oito) horas, contados do recebimento desta notificação, para que Vossa Senhoria efetue o pagamento integral do débito acima descrito, sob pena de adoção das medidas judiciais e extrajudiciais cabíveis.
+Fica concedido o prazo IMPRORROGÁVEL de 48 (quarenta e oito) horas, a contar do recebimento desta, para pagamento integral do débito, acrescido de:
+- Juros de mora de 1% ao mês;
+- Multa contratual de 2%;
+- Correção monetária, pela Taxa Selic diária;
+- Honorários e encargos de cobrança.
+
+Pagamento via PIX (CNPJ 05.950.717/0001-18) ou depósito identificado.
 
 CONSEQUÊNCIAS DO NÃO PAGAMENTO
-Em caso de não pagamento no prazo estipulado, serão adotadas as seguintes providências:
+O não cumprimento no prazo estipulado ensejará, sem novo aviso:
+- Protesto dos títulos em cartório;
+- Inclusão nos órgãos de proteção ao crédito;
+- Ajuizamento de Ação de Execução, com penhora de bens;
+- Pedido de desconsideração da personalidade jurídica, para atingir bens dos sócios;
+- Bloqueio de valores via SISBAJUD;
+- Cobrança de custas e honorários judiciais.
 
-• Protesto dos títulos em cartório competente;
-• Inclusão do nome nos órgãos de proteção ao crédito (SPC/SERASA);
-• Ajuizamento de Ação de Execução de Título Extrajudicial;
-• Bloqueio de valores em contas bancárias via sistema SISBAJUD;
-• Penhora de bens móveis e imóveis;
-• Demais medidas legais cabíveis.
+Esta notificação possui caráter formal e definitivo, constituindo Vossa Senhoria em mora.
 
-Ressaltamos que todas as despesas decorrentes das medidas acima serão acrescidas ao débito existente.
+Para tratativas imediatas de negociação do débito, contatar:
+Luiz Carlos: (62) 99679-9697 ou Rodrigo: (62) 99167-2674.
+contato@souzaeribeiro.com.br
 
-Colocamo-nos à disposição para negociação amigável do débito, desde que dentro do prazo acima estipulado.
+Goiânia, ${dataAtual}.
 
-${dataAtual}
+______________________________________________________________
+p.p. ${devedor.credor || 'CREDOR'}
+Rodrigo Ribeiro de Souza - Souza e Ribeiro Sociedade de Advogados.
 
-_______________________________
-${devedor.credor || 'CREDOR'}`;
+Rua 24, nº 208, Setor Marista, CEP: 74150-070, Goiânia-GO.
+Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
   };
 
   const handleOpenNotificacao = () => {
@@ -292,18 +308,52 @@ ${devedor.credor || 'CREDOR'}`;
 
   const handleDownloadNotifPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(11);
-    const lines = doc.splitTextToSize(notifContent, 170);
-    let y = 20;
+    const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
-    for (const line of lines) {
-      if (y > pageHeight - 20) {
-        doc.addPage();
-        y = 20;
+    const marginLeft = 20;
+    const marginRight = 20;
+    const contentWidth = pageWidth - marginLeft - marginRight;
+    const topMargin = 45; // space for logo
+    const bottomMargin = 35; // space for footer
+    const lineHeight = 6;
+
+    const addHeaderAndFooter = () => {
+      // Logo at top
+      try {
+        doc.addImage(logoSouzaRibeiro, 'PNG', marginLeft, 10, 40, 25);
+      } catch (e) {
+        // fallback if logo fails
       }
-      doc.text(line, 20, y);
-      y += 6;
+      // Footer
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Rua 24, nº 208, Setor Marista, CEP: 74150-070, Goiânia-GO.', pageWidth / 2, pageHeight - 15, { align: 'center' });
+      doc.text('Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br', pageWidth / 2, pageHeight - 10, { align: 'center' });
+    };
+
+    addHeaderAndFooter();
+
+    const contentLines = notifContent.split('\n');
+    let y = topMargin;
+    const boldSections = ['NOTIFICAÇÃO EXTRAJUDICIAL', 'EXIGÊNCIA', 'CONSEQUÊNCIAS DO NÃO PAGAMENTO', 'TÍTULOS EM ABERTO:'];
+
+    for (const rawLine of contentLines) {
+      const isBold = boldSections.some(s => rawLine.trim().startsWith(s));
+      doc.setFontSize(isBold ? 12 : 11);
+      doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+
+      const wrapped = doc.splitTextToSize(rawLine || ' ', contentWidth);
+      for (const wLine of wrapped) {
+        if (y > pageHeight - bottomMargin) {
+          doc.addPage();
+          addHeaderAndFooter();
+          y = topMargin;
+        }
+        doc.text(wLine, marginLeft, y);
+        y += lineHeight;
+      }
     }
+
     doc.save(`Notificacao-Extrajudicial-${devedor.nome}.pdf`);
   };
 
