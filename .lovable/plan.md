@@ -1,22 +1,60 @@
 
 
-## Remover logomarca do PDF da Notificacao Extrajudicial
+## Ajustar formatacao do Word para ficar identico ao modelo
 
 ### Resumo
 
-Remover a imagem do logo "Souza & Ribeiro" do cabecalho do PDF gerado pela funcao `handleDownloadNotifPDF`, e ajustar a margem superior para aproveitar o espaco que era ocupado pelo logo.
+O documento Word modelo nao possui logo no cabecalho nem rodape repetido em todas as paginas. O conteudo comeca diretamente com o texto do credor. Ajustar a funcao `handleDownloadNotifWord` para remover esses elementos e ajustar espaçamento dos bullets.
 
 ### Alteracoes em `src/pages/DevedorDetalhe.tsx`
 
-**1. Remover o bloco de insercao do logo (linhas 365-370)**
+**1. Remover logo do cabecalho Word (linhas 546-551)**
 
-Dentro da funcao `addHeaderAndFooter`, remover o bloco `try/catch` que adiciona a imagem com `doc.addImage(logoSouzaRibeiro, ...)`.
+Remover o bloco `<div style="mso-element:header">` que insere o logo no topo, ou deixar o header vazio. O documento deve comecar direto com o texto do credor.
 
-**2. Reduzir margem superior (linha 360)**
+Substituir:
+```html
+<div style="mso-element:header" id="h1">
+<p align="center" style="margin:0;padding:0;">
+${logoBase64 ? `<img src="${logoBase64}" ...>` : ''}
+</p>
+<p style="margin:0;">&nbsp;</p>
+</div>
+```
+Por um header vazio:
+```html
+<div style="mso-element:header" id="h1">
+<p style="margin:0;">&nbsp;</p>
+</div>
+```
 
-Alterar `topMargin` de `45` para `20`, ja que nao ha mais logo no topo e o texto pode comecar mais acima.
+**2. Remover rodape repetido (linhas 555-560)**
 
-**3. (Opcional) Remover import do logo**
+Remover o bloco `<div style="mso-element:footer">` com endereco, telefone e email. O documento modelo nao tem rodape em todas as paginas.
 
-Se o logo nao for mais usado em nenhum outro lugar do arquivo, remover o `import logoSouzaRibeiro`. Porem, o logo ainda e usado na funcao `handleDownloadNotifWord`, entao o import sera mantido.
+Substituir por footer vazio:
+```html
+<div style="mso-element:footer" id="f1">
+<p style="margin:0;">&nbsp;</p>
+</div>
+```
+
+**3. Aumentar espacamento entre bullets (linha 451)**
+
+Ajustar o margin dos bullets de `2pt` para `8pt` para dar mais espaco entre cada item, como no modelo:
+
+```html
+<table ... style="margin:8pt 0 8pt 36pt;">
+```
+
+**4. Remover chamada `getLogoBase64` (linha 416)**
+
+Como o logo nao sera mais usado no Word, remover a chamada `await getLogoBase64()` no inicio da funcao (a funcao `getLogoBase64` em si sera mantida caso seja usada em outro lugar).
+
+### Secao tecnica
+
+- Arquivo modificado: `src/pages/DevedorDetalhe.tsx`
+- Sem novas dependencias
+- A funcao `getLogoBase64` sera mantida no codigo (pode ser util futuramente)
+- O texto editavel no textarea nao e afetado
 
