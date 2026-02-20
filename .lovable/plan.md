@@ -1,97 +1,109 @@
 
 
-## Botao de Notificacao Extrajudicial na Ficha do Cliente
+## Ajustar Notificacao Extrajudicial para ficar identica ao documento modelo
 
 ### Resumo
 
-Adicionar um botao "Notificacao Extrajudicial" no cabecalho da ficha do cliente. Ao clicar, abre um Dialog com o texto do modelo de notificacao ja preenchido com os dados do cliente (nome, CPF/CNPJ, contratos em aberto, valores, datas). O conteudo e editavel e pode ser baixado como PDF.
+O texto gerado atualmente nao segue fielmente o modelo do documento enviado. As alteracoes abaixo vao reescrever a funcao `gerarTextoNotificacao` e melhorar a geracao do PDF para que o conteudo e o layout fiquem identicos ao documento original.
+
+### Diferencas identificadas entre o atual e o modelo
+
+1. **Cabecalho**: O modelo tem "SOUZA & RIBEIRO - ADVOCACIA E COBRANÇAS" antes do nome do credor. Atualmente nao existe.
+2. **Dados do credor**: O modelo inclui dados completos do credor (tipo juridico, CNPJ, endereco). Atualmente so mostra o nome.
+3. **Dados do cliente**: O modelo inclui endereco e nomes dos socios. Atualmente so mostra nome e CPF.
+4. **Texto principal**: O modelo menciona "mercadorias que lhes foram vendidas" e detalha correcao pela "Taxa Selic diaria, mais juros de mora de 1% ao mes e multa de 2%". O texto atual e generico.
+5. **Secao EXIGENCIA**: O modelo detalha itens como juros, multa, correcao monetaria e honorarios em lista. Inclui dados de pagamento via PIX. Atualmente e um paragrafo unico.
+6. **Secao CONSEQUENCIAS**: O modelo inclui "Pedido de desconsideracao da personalidade juridica" e "Cobranca de custas e honorarios judiciais". Faltam no texto atual.
+7. **Texto de mora**: O modelo diz "Esta notificacao possui carater formal e definitivo, constituindo Vossas Senhorias em mora."
+8. **Contatos para negociacao**: O modelo inclui nomes e telefones especificos para contato.
+9. **Rodape**: O modelo tem assinatura com "p.p. [CREDOR]" e "Rodrigo Ribeiro de Souza - Souza e Ribeiro Sociedade de Advogados" e endereco/telefone/email do escritorio.
+10. **PDF com logo**: O modelo tem o logotipo Souza & Ribeiro no topo de cada pagina.
 
 ### Alteracoes em `src/pages/DevedorDetalhe.tsx`
 
-**1. Novos estados**
+**1. Reescrever `gerarTextoNotificacao` (linhas 240-286)**
 
-- `notifDialogOpen` - controle do Dialog
-- `notifContent` - texto editavel da notificacao
-
-**2. Funcao `gerarTextoNotificacao`**
-
-Monta o texto do modelo com base nos dados do cliente e contratos:
-
-- Nome do cliente (`devedor.nome`)
-- CPF/CNPJ (`devedor.cpf`)
-- Credor (`devedor.credor`)
-- Quantidade de contratos em aberto (`contratos.length`)
-- Valor total atualizado (soma dos `valor_atualizado`)
-- Data atual formatada
-- Listagem dos contratos com numero, vencimento, valor original e valor atualizado
-
-O modelo segue a estrutura do documento anexado:
+O novo texto seguira exatamente a estrutura do documento modelo:
 
 ```text
+SOUZA & RIBEIRO
+ADVOCACIA E COBRANÇAS
+
 [CREDOR]
 
-NOTIFICACAO EXTRAJUDICIAL
-Assunto: Cobranca de divida vencida - Intimacao para pagamento
+NOTIFICAÇÃO EXTRAJUDICIAL
+Assunto: Cobrança de dívida vencida – Intimação para pagamento
 
-A
+À
 [NOME DO CLIENTE]
 CPF/CNPJ: [CPF]
 
-Notificamos Vossa Senhoria acerca da existencia de [QTD] titulo(s) vencido(s)...
-valor total originario de: R$ [TOTAL]...
+Prezado(a) Cliente,
 
-EXIGENCIA
-Fica concedido o prazo IMPRORROGAVEL de 48 horas...
+Notificamos Vossa Senhoria acerca da existência de [QTD] título(s) vencido(s) e não quitados, referentes às mercadorias/serviços contratados, os quais somam o valor total originário de: R$ [TOTAL ORIGINAL], sendo que, para efeito de negociação, esse valor será corrigido monetariamente, pela Taxa Selic diária, mais juros de mora de 1% (um por cento) ao mês e multa de 2% (dois por cento).
 
-CONSEQUENCIAS DO NAO PAGAMENTO
-- Protesto dos titulos em cartorio
-- Inclusao nos orgaos de protecao ao credito
-- Ajuizamento de Acao de Execucao
-- Bloqueio de valores via SISBAJUD
+TÍTULOS EM ABERTO:
+[lista de contratos]
 
-[DATA ATUAL]
+EXIGÊNCIA
+Fica concedido o prazo IMPRORROGÁVEL de 48 (quarenta e oito) horas, a contar do recebimento desta, para pagamento integral do débito, acrescido de:
+- Juros de mora de 1% ao mês;
+- Multa contratual de 2%;
+- Correção monetária, pela Taxa Selic diária;
+- Honorários e encargos de cobrança.
+
+Pagamento via PIX (CNPJ 05.950.717/0001-18) ou depósito identificado.
+
+CONSEQUÊNCIAS DO NÃO PAGAMENTO
+O não cumprimento no prazo estipulado ensejará, sem novo aviso:
+- Protesto dos títulos em cartório;
+- Inclusão nos órgãos de proteção ao crédito;
+- Ajuizamento de Ação de Execução, com penhora de bens;
+- Pedido de desconsideração da personalidade jurídica, para atingir bens dos sócios;
+- Bloqueio de valores via SISBAJUD;
+- Cobrança de custas e honorários judiciais.
+
+Esta notificação possui caráter formal e definitivo, constituindo Vossa Senhoria em mora.
+
+Para tratativas imediatas de negociação do débito, contatar:
+Luiz Carlos: (62) 99679-9697 ou Rodrigo: (62) 99167-2674.
+contato@souzaeribeiro.com.br
+
+[CIDADE], [DATA].
+
+______________________________________________________________
+p.p. [CREDOR]
+Rodrigo Ribeiro de Souza - Souza e Ribeiro Sociedade de Advogados.
+
+Rua 24, nº 208, Setor Marista, CEP: 74150-070, Goiânia-GO.
+Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br
 ```
 
-**3. Botao no cabecalho**
+Os campos entre colchetes serao substituidos pelos dados reais do cliente (`devedor.nome`, `devedor.cpf`, `devedor.credor`, contratos, valores).
 
-Posicionado ao lado do botao "Voltar", com icone `FileText`:
+**2. Atualizar `handleDownloadNotifPDF` (linhas 293-308)**
 
-```
-[Notificacao Extrajudicial]  [<- Voltar]
-```
+Melhorar a geracao do PDF para incluir:
+- Logotipo Souza & Ribeiro no topo de cada pagina (usar `src/assets/logo-souza-ribeiro.png` convertido em base64)
+- Margem superior maior para acomodar o logo
+- Rodape com endereco e contato do escritorio em cada pagina
+- Formatacao com negrito para titulos das secoes (EXIGENCIA, CONSEQUENCIAS, etc.)
 
-Ao clicar, chama `gerarTextoNotificacao()`, preenche `notifContent` e abre o Dialog.
+Para incluir o logo no PDF, importar a imagem como modulo e usar `doc.addImage()`.
 
-**4. Dialog com editor e download**
+**3. Importar o logo**
 
-- Dialog largo (`max-w-4xl`) com scroll
-- Textarea editavel com o texto gerado
-- Botao "Baixar PDF" no footer
-- Usa a biblioteca `jspdf` (ja instalada) para gerar o PDF com o conteudo editado
-- O PDF e gerado com quebra de linha automatica e formatacao basica
-
-**5. Geracao do PDF**
-
-Usa `jsPDF` para criar o documento:
-
+Adicionar import do logo no topo do arquivo:
 ```typescript
-import jsPDF from 'jspdf';
-
-const handleDownloadPDF = () => {
-  const doc = new jsPDF();
-  const lines = doc.splitTextToSize(notifContent, 170);
-  doc.setFontSize(11);
-  // Adiciona texto com paginacao automatica
-  doc.text(lines, 20, 20);
-  doc.save(`Notificacao-Extrajudicial-${devedor.nome}.pdf`);
-};
+import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 ```
 
 ### Secao tecnica
 
 - Arquivo modificado: `src/pages/DevedorDetalhe.tsx`
 - Sem alteracoes no banco de dados
-- Usa `jspdf` ja existente nas dependencias
-- O texto e 100% editavel antes do download
-- O modelo e gerado dinamicamente com dados reais do cliente
+- O logo ja existe em `src/assets/logo-souza-ribeiro.png`
+- O texto continua 100% editavel no Dialog antes do download
+- A geracao do PDF usara `doc.addImage()` para o logo e `doc.setFont('helvetica', 'bold')` para titulos em negrito
+- Rodape repetido em todas as paginas do PDF
 
