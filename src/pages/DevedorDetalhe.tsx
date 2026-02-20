@@ -6,17 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import jsPDF from 'jspdf';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
 import { CalculadoraDebitoDialog } from '@/components/devedor/CalculadoraDebitoDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -84,6 +87,10 @@ export default function DevedorDetalhe() {
   const [editEventoDescricao, setEditEventoDescricao] = useState('');
   const [telefonesDialogOpen, setTelefonesDialogOpen] = useState(false);
   const [operadorNomes, setOperadorNomes] = useState<Record<string, string>>({});
+
+  // Notificação Extrajudicial state
+  const [notifDialogOpen, setNotifDialogOpen] = useState(false);
+  const [notifContent, setNotifContent] = useState('');
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -230,6 +237,76 @@ export default function DevedorDetalhe() {
   };
   const totalEmAtraso = contratos.reduce((acc, c) => acc + c.valor_atualizado, 0);
 
+  const gerarTextoNotificacao = () => {
+    const dataAtual = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    const totalOriginal = contratos.reduce((acc, c) => acc + c.valor_original, 0);
+    const totalAtualizado = contratos.reduce((acc, c) => acc + c.valor_atualizado, 0);
+    const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const listaContratos = contratos.map((c, i) => {
+      const venc = c.data_vencimento ? new Date(c.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/I';
+      return `${i + 1}. Contrato: ${c.contrato || 'S/N'} | Vencimento: ${venc} | Valor Original: ${fmtBRL(c.valor_original)} | Valor Atualizado: ${fmtBRL(c.valor_atualizado)}`;
+    }).join('\n');
+
+    return `${devedor.credor || 'CREDOR NÃO INFORMADO'}
+
+NOTIFICAÇÃO EXTRAJUDICIAL
+Assunto: Cobrança de dívida vencida - Intimação para pagamento
+
+À
+${devedor.nome}
+CPF/CNPJ: ${devedor.cpf}
+
+Notificamos Vossa Senhoria acerca da existência de ${contratos.length} título(s) vencido(s) e não pago(s), conforme descritos abaixo, decorrentes de relação contratual firmada com ${devedor.credor || 'o credor'}, cujo valor total originário de: ${fmtBRL(totalOriginal)}, atualizado monetariamente perfaz a quantia de ${fmtBRL(totalAtualizado)}.
+
+TÍTULOS EM ABERTO:
+${listaContratos}
+
+EXIGÊNCIA
+Fica concedido o prazo IMPRORROGÁVEL de 48 (quarenta e oito) horas, contados do recebimento desta notificação, para que Vossa Senhoria efetue o pagamento integral do débito acima descrito, sob pena de adoção das medidas judiciais e extrajudiciais cabíveis.
+
+CONSEQUÊNCIAS DO NÃO PAGAMENTO
+Em caso de não pagamento no prazo estipulado, serão adotadas as seguintes providências:
+
+• Protesto dos títulos em cartório competente;
+• Inclusão do nome nos órgãos de proteção ao crédito (SPC/SERASA);
+• Ajuizamento de Ação de Execução de Título Extrajudicial;
+• Bloqueio de valores em contas bancárias via sistema SISBAJUD;
+• Penhora de bens móveis e imóveis;
+• Demais medidas legais cabíveis.
+
+Ressaltamos que todas as despesas decorrentes das medidas acima serão acrescidas ao débito existente.
+
+Colocamo-nos à disposição para negociação amigável do débito, desde que dentro do prazo acima estipulado.
+
+${dataAtual}
+
+_______________________________
+${devedor.credor || 'CREDOR'}`;
+  };
+
+  const handleOpenNotificacao = () => {
+    setNotifContent(gerarTextoNotificacao());
+    setNotifDialogOpen(true);
+  };
+
+  const handleDownloadNotifPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(11);
+    const lines = doc.splitTextToSize(notifContent, 170);
+    let y = 20;
+    const pageHeight = doc.internal.pageSize.height;
+    for (const line of lines) {
+      if (y > pageHeight - 20) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, 20, y);
+      y += 6;
+    }
+    doc.save(`Notificacao-Extrajudicial-${devedor.nome}.pdf`);
+  };
+
   const getDiasAtraso = (dataVencimento: string | null) => {
     if (!dataVencimento) return null;
     const days = differenceInDays(new Date(), new Date(dataVencimento + 'T00:00:00'));
@@ -269,9 +346,14 @@ export default function DevedorDetalhe() {
                   </Badge>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate('/clientes')}>
-                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleOpenNotificacao}>
+                  <FileText className="h-4 w-4 mr-1" /> Notificação Extrajudicial
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate('/clientes')}>
+                  <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
               <div>
@@ -309,6 +391,33 @@ export default function DevedorDetalhe() {
               telefoneImportado={devedor.telefone}
               devedorId={devedor.id}
             />
+          </DialogContent>
+        </Dialog>
+
+        {/* Notificação Extrajudicial Dialog */}
+        <Dialog open={notifDialogOpen} onOpenChange={setNotifDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" /> Notificação Extrajudicial
+              </DialogTitle>
+              <DialogDescription>
+                Edite o conteúdo abaixo e clique em "Baixar PDF" para gerar o documento.
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 min-h-0">
+              <Textarea
+                value={notifContent}
+                onChange={(e) => setNotifContent(e.target.value)}
+                className="min-h-[400px] font-mono text-sm"
+              />
+            </ScrollArea>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNotifDialogOpen(false)}>Fechar</Button>
+              <Button onClick={handleDownloadNotifPDF}>
+                <Download className="h-4 w-4 mr-1" /> Baixar PDF
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
