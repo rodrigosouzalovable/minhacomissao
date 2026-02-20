@@ -455,7 +455,10 @@ export default function Acordos() {
     });
   };
   const filteredAcordos = acordos.filter(acordo => {
-    const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) || (acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
+    const searchLower = search.toLowerCase();
+    const searchDigits = search.replace(/\D/g, '');
+    const matchesSearch = acordo.cliente_nome.toLowerCase().includes(searchLower) || 
+      (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
