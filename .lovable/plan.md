@@ -1,103 +1,31 @@
 
 
-## Vincular Funcionarios a Credores e Controlar Visibilidade no Ranking
+## Mostrar nome do funcionario na mensagem de CPF duplicado
 
 ### O que sera feito
 
-Duas novas funcionalidades na pagina de Equipes (AdminEquipes):
+Quando um funcionario tenta cadastrar um acordo com um CPF que ja possui acordo ativo, a mensagem de erro passara a informar o nome do funcionario que ja tem o acordo lancado. Exemplo: "Este CPF ja possui acordo lancado por Joao Silva."
 
-1. **Vincular funcionarios a credores**: Atualmente cada funcionario so pode ter uma "empresa" vinculada. Vamos trocar a coluna `empresa` (text unico) por `credores` (array de textos) na tabela `user_permissions`, permitindo vincular um funcionario a multiplos credores (ex: "UME / NOVO MUNDO", "MUNDO DA MODA", "MONTREAL").
+### Alteracoes
 
-2. **Controlar visibilidade no ranking**: Adicionar uma coluna booleana `visivel_ranking` na tabela `user_permissions` (padrao `true`). Na pagina de Equipes, cada funcionario tera um checkbox/switch para marcar se aparece no ranking. O componente `RankingMensal` filtrara apenas os usuarios com essa flag ativa.
+**1. Migracao SQL - Atualizar a funcao `acordos_block_duplicate_cpf`**
 
-### Alteracoes no banco de dados
+Modificar o trigger para buscar o nome do funcionario (da tabela `profiles`) que possui o acordo existente com aquele CPF, e incluir na mensagem de erro:
 
-**Migracao SQL:**
-- Adicionar coluna `credores` (text array, default `ARRAY['ume_novo_mundo']`) na tabela `user_permissions`
-- Migrar dados existentes da coluna `empresa` para `credores` (convertendo o valor unico em array)
-- Remover a coluna `empresa`
-- Adicionar coluna `visivel_ranking` (boolean, default `true`) na tabela `user_permissions`
-- Atualizar a funcao `ranking_mensal` para filtrar apenas usuarios com `visivel_ranking = true`
-
-### Alteracoes nos arquivos
-
-**1. `src/components/EditPermissionsDialog.tsx`**
-- Trocar o Select unico de "Empresa vinculada" por uma lista de checkboxes para selecionar multiplos credores
-- Adicionar um Switch/Checkbox para "Visivel no Ranking"
-- Atualizar a mutacao para salvar `credores` (array) e `visivel_ranking` (boolean) em vez de `empresa` (text)
-
-**2. `src/pages/AdminEquipes.tsx`**
-- Na tabela de equipes, adicionar colunas "Credores" e "Ranking" para visualizacao rapida
-- A coluna "Ranking" mostra um icone/badge indicando se o funcionario aparece no ranking
-- A coluna "Credores" mostra badges com os credores vinculados
-
-**3. `src/components/RankingMensal.tsx`**
-- Atualizar a funcao `ranking_mensal` (SQL) para excluir usuarios com `visivel_ranking = false`
-
-**4. `src/hooks/useUserPermissions.tsx`**
-- Atualizar para retornar `credores` (array) em vez de `empresa` (text)
-
-### Detalhes tecnicos
-
-**Migracao SQL:**
 ```sql
--- Adicionar novas colunas
-ALTER TABLE user_permissions 
-  ADD COLUMN credores TEXT[] NOT NULL DEFAULT ARRAY['ume_novo_mundo'],
-  ADD COLUMN visivel_ranking BOOLEAN NOT NULL DEFAULT true;
+-- Buscar o nome do funcionario do acordo existente
+SELECT p.nome INTO v_nome_funcionario
+FROM acordos a
+JOIN profiles p ON p.id = a.user_id
+WHERE cpf_normalize(a.cliente_cpf) = cpf_normalize(NEW.cliente_cpf)
+AND a.id IS DISTINCT FROM NEW.id
+ORDER BY a.criado_em DESC
+LIMIT 1;
 
--- Migrar dados existentes
-UPDATE user_permissions SET credores = ARRAY[empresa];
-
--- Remover coluna antiga
-ALTER TABLE user_permissions DROP COLUMN empresa;
-
--- Atualizar funcao de ranking para respeitar flag
-CREATE OR REPLACE FUNCTION ranking_mensal(p_mes_ano TEXT DEFAULT NULL)
-RETURNS TABLE(user_id UUID, nome TEXT, total_recebido NUMERIC)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
-DECLARE
-  v_mes_ano TEXT;
-BEGIN
-  v_mes_ano := COALESCE(p_mes_ano, to_char(NOW() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM'));
-  RETURN QUERY
-  SELECT 
-    p.id AS user_id,
-    p.nome,
-    COALESCE(SUM(pg.valor_parcela), 0) AS total_recebido
-  FROM profiles p
-  LEFT JOIN acordos a ON a.user_id = p.id
-  LEFT JOIN pagamentos pg ON pg.acordo_id = a.id 
-    AND pg.status = 'pago'
-    AND pg.data_paga >= (v_mes_ano || '-01')::DATE
-    AND pg.data_paga < ((v_mes_ano || '-01')::DATE + INTERVAL '1 month')
-  WHERE NOT EXISTS (
-    SELECT 1 FROM user_permissions up 
-    WHERE up.user_id = p.id AND up.visivel_ranking = false
-  )
-  GROUP BY p.id, p.nome
-  ORDER BY total_recebido DESC;
-END;
-$$;
+RAISE EXCEPTION 'Este CPF já possui acordo lançado por %.', v_nome_funcionario;
 ```
 
-**EditPermissionsDialog** - Credores como checkboxes multiplos:
-```typescript
-const CREDORES = [
-  { value: 'ume_novo_mundo', label: 'UME / NOVO MUNDO' },
-  { value: 'mundo_da_moda', label: 'MUNDO DA MODA' },
-  { value: 'montreal', label: 'MONTREAL' },
-];
-// Estado: credores: string[], visivelRanking: boolean
-```
+**2. `src/pages/NovoAcordo.tsx` - Exibir a mensagem do backend**
 
-**useUserPermissions** - Retorno atualizado:
-```typescript
-return {
-  abasPermitidas: permissions?.abas_permitidas ?? null,
-  credores: permissions?.credores ?? null,
-  visivelRanking: permissions?.visivel_ranking ?? true,
-  isLoading,
-};
-```
+No bloco `catch` do `handleSubmit`, verificar se o erro vem do trigger (mensagem contendo "Este CPF já possui acordo") e exibir a mensagem exata retornada pelo banco em vez da mensagem generica "Erro ao criar acordo / Tente novamente mais tarde."
 
