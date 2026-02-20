@@ -1,56 +1,34 @@
 
 
-## Barra de pesquisa unificada para Nome e CPF
+## Corrigir filtro de busca na pagina Meus Acordos
 
 ### Problema
 
-Atualmente existem campos separados para Nome e CPF. O usuario quer um unico campo de pesquisa que busque simultaneamente por nome OU por CPF.
+Quando o usuario pesquisa por nome (texto sem numeros), o filtro nao funciona corretamente. Todos os acordos continuam aparecendo.
+
+**Causa raiz:** Na logica de filtro (linha 458), quando o texto de busca nao contem numeros, `search.replace(/\D/g, '')` resulta em string vazia `""`. Como `qualquerTexto.includes("")` sempre retorna `true` em JavaScript, a condicao do CPF passa para TODOS os acordos, anulando o filtro por nome.
 
 ### Solucao
 
-Substituir os campos separados de "Nome" e "CPF" por um unico campo "Nome ou CPF". Na query ao banco, usar `.or()` para buscar em ambas as colunas.
+Alterar a logica de filtro para que a busca por CPF so seja tentada quando o texto de busca realmente contem digitos.
 
-### Alteracoes em `src/pages/Clientes.tsx`
+### Alteracao em `src/pages/Acordos.tsx`
 
-**1. Unificar os estados `nome` e `cpf` em um unico estado `busca`**
+**Linha 458** - Atualizar a logica de `matchesSearch`:
 
-Remover os estados `nome` e `cpf` separados e criar um unico estado `busca`.
-
-**2. Atualizar o campo de input no formulario**
-
-Substituir os dois inputs (Nome e CPF) por um unico campo:
-```
-Nome ou CPF/CNPJ: [___________________________]
-```
-
-**3. Atualizar a logica de pesquisa em `handleSearch`**
-
-Quando o campo `busca` estiver preenchido, verificar se o texto contem apenas digitos (ou formatacao de CPF). Se sim, buscar pelo CPF normalizado. Caso contrario, buscar por nome. Para cobrir ambos os casos, usar `.or()`:
-
+De:
 ```typescript
-if (busca.trim()) {
-  const termLimpo = busca.trim().replace(/\D/g, '');
-  if (termLimpo.length > 0) {
-    // Pode ser CPF ou nome com numeros - buscar em ambos
-    query = query.or(`nome.ilike.%${busca.trim()}%,cpf.ilike.%${termLimpo}%`);
-  } else {
-    query = query.ilike('nome', `%${busca.trim()}%`);
-  }
-}
+const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) || 
+  (acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
 ```
 
-**4. Atualizar `handleClear`**
+Para:
+```typescript
+const searchLower = search.toLowerCase();
+const searchDigits = search.replace(/\D/g, '');
+const matchesSearch = acordo.cliente_nome.toLowerCase().includes(searchLower) || 
+  (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
+```
 
-Trocar `setNome('')` e `setCpf('')` por `setBusca('')`.
-
-**5. Atualizar a validacao de filtros**
-
-Trocar `!nome.trim() && !cpf.trim()` por `!busca.trim()`.
-
-### Secao tecnica
-
-- Arquivo modificado: `src/pages/Clientes.tsx`
-- Os campos de Telefone, Credor e Estagio permanecem inalterados
-- A busca por CPF continua normalizada (sem pontos/tracos)
-- A busca por nome usa `ilike` para ser case-insensitive
+A unica diferenca e adicionar `searchDigits.length > 0` como condicao antes de comparar CPFs, evitando que uma busca puramente textual passe no filtro de CPF por causa da string vazia.
 
