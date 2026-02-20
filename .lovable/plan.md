@@ -1,60 +1,55 @@
 
-
-## Ajustar formatacao do Word para ficar identico ao modelo
+## Adicionar botao "Termo de Acordo" com geracao por IA
 
 ### Resumo
 
-O documento Word modelo nao possui logo no cabecalho nem rodape repetido em todas as paginas. O conteudo comeca diretamente com o texto do credor. Ajustar a funcao `handleDownloadNotifWord` para remover esses elementos e ajustar espaçamento dos bullets.
+Criar um botao "Termo de Acordo" ao lado do botao "Notificacao Extrajudicial". Ao clicar, abre um Dialog onde o usuario descreve o acordo feito com o cliente. Ao clicar "GERAR", uma IA (via Lovable AI) gera um termo de acordo profissional como se fosse escrito por um advogado experiente. O resultado aparece em um campo editavel, com botoes para baixar em Word e PDF.
 
-### Alteracoes em `src/pages/DevedorDetalhe.tsx`
+### Fluxo do usuario
 
-**1. Remover logo do cabecalho Word (linhas 546-551)**
+1. Clica em "Termo de Acordo" na ficha do cliente
+2. Dialog abre com um campo de texto para descrever os termos do acordo
+3. Clica em "GERAR" - a IA processa e gera o termo profissional
+4. O termo gerado aparece em um campo editavel (textarea)
+5. O usuario pode editar se necessario
+6. Botoes "Baixar Word" e "Baixar PDF" para download do documento final
 
-Remover o bloco `<div style="mso-element:header">` que insere o logo no topo, ou deixar o header vazio. O documento deve comecar direto com o texto do credor.
+### Alteracoes
 
-Substituir:
-```html
-<div style="mso-element:header" id="h1">
-<p align="center" style="margin:0;padding:0;">
-${logoBase64 ? `<img src="${logoBase64}" ...>` : ''}
-</p>
-<p style="margin:0;">&nbsp;</p>
-</div>
-```
-Por um header vazio:
-```html
-<div style="mso-element:header" id="h1">
-<p style="margin:0;">&nbsp;</p>
-</div>
-```
+**1. Nova edge function `supabase/functions/gerar-termo-acordo/index.ts`**
 
-**2. Remover rodape repetido (linhas 555-560)**
+Edge function que recebe os dados do acordo e do cliente, envia para o Lovable AI Gateway (modelo `google/gemini-3-flash-preview`), e retorna o termo gerado. O prompt instrui a IA a agir como um advogado com anos de experiencia, gerando um termo de acordo extrajudicial completo e profissional, sem qualquer mencao a IA.
 
-Remover o bloco `<div style="mso-element:footer">` com endereco, telefone e email. O documento modelo nao tem rodape em todas as paginas.
+**2. Atualizar `supabase/config.toml`**
 
-Substituir por footer vazio:
-```html
-<div style="mso-element:footer" id="f1">
-<p style="margin:0;">&nbsp;</p>
-</div>
-```
+Adicionar a configuracao da nova funcao com `verify_jwt = false`.
 
-**3. Aumentar espacamento entre bullets (linha 451)**
+**3. Modificar `src/pages/DevedorDetalhe.tsx`**
 
-Ajustar o margin dos bullets de `2pt` para `8pt` para dar mais espaco entre cada item, como no modelo:
-
-```html
-<table ... style="margin:8pt 0 8pt 36pt;">
-```
-
-**4. Remover chamada `getLogoBase64` (linha 416)**
-
-Como o logo nao sera mais usado no Word, remover a chamada `await getLogoBase64()` no inicio da funcao (a funcao `getLogoBase64` em si sera mantida caso seja usada em outro lugar).
+- Adicionar estados para o dialog do termo de acordo (`termoDialogOpen`, `termoInput`, `termoContent`, `termoGenerating`)
+- Adicionar botao "Termo de Acordo" ao lado do botao "Notificacao Extrajudicial" (linha 609)
+- Criar o Dialog com:
+  - Textarea para o usuario descrever o acordo
+  - Botao "GERAR" que chama a edge function
+  - Apos geracao: textarea editavel com o termo completo
+  - Botoes "Baixar Word" e "Baixar PDF" no footer
+- Funcoes `handleGerarTermo`, `handleDownloadTermoWord` e `handleDownloadTermoPDF` seguindo o mesmo padrao das funcoes existentes de notificacao extrajudicial
 
 ### Secao tecnica
 
-- Arquivo modificado: `src/pages/DevedorDetalhe.tsx`
-- Sem novas dependencias
-- A funcao `getLogoBase64` sera mantida no codigo (pode ser util futuramente)
-- O texto editavel no textarea nao e afetado
+**Edge function - prompt da IA:**
+- System prompt: "Voce e um advogado brasileiro com mais de 20 anos de experiencia em direito civil e empresarial, especializado em acordos extrajudiciais de cobranca."
+- Instrucoes para gerar termo completo com: qualificacao das partes, objeto do acordo, clausulas de pagamento, multas, foro, assinaturas
+- Dados do cliente (nome, CPF/CNPJ, credor, valores) enviados junto com a descricao do acordo
+- Resposta em texto puro (sem markdown), pronto para formatacao Word/PDF
 
+**Download Word:**
+- Mesmo padrao da notificacao extrajudicial (HTML com namespaces Microsoft Office XML)
+- Arial 11pt, justificado, margens 2.5cm
+
+**Download PDF:**
+- Mesmo padrao da notificacao extrajudicial (jsPDF)
+- Fonte Arial, texto justificado
+
+**Modelo IA:** google/gemini-3-flash-preview (default Lovable AI)
+**Secret:** LOVABLE_API_KEY (ja configurado)
