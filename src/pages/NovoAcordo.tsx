@@ -471,12 +471,19 @@ export default function NovoAcordo() {
       } else if (err instanceof Error) {
         // Tratar erro do trigger de CPF duplicado
         const errorMessage = err.message;
-        if (errorMessage.includes('Este CPF já possui acordo')) {
-          setCpfDuplicateError('Este CPF já possui acordo. Contate o administrador.');
+        if (errorMessage.includes('Este CPF já possui acordo lançado por')) {
+          setCpfDuplicateError(errorMessage);
           toast({
             variant: 'destructive',
             title: 'CPF já cadastrado',
-            description: 'Este CPF já possui acordo. Contate o administrador.',
+            description: errorMessage,
+          });
+        } else if (errorMessage.includes('Este CPF já possui acordo')) {
+          setCpfDuplicateError(errorMessage);
+          toast({
+            variant: 'destructive',
+            title: 'CPF já cadastrado',
+            description: errorMessage,
           });
         } else {
           toast({
