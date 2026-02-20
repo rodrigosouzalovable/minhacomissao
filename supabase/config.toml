@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.consultar-indices]
 verify_jwt = false
+
+[functions.gerar-termo-acordo]
+verify_jwt = false
