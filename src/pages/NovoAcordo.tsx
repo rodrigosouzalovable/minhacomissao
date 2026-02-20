@@ -569,8 +569,10 @@ export default function NovoAcordo() {
                           setCpfQuebraInfo('CPF possui acordo anterior com QUEBRA DE ACORDO. Novo acordo permitido.');
                           setCpfDuplicateError('');
                         } else {
-                          // CPF não tem quebra, bloquear
-                          setCpfDuplicateError('Este CPF já possui acordo ativo. Contate o administrador.');
+                          // CPF não tem quebra, buscar nome do funcionário
+                          const { data: nomeFuncionario } = await supabase.rpc('cpf_acordo_funcionario_nome' as any, { p_cpf: formatted });
+                          const nome = nomeFuncionario || 'outro funcionário';
+                          setCpfDuplicateError(`Este CPF já possui acordo ativo lançado por ${nome}. Contate o administrador.`);
                           setCpfQuebraInfo('');
                         }
                       }
