@@ -384,7 +384,8 @@ export default function EquipeAcordos() {
   const filteredAcordos = acordos.filter(acordo => {
     const matchesSearch = 
       acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
-      acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase());
+      acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase()) ||
+      (acordo.cliente_cpf && acordo.cliente_cpf.includes(search));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     const matchesMember = memberFilter === 'todos' || acordo.user_id === memberFilter;
     
