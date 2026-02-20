@@ -1,94 +1,108 @@
 
 
-## Ajustar texto da Notificacao Extrajudicial e adicionar opcao de download em WORD
+## Formatar o Word da Notificacao Extrajudicial igual ao documento modelo
 
 ### Resumo
 
-Reescrever a funcao `gerarTextoNotificacao` para seguir EXATAMENTE o modelo fornecido e adicionar botao de download em formato Word (.docx) alem do PDF.
+Reescrever a funcao `handleDownloadNotifWord` para gerar um documento Word com formatacao profissional identica ao modelo: logo centralizado no cabecalho, textos em negrito nos lugares corretos, titulo centralizado e sublinhado, texto justificado, bullets com quadrados, linhas separadoras, rodape com contato em todas as paginas e margens adequadas.
 
 ### Alteracoes em `src/pages/DevedorDetalhe.tsx`
 
-**1. Reescrever `gerarTextoNotificacao` (linhas 241-301)**
+**Reescrever `handleDownloadNotifWord` (linhas 404-422)**
 
-Remover a secao "TITULOS EM ABERTO" e ajustar o texto para ficar identico ao modelo. As principais mudancas:
+Substituir o HTML simples por um HTML completo com formatacao Word (usando namespaces Microsoft Office XML) que reproduz exatamente o layout do documento modelo:
 
-- Remover cabecalho "SOUZA & RIBEIRO / ADVOCACIA E COBRANÇAS" (ja aparece no logo do PDF)
-- Credor com dados completos: mapear cada credor para nome completo, tipo juridico, CNPJ e endereco. Exemplo para MONTREAL:
-  ```
-  MONTREAL - MONTADORA DE MÓVEIS E ELETRO-DOMÉSTICOS LTDA., pessoa jurídica de direito privado, inscrita no CNPJ nº 07.019.882/0001-86, com sede na Av. Eurípedes de Menezes, qd. 04, lts. 01/13 e 28/36, Setor Parque Industrial, CEP: 74993-540, Aparecida de Goiânia-GO.
-  ```
-- Linhas separadoras `________________________________________` entre secoes
-- Destinatario com "E aos sócios:" e campo "[PRECISA SER PREENCHIDO]" para endereco e socios
-- Texto principal: "mercadorias que lhes foram vendidas" e "Vossas Senhorias" (plural)
-- Paragrafo sobre inadimplemento: "O inadimplemento persiste desde [data mais antiga], o que configura descumprimento contratual..."
-- Secao EXIGENCIA com bullets usando "•" ao inves de "-"
-- Secao CONSEQUENCIAS com bullets usando "•"
-- Mora: "constituindo Vossas Senhorias em mora"
-- Data: "Goiânia-GO, [data por extenso]."
-- Assinatura: "p.p. [CREDOR COMPLETO]"
-- Remover completamente a listagem de titulos em aberto
+**Formatacao a aplicar:**
 
-**Mapeamento de credores** - criar objeto com dados completos:
+1. **Cabecalho com logo** - Usar a imagem `logo-souza-ribeiro.png` convertida em base64 e incluida via `<img>` centralizado no topo. O logo sera inserido via `@page` header section do Word XML.
 
-```typescript
-const credoresInfo: Record<string, { nomeCompleto: string; cnpj: string; endereco: string }> = {
-  'MONTREAL': {
-    nomeCompleto: 'MONTREAL - MONTADORA DE MÓVEIS E ELETRO-DOMÉSTICOS LTDA.',
-    cnpj: '07.019.882/0001-86',
-    endereco: 'Av. Eurípedes de Menezes, qd. 04, lts. 01/13 e 28/36, Setor Parque Industrial, CEP: 74993-540, Aparecida de Goiânia-GO'
-  },
-  'UME | NOVO MUNDO': {
-    nomeCompleto: 'UME | NOVO MUNDO',
-    cnpj: '[CNPJ]',
-    endereco: '[ENDEREÇO]'
-  }
-};
+2. **Texto justificado** - `text-align: justify` no corpo do documento.
+
+3. **Negrito seletivo** - Aplicar `<b>` nos trechos corretos:
+   - Nome completo do credor (primeira linha)
+   - "NOTIFICACAO EXTRAJUDICIAL" (centralizado e sublinhado)
+   - "Assunto: Cobranca de divida vencida - Intimacao para pagamento"
+   - "A" e nome do cliente
+   - "E aos socios:"
+   - Quantidade e valor em extenso dentro do paragrafo (ex: "31 (trinta e um) titulos vencidos e nao quitados", "R$103.749,05 (cento e tres mil...)")
+   - "EXIGENCIA" (sublinhado)
+   - "IMPRORROGAVEL de 48 (quarenta e oito) horas"
+   - "CONSEQUENCIAS DO NAO PAGAMENTO"
+   - "sem novo aviso"
+   - "formal e definitivo"
+   - Linhas de assinatura ("p.p. CREDOR..." e "Rodrigo Ribeiro...")
+
+4. **Bullets com quadrados** - Usar `<table>` com "□" (U+25A1) como marcador ao inves de listas HTML, para garantir alinhamento no Word.
+
+5. **Linhas separadoras** - Usar `<hr>` com estilo adequado entre as secoes.
+
+6. **Rodape em todas as paginas** - Usar `mso-header` e `mso-footer` sections do Word XML para repetir o rodape com endereco e contato.
+
+7. **Margens** - Configurar `@page` com margens de ~2.5cm (equivalente ao modelo).
+
+8. **Fonte e tamanho** - Arial, 11pt, line-height 1.5.
+
+**Estrutura do HTML Word:**
+
+```html
+<html xmlns:o="urn:schemas-microsoft-com:office:office" 
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { 
+      margin: 2.5cm 2.5cm 3cm 2.5cm; 
+      mso-header-margin: 1cm;
+      mso-footer-margin: 1cm;
+    }
+    @page Section1 { mso-header: h1; mso-footer: f1; }
+    div.Section1 { page: Section1; }
+    body { font-family: Arial; font-size: 11pt; text-align: justify; line-height: 1.5; }
+    table.MsoTableGrid { ... }
+  </style>
+</head>
+<body>
+  <div class="Section1">
+    <!-- Header with logo (Word XML header) -->
+    <div style="mso-element:header" id="h1">
+      <p align="center"><img src="data:image/png;base64,..." width="200" /></p>
+    </div>
+    
+    <!-- Content with proper formatting -->
+    <p><b>MONTREAL - MONTADORA...</b>, pessoa juridica...</p>
+    <hr/>
+    <p align="center" style="text-decoration:underline"><b>NOTIFICACAO EXTRAJUDICIAL</b></p>
+    <!-- ... resto do conteudo formatado ... -->
+    
+    <!-- Footer -->
+    <div style="mso-element:footer" id="f1">
+      <hr/>
+      <p align="center" style="font-size:9pt">Rua 24, n 208...</p>
+      <p align="center" style="font-size:9pt">Telefone/WhatsApp...</p>
+    </div>
+  </div>
+</body>
+</html>
 ```
 
-**2. Atualizar `handleDownloadNotifPDF` (linha 338)**
+**Logica de conversao do texto editado:**
 
-Remover "TÍTULOS EM ABERTO:" da lista de `boldSections`.
+Como o usuario pode editar o texto no textarea antes de baixar, a funcao precisara "parsear" o texto editado e aplicar a formatacao correta. A abordagem sera:
 
-**3. Adicionar download em WORD**
+- Converter o logo para base64 usando um canvas (ou importar como data URL)
+- Identificar as secoes do texto por palavras-chave e aplicar a formatacao HTML adequada
+- Para trechos em negrito dentro de paragrafos (como "IMPRORROGAVEL de 48 horas"), usar regex para envolver em `<b>`
+- Gerar o HTML completo com headers/footers do Word XML
 
-Adicionar botao "Baixar Word" ao lado do "Baixar PDF" no DialogFooter. Para gerar o arquivo Word, criar um Blob com conteudo HTML simples (com o logo e formatacao) e salvar como `.doc`:
+**Tambem sera necessario:**
 
-```typescript
-const handleDownloadNotifWord = () => {
-  // Gerar HTML com o conteudo formatado
-  const html = `<html><head><meta charset="utf-8"></head><body style="font-family: Arial; font-size: 11pt;">
-    <img src="..." width="150" /><br/><br/>
-    ${notifContent.split('\n').map(line => {
-      // Aplicar negrito em secoes de titulo
-      if (['NOTIFICAÇÃO EXTRAJUDICIAL', 'EXIGÊNCIA', 'CONSEQUÊNCIAS'].some(s => line.startsWith(s))) {
-        return `<b>${line}</b><br/>`;
-      }
-      return `${line}<br/>`;
-    }).join('')}
-  </body></html>`;
-  
-  const blob = new Blob([html], { type: 'application/msword' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Notificacao-Extrajudicial-${devedor.nome}.doc`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-```
-
-**4. Atualizar DialogFooter (linhas 465-470)**
-
-Adicionar o botao "Baixar Word" ao lado do botao "Baixar PDF":
-
-```
-[Fechar]  [Baixar Word]  [Baixar PDF]
-```
+- Importar o logo como base64 para embutir no HTML (o Word nao carrega URLs externas). Criar uma funcao auxiliar que converte a imagem importada para base64 usando canvas.
 
 ### Secao tecnica
 
 - Arquivo modificado: `src/pages/DevedorDetalhe.tsx`
-- Sem alteracoes no banco de dados
-- Sem novas dependencias (Word gerado via HTML/Blob nativo)
-- Os dados de UME | NOVO MUNDO precisarao ser preenchidos pelo usuario (CNPJ e endereco ficarao como placeholder editavel)
-- Campos de endereco e socios do cliente ficam como "[PRECISA SER PREENCHIDO]" para edicao manual
+- Sem novas dependencias
+- O logo sera convertido para base64 via canvas em tempo de execucao
+- A formatacao usa namespaces Microsoft Office XML para garantir compatibilidade com Word
+- O texto continua editavel no textarea - a formatacao e aplicada no momento do download
