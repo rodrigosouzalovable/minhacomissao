@@ -1,52 +1,56 @@
 
 
-## Mostrar nome do funcionario na validacao de CPF duplicado
+## Barra de pesquisa unificada para Nome e CPF
 
 ### Problema
 
-Quando um funcionario digita um CPF que ja possui acordo ativo, a mensagem exibida e generica: "Este CPF ja possui acordo ativo. Contate o administrador." O usuario precisa saber quem ja lancou o acordo naquele CPF.
+Atualmente existem campos separados para Nome e CPF. O usuario quer um unico campo de pesquisa que busque simultaneamente por nome OU por CPF.
 
 ### Solucao
 
-Criar uma nova funcao no banco de dados que retorna o nome do funcionario dono do acordo existente, e usar essa informacao na mensagem.
+Substituir os campos separados de "Nome" e "CPF" por um unico campo "Nome ou CPF". Na query ao banco, usar `.or()` para buscar em ambas as colunas.
 
-### Alteracoes
+### Alteracoes em `src/pages/Clientes.tsx`
 
-**1. Migracao SQL - Nova funcao `cpf_acordo_funcionario_nome`**
+**1. Unificar os estados `nome` e `cpf` em um unico estado `busca`**
 
-Criar uma funcao que recebe um CPF e retorna o nome do funcionario que possui o acordo mais recente para aquele CPF:
+Remover os estados `nome` e `cpf` separados e criar um unico estado `busca`.
 
-```sql
-CREATE OR REPLACE FUNCTION public.cpf_acordo_funcionario_nome(p_cpf text)
-RETURNS text
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_nome text;
-BEGIN
-  SELECT p.nome INTO v_nome
-  FROM acordos a
-  JOIN profiles p ON p.id = a.user_id
-  WHERE cpf_normalize(a.cliente_cpf) = cpf_normalize(p_cpf)
-  ORDER BY a.criado_em DESC
-  LIMIT 1;
+**2. Atualizar o campo de input no formulario**
 
-  RETURN v_nome;
-END;
-$$;
+Substituir os dois inputs (Nome e CPF) por um unico campo:
+```
+Nome ou CPF/CNPJ: [___________________________]
 ```
 
-**2. `src/pages/NovoAcordo.tsx` - Buscar e exibir o nome**
+**3. Atualizar a logica de pesquisa em `handleSearch`**
 
-No bloco onde o CPF duplicado e detectado (linha 571-574), apos confirmar que nao e quebra, chamar a nova funcao RPC para obter o nome do funcionario e montar a mensagem personalizada:
+Quando o campo `busca` estiver preenchido, verificar se o texto contem apenas digitos (ou formatacao de CPF). Se sim, buscar pelo CPF normalizado. Caso contrario, buscar por nome. Para cobrir ambos os casos, usar `.or()`:
 
 ```typescript
-// Apos confirmar que nao e quebra:
-const { data: nomeFuncionario } = await supabase.rpc('cpf_acordo_funcionario_nome', { p_cpf: formatted });
-const nome = nomeFuncionario || 'outro funcionário';
-setCpfDuplicateError(`Este CPF já possui acordo ativo lançado por ${nome}. Contate o administrador.`);
+if (busca.trim()) {
+  const termLimpo = busca.trim().replace(/\D/g, '');
+  if (termLimpo.length > 0) {
+    // Pode ser CPF ou nome com numeros - buscar em ambos
+    query = query.or(`nome.ilike.%${busca.trim()}%,cpf.ilike.%${termLimpo}%`);
+  } else {
+    query = query.ilike('nome', `%${busca.trim()}%`);
+  }
+}
 ```
 
-A mensagem passara a exibir, por exemplo: "Este CPF ja possui acordo ativo lancado por Joao Silva. Contate o administrador."
+**4. Atualizar `handleClear`**
+
+Trocar `setNome('')` e `setCpf('')` por `setBusca('')`.
+
+**5. Atualizar a validacao de filtros**
+
+Trocar `!nome.trim() && !cpf.trim()` por `!busca.trim()`.
+
+### Secao tecnica
+
+- Arquivo modificado: `src/pages/Clientes.tsx`
+- Os campos de Telefone, Credor e Estagio permanecem inalterados
+- A busca por CPF continua normalizada (sem pontos/tracos)
+- A busca por nome usa `ilike` para ser case-insensitive
+
