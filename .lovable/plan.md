@@ -1,34 +1,97 @@
 
 
-## Corrigir filtro de busca na pagina Meus Acordos
+## Botao de Notificacao Extrajudicial na Ficha do Cliente
 
-### Problema
+### Resumo
 
-Quando o usuario pesquisa por nome (texto sem numeros), o filtro nao funciona corretamente. Todos os acordos continuam aparecendo.
+Adicionar um botao "Notificacao Extrajudicial" no cabecalho da ficha do cliente. Ao clicar, abre um Dialog com o texto do modelo de notificacao ja preenchido com os dados do cliente (nome, CPF/CNPJ, contratos em aberto, valores, datas). O conteudo e editavel e pode ser baixado como PDF.
 
-**Causa raiz:** Na logica de filtro (linha 458), quando o texto de busca nao contem numeros, `search.replace(/\D/g, '')` resulta em string vazia `""`. Como `qualquerTexto.includes("")` sempre retorna `true` em JavaScript, a condicao do CPF passa para TODOS os acordos, anulando o filtro por nome.
+### Alteracoes em `src/pages/DevedorDetalhe.tsx`
 
-### Solucao
+**1. Novos estados**
 
-Alterar a logica de filtro para que a busca por CPF so seja tentada quando o texto de busca realmente contem digitos.
+- `notifDialogOpen` - controle do Dialog
+- `notifContent` - texto editavel da notificacao
 
-### Alteracao em `src/pages/Acordos.tsx`
+**2. Funcao `gerarTextoNotificacao`**
 
-**Linha 458** - Atualizar a logica de `matchesSearch`:
+Monta o texto do modelo com base nos dados do cliente e contratos:
 
-De:
-```typescript
-const matchesSearch = acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) || 
-  (acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
+- Nome do cliente (`devedor.nome`)
+- CPF/CNPJ (`devedor.cpf`)
+- Credor (`devedor.credor`)
+- Quantidade de contratos em aberto (`contratos.length`)
+- Valor total atualizado (soma dos `valor_atualizado`)
+- Data atual formatada
+- Listagem dos contratos com numero, vencimento, valor original e valor atualizado
+
+O modelo segue a estrutura do documento anexado:
+
+```text
+[CREDOR]
+
+NOTIFICACAO EXTRAJUDICIAL
+Assunto: Cobranca de divida vencida - Intimacao para pagamento
+
+A
+[NOME DO CLIENTE]
+CPF/CNPJ: [CPF]
+
+Notificamos Vossa Senhoria acerca da existencia de [QTD] titulo(s) vencido(s)...
+valor total originario de: R$ [TOTAL]...
+
+EXIGENCIA
+Fica concedido o prazo IMPRORROGAVEL de 48 horas...
+
+CONSEQUENCIAS DO NAO PAGAMENTO
+- Protesto dos titulos em cartorio
+- Inclusao nos orgaos de protecao ao credito
+- Ajuizamento de Acao de Execucao
+- Bloqueio de valores via SISBAJUD
+
+[DATA ATUAL]
 ```
 
-Para:
-```typescript
-const searchLower = search.toLowerCase();
-const searchDigits = search.replace(/\D/g, '');
-const matchesSearch = acordo.cliente_nome.toLowerCase().includes(searchLower) || 
-  (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
+**3. Botao no cabecalho**
+
+Posicionado ao lado do botao "Voltar", com icone `FileText`:
+
+```
+[Notificacao Extrajudicial]  [<- Voltar]
 ```
 
-A unica diferenca e adicionar `searchDigits.length > 0` como condicao antes de comparar CPFs, evitando que uma busca puramente textual passe no filtro de CPF por causa da string vazia.
+Ao clicar, chama `gerarTextoNotificacao()`, preenche `notifContent` e abre o Dialog.
+
+**4. Dialog com editor e download**
+
+- Dialog largo (`max-w-4xl`) com scroll
+- Textarea editavel com o texto gerado
+- Botao "Baixar PDF" no footer
+- Usa a biblioteca `jspdf` (ja instalada) para gerar o PDF com o conteudo editado
+- O PDF e gerado com quebra de linha automatica e formatacao basica
+
+**5. Geracao do PDF**
+
+Usa `jsPDF` para criar o documento:
+
+```typescript
+import jsPDF from 'jspdf';
+
+const handleDownloadPDF = () => {
+  const doc = new jsPDF();
+  const lines = doc.splitTextToSize(notifContent, 170);
+  doc.setFontSize(11);
+  // Adiciona texto com paginacao automatica
+  doc.text(lines, 20, 20);
+  doc.save(`Notificacao-Extrajudicial-${devedor.nome}.pdf`);
+};
+```
+
+### Secao tecnica
+
+- Arquivo modificado: `src/pages/DevedorDetalhe.tsx`
+- Sem alteracoes no banco de dados
+- Usa `jspdf` ja existente nas dependencias
+- O texto e 100% editavel antes do download
+- O modelo e gerado dinamicamente com dados reais do cliente
 
