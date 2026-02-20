@@ -238,63 +238,107 @@ export default function DevedorDetalhe() {
   };
   const totalEmAtraso = contratos.reduce((acc, c) => acc + c.valor_atualizado, 0);
 
+  const credoresInfo: Record<string, { nomeCompleto: string; cnpj: string; endereco: string }> = {
+    'MONTREAL': {
+      nomeCompleto: 'MONTREAL - MONTADORA DE MÓVEIS E ELETRO-DOMÉSTICOS LTDA.',
+      cnpj: '07.019.882/0001-86',
+      endereco: 'Av. Eurípedes de Menezes, qd. 04, lts. 01/13 e 28/36, Setor Parque Industrial, CEP: 74993-540, Aparecida de Goiânia-GO'
+    },
+    'UME | NOVO MUNDO': {
+      nomeCompleto: 'UME | NOVO MUNDO',
+      cnpj: '[CNPJ]',
+      endereco: '[ENDEREÇO]'
+    }
+  };
+
   const gerarTextoNotificacao = () => {
     const dataAtual = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     const totalOriginal = contratos.reduce((acc, c) => acc + c.valor_original, 0);
     const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    const listaContratos = contratos.map((c, i) => {
-      const venc = c.data_vencimento ? new Date(c.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/I';
-      return `${i + 1}. Contrato: ${c.contrato || 'S/N'} | Vencimento: ${venc} | Valor Original: ${fmtBRL(c.valor_original)} | Valor Atualizado: ${fmtBRL(c.valor_atualizado)}`;
-    }).join('\n');
+    const credorKey = devedor.credor || '';
+    const credorInfo = credoresInfo[credorKey] || {
+      nomeCompleto: credorKey || '[CREDOR NÃO INFORMADO]',
+      cnpj: '[CNPJ]',
+      endereco: '[ENDEREÇO]'
+    };
 
-    return `SOUZA & RIBEIRO
-ADVOCACIA E COBRANÇAS
+    // Find oldest due date for inadimplemento paragraph
+    const datesVenc = contratos
+      .filter(c => c.data_vencimento)
+      .map(c => new Date(c.data_vencimento + 'T00:00:00'))
+      .sort((a, b) => a.getTime() - b.getTime());
+    const dataInadimplemento = datesVenc.length > 0
+      ? format(datesVenc[0], "MMMM'/'yyyy", { locale: ptBR })
+      : '[DATA]';
 
-${devedor.credor || 'CREDOR NÃO INFORMADO'}
+    // Number in words helper (simple)
+    const numPorExtenso = (n: number): string => {
+      const unidades = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez',
+        'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove', 'vinte'];
+      const dezenas = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa', 'cem'];
+      if (n <= 20) return unidades[n];
+      if (n <= 100) {
+        const d = Math.floor(n / 10);
+        const u = n % 10;
+        return u === 0 ? dezenas[d] : `${dezenas[d]} e ${unidades[u]}`;
+      }
+      return String(n);
+    };
+
+    const qtdExtenso = numPorExtenso(contratos.length);
+
+    return `${credorInfo.nomeCompleto}, pessoa jurídica de direito privado, inscrita no CNPJ nº ${credorInfo.cnpj}, com sede na ${credorInfo.endereco}.
+________________________________________
 
 NOTIFICAÇÃO EXTRAJUDICIAL
+
 Assunto: Cobrança de dívida vencida – Intimação para pagamento
 
 À
 ${devedor.nome}
-CPF/CNPJ: ${devedor.cpf}
+CNPJ: ${devedor.cpf}
+Endereço: [PRECISA SER PREENCHIDO]
+E aos sócios:
+[PRECISA SER PREENCHIDO]
+________________________________________
+Prezados Cliente,
 
-Prezado(a) Cliente,
+Notificamos Vossas Senhorias acerca da existência de ${contratos.length} (${qtdExtenso}) títulos vencidos e não quitados, referentes às mercadorias que lhes foram vendidas, os quais somam o valor total originário de: ${fmtBRL(totalOriginal)}, sendo que, para efeito de negociação, esse valor será corrigido monetariamente, pela Taxa Selic diária, mais juros de mora de 1% (um por cento) ao mês e multa de 2% (dois por cento).
 
-Notificamos Vossa Senhoria acerca da existência de ${contratos.length} título(s) vencido(s) e não quitados, referentes às mercadorias/serviços contratados, os quais somam o valor total originário de: ${fmtBRL(totalOriginal)}, sendo que, para efeito de negociação, esse valor será corrigido monetariamente, pela Taxa Selic diária, mais juros de mora de 1% (um por cento) ao mês e multa de 2% (dois por cento).
-
-TÍTULOS EM ABERTO:
-${listaContratos}
-
+O inadimplemento persiste desde ${dataInadimplemento}, o que configura descumprimento contratual e autoriza a adoção imediata das medidas legais cabíveis.
+________________________________________
 EXIGÊNCIA
 Fica concedido o prazo IMPRORROGÁVEL de 48 (quarenta e oito) horas, a contar do recebimento desta, para pagamento integral do débito, acrescido de:
-- Juros de mora de 1% ao mês;
-- Multa contratual de 2%;
-- Correção monetária, pela Taxa Selic diária;
-- Honorários e encargos de cobrança.
-
+•\tJuros de mora de 1% ao mês;
+•\tMulta contratual de 2%;
+•\tCorreção monetária, pela Taxa Selic diária;
+•\tHonorários e encargos de cobrança.
 Pagamento via PIX (CNPJ 05.950.717/0001-18) ou depósito identificado.
-
+________________________________________
 CONSEQUÊNCIAS DO NÃO PAGAMENTO
 O não cumprimento no prazo estipulado ensejará, sem novo aviso:
-- Protesto dos títulos em cartório;
-- Inclusão nos órgãos de proteção ao crédito;
-- Ajuizamento de Ação de Execução, com penhora de bens;
-- Pedido de desconsideração da personalidade jurídica, para atingir bens dos sócios;
-- Bloqueio de valores via SISBAJUD;
-- Cobrança de custas e honorários judiciais.
-
-Esta notificação possui caráter formal e definitivo, constituindo Vossa Senhoria em mora.
+•\tProtesto dos títulos em cartório;
+•\tInclusão nos órgãos de proteção ao crédito;
+•\tAjuizamento de Ação de Execução, com penhora de bens;
+•\tPedido de desconsideração da personalidade jurídica, para atingir bens dos sócios;
+•\tBloqueio de valores via SISBAJUD;
+•\tCobrança de custas e honorários judiciais.
+________________________________________
+Esta notificação possui caráter formal e definitivo, constituindo Vossas Senhorias em mora.
 
 Para tratativas imediatas de negociação do débito, contatar:
 Luiz Carlos: (62) 99679-9697 ou Rodrigo: (62) 99167-2674.
 contato@souzaeribeiro.com.br
+________________________________________
 
-Goiânia, ${dataAtual}.
+Goiânia-GO, ${dataAtual}.
+
+
+
 
 ______________________________________________________________
-p.p. ${devedor.credor || 'CREDOR'}
+p.p. ${credorInfo.nomeCompleto}
 Rodrigo Ribeiro de Souza - Souza e Ribeiro Sociedade de Advogados.
 
 Rua 24, nº 208, Setor Marista, CEP: 74150-070, Goiânia-GO.
@@ -335,7 +379,7 @@ Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
 
     const contentLines = notifContent.split('\n');
     let y = topMargin;
-    const boldSections = ['NOTIFICAÇÃO EXTRAJUDICIAL', 'EXIGÊNCIA', 'CONSEQUÊNCIAS DO NÃO PAGAMENTO', 'TÍTULOS EM ABERTO:'];
+    const boldSections = ['NOTIFICAÇÃO EXTRAJUDICIAL', 'EXIGÊNCIA', 'CONSEQUÊNCIAS DO NÃO PAGAMENTO'];
 
     for (const rawLine of contentLines) {
       const isBold = boldSections.some(s => rawLine.trim().startsWith(s));
@@ -355,6 +399,27 @@ Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
     }
 
     doc.save(`Notificacao-Extrajudicial-${devedor.nome}.pdf`);
+  };
+
+  const handleDownloadNotifWord = () => {
+    const boldKeys = ['NOTIFICAÇÃO EXTRAJUDICIAL', 'EXIGÊNCIA', 'CONSEQUÊNCIAS DO NÃO PAGAMENTO', 'Assunto:'];
+    const htmlLines = notifContent.split('\n').map(line => {
+      const isBold = boldKeys.some(s => line.trim().startsWith(s));
+      const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return isBold ? `<b>${escaped}</b><br/>` : `${escaped}<br/>`;
+    }).join('');
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:11pt;line-height:1.5;margin:60px;}</style></head>
+<body>${htmlLines}</body></html>`;
+
+    const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Notificacao-Extrajudicial-${devedor.nome}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const getDiasAtraso = (dataVencimento: string | null) => {
@@ -464,6 +529,9 @@ Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
             </ScrollArea>
             <DialogFooter>
               <Button variant="outline" onClick={() => setNotifDialogOpen(false)}>Fechar</Button>
+              <Button variant="outline" onClick={handleDownloadNotifWord}>
+                <Download className="h-4 w-4 mr-1" /> Baixar Word
+              </Button>
               <Button onClick={handleDownloadNotifPDF}>
                 <Download className="h-4 w-4 mr-1" /> Baixar PDF
               </Button>
