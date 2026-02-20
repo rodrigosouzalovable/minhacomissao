@@ -357,17 +357,11 @@ Telefone/WhatsApp: (62) 99679-9697 - E-mail: contato@souzaeribeiro.com.br`;
     const marginLeft = 20;
     const marginRight = 20;
     const contentWidth = pageWidth - marginLeft - marginRight;
-    const topMargin = 45; // space for logo
+    const topMargin = 20;
     const bottomMargin = 35; // space for footer
     const lineHeight = 6;
 
     const addHeaderAndFooter = () => {
-      // Logo at top
-      try {
-        doc.addImage(logoSouzaRibeiro, 'PNG', marginLeft, 10, 40, 25);
-      } catch (e) {
-        // fallback if logo fails
-      }
       // Footer
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
