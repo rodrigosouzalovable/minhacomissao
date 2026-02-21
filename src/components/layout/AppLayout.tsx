@@ -23,6 +23,7 @@ import {
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import acordosIcon from '@/assets/acordos-icon.png';
 
 interface AppLayoutProps {
@@ -123,8 +124,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             <p className="text-sm opacity-80 mt-2 ml-10">{user?.email}</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4">
-            <nav>
+          <ScrollArea className="flex-1">
+            <nav className="px-4">
               {filteredNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.href;
@@ -147,7 +148,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 );
               })}
             </nav>
-          </div>
+          </ScrollArea>
 
           <div className="shrink-0 p-4 border-t border-sidebar-border">
             <Button
