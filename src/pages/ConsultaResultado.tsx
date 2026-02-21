@@ -36,6 +36,7 @@ interface NegociacaoState {
 }
 
 const PHONE = '5562981749600';
+const VALOR_MINIMO_PARCELA = 90;
 const PHONE_DISPLAY = '(62) 98174-9600';
 
 function formatCurrency(value: number) {
@@ -103,8 +104,11 @@ export default function ConsultaResultado() {
 
   const getMaxParcelas = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return 24;
-    const max = getMaxParcelasFaixa(neg.descontoFaixa);
-    return neg.entrada > 0 ? Math.min(max, max - 1) : max;
+    const maxPelaFaixa = getMaxParcelasFaixa(neg.descontoFaixa);
+    const valorDesc = getValorComDesconto(neg);
+    const restante = valorDesc - (neg.entrada || 0);
+    const maxPeloValor = restante > 0 ? Math.floor(restante / VALOR_MINIMO_PARCELA) : 1;
+    return Math.max(1, Math.min(maxPelaFaixa, maxPeloValor));
   };
 
   const isNegociacaoValida = (neg: NegociacaoState) => {
@@ -114,7 +118,7 @@ export default function ConsultaResultado() {
     if (neg.entrada > valorDesc) return false;
     if (neg.entrada < 0) return false;
     const valorParcela = getValorParcela(neg);
-    if (valorParcela < 1 && (valorDesc - (neg.entrada || 0)) > 0) return false;
+    if (valorParcela < VALOR_MINIMO_PARCELA && (valorDesc - (neg.entrada || 0)) > 0) return false;
     return true;
   };
 
