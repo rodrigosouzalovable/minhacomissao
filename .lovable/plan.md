@@ -1,45 +1,93 @@
 
+## Criar Layout de Importacao COBMAIS
 
-## Corrigir busca por nome na pagina "Acordos da Equipe"
+### Resumo
 
-### Problema
+Adicionar um novo layout de importacao chamado "COBMAIS" na pagina Importar Devedores. A planilha COBMAIS possui 4 abas com estruturas distintas. O parser combinara dados das abas relevantes para montar os registros de devedores.
 
-Quando o usuario pesquisa pelo nome de um cliente (ex: "RONILSON COSTA GUILHERME"), a busca retorna todos os acordos em vez de filtrar corretamente. Isso acontece porque a comparacao por CPF usa `search.replace(/\D/g, '')`, que resulta em uma string vazia quando o termo nao contem digitos. Como qualquer string contem uma string vazia (`"123".includes("") === true`), todos os acordos com CPF preenchido passam no filtro.
+### Estrutura da Planilha COBMAIS (4 abas)
 
-### Causa raiz
+**Aba 1 - Clientes (principal):**
+- A = CPF/CNPJ
+- B = Cod. Cliente
+- C = Cliente (nome)
+- D = Credor
+- E = Contrato
+- F = Atraso
+- M = Risco (valor devido)
 
-Linha 388 de `src/pages/EquipeAcordos.tsx`:
+**Aba 2 - Telefones:**
+- A = CPF/CNPJ
+- C = Numero
+- D = Tipo (Residencial, Comercial, Referencia)
+- I = Ativo (SIM/NAO)
 
-```typescript
-(acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')))
+**Aba 3 - Titulos:**
+- A = CPF/CNPJ
+- H = Vencimento
+- I = Valor
+
+**Aba 4 - Dados Pessoais:**
+- A = CPF/CNPJ
+- D = Nascimento
+
+### Logica de parsing
+
+1. Ler a Aba 1 como fonte principal de registros (cada linha = 1 devedor)
+2. Ler a Aba 2 para extrair o primeiro telefone ativo (onde coluna I = "SIM") de cada CPF
+3. Ler a Aba 4 para extrair a data de nascimento de cada CPF
+4. Combinar os dados por CPF/CNPJ
+5. Usar a coluna M (Risco) da Aba 1 como valor_original e valor_atualizado
+6. Desduplicar por CPF (a aba 1 pode ter linhas repetidas) - somar valores se houver multiplos registros
+
+### Alteracoes em `src/pages/ImportarDevedores.tsx`
+
+**1. Atualizar o tipo `CredorLayout`**
+```
+type CredorLayout = 'padrao' | 'montreal' | 'cobmais';
 ```
 
-Quando `search` = "RONILSON COSTA GUILHERME", `search.replace(/\D/g, '')` = `""`, e `"qualquerCPF".includes("")` = `true`.
-
-### Correcao
-
-Adicionar uma verificacao para que a comparacao por CPF so ocorra quando o termo de busca contiver digitos numericos. Essa mesma correcao ja foi aplicada em outras paginas do sistema (Meus Acordos, Clientes).
-
-**Arquivo:** `src/pages/EquipeAcordos.tsx`
-
-**Alterar linhas 384-388 de:**
-```typescript
-const matchesSearch = 
-  acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
-  acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase()) ||
-  (acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
+**2. Adicionar descricao do layout COBMAIS no objeto `DESCRICOES`**
+```
+cobmais: 'Aba 1: CPF/CNPJ, Cliente, Credor, Contrato, Atraso, Risco | Aba 2: Telefones | Aba 4: Nascimento'
 ```
 
-**Para:**
-```typescript
-const searchDigits = search.replace(/\D/g, '');
-const matchesSearch = 
-  acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
-  acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase()) ||
-  (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
-```
+**3. Adicionar opcao "COBMAIS" no Select de layout**
 
-### Resultado esperado
+Novo `SelectItem` com value "cobmais" e label "COBMAIS".
 
-A busca por nome filtrara corretamente, mostrando apenas acordos cujo nome do cliente ou nome do funcionario contenha o termo pesquisado. A busca por CPF continuara funcionando normalmente quando o usuario digitar numeros.
+**4. Criar funcao `parseCobmais`**
 
+Nova funcao que:
+- Recebe o `workbook` inteiro (nao apenas a primeira aba)
+- Le a Aba 1 (SheetNames[0]) para dados principais
+- Le a Aba 2 (SheetNames[1]) para telefones, filtrando apenas registros com coluna I = "SIM"
+- Le a Aba 4 (SheetNames[3]) para nascimento
+- Cruza os dados por CPF
+- Retorna array de `DevedorRow`
+
+**5. Ajustar `handleFile` para passar o workbook completo quando layout for COBMAIS**
+
+Em vez de sempre ler apenas `SheetNames[0]`, quando o layout for "cobmais", passa o workbook inteiro para a funcao `parseCobmais`.
+
+**6. Adicionar colunas especificas no preview da tabela para COBMAIS**
+
+Exibir: CPF/CNPJ, Nome, Credor, Contrato, Atraso, Risco (R$), Telefone - similar ao layout padrao mas com telefone.
+
+**7. Ajustar `handleImport` para mapear corretamente os campos COBMAIS**
+
+O campo `descricao` recebera o credor, e `data_vencimento` recebera a data de nascimento (mesmo comportamento do layout padrao).
+
+### Preview das colunas no COBMAIS
+
+| CPF/CNPJ | Nome | Credor | Contrato | Atraso | Risco (R$) | Telefone |
+|----------|------|--------|----------|--------|------------|----------|
+
+### Secao tecnica
+
+- Arquivo modificado: `src/pages/ImportarDevedores.tsx`
+- Sem novas dependencias
+- Sem alteracoes no banco de dados
+- A leitura de multiplas abas usa `workbook.Sheets[workbook.SheetNames[index]]` ja disponivel via biblioteca `xlsx`
+- Telefones sao filtrados por Ativo = "SIM" para importar apenas numeros validos
+- CPFs sao normalizados (apenas digitos) antes do cruzamento entre abas
