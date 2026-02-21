@@ -134,47 +134,59 @@ export default function ImportarDevedores() {
   };
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
+    console.log('[COBMAIS] Sheet names:', workbook.SheetNames);
+    console.log('[COBMAIS] Total sheets:', workbook.SheetNames.length);
+
     // Aba 1 - Cobrança (principal)
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
+    console.log('[COBMAIS] Aba 1 rows:', rows1.length);
+    if (rows1.length > 0) {
+      console.log('[COBMAIS] Aba 1 sample row keys:', Object.keys(rows1[0]));
+      console.log('[COBMAIS] Aba 1 sample row:', JSON.stringify(rows1[0]).substring(0, 500));
+      console.log('[COBMAIS] Aba 1 col A sample (first 5):', rows1.slice(0, 5).map(r => String(r['A'] ?? '')));
+    }
 
     // Aba 2 - Telefones
     const sheet2 = workbook.Sheets[workbook.SheetNames[1]];
     const rows2 = sheet2 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet2, { header: 'A' }).slice(1) : [];
+    console.log('[COBMAIS] Aba 2 rows:', rows2.length);
+    if (rows2.length > 0) {
+      console.log('[COBMAIS] Aba 2 sample row keys:', Object.keys(rows2[0]));
+      console.log('[COBMAIS] Aba 2 sample row:', JSON.stringify(rows2[0]).substring(0, 500));
+    }
 
     // Aba 4 - Dados Pessoais
     const sheet4 = workbook.SheetNames.length >= 4 ? workbook.Sheets[workbook.SheetNames[3]] : null;
     const rows4 = sheet4 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet4, { header: 'A' }).slice(1) : [];
+    console.log('[COBMAIS] Aba 4 rows:', rows4.length);
 
     // 1. Processar aba Telefones primeiro - construir mapa reverso cpfSemZeros -> cpfReal
-    // Na aba Telefones, CPFs estão como texto (com zeros à esquerda preservados)
-    const cpfRealMap = new Map<string, string>(); // "2967906131" -> "02967906131"
+    const cpfRealMap = new Map<string, string>();
     const phoneMap = new Map<string, string>();
     for (const row of rows2) {
       const cpfReal = String(row['A'] ?? '').replace(/\D/g, '');
       if (!cpfReal) continue;
-      // Chave sem zeros à esquerda (como o Excel armazena números)
       const cpfSemZeros = cpfReal.replace(/^0+/, '');
       if (cpfSemZeros && !cpfRealMap.has(cpfSemZeros)) {
         cpfRealMap.set(cpfSemZeros, cpfReal);
       }
-      // Mapear primeiro telefone ativo
       const ativo = String(row['I'] ?? '').toUpperCase().trim();
       if (cpfReal && ativo === 'SIM' && !phoneMap.has(cpfReal)) {
         const numero = String(row['C'] ?? '').replace(/\D/g, '');
         if (numero) phoneMap.set(cpfReal, numero);
       }
     }
+    console.log('[COBMAIS] cpfRealMap size:', cpfRealMap.size);
+    console.log('[COBMAIS] phoneMap size:', phoneMap.size);
 
     // Função para resolver CPF numérico para CPF real
     const resolverCpf = (raw: unknown): string => {
       const digits = String(raw ?? '').replace(/\D/g, '');
       if (!digits) return '';
       const semZeros = digits.replace(/^0+/, '');
-      // Tentar encontrar o CPF real via mapa reverso
       const cpfReal = cpfRealMap.get(semZeros);
       if (cpfReal) return cpfReal;
-      // Fallback: padStart
       if (digits.length <= 11) return digits.padStart(11, '0');
       if (digits.length <= 14) return digits.padStart(14, '0');
       return digits;
@@ -192,9 +204,16 @@ export default function ImportarDevedores() {
 
     // Processar Aba 1 (Cobrança) e combinar dados
     const cpfAccum = new Map<string, DevedorRow>();
+    let skippedCount = 0;
     for (const row of rows1) {
       const cpf = resolverCpf(row['A']);
-      if (cpf.length < 11) continue;
+      if (cpf.length < 11) {
+        skippedCount++;
+        if (skippedCount <= 3) {
+          console.log('[COBMAIS] Skipped row - raw A:', row['A'], '-> resolved cpf:', cpf);
+        }
+        continue;
+      }
 
       const risco = parseNum(row['M']);
       const existing = cpfAccum.get(cpf);
@@ -216,6 +235,8 @@ export default function ImportarDevedores() {
         });
       }
     }
+    console.log('[COBMAIS] Skipped rows total:', skippedCount);
+    console.log('[COBMAIS] Final result count:', cpfAccum.size);
 
     return Array.from(cpfAccum.values());
   };
