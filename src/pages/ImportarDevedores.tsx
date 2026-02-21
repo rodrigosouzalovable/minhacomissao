@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History, Users, Eye } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History, Users, Eye, Loader2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -61,6 +61,7 @@ export default function ImportarDevedores() {
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -196,22 +197,31 @@ export default function ImportarDevedores() {
     if (!f) return;
     setFile(f);
     setImported(false);
+    setParsing(true);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const data = evt.target?.result;
-      const workbook = XLSX.read(data, { type: 'binary' });
+      try {
+        const data = evt.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
 
-      if (credorSelecionado === 'cobmais') {
-        const parsed = parseCobmais(workbook);
-        setRows(parsed);
-      } else {
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-        const dataRows = json.slice(1);
-        const parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
-        setRows(parsed);
+        if (credorSelecionado === 'cobmais') {
+          const parsed = parseCobmais(workbook);
+          setRows(parsed);
+        } else {
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          const dataRows = json.slice(1);
+          const parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
+          setRows(parsed);
+        }
+      } finally {
+        setParsing(false);
       }
+    };
+    reader.onerror = () => {
+      setParsing(false);
+      toast({ title: 'Erro ao ler arquivo', variant: 'destructive' });
     };
     reader.readAsBinaryString(f);
   }, [credorSelecionado]);
@@ -337,14 +347,27 @@ export default function ImportarDevedores() {
                 accept=".xlsx,.xls,.csv"
                 onChange={handleFile}
                 className="max-w-sm"
+                disabled={parsing}
               />
-              {file && (
+              {file && !parsing && (
                 <Button variant="outline" size="sm" onClick={handleClear}>
                   <Trash2 className="h-4 w-4 mr-1" />
                   Limpar
                 </Button>
               )}
             </div>
+
+            {parsing && (
+              <Card className="border-dashed">
+                <CardContent className="flex items-center gap-3 py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <div>
+                    <p className="font-semibold text-sm">Processando planilha...</p>
+                    <p className="text-xs text-muted-foreground">Lendo abas e cruzando dados, aguarde...</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </CardContent>
         </Card>
 
