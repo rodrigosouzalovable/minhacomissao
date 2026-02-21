@@ -62,6 +62,10 @@ export default function ImportarDevedores() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [credorDestino, setCredorDestino] = useState('');
+  const [credorOutro, setCredorOutro] = useState('');
+
+  const CREDORES_OPCOES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -205,16 +209,21 @@ export default function ImportarDevedores() {
         const data = evt.target?.result;
         const workbook = XLSX.read(data, { type: 'binary' });
 
+        let parsed: DevedorRow[];
         if (credorSelecionado === 'cobmais') {
-          const parsed = parseCobmais(workbook);
-          setRows(parsed);
+          parsed = parseCobmais(workbook);
         } else {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           const dataRows = json.slice(1);
-          const parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
-          setRows(parsed);
+          parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
         }
+        setRows(parsed);
+        if (parsed.length === 0) {
+          toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos para importar.', variant: 'destructive' });
+        }
+      } catch {
+        toast({ title: 'Erro ao processar planilha', variant: 'destructive' });
       } finally {
         setParsing(false);
       }
@@ -240,6 +249,13 @@ export default function ImportarDevedores() {
 
   const handleImport = async () => {
     if (!user || rows.length === 0) return;
+
+    const credorFinal = credorDestino === 'outro' ? credorOutro.trim() : credorDestino;
+    if (!credorFinal) {
+      toast({ title: 'Selecione o credor de destino', variant: 'destructive' });
+      return;
+    }
+
     setImporting(true);
 
     // 1. Create importacao record
@@ -247,7 +263,7 @@ export default function ImportarDevedores() {
       .from('importacoes' as any)
       .insert({
         nome_arquivo: file?.name || 'unknown',
-        credor: credorSelecionado,
+        credor: credorFinal,
         total_registros: rows.length,
         importado_por: user.id,
       } as any)
@@ -268,11 +284,10 @@ export default function ImportarDevedores() {
       cpf: r.cpf,
       valor_original: r.valor_original,
       valor_atualizado: r.valor_atualizado,
-      credor: r.credor || null,
+      credor: credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: credorSelecionado === 'montreal' ? parseDate(r.atraso) : parseDate(r.nascimento),
-      ...(credorSelecionado === 'cobmais' ? { credor: r.credor || null } : {}),
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
@@ -340,6 +355,26 @@ export default function ImportarDevedores() {
                   <SelectItem value="cobmais">COBMAIS</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Credor de Destino</Label>
+              <Select value={credorDestino} onValueChange={setCredorDestino}>
+                <SelectTrigger className="max-w-xs">
+                  <SelectValue placeholder="Selecione o credor..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {CREDORES_OPCOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  <SelectItem value="outro">Outro (digitar)</SelectItem>
+                </SelectContent>
+              </Select>
+              {credorDestino === 'outro' && (
+                <Input
+                  placeholder="Digite o nome do credor"
+                  value={credorOutro}
+                  onChange={(e) => setCredorOutro(e.target.value)}
+                  className="max-w-xs"
+                />
+              )}
             </div>
             <div className="flex items-center gap-4">
               <Input
