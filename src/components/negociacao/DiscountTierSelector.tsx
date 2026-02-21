@@ -28,6 +28,8 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
+const VALOR_MINIMO_PARCELA = 90;
+
 export default function DiscountTierSelector({ selected, onSelect, valorTotal }: DiscountTierSelectorProps) {
   return (
     <div className="space-y-2">
@@ -37,16 +39,19 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
           const isSelected = selected === tier.faixa;
           const valorComDesconto = valorTotal * (1 - tier.desconto / 100);
           const economia = valorTotal - valorComDesconto;
+          const disabled = valorComDesconto < VALOR_MINIMO_PARCELA;
 
           return (
             <button
               key={tier.faixa}
-              onClick={() => onSelect(tier.faixa)}
+              onClick={() => !disabled && onSelect(tier.faixa)}
               className="relative rounded-lg p-3 text-left transition-all duration-200"
               style={{
                 background: isSelected ? '#00a86b22' : '#ffffff0a',
                 border: isSelected ? '2px solid #00a86b' : '2px solid #ffffff15',
                 transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                opacity: disabled ? 0.4 : 1,
+                cursor: disabled ? 'not-allowed' : 'pointer',
               }}
             >
               {tier.badge && (
