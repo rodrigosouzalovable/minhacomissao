@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History, Users, Eye, Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -64,6 +65,8 @@ export default function ImportarDevedores() {
   const [parsing, setParsing] = useState(false);
   const [credorDestino, setCredorDestino] = useState('');
   const [credorOutro, setCredorOutro] = useState('');
+  const [importProgress, setImportProgress] = useState(0);
+  const [insertedCount, setInsertedCount] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const CREDORES_OPCOES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
@@ -137,6 +140,7 @@ export default function ImportarDevedores() {
     // Aba 1 - Dados principais
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
+    console.log('[COBMAIS] Total de abas:', workbook.SheetNames.length, '| Linhas aba 1:', rows1.length);
 
     // Aba 2 - Telefones (opcional)
     const sheet2 = workbook.SheetNames.length >= 2 ? workbook.Sheets[workbook.SheetNames[1]] : null;
@@ -271,6 +275,8 @@ export default function ImportarDevedores() {
     }
 
     setImporting(true);
+    setImportProgress(0);
+    setInsertedCount(0);
 
     // 1. Create importacao record
     const { data: importacao, error: importError } = await supabase
@@ -308,12 +314,31 @@ export default function ImportarDevedores() {
       importacao_id: importacaoId,
     }));
 
-    const { error } = await supabase.from('devedores' as any).insert(records as any);
+    // Inserção em lotes de 500 registros
+    const BATCH_SIZE = 500;
+    let inserted = 0;
+    let batchError: any = null;
 
-    if (error) {
-      toast({ title: 'Erro na importação', description: error.message, variant: 'destructive' });
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const batch = records.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('devedores' as any).insert(batch as any);
+      if (error) {
+        batchError = error;
+        break;
+      }
+      inserted += batch.length;
+      setInsertedCount(inserted);
+      setImportProgress(Math.round((inserted / records.length) * 100));
+    }
+
+    if (batchError) {
+      toast({
+        title: 'Erro na importação',
+        description: `${inserted} de ${records.length} registros inseridos antes do erro: ${batchError.message}`,
+        variant: 'destructive',
+      });
     } else {
-      toast({ title: 'Importação concluída', description: `${rows.length} registros importados com sucesso.` });
+      toast({ title: 'Importação concluída', description: `${records.length} registros importados com sucesso.` });
       setImported(true);
       fetchImportacoes();
     }
@@ -436,14 +461,19 @@ export default function ImportarDevedores() {
                   <CardDescription>{file?.name}</CardDescription>
                 </div>
                 {!imported ? (
-                  <Button onClick={handleImport} disabled={importing} style={{ background: '#00a86b', color: '#fff' }}>
-                    {importing ? 'Importando...' : (
-                      <>
-                        <Check className="h-4 w-4 mr-1" />
-                        Confirmar Importação
-                      </>
-                    )}
-                  </Button>
+                   <Button onClick={handleImport} disabled={importing} style={{ background: '#00a86b', color: '#fff' }}>
+                     {importing ? (
+                       <>
+                         <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                         Importando...
+                       </>
+                     ) : (
+                       <>
+                         <Check className="h-4 w-4 mr-1" />
+                         Confirmar Importação
+                       </>
+                     )}
+                   </Button>
                 ) : (
                   <div className="flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
                     <Check className="h-4 w-4" />
@@ -451,6 +481,14 @@ export default function ImportarDevedores() {
                   </div>
                 )}
               </div>
+              {importing && (
+                <div className="mt-4 space-y-2">
+                  <Progress value={importProgress} className="h-3" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Inserindo {insertedCount.toLocaleString('pt-BR')} de {rows.length.toLocaleString('pt-BR')} registros... ({importProgress}%)
+                  </p>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 mb-4">
