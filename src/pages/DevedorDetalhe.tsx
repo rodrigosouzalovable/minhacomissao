@@ -905,6 +905,9 @@ ${bodyContent}
                                   Venc: {new Date(contrato.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}
                                 </span>
                               )}
+                              <span className="text-xs font-semibold text-destructive">
+                                {contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
                             </div>
                             <div className="shrink-0">
                               {openContratos[contrato.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
