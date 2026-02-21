@@ -1,28 +1,48 @@
 
 
-## Limitar parcelas para valor minimo de R$ 90,00
+## Melhorias no portal de negociacao
 
-### O que muda
+### 1. Desabilitar faixas de desconto com parcela minima abaixo de R$ 90
 
-O sistema passara a calcular o numero maximo de parcelas considerando que nenhuma parcela pode ser menor que R$ 90,00. Isso sera aplicado dinamicamente: se o valor com desconto (menos a entrada) dividido pelo numero de parcelas resultar em menos de R$ 90, essas opcoes nao aparecerao no seletor.
+No componente `DiscountTierSelector`, atualizar a logica de `disabled` para considerar o valor da parcela minima da faixa (valor com desconto dividido pelo numero maximo de parcelas da faixa). Se esse valor for menor que R$ 90, o card sera desabilitado visualmente (opacidade reduzida, cursor bloqueado).
+
+**Arquivo:** `src/components/negociacao/DiscountTierSelector.tsx`
+- Importar `getMaxParcelasFaixa` internamente
+- Mudar logica: `disabled = (valorComDesconto / getMaxParcelasFaixa(tier.faixa)) < VALOR_MINIMO_PARCELA && tier.faixa !== 'avista'`
+- Para "a vista": desabilitar apenas se `valorComDesconto < VALOR_MINIMO_PARCELA`
+
+### 2. Botao "TENHO UMA CONTRA PROPOSTA"
+
+Adicionar um botao visivel no formulario de negociacao que linka direto para o WhatsApp com uma mensagem padrao de contra proposta.
+
+**Arquivo:** `src/pages/ConsultaResultado.tsx`
+- Adicionar botao abaixo do formulario de negociacao (antes ou apos o botao "Confirmar proposta")
+- Texto: "TENHO UMA CONTRA PROPOSTA"
+- Link para WhatsApp com mensagem: "Ola! Meu nome e [nome], CPF [cpf], e gostaria de fazer uma contra proposta para os contratos [contratos]."
+- Estilo diferenciado (outline ou cor diferente para nao competir com o botao principal)
+
+### 3. Alterar numero do WhatsApp
+
+**Arquivo:** `src/pages/ConsultaResultado.tsx`
+- Alterar `PHONE` de `'5562981749600'` para `'5562982183144'`
+- Alterar `PHONE_DISPLAY` de `'(62) 98174-9600'` para `'(62) 98218-3144'`
 
 ### Detalhes tecnicos
 
-**Arquivo:** `src/pages/ConsultaResultado.tsx`
+**DiscountTierSelector.tsx** - Nova logica de disabled:
+```typescript
+const maxParcelas = getMaxParcelasFaixa(tier.faixa);
+const valorParcela = valorComDesconto / maxParcelas;
+const disabled = valorParcela < VALOR_MINIMO_PARCELA;
+```
 
-1. **Adicionar constante** `VALOR_MINIMO_PARCELA = 90` no topo do arquivo
-
-2. **Ajustar `getMaxParcelas`** para considerar o valor minimo:
-   - Calcular o maximo pela faixa de desconto (regra atual)
-   - Calcular o maximo pelo valor minimo: `Math.floor(restante / 90)`
-   - Retornar o menor dos dois, garantindo no minimo 1
-
-3. **Ajustar validacao `isNegociacaoValida`** para rejeitar parcelas abaixo de R$ 90:
-   - Trocar a checagem atual de `valorParcela < 1` por `valorParcela < 90`
-
-4. **No seletor de parcelas (Select)**, o range ja sera limitado pelo `getMaxParcelas` ajustado, entao as opcoes indisponiveis simplesmente nao aparecerao
-
-**Arquivo:** `src/components/negociacao/DiscountTierSelector.tsx`
-
-5. **Ocultar faixas de desconto impossiveis**: se o valor com desconto da faixa for menor que R$ 90 (ou seja, nem 1 parcela atinge o minimo), desabilitar visualmente o card dessa faixa -- embora na pratica isso so ocorra com debitos muito pequenos
-
+**ConsultaResultado.tsx** - Botao contra proposta (apos o botao "Confirmar proposta"):
+```typescript
+<a href={`https://wa.me/5562982183144?text=${encodeURIComponent(
+  `Olá! Meu nome é ${nomeCliente}, CPF ${cpfCliente}, e gostaria de fazer uma contra proposta para os contratos ${contratosStr}.`
+)}`} target="_blank">
+  <Button variant="outline" className="w-full">
+    TENHO UMA CONTRA PROPOSTA
+  </Button>
+</a>
+```
