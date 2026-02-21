@@ -45,14 +45,7 @@ function formatCpfFull(cpf: string) {
   return `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
 }
 
-function formatDateBR(dateStr: string | null) {
-  if (!dateStr) return null;
-  try {
-    return format(new Date(dateStr + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR });
-  } catch {
-    return null;
-  }
-}
+
 
 export default function ConsultaResultado() {
   const { cpf } = useParams<{ cpf: string }>();
@@ -60,7 +53,7 @@ export default function ConsultaResultado() {
   const [loading, setLoading] = useState(true);
   const [nomeCliente, setNomeCliente] = useState('');
   const [cpfCliente, setCpfCliente] = useState('');
-  const [nascimentoCliente, setNascimentoCliente] = useState<string | null>(null);
+  
   const [negociacao, setNegociacao] = useState<NegociacaoState | null>(null);
 
   useEffect(() => {
@@ -72,7 +65,7 @@ export default function ConsultaResultado() {
         setDebitos(typedData);
         setNomeCliente(typedData[0].nome);
         setCpfCliente(typedData[0].cpf);
-        setNascimentoCliente(typedData[0].data_vencimento);
+        
       }
       setLoading(false);
     }
@@ -187,11 +180,8 @@ export default function ConsultaResultado() {
                   <p className="text-sm" style={{ color: '#ffffffaa' }}>
                     CPF: {formatCpfFull(cpfCliente)}
                   </p>
-                  {nascimentoCliente && (
-                    <p className="text-sm" style={{ color: '#ffffffaa' }}>
-                      Nascimento: {formatDateBR(nascimentoCliente)}
-                    </p>
-                  )}
+
+
                 </div>
                 <p className="mt-2" style={{ color: '#ffffffaa' }}>
                   Encontramos {debitos.length} débito{debitos.length > 1 ? 's' : ''} em aberto. Negocie agora!
