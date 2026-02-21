@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 
-type CredorLayout = 'padrao' | 'montreal';
+type CredorLayout = 'padrao' | 'montreal' | 'cobmais';
 
 interface DevedorRow {
   cpf: string;
@@ -45,6 +45,7 @@ interface Importacao {
 const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = CPF/CNPJ, B = Nome/Razão Social, C = Nº Contrato, F = Tipo Contrato, H = Parcela, I = Vencimento, J = Valor, L = Tel Residencial, M = Tel Comercial',
+  cobmais: 'Aba 1: CPF/CNPJ, Cliente, Credor, Contrato, Atraso, Risco | Aba 2: Telefones | Aba 4: Nascimento',
 };
 
 export default function ImportarDevedores() {
@@ -126,6 +127,70 @@ export default function ImportarDevedores() {
     }).filter(r => r.cpf.length >= 11);
   };
 
+  const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
+    // Aba 1 - Clientes (principal)
+    const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
+    const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
+
+    // Aba 2 - Telefones
+    const sheet2 = workbook.Sheets[workbook.SheetNames[1]];
+    const rows2 = sheet2 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet2, { header: 'A' }).slice(1) : [];
+
+    // Aba 4 - Dados Pessoais
+    const sheet4 = workbook.SheetNames.length >= 4 ? workbook.Sheets[workbook.SheetNames[3]] : null;
+    const rows4 = sheet4 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet4, { header: 'A' }).slice(1) : [];
+
+    // Mapear telefones ativos por CPF (primeiro telefone ativo encontrado)
+    const phoneMap = new Map<string, string>();
+    for (const row of rows2) {
+      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      const ativo = String(row['I'] ?? '').toUpperCase().trim();
+      if (cpf && ativo === 'SIM' && !phoneMap.has(cpf)) {
+        const numero = String(row['C'] ?? '').replace(/\D/g, '');
+        if (numero) phoneMap.set(cpf, numero);
+      }
+    }
+
+    // Mapear nascimento por CPF
+    const birthMap = new Map<string, string>();
+    for (const row of rows4) {
+      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      if (cpf && !birthMap.has(cpf)) {
+        const nasc = String(row['D'] ?? '');
+        if (nasc) birthMap.set(cpf, nasc);
+      }
+    }
+
+    // Processar Aba 1 e combinar dados
+    const cpfAccum = new Map<string, DevedorRow>();
+    for (const row of rows1) {
+      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      if (cpf.length < 11) continue;
+
+      const risco = parseNum(row['M']);
+      const existing = cpfAccum.get(cpf);
+
+      if (existing) {
+        existing.valor_original += risco;
+        existing.valor_atualizado += risco;
+      } else {
+        cpfAccum.set(cpf, {
+          cpf,
+          nascimento: birthMap.get(cpf) || '',
+          nome: String(row['C'] ?? ''),
+          credor: String(row['D'] ?? ''),
+          contrato: String(row['E'] ?? ''),
+          atraso: String(row['F'] ?? ''),
+          valor_original: risco,
+          valor_atualizado: risco,
+          telefone: phoneMap.get(cpf) || undefined,
+        });
+      }
+    }
+
+    return Array.from(cpfAccum.values());
+  };
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -136,12 +201,17 @@ export default function ImportarDevedores() {
     reader.onload = (evt) => {
       const data = evt.target?.result;
       const workbook = XLSX.read(data, { type: 'binary' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-      const dataRows = json.slice(1);
 
-      const parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
-      setRows(parsed);
+      if (credorSelecionado === 'cobmais') {
+        const parsed = parseCobmais(workbook);
+        setRows(parsed);
+      } else {
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+        const dataRows = json.slice(1);
+        const parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
+        setRows(parsed);
+      }
     };
     reader.readAsBinaryString(f);
   }, [credorSelecionado]);
@@ -192,6 +262,7 @@ export default function ImportarDevedores() {
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: credorSelecionado === 'montreal' ? parseDate(r.atraso) : parseDate(r.nascimento),
+      ...(credorSelecionado === 'cobmais' ? { credor: r.credor || null } : {}),
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
@@ -229,6 +300,7 @@ export default function ImportarDevedores() {
   };
 
   const isMontreal = credorSelecionado === 'montreal';
+  const isCobmais = credorSelecionado === 'cobmais';
 
   return (
     <AppLayout>
@@ -255,6 +327,7 @@ export default function ImportarDevedores() {
                 <SelectContent>
                   <SelectItem value="padrao">Padrão</SelectItem>
                   <SelectItem value="montreal">MONTREAL</SelectItem>
+                  <SelectItem value="cobmais">COBMAIS</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -383,6 +456,15 @@ export default function ImportarDevedores() {
                             <TableHead>Valor (R$)</TableHead>
                             <TableHead>Telefone</TableHead>
                           </>
+                        ) : isCobmais ? (
+                          <>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Credor</TableHead>
+                            <TableHead>Contrato</TableHead>
+                            <TableHead>Atraso</TableHead>
+                            <TableHead>Risco (R$)</TableHead>
+                            <TableHead>Telefone</TableHead>
+                          </>
                         ) : (
                           <>
                             <TableHead>Nascimento</TableHead>
@@ -405,6 +487,15 @@ export default function ImportarDevedores() {
                               <TableCell>{row.contrato || '-'}</TableCell>
                               <TableCell>{row.descricao || '-'}</TableCell>
                               <TableCell>{row.atraso || '-'}</TableCell>
+                              <TableCell>{row.atraso || '-'}</TableCell>
+                              <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                              <TableCell>{row.telefone || '-'}</TableCell>
+                            </>
+                          ) : isCobmais ? (
+                            <>
+                              <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                              <TableCell>{row.credor || '-'}</TableCell>
+                              <TableCell>{row.contrato || '-'}</TableCell>
                               <TableCell>{row.atraso || '-'}</TableCell>
                               <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                               <TableCell>{row.telefone || '-'}</TableCell>
