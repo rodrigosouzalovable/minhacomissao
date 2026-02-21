@@ -1,67 +1,74 @@
 
 
-## Mostrar todas as parcelas na ficha do cliente
+## Corrigir limite de 1000 registros na busca de Clientes
 
-### O que muda
+### Problema
 
-Atualmente, o parser COBMAIS agrupa todas as linhas de um mesmo CPF+Contrato em um unico registro. Isso faz com que as parcelas individuais (com seus vencimentos e valores) sejam perdidas na importacao.
+O Supabase tem um limite padrao de 1000 linhas por consulta. Com 50 mil parcelas importadas, a busca retorna apenas 1000 linhas, que agrupadas por CPF resultam em ~184 clientes.
 
-A solucao e **parar de agrupar** no parser COBMAIS, armazenando cada linha da planilha como um registro separado na tabela `devedores`. Assim:
+### Solucao
 
-- Na **lista de clientes** (pagina Clientes): continua agrupando visualmente por CPF (ja funciona assim)
-- Na **ficha do cliente** (DevedorDetalhe): cada parcela aparece como um item separado com seu proprio vencimento e valor
+Implementar carregamento paginado em lotes na funcao `handleSearch` do arquivo `src/pages/Clientes.tsx`, buscando todas as linhas em loops de 1000 ate nao haver mais resultados.
 
-### Exemplo pratico
+### Arquivo: `src/pages/Clientes.tsx`
 
-Para ABADIA COSTA OLIVEIRA (CPF 2967906131):
-- Hoje: 1 registro com valor total R$ 511,78
-- Depois: 2 registros separados, cada um com R$ 255,89 e vencimentos 06/02/2025 e 06/03/2025
+**Mudanca na funcao `handleSearch` (linhas 201-243):**
 
-### Mudancas
-
-**Arquivo: `src/pages/ImportarDevedores.tsx`**
-
-1. Remover a logica de agrupamento (Map) do `parseCobmais`
-2. Cada linha da planilha vira um `DevedorRow` individual
-3. Usar coluna F (valor da parcela) como `valor_original` e `valor_atualizado` ao inves da coluna G (total)
-4. Manter a resolucao de CPF com zeros a esquerda e telefones da Aba 2
-
-**Arquivo: `src/pages/DevedorDetalhe.tsx`**
-
-5. Ajustar o resumo recolhido de cada contrato para mostrar o valor da parcela (que agora e individual)
-6. Nenhuma outra mudanca necessaria -- a pagina ja busca todos os registros com o mesmo CPF e exibe cada um como um item colapsavel com vencimento e valor
-
-### Secao tecnica
-
-**Mudanca em `parseCobmais` (linhas 177-214):**
+Substituir a consulta unica por um loop que busca em lotes de 1000:
 
 ```text
-// DE: Map com agrupamento
-const devedoresMap = new Map<string, DevedorRow>();
-for (const row of rows1) {
-  const key = `${cpf}|${contrato}`;
-  if (!devedoresMap.has(key)) { ... }
-}
-return Array.from(devedoresMap.values());
+// DE:
+const { data, error } = await query;
+if (!error && data) { setRawResults(data as ClienteRow[]); }
 
-// PARA: Array simples, cada linha = 1 registro
-const devedores: DevedorRow[] = [];
-for (const row of rows1) {
-  const valor = parseNum(row['F']); // Valor da parcela individual
-  devedores.push({ cpf, nome, contrato, atraso: vencimentoStr, valor_original: valor, valor_atualizado: valor, ... });
+// PARA:
+const PAGE_FETCH = 1000;
+let allData: ClienteRow[] = [];
+let from = 0;
+let keepFetching = true;
+
+while (keepFetching) {
+  const { data, error } = await query.range(from, from + PAGE_FETCH - 1);
+  if (error) { toast.error('Erro na busca: ' + error.message); break; }
+  if (data) allData = [...allData, ...(data as ClienteRow[])];
+  if (!data || data.length < PAGE_FETCH) keepFetching = false;
+  else from += PAGE_FETCH;
 }
-return devedores;
+
+setRawResults(allData);
 ```
 
-**Resultado na ficha do cliente:**
-- Cada parcela aparece como um item colapsavel separado
-- O resumo mostra: numero do contrato, dias de atraso e vencimento
-- Ao expandir: valor original, valor atualizado, estagio
-- O total no topo da secao Contratos soma todas as parcelas
+**Problema tecnico com reutilizacao de query:** O objeto `query` do Supabase nao pode ser reutilizado em um loop (o `.range()` modifica o builder). A solucao e mover a construcao do query para dentro do loop, recriando-o a cada iteracao.
 
-**Impacto:**
-- Unico arquivo principal modificado: `src/pages/ImportarDevedores.tsx`
-- Ajuste menor em `src/pages/DevedorDetalhe.tsx` (opcional, para melhorar a visualizacao)
+```text
+while (keepFetching) {
+  let q = supabase.from('devedores')
+    .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio')
+    .eq('ativo', true)
+    .order('criado_em', { ascending: false })
+    .range(from, from + PAGE_FETCH - 1);
+
+  // Reaplicar filtros
+  if (busca.trim()) { ... }
+  if (telefone.trim()) { ... }
+  if (credor !== 'todos') { ... }
+  if (estagio !== 'todos') { ... }
+
+  const { data, error } = await q;
+  ...
+}
+```
+
+**Tambem corrigir o fetch de credores (linhas 90-105):** A mesma limitacao de 1000 afeta a listagem de credores unicos. Adicionar `.limit(10000)` ou paginacao similar para garantir que todos os credores aparecam no filtro.
+
+### Resultado esperado
+
+- Todos os ~50 mil registros serao carregados (em lotes de 1000)
+- A interface de clientes mostrara todos os CPFs unicos agrupados corretamente
+- O indicador "Pesquisando..." continuara visivel durante todo o carregamento
+
+### Impacto
+- Unico arquivo modificado: `src/pages/Clientes.tsx`
 - Sem alteracoes no banco de dados
 - Sem novas dependencias
-- A proxima importacao COBMAIS criara registros individuais por parcela
+
