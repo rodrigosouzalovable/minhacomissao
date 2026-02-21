@@ -1,18 +1,18 @@
 
+## Adicionar numero da parcela e vencimento nos cards de debito
 
-## Remover "Nascimento" do portal de negociacao
+### Arquivo: `src/pages/ConsultaResultado.tsx`
 
-### Problema
-Na pagina de resultado da consulta do portal de negociacao, esta sendo exibida a data de nascimento do cliente ao lado do CPF, informacao desnecessaria.
+**Mudanca nos cards de debito (linhas 193-212):**
 
-### Solucao
-Remover o bloco que exibe "Nascimento: ..." no arquivo `src/pages/ConsultaResultado.tsx`.
+Adicionar em cada card:
+- Numero da parcela (indice + 1, ex: "Parcela 1 de 6")
+- Data de vencimento formatada (campo `data_vencimento` ja existe na interface `Debito`)
 
-### Detalhes tecnicos
+```
+Parcela 1 de 6
+Contrato: 60706294
+Vencimento: 15/01/2026                    R$ 139,89
+```
 
-**Arquivo:** `src/pages/ConsultaResultado.tsx`
-
-- Remover o estado `nascimentoCliente` e a linha que o define no `useEffect`
-- Remover o trecho condicional que renderiza "Nascimento: {formatDateBR(nascimentoCliente)}"
-- Opcionalmente remover a funcao `formatDateBR` se nao for usada em outro lugar do arquivo
-
+A data de vencimento sera formatada usando `format()` do date-fns com locale ptBR que ja estao importados no arquivo. Caso `data_vencimento` seja null, o campo nao sera exibido.
