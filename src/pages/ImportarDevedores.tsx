@@ -45,7 +45,7 @@ interface Importacao {
 const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = CPF/CNPJ, B = Nome/Razão Social, C = Nº Contrato, F = Tipo Contrato, H = Parcela, I = Vencimento, J = Valor, L = Tel Residencial, M = Tel Comercial',
-  cobmais: 'Aba 1: CPF/CNPJ, Cliente, Credor, Contrato, Atraso, Risco | Aba 2: Telefones | Aba 4: Nascimento',
+  cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total | Aba 2: Telefones (opcional)',
 };
 
 export default function ImportarDevedores() {
@@ -134,34 +134,15 @@ export default function ImportarDevedores() {
   };
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
-    console.log('[COBMAIS] Sheet names:', workbook.SheetNames);
-    console.log('[COBMAIS] Total sheets:', workbook.SheetNames.length);
-
-    // Aba 1 - Cobrança (principal)
+    // Aba 1 - Dados principais
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
-    console.log('[COBMAIS] Aba 1 rows:', rows1.length);
-    if (rows1.length > 0) {
-      console.log('[COBMAIS] Aba 1 sample row keys:', Object.keys(rows1[0]));
-      console.log('[COBMAIS] Aba 1 sample row:', JSON.stringify(rows1[0]).substring(0, 500));
-      console.log('[COBMAIS] Aba 1 col A sample (first 5):', rows1.slice(0, 5).map(r => String(r['A'] ?? '')));
-    }
 
-    // Aba 2 - Telefones
-    const sheet2 = workbook.Sheets[workbook.SheetNames[1]];
+    // Aba 2 - Telefones (opcional)
+    const sheet2 = workbook.SheetNames.length >= 2 ? workbook.Sheets[workbook.SheetNames[1]] : null;
     const rows2 = sheet2 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet2, { header: 'A' }).slice(1) : [];
-    console.log('[COBMAIS] Aba 2 rows:', rows2.length);
-    if (rows2.length > 0) {
-      console.log('[COBMAIS] Aba 2 sample row keys:', Object.keys(rows2[0]));
-      console.log('[COBMAIS] Aba 2 sample row:', JSON.stringify(rows2[0]).substring(0, 500));
-    }
 
-    // Aba 4 - Dados Pessoais
-    const sheet4 = workbook.SheetNames.length >= 4 ? workbook.Sheets[workbook.SheetNames[3]] : null;
-    const rows4 = sheet4 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet4, { header: 'A' }).slice(1) : [];
-    console.log('[COBMAIS] Aba 4 rows:', rows4.length);
-
-    // 1. Processar aba Telefones primeiro - construir mapa reverso cpfSemZeros -> cpfReal
+    // Construir mapa de CPF real (zeros à esquerda) e telefones a partir da Aba 2
     const cpfRealMap = new Map<string, string>();
     const phoneMap = new Map<string, string>();
     for (const row of rows2) {
@@ -177,10 +158,7 @@ export default function ImportarDevedores() {
         if (numero) phoneMap.set(cpfReal, numero);
       }
     }
-    console.log('[COBMAIS] cpfRealMap size:', cpfRealMap.size);
-    console.log('[COBMAIS] phoneMap size:', phoneMap.size);
 
-    // Função para resolver CPF numérico para CPF real
     const resolverCpf = (raw: unknown): string => {
       const digits = String(raw ?? '').replace(/\D/g, '');
       if (!digits) return '';
@@ -192,53 +170,44 @@ export default function ImportarDevedores() {
       return digits;
     };
 
-    // Mapear nascimento por CPF
-    const birthMap = new Map<string, string>();
-    for (const row of rows4) {
-      const cpf = resolverCpf(row['A']);
-      if (cpf && !birthMap.has(cpf)) {
-        const nasc = String(row['D'] ?? '');
-        if (nasc) birthMap.set(cpf, nasc);
-      }
-    }
-
-    // Processar Aba 1 (Cobrança) e combinar dados
-    const cpfAccum = new Map<string, DevedorRow>();
-    let skippedCount = 0;
+    // Agregar por CPF + Contrato
+    const devedoresMap = new Map<string, DevedorRow>();
     for (const row of rows1) {
       const cpf = resolverCpf(row['A']);
-      if (cpf.length < 11) {
-        skippedCount++;
-        if (skippedCount <= 3) {
-          console.log('[COBMAIS] Skipped row - raw A:', row['A'], '-> resolved cpf:', cpf);
+      if (cpf.length < 11) continue;
+
+      const contrato = String(row['C'] ?? '').trim();
+      const key = `${cpf}|${contrato}`;
+
+      if (!devedoresMap.has(key)) {
+        const total = parseNum(row['G']);
+        // Converter vencimento Excel serial number para string dd/mm/yyyy
+        let vencimentoStr = '';
+        const vencRaw = row['E'];
+        if (typeof vencRaw === 'number') {
+          const dt = XLSX.SSF.parse_date_code(vencRaw);
+          if (dt) {
+            vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+          }
+        } else if (vencRaw) {
+          vencimentoStr = String(vencRaw);
         }
-        continue;
-      }
 
-      const risco = parseNum(row['M']);
-      const existing = cpfAccum.get(cpf);
-
-      if (existing) {
-        existing.valor_original += risco;
-        existing.valor_atualizado += risco;
-      } else {
-        cpfAccum.set(cpf, {
+        devedoresMap.set(key, {
           cpf,
-          nascimento: birthMap.get(cpf) || '',
-          nome: String(row['C'] ?? ''),
-          credor: String(row['D'] ?? ''),
-          contrato: String(row['E'] ?? ''),
-          atraso: String(row['F'] ?? ''),
-          valor_original: risco,
-          valor_atualizado: risco,
+          nascimento: '',
+          nome: String(row['B'] ?? ''),
+          credor: '',
+          contrato,
+          atraso: vencimentoStr,
+          valor_original: total,
+          valor_atualizado: total,
           telefone: phoneMap.get(cpf) || undefined,
         });
       }
     }
-    console.log('[COBMAIS] Skipped rows total:', skippedCount);
-    console.log('[COBMAIS] Final result count:', cpfAccum.size);
 
-    return Array.from(cpfAccum.values());
+    return Array.from(devedoresMap.values());
   };
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -332,7 +301,7 @@ export default function ImportarDevedores() {
       credor: credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'montreal' ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
@@ -566,10 +535,9 @@ export default function ImportarDevedores() {
                         ) : isCobmais ? (
                           <>
                             <TableHead>Nome</TableHead>
-                            <TableHead>Credor</TableHead>
                             <TableHead>Contrato</TableHead>
-                            <TableHead>Atraso</TableHead>
-                            <TableHead>Risco (R$)</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead>Total (R$)</TableHead>
                             <TableHead>Telefone</TableHead>
                           </>
                         ) : (
@@ -601,7 +569,6 @@ export default function ImportarDevedores() {
                           ) : isCobmais ? (
                             <>
                               <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
-                              <TableCell>{row.credor || '-'}</TableCell>
                               <TableCell>{row.contrato || '-'}</TableCell>
                               <TableCell>{row.atraso || '-'}</TableCell>
                               <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
