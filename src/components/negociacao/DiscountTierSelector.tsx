@@ -39,9 +39,9 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
           const isSelected = selected === tier.faixa;
           const valorComDesconto = valorTotal * (1 - tier.desconto / 100);
           const economia = valorTotal - valorComDesconto;
-          const maxParcelas = getMaxParcelasFaixa(tier.faixa);
-          const valorParcela = valorComDesconto / maxParcelas;
-          const disabled = valorParcela < VALOR_MINIMO_PARCELA;
+          const minParcelas = getMinParcelas(tier.faixa);
+          const valorParcelaMin = valorComDesconto / minParcelas;
+          const disabled = valorParcelaMin < VALOR_MINIMO_PARCELA;
 
           return (
             <button
