@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useParams, Navigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Phone, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, MapPin, Lock } from 'lucide-react';
-import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
-import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
+import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
 
 function formatCpfInput(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -22,9 +21,6 @@ function isValidCpf(cpf: string) {
   return digits.length === 11;
 }
 
-const PHONE = '5562982183144';
-const PHONE_DISPLAY = '(62) 98218-3144';
-
 const FAQ_ITEMS = [
   { q: 'Qual o objetivo do Portal de Acordos?', a: 'O Portal de Acordos tem como objetivo facilitar a renegociação de débitos de forma online, rápida e segura, oferecendo condições especiais para que você regularize sua situação financeira.' },
   { q: 'Recebi um contato sobre uma oportunidade de negociação. Como consulto?', a: 'Basta digitar seu CPF no campo de consulta na página inicial. Se houver débitos disponíveis para negociação, eles serão exibidos com todos os detalhes para você avaliar.' },
@@ -35,15 +31,24 @@ const FAQ_ITEMS = [
 ];
 
 export default function PortalConsulta() {
+  const { creditor } = useParams<{ creditor: string }>();
   const [cpf, setCpf] = useState('');
   const [faqSearch, setFaqSearch] = useState('');
   const navigate = useNavigate();
+
+  if (!creditor || !isValidCredorSlug(creditor)) {
+    return <Navigate to="/" replace />;
+  }
+
+  const config = getCredorConfig(creditor)!;
+  const PHONE = config.phone;
+  const PHONE_DISPLAY = config.phoneDisplay;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const digits = cpf.replace(/\D/g, '');
     if (isValidCpf(cpf)) {
-      navigate(`/consulta/${digits}`);
+      navigate(`/consulta/${creditor}/${digits}`);
     }
   };
 
@@ -63,9 +68,13 @@ export default function PortalConsulta() {
       <header className="px-4 py-3" style={{ background: 'linear-gradient(135deg, #001a33 0%, #002b55 100%)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-6">
-            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-14 sm:h-20 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+            <img src={config.logos.parceiro} alt="Souza e Ribeiro" className="h-14 sm:h-20 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
             <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.25)' }} />
-            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-16 w-auto" />
+            {config.logos.principal ? (
+              <img src={config.logos.principal} alt={config.nome} className="h-12 sm:h-16 w-auto" />
+            ) : (
+              <span className="text-lg sm:text-xl font-black" style={{ color: '#00a86b' }}>{config.nome.toUpperCase()}</span>
+            )}
           </div>
           <nav className="hidden md:flex items-center gap-6">
             <button onClick={() => scrollTo('beneficios')} className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.85)' }}>Benefícios</button>
@@ -167,15 +176,16 @@ export default function PortalConsulta() {
         <div className="max-w-5xl mx-auto">
           <h3 className="text-2xl font-bold text-center mb-8" style={{ color: '#1a1a2e' }}>Quem somos</h3>
           <p className="text-center text-base sm:text-lg max-w-3xl mx-auto mb-10" style={{ color: '#444', lineHeight: 1.8 }}>
-            O Portal de Acordos é a plataforma de gestão e recuperação de crédito da{' '}
-            <strong>Souza e Ribeiro Advogados</strong>, <strong>autorizada e homologada pelo Grupo Altum</strong>,
-            com foco nas melhores oportunidades de negociação para seus clientes.
-            Todo o processo é online, de forma rápida e segura.
+            {config.quemSomos}
           </p>
           <div className="flex items-center justify-center gap-8 sm:gap-12">
-            <img src={logoSouzaRibeiro} alt="Souza e Ribeiro Advogados" className="h-16 sm:h-20 w-auto" />
+            <img src={config.logos.parceiro} alt="Souza e Ribeiro Advogados" className="h-16 sm:h-20 w-auto" />
             <div className="h-12 w-px" style={{ background: '#ddd' }} />
-            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-16 sm:h-20 w-auto" style={{ filter: 'brightness(0)' }} />
+            {config.logos.principal ? (
+              <img src={config.logos.principal} alt={config.nome} className="h-16 sm:h-20 w-auto" style={{ filter: 'brightness(0)' }} />
+            ) : (
+              <span className="text-2xl font-black" style={{ color: '#1a1a2e' }}>{config.nome.toUpperCase()}</span>
+            )}
           </div>
         </div>
       </section>
@@ -204,7 +214,7 @@ export default function PortalConsulta() {
         </div>
       </section>
 
-      {/* Dúvidas Frequentes - Accordion */}
+      {/* Dúvidas Frequentes */}
       <section id="duvidas" className="px-4 py-16" style={{ background: '#f7f8fa' }}>
         <div className="max-w-3xl mx-auto">
           <h3 className="text-2xl font-bold text-center mb-2" style={{ color: '#1a1a2e' }}>Perguntas Frequentes</h3>
@@ -246,19 +256,20 @@ export default function PortalConsulta() {
         </div>
       </section>
 
-      {/* Footer Completo */}
+      {/* Footer */}
       <footer style={{ background: '#1a1a2e' }}>
-        {/* Top bar */}
         <div className="px-4 py-10" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="max-w-5xl mx-auto">
-            {/* Logos */}
             <div className="flex items-center justify-center gap-6 sm:gap-10 mb-8">
-              <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-12 sm:h-14 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+              <img src={config.logos.parceiro} alt="Souza e Ribeiro" className="h-12 sm:h-14 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
               <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.2)' }} />
-              <img src={logoGrupoAltum} alt="Grupo Altum" className="h-12 sm:h-14 w-auto" />
+              {config.logos.principal ? (
+                <img src={config.logos.principal} alt={config.nome} className="h-12 sm:h-14 w-auto" />
+              ) : (
+                <span className="text-xl font-black" style={{ color: '#00a86b' }}>{config.nome.toUpperCase()}</span>
+              )}
             </div>
 
-            {/* Links + Atendimento */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-center sm:text-left">
               <div>
                 <h4 className="font-semibold text-sm mb-3" style={{ color: 'rgba(255,255,255,0.9)' }}>Links</h4>
@@ -282,14 +293,13 @@ export default function PortalConsulta() {
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div className="px-4 py-5">
           <div className="max-w-5xl mx-auto text-center">
             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              Portal de Acordos é um serviço da SOUZA E RIBEIRO ADVOGADOS
+              {config.footerTexto}
             </p>
             <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>
-              © {new Date().getFullYear()} Grupo Altum — Todos os direitos reservados
+              © {new Date().getFullYear()} {config.copyrightTexto} — Todos os direitos reservados
             </p>
           </div>
         </div>
