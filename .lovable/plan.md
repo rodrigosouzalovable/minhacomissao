@@ -1,39 +1,42 @@
 
 
-## Corrigir botao "Limpar" para resetar o input de arquivo
+## Corrigir leitura de planilhas COBMAIS grandes
 
-### Problema
+### Problema raiz
 
-Ao clicar em "Limpar", os estados internos (`file`, `rows`, `imported`) sao resetados, mas o elemento `<input type="file">` no DOM ainda exibe o nome do arquivo anterior. O usuario nao consegue selecionar o mesmo arquivo novamente nem ve o input como "limpo".
+O arquivo tem 17 abas com centenas de milhares de linhas (56K na Cobranca, 184K em Telefones, 319K em Parcelas). O metodo `reader.readAsBinaryString()` nao consegue processar arquivos desse tamanho corretamente - os dados sao truncados ou corrompidos, resultando em 0 linhas lidas na maioria das abas.
 
 ### Solucao
 
 **Arquivo: `src/pages/ImportarDevedores.tsx`**
 
-1. Adicionar um `useRef` para o input de arquivo:
-   ```text
-   const fileInputRef = useRef<HTMLInputElement>(null);
-   ```
+Trocar o metodo de leitura do arquivo de `readAsBinaryString` para `readAsArrayBuffer`, que e mais eficiente e confiavel para arquivos grandes:
 
-2. Associar o ref ao `<Input type="file">`:
-   ```text
-   <Input ref={fileInputRef} type="file" ... />
-   ```
+1. Alterar `reader.readAsBinaryString(f)` para `reader.readAsArrayBuffer(f)`
+2. Alterar `XLSX.read(data, { type: 'binary' })` para `XLSX.read(data, { type: 'array' })`
 
-3. No `handleClear`, alem dos states atuais, resetar o valor do input:
-   ```text
-   const handleClear = () => {
-     setFile(null);
-     setRows([]);
-     setImported(false);
-     if (fileInputRef.current) {
-       fileInputRef.current.value = '';
-     }
-   };
-   ```
+Sao apenas 2 linhas de alteracao.
 
 ### Secao tecnica
 
-- Unico arquivo modificado: `src/pages/ImportarDevedores.tsx`
-- Adiciona `useRef` ao import do React
-- Sem novas dependencias, sem alteracoes no banco
+**Linha ~255:**
+```text
+// DE:
+XLSX.read(data, { type: 'binary' });
+// PARA:
+XLSX.read(data, { type: 'array' });
+```
+
+**Linha ~280:**
+```text
+// DE:
+reader.readAsBinaryString(f);
+// PARA:
+reader.readAsArrayBuffer(f);
+```
+
+- `readAsArrayBuffer` trabalha com dados binarios puros (sem conversao para string), evitando truncamento e uso excessivo de memoria
+- `XLSX.read` com `type: 'array'` aceita `ArrayBuffer` diretamente
+- Essa mudanca beneficia todos os layouts (Padrao, Montreal, COBMAIS), nao apenas o COBMAIS
+- Sem novas dependencias, sem alteracoes no banco de dados
+
