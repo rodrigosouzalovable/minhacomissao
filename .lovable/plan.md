@@ -1,37 +1,113 @@
 
 
-## Corrigir logica de desabilitacao das faixas de desconto
+## Redesign Ultra Profissional da Pagina de Negociacao
 
-### Problema
+### Visao Geral
 
-A logica atual calcula `valorComDesconto / maxParcelas` para decidir se a faixa esta disponivel. Por exemplo, para o valor de R$ 839,34:
+Transformar a pagina `ConsultaResultado.tsx` e o componente `DiscountTierSelector.tsx` em uma experiencia visual de alto impacto, usando tecnicas de persuasao visual (ancoragem, urgencia, escassez, prova social) para maximizar a conversao de acordos. O layout sera completamente refeito com efeitos visuais modernos, tipografia impactante e hierarquia visual clara que direciona o cliente para o pagamento a vista.
 
-- **2 a 6x (40% off)**: R$ 503,60 / 6 = R$ 83,93 (desabilitado). Porem, com 2 parcelas seria R$ 251,80 e com 5 seria R$ 100,72 -- ambos acima de R$ 90.
-- **7 a 12x (30% off)**: R$ 587,54 / 12 = R$ 48,96 (desabilitado). Porem, com 7 parcelas seria R$ 83,93... na verdade com 6 parcelas seria R$ 97,92.
+---
 
-O correto e verificar se pelo menos a parcela **minima** da faixa gera um valor >= R$ 90. Se sim, a faixa fica habilitada, e o numero maximo de parcelas sera limitado dinamicamente no formulario.
+### Mudancas no DiscountTierSelector.tsx
 
-### Solucao
+**Layout e Visual dos Cards de Oferta:**
 
-**Arquivo:** `src/components/negociacao/DiscountTierSelector.tsx`
+- Card "A vista" sera 2x maior que os demais (ocupando linha inteira ou com destaque especial)
+- Background com gradiente verde vibrante e borda pulsante (animacao CSS pulse) para o card a vista
+- Badge "MELHOR OFERTA" maior, com animacao de brilho (shimmer effect)
+- Icone de estrela dourada animado
+- Valor com desconto em fonte 2xl-3xl, bold, cor verde neon (#00ff88)
+- Valor original riscado em vermelho ao lado
+- Economia em destaque: "Voce economiza R$ X,XX" em caixa verde
+- Cards desabilitados com overlay escuro e cadeado visual
+- Efeito hover com elevacao (shadow) e scale nos cards habilitados
+- Texto persuasivo em cada card: "Quite agora!", "Parcele em ate 6x", etc.
+- Contador visual de "economia perdida" nos cards parcelados (ex: "Desconto 10% menor")
 
-Alterar a logica de `disabled` de:
+**Hierarquia Visual:**
+- Grid: card a vista em full-width no topo, demais em grid 3 colunas abaixo
+- Separador visual entre a vista e parcelados com texto "ou parcele com desconto"
 
-```typescript
-const maxParcelas = getMaxParcelasFaixa(tier.faixa);
-const valorParcela = valorComDesconto / maxParcelas;
-const disabled = valorParcela < VALOR_MINIMO_PARCELA;
-```
+---
 
-Para:
+### Mudancas no ConsultaResultado.tsx
 
-```typescript
-const minParcelas = getMinParcelas(tier.faixa);
-const valorParcelaMin = valorComDesconto / minParcelas;
-const disabled = valorParcelaMin < VALOR_MINIMO_PARCELA;
-```
+**Header da Pagina:**
+- Saudacao mais acolhedora e personalizada com nome em destaque
+- Badge "Oportunidade Exclusiva" ou "Oferta por tempo limitado" com animacao
+- Icone de relogio pulsante sugerindo urgencia
 
-Isso significa: a faixa so sera desabilitada se nem mesmo com o menor numero de parcelas possivel o valor da parcela atingir R$ 90. O limite real de parcelas ja e calculado em `ConsultaResultado.tsx` pelo `getMaxParcelas`, que respeita o piso de R$ 90.
+**Cards de Debito:**
+- Visual mais compacto com scroll horizontal em mobile ou accordion colapsavel
+- Badge de "vencido" em vermelho nos debitos atrasados
+- Valor em vermelho grande e negrito
 
-Sera necessario importar `getMinParcelas` do mesmo arquivo (ja esta exportado).
+**Secao de Valor Total:**
+- Fundo com gradiente escuro premium
+- Valor total em fonte extra grande (4xl-5xl) em vermelho
+- Abaixo: "Mas voce pode pagar apenas..." com valor a vista em verde gigante
+- Barra de progresso visual mostrando "quanto voce ja economizou"
+- Selo de "Desconto Exclusivo" com efeito de brilho
+
+**Formulario de Negociacao:**
+- Caixa de destaque do valor com desconto: fundo com gradiente verde, valor enorme, confete visual sutil
+- Resumo da negociacao em card premium com bordas douradas/verdes
+- Botao "Confirmar proposta" maior, com gradiente verde vibrante e efeito de pulse
+- Botao "TENHO UMA CONTRA PROPOSTA" estilizado mas secundario
+
+**Secao de Confirmacao:**
+- Animacao de check/sucesso ao confirmar
+- Card de resumo com visual premium
+- Botao WhatsApp grande e verde com icone animado
+
+**Footer:**
+- Selos de seguranca e confianca (LGPD, sigilo, etc.)
+
+---
+
+### Detalhes Tecnicos
+
+**Arquivo: `src/components/negociacao/DiscountTierSelector.tsx`**
+
+1. Reescrever o layout dos cards:
+   - Card "a vista" em full-width com gradiente `linear-gradient(135deg, #00a86b, #00cc88)`, texto grande, badge animado
+   - Cards parcelados em grid de 3 colunas com visual mais contido
+   - Adicionar textos persuasivos: "Quite sua divida hoje!", "Economia maxima"
+   - Adicionar animacao CSS `@keyframes pulse` para borda do card a vista
+   - Adicionar animacao `@keyframes shimmer` para o badge "Melhor oferta"
+   - Mostrar valor original riscado + valor com desconto lado a lado
+   - Cards disabled com icone de cadeado e texto "Indisponivel para este valor"
+
+2. Adicionar CSS inline para animacoes (keyframes via style jsx ou className com tailwind animate)
+
+**Arquivo: `src/pages/ConsultaResultado.tsx`**
+
+1. **Secao de saudacao** (linhas ~200-214):
+   - Adicionar badge de urgencia animado
+   - Texto mais persuasivo: "Aproveite esta oportunidade unica para regularizar sua situacao!"
+   - Nome do cliente em fonte maior e bold
+
+2. **Cards de debito** (linhas ~217-244):
+   - Tornar colapsaveis (mostrar 2 e "ver mais X debitos")
+   - Adicionar badge "Vencido" com cor vermelha
+
+3. **Card de valor total** (linhas ~247-448):
+   - Valor total em 4xl vermelho
+   - Adicionar linha "Pague a vista por apenas" com valor 50% em verde 3xl
+   - Destacar economia em badge verde
+   - Formulario com spacing mais generoso e visual premium
+   - Resumo com bordas verdes e fundo semi-transparente
+   - Botao confirmar com gradiente e tamanho h-14
+   - Selos de confianca no rodape do card
+
+4. **Footer** (linhas ~454-460):
+   - Adicionar icones de seguranca (Shield, Lock)
+   - Texto sobre LGPD e sigilo
+
+**Arquivo: `src/index.css`**
+
+5. Adicionar keyframes CSS:
+   - `@keyframes pulse-border` para borda pulsante verde
+   - `@keyframes shimmer` para efeito de brilho no badge
+   - `@keyframes float` para leve flutuacao de elementos de destaque
 
