@@ -10,6 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ArrowLeft, MessageCircle, FileText, Phone, AlertCircle, CalendarIcon, Check } from 'lucide-react';
 import logoGrupoAltum from '@/assets/logo-grupo-altum-negociacao.png';
+import DiscountTierSelector, { type DescontoFaixa, getDesconto, getMinParcelas, getMaxParcelasFaixa } from '@/components/negociacao/DiscountTierSelector';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ interface NegociacaoState {
   entrada: number;
   parcelas: number;
   dataPrimeiroPagamento: Date | undefined;
+  descontoFaixa: DescontoFaixa | undefined;
 }
 
 const PHONE = '5562981749600';
@@ -78,7 +80,7 @@ export default function ConsultaResultado() {
     setNegociacao(prev =>
       prev?.negociando
         ? null
-        : { negociando: true, confirmado: false, entrada: 0, parcelas: 1, dataPrimeiroPagamento: undefined }
+        : { negociando: true, confirmado: false, entrada: 0, parcelas: 1, dataPrimeiroPagamento: undefined, descontoFaixa: undefined }
     );
   };
 
@@ -86,37 +88,56 @@ export default function ConsultaResultado() {
     setNegociacao(prev => prev ? { ...prev, ...updates } : prev);
   };
 
+  const getValorComDesconto = (neg: NegociacaoState) => {
+    if (!neg.descontoFaixa) return valorTotal;
+    const desconto = getDesconto(neg.descontoFaixa);
+    return valorTotal * (1 - desconto / 100);
+  };
+
   const getValorParcela = (neg: NegociacaoState) => {
-    const restante = valorTotal - (neg.entrada || 0);
+    const valorDesc = getValorComDesconto(neg);
+    const restante = valorDesc - (neg.entrada || 0);
     if (restante <= 0 || neg.parcelas < 1) return 0;
     return restante / neg.parcelas;
   };
 
   const getMaxParcelas = (neg: NegociacaoState) => {
-    return neg.entrada > 0 ? 23 : 24;
+    if (!neg.descontoFaixa) return 24;
+    const max = getMaxParcelasFaixa(neg.descontoFaixa);
+    return neg.entrada > 0 ? Math.min(max, max - 1) : max;
   };
 
   const isNegociacaoValida = (neg: NegociacaoState) => {
+    if (!neg.descontoFaixa) return false;
     if (!neg.dataPrimeiroPagamento) return false;
-    if (neg.entrada > valorTotal) return false;
+    const valorDesc = getValorComDesconto(neg);
+    if (neg.entrada > valorDesc) return false;
     if (neg.entrada < 0) return false;
     const valorParcela = getValorParcela(neg);
-    if (valorParcela < 1 && (valorTotal - (neg.entrada || 0)) > 0) return false;
+    if (valorParcela < 1 && (valorDesc - (neg.entrada || 0)) > 0) return false;
     return true;
+  };
+
+  const handleSelectFaixa = (faixa: DescontoFaixa) => {
+    const min = getMinParcelas(faixa);
+    updateNegociacao({ descontoFaixa: faixa, parcelas: min, entrada: 0 });
   };
 
   const gerarWhatsappLink = (neg: NegociacaoState) => {
     const valorParcela = getValorParcela(neg);
+    const valorDesc = getValorComDesconto(neg);
+    const desconto = neg.descontoFaixa ? getDesconto(neg.descontoFaixa) : 0;
     const dataFormatada = neg.dataPrimeiroPagamento
       ? format(neg.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
       : '';
     const contratosStr = debitos.map(d => d.contrato).filter(Boolean).join(', ');
+    const descontoStr = desconto > 0 ? `, com desconto de ${desconto}%, totalizando ${formatCurrency(valorDesc)}` : '';
 
     let msg: string;
     if (neg.entrada > 0) {
-      msg = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}, da seguinte forma: Entrada de ${formatCurrency(neg.entrada)} e mais ${neg.parcelas}x de ${formatCurrency(valorParcela)}. Quero pagar a primeira parcela no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
+      msg = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}, da seguinte forma: Entrada de ${formatCurrency(neg.entrada)} e mais ${neg.parcelas}x de ${formatCurrency(valorParcela)}. Quero pagar a primeira parcela no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
     } else {
-      msg = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}, da seguinte forma: ${neg.parcelas}x de ${formatCurrency(valorParcela)}. Quero pagar a primeira parcela no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
+      msg = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}, da seguinte forma: ${neg.parcelas}x de ${formatCurrency(valorParcela)}. Quero pagar a primeira parcela no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
     }
 
     return `https://wa.me/${PHONE}?text=${encodeURIComponent(msg)}`;
@@ -241,103 +262,145 @@ export default function ConsultaResultado() {
                         </button>
                       </div>
 
-                      <div>
-                        <Label className="text-xs" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={valorTotal}
-                          step={0.01}
-                          placeholder="R$ 0,00"
-                          value={negociacao.entrada || ''}
-                          onChange={(e) => handleEntradaChange(e.target.value)}
-                          className="mt-1 border-0"
-                          style={{ background: '#ffffff15', color: '#fff' }}
-                        />
-                        {negociacao.entrada > valorTotal && (
-                          <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor total</p>
-                        )}
-                      </div>
+                      <DiscountTierSelector
+                        selected={negociacao.descontoFaixa}
+                        onSelect={handleSelectFaixa}
+                        valorTotal={valorTotal}
+                      />
 
-                      <div>
-                        <Label className="text-xs" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
-                        <Select
-                          value={String(negociacao.parcelas)}
-                          onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}
-                        >
-                          <SelectTrigger className="mt-1 border-0" style={{ background: '#ffffff15', color: '#fff' }}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: getMaxParcelas(negociacao) }, (_, i) => i + 1).map(n => (
-                              <SelectItem key={n} value={String(n)}>{n}x de {formatCurrency((valorTotal - (negociacao.entrada || 0)) / n)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label className="text-xs" style={{ color: '#ffffffaa' }}>Data do primeiro pagamento</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn("w-full mt-1 justify-start text-left font-normal border-0", !negociacao.dataPrimeiroPagamento && "opacity-70")}
-                              style={{ background: '#ffffff15', color: '#fff' }}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {negociacao.dataPrimeiroPagamento
-                                ? format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
-                                : 'Selecione a data'}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={negociacao.dataPrimeiroPagamento}
-                              onSelect={(d) => updateNegociacao({ dataPrimeiroPagamento: d })}
-                              disabled={(date) => {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                return date < today;
-                              }}
-                              initialFocus
-                              className={cn("p-3 pointer-events-auto")}
-                              locale={ptBR}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      {negociacao.dataPrimeiroPagamento && negociacao.entrada <= valorTotal && (
-                        <div className="rounded-lg p-3" style={{ background: '#ffffff0a', border: '1px solid #ffffff15' }}>
-                          <p className="text-xs font-semibold mb-2" style={{ color: '#00a86b' }}>Resumo da negociação</p>
-                          {negociacao.entrada > 0 && (
-                            <p className="text-sm" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
+                      {negociacao.descontoFaixa && (
+                        <>
+                          {/* Valor com desconto destaque */}
+                          {negociacao.descontoFaixa !== 'sem' && (
+                            <div className="rounded-lg p-3 text-center" style={{ background: '#00a86b15', border: '1px solid #00a86b33' }}>
+                              <p className="text-xs" style={{ color: '#ffffffaa' }}>De <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> por</p>
+                              <p className="text-2xl font-extrabold" style={{ color: '#00a86b' }}>{formatCurrency(getValorComDesconto(negociacao))}</p>
+                              <p className="text-xs font-semibold" style={{ color: '#00a86b' }}>
+                                Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto(negociacao.descontoFaixa)}%)
+                              </p>
+                            </div>
                           )}
-                          <p className="text-sm" style={{ color: '#ffffffcc' }}>
-                            {negociacao.parcelas}x de {formatCurrency(getValorParcela(negociacao))}
-                          </p>
-                          <p className="text-sm" style={{ color: '#ffffffcc' }}>
-                            Primeiro pagamento: {format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })}
-                          </p>
-                        </div>
-                      )}
 
-                      <Button
-                        className="w-full"
-                        style={{ background: '#00a86b', color: '#fff' }}
-                        disabled={!isNegociacaoValida(negociacao)}
-                        onClick={() => updateNegociacao({ confirmado: true })}
-                      >
-                        <Check className="h-4 w-4 mr-2" />
-                        Confirmar proposta
-                      </Button>
+                          {/* Entrada - hide for à vista */}
+                          {negociacao.descontoFaixa !== 'avista' && (
+                            <div>
+                              <Label className="text-xs" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={getValorComDesconto(negociacao)}
+                                step={0.01}
+                                placeholder="R$ 0,00"
+                                value={negociacao.entrada || ''}
+                                onChange={(e) => handleEntradaChange(e.target.value)}
+                                className="mt-1 border-0"
+                                style={{ background: '#ffffff15', color: '#fff' }}
+                              />
+                              {negociacao.entrada > getValorComDesconto(negociacao) && (
+                                <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor com desconto</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Parcelas - hide for à vista */}
+                          {negociacao.descontoFaixa !== 'avista' && (
+                            <div>
+                              <Label className="text-xs" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
+                              <Select
+                                value={String(negociacao.parcelas)}
+                                onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}
+                              >
+                                <SelectTrigger className="mt-1 border-0" style={{ background: '#ffffff15', color: '#fff' }}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Array.from(
+                                    { length: getMaxParcelas(negociacao) - getMinParcelas(negociacao.descontoFaixa) + 1 },
+                                    (_, i) => i + getMinParcelas(negociacao.descontoFaixa)
+                                  ).map(n => (
+                                    <SelectItem key={n} value={String(n)}>
+                                      {n}x de {formatCurrency((getValorComDesconto(negociacao) - (negociacao.entrada || 0)) / n)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+
+                          <div>
+                            <Label className="text-xs" style={{ color: '#ffffffaa' }}>Data do primeiro pagamento</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn("w-full mt-1 justify-start text-left font-normal border-0", !negociacao.dataPrimeiroPagamento && "opacity-70")}
+                                  style={{ background: '#ffffff15', color: '#fff' }}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {negociacao.dataPrimeiroPagamento
+                                    ? format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
+                                    : 'Selecione a data'}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={negociacao.dataPrimeiroPagamento}
+                                  onSelect={(d) => updateNegociacao({ dataPrimeiroPagamento: d })}
+                                  disabled={(date) => {
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    return date < today;
+                                  }}
+                                  initialFocus
+                                  className={cn("p-3 pointer-events-auto")}
+                                  locale={ptBR}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+
+                          {negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
+                            <div className="rounded-lg p-3" style={{ background: '#ffffff0a', border: '1px solid #ffffff15' }}>
+                              <p className="text-xs font-semibold mb-2" style={{ color: '#00a86b' }}>Resumo da negociação</p>
+                              {negociacao.descontoFaixa !== 'sem' && (
+                                <p className="text-sm" style={{ color: '#ffffffcc' }}>
+                                  Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00a86b', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                                </p>
+                              )}
+                              {negociacao.entrada > 0 && (
+                                <p className="text-sm" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
+                              )}
+                              <p className="text-sm" style={{ color: '#ffffffcc' }}>
+                                {negociacao.parcelas}x de {formatCurrency(getValorParcela(negociacao))}
+                              </p>
+                              <p className="text-sm" style={{ color: '#ffffffcc' }}>
+                                Primeiro pagamento: {format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })}
+                              </p>
+                            </div>
+                          )}
+
+                          <Button
+                            className="w-full"
+                            style={{ background: '#00a86b', color: '#fff' }}
+                            disabled={!isNegociacaoValida(negociacao)}
+                            onClick={() => updateNegociacao({ confirmado: true })}
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            Confirmar proposta
+                          </Button>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3 pt-2" style={{ borderTop: '1px solid #ffffff15' }}>
                       <div className="rounded-lg p-3" style={{ background: '#00a86b15', border: '1px solid #00a86b33' }}>
                         <p className="text-xs font-semibold mb-2" style={{ color: '#00a86b' }}>✓ Proposta confirmada</p>
+                        {negociacao.descontoFaixa && negociacao.descontoFaixa !== 'sem' && (
+                          <p className="text-sm" style={{ color: '#ffffffcc' }}>
+                            Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00a86b', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                          </p>
+                        )}
                         {negociacao.entrada > 0 && (
                           <p className="text-sm" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
                         )}
