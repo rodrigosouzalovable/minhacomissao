@@ -11,7 +11,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, X, Users, SearchX, Eye, Link2, Unlink } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Search, X, Users, SearchX, Eye, Link2, Unlink, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
@@ -76,6 +77,12 @@ export default function Clientes() {
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [nomeGrupo, setNomeGrupo] = useState('');
   const [savingGroup, setSavingGroup] = useState(false);
+
+  // Delete mode state
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [credores, setCredores] = useState<string[]>(CREDORES_FIXOS);
 
@@ -200,6 +207,8 @@ export default function Clientes() {
     setPage(0);
     setSelectionMode(false);
     setSelectedCpfs(new Set());
+    setDeleteMode(false);
+    setSelectedForDeletion(new Set());
 
     let query = supabase
       .from('devedores')
@@ -243,6 +252,8 @@ export default function Clientes() {
     setSearched(false);
     setSelectionMode(false);
     setSelectedCpfs(new Set());
+    setDeleteMode(false);
+    setSelectedForDeletion(new Set());
   };
 
   const toggleCpfSelection = (cpfNorm: string) => {
@@ -299,6 +310,61 @@ export default function Clientes() {
       case 'finalizado': return 'outline';
       default: return 'default';
     }
+  };
+
+  // Get all devedor IDs for a given grouped row
+  const getIdsForRow = (row: ClienteAgrupado): string[] => {
+    if (row.isGrupo && row.cpfsGrupo) {
+      return rawResults
+        .filter(r => row.cpfsGrupo!.includes(r.cpf.replace(/\D/g, '')))
+        .map(r => r.id);
+    }
+    return rawResults
+      .filter(r => r.cpf.replace(/\D/g, '') === row.cpf.replace(/\D/g, ''))
+      .map(r => r.id);
+  };
+
+  const toggleDeletionForRow = (row: ClienteAgrupado) => {
+    const ids = getIdsForRow(row);
+    setSelectedForDeletion(prev => {
+      const next = new Set(prev);
+      const allSelected = ids.every(id => next.has(id));
+      if (allSelected) {
+        ids.forEach(id => next.delete(id));
+      } else {
+        ids.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const isRowSelected = (row: ClienteAgrupado): boolean => {
+    const ids = getIdsForRow(row);
+    return ids.length > 0 && ids.every(id => selectedForDeletion.has(id));
+  };
+
+  const toggleSelectAll = () => {
+    const allIds = rawResults.map(r => r.id);
+    setSelectedForDeletion(prev => {
+      if (prev.size === allIds.length) return new Set();
+      return new Set(allIds);
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    setDeleting(true);
+    const ids = Array.from(selectedForDeletion);
+    const { error } = await supabase.from('devedores').delete().in('id', ids);
+    if (error) {
+      toast.error('Erro ao excluir contratos: ' + error.message);
+    } else {
+      toast.success(`${ids.length} contrato(s) excluído(s) com sucesso!`);
+      setRawResults(prev => prev.filter(r => !selectedForDeletion.has(r.id)));
+      setDeleteMode(false);
+      setSelectedForDeletion(new Set());
+    }
+    setDeleteDialogOpen(false);
+    setDeleting(false);
   };
 
   return (
@@ -367,9 +433,24 @@ export default function Clientes() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{grouped.length} cliente{grouped.length !== 1 ? 's' : ''} encontrado{grouped.length !== 1 ? 's' : ''}</CardTitle>
-                {isAdmin && grouped.length >= 2 && (
+                {isAdmin && grouped.length >= 1 && (
                   <div className="flex gap-2">
-                    {selectionMode ? (
+                    {deleteMode ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={selectedForDeletion.size === 0}
+                          onClick={() => setDeleteDialogOpen(true)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Excluir Selecionados ({selectedForDeletion.size})
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => { setDeleteMode(false); setSelectedForDeletion(new Set()); }}>
+                          Cancelar
+                        </Button>
+                      </>
+                    ) : selectionMode ? (
                       <>
                         <Button
                           size="sm"
@@ -384,10 +465,18 @@ export default function Clientes() {
                         </Button>
                       </>
                     ) : (
-                      <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
-                        <Link2 className="h-4 w-4 mr-1" />
-                        Agrupar CNPJs
-                      </Button>
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => setDeleteMode(true)}>
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Excluir Contratos
+                        </Button>
+                        {grouped.length >= 2 && (
+                          <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
+                            <Link2 className="h-4 w-4 mr-1" />
+                            Agrupar CNPJs
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -398,7 +487,16 @@ export default function Clientes() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {selectionMode && <TableHead className="w-10"></TableHead>}
+                      {(selectionMode || deleteMode) && (
+                        <TableHead className="w-10">
+                          {deleteMode && (
+                            <Checkbox
+                              checked={rawResults.length > 0 && selectedForDeletion.size === rawResults.length}
+                              onCheckedChange={toggleSelectAll}
+                            />
+                          )}
+                        </TableHead>
+                      )}
                       <TableHead>Nome</TableHead>
                       <TableHead>CPF/CNPJ</TableHead>
                       <TableHead>Credor</TableHead>
@@ -411,7 +509,7 @@ export default function Clientes() {
                   <TableBody>
                     {paginatedResults.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={selectionMode ? 8 : 7} className="text-center py-12">
+                        <TableCell colSpan={(selectionMode || deleteMode) ? 8 : 7} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <SearchX className="h-10 w-10" />
                             <p className="text-lg font-semibold">Cliente não encontrado</p>
@@ -424,7 +522,15 @@ export default function Clientes() {
                         const cpfNorm = row.cpf.replace(/\D/g, '');
                         return (
                           <TableRow key={row.isGrupo ? row.grupoId : row.cpf}>
-                            {selectionMode && (
+                            {deleteMode && (
+                              <TableCell>
+                                <Checkbox
+                                  checked={isRowSelected(row)}
+                                  onCheckedChange={() => toggleDeletionForRow(row)}
+                                />
+                              </TableCell>
+                            )}
+                            {selectionMode && !deleteMode && (
                               <TableCell>
                                 {!row.isGrupo && (
                                   <Checkbox
@@ -531,6 +637,24 @@ export default function Clientes() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* AlertDialog para confirmar exclusão */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir {selectedForDeletion.size} contrato(s)? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteConfirm} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {deleting ? 'Excluindo...' : 'Excluir'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );
