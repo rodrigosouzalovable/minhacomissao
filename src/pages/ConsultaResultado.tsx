@@ -190,17 +190,23 @@ export default function ConsultaResultado() {
 
               {/* Debt cards - simplified, no individual negotiation */}
               <div className="grid gap-3 mb-6">
-                {debitos.map((debito) => (
+                {debitos.map((debito, index) => (
                   <Card key={debito.id} className="border-0" style={{ background: '#ffffff0d' }}>
                     <CardContent className="p-4 flex items-center justify-between">
                       <div>
                         <p className="font-medium" style={{ color: '#fff' }}>
-                          {debito.descricao || 'Débito'}
+                          Parcela {index + 1} de {debitos.length}
                         </p>
                         {debito.contrato && (
                           <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: '#ffffffaa' }}>
                             <FileText className="h-3 w-3" />
                             Contrato: {debito.contrato}
+                          </p>
+                        )}
+                        {debito.data_vencimento && (
+                          <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: '#ffffffaa' }}>
+                            <CalendarIcon className="h-3 w-3" />
+                            Vencimento: {format(new Date(debito.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
                           </p>
                         )}
                       </div>
