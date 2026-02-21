@@ -252,7 +252,7 @@ export default function ImportarDevedores() {
     reader.onload = (evt) => {
       try {
         const data = evt.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
+        const workbook = XLSX.read(data, { type: 'array' });
 
         let parsed: DevedorRow[];
         if (credorSelecionado === 'cobmais') {
@@ -277,7 +277,7 @@ export default function ImportarDevedores() {
       setParsing(false);
       toast({ title: 'Erro ao ler arquivo', variant: 'destructive' });
     };
-    reader.readAsBinaryString(f);
+    reader.readAsArrayBuffer(f);
   }, [credorSelecionado]);
 
   const parseDate = (raw: string): string | null => {
