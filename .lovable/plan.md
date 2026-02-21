@@ -1,47 +1,58 @@
 
 
-## Adicionar selecao e exclusao de contratos na pagina Clientes
+## Atualizar parser COBMAIS para novo layout de colunas
 
-### O que sera feito
+### Problema
 
-Adicionar checkboxes ao lado de cada cliente na tabela de resultados, permitindo selecionar um ou mais registros e excluir todos de uma vez. A funcionalidade sera exclusiva para administradores.
+O parser COBMAIS atual espera um layout multi-abas com colunas especificas (C=nome, D=credor, E=contrato, F=atraso, M=risco). A planilha do usuario tem um layout diferente na primeira aba:
 
-### Funcionamento
+```text
+A = CPF/CNPJ
+B = CLIENTE (nome)
+C = CONTRATO
+D = NUMERO (numero da parcela)
+E = VENCIMENTO (data)
+F = VALOR (valor da parcela)
+G = TOTAL (valor total do contrato)
+```
 
-1. Um novo botao "Excluir Contratos" aparecera ao lado do botao "Agrupar CNPJs" (somente para admins)
-2. Ao clicar, a tabela entra em modo de selecao com checkboxes em cada linha (similar ao modo de agrupamento ja existente)
-3. Um checkbox "Selecionar todos" aparecera no cabecalho da tabela
-4. Um botao de confirmacao mostra a contagem de selecionados
-5. Ao confirmar, um AlertDialog pede confirmacao antes de excluir
-6. A exclusao remove os registros da tabela `devedores` (marcando `ativo = false` ou deletando, conforme a politica RLS existente)
+Cada CPF pode ter multiplos contratos, e cada contrato tem multiplas parcelas (linhas). O sistema deve agregar por CPF+CONTRATO, criando um registro por contrato unico.
+
+### Solucao
+
+**Arquivo: `src/pages/ImportarDevedores.tsx`**
+
+1. Reescrever a funcao `parseCobmais` para ler o novo mapeamento de colunas:
+   - A = CPF/CNPJ (com resolucao de zeros a esquerda via Aba 2, se disponivel)
+   - B = Nome do cliente
+   - C = Numero do contrato
+   - E = Data de vencimento (usar a primeira ocorrencia)
+   - F = Valor da parcela
+   - G = Total do contrato (usar como valor_original e valor_atualizado)
+
+2. Agregar por CPF + CONTRATO: se o mesmo CPF tem o contrato 50010938 repetido em varias parcelas, criar apenas um registro com o valor TOTAL (coluna G)
+
+3. Manter a logica de telefones da Aba 2 (se existir) para associar telefones aos CPFs
+
+4. Atualizar a descricao do layout COBMAIS para refletir as novas colunas
+
+5. Ajustar o `handleImport` para usar `r.atraso` (que armazenara o vencimento) como `data_vencimento` no caso COBMAIS, similar ao layout Montreal
 
 ### Secao tecnica
 
-**Arquivo: `src/pages/Clientes.tsx`**
+**Mudancas na funcao `parseCobmais`:**
+- Mapeamento: `row['A']` = CPF, `row['B']` = nome, `row['C']` = contrato, `row['E']` = vencimento, `row['F']` = valor parcela, `row['G']` = total
+- Chave de agrupamento: `cpf + '|' + contrato` para evitar duplicatas
+- O campo `atraso` do DevedorRow sera usado para armazenar o vencimento (para reusar a logica de parseDate no handleImport)
+- O campo `valor_original` e `valor_atualizado` receberao o valor da coluna G (TOTAL)
+- Remover logs de debug da versao anterior
 
-1. Adicionar estados para o modo de exclusao:
-   - `deleteMode: boolean` - controla se o modo de selecao para exclusao esta ativo
-   - `selectedForDeletion: Set<string>` - armazena os IDs dos devedores selecionados
+**Mudanca na constante DESCRICOES:**
+- Atualizar texto do cobmais para: `'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Numero, E = Vencimento, F = Valor, G = Total | Aba 2: Telefones (opcional)'`
 
-2. Adicionar botao "Excluir Contratos" no cabecalho do card de resultados (ao lado de "Agrupar CNPJs"), visivel apenas para admins
+**Mudanca no `handleImport` (linha ~335):**
+- Adicionar condicao para cobmais usar `parseDate(r.atraso)` como `data_vencimento`, igual ao montreal
 
-3. Quando `deleteMode` estiver ativo:
-   - Mostrar checkboxes em cada linha da tabela
-   - Mostrar checkbox "Selecionar todos" no cabecalho
-   - Mostrar botao "Excluir Selecionados (N)" e "Cancelar"
-   - Ocultar os botoes de agrupamento para evitar conflito
-
-4. Ao confirmar exclusao:
-   - Mostrar AlertDialog com mensagem de confirmacao
-   - Executar `supabase.from('devedores').delete().in('id', [...selectedIds])`
-   - Atualizar a lista local removendo os registros excluidos
-   - Exibir toast de sucesso
-
-5. A selecao sera por **contrato individual** (ID do devedor), nao por CPF agrupado. Para clientes agrupados por CPF ou grupo empresarial, cada contrato individual podera ser selecionado expandindo ou selecionando o grupo inteiro (que seleciona todos os IDs dos devedores daquele CPF).
-
-6. Importar `Trash2` do lucide-react e `AlertDialog` components
-
-7. A politica RLS existente `Admins podem gerenciar devedores` (command ALL) ja permite DELETE para admins, entao nenhuma alteracao no banco e necessaria.
-
+- Unico arquivo modificado: `src/pages/ImportarDevedores.tsx`
 - Sem alteracoes no banco de dados
 - Sem novas dependencias
