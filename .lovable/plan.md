@@ -1,41 +1,25 @@
 
-## Corrigir sobreposicao do botao "Sair" na sidebar
+
+## Barra de scroll sutil na sidebar
 
 ### Problema
-
-O botao "Sair" esta posicionado com `absolute bottom-0`, o que faz com que ele se sobreponha aos itens de navegacao quando a tela esta com zoom em 90% ou quando ha muitos itens no menu.
+A barra de scroll padrao do navegador na area de navegacao da sidebar esta muito visivel e esteticamente ruim.
 
 ### Solucao
 
-Reestruturar o layout da sidebar para usar flexbox vertical com scroll:
-
 **Arquivo:** `src/components/layout/AppLayout.tsx`
 
-1. Transformar o conteudo da sidebar em um layout flex column com `h-full`
-2. O header (logo + email) fica no topo sem scroll
-3. A area de navegacao (`nav`) fica em um container com `flex-1 overflow-y-auto` para ter scroll quando necessario
-4. O botao "Sair" fica abaixo da navegacao como ultimo item do fluxo normal (removendo `absolute bottom-0`)
-5. Adicionar um separador visual (borda ou espacamento) entre o ultimo item de nav e o botao Sair
+Substituir o `overflow-y-auto` por um componente `ScrollArea` do Radix (ja disponivel no projeto em `src/components/ui/scroll-area.tsx`), que renderiza uma scrollbar customizada e sutil.
 
-### Estrutura resultante
+1. Importar `ScrollArea` de `@/components/ui/scroll-area`
+2. Substituir a div `flex-1 overflow-y-auto px-4` por `ScrollArea` com `className="flex-1"`
+3. Mover o `px-4` para dentro do conteudo da ScrollArea
 
-```text
-+------------------+
-| Logo + Email     |  (fixo no topo)
-+------------------+
-| Minha Conta      |
-| Dashboard        |
-| Meus Acordos     |  (scrollable se necessario)
-| ...              |
-| Importar Dev.    |
-+------------------+
-| Sair             |  (fixo no fundo, sem absolute)
-+------------------+
-```
+**Arquivo:** `src/components/ui/scroll-area.tsx`
 
-### Detalhes tecnicos
+Ajustar o estilo do thumb da scrollbar para ser mais sutil:
+- Reduzir largura de `w-2.5` para `w-1.5`
+- Usar cor semi-transparente (`bg-white/20`) em vez de `bg-border`
+- Adicionar `hover:bg-white/40` para feedback ao passar o mouse
+- Remover a borda lateral (`border-l-transparent`)
 
-- A tag `<aside>` ja tem `h-full`. Adicionar uma div interna com `flex flex-col h-full`
-- O header com logo fica como `shrink-0`
-- A `<nav>` fica dentro de um `<div className="flex-1 overflow-y-auto">`
-- O botao "Sair" fica em um `<div className="shrink-0 p-4 border-t border-sidebar-border">` sem posicionamento absoluto
