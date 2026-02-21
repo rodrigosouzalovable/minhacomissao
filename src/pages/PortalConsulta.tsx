@@ -71,7 +71,7 @@ export default function PortalConsulta() {
             <img src={config.logos.parceiro} alt="Souza e Ribeiro" className="h-14 sm:h-20 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
             <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.25)' }} />
             {config.logos.principal ? (
-              <img src={config.logos.principal} alt={config.nome} className="h-12 sm:h-16 w-auto" />
+              <img src={config.logos.principal} alt={config.nome} className="h-14 sm:h-20 w-auto max-w-[160px] sm:max-w-[220px] object-contain" />
             ) : (
               <span className="text-lg sm:text-xl font-black" style={{ color: '#00a86b' }}>{config.nome.toUpperCase()}</span>
             )}
