@@ -47,7 +47,7 @@ interface GrupoMembro {
   cpf_cnpj: string;
 }
 
-const CREDORES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
+const CREDORES_FIXOS = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
 const ESTAGIOS = [
   { value: 'novo', label: 'Novo' },
   { value: 'andamento', label: 'Andamento' },
@@ -76,6 +76,26 @@ export default function Clientes() {
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [nomeGrupo, setNomeGrupo] = useState('');
   const [savingGroup, setSavingGroup] = useState(false);
+
+  const [credores, setCredores] = useState<string[]>(CREDORES_FIXOS);
+
+  // Fetch dynamic creditors from database
+  useEffect(() => {
+    const fetchCredores = async () => {
+      const { data } = await supabase
+        .from('devedores')
+        .select('credor')
+        .eq('ativo', true)
+        .not('credor', 'is', null);
+      if (data) {
+        const unique = Array.from(new Set(data.map((d: any) => d.credor).filter(Boolean))) as string[];
+        // Merge with fixed list to ensure they always appear
+        const merged = Array.from(new Set([...CREDORES_FIXOS, ...unique]));
+        setCredores(merged);
+      }
+    };
+    fetchCredores();
+  }, []);
 
   // Fetch groups on mount
   useEffect(() => {
@@ -312,7 +332,7 @@ export default function Clientes() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
-                    {CREDORES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {credores.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
