@@ -1,34 +1,41 @@
 
-
-## Adaptar mensagem do WhatsApp para pagamento a vista
+## Corrigir sobreposicao do botao "Sair" na sidebar
 
 ### Problema
 
-Quando o cliente seleciona pagamento a vista, a mensagem enviada pelo WhatsApp diz "1x de R$ 419,67. Quero pagar a primeira parcela no dia...". Isso nao faz sentido para pagamento a vista -- deveria dizer algo como "Quero pagar no dia..." sem mencionar parcelas.
+O botao "Sair" esta posicionado com `absolute bottom-0`, o que faz com que ele se sobreponha aos itens de navegacao quando a tela esta com zoom em 90% ou quando ha muitos itens no menu.
 
 ### Solucao
 
-**Arquivo:** `src/pages/ConsultaResultado.tsx` (funcao `gerarWhatsappLink`, linhas 139-144)
+Reestruturar o layout da sidebar para usar flexbox vertical com scroll:
 
-Adicionar uma condicao para quando `neg.descontoFaixa === 'avista'`, gerando uma mensagem especifica:
+**Arquivo:** `src/components/layout/AppLayout.tsx`
 
+1. Transformar o conteudo da sidebar em um layout flex column com `h-full`
+2. O header (logo + email) fica no topo sem scroll
+3. A area de navegacao (`nav`) fica em um container com `flex-1 overflow-y-auto` para ter scroll quando necessario
+4. O botao "Sair" fica abaixo da navegacao como ultimo item do fluxo normal (removendo `absolute bottom-0`)
+5. Adicionar um separador visual (borda ou espacamento) entre o ultimo item de nav e o botao Sair
+
+### Estrutura resultante
+
+```text
++------------------+
+| Logo + Email     |  (fixo no topo)
++------------------+
+| Minha Conta      |
+| Dashboard        |
+| Meus Acordos     |  (scrollable se necessario)
+| ...              |
+| Importar Dev.    |
++------------------+
+| Sair             |  (fixo no fundo, sem absolute)
++------------------+
 ```
-Ola! Meu nome e [nome], meu CPF e [cpf] e quero negociar os contratos em aberto [contratos], no valor total de R$ [total], com desconto de 50%, totalizando R$ [valor]. Quero pagar a vista no dia [data]. Me envie o boleto por gentileza.
-```
-
-Para os demais casos (parcelado com ou sem entrada), a mensagem atual sera mantida.
 
 ### Detalhes tecnicos
 
-Na funcao `gerarWhatsappLink`, antes do bloco `if (neg.entrada > 0)`, adicionar:
-
-```typescript
-if (neg.descontoFaixa === 'avista') {
-  msg = `Ola! Meu nome e ${nomeCliente}, meu CPF e ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}. Quero pagar a vista no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
-} else if (neg.entrada > 0) {
-  // mensagem atual com entrada + parcelas
-} else {
-  // mensagem atual com parcelas
-}
-```
-
+- A tag `<aside>` ja tem `h-full`. Adicionar uma div interna com `flex flex-col h-full`
+- O header com logo fica como `shrink-0`
+- A `<nav>` fica dentro de um `<div className="flex-1 overflow-y-auto">`
+- O botao "Sair" fica em um `<div className="shrink-0 p-4 border-t border-sidebar-border">` sem posicionamento absoluto
