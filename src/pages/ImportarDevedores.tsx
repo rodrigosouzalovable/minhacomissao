@@ -174,44 +174,42 @@ export default function ImportarDevedores() {
       return digits;
     };
 
-    // Agregar por CPF + Contrato
-    const devedoresMap = new Map<string, DevedorRow>();
+    // Cada linha da planilha = 1 registro individual (cada parcela)
+    const devedores: DevedorRow[] = [];
     for (const row of rows1) {
       const cpf = resolverCpf(row['A']);
       if (cpf.length < 11) continue;
 
       const contrato = String(row['C'] ?? '').trim();
-      const key = `${cpf}|${contrato}`;
+      const valor = parseNum(row['F']); // Valor da parcela individual
 
-      if (!devedoresMap.has(key)) {
-        const total = parseNum(row['G']);
-        // Converter vencimento Excel serial number para string dd/mm/yyyy
-        let vencimentoStr = '';
-        const vencRaw = row['E'];
-        if (typeof vencRaw === 'number') {
-          const dt = XLSX.SSF.parse_date_code(vencRaw);
-          if (dt) {
-            vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
-          }
-        } else if (vencRaw) {
-          vencimentoStr = String(vencRaw);
+      // Converter vencimento Excel serial number para string dd/mm/yyyy
+      let vencimentoStr = '';
+      const vencRaw = row['E'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
         }
-
-        devedoresMap.set(key, {
-          cpf,
-          nascimento: '',
-          nome: String(row['B'] ?? ''),
-          credor: '',
-          contrato,
-          atraso: vencimentoStr,
-          valor_original: total,
-          valor_atualizado: total,
-          telefone: phoneMap.get(cpf) || undefined,
-        });
+      } else if (vencRaw) {
+        vencimentoStr = String(vencRaw);
       }
+
+      devedores.push({
+        cpf,
+        nascimento: '',
+        nome: String(row['B'] ?? ''),
+        credor: '',
+        contrato,
+        atraso: vencimentoStr,
+        valor_original: valor,
+        valor_atualizado: valor,
+        telefone: phoneMap.get(cpf) || undefined,
+      });
     }
 
-    return Array.from(devedoresMap.values());
+    console.log(`[COBMAIS] Total de linhas lidas: ${devedores.length}`);
+    return devedores;
   };
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
