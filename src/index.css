@@ -102,3 +102,32 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes pulse-border {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 168, 107, 0.3), 0 0 40px rgba(0, 168, 107, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(0, 168, 107, 0.5), 0 0 60px rgba(0, 168, 107, 0.2);
+  }
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
