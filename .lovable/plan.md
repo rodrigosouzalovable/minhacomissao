@@ -1,93 +1,48 @@
 
-## Criar Layout de Importacao COBMAIS
 
-### Resumo
+## Corrigir importacao COBMAIS e adicionar indicador de carregamento
 
-Adicionar um novo layout de importacao chamado "COBMAIS" na pagina Importar Devedores. A planilha COBMAIS possui 4 abas com estruturas distintas. O parser combinara dados das abas relevantes para montar os registros de devedores.
+### Problema
 
-### Estrutura da Planilha COBMAIS (4 abas)
+Ao importar a planilha COBMAIS, nada acontece visualmente. O arquivo esta sendo processado em segundo plano (leitura + parsing de 4 abas + cruzamento por CPF), mas nao existe nenhum indicador de carregamento para informar o usuario que deve aguardar.
 
-**Aba 1 - Clientes (principal):**
-- A = CPF/CNPJ
-- B = Cod. Cliente
-- C = Cliente (nome)
-- D = Credor
-- E = Contrato
-- F = Atraso
-- M = Risco (valor devido)
+### Causa raiz
 
-**Aba 2 - Telefones:**
-- A = CPF/CNPJ
-- C = Numero
-- D = Tipo (Residencial, Comercial, Referencia)
-- I = Ativo (SIM/NAO)
+A funcao `handleFile` usa `FileReader.readAsBinaryString()` que e assincrono, mas nao existe um estado `loading` para mostrar feedback visual ao usuario durante o processamento.
 
-**Aba 3 - Titulos:**
-- A = CPF/CNPJ
-- H = Vencimento
-- I = Valor
+### Solucao
 
-**Aba 4 - Dados Pessoais:**
-- A = CPF/CNPJ
-- D = Nascimento
+**Arquivo:** `src/pages/ImportarDevedores.tsx`
 
-### Logica de parsing
+**1. Adicionar novo estado `parsing`**
 
-1. Ler a Aba 1 como fonte principal de registros (cada linha = 1 devedor)
-2. Ler a Aba 2 para extrair o primeiro telefone ativo (onde coluna I = "SIM") de cada CPF
-3. Ler a Aba 4 para extrair a data de nascimento de cada CPF
-4. Combinar os dados por CPF/CNPJ
-5. Usar a coluna M (Risco) da Aba 1 como valor_original e valor_atualizado
-6. Desduplicar por CPF (a aba 1 pode ter linhas repetidas) - somar valores se houver multiplos registros
-
-### Alteracoes em `src/pages/ImportarDevedores.tsx`
-
-**1. Atualizar o tipo `CredorLayout`**
-```
-type CredorLayout = 'padrao' | 'montreal' | 'cobmais';
+```typescript
+const [parsing, setParsing] = useState(false);
 ```
 
-**2. Adicionar descricao do layout COBMAIS no objeto `DESCRICOES`**
-```
-cobmais: 'Aba 1: CPF/CNPJ, Cliente, Credor, Contrato, Atraso, Risco | Aba 2: Telefones | Aba 4: Nascimento'
-```
+**2. Envolver `handleFile` com o estado de loading**
 
-**3. Adicionar opcao "COBMAIS" no Select de layout**
+- Setar `setParsing(true)` antes de iniciar a leitura do arquivo
+- Setar `setParsing(false)` ao final do `reader.onload`
+- Tambem setar `setParsing(false)` em `reader.onerror`
 
-Novo `SelectItem` com value "cobmais" e label "COBMAIS".
+**3. Adicionar indicador visual na UI**
 
-**4. Criar funcao `parseCobmais`**
+Quando `parsing === true`, exibir um card com animacao de loading abaixo do upload, contendo:
+- Um icone de spinner animado (Loader2 do lucide-react)
+- Texto "Processando planilha..." em negrito
+- Subtexto "Lendo abas e cruzando dados, aguarde..."
+- Desabilitar o botao "Escolher arquivo" e "Limpar" durante o parsing
 
-Nova funcao que:
-- Recebe o `workbook` inteiro (nao apenas a primeira aba)
-- Le a Aba 1 (SheetNames[0]) para dados principais
-- Le a Aba 2 (SheetNames[1]) para telefones, filtrando apenas registros com coluna I = "SIM"
-- Le a Aba 4 (SheetNames[3]) para nascimento
-- Cruza os dados por CPF
-- Retorna array de `DevedorRow`
+**4. Desabilitar input de arquivo durante o parsing**
 
-**5. Ajustar `handleFile` para passar o workbook completo quando layout for COBMAIS**
-
-Em vez de sempre ler apenas `SheetNames[0]`, quando o layout for "cobmais", passa o workbook inteiro para a funcao `parseCobmais`.
-
-**6. Adicionar colunas especificas no preview da tabela para COBMAIS**
-
-Exibir: CPF/CNPJ, Nome, Credor, Contrato, Atraso, Risco (R$), Telefone - similar ao layout padrao mas com telefone.
-
-**7. Ajustar `handleImport` para mapear corretamente os campos COBMAIS**
-
-O campo `descricao` recebera o credor, e `data_vencimento` recebera a data de nascimento (mesmo comportamento do layout padrao).
-
-### Preview das colunas no COBMAIS
-
-| CPF/CNPJ | Nome | Credor | Contrato | Atraso | Risco (R$) | Telefone |
-|----------|------|--------|----------|--------|------------|----------|
+Impedir que o usuario selecione outro arquivo enquanto o atual esta sendo processado.
 
 ### Secao tecnica
 
-- Arquivo modificado: `src/pages/ImportarDevedores.tsx`
+- Unico arquivo modificado: `src/pages/ImportarDevedores.tsx`
+- Importar `Loader2` do lucide-react
+- Novo estado booleano `parsing`
+- Card de loading com spinner animado (`animate-spin`)
 - Sem novas dependencias
-- Sem alteracoes no banco de dados
-- A leitura de multiplas abas usa `workbook.Sheets[workbook.SheetNames[index]]` ja disponivel via biblioteca `xlsx`
-- Telefones sao filtrados por Ativo = "SIM" para importar apenas numeros validos
-- CPFs sao normalizados (apenas digitos) antes do cruzamento entre abas
+
