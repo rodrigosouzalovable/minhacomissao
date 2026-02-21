@@ -1,74 +1,53 @@
 
+## Negociar todos os debitos de uma vez no portal
 
-## Corrigir limite de 1000 registros na busca de Clientes
+### Problema atual
 
-### Problema
-
-O Supabase tem um limite padrao de 1000 linhas por consulta. Com 50 mil parcelas importadas, a busca retorna apenas 1000 linhas, que agrupadas por CPF resultam em ~184 clientes.
+Cada parcela/debito aparece como um card separado com seu proprio botao "Negociar este debito". O cliente precisa negociar parcela por parcela, o que e impraticavel quando tem muitas parcelas em aberto (como no exemplo da imagem: 3 parcelas de R$ 87,44).
 
 ### Solucao
 
-Implementar carregamento paginado em lotes na funcao `handleSearch` do arquivo `src/pages/Clientes.tsx`, buscando todas as linhas em loops de 1000 ate nao haver mais resultados.
+Substituir a negociacao individual por uma negociacao unificada. Todos os debitos do cliente serao listados em um resumo, e um unico formulario de negociacao permitira montar a proposta sobre o valor total de todos os debitos somados.
 
-### Arquivo: `src/pages/Clientes.tsx`
+### O que muda na interface
 
-**Mudanca na funcao `handleSearch` (linhas 201-243):**
+**Antes:**
+- Card por debito, cada um com botao "Negociar este debito"
+- Formulario de proposta dentro de cada card individual
 
-Substituir a consulta unica por um loop que busca em lotes de 1000:
+**Depois:**
+- Cards de debito continuam listados (mostrando contrato, valor), mas sem botao individual
+- Acima ou abaixo dos cards, um resumo com o valor total de todos os debitos
+- Um unico botao "Negociar todos os debitos"
+- Um unico formulario de proposta baseado no valor total
+- A mensagem do WhatsApp lista todos os contratos em aberto
 
-```text
-// DE:
-const { data, error } = await query;
-if (!error && data) { setRawResults(data as ClienteRow[]); }
+### Arquivo: `src/pages/ConsultaResultado.tsx`
 
-// PARA:
-const PAGE_FETCH = 1000;
-let allData: ClienteRow[] = [];
-let from = 0;
-let keepFetching = true;
+**Mudancas:**
 
-while (keepFetching) {
-  const { data, error } = await query.range(from, from + PAGE_FETCH - 1);
-  if (error) { toast.error('Erro na busca: ' + error.message); break; }
-  if (data) allData = [...allData, ...(data as ClienteRow[])];
-  if (!data || data.length < PAGE_FETCH) keepFetching = false;
-  else from += PAGE_FETCH;
-}
+1. **Remover estado `negociacoes` por debito** (Record por ID) e substituir por um unico estado de negociacao global (`negociacao: NegociacaoState | null`)
 
-setRawResults(allData);
+2. **Calcular `valorTotal`** somando `valor_original` de todos os debitos
+
+3. **Simplificar os cards de debito**: remover o botao "Negociar este debito" e o formulario embutido. Cada card mostra apenas contrato + valor
+
+4. **Adicionar secao de resumo total** abaixo dos cards com:
+   - Valor total de todos os debitos somado
+   - Botao "Negociar todos os debitos"
+
+5. **Formulario de negociacao unico** que aparece ao clicar o botao:
+   - Entrada (opcional), parcelas (ate 24x), data do primeiro pagamento
+   - Calcula com base no valor total
+
+6. **Mensagem WhatsApp unificada** incluindo:
+   - Nome e CPF do cliente
+   - Lista de todos os contratos em aberto (ex: "contratos 618010, 618011, 618013")
+   - Valor total
+   - Condicoes da proposta (entrada + parcelas)
+
+### Exemplo da mensagem gerada
+
 ```
-
-**Problema tecnico com reutilizacao de query:** O objeto `query` do Supabase nao pode ser reutilizado em um loop (o `.range()` modifica o builder). A solucao e mover a construcao do query para dentro do loop, recriando-o a cada iteracao.
-
-```text
-while (keepFetching) {
-  let q = supabase.from('devedores')
-    .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio')
-    .eq('ativo', true)
-    .order('criado_em', { ascending: false })
-    .range(from, from + PAGE_FETCH - 1);
-
-  // Reaplicar filtros
-  if (busca.trim()) { ... }
-  if (telefone.trim()) { ... }
-  if (credor !== 'todos') { ... }
-  if (estagio !== 'todos') { ... }
-
-  const { data, error } = await q;
-  ...
-}
+Ola! Meu nome e ABICELI SILVEIRA DIAS FILHO, meu CPF e 83714707115 e quero negociar os contratos em aberto 618010, 618011, 618013, no valor total de R$ 262,32, da seguinte forma: 3x de R$ 87,44. Quero pagar a primeira parcela no dia 25/02/2026. Me envie o boleto por gentileza.
 ```
-
-**Tambem corrigir o fetch de credores (linhas 90-105):** A mesma limitacao de 1000 afeta a listagem de credores unicos. Adicionar `.limit(10000)` ou paginacao similar para garantir que todos os credores aparecam no filtro.
-
-### Resultado esperado
-
-- Todos os ~50 mil registros serao carregados (em lotes de 1000)
-- A interface de clientes mostrara todos os CPFs unicos agrupados corretamente
-- O indicador "Pesquisando..." continuara visivel durante todo o carregamento
-
-### Impacto
-- Unico arquivo modificado: `src/pages/Clientes.tsx`
-- Sem alteracoes no banco de dados
-- Sem novas dependencias
-
