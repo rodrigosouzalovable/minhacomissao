@@ -37,7 +37,9 @@ export default function PortalHome() {
                 }}
               >
                 {credor.logos.principal ? (
-                  <img src={credor.logos.principal} alt={credor.nome} className="h-16 sm:h-20 w-auto" />
+                  <div className="h-16 sm:h-20 w-full flex items-center justify-center">
+                    <img src={credor.logos.principal} alt={credor.nome} className="max-h-16 sm:max-h-20 max-w-[200px] w-auto object-contain" />
+                  </div>
                 ) : (
                   <div
                     className="h-16 sm:h-20 flex items-center justify-center px-6 rounded-xl text-2xl font-black"
