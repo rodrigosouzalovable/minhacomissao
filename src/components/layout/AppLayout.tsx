@@ -111,50 +111,54 @@ export function AppLayout({ children }: AppLayoutProps) {
         "lg:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <img src={acordosIcon} alt="Meus Acordos" className="h-8 w-8" />
-              <h1 className="text-xl font-bold">MEUS ACORDOS</h1>
+        <div className="flex flex-col h-full">
+          <div className="shrink-0 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <img src={acordosIcon} alt="Meus Acordos" className="h-8 w-8" />
+                <h1 className="text-xl font-bold">MEUS ACORDOS</h1>
+              </div>
+              <PaymentReminders />
             </div>
-            <PaymentReminders />
+            <p className="text-sm opacity-80 mt-2 ml-10">{user?.email}</p>
           </div>
-          <p className="text-sm opacity-80 mt-2 ml-10">{user?.email}</p>
-        </div>
 
-        <nav className="mt-4 px-4">
-          {filteredNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.href;
-            
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "hover:bg-sidebar-accent/50"
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+          <div className="flex-1 overflow-y-auto px-4">
+            <nav>
+              {filteredNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.href;
+                
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "hover:bg-sidebar-accent/50"
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent/50"
-            onClick={handleSignOut}
-          >
-            <LogOut className="h-5 w-5" />
-            <span>Sair</span>
-          </Button>
+          <div className="shrink-0 p-4 border-t border-sidebar-border">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent/50"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-5 w-5" />
+              <span>Sair</span>
+            </Button>
+          </div>
         </div>
       </aside>
 
