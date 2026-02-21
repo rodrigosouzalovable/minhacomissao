@@ -182,7 +182,7 @@ export default function PortalConsulta() {
             <img src={config.logos.parceiro} alt="Souza e Ribeiro Advogados" className="h-16 sm:h-20 w-auto" />
             <div className="h-12 w-px" style={{ background: '#ddd' }} />
             {config.logos.principal ? (
-              <img src={config.logos.principal} alt={config.nome} className="h-16 sm:h-20 w-auto" style={{ filter: 'brightness(0)' }} />
+              <img src={config.logos.principal} alt={config.nome} className="h-16 sm:h-20 w-auto max-w-[180px] sm:max-w-[240px] object-contain" style={{ filter: 'brightness(0)' }} />
             ) : (
               <span className="text-2xl font-black" style={{ color: '#1a1a2e' }}>{config.nome.toUpperCase()}</span>
             )}
@@ -264,7 +264,7 @@ export default function PortalConsulta() {
               <img src={config.logos.parceiro} alt="Souza e Ribeiro" className="h-12 sm:h-14 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
               <div className="h-8 w-px" style={{ background: 'rgba(255,255,255,0.2)' }} />
               {config.logos.principal ? (
-                <img src={config.logos.principal} alt={config.nome} className="h-12 sm:h-14 w-auto" />
+                <img src={config.logos.principal} alt={config.nome} className="h-12 sm:h-14 w-auto max-w-[150px] sm:max-w-[200px] object-contain" />
               ) : (
                 <span className="text-xl font-black" style={{ color: '#00a86b' }}>{config.nome.toUpperCase()}</span>
               )}
