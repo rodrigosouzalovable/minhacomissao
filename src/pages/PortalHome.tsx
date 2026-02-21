@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CREDORES } from '@/lib/credorConfig';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
-import { ArrowRight, Shield } from 'lucide-react';
+import { ArrowRight, Lock, Shield } from 'lucide-react';
 
 export default function PortalHome() {
   const credores = Object.values(CREDORES);
@@ -10,8 +10,12 @@ export default function PortalHome() {
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(135deg, #001a33 0%, #003366 50%, #004080 100%)' }}>
       {/* Header */}
       <header className="px-4 py-4" style={{ background: 'linear-gradient(135deg, #001a33 0%, #002b55 100%)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <div className="max-w-5xl mx-auto flex items-center justify-center">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="w-10" />
           <img src={logoSouzaRibeiro} alt="Souza e Ribeiro" className="h-14 sm:h-20 w-auto" style={{ filter: 'brightness(0) invert(1)' }} />
+          <Link to="/auth" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Área restrita">
+            <Lock className="h-5 w-5" style={{ color: 'rgba(255,255,255,0.5)' }} />
+          </Link>
         </div>
       </header>
 
