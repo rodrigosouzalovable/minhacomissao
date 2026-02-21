@@ -1,66 +1,28 @@
 
 
-## Estrategia de desconto inteligente para o portal de negociacao
+## Limitar parcelas para valor minimo de R$ 90,00
 
-### Conceito da estrategia
+### O que muda
 
-A ideia e apresentar o desconto como uma **oferta especial limitada**, usando gatilhos de persuasao:
-
-1. **Ancoragem visual**: Mostrar o valor original riscado ao lado do valor com desconto, para o cliente perceber a economia
-2. **Escala de desconto regressiva**: Quanto menos parcelas, maior o desconto -- incentivando o pagamento a vista ou em poucas parcelas
-3. **Destaque da economia**: Exibir em destaque "Voce economiza R$ X,XX" para tornar o beneficio tangivel
-
-### Regras de desconto
-
-| Condicao | Desconto |
-|----------|----------|
-| A vista (1 parcela, sem entrada) | 50% |
-| 2 a 6 parcelas | 40% |
-| 7 a 12 parcelas | 30% |
-| 13 a 24 parcelas | Sem desconto |
-
-Essa escala progressiva incentiva o cliente a fechar em menos parcelas para ganhar mais desconto.
-
-### Como funciona na interface
-
-**Etapa 1 - Antes de negociar:**
-- O card de valor total continua igual, com botao "Negociar todos os debitos"
-
-**Etapa 2 - Formulario de proposta (apos clicar):**
-- Novo campo: seletor de tipo de pagamento com cards visuais atrativos mostrando cada faixa de desconto
-- Ao selecionar a faixa, o formulario atualiza automaticamente:
-  - Mostra o valor original riscado
-  - Mostra o valor com desconto em destaque (verde)
-  - Mostra "Voce economiza R$ X,XX" em destaque
-  - O seletor de parcelas se ajusta ao range permitido pela faixa
-- O resumo da negociacao inclui o desconto aplicado
-
-**Etapa 3 - Mensagem WhatsApp:**
-- Inclui o percentual de desconto e o valor com desconto na mensagem
+O sistema passara a calcular o numero maximo de parcelas considerando que nenhuma parcela pode ser menor que R$ 90,00. Isso sera aplicado dinamicamente: se o valor com desconto (menos a entrada) dividido pelo numero de parcelas resultar em menos de R$ 90, essas opcoes nao aparecerao no seletor.
 
 ### Detalhes tecnicos
 
 **Arquivo:** `src/pages/ConsultaResultado.tsx`
 
-1. **Atualizar `NegociacaoState`** para incluir `descontoFaixa` (tipo: `'avista' | 'curto' | 'medio' | 'sem'`)
+1. **Adicionar constante** `VALOR_MINIMO_PARCELA = 90` no topo do arquivo
 
-2. **Adicionar funcao `getDesconto(faixa)`** que retorna o percentual (50, 40, 30 ou 0)
+2. **Ajustar `getMaxParcelas`** para considerar o valor minimo:
+   - Calcular o maximo pela faixa de desconto (regra atual)
+   - Calcular o maximo pelo valor minimo: `Math.floor(restante / 90)`
+   - Retornar o menor dos dois, garantindo no minimo 1
 
-3. **Adicionar cards de selecao de faixa** no inicio do formulario, antes dos campos de entrada/parcelas, usando cards estilizados com:
-   - Icone de porcentagem ou tag
-   - "A vista - 50% OFF" (destaque, badge "Melhor oferta")
-   - "2 a 6x - 40% OFF"
-   - "7 a 12x - 30% OFF"
-   - "13 a 24x - Sem desconto"
+3. **Ajustar validacao `isNegociacaoValida`** para rejeitar parcelas abaixo de R$ 90:
+   - Trocar a checagem atual de `valorParcela < 1` por `valorParcela < 90`
 
-4. **Ajustar `getValorParcela`** para aplicar o desconto sobre o `valorTotal` antes de calcular
+4. **No seletor de parcelas (Select)**, o range ja sera limitado pelo `getMaxParcelas` ajustado, entao as opcoes indisponiveis simplesmente nao aparecerao
 
-5. **Ajustar `getMaxParcelas`** e adicionar `getMinParcelas` para limitar o range conforme a faixa
+**Arquivo:** `src/components/negociacao/DiscountTierSelector.tsx`
 
-6. **No resumo**, mostrar:
-   - ~~R$ 262,32~~ (riscado)
-   - **R$ 131,16** (com desconto, em verde)
-   - "Economia de R$ 131,16 (50%)"
-
-7. **Na mensagem WhatsApp**, incluir o desconto: "...com desconto de 50%, totalizando R$ 131,16..."
+5. **Ocultar faixas de desconto impossiveis**: se o valor com desconto da faixa for menor que R$ 90 (ou seja, nem 1 parcela atinge o minimo), desabilitar visualmente o card dessa faixa -- embora na pratica isso so ocorra com debitos muito pequenos
 
