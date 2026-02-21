@@ -429,7 +429,7 @@ export default function ConsultaResultado() {
                           )}
 
                           <div>
-                            <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Data do primeiro pagamento</Label>
+                            <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>{negociacao.descontoFaixa === 'avista' ? 'Data do pagamento' : 'Data do primeiro pagamento'}</Label>
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button
