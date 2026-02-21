@@ -35,9 +35,9 @@ interface NegociacaoState {
   descontoFaixa: DescontoFaixa | undefined;
 }
 
-const PHONE = '5562981749600';
+const PHONE = '5562982183144';
 const VALOR_MINIMO_PARCELA = 90;
-const PHONE_DISPLAY = '(62) 98174-9600';
+const PHONE_DISPLAY = '(62) 98218-3144';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -393,6 +393,24 @@ export default function ConsultaResultado() {
                             <Check className="h-4 w-4 mr-2" />
                             Confirmar proposta
                           </Button>
+
+                          <a
+                            href={`https://wa.me/5562982183144?text=${encodeURIComponent(
+                              `Olá! Meu nome é ${nomeCliente}, CPF ${cpfCliente}, e gostaria de fazer uma contra proposta para os contratos ${debitos.map(d => d.contrato).filter(Boolean).join(', ')}.`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            <Button
+                              variant="outline"
+                              className="w-full"
+                              style={{ borderColor: '#ffffff33', color: '#ffffffcc', background: 'transparent' }}
+                            >
+                              <MessageCircle className="h-4 w-4 mr-2" />
+                              TENHO UMA CONTRA PROPOSTA
+                            </Button>
+                          </a>
                         </>
                       )}
                     </div>
