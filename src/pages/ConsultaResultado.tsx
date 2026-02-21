@@ -137,7 +137,9 @@ export default function ConsultaResultado() {
     const descontoStr = desconto > 0 ? `, com desconto de ${desconto}%, totalizando ${formatCurrency(valorDesc)}` : '';
 
     let msg: string;
-    if (neg.entrada > 0) {
+    if (neg.descontoFaixa === 'avista') {
+      msg = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}. Quero pagar à vista no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
+    } else if (neg.entrada > 0) {
       msg = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}, da seguinte forma: Entrada de ${formatCurrency(neg.entrada)} e mais ${neg.parcelas}x de ${formatCurrency(valorParcela)}. Quero pagar a primeira parcela no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
     } else {
       msg = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}, da seguinte forma: ${neg.parcelas}x de ${formatCurrency(valorParcela)}. Quero pagar a primeira parcela no dia ${dataFormatada}. Me envie o boleto por gentileza.`;
