@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,7 @@ export default function ImportarDevedores() {
   const [credorDestino, setCredorDestino] = useState('');
   const [credorOutro, setCredorOutro] = useState('');
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const CREDORES_OPCOES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
 
   const fetchImportacoes = useCallback(async () => {
@@ -345,6 +346,9 @@ export default function ImportarDevedores() {
     setFile(null);
     setRows([]);
     setImported(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const isMontreal = credorSelecionado === 'montreal';
@@ -401,6 +405,7 @@ export default function ImportarDevedores() {
             </div>
             <div className="flex items-center gap-4">
               <Input
+                ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={handleFile}
