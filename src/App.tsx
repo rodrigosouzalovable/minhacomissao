@@ -30,6 +30,7 @@ import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import AntifraudePage from "./pages/Antifraude";
 import Clientes from "./pages/Clientes";
 import DevedorDetalhe from "./pages/DevedorDetalhe";
+import PortalHome from "./pages/PortalHome";
 
 const queryClient = new QueryClient();
 
@@ -107,8 +108,9 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/" element={<PortalConsulta />} />
-            <Route path="/consulta/:cpf" element={<ConsultaResultado />} />
+            <Route path="/" element={<PortalHome />} />
+            <Route path="/:creditor" element={<PortalConsulta />} />
+            <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
             <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
             <Route path="/antifraude" element={<AntifraudePage />} />
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ArrowLeft, MessageCircle, FileText, Phone, AlertCircle, CalendarIcon, Check, Shield, Lock, Clock, ChevronDown, TrendingDown, Sparkles } from 'lucide-react';
-import logoGrupoAltum from '@/assets/logo-grupo-altum-negociacao.png';
 import DiscountTierSelector, { type DescontoFaixa, getDesconto, getMinParcelas, getMaxParcelasFaixa } from '@/components/negociacao/DiscountTierSelector';
+import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -35,9 +35,7 @@ interface NegociacaoState {
   descontoFaixa: DescontoFaixa | undefined;
 }
 
-const PHONE = '5562982183144';
 const VALOR_MINIMO_PARCELA = 90;
-const PHONE_DISPLAY = '(62) 98218-3144';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -49,14 +47,18 @@ function formatCpfFull(cpf: string) {
 }
 
 export default function ConsultaResultado() {
-  const { cpf } = useParams<{ cpf: string }>();
+  const { cpf, creditor } = useParams<{ cpf: string; creditor: string }>();
   const [debitos, setDebitos] = useState<Debito[]>([]);
   const [loading, setLoading] = useState(true);
   const [nomeCliente, setNomeCliente] = useState('');
   const [cpfCliente, setCpfCliente] = useState('');
   const [mostrarTodosDebitos, setMostrarTodosDebitos] = useState(false);
-
   const [negociacao, setNegociacao] = useState<NegociacaoState | null>(null);
+
+  const validCreditor = creditor && isValidCredorSlug(creditor);
+  const config = validCreditor ? getCredorConfig(creditor)! : null;
+  const PHONE = config?.phone ?? '';
+  const PHONE_DISPLAY = config?.phoneDisplay ?? '';
 
   useEffect(() => {
     async function fetchDebitos() {
@@ -161,12 +163,20 @@ export default function ConsultaResultado() {
     return new Date(d.data_vencimento + 'T00:00:00') < new Date();
   };
 
+  if (!validCreditor || !config) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(135deg, #001a33 0%, #003366 50%, #004080 100%)' }}>
       <header className="border-b px-4 py-3" style={{ borderColor: '#ffffff15' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoGrupoAltum} alt="Grupo Altum" className="h-14" />
+            {config.logos.negociacao ? (
+              <img src={config.logos.negociacao} alt={config.nome} className="h-14" />
+            ) : (
+              <span className="text-xl font-black" style={{ color: '#00a86b' }}>{config.nome.toUpperCase()}</span>
+            )}
             <p className="text-sm" style={{ color: '#ffffffaa' }}>Portal de Negociação</p>
           </div>
           <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
@@ -178,7 +188,7 @@ export default function ConsultaResultado() {
 
       <main className="flex-1 px-4 py-8">
         <div className="max-w-4xl mx-auto">
-          <Link to="/" className="inline-flex items-center gap-2 text-sm mb-6 hover:underline" style={{ color: '#00a86b' }}>
+          <Link to={`/${creditor}`} className="inline-flex items-center gap-2 text-sm mb-6 hover:underline" style={{ color: '#00a86b' }}>
             <ArrowLeft className="h-4 w-4" />
             Voltar à consulta
           </Link>
@@ -512,7 +522,7 @@ export default function ConsultaResultado() {
                           </Button>
 
                           <a
-                            href={`https://wa.me/5562982183144?text=${encodeURIComponent(
+                            href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
                               `Olá! Meu nome é ${nomeCliente}, CPF ${cpfCliente}, e gostaria de fazer uma contra proposta para os contratos ${debitos.map(d => d.contrato).filter(Boolean).join(', ')}.`
                             )}`}
                             target="_blank"
@@ -610,7 +620,7 @@ export default function ConsultaResultado() {
             Suas informações são tratadas com total sigilo e segurança conforme a Lei Geral de Proteção de Dados (LGPD).
           </p>
           <p className="text-xs" style={{ color: '#ffffff44' }}>
-            © {new Date().getFullYear()} Grupo Altum — Todos os direitos reservados
+            © {new Date().getFullYear()} {config.copyrightTexto} — Todos os direitos reservados
           </p>
         </div>
       </footer>
