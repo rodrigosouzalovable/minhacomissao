@@ -89,14 +89,23 @@ export default function Clientes() {
   // Fetch dynamic creditors from database
   useEffect(() => {
     const fetchCredores = async () => {
-      const { data } = await supabase
-        .from('devedores')
-        .select('credor')
-        .eq('ativo', true)
-        .not('credor', 'is', null);
-      if (data) {
-        const unique = Array.from(new Set(data.map((d: any) => d.credor).filter(Boolean))) as string[];
-        // Merge with fixed list to ensure they always appear
+      const PAGE = 1000;
+      let allCredorData: any[] = [];
+      let from = 0;
+      let keepFetching = true;
+      while (keepFetching) {
+        const { data } = await supabase
+          .from('devedores')
+          .select('credor')
+          .eq('ativo', true)
+          .not('credor', 'is', null)
+          .range(from, from + PAGE - 1);
+        if (data) allCredorData = [...allCredorData, ...data];
+        if (!data || data.length < PAGE) keepFetching = false;
+        else from += PAGE;
+      }
+      if (allCredorData.length > 0) {
+        const unique = Array.from(new Set(allCredorData.map((d: any) => d.credor).filter(Boolean))) as string[];
         const merged = Array.from(new Set([...CREDORES_FIXOS, ...unique]));
         setCredores(merged);
       }
@@ -210,29 +219,39 @@ export default function Clientes() {
     setDeleteMode(false);
     setSelectedForDeletion(new Set());
 
-    let query = supabase
-      .from('devedores')
-      .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio')
-      .eq('ativo', true)
-      .order('criado_em', { ascending: false });
+    const PAGE_FETCH = 1000;
+    let allData: ClienteRow[] = [];
+    let from = 0;
+    let keepFetching = true;
 
-    if (busca.trim()) {
-      const termLimpo = busca.trim().replace(/\D/g, '');
-      if (termLimpo.length > 0) {
-        query = query.or(`nome.ilike.%${busca.trim()}%,cpf.ilike.%${termLimpo}%`);
-      } else {
-        query = query.ilike('nome', `%${busca.trim()}%`);
+    while (keepFetching) {
+      let q = supabase
+        .from('devedores')
+        .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio')
+        .eq('ativo', true)
+        .order('criado_em', { ascending: false })
+        .range(from, from + PAGE_FETCH - 1);
+
+      if (busca.trim()) {
+        const termLimpo = busca.trim().replace(/\D/g, '');
+        if (termLimpo.length > 0) {
+          q = q.or(`nome.ilike.%${busca.trim()}%,cpf.ilike.%${termLimpo}%`);
+        } else {
+          q = q.ilike('nome', `%${busca.trim()}%`);
+        }
       }
-    }
-    if (telefone.trim()) query = query.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
-    if (credor !== 'todos') query = query.eq('credor', credor);
-    if (estagio !== 'todos') query = query.eq('estagio', estagio);
+      if (telefone.trim()) q = q.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
+      if (credor !== 'todos') q = q.eq('credor', credor);
+      if (estagio !== 'todos') q = q.eq('estagio', estagio);
 
-    const { data, error } = await query;
-
-    if (!error && data) {
-      setRawResults(data as ClienteRow[]);
+      const { data, error } = await q;
+      if (error) { toast.error('Erro na busca: ' + error.message); break; }
+      if (data) allData = [...allData, ...(data as ClienteRow[])];
+      if (!data || data.length < PAGE_FETCH) keepFetching = false;
+      else from += PAGE_FETCH;
     }
+
+    setRawResults(allData);
 
     // Refresh groups
     const { data: grpData } = await supabase.from('grupo_empresarial_membros' as any).select('*');
