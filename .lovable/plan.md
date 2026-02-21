@@ -1,48 +1,41 @@
 
 
-## Corrigir importacao COBMAIS e adicionar indicador de carregamento
+## Adicionar seletor de credor destino na importacao + filtro dinamico na aba Clientes
 
-### Problema
+### Resumo
 
-Ao importar a planilha COBMAIS, nada acontece visualmente. O arquivo esta sendo processado em segundo plano (leitura + parsing de 4 abas + cruzamento por CPF), mas nao existe nenhum indicador de carregamento para informar o usuario que deve aguardar.
+Duas mudancas principais:
+1. Na pagina de importacao, adicionar um campo "Credor de destino" para que o usuario escolha para qual credor os devedores serao importados (sobrescrevendo o credor da planilha).
+2. Na pagina de Clientes, tornar o filtro de credor dinamico (buscar do banco) e exibir toast quando parsing retorna 0 registros.
 
-### Causa raiz
+### Alteracoes
 
-A funcao `handleFile` usa `FileReader.readAsBinaryString()` que e assincrono, mas nao existe um estado `loading` para mostrar feedback visual ao usuario durante o processamento.
+**Arquivo 1: `src/pages/ImportarDevedores.tsx`**
 
-### Solucao
+1. Adicionar novo estado `credorDestino` (string, inicialmente vazio)
+2. Adicionar um campo Select "Credor de Destino" abaixo do seletor de layout, com opcoes:
+   - MUNDO DA MODA
+   - UME | NOVO MUNDO
+   - MONTREAL
+   - Campo livre para digitar outro credor (Input condicional)
+3. No `handleImport`, usar `credorDestino` como valor do campo `credor` de todos os registros importados (em vez do credor que vem da planilha)
+4. Tambem gravar o `credorDestino` na tabela `importacoes` (campo `credor`) para o historico
+5. Adicionar validacao: se `credorDestino` estiver vazio, exibir toast de erro e nao permitir importar
+6. Apos o parsing, se `rows.length === 0`, exibir toast: "Nenhum registro encontrado na planilha"
 
-**Arquivo:** `src/pages/ImportarDevedores.tsx`
+**Arquivo 2: `src/pages/Clientes.tsx`**
 
-**1. Adicionar novo estado `parsing`**
-
-```typescript
-const [parsing, setParsing] = useState(false);
-```
-
-**2. Envolver `handleFile` com o estado de loading**
-
-- Setar `setParsing(true)` antes de iniciar a leitura do arquivo
-- Setar `setParsing(false)` ao final do `reader.onload`
-- Tambem setar `setParsing(false)` em `reader.onerror`
-
-**3. Adicionar indicador visual na UI**
-
-Quando `parsing === true`, exibir um card com animacao de loading abaixo do upload, contendo:
-- Um icone de spinner animado (Loader2 do lucide-react)
-- Texto "Processando planilha..." em negrito
-- Subtexto "Lendo abas e cruzando dados, aguarde..."
-- Desabilitar o botao "Escolher arquivo" e "Limpar" durante o parsing
-
-**4. Desabilitar input de arquivo durante o parsing**
-
-Impedir que o usuario selecione outro arquivo enquanto o atual esta sendo processado.
+1. Remover a constante fixa `CREDORES`
+2. Adicionar estado `credores` e um `useEffect` que busca credores distintos do banco:
+   ```sql
+   SELECT DISTINCT credor FROM devedores WHERE ativo = true AND credor IS NOT NULL
+   ```
+3. Popular o Select de credor com os resultados dinamicos
 
 ### Secao tecnica
 
-- Unico arquivo modificado: `src/pages/ImportarDevedores.tsx`
-- Importar `Loader2` do lucide-react
-- Novo estado booleano `parsing`
-- Card de loading com spinner animado (`animate-spin`)
+- Arquivos modificados: `src/pages/ImportarDevedores.tsx`, `src/pages/Clientes.tsx`
+- Sem alteracoes no banco de dados (o campo `credor` ja existe nas tabelas `devedores` e `importacoes`)
 - Sem novas dependencias
+- O `credorDestino` permite tanto opcoes pre-definidas quanto entrada livre para novos credores
 
