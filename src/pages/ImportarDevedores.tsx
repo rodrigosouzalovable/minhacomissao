@@ -133,7 +133,7 @@ export default function ImportarDevedores() {
   };
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
-    // Aba 1 - Clientes (principal)
+    // Aba 1 - Cobrança (principal)
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
 
@@ -145,31 +145,54 @@ export default function ImportarDevedores() {
     const sheet4 = workbook.SheetNames.length >= 4 ? workbook.Sheets[workbook.SheetNames[3]] : null;
     const rows4 = sheet4 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet4, { header: 'A' }).slice(1) : [];
 
-    // Mapear telefones ativos por CPF (primeiro telefone ativo encontrado)
+    // 1. Processar aba Telefones primeiro - construir mapa reverso cpfSemZeros -> cpfReal
+    // Na aba Telefones, CPFs estão como texto (com zeros à esquerda preservados)
+    const cpfRealMap = new Map<string, string>(); // "2967906131" -> "02967906131"
     const phoneMap = new Map<string, string>();
     for (const row of rows2) {
-      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      const cpfReal = String(row['A'] ?? '').replace(/\D/g, '');
+      if (!cpfReal) continue;
+      // Chave sem zeros à esquerda (como o Excel armazena números)
+      const cpfSemZeros = cpfReal.replace(/^0+/, '');
+      if (cpfSemZeros && !cpfRealMap.has(cpfSemZeros)) {
+        cpfRealMap.set(cpfSemZeros, cpfReal);
+      }
+      // Mapear primeiro telefone ativo
       const ativo = String(row['I'] ?? '').toUpperCase().trim();
-      if (cpf && ativo === 'SIM' && !phoneMap.has(cpf)) {
+      if (cpfReal && ativo === 'SIM' && !phoneMap.has(cpfReal)) {
         const numero = String(row['C'] ?? '').replace(/\D/g, '');
-        if (numero) phoneMap.set(cpf, numero);
+        if (numero) phoneMap.set(cpfReal, numero);
       }
     }
+
+    // Função para resolver CPF numérico para CPF real
+    const resolverCpf = (raw: unknown): string => {
+      const digits = String(raw ?? '').replace(/\D/g, '');
+      if (!digits) return '';
+      const semZeros = digits.replace(/^0+/, '');
+      // Tentar encontrar o CPF real via mapa reverso
+      const cpfReal = cpfRealMap.get(semZeros);
+      if (cpfReal) return cpfReal;
+      // Fallback: padStart
+      if (digits.length <= 11) return digits.padStart(11, '0');
+      if (digits.length <= 14) return digits.padStart(14, '0');
+      return digits;
+    };
 
     // Mapear nascimento por CPF
     const birthMap = new Map<string, string>();
     for (const row of rows4) {
-      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      const cpf = resolverCpf(row['A']);
       if (cpf && !birthMap.has(cpf)) {
         const nasc = String(row['D'] ?? '');
         if (nasc) birthMap.set(cpf, nasc);
       }
     }
 
-    // Processar Aba 1 e combinar dados
+    // Processar Aba 1 (Cobrança) e combinar dados
     const cpfAccum = new Map<string, DevedorRow>();
     for (const row of rows1) {
-      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      const cpf = resolverCpf(row['A']);
       if (cpf.length < 11) continue;
 
       const risco = parseNum(row['M']);
