@@ -1,25 +1,16 @@
 
 
-## Barra de scroll sutil na sidebar
+## Trocar telefone nas paginas do portal publico
 
-### Problema
-A barra de scroll padrao do navegador na area de navegacao da sidebar esta muito visivel e esteticamente ruim.
+### Alteracao
 
-### Solucao
+Substituir o telefone `(62) 98174-9600` por `(62) 98218-3144` em 3 arquivos:
 
-**Arquivo:** `src/components/layout/AppLayout.tsx`
+| Arquivo | Linha | De | Para |
+|---|---|---|---|
+| `src/pages/PortalConsulta.tsx` | 25-26 | `5562981749600` / `(62) 98174-9600` | `5562982183144` / `(62) 98218-3144` |
+| `src/pages/Antifraude.tsx` | 6-7 | `5562981749600` / `(62) 98174-9600` | `5562982183144` / `(62) 98218-3144` |
+| `src/pages/PoliticaPrivacidade.tsx` | 6-7 | `5562981749600` / `(62) 98174-9600` | `5562982183144` / `(62) 98218-3144` |
 
-Substituir o `overflow-y-auto` por um componente `ScrollArea` do Radix (ja disponivel no projeto em `src/components/ui/scroll-area.tsx`), que renderiza uma scrollbar customizada e sutil.
-
-1. Importar `ScrollArea` de `@/components/ui/scroll-area`
-2. Substituir a div `flex-1 overflow-y-auto px-4` por `ScrollArea` com `className="flex-1"`
-3. Mover o `px-4` para dentro do conteudo da ScrollArea
-
-**Arquivo:** `src/components/ui/scroll-area.tsx`
-
-Ajustar o estilo do thumb da scrollbar para ser mais sutil:
-- Reduzir largura de `w-2.5` para `w-1.5`
-- Usar cor semi-transparente (`bg-white/20`) em vez de `bg-border`
-- Adicionar `hover:bg-white/40` para feedback ao passar o mouse
-- Remover a borda lateral (`border-l-transparent`)
+Cada arquivo tem duas constantes no topo (`PHONE` e `PHONE_DISPLAY`) que serao atualizadas. Todas as referencias ao telefone no restante do codigo usam essas constantes, entao basta alterar nesses pontos.
 
