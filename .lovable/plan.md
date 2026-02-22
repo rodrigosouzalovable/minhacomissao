@@ -1,88 +1,35 @@
 
-# Dashboard Executivo para o Credor
 
-## Visao Geral
+# Melhorar Feedback de Pesquisa na Pagina Clientes
 
-Criar uma nova pagina publica (sem necessidade de login) acessivel por uma rota dedicada como `/credor/novomundo/dashboard` que exibe KPIs de recuperacao de credito em modo read-only. O credor podera acompanhar o desempenho da operacao sem ter acesso ao sistema interno.
+## Problema
 
-Para garantir seguranca, o acesso sera protegido por um token simples configuravel por credor, passado como query parameter (`?token=abc123`). Isso evita a necessidade de criar contas de usuario para credores.
+Quando o usuario filtra apenas pelo credor (ex: "UME | NOVO MUNDO"), a busca precisa carregar todos os registros do banco em lotes de 1000. Se houver milhares de registros, isso demora bastante e o usuario so ve "Pesquisando..." sem saber o progresso.
 
-## Funcionalidades do Dashboard
+## Solucao
 
-1. **Valor Total Recuperado** -- soma de todas as parcelas pagas dos acordos do credor
-2. **Taxa de Conversao do Portal** -- percentual de CPFs consultados no portal que geraram acordos
-3. **Acordos Fechados no Mes** -- quantidade e valor total de acordos criados no mes atual
-4. **Ticket Medio** -- valor medio por acordo fechado
-5. **Comparativo Mensal** -- grafico de barras comparando os ultimos 6 meses (valor recuperado por mes)
-6. **Cards com variacao percentual** -- indicadores de crescimento/queda em relacao ao mes anterior
+Adicionar um indicador de progresso em tempo real durante a busca, mostrando quantos registros ja foram carregados.
 
-## Arquitetura Tecnica
+### Mudancas no arquivo `src/pages/Clientes.tsx`:
 
-### 1. Backend -- Edge Function `credor-dashboard-data`
+1. **Novo estado para contagem parcial**: Adicionar um estado `loadingCount` que e atualizado a cada lote carregado.
 
-Uma edge function que recebe o slug do credor e o token de acesso, valida o token, e retorna os KPIs agregados diretamente do banco de dados usando service_role_key (bypassa RLS).
+2. **Barra de progresso durante a busca**: Exibir um card informativo abaixo dos filtros enquanto a busca esta em andamento, contendo:
+   - Icone de carregamento (spinner)
+   - Texto: "Carregando registros... X registros encontrados ate agora"
+   - Uma barra de progresso animada (indeterminada)
+   - Mensagem: "Aguarde, esta operacao pode levar alguns segundos dependendo do volume de dados."
 
-Dados retornados:
-- Total recuperado (all-time e mes atual)
-- Total recuperado mes anterior (para calculo de variacao)
-- Quantidade de acordos (mes atual e anterior)
-- Ticket medio (mes atual)
-- Serie temporal dos ultimos 6 meses
-- Contagem de consultas no portal (baseada em logs ou devedores consultados)
+3. **Atualizar o loop de busca**: Dentro do `while` de paginacao, atualizar `loadingCount` a cada iteracao para que o usuario veja o progresso em tempo real.
 
-### 2. Tabela `credor_tokens`
+4. **Botao de pesquisa**: Manter o texto "Pesquisando..." no botao, mas agora o card de progresso dara mais contexto.
 
-Nova tabela para armazenar tokens de acesso por credor:
+### Detalhes Tecnicos
 
-```text
-credor_tokens
-- id (uuid, PK)
-- credor_slug (text, unique)
-- token (text)
-- ativo (boolean, default true)
-- criado_em (timestamptz)
-```
+- Adicionar estado: `const [loadingCount, setLoadingCount] = useState(0);`
+- No loop `while` da funcao `handleSearch`, apos cada lote: `setLoadingCount(prev => prev + (data?.length || 0));`
+- Resetar `loadingCount` ao iniciar nova busca
+- Renderizar condicional: `{loading && <Card>...</Card>}` entre o card de filtros e o card de resultados
+- Usar componente `Progress` existente com animacao indeterminada (pulse)
+- Usar icone `Loader2` do lucide-react com classe `animate-spin`
 
-RLS: apenas admins podem gerenciar. A edge function usa service_role para validar.
-
-### 3. Frontend -- Nova pagina `src/pages/CredorDashboard.tsx`
-
-Pagina standalone (sem AppLayout) com branding do credor, contendo:
-- Header com logo do credor e logo Souza e Ribeiro
-- 4 cards de KPI no topo (Valor Recuperado, Acordos no Mes, Ticket Medio, Taxa Conversao)
-- Cada card com indicador de variacao vs mes anterior (seta verde/vermelha + percentual)
-- Grafico de barras com comparativo dos ultimos 6 meses (valor recuperado)
-- Rodape institucional
-
-### 4. Rota
-
-Nova rota publica em `App.tsx`:
-```text
-/credor/:slug/dashboard  -->  CredorDashboard
-```
-
-## Arquivos a Criar/Modificar
-
-| Arquivo | Acao |
-|---|---|
-| `supabase/functions/credor-dashboard-data/index.ts` | Criar -- edge function que agrega KPIs |
-| `src/pages/CredorDashboard.tsx` | Criar -- pagina do dashboard executivo |
-| `src/App.tsx` | Modificar -- adicionar rota publica |
-| Migration SQL | Criar tabela `credor_tokens` com RLS |
-
-## Fluxo de Acesso
-
-1. Admin configura o token do credor na tabela `credor_tokens` (pode ser feito via SQL inicialmente)
-2. Admin compartilha o link com o credor: `https://minhacomissao.lovable.app/credor/novomundo/dashboard?token=TOKEN_AQUI`
-3. A pagina carrega, chama a edge function com slug + token
-4. Edge function valida o token, busca dados agregados, retorna JSON
-5. Frontend renderiza os KPIs em cards visuais e grafico
-
-## Design Visual
-
-- Fundo escuro (gradiente similar ao portal publico)
-- Cards com fundo semi-transparente branco
-- Cores: verde para crescimento, vermelho para queda
-- Grafico em tons de azul/verde
-- Logo do credor no header
-- Responsivo para mobile e desktop
