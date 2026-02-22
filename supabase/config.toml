@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.credor-dashboard-data]
 verify_jwt = false
+
+[functions.credor-report-whatsapp]
+verify_jwt = false
