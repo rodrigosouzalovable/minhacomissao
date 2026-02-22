@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Search, X, Users, SearchX, Eye, Link2, Unlink, Trash2 } from 'lucide-react';
+import { Search, X, Users, SearchX, Eye, Link2, Unlink, Trash2, Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
@@ -69,6 +70,7 @@ export default function Clientes() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [loadingCount, setLoadingCount] = useState(0);
 
   // Grupo empresarial state
   const [grupos, setGrupos] = useState<GrupoMembro[]>([]);
@@ -213,6 +215,7 @@ export default function Clientes() {
       return;
     }
     setLoading(true);
+    setLoadingCount(0);
     setPage(0);
     setSelectionMode(false);
     setSelectedCpfs(new Set());
@@ -246,7 +249,10 @@ export default function Clientes() {
 
       const { data, error } = await q;
       if (error) { toast.error('Erro na busca: ' + error.message); break; }
-      if (data) allData = [...allData, ...(data as ClienteRow[])];
+      if (data) {
+        allData = [...allData, ...(data as ClienteRow[])];
+        setLoadingCount(allData.length);
+      }
       if (!data || data.length < PAGE_FETCH) keepFetching = false;
       else from += PAGE_FETCH;
     }
@@ -447,7 +453,24 @@ export default function Clientes() {
           </CardContent>
         </Card>
 
-        {searched && (
+        {loading && (
+          <Card className="mb-6">
+            <CardContent className="py-6">
+              <div className="flex items-center gap-3 mb-3">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span className="text-sm font-medium">
+                  Carregando registros... {loadingCount > 0 ? `${loadingCount.toLocaleString('pt-BR')} registros encontrados até agora` : 'Iniciando busca...'}
+                </span>
+              </div>
+              <Progress value={undefined} className="h-2 animate-pulse" />
+              <p className="text-xs text-muted-foreground mt-3">
+                Aguarde, esta operação pode levar alguns segundos dependendo do volume de dados.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {searched && !loading && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
