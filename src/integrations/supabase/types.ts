@@ -164,6 +164,39 @@ export type Database = {
           },
         ]
       }
+      credor_relatorio_config: {
+        Row: {
+          ativo: boolean
+          credor_slug: string
+          criado_em: string
+          frequencia: string
+          id: string
+          telefone: string
+          ultimo_envio_mensal: string | null
+          ultimo_envio_semanal: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          credor_slug: string
+          criado_em?: string
+          frequencia?: string
+          id?: string
+          telefone: string
+          ultimo_envio_mensal?: string | null
+          ultimo_envio_semanal?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          credor_slug?: string
+          criado_em?: string
+          frequencia?: string
+          id?: string
+          telefone?: string
+          ultimo_envio_mensal?: string | null
+          ultimo_envio_semanal?: string | null
+        }
+        Relationships: []
+      }
       credor_tokens: {
         Row: {
           ativo: boolean
