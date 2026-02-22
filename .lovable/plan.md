@@ -1,66 +1,125 @@
 
 
-# Corrigir Duplicidade de Parcelas de Acordo na Tabela de Devedores
+# Sincronizar Portal Publico com Acordos Internos
 
-## Problema Identificado
+## Problema
 
-A importacao "UME NOVO MUNDO 5.xlsx" inseriu na tabela `devedores` tanto as parcelas originais das dividas quanto as parcelas dos acordos ja negociados internamente. Isso faz com que o portal publico exiba registros duplicados/incorretos para esses clientes.
+Quando um acordo e lancado no sistema interno, o portal publico continua exibindo os debitos originais (ex: 10x R$ 141,00) ao inves dos valores do acordo negociado (10x R$ 133,95). Alem disso, quando uma parcela e marcada como paga internamente, o portal nao reflete essa informacao.
 
-- Caso Stefanne: 14 parcelas originais (R$ 144,00) + 15 parcelas do acordo (R$ 134,40) = 29 registros ao inves dos 14 corretos
-- **229 acordos ativos** potencialmente afetados por esse problema
+Caso concreto - CPF 70776699202:
+- Debitos originais: 10 parcelas de R$ 141,00 (exibidos no portal)
+- Acordo ativo no sistema: 10x de R$ 133,95 (parcela 1 ja paga)
+- O portal deveria mostrar as parcelas do acordo com status de pagamento
 
-## Solucao em Duas Frentes
+## Solucao
 
-### Frente 1: Limpeza dos dados duplicados
+Quando existir um acordo ativo para o CPF consultado, o portal substituira a exibicao dos debitos originais pelas parcelas do acordo, mostrando valores corretos e status de pagamento (pago/pendente).
 
-Desativar (`ativo = false`) os registros de devedores que correspondem a parcelas de acordos ja lancados. A identificacao sera feita cruzando:
-- CPF normalizado igual entre `devedores` e `acordos`
-- `valor_atualizado` do devedor igual ao `valor_parcela` do acordo
-- `data_vencimento` do devedor >= `data_primeiro_pagamento` do acordo
-- Acordo com status 'ativo' ou 'concluido'
+## Mudancas
 
-Sera executada uma query SQL para marcar esses registros como `ativo = false`, preservando o historico sem deletar dados.
+### 1. Nova funcao no banco de dados
 
-### Frente 2: Prevencao no portal (ja implementado parcialmente)
+Criar `consultar_parcelas_acordo_por_cpf(p_cpf text)` que retorna as parcelas do acordo ativo:
+- Numero da parcela
+- Valor
+- Data prevista
+- Status (pago/pendente)
+- Data de pagamento (se paga)
 
-A funcao `consultar_acordo_ativo_por_cpf` implementada anteriormente ja bloqueia a negociacao para CPFs com acordo ativo. Porem, o portal ainda exibe todos os registros de devedores, incluindo os incorretos. A melhoria sera:
+Funcao com `SECURITY DEFINER` para acesso sem autenticacao pelo portal.
 
-- Alterar a funcao `consultar_debitos_por_cpf` ou a logica do frontend para filtrar registros que correspondam a parcelas de acordos ativos
-- Garantir que o saldo exibido reflita apenas a divida original, nao as parcelas do acordo
+### 2. Alteracao no ConsultaResultado.tsx
+
+Quando `acordoExistente` for detectado (status 'ativo'):
+- Buscar as parcelas do acordo via nova funcao RPC
+- Substituir a lista de debitos originais pela lista de parcelas do acordo
+- Exibir cada parcela com:
+  - Numero (ex: "Parcela 1 de 10")
+  - Valor (R$ 133,95)
+  - Data de vencimento
+  - Badge "PAGO" (verde) ou "PENDENTE"
+- Recalcular o saldo total como soma das parcelas pendentes
+- Manter o banner de "negociacao em andamento" e o botao de WhatsApp
+- Desabilitar o botao de negociar (ja implementado)
+
+### 3. Visual do portal com acordo ativo
+
+```
+[Banner: Voce ja possui uma negociacao em andamento!]
+
+Ola, SERGIO!
+CPF: 707.766.992-02
+
+Seu acordo: 10x de R$ 133,95
+
+Parcela 1 de 10 - R$ 133,95 - 09/02/2026  [PAGO]
+Parcela 2 de 10 - R$ 133,95 - 09/03/2026  [PENDENTE]
+Parcela 3 de 10 - R$ 133,95 - 09/04/2026  [PENDENTE]
+...
+
+Saldo restante: R$ 1.205,55 (9 parcelas pendentes)
+
+[Falar no WhatsApp]
+```
 
 ## Detalhes Tecnicos
 
-### Migration SQL - Limpeza de dados
+### Funcao SQL
 
 ```sql
--- Desativar registros de devedores que sao parcelas de acordos ja lancados
-UPDATE devedores d
-SET ativo = false, atualizado_em = now()
-WHERE d.ativo = true
-AND EXISTS (
-  SELECT 1 FROM acordos a
-  WHERE cpf_normalize(a.cliente_cpf) = cpf_normalize(d.cpf)
+CREATE OR REPLACE FUNCTION public.consultar_parcelas_acordo_por_cpf(p_cpf text)
+RETURNS TABLE(
+  numero_parcela integer,
+  valor_parcela numeric,
+  data_prevista date,
+  status text,
+  data_paga date,
+  total_parcelas integer,
+  valor_total_acordo numeric
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_acordo_id uuid;
+  v_total_parcelas integer;
+  v_valor_total numeric;
+BEGIN
+  SELECT a.id, a.parcelas, a.valor_total
+  INTO v_acordo_id, v_total_parcelas, v_valor_total
+  FROM acordos a
+  WHERE cpf_normalize(a.cliente_cpf) = cpf_normalize(p_cpf)
     AND a.status IN ('ativo', 'concluido')
-    AND d.valor_atualizado = a.valor_parcela
-    AND d.data_vencimento >= a.data_primeiro_pagamento
-);
+  ORDER BY a.criado_em DESC
+  LIMIT 1;
+
+  IF v_acordo_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    p.numero_parcela,
+    p.valor_parcela,
+    p.data_prevista,
+    p.status,
+    p.data_paga,
+    v_total_parcelas,
+    v_valor_total
+  FROM pagamentos p
+  WHERE p.acordo_id = v_acordo_id
+  ORDER BY p.numero_parcela;
+END;
+$$;
 ```
 
-### Alteracao no frontend (ConsultaResultado.tsx)
+### Frontend (ConsultaResultado.tsx)
 
-- Quando o sistema detectar um acordo ativo (via `consultar_acordo_ativo_por_cpf`), o portal ja exibe o banner de bloqueio e desabilita a negociacao, portanto os debitos exibidos sao irrelevantes nesse cenario
-- Como camada extra de seguranca, nenhuma alteracao adicional no frontend e necessaria alem do que ja foi implementado
-
-### Validacao pos-limpeza
-
-Apos executar a migration, verificar:
-1. Que a cliente Stefanne agora mostra apenas 14 registros (parcelas originais)
-2. Que os 229 casos afetados foram corrigidos
-3. Que o banner de "negociacao em andamento" continua aparecendo corretamente
-
-## Riscos e Cuidados
-
-- A query de limpeza usa `valor_atualizado = valor_parcela`, que pode ter falsos positivos em casos onde o valor da parcela do acordo coincide com o valor original da divida. Para mitigar, o filtro de `data_vencimento >= data_primeiro_pagamento` reduz significativamente esse risco
-- Os dados nao serao deletados, apenas marcados como `ativo = false`, permitindo reversao se necessario
-- Recomenda-se revisar manualmente alguns casos apos a execucao para validar a correcao
+- Novo estado `parcelasAcordo` com array de parcelas do acordo
+- No `useEffect`, se `acordoExistente` existir, chamar `consultar_parcelas_acordo_por_cpf`
+- Renderizacao condicional: se `parcelasAcordo.length > 0`, exibir parcelas do acordo; senao, exibir debitos originais
+- Cards de parcela com badge de status (verde para pago, amarelo para pendente)
+- Saldo restante calculado como soma das parcelas pendentes
 
