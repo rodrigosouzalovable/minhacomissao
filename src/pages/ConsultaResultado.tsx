@@ -54,6 +54,7 @@ export default function ConsultaResultado() {
   const [cpfCliente, setCpfCliente] = useState('');
   const [mostrarTodosDebitos, setMostrarTodosDebitos] = useState(false);
   const [negociacao, setNegociacao] = useState<NegociacaoState | null>(null);
+  const [acordoExistente, setAcordoExistente] = useState<{ status: string; criadoEm: string; funcionarioNome: string } | null>(null);
 
   const validCreditor = creditor && isValidCredorSlug(creditor);
   const config = validCreditor ? getCredorConfig(creditor)! : null;
@@ -63,13 +64,27 @@ export default function ConsultaResultado() {
   useEffect(() => {
     async function fetchDebitos() {
       if (!cpf) return;
-      const { data, error } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
-      if (!error && data && data.length > 0) {
-        const typedData = data as Debito[];
+      const [debitosResult, acordoResult] = await Promise.all([
+        supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpf }),
+        supabase.rpc('consultar_acordo_ativo_por_cpf', { p_cpf: cpf } as any),
+      ]);
+      
+      if (!debitosResult.error && debitosResult.data && debitosResult.data.length > 0) {
+        const typedData = debitosResult.data as Debito[];
         setDebitos(typedData);
         setNomeCliente(typedData[0].nome);
         setCpfCliente(typedData[0].cpf);
       }
+      
+      if (!acordoResult.error && acordoResult.data && (acordoResult.data as any[]).length > 0) {
+        const acordo = (acordoResult.data as any[])[0];
+        setAcordoExistente({
+          status: acordo.acordo_status,
+          criadoEm: acordo.acordo_criado_em,
+          funcionarioNome: acordo.funcionario_nome,
+        });
+      }
+      
       setLoading(false);
     }
     fetchDebitos();
@@ -238,8 +253,48 @@ export default function ConsultaResultado() {
                     <Clock className="h-3 w-3" style={{ animation: 'float 2s ease-in-out infinite' }} />
                     Oferta por tempo limitado
                   </span>
-                </div>
+              </div>
 
+              {/* Banner de acordo existente */}
+              {acordoExistente && acordoExistente.status === 'ativo' && (
+                <div
+                  className="rounded-xl p-5 mb-6"
+                  style={{
+                    background: 'linear-gradient(135deg, #1a3a1a 0%, #0d2b0d 100%)',
+                    border: '2px solid #f59e0b66',
+                    boxShadow: '0 4px 20px rgba(245, 158, 11, 0.15)',
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0" style={{ background: '#f59e0b22' }}>
+                      <AlertCircle className="h-5 w-5" style={{ color: '#f59e0b' }} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-base font-bold mb-1" style={{ color: '#f59e0b' }}>
+                        Você já possui uma negociação em andamento!
+                      </h3>
+                      <p className="text-sm mb-3" style={{ color: '#ffffffaa' }}>
+                        Seu acordo está sendo acompanhado por nossa equipe. Entre em contato para mais detalhes sobre sua negociação.
+                      </p>
+                      <a
+                        href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
+                          `Olá! Meu nome é ${nomeCliente}, CPF ${cpfCliente}, e gostaria de informações sobre meu acordo em andamento.`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button
+                          className="h-10 rounded-lg text-sm font-semibold"
+                          style={{ background: '#25D366', color: '#fff' }}
+                        >
+                          <MessageCircle className="h-4 w-4 mr-2" />
+                          Falar no WhatsApp
+                        </Button>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
                 <h2 className="text-3xl font-black mb-1" style={{ color: '#fff' }}>
                   Olá, <span style={{ color: '#00ff88' }}>{nomeCliente}</span>!
                 </h2>
@@ -339,15 +394,20 @@ export default function ConsultaResultado() {
                     <Button
                       className="w-full h-14 text-base font-bold rounded-xl"
                       style={{
-                        background: 'linear-gradient(135deg, #00a86b, #00cc88)',
+                        background: acordoExistente?.status === 'ativo'
+                          ? '#ffffff15'
+                          : 'linear-gradient(135deg, #00a86b, #00cc88)',
                         color: '#fff',
-                        boxShadow: '0 4px 20px rgba(0, 168, 107, 0.4)',
-                        animation: 'pulse-border 2s ease-in-out infinite',
+                        boxShadow: acordoExistente?.status === 'ativo' ? 'none' : '0 4px 20px rgba(0, 168, 107, 0.4)',
+                        animation: acordoExistente?.status === 'ativo' ? 'none' : 'pulse-border 2s ease-in-out infinite',
+                        cursor: acordoExistente?.status === 'ativo' ? 'not-allowed' : 'pointer',
+                        opacity: acordoExistente?.status === 'ativo' ? 0.5 : 1,
                       }}
                       onClick={toggleNegociacao}
+                      disabled={acordoExistente?.status === 'ativo'}
                     >
                       <MessageCircle className="h-5 w-5 mr-2" />
-                      NEGOCIAR AGORA COM DESCONTO
+                      {acordoExistente?.status === 'ativo' ? 'NEGOCIAÇÃO EM ANDAMENTO' : 'NEGOCIAR AGORA COM DESCONTO'}
                     </Button>
                   ) : !negociacao.confirmado ? (
                     <div className="space-y-5 pt-4" style={{ borderTop: '1px solid #ffffff15' }}>

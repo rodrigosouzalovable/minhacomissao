@@ -879,6 +879,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consultar_acordo_ativo_por_cpf: {
+        Args: { p_cpf: string }
+        Returns: {
+          acordo_criado_em: string
+          acordo_status: string
+          funcionario_nome: string
+        }[]
+      }
       consultar_debitos_por_cpf: {
         Args: { p_cpf: string }
         Returns: {
