@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.gerar-termo-acordo]
 verify_jwt = false
+
+[functions.credor-dashboard-data]
+verify_jwt = false

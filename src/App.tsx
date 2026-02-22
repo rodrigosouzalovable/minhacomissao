@@ -31,6 +31,7 @@ import AntifraudePage from "./pages/Antifraude";
 import Clientes from "./pages/Clientes";
 import DevedorDetalhe from "./pages/DevedorDetalhe";
 import PortalHome from "./pages/PortalHome";
+import CredorDashboard from "./pages/CredorDashboard";
 
 const queryClient = new QueryClient();
 
@@ -113,6 +114,7 @@ const App = () => (
             <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
             <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
             <Route path="/antifraude" element={<AntifraudePage />} />
+            <Route path="/credor/:slug/dashboard" element={<CredorDashboard />} />
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/acordos" element={<ProtectedRoute><Acordos /></ProtectedRoute>} />
