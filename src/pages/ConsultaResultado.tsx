@@ -207,7 +207,7 @@ export default function ConsultaResultado() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             {config.logos.negociacao ? (
-              <img src={config.logos.negociacao} alt={config.nome} className="h-14" />
+              <img src={config.logos.negociacao} alt={config.nome} className="h-10 max-w-[160px] object-contain" />
             ) : (
               <span className="text-xl font-black" style={{ color: '#00a86b' }}>{config.nome.toUpperCase()}</span>
             )}
