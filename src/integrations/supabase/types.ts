@@ -900,6 +900,18 @@ export type Database = {
           valor_original: number
         }[]
       }
+      consultar_parcelas_acordo_por_cpf: {
+        Args: { p_cpf: string }
+        Returns: {
+          data_paga: string
+          data_prevista: string
+          numero_parcela: number
+          status: string
+          total_parcelas: number
+          valor_parcela: number
+          valor_total_acordo: number
+        }[]
+      }
       contar_acordos_hoje: { Args: never; Returns: number }
       contar_acordos_hoje_por_usuario: {
         Args: { p_user_id?: string }

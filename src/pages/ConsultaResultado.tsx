@@ -26,6 +26,16 @@ interface Debito {
   data_vencimento: string | null;
 }
 
+interface ParcelaAcordo {
+  numero_parcela: number;
+  valor_parcela: number;
+  data_prevista: string;
+  status: string;
+  data_paga: string | null;
+  total_parcelas: number;
+  valor_total_acordo: number;
+}
+
 interface NegociacaoState {
   negociando: boolean;
   confirmado: boolean;
@@ -55,6 +65,7 @@ export default function ConsultaResultado() {
   const [mostrarTodosDebitos, setMostrarTodosDebitos] = useState(false);
   const [negociacao, setNegociacao] = useState<NegociacaoState | null>(null);
   const [acordoExistente, setAcordoExistente] = useState<{ status: string; criadoEm: string; funcionarioNome: string } | null>(null);
+  const [parcelasAcordo, setParcelasAcordo] = useState<ParcelaAcordo[]>([]);
 
   const validCreditor = creditor && isValidCredorSlug(creditor);
   const config = validCreditor ? getCredorConfig(creditor)! : null;
@@ -83,6 +94,14 @@ export default function ConsultaResultado() {
           criadoEm: acordo.acordo_criado_em,
           funcionarioNome: acordo.funcionario_nome,
         });
+
+        // Fetch agreement installments
+        if (acordo.acordo_status === 'ativo' || acordo.acordo_status === 'concluido') {
+          const parcelasResult = await supabase.rpc('consultar_parcelas_acordo_por_cpf' as any, { p_cpf: cpf });
+          if (!parcelasResult.error && parcelasResult.data && (parcelasResult.data as any[]).length > 0) {
+            setParcelasAcordo(parcelasResult.data as ParcelaAcordo[]);
+          }
+        }
       }
       
       setLoading(false);
@@ -301,359 +320,462 @@ export default function ConsultaResultado() {
                 <p className="text-sm" style={{ color: '#ffffffaa' }}>
                   CPF: {formatCpfFull(cpfCliente)}
                 </p>
-                <p className="mt-2 text-base" style={{ color: '#ffffffcc' }}>
-                  Aproveite esta oportunidade única para regularizar sua situação com <strong style={{ color: '#00a86b' }}>até 50% de desconto</strong>!
-                </p>
               </div>
 
-              {/* Cards de débito colapsáveis */}
-              <div className="space-y-2 mb-6">
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#ffffff66' }}>
-                  {debitos.length} débito{debitos.length > 1 ? 's' : ''} em aberto
-                </p>
-                {debitosVisiveis.map((debito, index) => (
-                  <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : '3px solid #ffffff15' }}>
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-sm" style={{ color: '#fff' }}>
-                            Parcela {index + 1} de {debitos.length}
-                          </p>
-                          {isDebitoVencido(debito) && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#ff6b6b22', color: '#ff6b6b', border: '1px solid #ff6b6b44' }}>
-                              VENCIDO
-                            </span>
-                          )}
-                        </div>
-                        {debito.contrato && (
-                          <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: '#ffffffaa' }}>
-                            <FileText className="h-3 w-3" />
-                            Contrato: {debito.contrato}
-                          </p>
-                        )}
-                        {debito.data_vencimento && (
-                          <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: '#ffffffaa' }}>
-                            <CalendarIcon className="h-3 w-3" />
-                            Vencimento: {format(new Date(debito.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
-                          </p>
-                        )}
-                      </div>
-                      <p className="text-lg font-black" style={{ color: '#ff6b6b' }}>
-                        {formatCurrency(debito.valor_original)}
+              {parcelasAcordo.length > 0 ? (
+                /* === AGREEMENT INSTALLMENTS VIEW === */
+                <>
+                  <div className="mb-6">
+                    <div className="rounded-xl p-4" style={{ background: 'linear-gradient(135deg, #00a86b15, #00cc8815)', border: '1px solid #00a86b33' }}>
+                      <p className="text-sm font-semibold" style={{ color: '#00a86b' }}>
+                        Seu acordo: {parcelasAcordo[0].total_parcelas}x de {formatCurrency(parcelasAcordo[0].valor_parcela)}
                       </p>
-                    </CardContent>
-                  </Card>
-                ))}
-                {debitos.length > 2 && !mostrarTodosDebitos && (
-                  <button
-                    onClick={() => setMostrarTodosDebitos(true)}
-                    className="w-full flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-colors"
-                    style={{ color: '#00a86b', background: '#00a86b11' }}
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                    Ver mais {debitosOcultos} débito{debitosOcultos > 1 ? 's' : ''}
-                  </button>
-                )}
-              </div>
-
-              {/* Card de valor total premium */}
-              <Card className="border-0 overflow-hidden" style={{ background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 100%)', border: '1px solid #ffffff10' }}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xs uppercase tracking-wider font-semibold" style={{ color: '#ffffff55' }}>
-                    Valor total dos débitos
-                  </CardTitle>
-                  <p className="text-4xl font-black" style={{ color: '#ff6b6b' }}>
-                    {formatCurrency(valorTotal)}
-                  </p>
-
-                  {/* Destaque à vista */}
-                  <div className="rounded-xl p-4 mt-3" style={{ background: 'linear-gradient(135deg, #00a86b15, #00cc8815)', border: '1px solid #00a86b33' }}>
-                    <p className="text-sm mb-1" style={{ color: '#ffffffaa' }}>
-                      Mas você pode pagar à vista por apenas:
-                    </p>
-                    <p className="text-3xl font-black" style={{ color: '#00ff88', animation: 'float 4s ease-in-out infinite' }}>
-                      {formatCurrency(valorAvista)}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
-                      <span className="text-sm font-bold" style={{ color: '#00a86b' }}>
-                        Economize {formatCurrency(valorTotal - valorAvista)}
-                      </span>
-                      <span
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
-                        style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}
-                      >
-                        50% OFF
-                      </span>
                     </div>
                   </div>
-                </CardHeader>
 
-                <CardContent>
-                  {!negociacao?.negociando ? (
+                  <div className="space-y-2 mb-6">
+                    <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#ffffff66' }}>
+                      Parcelas do acordo
+                    </p>
+                    {parcelasAcordo.map((parcela) => (
+                      <Card key={parcela.numero_parcela} className="border-0" style={{ 
+                        background: '#ffffff0a', 
+                        borderLeft: parcela.status === 'pago' ? '3px solid #00a86b' : '3px solid #ffffff15' 
+                      }}>
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-sm" style={{ color: '#fff' }}>
+                                Parcela {parcela.numero_parcela} de {parcela.total_parcelas}
+                              </p>
+                              {parcela.status === 'pago' ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}>
+                                  <Check className="h-3 w-3" />
+                                  PAGO
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b44' }}>
+                                  PENDENTE
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: '#ffffffaa' }}>
+                              <CalendarIcon className="h-3 w-3" />
+                              {parcela.status === 'pago' && parcela.data_paga
+                                ? `Pago em: ${format(new Date(parcela.data_paga + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}`
+                                : `Vencimento: ${format(new Date(parcela.data_prevista + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}`
+                              }
+                            </p>
+                          </div>
+                          <p className="text-lg font-black" style={{ color: parcela.status === 'pago' ? '#00a86b' : '#fff' }}>
+                            {formatCurrency(parcela.valor_parcela)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {(() => {
+                    const parcelasPendentes = parcelasAcordo.filter(p => p.status !== 'pago');
+                    const saldoRestante = parcelasPendentes.reduce((acc, p) => acc + p.valor_parcela, 0);
+                    const parcelasPagas = parcelasAcordo.filter(p => p.status === 'pago').length;
+                    return (
+                      <Card className="border-0 overflow-hidden mb-6" style={{ background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 100%)', border: '1px solid #ffffff10' }}>
+                        <CardContent className="p-6">
+                          {parcelasPagas > 0 && (
+                            <div className="flex items-center gap-2 mb-3">
+                              <Check className="h-4 w-4" style={{ color: '#00a86b' }} />
+                              <p className="text-sm" style={{ color: '#00a86b' }}>
+                                {parcelasPagas} parcela{parcelasPagas > 1 ? 's' : ''} paga{parcelasPagas > 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          )}
+                          <p className="text-xs uppercase tracking-wider font-semibold mb-1" style={{ color: '#ffffff55' }}>
+                            Saldo restante
+                          </p>
+                          <p className="text-3xl font-black" style={{ color: parcelasPendentes.length === 0 ? '#00a86b' : '#fff' }}>
+                            {formatCurrency(saldoRestante)}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: '#ffffffaa' }}>
+                            {parcelasPendentes.length} parcela{parcelasPendentes.length !== 1 ? 's' : ''} pendente{parcelasPendentes.length !== 1 ? 's' : ''}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+
+                  <a
+                    href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
+                      `Olá! Meu nome é ${nomeCliente}, CPF ${cpfCliente}, e gostaria de informações sobre meu acordo em andamento.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <Button
                       className="w-full h-14 text-base font-bold rounded-xl"
                       style={{
-                        background: acordoExistente?.status === 'ativo'
-                          ? '#ffffff15'
-                          : 'linear-gradient(135deg, #00a86b, #00cc88)',
+                        background: 'linear-gradient(135deg, #25d366, #128c7e)',
                         color: '#fff',
-                        boxShadow: acordoExistente?.status === 'ativo' ? 'none' : '0 4px 20px rgba(0, 168, 107, 0.4)',
-                        animation: acordoExistente?.status === 'ativo' ? 'none' : 'pulse-border 2s ease-in-out infinite',
-                        cursor: acordoExistente?.status === 'ativo' ? 'not-allowed' : 'pointer',
-                        opacity: acordoExistente?.status === 'ativo' ? 0.5 : 1,
+                        boxShadow: '0 4px 20px rgba(37, 211, 102, 0.4)',
                       }}
-                      onClick={toggleNegociacao}
-                      disabled={acordoExistente?.status === 'ativo'}
                     >
                       <MessageCircle className="h-5 w-5 mr-2" />
-                      {acordoExistente?.status === 'ativo' ? 'NEGOCIAÇÃO EM ANDAMENTO' : 'NEGOCIAR AGORA COM DESCONTO'}
+                      Falar no WhatsApp
                     </Button>
-                  ) : !negociacao.confirmado ? (
-                    <div className="space-y-5 pt-4" style={{ borderTop: '1px solid #ffffff15' }}>
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-base flex items-center gap-2" style={{ color: '#00a86b' }}>
-                          <Sparkles className="h-4 w-4" />
-                          Monte sua proposta
-                        </h3>
-                        <button onClick={toggleNegociacao} className="text-xs hover:underline" style={{ color: '#ffffff55' }}>
-                          Cancelar
-                        </button>
-                      </div>
+                  </a>
+                </>
+              ) : (
+                /* === ORIGINAL DEBTS VIEW === */
+                <>
+                  <p className="mt-2 text-base mb-6" style={{ color: '#ffffffcc' }}>
+                    Aproveite esta oportunidade única para regularizar sua situação com <strong style={{ color: '#00a86b' }}>até 50% de desconto</strong>!
+                  </p>
 
-                      <DiscountTierSelector
-                        selected={negociacao.descontoFaixa}
-                        onSelect={handleSelectFaixa}
-                        valorTotal={valorTotal}
-                      />
-
-                      {negociacao.descontoFaixa && (
-                        <>
-                          {/* Valor com desconto destaque */}
-                          {negociacao.descontoFaixa !== 'sem' && (
-                            <div
-                              className="rounded-xl p-5 text-center"
-                              style={{
-                                background: 'linear-gradient(135deg, #00a86b15, #00cc8815)',
-                                border: '1px solid #00a86b44',
-                                boxShadow: '0 0 30px rgba(0, 168, 107, 0.1)',
-                              }}
-                            >
-                              <p className="text-xs mb-1" style={{ color: '#ffffffaa' }}>
-                                De <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> por
-                              </p>
-                              <p className="text-4xl font-black" style={{ color: '#00ff88' }}>
-                                {formatCurrency(getValorComDesconto(negociacao))}
-                              </p>
-                              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: '#00a86b22', border: '1px solid #00a86b44' }}>
-                                <TrendingDown className="h-3.5 w-3.5" style={{ color: '#00a86b' }} />
-                                <p className="text-xs font-bold" style={{ color: '#00a86b' }}>
-                                  Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto(negociacao.descontoFaixa)}%)
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Entrada - hide for à vista */}
-                          {negociacao.descontoFaixa !== 'avista' && (
-                            <div>
-                              <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
-                              <Input
-                                type="number"
-                                min={0}
-                                max={getValorComDesconto(negociacao)}
-                                step={0.01}
-                                placeholder="R$ 0,00"
-                                value={negociacao.entrada || ''}
-                                onChange={(e) => handleEntradaChange(e.target.value)}
-                                className="mt-1 border-0 h-12 rounded-xl text-base"
-                                style={{ background: '#ffffff12', color: '#fff' }}
-                              />
-                              {negociacao.entrada > getValorComDesconto(negociacao) && (
-                                <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor com desconto</p>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Parcelas - hide for à vista */}
-                          {negociacao.descontoFaixa !== 'avista' && (
-                            <div>
-                              <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
-                              <Select
-                                value={String(negociacao.parcelas)}
-                                onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}
-                              >
-                                <SelectTrigger className="mt-1 border-0 h-12 rounded-xl text-base" style={{ background: '#ffffff12', color: '#fff' }}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {Array.from(
-                                    { length: getMaxParcelas(negociacao) - getMinParcelas(negociacao.descontoFaixa) + 1 },
-                                    (_, i) => i + getMinParcelas(negociacao.descontoFaixa)
-                                  ).map(n => (
-                                    <SelectItem key={n} value={String(n)}>
-                                      {n}x de {formatCurrency((getValorComDesconto(negociacao) - (negociacao.entrada || 0)) / n)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
-
+                  {/* Cards de débito colapsáveis */}
+                  <div className="space-y-2 mb-6">
+                    <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#ffffff66' }}>
+                      {debitos.length} débito{debitos.length > 1 ? 's' : ''} em aberto
+                    </p>
+                    {debitosVisiveis.map((debito, index) => (
+                      <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : '3px solid #ffffff15' }}>
+                        <CardContent className="p-4 flex items-center justify-between">
                           <div>
-                            <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>{negociacao.descontoFaixa === 'avista' ? 'Data do pagamento' : 'Data do primeiro pagamento'}</Label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className={cn("w-full mt-1 justify-start text-left font-normal border-0 h-12 rounded-xl text-base", !negociacao.dataPrimeiroPagamento && "opacity-70")}
-                                  style={{ background: '#ffffff12', color: '#fff' }}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {negociacao.dataPrimeiroPagamento
-                                    ? format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
-                                    : 'Selecione a data'}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={negociacao.dataPrimeiroPagamento}
-                                  onSelect={(d) => updateNegociacao({ dataPrimeiroPagamento: d })}
-                                  disabled={(date) => {
-                                    const today = new Date();
-                                    today.setHours(0, 0, 0, 0);
-                                    return date < today;
-                                  }}
-                                  initialFocus
-                                  className={cn("p-3 pointer-events-auto")}
-                                  locale={ptBR}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-
-                          {/* Resumo premium */}
-                          {negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
-                            <div
-                              className="rounded-xl p-4"
-                              style={{
-                                background: 'linear-gradient(135deg, #00a86b08, #00cc8808)',
-                                border: '1px solid #00a86b33',
-                                boxShadow: '0 0 20px rgba(0, 168, 107, 0.05)',
-                              }}
-                            >
-                              <p className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#00a86b' }}>
-                                <Check className="h-4 w-4" />
-                                Resumo da negociação
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-sm" style={{ color: '#fff' }}>
+                                Parcela {index + 1} de {debitos.length}
                               </p>
-                              {negociacao.descontoFaixa !== 'sem' && (
-                                <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
-                                  Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
-                                </p>
+                              {isDebitoVencido(debito) && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#ff6b6b22', color: '#ff6b6b', border: '1px solid #ff6b6b44' }}>
+                                  VENCIDO
+                                </span>
                               )}
-                              {negociacao.entrada > 0 && (
-                                <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
-                              )}
-                              <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
-                                {negociacao.parcelas}x de <strong style={{ color: '#00ff88' }}>{formatCurrency(getValorParcela(negociacao))}</strong>
-                              </p>
-                              <p className="text-sm" style={{ color: '#ffffffcc' }}>
-                                Primeiro pagamento: {format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })}
-                              </p>
                             </div>
-                          )}
-
-                          <Button
-                            className="w-full h-14 text-base font-bold rounded-xl"
-                            style={{
-                              background: isNegociacaoValida(negociacao)
-                                ? 'linear-gradient(135deg, #00a86b, #00cc88)'
-                                : '#ffffff15',
-                              color: '#fff',
-                              boxShadow: isNegociacaoValida(negociacao) ? '0 4px 20px rgba(0, 168, 107, 0.4)' : 'none',
-                              animation: isNegociacaoValida(negociacao) ? 'pulse-border 2s ease-in-out infinite' : 'none',
-                            }}
-                            disabled={!isNegociacaoValida(negociacao)}
-                            onClick={() => updateNegociacao({ confirmado: true })}
-                          >
-                            <Check className="h-5 w-5 mr-2" />
-                            CONFIRMAR PROPOSTA
-                          </Button>
-
-                          <a
-                            href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
-                              `Olá! Meu nome é ${nomeCliente}, CPF ${cpfCliente}, e gostaria de fazer uma contra proposta para os contratos ${debitos.map(d => d.contrato).filter(Boolean).join(', ')}.`
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block"
-                          >
-                            <Button
-                              variant="outline"
-                              className="w-full h-12 rounded-xl text-sm"
-                              style={{ borderColor: '#ffffff22', color: '#ffffffaa', background: '#ffffff05' }}
-                            >
-                              <MessageCircle className="h-4 w-4 mr-2" />
-                              TENHO UMA CONTRA PROPOSTA
-                            </Button>
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    /* Confirmação */
-                    <div className="space-y-4 pt-4" style={{ borderTop: '1px solid #ffffff15' }}>
-                      <div
-                        className="rounded-xl p-5 text-center"
-                        style={{
-                          background: 'linear-gradient(135deg, #00a86b15, #00cc8815)',
-                          border: '1px solid #00a86b44',
-                        }}
-                      >
-                        <div
-                          className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center"
-                          style={{ background: '#00a86b', boxShadow: '0 0 30px rgba(0, 168, 107, 0.4)' }}
-                        >
-                          <Check className="h-8 w-8" style={{ color: '#fff' }} />
-                        </div>
-                        <p className="text-lg font-bold mb-3" style={{ color: '#00ff88' }}>✓ Proposta confirmada!</p>
-                        {negociacao.descontoFaixa && negociacao.descontoFaixa !== 'sem' && (
-                          <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
-                            Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                            {debito.contrato && (
+                              <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: '#ffffffaa' }}>
+                                <FileText className="h-3 w-3" />
+                                Contrato: {debito.contrato}
+                              </p>
+                            )}
+                            {debito.data_vencimento && (
+                              <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: '#ffffffaa' }}>
+                                <CalendarIcon className="h-3 w-3" />
+                                Vencimento: {format(new Date(debito.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                              </p>
+                            )}
+                          </div>
+                          <p className="text-lg font-black" style={{ color: '#ff6b6b' }}>
+                            {formatCurrency(debito.valor_original)}
                           </p>
-                        )}
-                        {negociacao.entrada > 0 && (
-                          <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
-                        )}
-                        <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
-                          {negociacao.parcelas}x de <strong style={{ color: '#00ff88' }}>{formatCurrency(getValorParcela(negociacao))}</strong>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    {debitos.length > 2 && !mostrarTodosDebitos && (
+                      <button
+                        onClick={() => setMostrarTodosDebitos(true)}
+                        className="w-full flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-colors"
+                        style={{ color: '#00a86b', background: '#00a86b11' }}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                        Ver mais {debitosOcultos} débito{debitosOcultos > 1 ? 's' : ''}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Card de valor total premium */}
+                  <Card className="border-0 overflow-hidden" style={{ background: 'linear-gradient(180deg, #0a1628 0%, #0d1f3c 100%)', border: '1px solid #ffffff10' }}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-xs uppercase tracking-wider font-semibold" style={{ color: '#ffffff55' }}>
+                        Valor total dos débitos
+                      </CardTitle>
+                      <p className="text-4xl font-black" style={{ color: '#ff6b6b' }}>
+                        {formatCurrency(valorTotal)}
+                      </p>
+
+                      {/* Destaque à vista */}
+                      <div className="rounded-xl p-4 mt-3" style={{ background: 'linear-gradient(135deg, #00a86b15, #00cc8815)', border: '1px solid #00a86b33' }}>
+                        <p className="text-sm mb-1" style={{ color: '#ffffffaa' }}>
+                          Mas você pode pagar à vista por apenas:
                         </p>
-                        <p className="text-sm" style={{ color: '#ffffffcc' }}>
-                          Primeiro pagamento: {format(negociacao.dataPrimeiroPagamento!, 'dd/MM/yyyy', { locale: ptBR })}
+                        <p className="text-3xl font-black" style={{ color: '#00ff88', animation: 'float 4s ease-in-out infinite' }}>
+                          {formatCurrency(valorAvista)}
                         </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
+                          <span className="text-sm font-bold" style={{ color: '#00a86b' }}>
+                            Economize {formatCurrency(valorTotal - valorAvista)}
+                          </span>
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
+                            style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}
+                          >
+                            50% OFF
+                          </span>
+                        </div>
                       </div>
-                      <a href={gerarWhatsappLink(negociacao)} target="_blank" rel="noopener noreferrer" className="block">
+                    </CardHeader>
+
+                    <CardContent>
+                      {!negociacao?.negociando ? (
                         <Button
                           className="w-full h-14 text-base font-bold rounded-xl"
                           style={{
-                            background: 'linear-gradient(135deg, #25d366, #128c7e)',
+                            background: acordoExistente?.status === 'ativo'
+                              ? '#ffffff15'
+                              : 'linear-gradient(135deg, #00a86b, #00cc88)',
                             color: '#fff',
-                            boxShadow: '0 4px 20px rgba(37, 211, 102, 0.4)',
-                            animation: 'pulse-border 2s ease-in-out infinite',
+                            boxShadow: acordoExistente?.status === 'ativo' ? 'none' : '0 4px 20px rgba(0, 168, 107, 0.4)',
+                            animation: acordoExistente?.status === 'ativo' ? 'none' : 'pulse-border 2s ease-in-out infinite',
+                            cursor: acordoExistente?.status === 'ativo' ? 'not-allowed' : 'pointer',
+                            opacity: acordoExistente?.status === 'ativo' ? 0.5 : 1,
                           }}
+                          onClick={toggleNegociacao}
+                          disabled={acordoExistente?.status === 'ativo'}
                         >
                           <MessageCircle className="h-5 w-5 mr-2" />
-                          ENVIAR PROPOSTA PELO WHATSAPP
+                          {acordoExistente?.status === 'ativo' ? 'NEGOCIAÇÃO EM ANDAMENTO' : 'NEGOCIAR AGORA COM DESCONTO'}
                         </Button>
-                      </a>
-                      <button onClick={() => updateNegociacao({ confirmado: false })} className="w-full text-xs text-center hover:underline" style={{ color: '#ffffff55' }}>
-                        Alterar proposta
-                      </button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                      ) : !negociacao.confirmado ? (
+                        <div className="space-y-5 pt-4" style={{ borderTop: '1px solid #ffffff15' }}>
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-base flex items-center gap-2" style={{ color: '#00a86b' }}>
+                              <Sparkles className="h-4 w-4" />
+                              Monte sua proposta
+                            </h3>
+                            <button onClick={toggleNegociacao} className="text-xs hover:underline" style={{ color: '#ffffff55' }}>
+                              Cancelar
+                            </button>
+                          </div>
+
+                          <DiscountTierSelector
+                            selected={negociacao.descontoFaixa}
+                            onSelect={handleSelectFaixa}
+                            valorTotal={valorTotal}
+                          />
+
+                          {negociacao.descontoFaixa && (
+                            <>
+                              {negociacao.descontoFaixa !== 'sem' && (
+                                <div
+                                  className="rounded-xl p-5 text-center"
+                                  style={{
+                                    background: 'linear-gradient(135deg, #00a86b15, #00cc8815)',
+                                    border: '1px solid #00a86b44',
+                                    boxShadow: '0 0 30px rgba(0, 168, 107, 0.1)',
+                                  }}
+                                >
+                                  <p className="text-xs mb-1" style={{ color: '#ffffffaa' }}>
+                                    De <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> por
+                                  </p>
+                                  <p className="text-4xl font-black" style={{ color: '#00ff88' }}>
+                                    {formatCurrency(getValorComDesconto(negociacao))}
+                                  </p>
+                                  <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: '#00a86b22', border: '1px solid #00a86b44' }}>
+                                    <TrendingDown className="h-3.5 w-3.5" style={{ color: '#00a86b' }} />
+                                    <p className="text-xs font-bold" style={{ color: '#00a86b' }}>
+                                      Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto(negociacao.descontoFaixa)}%)
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {negociacao.descontoFaixa !== 'avista' && (
+                                <div>
+                                  <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={getValorComDesconto(negociacao)}
+                                    step={0.01}
+                                    placeholder="R$ 0,00"
+                                    value={negociacao.entrada || ''}
+                                    onChange={(e) => handleEntradaChange(e.target.value)}
+                                    className="mt-1 border-0 h-12 rounded-xl text-base"
+                                    style={{ background: '#ffffff12', color: '#fff' }}
+                                  />
+                                  {negociacao.entrada > getValorComDesconto(negociacao) && (
+                                    <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor com desconto</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {negociacao.descontoFaixa !== 'avista' && (
+                                <div>
+                                  <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
+                                  <Select
+                                    value={String(negociacao.parcelas)}
+                                    onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}
+                                  >
+                                    <SelectTrigger className="mt-1 border-0 h-12 rounded-xl text-base" style={{ background: '#ffffff12', color: '#fff' }}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {Array.from(
+                                        { length: getMaxParcelas(negociacao) - getMinParcelas(negociacao.descontoFaixa) + 1 },
+                                        (_, i) => i + getMinParcelas(negociacao.descontoFaixa)
+                                      ).map(n => (
+                                        <SelectItem key={n} value={String(n)}>
+                                          {n}x de {formatCurrency((getValorComDesconto(negociacao) - (negociacao.entrada || 0)) / n)}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+
+                              <div>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>{negociacao.descontoFaixa === 'avista' ? 'Data do pagamento' : 'Data do primeiro pagamento'}</Label>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className={cn("w-full mt-1 justify-start text-left font-normal border-0 h-12 rounded-xl text-base", !negociacao.dataPrimeiroPagamento && "opacity-70")}
+                                      style={{ background: '#ffffff12', color: '#fff' }}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {negociacao.dataPrimeiroPagamento
+                                        ? format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
+                                        : 'Selecione a data'}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={negociacao.dataPrimeiroPagamento}
+                                      onSelect={(d) => updateNegociacao({ dataPrimeiroPagamento: d })}
+                                      disabled={(date) => {
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+                                        return date < today;
+                                      }}
+                                      initialFocus
+                                      className={cn("p-3 pointer-events-auto")}
+                                      locale={ptBR}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+
+                              {negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
+                                <div
+                                  className="rounded-xl p-4"
+                                  style={{
+                                    background: 'linear-gradient(135deg, #00a86b08, #00cc8808)',
+                                    border: '1px solid #00a86b33',
+                                    boxShadow: '0 0 20px rgba(0, 168, 107, 0.05)',
+                                  }}
+                                >
+                                  <p className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#00a86b' }}>
+                                    <Check className="h-4 w-4" />
+                                    Resumo da negociação
+                                  </p>
+                                  {negociacao.descontoFaixa !== 'sem' && (
+                                    <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
+                                      Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                                    </p>
+                                  )}
+                                  {negociacao.entrada > 0 && (
+                                    <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
+                                  )}
+                                  <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
+                                    {negociacao.parcelas}x de <strong style={{ color: '#00ff88' }}>{formatCurrency(getValorParcela(negociacao))}</strong>
+                                  </p>
+                                  <p className="text-sm" style={{ color: '#ffffffcc' }}>
+                                    Primeiro pagamento: {format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })}
+                                  </p>
+                                </div>
+                              )}
+
+                              <Button
+                                className="w-full h-14 text-base font-bold rounded-xl"
+                                style={{
+                                  background: isNegociacaoValida(negociacao)
+                                    ? 'linear-gradient(135deg, #00a86b, #00cc88)'
+                                    : '#ffffff15',
+                                  color: '#fff',
+                                  boxShadow: isNegociacaoValida(negociacao) ? '0 4px 20px rgba(0, 168, 107, 0.4)' : 'none',
+                                  animation: isNegociacaoValida(negociacao) ? 'pulse-border 2s ease-in-out infinite' : 'none',
+                                }}
+                                disabled={!isNegociacaoValida(negociacao)}
+                                onClick={() => updateNegociacao({ confirmado: true })}
+                              >
+                                <Check className="h-5 w-5 mr-2" />
+                                CONFIRMAR PROPOSTA
+                              </Button>
+
+                              <a
+                                href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
+                                  `Olá! Meu nome é ${nomeCliente}, CPF ${cpfCliente}, e gostaria de fazer uma contra proposta para os contratos ${debitos.map(d => d.contrato).filter(Boolean).join(', ')}.`
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block"
+                              >
+                                <Button
+                                  variant="outline"
+                                  className="w-full h-12 rounded-xl text-sm"
+                                  style={{ borderColor: '#ffffff22', color: '#ffffffaa', background: '#ffffff05' }}
+                                >
+                                  <MessageCircle className="h-4 w-4 mr-2" />
+                                  TENHO UMA CONTRA PROPOSTA
+                                </Button>
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-4 pt-4" style={{ borderTop: '1px solid #ffffff15' }}>
+                          <div
+                            className="rounded-xl p-5 text-center"
+                            style={{
+                              background: 'linear-gradient(135deg, #00a86b15, #00cc8815)',
+                              border: '1px solid #00a86b44',
+                            }}
+                          >
+                            <div
+                              className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center"
+                              style={{ background: '#00a86b', boxShadow: '0 0 30px rgba(0, 168, 107, 0.4)' }}
+                            >
+                              <Check className="h-8 w-8" style={{ color: '#fff' }} />
+                            </div>
+                            <p className="text-lg font-bold mb-3" style={{ color: '#00ff88' }}>✓ Proposta confirmada!</p>
+                            {negociacao.descontoFaixa && negociacao.descontoFaixa !== 'sem' && (
+                              <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
+                                Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                              </p>
+                            )}
+                            {negociacao.entrada > 0 && (
+                              <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
+                            )}
+                            <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
+                              {negociacao.parcelas}x de <strong style={{ color: '#00ff88' }}>{formatCurrency(getValorParcela(negociacao))}</strong>
+                            </p>
+                            <p className="text-sm" style={{ color: '#ffffffcc' }}>
+                              Primeiro pagamento: {format(negociacao.dataPrimeiroPagamento!, 'dd/MM/yyyy', { locale: ptBR })}
+                            </p>
+                          </div>
+                          <a href={gerarWhatsappLink(negociacao)} target="_blank" rel="noopener noreferrer" className="block">
+                            <Button
+                              className="w-full h-14 text-base font-bold rounded-xl"
+                              style={{
+                                background: 'linear-gradient(135deg, #25d366, #128c7e)',
+                                color: '#fff',
+                                boxShadow: '0 4px 20px rgba(37, 211, 102, 0.4)',
+                                animation: 'pulse-border 2s ease-in-out infinite',
+                              }}
+                            >
+                              <MessageCircle className="h-5 w-5 mr-2" />
+                              ENVIAR PROPOSTA PELO WHATSAPP
+                            </Button>
+                          </a>
+                          <button onClick={() => updateNegociacao({ confirmado: false })} className="w-full text-xs text-center hover:underline" style={{ color: '#ffffff55' }}>
+                            Alterar proposta
+                          </button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </>
           )}
         </div>
