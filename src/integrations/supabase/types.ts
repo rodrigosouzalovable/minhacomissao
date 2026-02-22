@@ -164,6 +164,30 @@ export type Database = {
           },
         ]
       }
+      credor_tokens: {
+        Row: {
+          ativo: boolean
+          credor_slug: string
+          criado_em: string
+          id: string
+          token: string
+        }
+        Insert: {
+          ativo?: boolean
+          credor_slug: string
+          criado_em?: string
+          id?: string
+          token: string
+        }
+        Update: {
+          ativo?: boolean
+          credor_slug?: string
+          criado_em?: string
+          id?: string
+          token?: string
+        }
+        Relationships: []
+      }
       devedor_eventos: {
         Row: {
           arquivo_nome: string | null
