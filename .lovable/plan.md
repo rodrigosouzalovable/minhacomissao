@@ -1,61 +1,36 @@
 
-# Corrigir Layout de Importacao MONTREAL
 
-## Problema
-O mapeamento atual das colunas do layout MONTREAL nao corresponde ao arquivo Excel real. O arquivo tem colunas diferentes do que o codigo espera.
+# Fix: Reset Password Edge Function - Session Not Found
 
-## Estrutura Real do Excel
+## Root Cause
+The current user's JWT contains a `session_id` that no longer exists in the database. Every method that validates the token against the auth server (SDK `getUser`, REST `/auth/v1/user`) fails with `session_not_found`. This is a stale session issue.
 
-| Coluna | Header no Excel |
-|--------|----------------|
-| A | Parceiro (codigo numerico) |
-| B | Razao Social do Parceiro |
-| C | CNPJ / CPF |
-| D | FONE1 |
-| E | FONE2 |
-| F | Apelido |
-| G | Tipo de Titulo |
-| H | Atraso (dias) |
-| I | Nro Nota |
-| J | Desdob. |
-| K | Vlr do Desdobramento |
-| L | Dt. Venc. Inicial |
+## Solution
+Decode the JWT payload manually (base64) to extract the user ID (`sub` claim), then use the admin client to verify the admin role. This completely bypasses session validation.
 
-## Mapeamento Correto
+## Changes
 
-| Campo no Sistema | Coluna Excel | Valor |
-|-----------------|-------------|-------|
-| cpf | C | CNPJ/CPF |
-| nome | B | Razao Social do Parceiro |
-| contrato | I | Nro Nota |
-| descricao | G | Tipo de Titulo |
-| atraso (vencimento) | L | Dt. Venc. Inicial |
-| valor_original | K | Vlr do Desdobramento |
-| telefone | D ou E | FONE1 ou FONE2 |
+### File: `supabase/functions/reset-user-password/index.ts`
 
-## Detalhes Tecnicos
+Replace the REST API user verification (lines 23-38) with JWT payload decoding:
 
-### Arquivo: `src/pages/ImportarDevedores.tsx`
+```typescript
+// Decode JWT payload to get user ID (bypass session validation)
+const parts = token.split('.')
+if (parts.length !== 3) throw new Error('Token inválido')
 
-**1. Atualizar descricao do layout (linha 48):**
-```
-montreal: 'A = Parceiro, B = Razao Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Tipo Titulo, H = Atraso (dias), I = Nro Nota, J = Desdob., K = Valor, L = Dt. Venc. Inicial'
+const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+const callingUserId = payload.sub
+const callingEmail = payload.email
+
+if (!callingUserId) throw new Error('Usuário não autenticado')
+
+console.log(`User ${callingEmail} attempting password reset`)
 ```
 
-**2. Atualizar funcao `parseMontreal` (linhas 119-137):**
-- C -> cpf (antes era A)
-- B -> nome (ja correto)
-- I -> contrato (antes era C)
-- G -> descricao/tipo titulo (antes era F)
-- L -> atraso/vencimento (antes era H)
-- K -> valor (antes era J)
-- D/E -> telefones (antes eram L/M)
+Then update references from `callingUser.id` to `callingUserId` and `callingUser.email` to `callingEmail` in the rest of the function (role check query and success log).
 
-**3. Atualizar tabela de preview (linhas 561-603):**
-Ajustar os headers e dados exibidos para corresponder ao novo mapeamento:
-- Nome, Contrato (Nro Nota), Tipo Titulo, Atraso (dias), Vencimento, Valor, Telefone
+No other files need changes.
 
-**4. Atualizar mapeamento de insercao (linhas 306-308):**
-O `data_vencimento` para montreal usa `r.atraso` que agora contera a data de vencimento da coluna L.
-
-Nenhuma alteracao no banco de dados e necessaria.
+## Important Note
+After this fix works, the user should log out and log back in to refresh their session token for other functions that may also validate the session.
