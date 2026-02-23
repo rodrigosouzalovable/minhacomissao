@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.credor-report-whatsapp]
 verify_jwt = false
+
+[functions.gerar-estrategia-cobranca]
+verify_jwt = false

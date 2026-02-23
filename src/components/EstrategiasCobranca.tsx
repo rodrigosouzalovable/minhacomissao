@@ -1,513 +1,284 @@
-import { useMemo, useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Target, Download, Users, DollarSign, Clock, AlertTriangle, TrendingUp, CheckCircle, X, Filter } from 'lucide-react';
-import { exportarParaExcel } from '@/lib/exportExcel';
+import { Textarea } from '@/components/ui/textarea';
+import { Brain, Loader2, Sparkles, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
 
-// ── Types ──
+const SUGESTOES = [
+  'Quero uma estratégia para clientes que nunca pagaram nenhuma parcela',
+  'Como priorizar minha carteira de alto valor?',
+  'Crie um plano de ação para inadimplentes com mais de 60 dias',
+  'Sugira scripts de abordagem por WhatsApp para primeira cobrança',
+];
 
-interface AcordoComPagamentos {
-  id: string;
-  cliente_nome: string;
-  cliente_cpf: string | null;
-  valor_total: number;
-  parcelas: number;
-  dias_atraso: number;
-  user_id: string;
-  funcionario_nome: string;
-  parcelas_pagas: number;
-  parcelas_pendentes: number;
-  valor_pago: number;
-  valor_pendente: number;
-  max_dias_atraso_parcela: number;
-}
+async function buscarResumoCarteira(): Promise<string> {
+  const [acordosRes, pagamentosRes, devedoresRes, acordosCpfRes] = await Promise.all([
+    supabase.from('acordos').select('id, valor_total, dias_atraso, status').eq('status', 'ativo'),
+    supabase.from('pagamentos').select('acordo_id, status, valor_parcela, data_prevista'),
+    supabase.from('devedores').select('id, valor_atualizado, data_vencimento').eq('ativo', true),
+    supabase.from('acordos').select('cliente_cpf').in('status', ['ativo', 'concluido']),
+  ]);
 
-interface DevedorSemAcordo {
-  id: string;
-  nome: string;
-  cpf: string;
-  valor_original: number;
-  valor_atualizado: number;
-  credor: string | null;
-  dias_vencido: number;
-}
+  const acordos = acordosRes.data ?? [];
+  const pagamentos = pagamentosRes.data ?? [];
+  const devedores = devedoresRes.data ?? [];
+  const cpfsComAcordo = new Set(
+    (acordosCpfRes.data ?? []).map(a => (a.cliente_cpf ?? '').replace(/\D/g, '')).filter(Boolean)
+  );
 
-type TipoCliente = 'com_acordo' | 'sem_acordo';
-
-// ── Constants ──
-
-const CATEGORIAS = [
-  { id: 'parciais', label: 'Pagadores Parciais', icon: TrendingUp, cor: 'text-emerald-600' },
-  { id: 'unica', label: 'Parcela Única', icon: CheckCircle, cor: 'text-blue-600' },
-  { id: 'recentes', label: 'Atraso < 30d', icon: Clock, cor: 'text-amber-600' },
-  { id: 'moderados', label: 'Atraso 31-90d', icon: AlertTriangle, cor: 'text-orange-600' },
-  { id: 'nunca', label: 'Nunca Pagaram', icon: AlertTriangle, cor: 'text-destructive' },
-  { id: 'alto_valor', label: 'Alto Valor', icon: DollarSign, cor: 'text-primary' },
-] as const;
-
-type CategoriaId = typeof CATEGORIAS[number]['id'];
-
-// ── Helpers ──
-
-function calcularDiasAtrasoMaiorParcela(parcelas: { data_prevista: string; status: string }[]): number {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
-  let maxDias = 0;
-  for (const p of parcelas) {
-    if (p.status === 'pendente') {
-      const vencimento = new Date(p.data_prevista + 'T00:00:00');
-      const diff = Math.floor((hoje.getTime() - vencimento.getTime()) / (1000 * 60 * 60 * 24));
-      if (diff > maxDias) maxDias = diff;
+
+  // Faixas de atraso dos pagamentos pendentes
+  const faixas = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
+  const valoresFaixa = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
+  let nuncaPagaram = 0;
+  let parcelaUnica = 0;
+
+  const acordoIds = new Set(acordos.map(a => a.id));
+  const pagsPorAcordo = new Map<string, typeof pagamentos>();
+  for (const p of pagamentos) {
+    if (!acordoIds.has(p.acordo_id)) continue;
+    if (!pagsPorAcordo.has(p.acordo_id)) pagsPorAcordo.set(p.acordo_id, []);
+    pagsPorAcordo.get(p.acordo_id)!.push(p);
+  }
+
+  for (const [, pags] of pagsPorAcordo) {
+    const pagas = pags.filter(p => p.status === 'pago');
+    const pendentes = pags.filter(p => p.status === 'pendente');
+
+    if (pagas.length === 0 && pendentes.length > 0) nuncaPagaram++;
+    if (pendentes.length === 1) parcelaUnica++;
+
+    for (const p of pendentes) {
+      const venc = new Date(p.data_prevista + 'T00:00:00');
+      const dias = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / 86400000));
+      const valor = Number(p.valor_parcela);
+      if (dias <= 30) { faixas['0-30']++; valoresFaixa['0-30'] += valor; }
+      else if (dias <= 60) { faixas['31-60']++; valoresFaixa['31-60'] += valor; }
+      else if (dias <= 90) { faixas['61-90']++; valoresFaixa['61-90'] += valor; }
+      else { faixas['90+']++; valoresFaixa['90+'] += valor; }
     }
   }
-  return maxDias;
+
+  const totalDevedoresSemAcordo = devedores.filter(d => {
+    // sem CPF não dá pra cruzar, mas conta como sem acordo
+    return true; // simplificado - conta todos os devedores ativos
+  }).length;
+
+  const valorTotalPendente = Object.values(valoresFaixa).reduce((a, b) => a + b, 0);
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  return `- Total de acordos ativos: ${acordos.length}
+- Total de devedores cadastrados (ativos): ${devedores.length}
+- Valor total pendente em parcelas: ${fmt(valorTotalPendente)}
+- Distribuição por faixa de atraso (parcelas pendentes):
+  - 0-30 dias: ${faixas['0-30']} parcelas (${fmt(valoresFaixa['0-30'])})
+  - 31-60 dias: ${faixas['31-60']} parcelas (${fmt(valoresFaixa['31-60'])})
+  - 61-90 dias: ${faixas['61-90']} parcelas (${fmt(valoresFaixa['61-90'])})
+  - 90+ dias: ${faixas['90+']} parcelas (${fmt(valoresFaixa['90+'])})
+- Acordos onde o cliente nunca pagou nenhuma parcela: ${nuncaPagaram}
+- Acordos com apenas 1 parcela pendente: ${parcelaUnica}`;
 }
-
-function filtrarPorCategoria(acordos: AcordoComPagamentos[], categoria: CategoriaId): AcordoComPagamentos[] {
-  switch (categoria) {
-    case 'parciais':
-      return acordos.filter(a => a.parcelas_pagas > 0 && a.parcelas_pendentes > 0);
-    case 'unica':
-      return acordos.filter(a => a.parcelas_pendentes === 1);
-    case 'recentes':
-      return acordos.filter(a => a.max_dias_atraso_parcela > 0 && a.max_dias_atraso_parcela <= 30);
-    case 'moderados':
-      return acordos.filter(a => a.max_dias_atraso_parcela > 30 && a.max_dias_atraso_parcela <= 90);
-    case 'nunca':
-      return acordos.filter(a => a.parcelas_pagas === 0);
-    case 'alto_valor':
-      return [...acordos].sort((a, b) => b.valor_pendente - a.valor_pendente).slice(0, 50);
-    default:
-      return [];
-  }
-}
-
-function calcularDiasVencido(dataVencimento: string | null): number {
-  if (!dataVencimento) return 0;
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const venc = new Date(dataVencimento + 'T00:00:00');
-  const diff = Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
-  return Math.max(0, diff);
-}
-
-// ── Excel columns ──
-
-const colunasAcordo = [
-  { chave: 'cliente_nome' as const, titulo: 'Cliente' },
-  { chave: 'cliente_cpf' as const, titulo: 'CPF' },
-  { chave: 'valor_total' as const, titulo: 'Valor Total' },
-  { chave: 'parcelas_pagas' as const, titulo: 'Parcelas Pagas' },
-  { chave: 'parcelas_pendentes' as const, titulo: 'Parcelas Pendentes' },
-  { chave: 'valor_pago' as const, titulo: 'Valor Pago' },
-  { chave: 'valor_pendente' as const, titulo: 'Valor Pendente' },
-  { chave: 'max_dias_atraso_parcela' as const, titulo: 'Dias Atraso' },
-  { chave: 'funcionario_nome' as const, titulo: 'Funcionário' },
-];
-
-const colunasDevedor = [
-  { chave: 'nome' as const, titulo: 'Nome' },
-  { chave: 'cpf' as const, titulo: 'CPF' },
-  { chave: 'valor_original' as const, titulo: 'Valor Original' },
-  { chave: 'valor_atualizado' as const, titulo: 'Valor Atualizado' },
-  { chave: 'credor' as const, titulo: 'Credor' },
-  { chave: 'dias_vencido' as const, titulo: 'Dias Vencido' },
-];
-
-// ── Component ──
 
 export function EstrategiasCobranca() {
-  const [tabAtiva, setTabAtiva] = useState<CategoriaId>('parciais');
-  const [tipoCliente, setTipoCliente] = useState<TipoCliente>('com_acordo');
-  const [diasAtrasoMin, setDiasAtrasoMin] = useState('');
-  const [diasAtrasoMax, setDiasAtrasoMax] = useState('');
-  const [filtroAtrasoAtivo, setFiltroAtrasoAtivo] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [resposta, setResposta] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // ── Query: Acordos ativos ──
-  const { data: acordosProcessados, isLoading: loadingAcordos } = useQuery({
-    queryKey: ['estrategias-cobranca'],
-    enabled: tipoCliente === 'com_acordo',
-    queryFn: async () => {
-      const { data: acordos, error: acordosError } = await supabase
-        .from('acordos')
-        .select('id, cliente_nome, cliente_cpf, valor_total, parcelas, dias_atraso, user_id')
-        .eq('status', 'ativo');
-
-      if (acordosError) throw acordosError;
-      if (!acordos?.length) return [];
-
-      const acordoIds = acordos.map(a => a.id);
-
-      const BATCH_SIZE = 50;
-      const batches: string[][] = [];
-      for (let i = 0; i < acordoIds.length; i += BATCH_SIZE) {
-        batches.push(acordoIds.slice(i, i + BATCH_SIZE));
-      }
-
-      const pagamentosResults = await Promise.all(
-        batches.map(batch =>
-          supabase
-            .from('pagamentos')
-            .select('acordo_id, status, valor_parcela, data_prevista')
-            .in('acordo_id', batch)
-        )
-      );
-
-      const pagamentos = pagamentosResults.flatMap(r => {
-        if (r.error) throw r.error;
-        return r.data ?? [];
-      });
-
-      const userIds = [...new Set(acordos.map(a => a.user_id))];
-      const { data: profiles, error: profError } = await supabase
-        .from('profiles')
-        .select('id, nome')
-        .in('id', userIds);
-
-      if (profError) throw profError;
-
-      const profileMap = new Map(profiles?.map(p => [p.id, p.nome]) ?? []);
-      const pagamentosPorAcordo = new Map<string, typeof pagamentos>();
-      for (const p of pagamentos ?? []) {
-        if (!pagamentosPorAcordo.has(p.acordo_id)) pagamentosPorAcordo.set(p.acordo_id, []);
-        pagamentosPorAcordo.get(p.acordo_id)!.push(p);
-      }
-
-      return acordos.map(a => {
-        const pags = pagamentosPorAcordo.get(a.id) ?? [];
-        const pagas = pags.filter(p => p.status === 'pago');
-        const pendentes = pags.filter(p => p.status === 'pendente');
-        return {
-          id: a.id,
-          cliente_nome: a.cliente_nome,
-          cliente_cpf: a.cliente_cpf,
-          valor_total: a.valor_total,
-          parcelas: a.parcelas,
-          dias_atraso: a.dias_atraso,
-          user_id: a.user_id,
-          funcionario_nome: profileMap.get(a.user_id) ?? 'N/A',
-          parcelas_pagas: pagas.length,
-          parcelas_pendentes: pendentes.length,
-          valor_pago: pagas.reduce((s, p) => s + Number(p.valor_parcela), 0),
-          valor_pendente: pendentes.reduce((s, p) => s + Number(p.valor_parcela), 0),
-          max_dias_atraso_parcela: calcularDiasAtrasoMaiorParcela(pags),
-        } satisfies AcordoComPagamentos;
-      });
-    },
+  const { data: resumoCarteira } = useQuery({
+    queryKey: ['resumo-carteira-ia'],
+    queryFn: buscarResumoCarteira,
+    staleTime: 5 * 60 * 1000,
   });
 
-  // ── Query: Devedores sem acordo ──
-  const { data: devedoresSemAcordo, isLoading: loadingDevedores } = useQuery({
-    queryKey: ['estrategias-sem-acordo'],
-    enabled: tipoCliente === 'sem_acordo',
-    queryFn: async () => {
-      const [devRes, acordosRes] = await Promise.all([
-        supabase.from('devedores').select('id, nome, cpf, valor_original, valor_atualizado, credor, data_vencimento').eq('ativo', true),
-        supabase.from('acordos').select('cliente_cpf').in('status', ['ativo', 'concluido']),
-      ]);
-
-      if (devRes.error) throw devRes.error;
-      if (acordosRes.error) throw acordosRes.error;
-
-      const cpfsComAcordo = new Set(
-        (acordosRes.data ?? [])
-          .map(a => (a.cliente_cpf ?? '').replace(/\D/g, ''))
-          .filter(Boolean)
-      );
-
-      return (devRes.data ?? [])
-        .filter(d => !cpfsComAcordo.has(d.cpf.replace(/\D/g, '')))
-        .map(d => ({
-          id: d.id,
-          nome: d.nome,
-          cpf: d.cpf,
-          valor_original: d.valor_original,
-          valor_atualizado: d.valor_atualizado,
-          credor: d.credor,
-          dias_vencido: calcularDiasVencido(d.data_vencimento),
-        } satisfies DevedorSemAcordo));
-    },
-  });
-
-  // ── Memos for "com_acordo" ──
-  const categoriasDados = useMemo(() => {
-    if (!acordosProcessados) return {} as Record<CategoriaId, AcordoComPagamentos[]>;
-    const result = {} as Record<CategoriaId, AcordoComPagamentos[]>;
-    for (const cat of CATEGORIAS) {
-      result[cat.id] = filtrarPorCategoria(acordosProcessados, cat.id);
+  const gerarEstrategia = async (textoPrompt?: string) => {
+    const finalPrompt = textoPrompt || prompt;
+    if (!finalPrompt.trim()) {
+      toast.error('Digite uma solicitação para gerar a estratégia.');
+      return;
     }
-    return result;
-  }, [acordosProcessados]);
 
-  // ── Apply delay filter ──
-  const aplicarFiltroAtraso = <T extends { max_dias_atraso_parcela?: number; dias_vencido?: number }>(dados: T[]): T[] => {
-    if (!filtroAtrasoAtivo) return dados;
-    const min = diasAtrasoMin ? Number(diasAtrasoMin) : 0;
-    const max = diasAtrasoMax ? Number(diasAtrasoMax) : Infinity;
-    return dados.filter(d => {
-      const dias = ('max_dias_atraso_parcela' in d ? d.max_dias_atraso_parcela : d.dias_vencido) ?? 0;
-      return dias >= min && dias <= max;
-    });
-  };
+    setIsLoading(true);
+    setResposta('');
 
-  const dadosAcordoAtivos = aplicarFiltroAtraso(categoriasDados[tabAtiva] ?? []);
-  const dadosDevedorAtivos = aplicarFiltroAtraso(devedoresSemAcordo ?? []);
+    abortRef.current = new AbortController();
 
-  const isLoading = tipoCliente === 'com_acordo' ? loadingAcordos : loadingDevedores;
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gerar-estrategia-cobranca`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ prompt: finalPrompt, resumoCarteira: resumoCarteira ?? '' }),
+        signal: abortRef.current.signal,
+      });
 
-  // ── Summary values ──
-  const totalClientes = tipoCliente === 'com_acordo' ? dadosAcordoAtivos.length : dadosDevedorAtivos.length;
-  const valorResumo = tipoCliente === 'com_acordo'
-    ? dadosAcordoAtivos.reduce((s, a) => s + a.valor_pendente, 0)
-    : dadosDevedorAtivos.reduce((s, d) => s + d.valor_atualizado, 0);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Erro desconhecido' }));
+        toast.error(err.error || 'Erro ao gerar estratégia');
+        setIsLoading(false);
+        return;
+      }
 
-  // ── Export ──
-  const handleExport = () => {
-    if (tipoCliente === 'com_acordo') {
-      const catLabel = CATEGORIAS.find(c => c.id === tabAtiva)?.label ?? tabAtiva;
-      exportarParaExcel(dadosAcordoAtivos, colunasAcordo, `Estrategia_${catLabel}`);
-    } else {
-      exportarParaExcel(dadosDevedorAtivos, colunasDevedor, 'Devedores_Sem_Acordo');
+      if (!resp.body) throw new Error('Sem body na resposta');
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              fullText += content;
+              setResposta(fullText);
+            }
+          } catch {
+            buffer = line + '\n' + buffer;
+            break;
+          }
+        }
+      }
+
+      // flush remaining
+      if (buffer.trim()) {
+        for (let raw of buffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              fullText += content;
+              setResposta(fullText);
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('Erro ao gerar estratégia:', e);
+        toast.error('Erro ao gerar estratégia. Tente novamente.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleFiltrar = () => setFiltroAtrasoAtivo(true);
-  const handleLimpar = () => {
-    setDiasAtrasoMin('');
-    setDiasAtrasoMax('');
-    setFiltroAtrasoAtivo(false);
+  const handleSugestao = (s: string) => {
+    setPrompt(s);
+    gerarEstrategia(s);
   };
 
-  const hasData = tipoCliente === 'com_acordo' ? !!acordosProcessados?.length : !!devedoresSemAcordo?.length;
-  const exportDisabled = tipoCliente === 'com_acordo' ? !dadosAcordoAtivos.length : !dadosDevedorAtivos.length;
+  const limpar = () => {
+    if (abortRef.current) abortRef.current.abort();
+    setResposta('');
+    setPrompt('');
+    setIsLoading(false);
+  };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Target className="h-5 w-5" />
-          Estratégias de Cobrança
+          <Brain className="h-5 w-5" />
+          Gerador de Estratégias com IA
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        {/* ── Filter Bar ── */}
-        <div className="flex flex-wrap items-end gap-4 mb-4">
-          <div className="space-y-1">
-            <Label className="text-xs">Tipo de Cliente</Label>
-            <Select value={tipoCliente} onValueChange={(v) => setTipoCliente(v as TipoCliente)}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="com_acordo">Com Acordo Ativo</SelectItem>
-                <SelectItem value="sem_acordo">Sem Acordo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Atraso de</Label>
-              <Input
-                type="number"
-                min={0}
-                className="w-20"
-                placeholder="0"
-                value={diasAtrasoMin}
-                onChange={e => setDiasAtrasoMin(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">até</Label>
-              <Input
-                type="number"
-                min={0}
-                className="w-20"
-                placeholder="∞"
-                value={diasAtrasoMax}
-                onChange={e => setDiasAtrasoMax(e.target.value)}
-              />
-            </div>
-            <span className="text-xs text-muted-foreground pb-2">dias</span>
-            <Button size="sm" variant="secondary" onClick={handleFiltrar}>
-              <Filter className="h-3 w-3 mr-1" />
-              Filtrar
+      <CardContent className="space-y-4">
+        {/* Sugestões */}
+        <div className="flex flex-wrap gap-2">
+          {SUGESTOES.map((s, i) => (
+            <Button
+              key={i}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              disabled={isLoading}
+              onClick={() => handleSugestao(s)}
+            >
+              <Sparkles className="h-3 w-3 mr-1" />
+              {s}
             </Button>
-            {filtroAtrasoAtivo && (
-              <Button size="sm" variant="ghost" onClick={handleLimpar}>
-                <X className="h-3 w-3 mr-1" />
+          ))}
+        </div>
+
+        {/* Prompt */}
+        <div className="space-y-2">
+          <Textarea
+            placeholder="Descreva a estratégia de cobrança que você precisa..."
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            rows={3}
+            disabled={isLoading}
+          />
+          <div className="flex gap-2">
+            <Button onClick={() => gerarEstrategia()} disabled={isLoading || !prompt.trim()}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <Brain className="h-4 w-4 mr-1" />
+                  Gerar Estratégia
+                </>
+              )}
+            </Button>
+            {(resposta || isLoading) && (
+              <Button variant="ghost" size="sm" onClick={limpar}>
+                <RotateCcw className="h-4 w-4 mr-1" />
                 Limpar
               </Button>
             )}
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Carregando dados...</div>
-        ) : !hasData ? (
-          <div className="text-center py-8 text-muted-foreground">Nenhum registro encontrado.</div>
-        ) : tipoCliente === 'com_acordo' ? (
-          /* ── COM ACORDO ── */
-          <Tabs value={tabAtiva} onValueChange={(v) => setTabAtiva(v as CategoriaId)}>
-            <TabsList className="flex flex-wrap h-auto gap-1 mb-4">
-              {CATEGORIAS.map(cat => (
-                <TabsTrigger key={cat.id} value={cat.id} className="text-xs gap-1">
-                  <cat.icon className="h-3 w-3" />
-                  {cat.label}
-                  <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                    {aplicarFiltroAtraso(categoriasDados[cat.id] ?? []).length}
-                  </Badge>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+        {/* Resposta */}
+        {resposta && (
+          <div className="border rounded-lg p-4 bg-muted/30">
+            <div className="prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown>{resposta}</ReactMarkdown>
+            </div>
+          </div>
+        )}
 
-            {CATEGORIAS.map(cat => (
-              <TabsContent key={cat.id} value={cat.id}>
-                <SummaryCards totalClientes={totalClientes} valorResumo={valorResumo} labelValor="Valor Pendente" />
-                <ExportButton onClick={handleExport} disabled={exportDisabled} />
-                <AcordoTable dados={dadosAcordoAtivos} />
-              </TabsContent>
-            ))}
-          </Tabs>
-        ) : (
-          /* ── SEM ACORDO ── */
-          <>
-            <SummaryCards totalClientes={totalClientes} valorResumo={valorResumo} labelValor="Valor Atualizado" />
-            <ExportButton onClick={handleExport} disabled={exportDisabled} />
-            <DevedorTable dados={dadosDevedorAtivos} />
-          </>
+        {isLoading && !resposta && (
+          <div className="text-center py-8 text-muted-foreground flex items-center justify-center gap-2">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Analisando sua carteira e gerando estratégia...
+          </div>
         )}
       </CardContent>
     </Card>
-  );
-}
-
-// ── Sub-components ──
-
-function SummaryCards({ totalClientes, valorResumo, labelValor }: { totalClientes: number; valorResumo: number; labelValor: string }) {
-  return (
-    <div className="grid grid-cols-2 gap-4 mb-4">
-      <div className="border rounded-lg p-3 flex items-center gap-3">
-        <Users className="h-5 w-5 text-muted-foreground" />
-        <div>
-          <p className="text-xs text-muted-foreground">Clientes</p>
-          <p className="text-xl font-bold">{totalClientes}</p>
-        </div>
-      </div>
-      <div className="border rounded-lg p-3 flex items-center gap-3">
-        <DollarSign className="h-5 w-5 text-muted-foreground" />
-        <div>
-          <p className="text-xs text-muted-foreground">{labelValor}</p>
-          <p className="text-xl font-bold">
-            {valorResumo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ExportButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
-  return (
-    <div className="flex justify-end mb-2">
-      <Button size="sm" variant="outline" onClick={onClick} disabled={disabled}>
-        <Download className="h-4 w-4 mr-1" />
-        Exportar Excel
-      </Button>
-    </div>
-  );
-}
-
-function AcordoTable({ dados }: { dados: AcordoComPagamentos[] }) {
-  if (!dados.length) return <p className="text-sm text-muted-foreground text-center py-4">Nenhum cliente nesta categoria.</p>;
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Cliente</TableHead>
-            <TableHead>CPF</TableHead>
-            <TableHead className="text-right">Valor Total</TableHead>
-            <TableHead className="text-center">Pagas/Total</TableHead>
-            <TableHead className="text-right">Valor Pendente</TableHead>
-            <TableHead className="text-center">Dias Atraso</TableHead>
-            <TableHead>Funcionário</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {dados.map(a => (
-            <TableRow key={a.id}>
-              <TableCell className="font-medium">{a.cliente_nome}</TableCell>
-              <TableCell>{a.cliente_cpf ?? '-'}</TableCell>
-              <TableCell className="text-right">
-                {a.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </TableCell>
-              <TableCell className="text-center">{a.parcelas_pagas}/{a.parcelas}</TableCell>
-              <TableCell className="text-right">
-                {a.valor_pendente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </TableCell>
-              <TableCell className="text-center">
-                <Badge variant={a.max_dias_atraso_parcela > 30 ? 'destructive' : a.max_dias_atraso_parcela > 0 ? 'secondary' : 'outline'}>
-                  {a.max_dias_atraso_parcela}
-                </Badge>
-              </TableCell>
-              <TableCell>{a.funcionario_nome}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function DevedorTable({ dados }: { dados: DevedorSemAcordo[] }) {
-  if (!dados.length) return <p className="text-sm text-muted-foreground text-center py-4">Nenhum devedor encontrado.</p>;
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>CPF</TableHead>
-            <TableHead className="text-right">Valor Original</TableHead>
-            <TableHead className="text-right">Valor Atualizado</TableHead>
-            <TableHead>Credor</TableHead>
-            <TableHead className="text-center">Dias Vencido</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {dados.map(d => (
-            <TableRow key={d.id}>
-              <TableCell className="font-medium">{d.nome}</TableCell>
-              <TableCell>{d.cpf}</TableCell>
-              <TableCell className="text-right">
-                {d.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </TableCell>
-              <TableCell className="text-right">
-                {d.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </TableCell>
-              <TableCell>{d.credor ?? '-'}</TableCell>
-              <TableCell className="text-center">
-                <Badge variant={d.dias_vencido > 30 ? 'destructive' : d.dias_vencido > 0 ? 'secondary' : 'outline'}>
-                  {d.dias_vencido}
-                </Badge>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
   );
 }
