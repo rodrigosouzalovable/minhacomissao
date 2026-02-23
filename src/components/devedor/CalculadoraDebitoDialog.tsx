@@ -88,6 +88,7 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
   const [loadingTaxa, setLoadingTaxa] = useState(false);
   const [dataBase, setDataBase] = useState<string>('');
   const [periodoConsultado, setPeriodoConsultado] = useState<string>('');
+  const [dataPrimeiroPagamento, setDataPrimeiroPagamento] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const contratoAtual = contratoSelecionado === 'todos'
     ? null
@@ -134,7 +135,8 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
   // Datas de vencimento das parcelas
   const diasFreq = getDiasFrequencia(frequencia);
   const gerarDatasParcelas = () => {
-    return Array.from({ length: parcelas }, (_, i) => addDays(hoje, diasFreq * (i + 1)));
+    const baseDate = dataPrimeiroPagamento ? new Date(dataPrimeiroPagamento + 'T00:00:00') : hoje;
+    return Array.from({ length: parcelas }, (_, i) => addDays(baseDate, diasFreq * i));
   };
 
   const isValidDate = (d: string) => {
@@ -432,7 +434,17 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
                   <RadioGroupItem value="mensal" id="freq-mensal" />
                   <Label htmlFor="freq-mensal">Mensal</Label>
                 </div>
-              </RadioGroup>
+            </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-semibold">Data do 1º Pagamento</Label>
+              <Input
+                type="date"
+                value={dataPrimeiroPagamento}
+                onChange={(e) => setDataPrimeiroPagamento(e.target.value)}
+                className="w-48"
+              />
             </div>
 
             {parcelas > 1 && (
