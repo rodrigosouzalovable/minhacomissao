@@ -1,36 +1,35 @@
 
 
-# Fix: Reset Password Edge Function - Session Not Found
+# Filtrar Dropdown de Credor por Permissoes do Usuario
 
-## Root Cause
-The current user's JWT contains a `session_id` that no longer exists in the database. Every method that validates the token against the auth server (SDK `getUser`, REST `/auth/v1/user`) fails with `session_not_found`. This is a stale session issue.
+## Objetivo
+Quando um usuario tem credores especificos configurados nas suas permissoes (tabela `user_permissions`), o dropdown de "Credor" na tela de Clientes deve mostrar apenas os credores permitidos. Usuarios sem restricao (campo `credores` nulo) continuam vendo todos.
 
-## Solution
-Decode the JWT payload manually (base64) to extract the user ID (`sub` claim), then use the admin client to verify the admin role. This completely bypasses session validation.
+## Mudancas
 
-## Changes
+### Arquivo: `src/pages/Clientes.tsx`
 
-### File: `supabase/functions/reset-user-password/index.ts`
+1. Importar o hook `useUserPermissions` no topo do arquivo
+2. Chamar `const { credores: credoresPermitidos } = useUserPermissions()` dentro do componente
+3. No `useEffect` que monta a lista de credores (e tambem no estado inicial), filtrar pela lista de credores permitidos quando ela nao for nula:
+   - Se `credoresPermitidos` for `null` ou vazio, manter o comportamento atual (mostrar todos)
+   - Se `credoresPermitidos` tiver valores, filtrar `credores` para incluir apenas os que estao na lista de permissoes
+4. Quando o usuario tem apenas 1 credor permitido, pre-selecionar automaticamente esse credor no filtro
 
-Replace the REST API user verification (lines 23-38) with JWT payload decoding:
+### Logica de filtragem
 
-```typescript
-// Decode JWT payload to get user ID (bypass session validation)
-const parts = token.split('.')
-if (parts.length !== 3) throw new Error('Token inválido')
-
-const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-const callingUserId = payload.sub
-const callingEmail = payload.email
-
-if (!callingUserId) throw new Error('Usuário não autenticado')
-
-console.log(`User ${callingEmail} attempting password reset`)
+```
+// Apos montar a lista merged de credores:
+if (credoresPermitidos && credoresPermitidos.length > 0) {
+  const filtered = merged.filter(c => credoresPermitidos.includes(c));
+  setCredores(filtered);
+} else {
+  setCredores(merged);
+}
 ```
 
-Then update references from `callingUser.id` to `callingUserId` and `callingUser.email` to `callingEmail` in the rest of the function (role check query and success log).
+### Efeito adicional
+Adicionar `credoresPermitidos` como dependencia do `useEffect` que carrega os credores, para que a filtragem seja aplicada quando as permissoes carregarem.
 
-No other files need changes.
-
-## Important Note
-After this fix works, the user should log out and log back in to refresh their session token for other functions that may also validate the session.
+## Resultado
+Os usuarios `cobranca2@montrealindustria.com.br` e `manoelito@montrealindustria.com.br`, ao terem `["MONTREAL"]` configurado nas suas permissoes, verao apenas "MONTREAL" no dropdown de Credor.
