@@ -205,6 +205,10 @@ export default function DevedorDetalhe() {
 
     if (error) { toast.error('Erro: ' + error.message); }
     else {
+      // Atualizar estágio de "novo" para "andamento" no banco
+      if (devedor?.estagio === 'novo') {
+        await supabase.from('devedores').update({ estagio: 'andamento' }).eq('id', id);
+      }
       toast.success('Evento registrado!');
       setDialogOpen(false); setEventoTipo('contato_cliente'); setEventoDescricao(''); setEventoFile(null);
       fetchData();
@@ -718,8 +722,8 @@ ${bodyContent}
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold">{devedor.nome}</h1>
-                  <Badge variant={devedor.estagio === 'novo' && eventos.length > 0 ? 'default' : 'secondary'} className="mt-1">
-                    {devedor.estagio === 'novo' && eventos.length > 0 ? 'andamento' : devedor.estagio}
+                  <Badge variant={devedor.estagio === 'andamento' ? 'default' : 'secondary'} className="mt-1">
+                    {devedor.estagio}
                   </Badge>
                 </div>
               </div>
