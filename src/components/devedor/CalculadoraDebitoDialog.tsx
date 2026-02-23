@@ -44,11 +44,7 @@ type Frequencia = 'semanal' | 'quinzenal' | 'mensal';
 
 const getTaxaJurosMensal = (numParcelas: number): number => {
   if (numParcelas <= 1) return 0;
-  if (numParcelas <= 12) return 0.01;
-  if (numParcelas <= 24) return 0.015;
-  if (numParcelas <= 36) return 0.02;
-  if (numParcelas <= 48) return 0.025;
-  return 0.03;
+  return 0.01;
 };
 
 const getTaxaJurosLabel = (numParcelas: number): string => {
