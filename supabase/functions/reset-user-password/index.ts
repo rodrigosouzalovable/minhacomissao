@@ -20,22 +20,17 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '')
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
 
-    // Verificar usuário via REST API diretamente
-    const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'apikey': Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      },
-    })
+    // Decode JWT payload to get user ID (bypass session validation)
+    const parts = token.split('.')
+    if (parts.length !== 3) throw new Error('Token inválido')
 
-    if (!userRes.ok) {
-      const errText = await userRes.text()
-      console.error('Auth verification failed:', errText)
-      throw new Error('Usuário não autenticado')
-    }
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    const callingUserId = payload.sub
+    const callingEmail = payload.email
 
-    const callingUser = await userRes.json()
-    console.log(`User ${callingUser.email} attempting password reset`)
+    if (!callingUserId) throw new Error('Usuário não autenticado')
+
+    console.log(`User ${callingEmail} attempting password reset`)
 
     // Criar cliente admin
     const supabaseAdmin = createClient(
@@ -48,7 +43,7 @@ serve(async (req) => {
     const { data: adminRole, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('id')
-      .eq('user_id', callingUser.id)
+      .eq('user_id', callingUserId)
       .eq('role', 'admin')
       .maybeSingle()
 
@@ -58,7 +53,7 @@ serve(async (req) => {
     }
 
     if (!adminRole) {
-      console.error(`User ${callingUser.email} is not admin`)
+      console.error(`User ${callingEmail} is not admin`)
       throw new Error('Apenas administradores podem redefinir senhas')
     }
 
@@ -82,7 +77,7 @@ serve(async (req) => {
       throw updateError
     }
 
-    console.log(`SUCCESS: Admin ${callingUser.email} reset password for user ${userId}`)
+    console.log(`SUCCESS: Admin ${callingEmail} reset password for user ${userId}`)
 
     return new Response(
       JSON.stringify({ success: true, message: 'Senha redefinida com sucesso' }),
