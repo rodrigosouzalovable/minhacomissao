@@ -1,54 +1,79 @@
 
 
-# Filtros Avancados para Estrategias de Cobranca
+# Gerador de Estrategias de Cobranca com IA
 
 ## Objetivo
-Adicionar dois novos filtros ao painel de Estrategias de Cobranca:
+Substituir o painel atual de segmentacao por regras por um **gerador de estrategias com IA**, onde o admin descreve sua carteira ou situacao e a IA responde com uma estrategia de cobranca personalizada, incluindo priorizacao de clientes, abordagens sugeridas e plano de acao.
 
-1. **Tipo de cliente** - Alternar entre clientes que ja possuem acordo no sistema vs devedores que nunca tiveram acordo lancado
-2. **Faixa de atraso personalizada** - Dois campos (de/ate) para filtrar por quantidade de dias de atraso
+## O que sera removido
+- Todo o conteudo atual do componente `src/components/EstrategiasCobranca.tsx` (segmentacao por categorias, tabelas, filtros de atraso, filtro tipo de cliente)
+- O componente sera reescrito do zero com a nova funcionalidade
 
-## Detalhes Tecnicos
+## Nova funcionalidade
 
-### 1. Filtro "Tipo de Cliente"
+O componente tera:
 
-Adicionar um Select com 2 opcoes acima das tabs:
-- **Com Acordo Ativo** (padrao atual) - Mostra os acordos ativos ja existentes
-- **Sem Acordo** - Busca devedores da tabela `devedores` que NAO possuem nenhum acordo na tabela `acordos` (cruzando por CPF). Exibe nome, CPF, valor original, valor atualizado, credor e dias desde o vencimento
+1. **Campo de texto (textarea)** onde o admin descreve o que precisa. Exemplos:
+   - "Quero uma estrategia para clientes que nunca pagaram nenhuma parcela"
+   - "Como priorizar minha carteira de alto valor?"
+   - "Crie um plano de acao para inadimplentes com mais de 60 dias"
 
-Quando "Sem Acordo" estiver selecionado:
-- As tabs de categoria serao ocultadas (nao se aplicam a devedores sem acordo)
-- A tabela mostrara colunas diferentes: Nome, CPF, Valor Original, Valor Atualizado, Credor, Dias Vencido
-- O botao de exportar Excel continuara funcionando com as colunas adaptadas
-- Os cards de resumo mostrarao total de devedores e valor total atualizado
+2. **Botao "Gerar Estrategia"** que envia o prompt para a IA junto com um resumo automatico da carteira (totais agregados, nao dados individuais)
 
-A query para "Sem Acordo" buscara todos os devedores ativos e depois filtrara no frontend removendo aqueles cujo CPF aparece em algum acordo ativo.
+3. **Area de resposta** com renderizacao em markdown mostrando a estrategia gerada pela IA, com streaming token a token
 
-### 2. Filtro de Faixa de Atraso
+4. **Contexto automatico**: Antes de enviar para a IA, o sistema busca um resumo da carteira (total de acordos ativos, total de devedores sem acordo, distribuicao por faixa de atraso, valores totais) para dar contexto ao modelo sem expor dados pessoais
 
-Adicionar dois campos Input (tipo number) lado a lado com labels "De" e "Ate" (em dias), mais um botao "Filtrar":
-- Aplica-se a ambos os modos (com acordo e sem acordo)
-- No modo "Com Acordo", filtra pelo `max_dias_atraso_parcela`
-- No modo "Sem Acordo", filtra pela diferenca entre hoje e `data_vencimento` do devedor
-- Quando preenchidos, filtram os dados da tabela apos a segmentacao por categoria
-- Botao "Limpar" para remover o filtro de atraso
+5. **Botao "Exportar Clientes"** que, apos a estrategia gerada, permite baixar em Excel os clientes que se encaixam nos criterios sugeridos (usando filtros basicos de atraso e status)
 
-### Layout dos Filtros
+## Arquitetura Tecnica
 
-Os filtros ficarao em uma barra horizontal acima das tabs:
+### Edge Function: `supabase/functions/gerar-estrategia-cobranca/index.ts`
+- Recebe o prompt do usuario + resumo da carteira
+- Usa Lovable AI (google/gemini-3-flash-preview) com system prompt de especialista em cobranca
+- Retorna resposta em streaming (SSE)
+- O system prompt instruira a IA a atuar como especialista em estrategia de cobranca brasileiro, sugerindo priorizacoes, scripts de abordagem, e planos de acao
+
+### Frontend: `src/components/EstrategiasCobranca.tsx` (reescrito)
+- Textarea para o prompt do usuario
+- Busca resumo da carteira com useQuery (dados agregados)
+- Streaming da resposta da IA com renderizacao progressiva
+- Historico das ultimas estrategias geradas na sessao
+- Botao de exportar clientes filtrados por faixa de atraso
+
+### Config: `supabase/config.toml`
+- Adicionar entrada para a nova edge function com `verify_jwt = false`
+
+### Dependencia
+- Instalar `react-markdown` para renderizar a resposta da IA formatada
+
+## Fluxo do usuario
 
 ```text
-[Tipo: Com Acordo Ativo v]   Atraso de [___] ate [___] dias  [Filtrar] [X]
+1. Admin abre a pagina de Equipes
+2. Rola ate "Estrategias de Cobranca"
+3. Digita: "Quero uma estrategia para recuperar clientes inadimplentes ha mais de 30 dias"
+4. Clica em "Gerar Estrategia"
+5. A IA recebe o prompt + resumo da carteira (ex: "Voce tem 150 acordos ativos, 45 com atraso > 30 dias, valor total pendente R$ 500.000...")
+6. A resposta aparece em streaming com sugestoes de priorizacao, scripts, e plano de acao
+7. O admin pode exportar os clientes filtrados para Excel
 ```
 
-### Alteracoes no Arquivo
+## Resumo da carteira (contexto para IA)
 
-**Arquivo unico:** `src/components/EstrategiasCobranca.tsx`
+Dados agregados enviados automaticamente (sem dados pessoais):
+- Total de acordos ativos
+- Total de devedores sem acordo
+- Distribuicao por faixa de atraso (0-30d, 31-60d, 61-90d, 90+d)
+- Valor total pendente por faixa
+- Quantidade de clientes que nunca pagaram
+- Quantidade com parcela unica pendente
+- Top valores pendentes (sem nomes/CPFs)
 
-- Novos states: `tipoCliente` ('com_acordo' | 'sem_acordo'), `diasAtrasoMin`, `diasAtrasoMax`
-- Nova query separada para buscar devedores sem acordo (com `useQuery` e `enabled` condicional)
-- Interface `DevedorSemAcordo` para tipar os dados do modo sem acordo
-- Colunas Excel adaptadas para cada modo
-- Logica de filtro de atraso aplicada via `useMemo` sobre os dados finais
-- Importar `Input` de `@/components/ui/input`, `Select` de `@/components/ui/select`, e `Label` de `@/components/ui/label`
+## Arquivos alterados
+
+1. `src/components/EstrategiasCobranca.tsx` - Reescrito completamente
+2. `supabase/functions/gerar-estrategia-cobranca/index.ts` - Nova edge function
+3. `supabase/config.toml` - Nova entrada para a function
+4. `package.json` - Adicionar react-markdown
 
