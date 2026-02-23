@@ -20,28 +20,30 @@ serve(async (req) => {
       throw new Error('Não autorizado')
     }
 
-    // 2. Criar cliente com token do usuário para verificar quem está chamando
-    const supabaseClient = createClient(
+    // 2. Criar cliente admin para verificar o usuário
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // 3. Validar token via getClaims
+    // 3. Verificar usuário pelo JWT
     const token = authHeader.replace('Bearer ', '')
-    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token)
-    if (claimsError || !claimsData?.claims) {
-      console.error('Token validation error:', claimsError)
+    const { data: { user: callingUser }, error: userError } = await supabaseAdmin.auth.getUser(token)
+    if (userError || !callingUser) {
+      console.error('Token validation error:', userError)
       throw new Error('Usuário não autenticado')
     }
 
-    const callingUserId = claimsData.claims.sub
-    const callingEmail = claimsData.claims.email
-    console.log(`User ${callingEmail} attempting password reset`)
+    console.log(`User ${callingUser.email} attempting password reset`)
 
-    // 4. Verificar se é admin usando a função has_role
-    const { data: isAdmin, error: roleError } = await supabaseClient
-      .rpc('has_role', { _user_id: callingUserId, _role: 'admin' })
+    // 4. Verificar se é admin
+    const { data: isAdmin, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('id')
+      .eq('user_id', callingUser.id)
+      .eq('role', 'admin')
+      .maybeSingle()
 
     if (roleError) {
       console.error('Role check error:', roleError)
@@ -49,7 +51,7 @@ serve(async (req) => {
     }
 
     if (!isAdmin) {
-      console.error(`User ${callingEmail} is not admin`)
+      console.error(`User ${callingUser.email} is not admin`)
       throw new Error('Apenas administradores podem redefinir senhas')
     }
 
@@ -64,12 +66,7 @@ serve(async (req) => {
       throw new Error('A senha deve ter pelo menos 6 caracteres')
     }
 
-    // 6. Criar cliente admin para alterar senha
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
+    // 6. Atualizar senha do usuário alvo
 
     // 7. Atualizar senha do usuário alvo
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
