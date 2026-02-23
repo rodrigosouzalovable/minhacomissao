@@ -45,7 +45,7 @@ interface Importacao {
 
 const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
-  montreal: 'A = CPF/CNPJ, B = Nome/Razão Social, C = Nº Contrato, F = Tipo Contrato, H = Parcela, I = Vencimento, J = Valor, L = Tel Residencial, M = Tel Comercial',
+  montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Tipo Título, H = Atraso (dias), I = Nro Nota, J = Desdob., K = Valor, L = Dt. Venc. Inicial',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total | Aba 2: Telefones (opcional)',
 };
 
@@ -118,20 +118,33 @@ export default function ImportarDevedores() {
 
   const parseMontreal = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
     return dataRows.map((row) => {
-      const valor = parseNum(row['J']);
-      const telRes = String(row['L'] ?? '').replace(/\D/g, '');
-      const telCom = String(row['M'] ?? '').replace(/\D/g, '');
+      const valor = parseNum(row['K']);
+      const tel1 = String(row['D'] ?? '').replace(/\D/g, '');
+      const tel2 = String(row['E'] ?? '').replace(/\D/g, '');
+
+      // Converter vencimento Excel serial number para string dd/mm/yyyy
+      let vencimentoStr = '';
+      const vencRaw = row['L'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+        }
+      } else if (vencRaw) {
+        vencimentoStr = String(vencRaw);
+      }
+
       return {
-        cpf: String(row['A'] ?? '').replace(/\D/g, ''),
+        cpf: String(row['C'] ?? '').replace(/\D/g, ''),
         nascimento: '',
         nome: String(row['B'] ?? ''),
         credor: 'MONTREAL',
-        contrato: String(row['C'] ?? ''),
-        descricao: String(row['F'] ?? ''),
-        atraso: String(row['H'] ?? ''),
+        contrato: String(row['I'] ?? ''),
+        descricao: String(row['G'] ?? ''),
+        atraso: vencimentoStr,
         valor_original: valor,
         valor_atualizado: valor,
-        telefone: telRes || telCom || undefined,
+        telefone: tel1 || tel2 || undefined,
       };
     }).filter(r => r.cpf.length >= 11);
   };
@@ -561,9 +574,8 @@ export default function ImportarDevedores() {
                         {isMontreal ? (
                           <>
                             <TableHead>Nome</TableHead>
-                            <TableHead>Contrato</TableHead>
-                            <TableHead>Tipo Contrato</TableHead>
-                            <TableHead>Parcela</TableHead>
+                            <TableHead>Nro Nota</TableHead>
+                            <TableHead>Tipo Título</TableHead>
                             <TableHead>Vencimento</TableHead>
                             <TableHead>Valor (R$)</TableHead>
                             <TableHead>Telefone</TableHead>
@@ -597,7 +609,6 @@ export default function ImportarDevedores() {
                               <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
                               <TableCell>{row.contrato || '-'}</TableCell>
                               <TableCell>{row.descricao || '-'}</TableCell>
-                              <TableCell>{row.atraso || '-'}</TableCell>
                               <TableCell>{row.atraso || '-'}</TableCell>
                               <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                               <TableCell>{row.telefone || '-'}</TableCell>
