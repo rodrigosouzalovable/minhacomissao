@@ -1,66 +1,42 @@
 
-# Estrategias de Cobranca - Painel de Analise de Carteira
 
-## Objetivo
-Criar uma secao "Estrategias" abaixo da secao "Equipes" na pagina `/admin/equipes` que segmenta automaticamente os acordos ativos em categorias estrategicas de cobranca, ajudando a identificar os melhores clientes para priorizar acionamentos.
+# Corrigir Estrategias de Cobranca - Query URL muito longa
 
-## Segmentacoes Estrategicas
+## Problema
+A query de pagamentos esta falhando com erro **400 Bad Request** porque a URL gerada pelo filtro `.in('acordo_id', acordoIds)` e muito longa. Com mais de 200 acordos ativos, a URL excede o limite permitido pelo servidor.
 
-Com base em boas praticas de cobranca e nos dados disponiveis (acordos, pagamentos, dias de atraso), os clientes serao classificados em 6 categorias:
+## Solucao
+Dividir a busca de pagamentos em lotes (batches) de 50 IDs por vez, para manter a URL dentro do limite. Depois, combinar todos os resultados.
 
-1. **Pagadores Parciais** - Clientes que ja pagaram pelo menos 1 parcela mas pararam. Sao os de MAIOR probabilidade de retorno pois ja demonstraram intencao de pagar.
+## Detalhes Tecnicos
 
-2. **Parcela Unica Pendente** - Acordos com apenas 1 parcela restante. Facil conversao pois o cliente esta proximo de quitar.
+**Arquivo:** `src/components/EstrategiasCobranca.tsx`
 
-3. **Inadimplentes Recentes (ate 30 dias)** - Clientes com parcelas vencidas ha menos de 30 dias. A janela de recuperacao e alta nesse periodo.
+Na funcao `queryFn`, apos obter a lista de `acordoIds`, dividir em lotes de 50 e fazer multiplas queries em paralelo:
 
-4. **Inadimplentes Moderados (31-90 dias)** - Clientes com atraso moderado. Necessitam abordagem mais incisiva mas ainda ha boa chance.
+```typescript
+// Buscar pagamentos em lotes de 50 para evitar URL muito longa
+const BATCH_SIZE = 50;
+const batches = [];
+for (let i = 0; i < acordoIds.length; i += BATCH_SIZE) {
+  batches.push(acordoIds.slice(i, i + BATCH_SIZE));
+}
 
-5. **Nunca Pagaram** - Clientes que nao pagaram nenhuma parcela do acordo. Exigem reavaliacao da estrategia de contato.
+const pagamentosResults = await Promise.all(
+  batches.map(batch =>
+    supabase
+      .from('pagamentos')
+      .select('acordo_id, status, valor_parcela, data_prevista')
+      .in('acordo_id', batch)
+  )
+);
 
-6. **Alto Valor Pendente (top 50)** - Os 50 acordos com maior valor pendente, independente do status de pagamento. Prioridade pelo impacto financeiro.
-
-## Arquitetura
-
-### Novo componente: `src/components/EstrategiasCobranca.tsx`
-
-Componente separado para manter o `AdminEquipes.tsx` limpo. Contera:
-
-- Tabs para alternar entre as 6 categorias
-- Cards de resumo no topo (total de clientes, valor pendente total)
-- Tabela com os clientes da categoria selecionada: Nome, CPF, Valor Total, Parcelas Pagas/Total, Valor Pendente, Dias de Atraso, Funcionario
-- Botao "Exportar Excel" que baixa os clientes da aba ativa
-- Badge com quantidade de clientes em cada aba
-
-### Dados
-
-Uma unica query busca todos os acordos ativos com seus pagamentos e os processa no frontend para classificacao:
-
-```text
-acordos (status = 'ativo')
-  + pagamentos (agregados: parcelas_pagas, parcelas_pendentes, total_pago, total_pendente)
-  + profiles (nome do funcionario)
+const pagamentos = pagamentosResults.flatMap(r => {
+  if (r.error) throw r.error;
+  return r.data ?? [];
+});
 ```
 
-Nao sera necessaria nenhuma alteracao no banco de dados. A logica de segmentacao sera feita no frontend com os dados ja disponiveis.
+O mesmo padrao sera aplicado a query de `profiles` caso tambem tenha muitos IDs, embora seja menos provavel que exceda o limite.
 
-### Integracao na pagina
-
-O componente `EstrategiasCobranca` sera importado e renderizado no `AdminEquipes.tsx` logo apos o card de "Equipes", envolvido em um Card com icone e titulo "Estrategias de Cobranca".
-
-### Exportacao Excel
-
-Cada aba tera um botao "Exportar Excel" que usa a funcao `exportarParaExcel` ja existente no projeto para gerar uma planilha com as colunas: Cliente, CPF, Valor Total, Parcelas Pagas, Parcelas Pendentes, Valor Pago, Valor Pendente, Dias Atraso, Funcionario.
-
-### Detalhes tecnicos
-
-- Query com `useQuery` para acordos ativos + join manual com pagamentos e profiles
-- Funcoes de filtro puras para cada categoria
-- `useMemo` para evitar recalculos desnecessarios
-- Tabs do Radix UI (ja disponivel no projeto)
-- Reutiliza componentes existentes: Card, Table, Badge, Button, Tabs
-- Reutiliza `exportarParaExcel` de `src/lib/exportExcel.ts`
-
-## Sem IA
-
-A segmentacao e puramente baseada em regras e dados estruturados, nao necessitando de integracao com IA. Os criterios sao objetivos (parcelas pagas, dias de atraso, valor pendente) e mais confiaveis que uma classificacao por modelo de linguagem.
+Nenhuma alteracao no banco de dados e necessaria. Apenas a logica de fetch no componente precisa ser ajustada.
