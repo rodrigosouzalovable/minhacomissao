@@ -98,12 +98,27 @@ export function EstrategiasCobranca() {
       if (!acordos?.length) return [];
 
       const acordoIds = acordos.map(a => a.id);
-      const { data: pagamentos, error: pagError } = await supabase
-        .from('pagamentos')
-        .select('acordo_id, status, valor_parcela, data_prevista')
-        .in('acordo_id', acordoIds);
 
-      if (pagError) throw pagError;
+      // Buscar pagamentos em lotes de 50 para evitar URL muito longa
+      const BATCH_SIZE = 50;
+      const batches: string[][] = [];
+      for (let i = 0; i < acordoIds.length; i += BATCH_SIZE) {
+        batches.push(acordoIds.slice(i, i + BATCH_SIZE));
+      }
+
+      const pagamentosResults = await Promise.all(
+        batches.map(batch =>
+          supabase
+            .from('pagamentos')
+            .select('acordo_id, status, valor_parcela, data_prevista')
+            .in('acordo_id', batch)
+        )
+      );
+
+      const pagamentos = pagamentosResults.flatMap(r => {
+        if (r.error) throw r.error;
+        return r.data ?? [];
+      });
 
       const userIds = [...new Set(acordos.map(a => a.user_id))];
       const { data: profiles, error: profError } = await supabase
