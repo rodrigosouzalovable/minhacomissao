@@ -4,12 +4,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Target, Download, Users, DollarSign, Clock, AlertTriangle, TrendingUp, CheckCircle } from 'lucide-react';
+import { Target, Download, Users, DollarSign, Clock, AlertTriangle, TrendingUp, CheckCircle, X, Filter } from 'lucide-react';
 import { exportarParaExcel } from '@/lib/exportExcel';
+
+// ── Types ──
 
 interface AcordoComPagamentos {
   id: string;
@@ -27,6 +34,20 @@ interface AcordoComPagamentos {
   max_dias_atraso_parcela: number;
 }
 
+interface DevedorSemAcordo {
+  id: string;
+  nome: string;
+  cpf: string;
+  valor_original: number;
+  valor_atualizado: number;
+  credor: string | null;
+  dias_vencido: number;
+}
+
+type TipoCliente = 'com_acordo' | 'sem_acordo';
+
+// ── Constants ──
+
 const CATEGORIAS = [
   { id: 'parciais', label: 'Pagadores Parciais', icon: TrendingUp, cor: 'text-emerald-600' },
   { id: 'unica', label: 'Parcela Única', icon: CheckCircle, cor: 'text-blue-600' },
@@ -37,6 +58,8 @@ const CATEGORIAS = [
 ] as const;
 
 type CategoriaId = typeof CATEGORIAS[number]['id'];
+
+// ── Helpers ──
 
 function calcularDiasAtrasoMaiorParcela(parcelas: { data_prevista: string; status: string }[]): number {
   const hoje = new Date();
@@ -71,7 +94,18 @@ function filtrarPorCategoria(acordos: AcordoComPagamentos[], categoria: Categori
   }
 }
 
-const colunasExcel = [
+function calcularDiasVencido(dataVencimento: string | null): number {
+  if (!dataVencimento) return 0;
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const venc = new Date(dataVencimento + 'T00:00:00');
+  const diff = Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.max(0, diff);
+}
+
+// ── Excel columns ──
+
+const colunasAcordo = [
   { chave: 'cliente_nome' as const, titulo: 'Cliente' },
   { chave: 'cliente_cpf' as const, titulo: 'CPF' },
   { chave: 'valor_total' as const, titulo: 'Valor Total' },
@@ -83,11 +117,28 @@ const colunasExcel = [
   { chave: 'funcionario_nome' as const, titulo: 'Funcionário' },
 ];
 
+const colunasDevedor = [
+  { chave: 'nome' as const, titulo: 'Nome' },
+  { chave: 'cpf' as const, titulo: 'CPF' },
+  { chave: 'valor_original' as const, titulo: 'Valor Original' },
+  { chave: 'valor_atualizado' as const, titulo: 'Valor Atualizado' },
+  { chave: 'credor' as const, titulo: 'Credor' },
+  { chave: 'dias_vencido' as const, titulo: 'Dias Vencido' },
+];
+
+// ── Component ──
+
 export function EstrategiasCobranca() {
   const [tabAtiva, setTabAtiva] = useState<CategoriaId>('parciais');
+  const [tipoCliente, setTipoCliente] = useState<TipoCliente>('com_acordo');
+  const [diasAtrasoMin, setDiasAtrasoMin] = useState('');
+  const [diasAtrasoMax, setDiasAtrasoMax] = useState('');
+  const [filtroAtrasoAtivo, setFiltroAtrasoAtivo] = useState(false);
 
-  const { data: acordosProcessados, isLoading } = useQuery({
+  // ── Query: Acordos ativos ──
+  const { data: acordosProcessados, isLoading: loadingAcordos } = useQuery({
     queryKey: ['estrategias-cobranca'],
+    enabled: tipoCliente === 'com_acordo',
     queryFn: async () => {
       const { data: acordos, error: acordosError } = await supabase
         .from('acordos')
@@ -99,7 +150,6 @@ export function EstrategiasCobranca() {
 
       const acordoIds = acordos.map(a => a.id);
 
-      // Buscar pagamentos em lotes de 50 para evitar URL muito longa
       const BATCH_SIZE = 50;
       const batches: string[][] = [];
       for (let i = 0; i < acordoIds.length; i += BATCH_SIZE) {
@@ -158,22 +208,90 @@ export function EstrategiasCobranca() {
     },
   });
 
+  // ── Query: Devedores sem acordo ──
+  const { data: devedoresSemAcordo, isLoading: loadingDevedores } = useQuery({
+    queryKey: ['estrategias-sem-acordo'],
+    enabled: tipoCliente === 'sem_acordo',
+    queryFn: async () => {
+      const [devRes, acordosRes] = await Promise.all([
+        supabase.from('devedores').select('id, nome, cpf, valor_original, valor_atualizado, credor, data_vencimento').eq('ativo', true),
+        supabase.from('acordos').select('cliente_cpf').in('status', ['ativo', 'concluido']),
+      ]);
+
+      if (devRes.error) throw devRes.error;
+      if (acordosRes.error) throw acordosRes.error;
+
+      const cpfsComAcordo = new Set(
+        (acordosRes.data ?? [])
+          .map(a => (a.cliente_cpf ?? '').replace(/\D/g, ''))
+          .filter(Boolean)
+      );
+
+      return (devRes.data ?? [])
+        .filter(d => !cpfsComAcordo.has(d.cpf.replace(/\D/g, '')))
+        .map(d => ({
+          id: d.id,
+          nome: d.nome,
+          cpf: d.cpf,
+          valor_original: d.valor_original,
+          valor_atualizado: d.valor_atualizado,
+          credor: d.credor,
+          dias_vencido: calcularDiasVencido(d.data_vencimento),
+        } satisfies DevedorSemAcordo));
+    },
+  });
+
+  // ── Memos for "com_acordo" ──
   const categoriasDados = useMemo(() => {
-    if (!acordosProcessados) return {};
-    const result: Record<CategoriaId, AcordoComPagamentos[]> = {} as any;
+    if (!acordosProcessados) return {} as Record<CategoriaId, AcordoComPagamentos[]>;
+    const result = {} as Record<CategoriaId, AcordoComPagamentos[]>;
     for (const cat of CATEGORIAS) {
       result[cat.id] = filtrarPorCategoria(acordosProcessados, cat.id);
     }
     return result;
   }, [acordosProcessados]);
 
-  const dadosAtivos = categoriasDados[tabAtiva] ?? [];
-  const valorPendenteTotal = dadosAtivos.reduce((s, a) => s + a.valor_pendente, 0);
-
-  const handleExport = () => {
-    const catLabel = CATEGORIAS.find(c => c.id === tabAtiva)?.label ?? tabAtiva;
-    exportarParaExcel(dadosAtivos, colunasExcel, `Estrategia_${catLabel}`);
+  // ── Apply delay filter ──
+  const aplicarFiltroAtraso = <T extends { max_dias_atraso_parcela?: number; dias_vencido?: number }>(dados: T[]): T[] => {
+    if (!filtroAtrasoAtivo) return dados;
+    const min = diasAtrasoMin ? Number(diasAtrasoMin) : 0;
+    const max = diasAtrasoMax ? Number(diasAtrasoMax) : Infinity;
+    return dados.filter(d => {
+      const dias = ('max_dias_atraso_parcela' in d ? d.max_dias_atraso_parcela : d.dias_vencido) ?? 0;
+      return dias >= min && dias <= max;
+    });
   };
+
+  const dadosAcordoAtivos = aplicarFiltroAtraso(categoriasDados[tabAtiva] ?? []);
+  const dadosDevedorAtivos = aplicarFiltroAtraso(devedoresSemAcordo ?? []);
+
+  const isLoading = tipoCliente === 'com_acordo' ? loadingAcordos : loadingDevedores;
+
+  // ── Summary values ──
+  const totalClientes = tipoCliente === 'com_acordo' ? dadosAcordoAtivos.length : dadosDevedorAtivos.length;
+  const valorResumo = tipoCliente === 'com_acordo'
+    ? dadosAcordoAtivos.reduce((s, a) => s + a.valor_pendente, 0)
+    : dadosDevedorAtivos.reduce((s, d) => s + d.valor_atualizado, 0);
+
+  // ── Export ──
+  const handleExport = () => {
+    if (tipoCliente === 'com_acordo') {
+      const catLabel = CATEGORIAS.find(c => c.id === tabAtiva)?.label ?? tabAtiva;
+      exportarParaExcel(dadosAcordoAtivos, colunasAcordo, `Estrategia_${catLabel}`);
+    } else {
+      exportarParaExcel(dadosDevedorAtivos, colunasDevedor, 'Devedores_Sem_Acordo');
+    }
+  };
+
+  const handleFiltrar = () => setFiltroAtrasoAtivo(true);
+  const handleLimpar = () => {
+    setDiasAtrasoMin('');
+    setDiasAtrasoMax('');
+    setFiltroAtrasoAtivo(false);
+  };
+
+  const hasData = tipoCliente === 'com_acordo' ? !!acordosProcessados?.length : !!devedoresSemAcordo?.length;
+  const exportDisabled = tipoCliente === 'com_acordo' ? !dadosAcordoAtivos.length : !dadosDevedorAtivos.length;
 
   return (
     <Card>
@@ -184,11 +302,64 @@ export function EstrategiasCobranca() {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {/* ── Filter Bar ── */}
+        <div className="flex flex-wrap items-end gap-4 mb-4">
+          <div className="space-y-1">
+            <Label className="text-xs">Tipo de Cliente</Label>
+            <Select value={tipoCliente} onValueChange={(v) => setTipoCliente(v as TipoCliente)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="com_acordo">Com Acordo Ativo</SelectItem>
+                <SelectItem value="sem_acordo">Sem Acordo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Atraso de</Label>
+              <Input
+                type="number"
+                min={0}
+                className="w-20"
+                placeholder="0"
+                value={diasAtrasoMin}
+                onChange={e => setDiasAtrasoMin(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">até</Label>
+              <Input
+                type="number"
+                min={0}
+                className="w-20"
+                placeholder="∞"
+                value={diasAtrasoMax}
+                onChange={e => setDiasAtrasoMax(e.target.value)}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground pb-2">dias</span>
+            <Button size="sm" variant="secondary" onClick={handleFiltrar}>
+              <Filter className="h-3 w-3 mr-1" />
+              Filtrar
+            </Button>
+            {filtroAtrasoAtivo && (
+              <Button size="sm" variant="ghost" onClick={handleLimpar}>
+                <X className="h-3 w-3 mr-1" />
+                Limpar
+              </Button>
+            )}
+          </div>
+        </div>
+
         {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Carregando dados da carteira...</div>
-        ) : !acordosProcessados?.length ? (
-          <div className="text-center py-8 text-muted-foreground">Nenhum acordo ativo encontrado.</div>
-        ) : (
+          <div className="text-center py-8 text-muted-foreground">Carregando dados...</div>
+        ) : !hasData ? (
+          <div className="text-center py-8 text-muted-foreground">Nenhum registro encontrado.</div>
+        ) : tipoCliente === 'com_acordo' ? (
+          /* ── COM ACORDO ── */
           <Tabs value={tabAtiva} onValueChange={(v) => setTabAtiva(v as CategoriaId)}>
             <TabsList className="flex flex-wrap h-auto gap-1 mb-4">
               {CATEGORIAS.map(cat => (
@@ -196,7 +367,7 @@ export function EstrategiasCobranca() {
                   <cat.icon className="h-3 w-3" />
                   {cat.label}
                   <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                    {(categoriasDados[cat.id] ?? []).length}
+                    {aplicarFiltroAtraso(categoriasDados[cat.id] ?? []).length}
                   </Badge>
                 </TabsTrigger>
               ))}
@@ -204,82 +375,139 @@ export function EstrategiasCobranca() {
 
             {CATEGORIAS.map(cat => (
               <TabsContent key={cat.id} value={cat.id}>
-                {/* Summary cards */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="border rounded-lg p-3 flex items-center gap-3">
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Clientes</p>
-                      <p className="text-xl font-bold">{dadosAtivos.length}</p>
-                    </div>
-                  </div>
-                  <div className="border rounded-lg p-3 flex items-center gap-3">
-                    <DollarSign className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Valor Pendente</p>
-                      <p className="text-xl font-bold">
-                        {valorPendenteTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Export button */}
-                <div className="flex justify-end mb-2">
-                  <Button size="sm" variant="outline" onClick={handleExport} disabled={!dadosAtivos.length}>
-                    <Download className="h-4 w-4 mr-1" />
-                    Exportar Excel
-                  </Button>
-                </div>
-
-                {/* Table */}
-                {dadosAtivos.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Cliente</TableHead>
-                          <TableHead>CPF</TableHead>
-                          <TableHead className="text-right">Valor Total</TableHead>
-                          <TableHead className="text-center">Pagas/Total</TableHead>
-                          <TableHead className="text-right">Valor Pendente</TableHead>
-                          <TableHead className="text-center">Dias Atraso</TableHead>
-                          <TableHead>Funcionário</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {dadosAtivos.map(a => (
-                          <TableRow key={a.id}>
-                            <TableCell className="font-medium">{a.cliente_nome}</TableCell>
-                            <TableCell>{a.cliente_cpf ?? '-'}</TableCell>
-                            <TableCell className="text-right">
-                              {a.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {a.parcelas_pagas}/{a.parcelas}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {a.valor_pendente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant={a.max_dias_atraso_parcela > 30 ? 'destructive' : a.max_dias_atraso_parcela > 0 ? 'secondary' : 'outline'}>
-                                {a.max_dias_atraso_parcela}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{a.funcionario_nome}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum cliente nesta categoria.</p>
-                )}
+                <SummaryCards totalClientes={totalClientes} valorResumo={valorResumo} labelValor="Valor Pendente" />
+                <ExportButton onClick={handleExport} disabled={exportDisabled} />
+                <AcordoTable dados={dadosAcordoAtivos} />
               </TabsContent>
             ))}
           </Tabs>
+        ) : (
+          /* ── SEM ACORDO ── */
+          <>
+            <SummaryCards totalClientes={totalClientes} valorResumo={valorResumo} labelValor="Valor Atualizado" />
+            <ExportButton onClick={handleExport} disabled={exportDisabled} />
+            <DevedorTable dados={dadosDevedorAtivos} />
+          </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Sub-components ──
+
+function SummaryCards({ totalClientes, valorResumo, labelValor }: { totalClientes: number; valorResumo: number; labelValor: string }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="border rounded-lg p-3 flex items-center gap-3">
+        <Users className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-xs text-muted-foreground">Clientes</p>
+          <p className="text-xl font-bold">{totalClientes}</p>
+        </div>
+      </div>
+      <div className="border rounded-lg p-3 flex items-center gap-3">
+        <DollarSign className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-xs text-muted-foreground">{labelValor}</p>
+          <p className="text-xl font-bold">
+            {valorResumo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExportButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return (
+    <div className="flex justify-end mb-2">
+      <Button size="sm" variant="outline" onClick={onClick} disabled={disabled}>
+        <Download className="h-4 w-4 mr-1" />
+        Exportar Excel
+      </Button>
+    </div>
+  );
+}
+
+function AcordoTable({ dados }: { dados: AcordoComPagamentos[] }) {
+  if (!dados.length) return <p className="text-sm text-muted-foreground text-center py-4">Nenhum cliente nesta categoria.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Cliente</TableHead>
+            <TableHead>CPF</TableHead>
+            <TableHead className="text-right">Valor Total</TableHead>
+            <TableHead className="text-center">Pagas/Total</TableHead>
+            <TableHead className="text-right">Valor Pendente</TableHead>
+            <TableHead className="text-center">Dias Atraso</TableHead>
+            <TableHead>Funcionário</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {dados.map(a => (
+            <TableRow key={a.id}>
+              <TableCell className="font-medium">{a.cliente_nome}</TableCell>
+              <TableCell>{a.cliente_cpf ?? '-'}</TableCell>
+              <TableCell className="text-right">
+                {a.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </TableCell>
+              <TableCell className="text-center">{a.parcelas_pagas}/{a.parcelas}</TableCell>
+              <TableCell className="text-right">
+                {a.valor_pendente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant={a.max_dias_atraso_parcela > 30 ? 'destructive' : a.max_dias_atraso_parcela > 0 ? 'secondary' : 'outline'}>
+                  {a.max_dias_atraso_parcela}
+                </Badge>
+              </TableCell>
+              <TableCell>{a.funcionario_nome}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function DevedorTable({ dados }: { dados: DevedorSemAcordo[] }) {
+  if (!dados.length) return <p className="text-sm text-muted-foreground text-center py-4">Nenhum devedor encontrado.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Nome</TableHead>
+            <TableHead>CPF</TableHead>
+            <TableHead className="text-right">Valor Original</TableHead>
+            <TableHead className="text-right">Valor Atualizado</TableHead>
+            <TableHead>Credor</TableHead>
+            <TableHead className="text-center">Dias Vencido</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {dados.map(d => (
+            <TableRow key={d.id}>
+              <TableCell className="font-medium">{d.nome}</TableCell>
+              <TableCell>{d.cpf}</TableCell>
+              <TableCell className="text-right">
+                {d.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </TableCell>
+              <TableCell className="text-right">
+                {d.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </TableCell>
+              <TableCell>{d.credor ?? '-'}</TableCell>
+              <TableCell className="text-center">
+                <Badge variant={d.dias_vencido > 30 ? 'destructive' : d.dias_vencido > 0 ? 'secondary' : 'outline'}>
+                  {d.dias_vencido}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
