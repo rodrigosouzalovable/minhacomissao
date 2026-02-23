@@ -628,13 +628,15 @@ export default function Clientes() {
                             <TableCell>{row.qtdContratos} contrato{row.qtdContratos !== 1 ? 's' : ''}</TableCell>
                             <TableCell>{row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                             <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {row.estagios.map((e) => (
-                                  <Badge key={e} variant={estagioVariant(e)}>
-                                    {ESTAGIOS.find(es => es.value === e)?.label || e}
+                              {(() => {
+                                const prioridade = ['finalizado', 'andamento', 'novo'];
+                                const principal = prioridade.find(p => row.estagios.includes(p)) || row.estagios[0];
+                                return (
+                                  <Badge variant={estagioVariant(principal)}>
+                                    {ESTAGIOS.find(es => es.value === principal)?.label || principal}
                                   </Badge>
-                                ))}
-                              </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-1">
