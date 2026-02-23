@@ -31,6 +31,8 @@ type SendStatus = 'idle' | 'sending' | 'success' | 'error';
 
 const STORAGE_KEY = 'acionamento_mensagem_padrao';
 const HISTORICO_KEY = 'acionamento_historico';
+const ACTIVE_KEY = 'acionamento_ativo';
+const SEND_STATUS_KEY = 'acionamento_send_status';
 
 const formatPrimeiroNome = (nome: string): string => {
   const primeiro = nome.trim().split(/\s+/)[0].toLowerCase();
@@ -75,8 +77,21 @@ export default function Acionamento() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setMensagem(saved);
     const savedHist = localStorage.getItem(HISTORICO_KEY);
+    let parsedHist: HistoricoItem[] = [];
     if (savedHist) {
-      try { setHistorico(JSON.parse(savedHist)); } catch {}
+      try { parsedHist = JSON.parse(savedHist); setHistorico(parsedHist); } catch {}
+    }
+    const savedActiveId = localStorage.getItem(ACTIVE_KEY);
+    if (savedActiveId && parsedHist.length > 0) {
+      const activeItem = parsedHist.find(h => h.id === savedActiveId);
+      if (activeItem) {
+        setClientes(activeItem.clientes);
+        setActiveHistoricoId(savedActiveId);
+        const savedStatus = localStorage.getItem(`${SEND_STATUS_KEY}_${savedActiveId}`);
+        if (savedStatus) {
+          try { setSendStatus(JSON.parse(savedStatus)); } catch {}
+        }
+      }
     }
   }, []);
 
@@ -142,6 +157,8 @@ export default function Acionamento() {
         clientes: parsed,
       };
       setActiveHistoricoId(newItem.id);
+      localStorage.setItem(ACTIVE_KEY, newItem.id);
+      localStorage.removeItem(`${SEND_STATUS_KEY}_${newItem.id}`);
       saveHistorico([newItem, ...historico]);
       toast.success(`${parsed.length} clientes importados`);
     };
@@ -151,18 +168,26 @@ export default function Acionamento() {
 
   const handleLoadHistorico = (item: HistoricoItem) => {
     setClientes(item.clientes);
-    setSendStatus({});
     setActiveHistoricoId(item.id);
+    localStorage.setItem(ACTIVE_KEY, item.id);
+    const savedStatus = localStorage.getItem(`${SEND_STATUS_KEY}_${item.id}`);
+    if (savedStatus) {
+      try { setSendStatus(JSON.parse(savedStatus)); } catch { setSendStatus({}); }
+    } else {
+      setSendStatus({});
+    }
     toast.success(`Planilha "${item.nomeArquivo}" carregada`);
   };
 
   const handleDeleteHistorico = (id: string) => {
     const updated = historico.filter((h) => h.id !== id);
     saveHistorico(updated);
+    localStorage.removeItem(`${SEND_STATUS_KEY}_${id}`);
     if (activeHistoricoId === id) {
       setClientes([]);
       setSendStatus({});
       setActiveHistoricoId(null);
+      localStorage.removeItem(ACTIVE_KEY);
     }
     toast.success('Planilha removida do histórico');
   };
@@ -183,10 +208,18 @@ export default function Acionamento() {
       });
 
       if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro');
-      setSendStatus((prev) => ({ ...prev, [index]: 'success' }));
+      setSendStatus((prev) => {
+        const next = { ...prev, [index]: 'success' as SendStatus };
+        if (activeHistoricoId) localStorage.setItem(`${SEND_STATUS_KEY}_${activeHistoricoId}`, JSON.stringify(next));
+        return next;
+      });
       toast.success(`Mensagem enviada para ${formatPrimeiroNome(cliente.nome)}`);
     } catch (err: any) {
-      setSendStatus((prev) => ({ ...prev, [index]: 'error' }));
+      setSendStatus((prev) => {
+        const next = { ...prev, [index]: 'error' as SendStatus };
+        if (activeHistoricoId) localStorage.setItem(`${SEND_STATUS_KEY}_${activeHistoricoId}`, JSON.stringify(next));
+        return next;
+      });
       toast.error(`Falha ao enviar para ${formatPrimeiroNome(cliente.nome)}: ${err.message}`);
     }
   };
