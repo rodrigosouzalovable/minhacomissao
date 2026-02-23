@@ -1,42 +1,54 @@
 
 
-# Corrigir Estrategias de Cobranca - Query URL muito longa
+# Filtros Avancados para Estrategias de Cobranca
 
-## Problema
-A query de pagamentos esta falhando com erro **400 Bad Request** porque a URL gerada pelo filtro `.in('acordo_id', acordoIds)` e muito longa. Com mais de 200 acordos ativos, a URL excede o limite permitido pelo servidor.
+## Objetivo
+Adicionar dois novos filtros ao painel de Estrategias de Cobranca:
 
-## Solucao
-Dividir a busca de pagamentos em lotes (batches) de 50 IDs por vez, para manter a URL dentro do limite. Depois, combinar todos os resultados.
+1. **Tipo de cliente** - Alternar entre clientes que ja possuem acordo no sistema vs devedores que nunca tiveram acordo lancado
+2. **Faixa de atraso personalizada** - Dois campos (de/ate) para filtrar por quantidade de dias de atraso
 
 ## Detalhes Tecnicos
 
-**Arquivo:** `src/components/EstrategiasCobranca.tsx`
+### 1. Filtro "Tipo de Cliente"
 
-Na funcao `queryFn`, apos obter a lista de `acordoIds`, dividir em lotes de 50 e fazer multiplas queries em paralelo:
+Adicionar um Select com 2 opcoes acima das tabs:
+- **Com Acordo Ativo** (padrao atual) - Mostra os acordos ativos ja existentes
+- **Sem Acordo** - Busca devedores da tabela `devedores` que NAO possuem nenhum acordo na tabela `acordos` (cruzando por CPF). Exibe nome, CPF, valor original, valor atualizado, credor e dias desde o vencimento
 
-```typescript
-// Buscar pagamentos em lotes de 50 para evitar URL muito longa
-const BATCH_SIZE = 50;
-const batches = [];
-for (let i = 0; i < acordoIds.length; i += BATCH_SIZE) {
-  batches.push(acordoIds.slice(i, i + BATCH_SIZE));
-}
+Quando "Sem Acordo" estiver selecionado:
+- As tabs de categoria serao ocultadas (nao se aplicam a devedores sem acordo)
+- A tabela mostrara colunas diferentes: Nome, CPF, Valor Original, Valor Atualizado, Credor, Dias Vencido
+- O botao de exportar Excel continuara funcionando com as colunas adaptadas
+- Os cards de resumo mostrarao total de devedores e valor total atualizado
 
-const pagamentosResults = await Promise.all(
-  batches.map(batch =>
-    supabase
-      .from('pagamentos')
-      .select('acordo_id, status, valor_parcela, data_prevista')
-      .in('acordo_id', batch)
-  )
-);
+A query para "Sem Acordo" buscara todos os devedores ativos e depois filtrara no frontend removendo aqueles cujo CPF aparece em algum acordo ativo.
 
-const pagamentos = pagamentosResults.flatMap(r => {
-  if (r.error) throw r.error;
-  return r.data ?? [];
-});
+### 2. Filtro de Faixa de Atraso
+
+Adicionar dois campos Input (tipo number) lado a lado com labels "De" e "Ate" (em dias), mais um botao "Filtrar":
+- Aplica-se a ambos os modos (com acordo e sem acordo)
+- No modo "Com Acordo", filtra pelo `max_dias_atraso_parcela`
+- No modo "Sem Acordo", filtra pela diferenca entre hoje e `data_vencimento` do devedor
+- Quando preenchidos, filtram os dados da tabela apos a segmentacao por categoria
+- Botao "Limpar" para remover o filtro de atraso
+
+### Layout dos Filtros
+
+Os filtros ficarao em uma barra horizontal acima das tabs:
+
+```text
+[Tipo: Com Acordo Ativo v]   Atraso de [___] ate [___] dias  [Filtrar] [X]
 ```
 
-O mesmo padrao sera aplicado a query de `profiles` caso tambem tenha muitos IDs, embora seja menos provavel que exceda o limite.
+### Alteracoes no Arquivo
 
-Nenhuma alteracao no banco de dados e necessaria. Apenas a logica de fetch no componente precisa ser ajustada.
+**Arquivo unico:** `src/components/EstrategiasCobranca.tsx`
+
+- Novos states: `tipoCliente` ('com_acordo' | 'sem_acordo'), `diasAtrasoMin`, `diasAtrasoMax`
+- Nova query separada para buscar devedores sem acordo (com `useQuery` e `enabled` condicional)
+- Interface `DevedorSemAcordo` para tipar os dados do modo sem acordo
+- Colunas Excel adaptadas para cada modo
+- Logica de filtro de atraso aplicada via `useMemo` sobre os dados finais
+- Importar `Input` de `@/components/ui/input`, `Select` de `@/components/ui/select`, e `Label` de `@/components/ui/label`
+
