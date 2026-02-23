@@ -21,8 +21,8 @@ export function useUserPermissions() {
 
   return {
     abasPermitidas: permissions?.abas_permitidas ?? null,
-    credores: (permissions as any)?.credores ?? null,
-    visivelRanking: (permissions as any)?.visivel_ranking ?? true,
+    credores: permissions?.credores ?? null,
+    visivelRanking: permissions?.visivel_ranking ?? true,
     isLoading,
   };
 }
