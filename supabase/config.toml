@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.gerar-estrategia-cobranca]
 verify_jwt = false
+
+[functions.notify-cpf-consulta]
+verify_jwt = false
