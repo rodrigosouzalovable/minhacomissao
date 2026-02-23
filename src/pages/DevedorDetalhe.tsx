@@ -140,8 +140,9 @@ export default function DevedorDetalhe() {
         .from('devedores')
         .select('id, nome, cpf, telefone, credor, contrato, valor_original, valor_atualizado, data_vencimento, descricao, estagio')
         .eq('ativo', true)
-        .order('criado_em', { ascending: false });
-      if (ctrs) setContratos((ctrs as Devedor[]).filter(c => allCpfs.includes(c.cpf.replace(/\D/g, ''))));
+        .in('cpf', allCpfs)
+        .order('data_vencimento', { ascending: true });
+      if (ctrs) setContratos(ctrs as Devedor[]);
 
       // Phones for all CPFs in the group
       const allPhones: Telefone[] = [];
