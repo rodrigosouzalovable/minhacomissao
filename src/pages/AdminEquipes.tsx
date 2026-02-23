@@ -24,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Users, UserPlus, Trash2, Pencil, Trophy } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
+import { EstrategiasCobranca } from '@/components/EstrategiasCobranca';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -375,6 +376,9 @@ export default function AdminEquipes() {
             )}
           </CardContent>
         </Card>
+
+        {/* Estratégias de Cobrança */}
+        <EstrategiasCobranca />
       </div>
 
       {editingUser && (
