@@ -233,8 +233,17 @@ export default function Clientes() {
     return result;
   }, [rawResults, grupos]);
 
-  const totalPages = Math.ceil(grouped.length / PAGE_SIZE);
-  const paginatedResults = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const filteredGrouped = useMemo(() => {
+    if (estagio === 'todos') return grouped;
+    const prioridade = ['finalizado', 'andamento', 'novo'];
+    return grouped.filter(row => {
+      const principal = prioridade.find(p => row.estagios.includes(p)) || row.estagios[0];
+      return principal === estagio;
+    });
+  }, [grouped, estagio]);
+
+  const totalPages = Math.ceil(filteredGrouped.length / PAGE_SIZE);
+  const paginatedResults = filteredGrouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleSearch = async () => {
     if (!busca.trim() && !telefone.trim() && credor === 'todos' && estagio === 'todos') {
@@ -272,7 +281,7 @@ export default function Clientes() {
       }
       if (telefone.trim()) q = q.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
       if (credor !== 'todos') q = q.eq('credor', credor);
-      if (estagio !== 'todos') q = q.eq('estagio', estagio);
+      // Estágio filter is applied post-grouping to respect priority logic
 
       const { data, error } = await q;
       if (error) { toast.error('Erro na busca: ' + error.message); break; }
@@ -501,8 +510,8 @@ export default function Clientes() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>{grouped.length} cliente{grouped.length !== 1 ? 's' : ''} encontrado{grouped.length !== 1 ? 's' : ''}</CardTitle>
-                {isAdmin && grouped.length >= 1 && (
+                <CardTitle>{filteredGrouped.length} cliente{filteredGrouped.length !== 1 ? 's' : ''} encontrado{filteredGrouped.length !== 1 ? 's' : ''}</CardTitle>
+                {isAdmin && filteredGrouped.length >= 1 && (
                   <div className="flex gap-2">
                     {deleteMode ? (
                       <>
@@ -539,7 +548,7 @@ export default function Clientes() {
                           <Trash2 className="h-4 w-4 mr-1" />
                           Excluir Contratos
                         </Button>
-                        {grouped.length >= 2 && (
+                        {filteredGrouped.length >= 2 && (
                           <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
                             <Link2 className="h-4 w-4 mr-1" />
                             Agrupar CNPJs
