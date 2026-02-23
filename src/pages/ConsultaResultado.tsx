@@ -85,6 +85,16 @@ export default function ConsultaResultado() {
         setDebitos(typedData);
         setNomeCliente(typedData[0].nome);
         setCpfCliente(typedData[0].cpf);
+
+        // Notificar consulta via WhatsApp (fire-and-forget)
+        supabase.functions.invoke('notify-cpf-consulta', {
+          body: {
+            cpf: typedData[0].cpf,
+            nome: typedData[0].nome,
+            credor: config?.nome || creditor,
+            totalDebitos: typedData.length,
+          },
+        }).catch(() => {});
       }
       
       if (!acordoResult.error && acordoResult.data && (acordoResult.data as any[]).length > 0) {
