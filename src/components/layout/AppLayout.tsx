@@ -18,7 +18,8 @@ import {
   UsersRound,
   RotateCcw,
   FileSpreadsheet,
-  Wallet
+  Wallet,
+  MessageSquare
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -52,6 +53,7 @@ const navItems: NavItem[] = [
   { href: '/admin/auditoria', label: 'Auditoria', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, adminOnly: true },
   { href: '/admin/importar-devedores', label: 'Importar Devedores', icon: FileSpreadsheet, adminOnly: true },
+  { href: '/admin/acionamento', label: 'Acionamento', icon: MessageSquare, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
