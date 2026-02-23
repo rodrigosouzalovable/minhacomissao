@@ -17,6 +17,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 interface ClienteRow {
   id: string;
@@ -50,6 +51,12 @@ interface GrupoMembro {
 }
 
 const CREDORES_FIXOS = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
+
+const CREDOR_SLUG_MAP: Record<string, string> = {
+  'ume_novo_mundo': 'UME | NOVO MUNDO',
+  'mundo_da_moda': 'MUNDO DA MODA',
+  'montreal': 'MONTREAL',
+};
 const ESTAGIOS = [
   { value: 'novo', label: 'Novo' },
   { value: 'andamento', label: 'Andamento' },
@@ -62,6 +69,7 @@ export default function Clientes() {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
   const { user } = useAuth();
+  const { credores: credoresPermitidos } = useUserPermissions();
   const [busca, setBusca] = useState('');
   const [telefone, setTelefone] = useState('');
   const [credor, setCredor] = useState('todos');
@@ -108,12 +116,31 @@ export default function Clientes() {
       }
       if (allCredorData.length > 0) {
         const unique = Array.from(new Set(allCredorData.map((d: any) => d.credor).filter(Boolean))) as string[];
-        const merged = Array.from(new Set([...CREDORES_FIXOS, ...unique]));
+        let merged = Array.from(new Set([...CREDORES_FIXOS, ...unique]));
+        
+        // Filter by user permissions
+        if (credoresPermitidos && credoresPermitidos.length > 0) {
+          const allowedNames = credoresPermitidos.map((slug: string) => CREDOR_SLUG_MAP[slug] || slug);
+          merged = merged.filter(c => allowedNames.includes(c));
+        }
+        
         setCredores(merged);
+        
+        // Auto-select if only one credor allowed
+        if (merged.length === 1) {
+          setCredor(merged[0]);
+        }
+      } else if (credoresPermitidos && credoresPermitidos.length > 0) {
+        const allowedNames = credoresPermitidos.map((slug: string) => CREDOR_SLUG_MAP[slug] || slug);
+        const filtered = CREDORES_FIXOS.filter(c => allowedNames.includes(c));
+        setCredores(filtered);
+        if (filtered.length === 1) {
+          setCredor(filtered[0]);
+        }
       }
     };
     fetchCredores();
-  }, []);
+  }, [credoresPermitidos]);
 
   // Fetch groups on mount
   useEffect(() => {
