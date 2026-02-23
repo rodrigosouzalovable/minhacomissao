@@ -1,60 +1,47 @@
 
-# Nova aba "Acionamento" - Disparo individual de WhatsApp
 
-## Resumo
-Criar a pagina **Acionamento** no menu lateral (admin only) para importar planilha Excel de clientes, definir mensagem padrao com variaveis dinamicas (incluindo `{primeiro_nome}` com formatacao capitalizada), e enviar WhatsApp individualmente por cliente.
+# Historico de planilhas e feedback visual no Acionamento
 
----
+## Alteracoes no arquivo `src/pages/Acionamento.tsx`
 
-## Funcionalidades
+### 1. Historico de planilhas importadas
+- Abaixo do botao "Selecionar arquivo Excel", adicionar uma lista com o historico de planilhas importadas
+- Cada item mostra: nome do arquivo, quantidade de clientes e data/hora da importacao
+- Botao de lixeira (icone Trash2 do lucide) ao lado de cada item para excluir
+- Historico persistido no `localStorage` (chave `acionamento_historico`)
+- Ao clicar em um item do historico, recarrega os dados daquela planilha na lista de clientes
+- Ao excluir, remove do historico e limpa a lista se for a planilha ativa
 
-### Importacao de planilha
-- Upload de arquivo Excel (.xlsx/.xls)
-- Parsing automatico das 5 colunas: CPF (A), Nome (B), Telefone (C), Atraso (D), Saldo (E)
-- Exibicao da lista importada em tabela
-
-### Mensagem padrao com persistencia
-- Textarea para definir a mensagem modelo
-- Botao "Salvar mensagem padrao" que persiste no `localStorage`
-- Ao abrir a pagina, carrega a mensagem salva automaticamente
-
-### Variaveis dinamicas
-Painel com botoes clicaveis que inserem a variavel na posicao do cursor:
-- `{nome}` - Nome completo do cliente
-- `{primeiro_nome}` - Primeiro nome com primeira letra maiuscula e demais minusculas
-- `{cpf}` - CPF do cliente
-- `{atraso}` - Dias de atraso
-- `{saldo}` - Valor do saldo formatado em R$
-
-### Lista de clientes
-Tabela com colunas:
-- Nome do cliente
-- Telefone
-- Atraso (dias)
-- Saldo (R$)
-- Botao WhatsApp (icone verde) a direita de cada linha para envio individual
-
-Ao clicar no botao WhatsApp:
-- Substitui as variaveis na mensagem pelos dados daquela linha
-- Envia via edge function `send-whatsapp`
-- Feedback visual: icone muda para check (sucesso) ou X (erro)
+### 2. Feedback visual no botao WhatsApp
+- O codigo atual ja troca o icone para Check (verde) ao enviar com sucesso e X (vermelho) em caso de erro
+- Porem, o status so muda apos a resposta da API. Vou garantir que ao clicar, o botao mude imediatamente para o spinner e depois para o check verde permanente
+- O check permanece mesmo apos recarregar a lista (status mantido no estado local por indice)
 
 ---
 
-## Alteracoes tecnicas
+## Detalhes tecnicos
 
-### 1. `src/pages/Acionamento.tsx` (novo)
-- Pagina com `AppLayout` wrapper
-- Estado: lista de clientes importados, mensagem template, status de envio por linha
-- Parsing Excel com biblioteca `xlsx` (ja instalada)
-- Funcao `formatPrimeiroNome(nome)`: pega primeira palavra, converte para primeira maiuscula + resto minusculo
-- Envio individual: `supabase.functions.invoke('send-whatsapp', { body: { telefone, mensagem } })`
-- Persistencia da mensagem padrao em `localStorage` com chave `acionamento_mensagem_padrao`
+### Estrutura do historico no localStorage
+```typescript
+interface HistoricoItem {
+  id: string;           // uuid gerado no momento da importacao
+  nomeArquivo: string;  // nome do arquivo Excel
+  qtdClientes: number;  // quantidade de clientes importados
+  dataImportacao: string; // ISO date string
+  clientes: ClienteData[]; // dados completos dos clientes
+}
+```
 
-### 2. `src/components/layout/AppLayout.tsx` (editado)
-- Importar `MessageSquare` do lucide-react
-- Adicionar no array `navItems`: `{ href: '/admin/acionamento', label: 'Acionamento', icon: MessageSquare, adminOnly: true }`
+### Alteracoes especificas
+- Adicionar estado `historico` com array de `HistoricoItem`
+- No `useEffect` inicial, carregar historico do localStorage
+- No `handleFileUpload`, alem de setar clientes, salvar no historico
+- Adicionar funcao `handleDeleteHistorico(id)` para remover item
+- Adicionar funcao `handleLoadHistorico(id)` para carregar planilha do historico
+- Renderizar lista do historico entre o botao de upload e o card de mensagem
+- Importar icone `Trash2` do lucide-react
 
-### 3. `src/App.tsx` (editado)
-- Importar pagina `Acionamento`
-- Adicionar rota: `<Route path="/admin/acionamento" element={<AdminRoute><Acionamento /></AdminRoute>} />`
+### Sobre o botao WhatsApp -> Check
+- O comportamento ja existe no codigo atual (linhas que tratam `sendStatus[i] === 'success'`)
+- Confirmar que o icone Check aparece corretamente e permanece apos o clique, sem necessidade de alteracao adicional nessa parte
+
