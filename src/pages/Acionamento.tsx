@@ -29,7 +29,7 @@ interface HistoricoItem {
 
 type SendStatus = 'idle' | 'sending' | 'success' | 'error';
 
-const STORAGE_KEY = 'acionamento_mensagem_padrao';
+const MENSAGENS_KEY = 'acionamento_mensagens_salvas';
 const HISTORICO_KEY = 'acionamento_historico';
 const ACTIVE_KEY = 'acionamento_ativo';
 const SEND_STATUS_KEY = 'acionamento_send_status';
@@ -67,6 +67,8 @@ const WhatsAppIcon = () => (
 export default function Acionamento() {
   const [clientes, setClientes] = useState<ClienteData[]>([]);
   const [mensagem, setMensagem] = useState('');
+  const [mensagensSalvas, setMensagensSalvas] = useState<string[]>([]);
+  const [lastUsedMsgIndex, setLastUsedMsgIndex] = useState<number | null>(null);
   const [sendStatus, setSendStatus] = useState<Record<number, SendStatus>>({});
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
@@ -74,8 +76,10 @@ export default function Acionamento() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) setMensagem(saved);
+    const savedMsgs = localStorage.getItem(MENSAGENS_KEY);
+    if (savedMsgs) {
+      try { setMensagensSalvas(JSON.parse(savedMsgs)); } catch {}
+    }
     const savedHist = localStorage.getItem(HISTORICO_KEY);
     let parsedHist: HistoricoItem[] = [];
     if (savedHist) {
@@ -100,9 +104,29 @@ export default function Acionamento() {
     localStorage.setItem(HISTORICO_KEY, JSON.stringify(items));
   };
 
-  const handleSaveTemplate = () => {
-    localStorage.setItem(STORAGE_KEY, mensagem);
-    toast.success('Mensagem padrão salva!');
+  const saveMensagens = (msgs: string[]) => {
+    setMensagensSalvas(msgs);
+    localStorage.setItem(MENSAGENS_KEY, JSON.stringify(msgs));
+  };
+
+  const handleSaveMessage = () => {
+    if (!mensagem.trim()) {
+      toast.error('Digite uma mensagem antes de salvar');
+      return;
+    }
+    saveMensagens([...mensagensSalvas, mensagem.trim()]);
+    setMensagem('');
+    toast.success('Mensagem salva!');
+  };
+
+  const handleDeleteMessage = (index: number) => {
+    const updated = mensagensSalvas.filter((_, i) => i !== index);
+    saveMensagens(updated);
+    if (lastUsedMsgIndex !== null) {
+      if (index === lastUsedMsgIndex) setLastUsedMsgIndex(null);
+      else if (index < lastUsedMsgIndex) setLastUsedMsgIndex(lastUsedMsgIndex - 1);
+    }
+    toast.success('Mensagem removida');
   };
 
   const insertVariable = (variable: string) => {
@@ -192,9 +216,21 @@ export default function Acionamento() {
     toast.success('Planilha removida do histórico');
   };
 
+  const getRotatedMessage = (): string | null => {
+    if (mensagensSalvas.length === 0) return null;
+    if (mensagensSalvas.length === 1) { setLastUsedMsgIndex(0); return mensagensSalvas[0]; }
+    let newIndex: number;
+    do {
+      newIndex = Math.floor(Math.random() * mensagensSalvas.length);
+    } while (newIndex === lastUsedMsgIndex);
+    setLastUsedMsgIndex(newIndex);
+    return mensagensSalvas[newIndex];
+  };
+
   const handleSend = async (index: number) => {
-    if (!mensagem.trim()) {
-      toast.error('Defina a mensagem antes de enviar');
+    const template = getRotatedMessage();
+    if (!template) {
+      toast.error('Salve pelo menos uma mensagem antes de enviar');
       return;
     }
 
@@ -202,7 +238,7 @@ export default function Acionamento() {
     setSendStatus((prev) => ({ ...prev, [index]: 'sending' }));
 
     try {
-      const msg = replaceVariables(mensagem, cliente);
+      const msg = replaceVariables(template, cliente);
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: { telefone: cliente.telefone, mensagem: msg },
       });
@@ -299,7 +335,7 @@ export default function Acionamento() {
         {/* Mensagem */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Mensagem Padrão</CardTitle>
+            <CardTitle className="text-lg">Mensagens</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
@@ -321,9 +357,30 @@ export default function Acionamento() {
               placeholder="Digite a mensagem usando as variáveis acima..."
               rows={6}
             />
-            <Button onClick={handleSaveTemplate}>
-              <Save className="h-4 w-4 mr-2" /> Salvar mensagem padrão
+            <Button onClick={handleSaveMessage}>
+              <Save className="h-4 w-4 mr-2" /> Salvar mensagem
             </Button>
+
+            {mensagensSalvas.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Mensagens salvas ({mensagensSalvas.length})</p>
+                <div className="space-y-1">
+                  {mensagensSalvas.map((msg, i) => (
+                    <div key={i} className="flex items-start justify-between gap-2 rounded-md border p-3">
+                      <p className="text-sm whitespace-pre-wrap break-words min-w-0 flex-1">{msg}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteMessage(i)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
