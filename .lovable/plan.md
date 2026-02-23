@@ -1,47 +1,23 @@
 
+# Persistir lista de clientes e status de envio entre navegacoes
 
-# Historico de planilhas e feedback visual no Acionamento
+## Problema atual
+Ao sair da pagina de Acionamento e voltar, a lista de clientes desaparece e o status de envio (quem ja foi acionado) se perde. Os dados so existem em memoria (estado React).
 
-## Alteracoes no arquivo `src/pages/Acionamento.tsx`
+## Solucao
 
-### 1. Historico de planilhas importadas
-- Abaixo do botao "Selecionar arquivo Excel", adicionar uma lista com o historico de planilhas importadas
-- Cada item mostra: nome do arquivo, quantidade de clientes e data/hora da importacao
-- Botao de lixeira (icone Trash2 do lucide) ao lado de cada item para excluir
-- Historico persistido no `localStorage` (chave `acionamento_historico`)
-- Ao clicar em um item do historico, recarrega os dados daquela planilha na lista de clientes
-- Ao excluir, remove do historico e limpa a lista se for a planilha ativa
+### Alteracoes em `src/pages/Acionamento.tsx`
 
-### 2. Feedback visual no botao WhatsApp
-- O codigo atual ja troca o icone para Check (verde) ao enviar com sucesso e X (vermelho) em caso de erro
-- Porem, o status so muda apos a resposta da API. Vou garantir que ao clicar, o botao mude imediatamente para o spinner e depois para o check verde permanente
-- O check permanece mesmo apos recarregar a lista (status mantido no estado local por indice)
+1. **Persistir a planilha ativa**: Ao carregar a pagina, verificar no `localStorage` qual e o `activeHistoricoId` salvo (nova chave `acionamento_ativo`) e automaticamente carregar os clientes daquela planilha do historico.
 
----
+2. **Persistir o status de envio**: Salvar o `sendStatus` no `localStorage` (nova chave `acionamento_send_status`) associado ao ID da planilha ativa. Sempre que o status de um cliente mudar (sucesso/erro), atualizar o localStorage. Ao recarregar a planilha do historico, restaurar os status salvos.
 
-## Detalhes tecnicos
+3. **Lista so desaparece ao excluir**: Remover qualquer logica que limpe a lista de clientes ao navegar. A lista so sera limpa quando o usuario excluir a planilha no historico de importacoes.
 
-### Estrutura do historico no localStorage
-```typescript
-interface HistoricoItem {
-  id: string;           // uuid gerado no momento da importacao
-  nomeArquivo: string;  // nome do arquivo Excel
-  qtdClientes: number;  // quantidade de clientes importados
-  dataImportacao: string; // ISO date string
-  clientes: ClienteData[]; // dados completos dos clientes
-}
-```
+### Detalhes tecnicos
 
-### Alteracoes especificas
-- Adicionar estado `historico` com array de `HistoricoItem`
-- No `useEffect` inicial, carregar historico do localStorage
-- No `handleFileUpload`, alem de setar clientes, salvar no historico
-- Adicionar funcao `handleDeleteHistorico(id)` para remover item
-- Adicionar funcao `handleLoadHistorico(id)` para carregar planilha do historico
-- Renderizar lista do historico entre o botao de upload e o card de mensagem
-- Importar icone `Trash2` do lucide-react
-
-### Sobre o botao WhatsApp -> Check
-- O comportamento ja existe no codigo atual (linhas que tratam `sendStatus[i] === 'success'`)
-- Confirmar que o icone Check aparece corretamente e permanece apos o clique, sem necessidade de alteracao adicional nessa parte
-
+- Nova constante `ACTIVE_KEY = 'acionamento_ativo'` e `SEND_STATUS_KEY = 'acionamento_send_status'`
+- No `useEffect` inicial: alem de carregar historico e mensagem, carregar o `activeHistoricoId` do localStorage, buscar a planilha correspondente no historico e setar os clientes e o sendStatus
+- No `handleSend`: apos atualizar o `sendStatus` no estado, tambem salvar no localStorage com a chave composta pelo ID da planilha
+- No `handleFileUpload` e `handleLoadHistorico`: salvar o `activeHistoricoId` no localStorage e limpar/carregar o sendStatus correspondente
+- No `handleDeleteHistorico`: limpar o `activeHistoricoId` e `sendStatus` do localStorage quando a planilha ativa for excluida
