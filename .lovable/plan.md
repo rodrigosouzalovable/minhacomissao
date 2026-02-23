@@ -1,36 +1,61 @@
 
-
-# Alterar Juros do Parcelamento para 1% Fixo
+# Corrigir Layout de Importacao MONTREAL
 
 ## Problema
-Atualmente a taxa de juros do parcelamento e progressiva (1% a 3% dependendo do numero de parcelas). O usuario quer uma taxa fixa de **1% a.m.** independente do numero de parcelas.
+O mapeamento atual das colunas do layout MONTREAL nao corresponde ao arquivo Excel real. O arquivo tem colunas diferentes do que o codigo espera.
 
-## Solucao
-Alterar a funcao `getTaxaJurosMensal` em `src/components/devedor/CalculadoraDebitoDialog.tsx` para retornar sempre 1% (0.01) quando houver mais de 1 parcela.
+## Estrutura Real do Excel
 
-## Detalhe Tecnico
+| Coluna | Header no Excel |
+|--------|----------------|
+| A | Parceiro (codigo numerico) |
+| B | Razao Social do Parceiro |
+| C | CNPJ / CPF |
+| D | FONE1 |
+| E | FONE2 |
+| F | Apelido |
+| G | Tipo de Titulo |
+| H | Atraso (dias) |
+| I | Nro Nota |
+| J | Desdob. |
+| K | Vlr do Desdobramento |
+| L | Dt. Venc. Inicial |
 
-**Arquivo:** `src/components/devedor/CalculadoraDebitoDialog.tsx`
+## Mapeamento Correto
 
-Codigo atual (linhas 48-54):
-```typescript
-const getTaxaJurosMensal = (numParcelas: number): number => {
-  if (numParcelas <= 1) return 0;
-  if (numParcelas <= 12) return 0.01;
-  if (numParcelas <= 24) return 0.015;
-  if (numParcelas <= 36) return 0.02;
-  if (numParcelas <= 48) return 0.025;
-  return 0.03;
-};
+| Campo no Sistema | Coluna Excel | Valor |
+|-----------------|-------------|-------|
+| cpf | C | CNPJ/CPF |
+| nome | B | Razao Social do Parceiro |
+| contrato | I | Nro Nota |
+| descricao | G | Tipo de Titulo |
+| atraso (vencimento) | L | Dt. Venc. Inicial |
+| valor_original | K | Vlr do Desdobramento |
+| telefone | D ou E | FONE1 ou FONE2 |
+
+## Detalhes Tecnicos
+
+### Arquivo: `src/pages/ImportarDevedores.tsx`
+
+**1. Atualizar descricao do layout (linha 48):**
+```
+montreal: 'A = Parceiro, B = Razao Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Tipo Titulo, H = Atraso (dias), I = Nro Nota, J = Desdob., K = Valor, L = Dt. Venc. Inicial'
 ```
 
-Codigo novo:
-```typescript
-const getTaxaJurosMensal = (numParcelas: number): number => {
-  if (numParcelas <= 1) return 0;
-  return 0.01;
-};
-```
+**2. Atualizar funcao `parseMontreal` (linhas 119-137):**
+- C -> cpf (antes era A)
+- B -> nome (ja correto)
+- I -> contrato (antes era C)
+- G -> descricao/tipo titulo (antes era F)
+- L -> atraso/vencimento (antes era H)
+- K -> valor (antes era J)
+- D/E -> telefones (antes eram L/M)
 
-Nenhuma outra alteracao necessaria -- as funcoes `getTaxaJurosLabel`, `ajustarTaxaPorFrequencia`, `calcularPMT` e o PDF ja usam o retorno dessa funcao.
+**3. Atualizar tabela de preview (linhas 561-603):**
+Ajustar os headers e dados exibidos para corresponder ao novo mapeamento:
+- Nome, Contrato (Nro Nota), Tipo Titulo, Atraso (dias), Vencimento, Valor, Telefone
 
+**4. Atualizar mapeamento de insercao (linhas 306-308):**
+O `data_vencimento` para montreal usa `r.atraso` que agora contera a data de vencimento da coluna L.
+
+Nenhuma alteracao no banco de dados e necessaria.
