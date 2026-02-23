@@ -27,18 +27,21 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // 3. Obter usuário atual
-    const { data: { user: callingUser }, error: userError } = await supabaseClient.auth.getUser()
-    if (userError || !callingUser) {
-      console.error('User authentication error:', userError)
+    // 3. Validar token via getClaims
+    const token = authHeader.replace('Bearer ', '')
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token)
+    if (claimsError || !claimsData?.claims) {
+      console.error('Token validation error:', claimsError)
       throw new Error('Usuário não autenticado')
     }
 
-    console.log(`User ${callingUser.email} attempting password reset`)
+    const callingUserId = claimsData.claims.sub
+    const callingEmail = claimsData.claims.email
+    console.log(`User ${callingEmail} attempting password reset`)
 
     // 4. Verificar se é admin usando a função has_role
     const { data: isAdmin, error: roleError } = await supabaseClient
-      .rpc('has_role', { _user_id: callingUser.id, _role: 'admin' })
+      .rpc('has_role', { _user_id: callingUserId, _role: 'admin' })
 
     if (roleError) {
       console.error('Role check error:', roleError)
@@ -46,7 +49,7 @@ serve(async (req) => {
     }
 
     if (!isAdmin) {
-      console.error(`User ${callingUser.email} is not admin`)
+      console.error(`User ${callingEmail} is not admin`)
       throw new Error('Apenas administradores podem redefinir senhas')
     }
 
@@ -80,7 +83,7 @@ serve(async (req) => {
     }
 
     // 8. Log da operação (para auditoria)
-    console.log(`SUCCESS: Admin ${callingUser.email} reset password for user ${userId}`)
+    console.log(`SUCCESS: Admin ${callingEmail} reset password for user ${userId}`)
 
     return new Response(
       JSON.stringify({ success: true, message: 'Senha redefinida com sucesso' }),
