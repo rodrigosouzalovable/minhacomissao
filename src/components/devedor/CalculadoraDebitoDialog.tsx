@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calculator, Download, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { differenceInMonths, differenceInDays, format } from 'date-fns';
+import { differenceInMonths, differenceInDays, format, addDays } from 'date-fns';
 import { calcularINPCAcumulado } from '@/lib/inpcData';
 import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
@@ -40,12 +40,55 @@ interface CalculadoraDebitoDialogProps {
   devedor: Devedor;
 }
 
+type Frequencia = 'semanal' | 'quinzenal' | 'mensal';
+
+const getTaxaJurosMensal = (numParcelas: number): number => {
+  if (numParcelas <= 1) return 0;
+  if (numParcelas <= 12) return 0.01;
+  if (numParcelas <= 24) return 0.015;
+  if (numParcelas <= 36) return 0.02;
+  if (numParcelas <= 48) return 0.025;
+  return 0.03;
+};
+
+const getTaxaJurosLabel = (numParcelas: number): string => {
+  const taxa = getTaxaJurosMensal(numParcelas);
+  if (taxa === 0) return 'Sem juros';
+  return `${(taxa * 100).toFixed(1)}% a.m.`;
+};
+
+const ajustarTaxaPorFrequencia = (taxaMensal: number, freq: Frequencia): number => {
+  if (taxaMensal === 0) return 0;
+  if (freq === 'semanal') return taxaMensal / 4.33;
+  if (freq === 'quinzenal') return taxaMensal / 2;
+  return taxaMensal;
+};
+
+const calcularPMT = (pv: number, i: number, n: number): number => {
+  if (i === 0 || n <= 1) return pv / n;
+  const fator = Math.pow(1 + i, n);
+  return pv * (i * fator) / (fator - 1);
+};
+
+const getDiasFrequencia = (freq: Frequencia): number => {
+  if (freq === 'semanal') return 7;
+  if (freq === 'quinzenal') return 15;
+  return 30;
+};
+
+const getFrequenciaLabel = (freq: Frequencia): string => {
+  if (freq === 'semanal') return 'Semanal';
+  if (freq === 'quinzenal') return 'Quinzenal';
+  return 'Mensal';
+};
+
 export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebitoDialogProps) {
   const [open, setOpen] = useState(false);
   const [contratoSelecionado, setContratoSelecionado] = useState<string>('todos');
   const [tipoCorrecao, setTipoCorrecao] = useState<'selic' | 'inpc'>('selic');
   const [taxaAcumulada, setTaxaAcumulada] = useState<number>(0);
   const [parcelas, setParcelas] = useState<number>(1);
+  const [frequencia, setFrequencia] = useState<Frequencia>('mensal');
   const [loadingTaxa, setLoadingTaxa] = useState(false);
   const [dataBase, setDataBase] = useState<string>('');
   const [periodoConsultado, setPeriodoConsultado] = useState<string>('');
@@ -66,7 +109,6 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
       }, null)
     : (contratoAtual?.data_vencimento || null);
 
-  // Sync dataBase with dataVencimento when contract changes
   useEffect(() => {
     if (dataVencimento) {
       setDataBase(dataVencimento);
@@ -85,7 +127,19 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
   const juros = valorOriginal * 0.01 * mesesAtraso;
   const correcao = valorOriginal * (taxaAcumulada / 100);
   const totalAtualizado = valorOriginal + multa + juros + correcao;
-  const valorParcela = totalAtualizado / parcelas;
+
+  // Juros progressivos + Price
+  const taxaJurosMensal = getTaxaJurosMensal(parcelas);
+  const taxaAjustada = ajustarTaxaPorFrequencia(taxaJurosMensal, frequencia);
+  const valorParcela = calcularPMT(totalAtualizado, taxaAjustada, parcelas);
+  const totalAPagar = valorParcela * parcelas;
+  const custoParcelamento = totalAPagar - totalAtualizado;
+
+  // Datas de vencimento das parcelas
+  const diasFreq = getDiasFrequencia(frequencia);
+  const gerarDatasParcelas = () => {
+    return Array.from({ length: parcelas }, (_, i) => addDays(hoje, diasFreq * (i + 1)));
+  };
 
   const isValidDate = (d: string) => {
     if (!d || d.length !== 10) return false;
@@ -139,18 +193,19 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     }
   }, [open, tipoCorrecao, dataBase, calcularTaxa]);
 
+  const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
   const gerarPDF = () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     let y = 20;
+    const datasParcelas = gerarDatasParcelas();
 
-    // Title
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('Cálculo de Atualização de Débito', pageWidth / 2, y, { align: 'center' });
     y += 12;
 
-    // Devedor info
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text('DADOS DO DEVEDOR', 14, y);
@@ -177,12 +232,9 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     doc.line(14, y, pageWidth - 14, y);
     y += 8;
 
-    // Cálculo
     doc.setFont('helvetica', 'bold');
     doc.text('DETALHAMENTO DO CÁLCULO', 14, y); y += 6;
     doc.setFont('helvetica', 'normal');
-
-    const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const items = [
       ['Valor Original', fmtBRL(valorOriginal)],
@@ -204,25 +256,38 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     doc.text(fmtBRL(totalAtualizado), pageWidth - 14, y, { align: 'right' });
     y += 10;
 
-    // Parcelas
+    // Parcelamento
     doc.setFontSize(10);
-    doc.text(`PARCELAMENTO EM ${parcelas}x`, 14, y); y += 8;
+    doc.text(`PARCELAMENTO EM ${parcelas}x - ${getFrequenciaLabel(frequencia)}`, 14, y); y += 6;
+    
+    if (parcelas > 1) {
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Taxa de juros do parcelamento: ${getTaxaJurosLabel(parcelas)}`, 14, y); y += 5;
+      doc.text(`Valor de cada parcela: ${fmtBRL(valorParcela)}`, 14, y); y += 5;
+      doc.text(`Total a pagar: ${fmtBRL(totalAPagar)}`, 14, y); y += 5;
+      if (custoParcelamento > 0) {
+        doc.text(`Custo do parcelamento: ${fmtBRL(custoParcelamento)}`, 14, y); y += 5;
+      }
+      y += 3;
+    }
 
     // Table header
     doc.setFillColor(240, 240, 240);
     doc.rect(14, y - 4, pageWidth - 28, 7, 'F');
     doc.setFont('helvetica', 'bold');
     doc.text('Parcela', 20, y);
+    doc.text('Vencimento', pageWidth / 2, y, { align: 'center' });
     doc.text('Valor', pageWidth - 30, y, { align: 'right' });
     y += 7;
 
     doc.setFont('helvetica', 'normal');
-    for (let i = 1; i <= parcelas; i++) {
+    for (let i = 0; i < parcelas; i++) {
       if (y > 270) {
         doc.addPage();
         y = 20;
       }
-      doc.text(`${i}ª parcela`, 20, y);
+      doc.text(`${i + 1}ª parcela`, 20, y);
+      doc.text(format(datasParcelas[i], 'dd/MM/yyyy'), pageWidth / 2, y, { align: 'center' });
       doc.text(fmtBRL(valorParcela), pageWidth - 30, y, { align: 'right' });
       y += 6;
     }
@@ -235,8 +300,6 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     doc.save(`calculo-debito-${devedor.cpf.replace(/\D/g, '')}.pdf`);
     toast.success('PDF gerado com sucesso!');
   };
-
-  const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -340,17 +403,47 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
 
           <Separator />
 
-          {/* Parcelas */}
-          <div className="space-y-2">
-            <Label className="font-semibold">Parcelamento</Label>
-            <Select value={String(parcelas)} onValueChange={(v) => setParcelas(Number(v))}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 24 }, (_, i) => i + 1).map(n => (
-                  <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Parcelas + Frequência */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="font-semibold">Parcelamento</Label>
+              <Select value={String(parcelas)} onValueChange={(v) => setParcelas(Number(v))}>
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 60 }, (_, i) => i + 1).map(n => (
+                    <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-semibold">Frequência de Pagamento</Label>
+              <RadioGroup
+                value={frequencia}
+                onValueChange={(v) => setFrequencia(v as Frequencia)}
+                className="flex gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="semanal" id="freq-semanal" />
+                  <Label htmlFor="freq-semanal">Semanal</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="quinzenal" id="freq-quinzenal" />
+                  <Label htmlFor="freq-quinzenal">Quinzenal</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="mensal" id="freq-mensal" />
+                  <Label htmlFor="freq-mensal">Mensal</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {parcelas > 1 && (
+              <div className="text-sm text-muted-foreground">
+                Taxa de juros do parcelamento: <Badge variant="outline">{getTaxaJurosLabel(parcelas)}</Badge>
+              </div>
+            )}
           </div>
 
           <Separator />
@@ -384,10 +477,27 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
                   <span className="text-destructive">{fmtBRL(totalAtualizado)}</span>
                 </div>
                 {parcelas > 1 && (
-                  <div className="flex justify-between font-semibold">
-                    <span>{parcelas}x de</span>
-                    <span>{fmtBRL(valorParcela)}</span>
-                  </div>
+                  <>
+                    <Separator />
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Juros do parcelamento</span>
+                      <span>{getTaxaJurosLabel(parcelas)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold">
+                      <span>{parcelas}x de ({getFrequenciaLabel(frequencia)})</span>
+                      <span>{fmtBRL(valorParcela)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total a pagar</span>
+                      <span className="font-semibold">{fmtBRL(totalAPagar)}</span>
+                    </div>
+                    {custoParcelamento > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Custo do parcelamento</span>
+                        <span className="text-muted-foreground">{fmtBRL(custoParcelamento)}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>
@@ -400,13 +510,15 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
                 <thead className="bg-muted sticky top-0">
                   <tr>
                     <th className="text-left p-2">Parcela</th>
+                    <th className="text-center p-2">Vencimento</th>
                     <th className="text-right p-2">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Array.from({ length: parcelas }, (_, i) => (
+                  {gerarDatasParcelas().map((data, i) => (
                     <tr key={i} className="border-t">
                       <td className="p-2">{i + 1}ª parcela</td>
+                      <td className="p-2 text-center">{format(data, 'dd/MM/yyyy')}</td>
                       <td className="p-2 text-right">{fmtBRL(valorParcela)}</td>
                     </tr>
                   ))}
