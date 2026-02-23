@@ -564,7 +564,7 @@ export default function ConsultaResultado() {
 
                           {negociacao.descontoFaixa && (
                             <>
-                              {negociacao.descontoFaixa !== 'sem' && (
+                          {(
                                 <div
                                   className="rounded-xl p-5 text-center"
                                   style={{
@@ -678,11 +678,9 @@ export default function ConsultaResultado() {
                                     <Check className="h-4 w-4" />
                                     Resumo da negociação
                                   </p>
-                                  {negociacao.descontoFaixa !== 'sem' && (
-                                    <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
+                              <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
                                       Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
                                     </p>
-                                  )}
                                   {negociacao.entrada > 0 && (
                                     <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
                                   )}
@@ -748,7 +746,7 @@ export default function ConsultaResultado() {
                               <Check className="h-8 w-8" style={{ color: '#fff' }} />
                             </div>
                             <p className="text-lg font-bold mb-3" style={{ color: '#00ff88' }}>✓ Proposta confirmada!</p>
-                            {negociacao.descontoFaixa && negociacao.descontoFaixa !== 'sem' && (
+                            {negociacao.descontoFaixa && (
                               <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
                                 Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
                               </p>
