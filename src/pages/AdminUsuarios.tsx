@@ -23,11 +23,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
+import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -58,6 +59,7 @@ export default function AdminUsuarios() {
   const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
+  const [permissionsUser, setPermissionsUser] = useState<UserWithRole | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Estados para criação de novo usuário
@@ -482,6 +484,14 @@ export default function AdminUsuarios() {
                               <DollarSign className="h-4 w-4 mr-1" />
                               Comissões
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setPermissionsUser(user)}
+                            >
+                              <Settings2 className="h-4 w-4 mr-1" />
+                              Permissões
+                            </Button>
                           </div>
                         </div>
                       </TableCell>
@@ -503,6 +513,13 @@ export default function AdminUsuarios() {
           userName={resetPasswordUser?.nome ?? ''}
           onConfirm={handleResetPassword}
           isLoading={resetPasswordMutation.isPending}
+        />
+
+        <EditPermissionsDialog
+          open={!!permissionsUser}
+          onOpenChange={(open) => !open && setPermissionsUser(null)}
+          userId={permissionsUser?.id ?? ''}
+          userName={permissionsUser?.nome ?? ''}
         />
 
       </div>
