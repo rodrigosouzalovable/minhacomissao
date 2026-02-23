@@ -1,23 +1,27 @@
 
-# Persistir lista de clientes e status de envio entre navegacoes
+# Sistema de multiplas mensagens com rotacao automatica
 
-## Problema atual
-Ao sair da pagina de Acionamento e voltar, a lista de clientes desaparece e o status de envio (quem ja foi acionado) se perde. Os dados so existem em memoria (estado React).
+## O que muda
 
-## Solucao
+### Card "Mensagens" (antes "Mensagem Padrao")
+- Renomear titulo do card de "Mensagem Padrao" para "Mensagens"
+- Renomear botao de "Salvar mensagem padrao" para "Salvar mensagem"
+- Ao clicar em "Salvar mensagem", a mensagem e adicionada a uma lista de mensagens salvas e o campo de texto e limpo
+- Abaixo do botao, exibir a lista de mensagens salvas, cada uma com um botao de lixeira para excluir
+- As mensagens salvas sao persistidas no `localStorage` (nova chave `acionamento_mensagens_salvas`)
 
-### Alteracoes em `src/pages/Acionamento.tsx`
+### Envio com rotacao automatica
+- Ao clicar no botao WhatsApp de um cliente, o sistema escolhe automaticamente uma das mensagens salvas
+- A mensagem escolhida nunca e a mesma que foi usada no envio imediatamente anterior
+- Logica: manter um estado `lastUsedIndex` e selecionar aleatoriamente entre as demais mensagens
 
-1. **Persistir a planilha ativa**: Ao carregar a pagina, verificar no `localStorage` qual e o `activeHistoricoId` salvo (nova chave `acionamento_ativo`) e automaticamente carregar os clientes daquela planilha do historico.
+## Detalhes tecnicos (arquivo `src/pages/Acionamento.tsx`)
 
-2. **Persistir o status de envio**: Salvar o `sendStatus` no `localStorage` (nova chave `acionamento_send_status`) associado ao ID da planilha ativa. Sempre que o status de um cliente mudar (sucesso/erro), atualizar o localStorage. Ao recarregar a planilha do historico, restaurar os status salvos.
-
-3. **Lista so desaparece ao excluir**: Remover qualquer logica que limpe a lista de clientes ao navegar. A lista so sera limpa quando o usuario excluir a planilha no historico de importacoes.
-
-### Detalhes tecnicos
-
-- Nova constante `ACTIVE_KEY = 'acionamento_ativo'` e `SEND_STATUS_KEY = 'acionamento_send_status'`
-- No `useEffect` inicial: alem de carregar historico e mensagem, carregar o `activeHistoricoId` do localStorage, buscar a planilha correspondente no historico e setar os clientes e o sendStatus
-- No `handleSend`: apos atualizar o `sendStatus` no estado, tambem salvar no localStorage com a chave composta pelo ID da planilha
-- No `handleFileUpload` e `handleLoadHistorico`: salvar o `activeHistoricoId` no localStorage e limpar/carregar o sendStatus correspondente
-- No `handleDeleteHistorico`: limpar o `activeHistoricoId` e `sendStatus` do localStorage quando a planilha ativa for excluida
+- Novo estado `mensagensSalvas: string[]` carregado do localStorage
+- Novo estado `lastUsedMsgIndex: number | null` para controlar rotacao
+- Constante `MENSAGENS_KEY = 'acionamento_mensagens_salvas'`
+- Funcao `handleSaveMessage`: adiciona `mensagem` ao array, limpa o textarea, salva no localStorage
+- Funcao `handleDeleteMessage(index)`: remove mensagem do array, salva no localStorage
+- No `handleSend`: seleciona uma mensagem aleatoria diferente da ultima usada, substitui variaveis e envia
+- Remover a chave antiga `STORAGE_KEY` (mensagem padrao unica) ou migrar o valor existente como primeira mensagem salva
+- Lista de mensagens salvas renderizada como cards compactos com texto truncado e botao Trash2
