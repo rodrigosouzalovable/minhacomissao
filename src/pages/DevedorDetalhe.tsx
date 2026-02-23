@@ -207,8 +207,22 @@ export default function DevedorDetalhe() {
     else {
       // Atualizar estágio de "novo" para "andamento" em TODOS os contratos do mesmo CPF
       if (devedor?.estagio === 'novo') {
+        // Update all contracts with the same CPF/CNPJ from 'novo' to 'andamento'
+        // Fetch all devedores with estagio 'novo' and filter by normalized CPF in JS
         const cpfNorm = devedor.cpf.replace(/\D/g, '');
-        await supabase.from('devedores').update({ estagio: 'andamento' }).ilike('cpf', `%${cpfNorm}%`).eq('estagio', 'novo');
+        const { data: allNovo } = await supabase
+          .from('devedores')
+          .select('id, cpf')
+          .eq('estagio', 'novo')
+          .eq('ativo', true);
+        if (allNovo && allNovo.length > 0) {
+          const idsToUpdate = allNovo
+            .filter(d => d.cpf?.replace(/\D/g, '') === cpfNorm)
+            .map(d => d.id);
+          if (idsToUpdate.length > 0) {
+            await supabase.from('devedores').update({ estagio: 'andamento' }).in('id', idsToUpdate);
+          }
+        }
       }
       toast.success('Evento registrado!');
       setDialogOpen(false); setEventoTipo('contato_cliente'); setEventoDescricao(''); setEventoFile(null);
