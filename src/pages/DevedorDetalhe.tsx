@@ -205,9 +205,10 @@ export default function DevedorDetalhe() {
 
     if (error) { toast.error('Erro: ' + error.message); }
     else {
-      // Atualizar estágio de "novo" para "andamento" no banco
+      // Atualizar estágio de "novo" para "andamento" em TODOS os contratos do mesmo CPF
       if (devedor?.estagio === 'novo') {
-        await supabase.from('devedores').update({ estagio: 'andamento' }).eq('id', id);
+        const cpfNorm = devedor.cpf.replace(/\D/g, '');
+        await supabase.from('devedores').update({ estagio: 'andamento' }).ilike('cpf', `%${cpfNorm}%`).eq('estagio', 'novo');
       }
       toast.success('Evento registrado!');
       setDialogOpen(false); setEventoTipo('contato_cliente'); setEventoDescricao(''); setEventoFile(null);
