@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -86,6 +86,10 @@ export default function Acionamento() {
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados'>('pendentes');
+  const [autoMinSec, setAutoMinSec] = useState(10);
+  const [autoMaxSec, setAutoMaxSec] = useState(30);
+  const [autoSending, setAutoSending] = useState(false);
+  const autoSendingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -335,6 +339,68 @@ export default function Acionamento() {
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const handleAutoSend = async () => {
+    if (mensagensSalvas.length === 0) {
+      toast.error('Salve pelo menos uma mensagem antes de iniciar');
+      return;
+    }
+    if (autoMinSec < 1) {
+      toast.error('O tempo mínimo deve ser pelo menos 1 segundo');
+      return;
+    }
+    if (autoMaxSec <= autoMinSec) {
+      toast.error('O tempo máximo deve ser maior que o mínimo');
+      return;
+    }
+
+    autoSendingRef.current = true;
+    setAutoSending(true);
+
+    // snapshot current pendentes
+    const pendentesSnapshot = clientes
+      .map((c, i) => ({ ...c, originalIndex: i }))
+      .filter(c => sendStatus[c.originalIndex] !== 'success' && !manualChecked.has(c.originalIndex));
+
+    if (pendentesSnapshot.length === 0) {
+      toast.error('Não há clientes pendentes para enviar');
+      autoSendingRef.current = false;
+      setAutoSending(false);
+      return;
+    }
+
+    let lastDelay = -1;
+
+    for (let i = 0; i < pendentesSnapshot.length; i++) {
+      if (!autoSendingRef.current) break;
+
+      const cliente = pendentesSnapshot[i];
+      await handleSend(cliente.originalIndex);
+
+      // Wait random delay before next (skip delay after last one)
+      if (i < pendentesSnapshot.length - 1 && autoSendingRef.current) {
+        let delay: number;
+        do {
+          delay = Math.floor(Math.random() * (autoMaxSec - autoMinSec + 1)) + autoMinSec;
+        } while (delay === lastDelay && autoMaxSec - autoMinSec >= 1);
+        lastDelay = delay;
+
+        await new Promise(resolve => setTimeout(resolve, delay * 1000));
+      }
+    }
+
+    autoSendingRef.current = false;
+    setAutoSending(false);
+    if (autoSendingRef.current === false) {
+      toast.success('Envio automático finalizado');
+    }
+  };
+
+  const handleStopAutoSend = () => {
+    autoSendingRef.current = false;
+    setAutoSending(false);
+    toast.info('Envio automático parado');
+  };
+
   const clientesComIndex = useMemo(
     () => clientes.map((c, i) => ({ ...c, originalIndex: i })),
     [clientes]
@@ -496,7 +562,49 @@ export default function Acionamento() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Auto-send controls */}
+              {activeTab === 'pendentes' && (
+                <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
+                  <span className="text-sm font-medium">Envio automático:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={autoMinSec}
+                    onChange={(e) => setAutoMinSec(Number(e.target.value))}
+                    className="w-20 h-9"
+                    disabled={autoSending}
+                  />
+                  <span className="text-sm">a</span>
+                  <Input
+                    type="number"
+                    min={2}
+                    value={autoMaxSec}
+                    onChange={(e) => setAutoMaxSec(Number(e.target.value))}
+                    className="w-20 h-9"
+                    disabled={autoSending}
+                  />
+                  <span className="text-sm">segundos</span>
+                  {!autoSending ? (
+                    <Button
+                      size="sm"
+                      onClick={handleAutoSend}
+                      disabled={mensagensSalvas.length === 0 || pendentes.length === 0}
+                      className="bg-green-600 hover:bg-green-700 text-primary-foreground"
+                    >
+                      <Play className="h-4 w-4 mr-1" /> Iniciar
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleStopAutoSend}
+                    >
+                      <Square className="h-4 w-4 mr-1" /> Parar
+                    </Button>
+                  )}
+                </div>
+              )}
               {activeTab === 'pendentes' && (
                 <>
                   {pendentes.length === 0 ? (
@@ -524,11 +632,12 @@ export default function Acionamento() {
                                 <Checkbox
                                   checked={false}
                                   onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
+                                  disabled={autoSending}
                                 />
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  disabled={sendStatus[c.originalIndex] === 'sending'}
+                                  disabled={sendStatus[c.originalIndex] === 'sending' || autoSending}
                                   onClick={() => handleSend(c.originalIndex)}
                                   className={
                                     sendStatus[c.originalIndex] === 'error'
