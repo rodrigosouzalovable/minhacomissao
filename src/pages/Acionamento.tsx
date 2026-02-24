@@ -36,6 +36,7 @@ const ACTIVE_KEY = 'acionamento_ativo';
 const SEND_STATUS_KEY = 'acionamento_send_status';
 const MANUAL_CHECKED_KEY = 'acionamento_manual_checked';
 const SEND_TIMESTAMPS_KEY = 'acionamento_send_timestamps';
+const AUTO_SENDING_KEY = 'acionamento_auto_sending_state';
 
 const isToday = (isoString: string): boolean => {
   const date = new Date(isoString);
@@ -94,6 +95,7 @@ export default function Acionamento() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load saved data on mount
   useEffect(() => {
     const savedMsgs = localStorage.getItem(MENSAGENS_KEY);
     if (savedMsgs) {
@@ -124,6 +126,40 @@ export default function Acionamento() {
         }
       }
     }
+  }, []);
+
+  // Resume auto-send if it was active when the user navigated away
+  useEffect(() => {
+    const savedAutoState = localStorage.getItem(AUTO_SENDING_KEY);
+    if (!savedAutoState) return;
+
+    try {
+      const parsed = JSON.parse(savedAutoState);
+      if (!parsed.active) return;
+
+      // Ensure the correct historico is loaded
+      const savedHist = localStorage.getItem(HISTORICO_KEY);
+      if (!savedHist) return;
+      const allHist: HistoricoItem[] = JSON.parse(savedHist);
+      const targetItem = allHist.find(h => h.id === parsed.historicoId);
+      if (!targetItem) {
+        localStorage.removeItem(AUTO_SENDING_KEY);
+        return;
+      }
+
+      // Restore interval settings
+      setAutoMinSec(parsed.minSec || 10);
+      setAutoMaxSec(parsed.maxSec || 30);
+
+      // Small delay to ensure state is settled before resuming
+      const timer = setTimeout(() => {
+        handleAutoSendResume(targetItem, parsed.minSec || 10, parsed.maxSec || 30);
+      }, 500);
+      return () => clearTimeout(timer);
+    } catch {
+      localStorage.removeItem(AUTO_SENDING_KEY);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const saveManualChecked = (checked: Set<number>) => {
@@ -340,34 +376,30 @@ export default function Acionamento() {
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleAutoSend = async () => {
-    if (mensagensSalvas.length === 0) {
-      toast.error('Salve pelo menos uma mensagem antes de iniciar');
-      return;
-    }
-    if (autoMinSec < 1) {
-      toast.error('O tempo mínimo deve ser pelo menos 1 segundo');
-      return;
-    }
-    if (autoMaxSec <= autoMinSec) {
-      toast.error('O tempo máximo deve ser maior que o mínimo');
-      return;
-    }
-
+  const runAutoSendLoop = async (clientesList: ClienteData[], statusMap: Record<number, SendStatus>, checkedSet: Set<number>, minSec: number, maxSec: number, historicoId: string | null) => {
     autoSendingRef.current = true;
     setAutoSending(true);
 
-    // snapshot current pendentes
-    const pendentesSnapshot = clientes
+    // snapshot current pendentes using provided data
+    const pendentesSnapshot = clientesList
       .map((c, i) => ({ ...c, originalIndex: i }))
-      .filter(c => sendStatus[c.originalIndex] !== 'success' && !manualChecked.has(c.originalIndex));
+      .filter(c => statusMap[c.originalIndex] !== 'success' && !checkedSet.has(c.originalIndex));
 
     if (pendentesSnapshot.length === 0) {
       toast.error('Não há clientes pendentes para enviar');
       autoSendingRef.current = false;
       setAutoSending(false);
+      localStorage.removeItem(AUTO_SENDING_KEY);
       return;
     }
+
+    // Save auto-send state to localStorage
+    localStorage.setItem(AUTO_SENDING_KEY, JSON.stringify({
+      active: true,
+      historicoId: historicoId,
+      minSec,
+      maxSec,
+    }));
 
     let lastDelay = -1;
 
@@ -383,8 +415,8 @@ export default function Acionamento() {
       if (i < pendentesSnapshot.length - 1 && autoSendingRef.current) {
         let delay: number;
         do {
-          delay = Math.floor(Math.random() * (autoMaxSec - autoMinSec + 1)) + autoMinSec;
-        } while (delay === lastDelay && autoMaxSec - autoMinSec >= 1);
+          delay = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
+        } while (delay === lastDelay && maxSec - minSec >= 1);
         lastDelay = delay;
 
         await new Promise(resolve => setTimeout(resolve, delay * 1000));
@@ -394,15 +426,79 @@ export default function Acionamento() {
     autoSendingRef.current = false;
     setAutoSending(false);
     setAutoProgress(null);
-    setActiveTab('enviados');
-    toast.success('Envio automático finalizado');
+    localStorage.removeItem(AUTO_SENDING_KEY);
+    if (pendentesSnapshot.length > 0) {
+      setActiveTab('enviados');
+      toast.success('Envio automático finalizado');
+    }
+  };
+
+  const handleAutoSend = async () => {
+    if (mensagensSalvas.length === 0) {
+      toast.error('Salve pelo menos uma mensagem antes de iniciar');
+      return;
+    }
+    if (autoMinSec < 1) {
+      toast.error('O tempo mínimo deve ser pelo menos 1 segundo');
+      return;
+    }
+    if (autoMaxSec <= autoMinSec) {
+      toast.error('O tempo máximo deve ser maior que o mínimo');
+      return;
+    }
+
+    await runAutoSendLoop(clientes, sendStatus, manualChecked, autoMinSec, autoMaxSec, activeHistoricoId);
+  };
+
+  const handleAutoSendResume = async (item: HistoricoItem, minSec: number, maxSec: number) => {
+    // Load saved messages
+    const savedMsgs = localStorage.getItem(MENSAGENS_KEY);
+    let msgs: string[] = [];
+    if (savedMsgs) {
+      try { msgs = JSON.parse(savedMsgs); } catch {}
+    }
+    if (msgs.length === 0) {
+      toast.error('Sem mensagens salvas para retomar o envio');
+      localStorage.removeItem(AUTO_SENDING_KEY);
+      return;
+    }
+
+    // Restore historico data
+    setClientes(item.clientes);
+    setActiveHistoricoId(item.id);
+    localStorage.setItem(ACTIVE_KEY, item.id);
+
+    // Load persisted send status
+    let statusMap: Record<number, SendStatus> = {};
+    const savedStatus = localStorage.getItem(`${SEND_STATUS_KEY}_${item.id}`);
+    if (savedStatus) {
+      try { statusMap = JSON.parse(savedStatus); } catch {}
+    }
+    setSendStatus(statusMap);
+
+    let checkedSet = new Set<number>();
+    const savedManual = localStorage.getItem(`${MANUAL_CHECKED_KEY}_${item.id}`);
+    if (savedManual) {
+      try { checkedSet = new Set(JSON.parse(savedManual)); } catch {}
+    }
+    setManualChecked(checkedSet);
+
+    const savedTs = localStorage.getItem(`${SEND_TIMESTAMPS_KEY}_${item.id}`);
+    if (savedTs) {
+      try { setSendTimestamps(JSON.parse(savedTs)); } catch {}
+    }
+
+    setMensagensSalvas(msgs);
+    toast.info('Retomando envio automático...');
+
+    await runAutoSendLoop(item.clientes, statusMap, checkedSet, minSec, maxSec, item.id);
   };
 
   const handleStopAutoSend = () => {
     autoSendingRef.current = false;
     setAutoSending(false);
     setAutoProgress(null);
-    setActiveTab('enviados');
+    localStorage.removeItem(AUTO_SENDING_KEY);
     toast.info('Envio automático parado');
   };
 
