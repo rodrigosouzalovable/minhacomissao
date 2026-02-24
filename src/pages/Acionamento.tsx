@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet } from 'lucide-react';
@@ -33,6 +34,7 @@ const MENSAGENS_KEY = 'acionamento_mensagens_salvas';
 const HISTORICO_KEY = 'acionamento_historico';
 const ACTIVE_KEY = 'acionamento_ativo';
 const SEND_STATUS_KEY = 'acionamento_send_status';
+const MANUAL_CHECKED_KEY = 'acionamento_manual_checked';
 
 const formatPrimeiroNome = (nome: string): string => {
   const primeiro = nome.trim().split(/\s+/)[0].toLowerCase();
@@ -70,6 +72,7 @@ export default function Acionamento() {
   const [mensagensSalvas, setMensagensSalvas] = useState<string[]>([]);
   const [lastUsedMsgIndex, setLastUsedMsgIndex] = useState<number | null>(null);
   const [sendStatus, setSendStatus] = useState<Record<number, SendStatus>>({});
+  const [manualChecked, setManualChecked] = useState<Set<number>>(new Set());
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -95,9 +98,20 @@ export default function Acionamento() {
         if (savedStatus) {
           try { setSendStatus(JSON.parse(savedStatus)); } catch {}
         }
+        const savedManual = localStorage.getItem(`${MANUAL_CHECKED_KEY}_${savedActiveId}`);
+        if (savedManual) {
+          try { setManualChecked(new Set(JSON.parse(savedManual))); } catch {}
+        }
       }
     }
   }, []);
+
+  const saveManualChecked = (checked: Set<number>) => {
+    setManualChecked(checked);
+    if (activeHistoricoId) {
+      localStorage.setItem(`${MANUAL_CHECKED_KEY}_${activeHistoricoId}`, JSON.stringify([...checked]));
+    }
+  };
 
   const saveHistorico = (items: HistoricoItem[]) => {
     setHistorico(items);
@@ -172,6 +186,7 @@ export default function Acionamento() {
 
       setClientes(parsed);
       setSendStatus({});
+      setManualChecked(new Set());
 
       const newItem: HistoricoItem = {
         id: crypto.randomUUID(),
@@ -183,6 +198,7 @@ export default function Acionamento() {
       setActiveHistoricoId(newItem.id);
       localStorage.setItem(ACTIVE_KEY, newItem.id);
       localStorage.removeItem(`${SEND_STATUS_KEY}_${newItem.id}`);
+      localStorage.removeItem(`${MANUAL_CHECKED_KEY}_${newItem.id}`);
       saveHistorico([newItem, ...historico]);
       toast.success(`${parsed.length} clientes importados`);
     };
@@ -200,6 +216,12 @@ export default function Acionamento() {
     } else {
       setSendStatus({});
     }
+    const savedManual = localStorage.getItem(`${MANUAL_CHECKED_KEY}_${item.id}`);
+    if (savedManual) {
+      try { setManualChecked(new Set(JSON.parse(savedManual))); } catch { setManualChecked(new Set()); }
+    } else {
+      setManualChecked(new Set());
+    }
     toast.success(`Planilha "${item.nomeArquivo}" carregada`);
   };
 
@@ -207,13 +229,25 @@ export default function Acionamento() {
     const updated = historico.filter((h) => h.id !== id);
     saveHistorico(updated);
     localStorage.removeItem(`${SEND_STATUS_KEY}_${id}`);
+    localStorage.removeItem(`${MANUAL_CHECKED_KEY}_${id}`);
     if (activeHistoricoId === id) {
       setClientes([]);
       setSendStatus({});
+      setManualChecked(new Set());
       setActiveHistoricoId(null);
       localStorage.removeItem(ACTIVE_KEY);
     }
     toast.success('Planilha removida do histórico');
+  };
+
+  const handleManualCheck = (originalIndex: number, checked: boolean) => {
+    const next = new Set(manualChecked);
+    if (checked) {
+      next.add(originalIndex);
+    } else {
+      next.delete(originalIndex);
+    }
+    saveManualChecked(next);
   };
 
   const getRotatedMessage = (): string | null => {
@@ -264,6 +298,21 @@ export default function Acionamento() {
     const d = new Date(iso);
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
+
+  const clientesComIndex = useMemo(
+    () => clientes.map((c, i) => ({ ...c, originalIndex: i })),
+    [clientes]
+  );
+
+  const pendentes = useMemo(
+    () => clientesComIndex.filter(c => sendStatus[c.originalIndex] !== 'success' && !manualChecked.has(c.originalIndex)),
+    [clientesComIndex, sendStatus, manualChecked]
+  );
+
+  const enviados = useMemo(
+    () => clientesComIndex.filter(c => sendStatus[c.originalIndex] === 'success' || manualChecked.has(c.originalIndex)),
+    [clientesComIndex, sendStatus, manualChecked]
+  );
 
   return (
     <AppLayout>
@@ -384,11 +433,11 @@ export default function Acionamento() {
           </CardContent>
         </Card>
 
-        {/* Lista de clientes */}
-        {clientes.length > 0 && (
+        {/* Lista de clientes pendentes */}
+        {clientes.length > 0 && pendentes.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Clientes ({clientes.length})</CardTitle>
+              <CardTitle className="text-lg">Pendentes ({pendentes.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
@@ -398,43 +447,99 @@ export default function Acionamento() {
                     <TableHead>Telefone</TableHead>
                     <TableHead>Atraso</TableHead>
                     <TableHead>Saldo</TableHead>
-                    <TableHead className="w-16 text-right">Enviar</TableHead>
+                    <TableHead className="w-24 text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clientes.map((c, i) => (
-                    <TableRow key={i}>
+                  {pendentes.map((c) => (
+                    <TableRow key={c.originalIndex}>
                       <TableCell className="font-medium">{c.nome}</TableCell>
                       <TableCell>{c.telefone}</TableCell>
                       <TableCell>{c.atraso}</TableCell>
                       <TableCell>{formatCurrency(c.saldo)}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={sendStatus[i] === 'sending' || sendStatus[i] === 'success'}
-                          onClick={() => handleSend(i)}
-                          className={
-                            sendStatus[i] === 'success'
-                              ? 'text-green-600'
-                              : sendStatus[i] === 'error'
-                              ? 'text-destructive'
-                              : 'text-green-600 hover:text-green-700'
-                          }
-                        >
-                          {sendStatus[i] === 'sending' ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : sendStatus[i] === 'success' ? (
-                            <Check className="h-5 w-5" />
-                          ) : sendStatus[i] === 'error' ? (
-                            <X className="h-5 w-5" />
-                          ) : (
-                            <WhatsAppIcon />
-                          )}
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Checkbox
+                            checked={false}
+                            onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            disabled={sendStatus[c.originalIndex] === 'sending'}
+                            onClick={() => handleSend(c.originalIndex)}
+                            className={
+                              sendStatus[c.originalIndex] === 'error'
+                                ? 'text-destructive'
+                                : 'text-green-600 hover:text-green-700'
+                            }
+                          >
+                            {sendStatus[c.originalIndex] === 'sending' ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : sendStatus[c.originalIndex] === 'error' ? (
+                              <X className="h-5 w-5" />
+                            ) : (
+                              <WhatsAppIcon />
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Mensagens enviadas */}
+        {clientes.length > 0 && enviados.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Mensagens Enviadas ({enviados.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead>Atraso</TableHead>
+                    <TableHead>Saldo</TableHead>
+                    <TableHead className="w-24 text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {enviados.map((c) => {
+                    const wasSent = sendStatus[c.originalIndex] === 'success';
+                    const wasManual = manualChecked.has(c.originalIndex);
+                    return (
+                      <TableRow key={c.originalIndex}>
+                        <TableCell className="font-medium">{c.nome}</TableCell>
+                        <TableCell>{c.telefone}</TableCell>
+                        <TableCell>{c.atraso}</TableCell>
+                        <TableCell>{formatCurrency(c.saldo)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {wasSent && (
+                              <Badge variant="default" className="bg-green-600 hover:bg-green-600">
+                                <Check className="h-3 w-3 mr-1" /> Enviado
+                              </Badge>
+                            )}
+                            {wasManual && !wasSent && (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">Manual</Badge>
+                                <Checkbox
+                                  checked={true}
+                                  onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
