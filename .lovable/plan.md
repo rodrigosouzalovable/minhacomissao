@@ -1,50 +1,45 @@
 
 
-# Separar clientes em "Pendentes" e "Mensagens Enviadas"
+# Substituir cards separados por abas "A ENVIAR" e "ENVIADOS" com contador diario
 
 ## Resumo
-Dividir a tabela de clientes em duas secoes: uma com clientes pendentes de envio e outra com clientes ja acionados. O cliente move automaticamente para "Mensagens Enviadas" ao clicar no icone do WhatsApp (apos sucesso) ou ao marcar um checkbox manual.
+Substituir os dois cards separados (Pendentes e Mensagens Enviadas) por um unico card com dois botoes/abas no topo: "A ENVIAR" e "ENVIADOS". O botao "ENVIADOS" tera um contador que mostra quantos clientes foram acionados no dia atual, zerando automaticamente a meia-noite.
 
 ## Alteracoes em `src/pages/Acionamento.tsx`
 
-### 1. Adicionar checkbox na tabela
-- Importar o componente `Checkbox` de `@/components/ui/checkbox`
-- Adicionar uma nova coluna na tabela ao lado do botao WhatsApp com um checkbox
-- Ao marcar o checkbox, o cliente e movido para a secao "Mensagens Enviadas" (sem disparar mensagem)
+### 1. Novo estado para controlar a aba ativa
+- `activeTab: 'pendentes' | 'enviados'` com valor inicial `'pendentes'`
 
-### 2. Logica de separacao
-- Derivar dois arrays a partir de `clientes` e `sendStatus`:
-  - **Pendentes**: clientes cujo `sendStatus[i]` NAO e `'success'` e que NAO foram marcados manualmente
-  - **Mensagens Enviadas**: clientes cujo `sendStatus[i]` e `'success'` OU que foram marcados via checkbox
-- Novo estado `manualChecked: Set<number>` para rastrear indices marcados manualmente pelo checkbox
-- Persistir `manualChecked` no localStorage junto com o `sendStatus` (mesma chave por planilha)
+### 2. Contador diario de envios
+- Calcular `enviadosHoje` filtrando os enviados cujo timestamp de envio e do dia atual
+- Precisamos registrar o timestamp de cada envio. Adicionar um novo estado `sendTimestamps: Record<number, string>` (indice -> ISO date string) persistido no localStorage por planilha (`acionamento_send_timestamps_[ID]`)
+- Ao enviar com sucesso ou marcar manualmente, registrar `new Date().toISOString()` no `sendTimestamps`
+- `enviadosHoje = enviados.filter(c => sendTimestamps[c.originalIndex] e de hoje)`
+- "Hoje" = comparar apenas a data (ano/mes/dia), assim zera automaticamente a meia-noite
 
-### 3. Fluxo ao clicar no WhatsApp
-- Apos envio com sucesso (`sendStatus` vira `'success'`), o cliente automaticamente aparece na secao "Mensagens Enviadas"
-- Nenhuma mudanca na logica de envio existente
+### 3. UI - Botoes de aba
+- Dentro do card, no header, renderizar dois botoes lado a lado:
+  - **"A ENVIAR"** - exibe a tabela de pendentes
+  - **"ENVIADOS (X)"** - onde X e o `enviadosHoje`, exibe a tabela de enviados
+- Botao ativo tera estilo destacado (bg-primary, text-white); inativo tera estilo outline
+- Abaixo dos botoes, renderizar condicionalmente a tabela correspondente
 
-### 4. Fluxo ao marcar o checkbox
-- Ao marcar, adicionar o indice ao `manualChecked` e persistir no localStorage
-- O cliente aparece na secao "Mensagens Enviadas" com um badge indicando "Manual" (para diferenciar dos enviados via WhatsApp)
-- Ao desmarcar na secao de enviados, o cliente volta para pendentes
-
-### 5. Renderizacao
-- Card "Clientes" passa a mostrar apenas os pendentes, com titulo "Clientes ({pendentes.length})"
-- Novo Card "Mensagens Enviadas ({enviados.length})" abaixo, com tabela identica mas sem o botao de envio (apenas o check verde ou badge "Manual")
-- Ambas as tabelas mantem as colunas: Nome, Telefone, Atraso, Saldo e uma coluna de status
-
-### Detalhes tecnicos
-
-- Novo estado: `manualChecked: Set<number>` (indices dos clientes marcados manualmente)
-- Nova chave localStorage: `acionamento_manual_checked_[ID]` para persistir por planilha
-- Computacao derivada:
-```typescript
-const pendentes = clientes.map((c, i) => ({ ...c, originalIndex: i }))
-  .filter(c => sendStatus[c.originalIndex] !== 'success' && !manualChecked.has(c.originalIndex));
-
-const enviados = clientes.map((c, i) => ({ ...c, originalIndex: i }))
-  .filter(c => sendStatus[c.originalIndex] === 'success' || manualChecked.has(c.originalIndex));
+### 4. Estrutura do card unico
+```text
+┌─────────────────────────────────────────┐
+│  [A ENVIAR]    [ENVIADOS (12)]          │
+├─────────────────────────────────────────┤
+│  Nome  │ Telefone │ Atraso │ Saldo │ ...│
+│  ...   │ ...      │ ...    │ ...   │ ...│
+└─────────────────────────────────────────┘
 ```
-- Checkbox renderizado na coluna de acao, ao lado do botao WhatsApp
-- Ao restaurar dados do localStorage (mount e troca de planilha), restaurar tambem o `manualChecked`
+
+### 5. Detalhes tecnicos
+- Nova constante `SEND_TIMESTAMPS_KEY = 'acionamento_send_timestamps'`
+- No `handleSend` (sucesso): salvar timestamp no estado e localStorage
+- No `handleManualCheck` (checked=true): salvar timestamp
+- No `useEffect` inicial e `handleLoadHistorico`: restaurar timestamps do localStorage
+- No `handleDeleteHistorico`: limpar timestamps do localStorage
+- Funcao auxiliar `isToday(isoString)`: compara date parts com `new Date()` para determinar se e do dia atual
+- O contador no botao "ENVIADOS" mostra apenas os do dia; a lista completa mostra todos os enviados (independente do dia)
 
