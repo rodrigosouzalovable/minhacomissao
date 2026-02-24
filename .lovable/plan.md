@@ -1,45 +1,57 @@
 
 
-# Substituir cards separados por abas "A ENVIAR" e "ENVIADOS" com contador diario
+# Disparo automatico com intervalo randomizado
 
 ## Resumo
-Substituir os dois cards separados (Pendentes e Mensagens Enviadas) por um unico card com dois botoes/abas no topo: "A ENVIAR" e "ENVIADOS". O botao "ENVIADOS" tera um contador que mostra quantos clientes foram acionados no dia atual, zerando automaticamente a meia-noite.
+Adicionar um campo de configuracao de intervalo (minimo e maximo em segundos) e um botao "Iniciar" que dispara mensagens automaticamente para todos os clientes pendentes, com tempo aleatorio entre cada envio.
 
 ## Alteracoes em `src/pages/Acionamento.tsx`
 
-### 1. Novo estado para controlar a aba ativa
-- `activeTab: 'pendentes' | 'enviados'` com valor inicial `'pendentes'`
+### 1. Novos estados
+- `autoMinSec: number` (default 10) - tempo minimo em segundos
+- `autoMaxSec: number` (default 30) - tempo maximo em segundos
+- `autoSending: boolean` - se o disparo automatico esta ativo
+- `autoSendingRef: React.MutableRefObject<boolean>` - ref para controlar o loop async (permite parar)
 
-### 2. Contador diario de envios
-- Calcular `enviadosHoje` filtrando os enviados cujo timestamp de envio e do dia atual
-- Precisamos registrar o timestamp de cada envio. Adicionar um novo estado `sendTimestamps: Record<number, string>` (indice -> ISO date string) persistido no localStorage por planilha (`acionamento_send_timestamps_[ID]`)
-- Ao enviar com sucesso ou marcar manualmente, registrar `new Date().toISOString()` no `sendTimestamps`
-- `enviadosHoje = enviados.filter(c => sendTimestamps[c.originalIndex] e de hoje)`
-- "Hoje" = comparar apenas a data (ano/mes/dia), assim zera automaticamente a meia-noite
+### 2. UI - Campo de configuracao
+Acima da tabela de clientes (dentro do card, entre os botoes de aba e a tabela), renderizar uma linha com:
+- Label "Envio automático:"
+- Input number para "De" (segundos minimos)
+- Label "a"
+- Input number para "Até" (segundos maximos)
+- Label "segundos"
+- Botao "Iniciar" (verde) / "Parar" (vermelho) que alterna conforme `autoSending`
 
-### 3. UI - Botoes de aba
-- Dentro do card, no header, renderizar dois botoes lado a lado:
-  - **"A ENVIAR"** - exibe a tabela de pendentes
-  - **"ENVIADOS (X)"** - onde X e o `enviadosHoje`, exibe a tabela de enviados
-- Botao ativo tera estilo destacado (bg-primary, text-white); inativo tera estilo outline
-- Abaixo dos botoes, renderizar condicionalmente a tabela correspondente
-
-### 4. Estrutura do card unico
 ```text
-┌─────────────────────────────────────────┐
-│  [A ENVIAR]    [ENVIADOS (12)]          │
-├─────────────────────────────────────────┤
-│  Nome  │ Telefone │ Atraso │ Saldo │ ...│
-│  ...   │ ...      │ ...    │ ...   │ ...│
-└─────────────────────────────────────────┘
+Envio automático: [10] a [30] segundos  [▶ Iniciar]
 ```
 
+### 3. Logica de disparo automatico
+- Funcao `handleAutoSend`:
+  - Marca `autoSending = true`
+  - Itera sobre os clientes pendentes em ordem
+  - Para cada cliente:
+    - Verifica se `autoSendingRef.current` ainda e true (se nao, para)
+    - Chama `handleSend(originalIndex)`
+    - Aguarda um tempo aleatorio entre `autoMinSec` e `autoMaxSec` segundos (usando `Math.random() * (max - min) + min`)
+    - O tempo nunca e igual ao anterior (garante variacao)
+  - Ao terminar ou parar, marca `autoSending = false`
+
+- Funcao `handleStopAutoSend`:
+  - Marca `autoSendingRef.current = false`
+  - O loop async detecta e para
+
+### 4. Validacoes
+- Min deve ser >= 1 segundo
+- Max deve ser > Min
+- Deve haver pelo menos 1 mensagem salva
+- Deve haver clientes pendentes
+
 ### 5. Detalhes tecnicos
-- Nova constante `SEND_TIMESTAMPS_KEY = 'acionamento_send_timestamps'`
-- No `handleSend` (sucesso): salvar timestamp no estado e localStorage
-- No `handleManualCheck` (checked=true): salvar timestamp
-- No `useEffect` inicial e `handleLoadHistorico`: restaurar timestamps do localStorage
-- No `handleDeleteHistorico`: limpar timestamps do localStorage
-- Funcao auxiliar `isToday(isoString)`: compara date parts com `new Date()` para determinar se e do dia atual
-- O contador no botao "ENVIADOS" mostra apenas os do dia; a lista completa mostra todos os enviados (independente do dia)
+- Usar `useRef` para o flag de parada (evita closure stale)
+- O delay entre envios usa `new Promise(resolve => setTimeout(resolve, ms))`
+- Gerar tempo aleatorio: `Math.floor(Math.random() * (max - min + 1)) + min` em segundos, converter para ms
+- Para garantir que o tempo nunca repita consecutivamente, manter uma variavel local `lastDelay` e re-sortear se igual
+- O botao "Iniciar" fica desabilitado se nao ha mensagens salvas ou nao ha pendentes
+- Durante o envio automatico, desabilitar os botoes individuais de WhatsApp e o checkbox manual
 
