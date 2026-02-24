@@ -92,8 +92,14 @@ export default function Acionamento() {
   const [autoSending, setAutoSending] = useState(false);
   const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
   const autoSendingRef = useRef(false);
+  const activeHistoricoIdRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    activeHistoricoIdRef.current = activeHistoricoId;
+  }, [activeHistoricoId]);
 
   // Load saved data on mount
   useEffect(() => {
@@ -355,16 +361,22 @@ export default function Acionamento() {
       if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro');
       setSendStatus((prev) => {
         const next = { ...prev, [index]: 'success' as SendStatus };
-        if (activeHistoricoId) localStorage.setItem(`${SEND_STATUS_KEY}_${activeHistoricoId}`, JSON.stringify(next));
+        const hId = activeHistoricoIdRef.current;
+        if (hId) localStorage.setItem(`${SEND_STATUS_KEY}_${hId}`, JSON.stringify(next));
         return next;
       });
-      const nextTs = { ...sendTimestamps, [index]: new Date().toISOString() };
-      saveSendTimestamps(nextTs);
+      setSendTimestamps((prev) => {
+        const next = { ...prev, [index]: new Date().toISOString() };
+        const hId = activeHistoricoIdRef.current;
+        if (hId) localStorage.setItem(`${SEND_TIMESTAMPS_KEY}_${hId}`, JSON.stringify(next));
+        return next;
+      });
       toast.success(`Mensagem enviada para ${formatPrimeiroNome(cliente.nome)}`);
     } catch (err: any) {
       setSendStatus((prev) => {
         const next = { ...prev, [index]: 'error' as SendStatus };
-        if (activeHistoricoId) localStorage.setItem(`${SEND_STATUS_KEY}_${activeHistoricoId}`, JSON.stringify(next));
+        const hId = activeHistoricoIdRef.current;
+        if (hId) localStorage.setItem(`${SEND_STATUS_KEY}_${hId}`, JSON.stringify(next));
         return next;
       });
       toast.error(`Falha ao enviar para ${formatPrimeiroNome(cliente.nome)}: ${err.message}`);
