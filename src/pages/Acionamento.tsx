@@ -35,6 +35,15 @@ const HISTORICO_KEY = 'acionamento_historico';
 const ACTIVE_KEY = 'acionamento_ativo';
 const SEND_STATUS_KEY = 'acionamento_send_status';
 const MANUAL_CHECKED_KEY = 'acionamento_manual_checked';
+const SEND_TIMESTAMPS_KEY = 'acionamento_send_timestamps';
+
+const isToday = (isoString: string): boolean => {
+  const date = new Date(isoString);
+  const today = new Date();
+  return date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear();
+};
 
 const formatPrimeiroNome = (nome: string): string => {
   const primeiro = nome.trim().split(/\s+/)[0].toLowerCase();
@@ -73,8 +82,10 @@ export default function Acionamento() {
   const [lastUsedMsgIndex, setLastUsedMsgIndex] = useState<number | null>(null);
   const [sendStatus, setSendStatus] = useState<Record<number, SendStatus>>({});
   const [manualChecked, setManualChecked] = useState<Set<number>>(new Set());
+  const [sendTimestamps, setSendTimestamps] = useState<Record<number, string>>({});
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados'>('pendentes');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,6 +113,10 @@ export default function Acionamento() {
         if (savedManual) {
           try { setManualChecked(new Set(JSON.parse(savedManual))); } catch {}
         }
+        const savedTs = localStorage.getItem(`${SEND_TIMESTAMPS_KEY}_${savedActiveId}`);
+        if (savedTs) {
+          try { setSendTimestamps(JSON.parse(savedTs)); } catch {}
+        }
       }
     }
   }, []);
@@ -110,6 +125,13 @@ export default function Acionamento() {
     setManualChecked(checked);
     if (activeHistoricoId) {
       localStorage.setItem(`${MANUAL_CHECKED_KEY}_${activeHistoricoId}`, JSON.stringify([...checked]));
+    }
+  };
+
+  const saveSendTimestamps = (timestamps: Record<number, string>) => {
+    setSendTimestamps(timestamps);
+    if (activeHistoricoId) {
+      localStorage.setItem(`${SEND_TIMESTAMPS_KEY}_${activeHistoricoId}`, JSON.stringify(timestamps));
     }
   };
 
@@ -187,6 +209,7 @@ export default function Acionamento() {
       setClientes(parsed);
       setSendStatus({});
       setManualChecked(new Set());
+      setSendTimestamps({});
 
       const newItem: HistoricoItem = {
         id: crypto.randomUUID(),
@@ -199,6 +222,7 @@ export default function Acionamento() {
       localStorage.setItem(ACTIVE_KEY, newItem.id);
       localStorage.removeItem(`${SEND_STATUS_KEY}_${newItem.id}`);
       localStorage.removeItem(`${MANUAL_CHECKED_KEY}_${newItem.id}`);
+      localStorage.removeItem(`${SEND_TIMESTAMPS_KEY}_${newItem.id}`);
       saveHistorico([newItem, ...historico]);
       toast.success(`${parsed.length} clientes importados`);
     };
@@ -222,6 +246,12 @@ export default function Acionamento() {
     } else {
       setManualChecked(new Set());
     }
+    const savedTs = localStorage.getItem(`${SEND_TIMESTAMPS_KEY}_${item.id}`);
+    if (savedTs) {
+      try { setSendTimestamps(JSON.parse(savedTs)); } catch { setSendTimestamps({}); }
+    } else {
+      setSendTimestamps({});
+    }
     toast.success(`Planilha "${item.nomeArquivo}" carregada`);
   };
 
@@ -230,10 +260,12 @@ export default function Acionamento() {
     saveHistorico(updated);
     localStorage.removeItem(`${SEND_STATUS_KEY}_${id}`);
     localStorage.removeItem(`${MANUAL_CHECKED_KEY}_${id}`);
+    localStorage.removeItem(`${SEND_TIMESTAMPS_KEY}_${id}`);
     if (activeHistoricoId === id) {
       setClientes([]);
       setSendStatus({});
       setManualChecked(new Set());
+      setSendTimestamps({});
       setActiveHistoricoId(null);
       localStorage.removeItem(ACTIVE_KEY);
     }
@@ -244,6 +276,8 @@ export default function Acionamento() {
     const next = new Set(manualChecked);
     if (checked) {
       next.add(originalIndex);
+      const nextTs = { ...sendTimestamps, [originalIndex]: new Date().toISOString() };
+      saveSendTimestamps(nextTs);
     } else {
       next.delete(originalIndex);
     }
@@ -283,6 +317,8 @@ export default function Acionamento() {
         if (activeHistoricoId) localStorage.setItem(`${SEND_STATUS_KEY}_${activeHistoricoId}`, JSON.stringify(next));
         return next;
       });
+      const nextTs = { ...sendTimestamps, [index]: new Date().toISOString() };
+      saveSendTimestamps(nextTs);
       toast.success(`Mensagem enviada para ${formatPrimeiroNome(cliente.nome)}`);
     } catch (err: any) {
       setSendStatus((prev) => {
@@ -312,6 +348,14 @@ export default function Acionamento() {
   const enviados = useMemo(
     () => clientesComIndex.filter(c => sendStatus[c.originalIndex] === 'success' || manualChecked.has(c.originalIndex)),
     [clientesComIndex, sendStatus, manualChecked]
+  );
+
+  const enviadosHoje = useMemo(
+    () => enviados.filter(c => {
+      const ts = sendTimestamps[c.originalIndex];
+      return ts && isToday(ts);
+    }).length,
+    [enviados, sendTimestamps]
   );
 
   return (
@@ -433,115 +477,134 @@ export default function Acionamento() {
           </CardContent>
         </Card>
 
-        {/* Lista de clientes pendentes */}
-        {clientes.length > 0 && pendentes.length > 0 && (
+        {/* Lista de clientes com abas */}
+        {clientes.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Pendentes ({pendentes.length})</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={activeTab === 'pendentes' ? 'default' : 'outline'}
+                  onClick={() => setActiveTab('pendentes')}
+                >
+                  A ENVIAR ({pendentes.length})
+                </Button>
+                <Button
+                  variant={activeTab === 'enviados' ? 'default' : 'outline'}
+                  onClick={() => setActiveTab('enviados')}
+                >
+                  ENVIADOS ({enviadosHoje} hoje)
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead>Atraso</TableHead>
-                    <TableHead>Saldo</TableHead>
-                    <TableHead className="w-24 text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendentes.map((c) => (
-                    <TableRow key={c.originalIndex}>
-                      <TableCell className="font-medium">{c.nome}</TableCell>
-                      <TableCell>{c.telefone}</TableCell>
-                      <TableCell>{c.atraso}</TableCell>
-                      <TableCell>{formatCurrency(c.saldo)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Checkbox
-                            checked={false}
-                            onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            disabled={sendStatus[c.originalIndex] === 'sending'}
-                            onClick={() => handleSend(c.originalIndex)}
-                            className={
-                              sendStatus[c.originalIndex] === 'error'
-                                ? 'text-destructive'
-                                : 'text-green-600 hover:text-green-700'
-                            }
-                          >
-                            {sendStatus[c.originalIndex] === 'sending' ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : sendStatus[c.originalIndex] === 'error' ? (
-                              <X className="h-5 w-5" />
-                            ) : (
-                              <WhatsAppIcon />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Mensagens enviadas */}
-        {clientes.length > 0 && enviados.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Mensagens Enviadas ({enviados.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead>Atraso</TableHead>
-                    <TableHead>Saldo</TableHead>
-                    <TableHead className="w-24 text-right">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {enviados.map((c) => {
-                    const wasSent = sendStatus[c.originalIndex] === 'success';
-                    const wasManual = manualChecked.has(c.originalIndex);
-                    return (
-                      <TableRow key={c.originalIndex}>
-                        <TableCell className="font-medium">{c.nome}</TableCell>
-                        <TableCell>{c.telefone}</TableCell>
-                        <TableCell>{c.atraso}</TableCell>
-                        <TableCell>{formatCurrency(c.saldo)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {wasSent && (
-                              <Badge variant="default" className="bg-green-600 hover:bg-green-600">
-                                <Check className="h-3 w-3 mr-1" /> Enviado
-                              </Badge>
-                            )}
-                            {wasManual && !wasSent && (
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary">Manual</Badge>
+              {activeTab === 'pendentes' && (
+                <>
+                  {pendentes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhum cliente pendente</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Telefone</TableHead>
+                          <TableHead>Atraso</TableHead>
+                          <TableHead>Saldo</TableHead>
+                          <TableHead className="w-24 text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendentes.map((c) => (
+                          <TableRow key={c.originalIndex}>
+                            <TableCell className="font-medium">{c.nome}</TableCell>
+                            <TableCell>{c.telefone}</TableCell>
+                            <TableCell>{c.atraso}</TableCell>
+                            <TableCell>{formatCurrency(c.saldo)}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
                                 <Checkbox
-                                  checked={true}
+                                  checked={false}
                                   onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
                                 />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  disabled={sendStatus[c.originalIndex] === 'sending'}
+                                  onClick={() => handleSend(c.originalIndex)}
+                                  className={
+                                    sendStatus[c.originalIndex] === 'error'
+                                      ? 'text-destructive'
+                                      : 'text-green-600 hover:text-green-700'
+                                  }
+                                >
+                                  {sendStatus[c.originalIndex] === 'sending' ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                  ) : sendStatus[c.originalIndex] === 'error' ? (
+                                    <X className="h-5 w-5" />
+                                  ) : (
+                                    <WhatsAppIcon />
+                                  )}
+                                </Button>
                               </div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </>
+              )}
+
+              {activeTab === 'enviados' && (
+                <>
+                  {enviados.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhuma mensagem enviada ainda</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Telefone</TableHead>
+                          <TableHead>Atraso</TableHead>
+                          <TableHead>Saldo</TableHead>
+                          <TableHead className="w-24 text-right">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {enviados.map((c) => {
+                          const wasSent = sendStatus[c.originalIndex] === 'success';
+                          const wasManual = manualChecked.has(c.originalIndex);
+                          return (
+                            <TableRow key={c.originalIndex}>
+                              <TableCell className="font-medium">{c.nome}</TableCell>
+                              <TableCell>{c.telefone}</TableCell>
+                              <TableCell>{c.atraso}</TableCell>
+                              <TableCell>{formatCurrency(c.saldo)}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  {wasSent && (
+                                    <Badge variant="default" className="bg-green-600 hover:bg-green-600">
+                                      <Check className="h-3 w-3 mr-1" /> Enviado
+                                    </Badge>
+                                  )}
+                                  {wasManual && !wasSent && (
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="secondary">Manual</Badge>
+                                      <Checkbox
+                                        checked={true}
+                                        onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
         )}
