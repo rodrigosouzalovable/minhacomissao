@@ -89,6 +89,7 @@ export default function Acionamento() {
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
   const [autoSending, setAutoSending] = useState(false);
+  const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
   const autoSendingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -373,6 +374,8 @@ export default function Acionamento() {
     for (let i = 0; i < pendentesSnapshot.length; i++) {
       if (!autoSendingRef.current) break;
 
+      setAutoProgress({ current: i + 1, total: pendentesSnapshot.length });
+
       const cliente = pendentesSnapshot[i];
       await handleSend(cliente.originalIndex);
 
@@ -390,14 +393,16 @@ export default function Acionamento() {
 
     autoSendingRef.current = false;
     setAutoSending(false);
-    if (autoSendingRef.current === false) {
-      toast.success('Envio automático finalizado');
-    }
+    setAutoProgress(null);
+    setActiveTab('enviados');
+    toast.success('Envio automático finalizado');
   };
 
   const handleStopAutoSend = () => {
     autoSendingRef.current = false;
     setAutoSending(false);
+    setAutoProgress(null);
+    setActiveTab('enviados');
     toast.info('Envio automático parado');
   };
 
@@ -595,13 +600,20 @@ export default function Acionamento() {
                       <Play className="h-4 w-4 mr-1" /> Iniciar
                     </Button>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={handleStopAutoSend}
-                    >
-                      <Square className="h-4 w-4 mr-1" /> Parar
-                    </Button>
+                    <>
+                      {autoProgress && (
+                        <span className="text-sm font-medium text-muted-foreground">
+                          Enviando {autoProgress.current}/{autoProgress.total}...
+                        </span>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={handleStopAutoSend}
+                      >
+                        <Square className="h-4 w-4 mr-1" /> Parar
+                      </Button>
+                    </>
                   )}
                 </div>
               )}
