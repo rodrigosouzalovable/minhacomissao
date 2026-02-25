@@ -1,39 +1,57 @@
 
 
-# Correção: Clientes não movem para aba "ENVIADOS" durante envio automático
+# Envio Automático Persistente Entre Abas
 
-## Problema identificado
+## Problema
 
-Ao analisar o código, encontrei a causa raiz:
-
-O filtro da aba "ENVIADOS" só inclui clientes com `sendStatus === 'success'` (linha 552). Quando o envio falha (status = `'error'`), o cliente permanece na aba "A ENVIAR". Como os envios via UAZAPI ainda estão retornando erros (405), os clientes nunca saem da aba "A ENVIAR".
-
-Além disso, mesmo quando o envio é bem-sucedido, se o status é `'error'` de uma tentativa anterior, o cliente fica "preso" na aba pendentes.
-
-**Filtro atual:**
-```typescript
-// pendentes: exclui apenas 'success'
-pendentes = clientes.filter(c => sendStatus[c.originalIndex] !== 'success' && !manualChecked.has(c.originalIndex));
-
-// enviados: inclui apenas 'success'
-enviados = clientes.filter(c => sendStatus[c.originalIndex] === 'success' || manualChecked.has(c.originalIndex));
-```
+O envio automático vive dentro do componente `Acionamento.tsx`. Quando o usuário navega para outra página (ex: Dashboard, Acordos), o componente é desmontado pelo React Router e o loop de envio para imediatamente. O estado se perde.
 
 ## Solução
 
-Alterar os filtros para que **qualquer cliente que teve uma tentativa de envio** (status `'success'` ou `'error'`) seja movido para a aba "ENVIADOS". Apenas clientes com status `'idle'` ou `'sending'` ficam em "A ENVIAR".
+Criar um **Context Provider global** (`AutoSendProvider`) que vive no nível do `App.tsx`, acima de todas as rotas. Isso garante que o loop de envio automático continue rodando independentemente da página em que o usuário esteja.
 
-**Filtro corrigido:**
-```typescript
-// pendentes: exclui 'success' E 'error' (já foi tentado)
-pendentes = clientes.filter(c => sendStatus[c.originalIndex] !== 'success' && sendStatus[c.originalIndex] !== 'error' && !manualChecked.has(c.originalIndex));
+### Arquitetura
 
-// enviados: inclui 'success' E 'error' (qualquer tentativa feita)
-enviados = clientes.filter(c => sendStatus[c.originalIndex] === 'success' || sendStatus[c.originalIndex] === 'error' || manualChecked.has(c.originalIndex));
+```text
+App.tsx
+  └── AuthProvider
+        └── AutoSendProvider  ← NOVO (persiste entre rotas)
+              └── Routes
+                    ├── /dashboard
+                    ├── /acordos
+                    ├── /admin/acionamento  ← usa useAutoSend() para controlar
+                    └── ...
 ```
 
-Na aba "ENVIADOS", clientes com erro serão exibidos com um indicador visual diferente (ícone vermelho X) para distingui-los dos enviados com sucesso (ícone verde).
+### Alterações
 
-### Resumo
-- **1 arquivo**: `src/pages/Acionamento.tsx` — corrigir filtros `pendentes` e `enviados` para mover clientes após qualquer tentativa de envio
+**1. Novo arquivo: `src/hooks/useAutoSend.tsx`**
+- Context Provider com toda a lógica do loop de envio automático
+- Expõe: `startAutoSend()`, `stopAutoSend()`, `autoSending`, `autoProgress`
+- Mantém refs internas para `clientes`, `mensagensSalvas`, config UAZAPI, etc.
+- O loop usa `useRef` para evitar stale closures
+- Atualiza `sendStatus` e `sendTimestamps` no localStorage em tempo real
+- Limpa estado ao completar ou ao chamar `stopAutoSend()`
+
+**2. Alterar: `src/App.tsx`**
+- Envolver as rotas com `<AutoSendProvider>`
+
+**3. Alterar: `src/pages/Acionamento.tsx`**
+- Remover a lógica interna de `runAutoSendLoop`, `handleAutoSend`, `handleStopAutoSend`
+- Importar `useAutoSend()` do novo hook
+- Ao clicar "Iniciar": chamar `startAutoSend(clientes, mensagensSalvas, config, min, max, historicoId)`
+- Ao clicar "Parar": chamar `stopAutoSend()`
+- Sincronizar `sendStatus` e `sendTimestamps` do contexto com o estado local do componente (via callback ou subscription)
+- O componente continua responsável pela UI, importação de planilhas e gerenciamento de mensagens
+
+### Comportamento esperado
+- Usuário clica "Iniciar" → envio começa
+- Usuário muda de aba (Dashboard, Acordos, etc.) → envio continua
+- Usuário volta ao Acionamento → vê o progresso atualizado
+- Usuário clica "Parar" → envio para imediatamente
+- Usuário fecha/recarrega a página → envio para (não retoma automaticamente)
+
+### Resumo de arquivos
+- **1 novo**: `src/hooks/useAutoSend.tsx`
+- **2 alterados**: `src/App.tsx`, `src/pages/Acionamento.tsx`
 
