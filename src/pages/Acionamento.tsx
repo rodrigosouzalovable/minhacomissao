@@ -613,12 +613,13 @@ export default function Acionamento() {
       });
       if (error) throw error;
       if (data?.ok) {
-        toast.success('Conexão com UAZAPI bem-sucedida!');
+        toast.success(`Conexão com UAZAPI bem-sucedida! (${data.endpoint})`);
       } else {
-        toast.error('UAZAPI respondeu com erro. Verifique suas credenciais.');
+        const detail = data?.data?.message || data?.data?.error || data?.error || JSON.stringify(data?.data);
+        toast.error(`UAZAPI respondeu com erro (status ${data?.status}): ${detail}`);
       }
     } catch (error: any) {
-      toast.error('Não foi possível conectar à UAZAPI. Verifique o Server URL.');
+      toast.error(`Não foi possível conectar à UAZAPI: ${error.message || 'Verifique o Server URL.'}`);
     } finally {
       setTestingConnection(false);
     }
