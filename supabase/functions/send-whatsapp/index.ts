@@ -43,8 +43,8 @@ serve(async (req) => {
           'token': uazapi_instance_token,
         },
         body: JSON.stringify({
-          phone: telefoneCompleto,
-          message: mensagem,
+          number: telefoneCompleto,
+          text: mensagem,
         }),
       });
 
