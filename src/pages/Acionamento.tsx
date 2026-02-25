@@ -35,13 +35,14 @@ interface HistoricoItem {
 
 type SendStatus = 'idle' | 'sending' | 'success' | 'error';
 
-const MENSAGENS_KEY = 'acionamento_mensagens_salvas';
-const HISTORICO_KEY = 'acionamento_historico';
-const ACTIVE_KEY = 'acionamento_ativo';
-const SEND_STATUS_KEY = 'acionamento_send_status';
-const MANUAL_CHECKED_KEY = 'acionamento_manual_checked';
-const SEND_TIMESTAMPS_KEY = 'acionamento_send_timestamps';
-const AUTO_SENDING_KEY = 'acionamento_auto_sending_state';
+const getKey = (base: string, userId: string) => `${base}_${userId}`;
+const MENSAGENS_BASE = 'acionamento_mensagens_salvas';
+const HISTORICO_BASE = 'acionamento_historico';
+const ACTIVE_BASE = 'acionamento_ativo';
+const SEND_STATUS_BASE = 'acionamento_send_status';
+const MANUAL_CHECKED_BASE = 'acionamento_manual_checked';
+const SEND_TIMESTAMPS_BASE = 'acionamento_send_timestamps';
+const AUTO_SENDING_BASE = 'acionamento_auto_sending_state';
 
 const isToday = (isoString: string): boolean => {
   const date = new Date(isoString);
@@ -114,13 +115,24 @@ export default function Acionamento() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // User-scoped localStorage keys
+  const uid = user?.id || '';
+  const MENSAGENS_KEY = getKey(MENSAGENS_BASE, uid);
+  const HISTORICO_KEY = getKey(HISTORICO_BASE, uid);
+  const ACTIVE_KEY = getKey(ACTIVE_BASE, uid);
+  const SEND_STATUS_KEY = getKey(SEND_STATUS_BASE, uid);
+  const MANUAL_CHECKED_KEY = getKey(MANUAL_CHECKED_BASE, uid);
+  const SEND_TIMESTAMPS_KEY = getKey(SEND_TIMESTAMPS_BASE, uid);
+  const AUTO_SENDING_KEY = getKey(AUTO_SENDING_BASE, uid);
+
   // Keep ref in sync with state
   useEffect(() => {
     activeHistoricoIdRef.current = activeHistoricoId;
   }, [activeHistoricoId]);
 
-  // Load saved data on mount
+  // Load saved data when user is available
   useEffect(() => {
+    if (!user) return;
     const savedMsgs = localStorage.getItem(MENSAGENS_KEY);
     if (savedMsgs) {
       try { setMensagensSalvas(JSON.parse(savedMsgs)); } catch {}
@@ -150,7 +162,9 @@ export default function Acionamento() {
         }
       }
     }
-  }, []);
+    // Clear any auto-sending state on load — only send when user clicks the button
+    localStorage.removeItem(AUTO_SENDING_KEY);
+  }, [user]);
 
   // Fetch UAZAPI config from database
   useEffect(() => {
@@ -171,39 +185,7 @@ export default function Acionamento() {
     fetchConfig();
   }, [user]);
 
-  // Resume auto-send if it was active when the user navigated away
-  useEffect(() => {
-    const savedAutoState = localStorage.getItem(AUTO_SENDING_KEY);
-    if (!savedAutoState) return;
-
-    try {
-      const parsed = JSON.parse(savedAutoState);
-      if (!parsed.active) return;
-
-      // Ensure the correct historico is loaded
-      const savedHist = localStorage.getItem(HISTORICO_KEY);
-      if (!savedHist) return;
-      const allHist: HistoricoItem[] = JSON.parse(savedHist);
-      const targetItem = allHist.find(h => h.id === parsed.historicoId);
-      if (!targetItem) {
-        localStorage.removeItem(AUTO_SENDING_KEY);
-        return;
-      }
-
-      // Restore interval settings
-      setAutoMinSec(parsed.minSec || 10);
-      setAutoMaxSec(parsed.maxSec || 30);
-
-      // Small delay to ensure state is settled before resuming
-      const timer = setTimeout(() => {
-        handleAutoSendResume(targetItem, parsed.minSec || 10, parsed.maxSec || 30);
-      }, 500);
-      return () => clearTimeout(timer);
-    } catch {
-      localStorage.removeItem(AUTO_SENDING_KEY);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Auto-resume is intentionally DISABLED — auto-send only starts when user clicks the button
 
   const saveManualChecked = (checked: Set<number>) => {
     setManualChecked(checked);
@@ -652,6 +634,8 @@ export default function Acionamento() {
       setSendingTest(false);
     }
   };
+
+
 
 
   return (
