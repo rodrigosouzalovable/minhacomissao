@@ -1,42 +1,39 @@
 
 
-# Persistência por Usuário e Controle de Envio Automático no Acionamento
+# Correção: Clientes não movem para aba "ENVIADOS" durante envio automático
 
-## Problemas Identificados
+## Problema identificado
 
-### 1. Dados compartilhados entre todos os logins (CRÍTICO)
-Todas as chaves do localStorage são globais (ex: `acionamento_historico`, `acionamento_ativo`). Isso significa que se o funcionário A importa uma planilha e o funcionário B faz login no mesmo navegador, B verá os dados de A. Mesmo em navegadores diferentes, se dois funcionários acessarem o mesmo dispositivo, os dados se misturam.
+Ao analisar o código, encontrei a causa raiz:
 
-### 2. Envio automático retoma sem consentimento
-Ao recarregar a página ou navegar de volta, o sistema automaticamente retoma o envio se havia um estado salvo em `AUTO_SENDING_KEY`. Isso pode causar envios indesejados.
+O filtro da aba "ENVIADOS" só inclui clientes com `sendStatus === 'success'` (linha 552). Quando o envio falha (status = `'error'`), o cliente permanece na aba "A ENVIAR". Como os envios via UAZAPI ainda estão retornando erros (405), os clientes nunca saem da aba "A ENVIAR".
 
-### 3. Botão "Parar" funciona corretamente
-O mecanismo de parada (`autoSendingRef.current = false`) está correto. O loop verifica essa flag antes de cada envio e para após o envio em andamento concluir. Não há problema aqui.
+Além disso, mesmo quando o envio é bem-sucedido, se o status é `'error'` de uma tentativa anterior, o cliente fica "preso" na aba pendentes.
+
+**Filtro atual:**
+```typescript
+// pendentes: exclui apenas 'success'
+pendentes = clientes.filter(c => sendStatus[c.originalIndex] !== 'success' && !manualChecked.has(c.originalIndex));
+
+// enviados: inclui apenas 'success'
+enviados = clientes.filter(c => sendStatus[c.originalIndex] === 'success' || manualChecked.has(c.originalIndex));
+```
 
 ## Solução
 
-### Alteração em `src/pages/Acionamento.tsx`
+Alterar os filtros para que **qualquer cliente que teve uma tentativa de envio** (status `'success'` ou `'error'`) seja movido para a aba "ENVIADOS". Apenas clientes com status `'idle'` ou `'sending'` ficam em "A ENVIAR".
 
-**Tornar todas as chaves do localStorage específicas por usuário**, incluindo o `user.id` em cada chave:
+**Filtro corrigido:**
+```typescript
+// pendentes: exclui 'success' E 'error' (já foi tentado)
+pendentes = clientes.filter(c => sendStatus[c.originalIndex] !== 'success' && sendStatus[c.originalIndex] !== 'error' && !manualChecked.has(c.originalIndex));
 
-```text
-Antes:  'acionamento_historico'
-Depois: 'acionamento_historico_<user.id>'
+// enviados: inclui 'success' E 'error' (qualquer tentativa feita)
+enviados = clientes.filter(c => sendStatus[c.originalIndex] === 'success' || sendStatus[c.originalIndex] === 'error' || manualChecked.has(c.originalIndex));
 ```
 
-Chaves afetadas (7 no total):
-- `MENSAGENS_KEY` → mensagens salvas
-- `HISTORICO_KEY` → histórico de importações
-- `ACTIVE_KEY` → planilha ativa
-- `SEND_STATUS_KEY` → status de envio por cliente
-- `MANUAL_CHECKED_KEY` → marcações manuais
-- `SEND_TIMESTAMPS_KEY` → timestamps de envio
-- `AUTO_SENDING_KEY` → estado do envio automático
+Na aba "ENVIADOS", clientes com erro serão exibidos com um indicador visual diferente (ícone vermelho X) para distingui-los dos enviados com sucesso (ícone verde).
 
-**Implementação**: As constantes deixarão de ser fixas e passarão a ser derivadas do `user.id` via uma função helper. O `useEffect` de carregamento será condicionado ao `user` estar disponível.
-
-**Envio automático**: O auto-resume só será executado se a chave correspondente ao usuário logado tiver estado `active: true`. Ao trocar de usuário, o novo login não verá nem retomará envios de outro usuário.
-
-### Resumo de alterações
-- **1 arquivo**: `src/pages/Acionamento.tsx` — prefixar todas as chaves localStorage com `user.id`
+### Resumo
+- **1 arquivo**: `src/pages/Acionamento.tsx` — corrigir filtros `pendentes` e `enviados` para mover clientes após qualquer tentativa de envio
 
