@@ -1,43 +1,17 @@
 
 
-# Atualizar lista de abas no dialog de Editar Permissões
+# Adicionar botão "Testar Conexão" na configuração UAZAPI
 
-## Problema
-O dialog de Editar Permissões em `EditPermissionsDialog.tsx` lista apenas 7 abas fixas, mas o sistema tem mais abas disponíveis (como "Acordos da Equipe", "Acionamento", etc.). Quando novas abas forem criadas, elas precisam aparecer automaticamente.
+## Alteração em `src/pages/Acionamento.tsx`
 
-## Solução
+1. Adicionar estado `testingConnection` para controlar o loading do botão de teste.
+2. Criar função `handleTestUazapiConnection` que faz uma requisição para o endpoint UAZAPI (ex: GET `{serverUrl}/status/{token}`) e exibe toast de sucesso ou erro.
+3. Na linha 950, transformar o botão único em um `div` com `flex gap-2` contendo o botão "Salvar configuração" existente e um novo botão "Testar conexão" com ícone `Wifi` (ou `Zap`), desabilitado quando `testingConnection` ou quando os campos estão vazios.
 
-### Alteração em `src/components/EditPermissionsDialog.tsx`
+### Lógica do teste de conexão
+- Chamará `fetch(${uazapiServerUrl}/status/${uazapiInstanceToken})` para verificar se a instância responde.
+- Mostra toast de sucesso se a API responder OK, ou toast de erro caso contrário.
 
-Atualizar a constante `AVAILABLE_TABS` para incluir todas as abas existentes no sistema, espelhando a lista de `navItems` do `AppLayout.tsx`:
-
-```typescript
-const AVAILABLE_TABS = [
-  { path: '/conta', label: 'Minha Conta' },
-  { path: '/dashboard', label: 'Dashboard' },
-  { path: '/acordos', label: 'Meus Acordos' },
-  { path: '/acordos/novo', label: 'Novo Acordo' },
-  { path: '/retornos', label: 'Retornos' },
-  { path: '/clientes', label: 'Clientes' },
-  { path: '/comissoes', label: 'Minhas Comissões' },
-  { path: '/equipe/acordos', label: 'Acordos da Equipe' },
-  { path: '/admin/usuarios', label: 'Usuários' },
-  { path: '/admin/equipes', label: 'Equipes' },
-  { path: '/admin/auditoria', label: 'Auditoria' },
-  { path: '/admin/financeiro', label: 'Financeiro' },
-  { path: '/admin/importar-devedores', label: 'Importar Devedores' },
-  { path: '/admin/acionamento', label: 'Acionamento' },
-];
-```
-
-Isso inclui todas as 14 abas do sistema. Para facilitar a manutenção futura, a lista será centralizada neste componente e refletirá todas as rotas protegidas do `AppLayout`.
-
-### Alteração no `AppLayout.tsx`
-
-Ajustar a lógica de filtragem para que, quando `abasPermitidas` estiver configurada, ela seja respeitada para **todas** as abas (não apenas as não-admin). Isso permite que o admin conceda acesso seletivo a abas administrativas para funcionários específicos, se desejado. A lógica atual já funciona corretamente pois só aplica o filtro para não-admins.
-
-Nenhuma mudança necessária no `AppLayout.tsx` -- a lógica atual já cobre o cenário.
-
-### Resumo das mudanças
-- **1 arquivo**: `src/components/EditPermissionsDialog.tsx` -- atualizar `AVAILABLE_TABS` com todas as 14 abas do sistema
+### Resultado visual
+Dois botões lado a lado: `[Salvar configuração] [Testar conexão]`
 
