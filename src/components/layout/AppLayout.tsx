@@ -66,12 +66,14 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter((item) => {
-    if (item.adminOnly && !isAdmin) return false;
-    if (item.gestorOnly && !isGestor && !isAdmin) return false;
-    // Apply tab permissions for non-admin, non-gestor-only items
-    if (!isAdmin && !item.adminOnly && !item.gestorOnly && abasPermitidas) {
+    if (isAdmin) return true;
+    // For non-admin users, if abasPermitidas is set, use it as the source of truth
+    if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }
+    // If no abasPermitidas configured, apply role-based defaults
+    if (item.adminOnly) return false;
+    if (item.gestorOnly && !isGestor) return false;
     return true;
   });
 
