@@ -1,17 +1,31 @@
 
 
-# Adicionar botão "Testar Conexão" na configuração UAZAPI
+# Correção do botão "Testar Conexão" UAZAPI
 
-## Alteração em `src/pages/Acionamento.tsx`
+## Problema identificado
 
-1. Adicionar estado `testingConnection` para controlar o loading do botão de teste.
-2. Criar função `handleTestUazapiConnection` que faz uma requisição para o endpoint UAZAPI (ex: GET `{serverUrl}/status/{token}`) e exibe toast de sucesso ou erro.
-3. Na linha 950, transformar o botão único em um `div` com `flex gap-2` contendo o botão "Salvar configuração" existente e um novo botão "Testar conexão" com ícone `Wifi` (ou `Zap`), desabilitado quando `testingConnection` ou quando os campos estão vazios.
+O teste de conexão está falhando porque a requisição é feita **diretamente do navegador** para o servidor UAZAPI. Servidores externos como UAZAPI não permitem requisições cross-origin (CORS) vindas de navegadores. O envio de mensagens funciona porque passa por uma backend function, mas o teste de conexão tenta chamar a UAZAPI diretamente do frontend.
 
-### Lógica do teste de conexão
-- Chamará `fetch(${uazapiServerUrl}/status/${uazapiInstanceToken})` para verificar se a instância responde.
-- Mostra toast de sucesso se a API responder OK, ou toast de erro caso contrário.
+## Solução
 
-### Resultado visual
-Dois botões lado a lado: `[Salvar configuração] [Testar conexão]`
+Criar uma backend function `test-uazapi-connection` que faz a requisição ao servidor UAZAPI no lado do servidor (sem restrição de CORS), e alterar o frontend para chamar essa function em vez de acessar a UAZAPI diretamente.
+
+### 1. Criar `supabase/functions/test-uazapi-connection/index.ts`
+
+- Recebe `server_url` e `instance_token` no body da requisição
+- Faz GET para `${server_url}/status/${instance_token}`
+- Retorna o resultado (status connected/disconnected) ou erro
+
+### 2. Alterar `src/pages/Acionamento.tsx`
+
+- Na função `handleTestUazapiConnection`, substituir o `fetch` direto por uma chamada à backend function via `supabase.functions.invoke('test-uazapi-connection', { body: { server_url, instance_token } })`
+- Exibir toast de sucesso com o status retornado, ou toast de erro
+
+### 3. Registrar a function em `supabase/config.toml`
+
+- Adicionar entrada `[functions.test-uazapi-connection]` com `verify_jwt = false`
+
+### Resumo das mudanças
+- **1 arquivo novo**: `supabase/functions/test-uazapi-connection/index.ts`
+- **1 arquivo editado**: `src/pages/Acionamento.tsx` (função de teste)
 
