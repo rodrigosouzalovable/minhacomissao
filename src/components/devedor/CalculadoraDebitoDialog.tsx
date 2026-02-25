@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Calculator, Download, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Calculator, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { differenceInMonths, differenceInDays, format, addDays } from 'date-fns';
 import { calcularINPCAcumulado } from '@/lib/inpcData';
@@ -81,11 +81,12 @@ const getFrequenciaLabel = (freq: Frequencia): string => {
 export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebitoDialogProps) {
   const [open, setOpen] = useState(false);
   const [contratoSelecionado, setContratoSelecionado] = useState<string>('todos');
-  const [tipoCorrecao, setTipoCorrecao] = useState<'selic' | 'inpc'>('selic');
+  const [aplicarINPC, setAplicarINPC] = useState(false);
+  const [aplicarJuros, setAplicarJuros] = useState(true);
+  const [aplicarMulta, setAplicarMulta] = useState(true);
   const [taxaAcumulada, setTaxaAcumulada] = useState<number>(0);
   const [parcelas, setParcelas] = useState<number>(1);
   const [frequencia, setFrequencia] = useState<Frequencia>('mensal');
-  const [loadingTaxa, setLoadingTaxa] = useState(false);
   const [dataBase, setDataBase] = useState<string>('');
   const [periodoConsultado, setPeriodoConsultado] = useState<string>('');
   const [dataPrimeiroPagamento, setDataPrimeiroPagamento] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -120,19 +121,17 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     ? Math.max(0, differenceInDays(hoje, new Date(dataBase + 'T00:00:00')))
     : 0;
 
-  const multa = valorOriginal * 0.02;
-  const juros = valorOriginal * 0.01 * mesesAtraso;
-  const correcao = valorOriginal * (taxaAcumulada / 100);
+  const multa = aplicarMulta ? valorOriginal * 0.02 : 0;
+  const juros = aplicarJuros ? valorOriginal * 0.01 * mesesAtraso : 0;
+  const correcao = aplicarINPC ? valorOriginal * (taxaAcumulada / 100) : 0;
   const totalAtualizado = valorOriginal + multa + juros + correcao;
 
-  // Juros progressivos + Price
   const taxaJurosMensal = getTaxaJurosMensal(parcelas);
   const taxaAjustada = ajustarTaxaPorFrequencia(taxaJurosMensal, frequencia);
   const valorParcela = calcularPMT(totalAtualizado, taxaAjustada, parcelas);
   const totalAPagar = valorParcela * parcelas;
   const custoParcelamento = totalAPagar - totalAtualizado;
 
-  // Datas de vencimento das parcelas
   const diasFreq = getDiasFrequencia(frequencia);
   const gerarDatasParcelas = () => {
     const baseDate = dataPrimeiroPagamento ? new Date(dataPrimeiroPagamento + 'T00:00:00') : hoje;
@@ -145,53 +144,35 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     return year >= 1990 && year <= 2100;
   };
 
-  const fetchSelicTaxa = useCallback(async () => {
-    if (!isValidDate(dataBase)) return;
-    const dataFinal = format(hoje, 'yyyy-MM-dd');
-    if (dataBase >= dataFinal) return;
-    setLoadingTaxa(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('consultar-indices', {
-        body: { dataInicial: dataBase, dataFinal, tipo: 'selic' },
-      });
-      if (error) throw error;
-      if (data?.taxaAcumulada !== undefined) {
-        setTaxaAcumulada(data.taxaAcumulada);
-        if (data.periodo) {
-          setPeriodoConsultado(`${data.periodo.de} a ${data.periodo.ate}`);
-        }
-      }
-    } catch (err: any) {
-      console.error('Erro ao buscar taxa:', err);
-      toast.error('Erro ao buscar taxa do BCB. Informe manualmente.');
-    } finally {
-      setLoadingTaxa(false);
-    }
-  }, [dataBase]);
-
   const calcularTaxa = useCallback(() => {
     if (!isValidDate(dataBase)) return;
     const dataFinal = format(hoje, 'yyyy-MM-dd');
     if (dataBase >= dataFinal) return;
 
-    if (tipoCorrecao === 'inpc') {
-      const taxa = calcularINPCAcumulado(dataBase, dataFinal);
-      setTaxaAcumulada(taxa);
-      const diStr = new Date(dataBase + 'T00:00:00').toLocaleDateString('pt-BR');
-      const dfStr = hoje.toLocaleDateString('pt-BR');
-      setPeriodoConsultado(`${diStr} a ${dfStr}`);
-    } else {
-      fetchSelicTaxa();
-    }
-  }, [dataBase, tipoCorrecao, fetchSelicTaxa]);
+    const taxa = calcularINPCAcumulado(dataBase, dataFinal);
+    setTaxaAcumulada(taxa);
+    const diStr = new Date(dataBase + 'T00:00:00').toLocaleDateString('pt-BR');
+    const dfStr = hoje.toLocaleDateString('pt-BR');
+    setPeriodoConsultado(`${diStr} a ${dfStr}`);
+  }, [dataBase]);
 
   useEffect(() => {
     if (open && isValidDate(dataBase)) {
       calcularTaxa();
     }
-  }, [open, tipoCorrecao, dataBase, calcularTaxa]);
+  }, [open, dataBase, calcularTaxa]);
 
   const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // Calcula valor atualizado de cada contrato individual
+  const calcularValorAtualizadoContrato = (valorOrig: number, dataVenc: string | null) => {
+    if (!dataVenc) return valorOrig;
+    const meses = Math.max(0, differenceInMonths(hoje, new Date(dataVenc + 'T00:00:00')));
+    const m = aplicarMulta ? valorOrig * 0.02 : 0;
+    const j = aplicarJuros ? valorOrig * 0.01 * meses : 0;
+    const c = aplicarINPC ? valorOrig * (taxaAcumulada / 100) : 0;
+    return valorOrig + m + j + c;
+  };
 
   const gerarPDF = () => {
     const doc = new jsPDF();
@@ -230,16 +211,61 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     doc.line(14, y, pageWidth - 14, y);
     y += 8;
 
+    // Detalhamento por contrato/parcela
     doc.setFont('helvetica', 'bold');
-    doc.text('DETALHAMENTO DO CÁLCULO', 14, y); y += 6;
-    doc.setFont('helvetica', 'normal');
+    doc.text('DETALHAMENTO POR PARCELA', 14, y); y += 6;
 
-    const items = [
+    // Table header
+    doc.setFillColor(240, 240, 240);
+    doc.rect(14, y - 4, pageWidth - 28, 7, 'F');
+    doc.setFontSize(8);
+    doc.text('Contrato', 16, y);
+    doc.text('Vencimento', 60, y);
+    doc.text('Valor Original', 100, y);
+    doc.text('Valor Atualizado', pageWidth - 16, y, { align: 'right' });
+    y += 7;
+
+    doc.setFont('helvetica', 'normal');
+    const contratosParaListar = contratoSelecionado === 'todos' ? contratos : [contratoAtual!];
+    let somaOriginal = 0;
+    let somaAtualizado = 0;
+
+    for (const c of contratosParaListar) {
+      if (y > 270) { doc.addPage(); y = 20; }
+      const valAtualizado = calcularValorAtualizadoContrato(c.valor_original, c.data_vencimento);
+      somaOriginal += c.valor_original;
+      somaAtualizado += valAtualizado;
+
+      doc.text(c.contrato || 'S/N', 16, y);
+      doc.text(c.data_vencimento ? new Date(c.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A', 60, y);
+      doc.text(fmtBRL(c.valor_original), 100, y);
+      doc.text(fmtBRL(valAtualizado), pageWidth - 16, y, { align: 'right' });
+      y += 5;
+    }
+
+    // Totals
+    y += 2;
+    doc.setDrawColor(200);
+    doc.line(14, y, pageWidth - 14, y);
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL', 16, y);
+    doc.text(fmtBRL(somaOriginal), 100, y);
+    doc.text(fmtBRL(somaAtualizado), pageWidth - 16, y, { align: 'right' });
+    y += 8;
+
+    // Composição
+    doc.setFontSize(10);
+    doc.text('COMPOSIÇÃO DA ATUALIZAÇÃO', 14, y); y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+
+    const items: [string, string][] = [
       ['Valor Original', fmtBRL(valorOriginal)],
-      ['Multa (2%)', fmtBRL(multa)],
-      [`Juros de Mora (1% a.m. × ${mesesAtraso} meses)`, fmtBRL(juros)],
-      [`Correção Monetária (${tipoCorrecao === 'selic' ? 'Selic Diária' : 'INPC'} - ${taxaAcumulada.toFixed(4)}%)`, fmtBRL(correcao)],
     ];
+    if (aplicarMulta) items.push(['Multa (2%)', fmtBRL(multa)]);
+    if (aplicarJuros) items.push([`Juros de Mora (1% a.m. × ${mesesAtraso} meses)`, fmtBRL(juros)]);
+    if (aplicarINPC) items.push([`Correção Monetária (INPC - ${taxaAcumulada.toFixed(4)}%)`, fmtBRL(correcao)]);
 
     for (const [label, value] of items) {
       doc.text(label, 14, y);
@@ -261,18 +287,13 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
     if (parcelas > 1) {
       doc.setFont('helvetica', 'normal');
       doc.text(`Taxa de juros do parcelamento: ${getTaxaJurosLabel(parcelas)}`, 14, y); y += 5;
-      doc.text(`Valor de cada parcela: ${fmtBRL(valorParcela)}`, 14, y); y += 5;
-      doc.text(`Total a pagar: ${fmtBRL(totalAPagar)}`, 14, y); y += 5;
-      if (custoParcelamento > 0) {
-        doc.text(`Custo do parcelamento: ${fmtBRL(custoParcelamento)}`, 14, y); y += 5;
-      }
-      y += 3;
     }
 
-    // Table header
+    // Parcelas table
     doc.setFillColor(240, 240, 240);
     doc.rect(14, y - 4, pageWidth - 28, 7, 'F');
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
     doc.text('Parcela', 20, y);
     doc.text('Vencimento', pageWidth / 2, y, { align: 'center' });
     doc.text('Valor', pageWidth - 30, y, { align: 'right' });
@@ -280,14 +301,22 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
 
     doc.setFont('helvetica', 'normal');
     for (let i = 0; i < parcelas; i++) {
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
-      }
+      if (y > 270) { doc.addPage(); y = 20; }
       doc.text(`${i + 1}ª parcela`, 20, y);
       doc.text(format(datasParcelas[i], 'dd/MM/yyyy'), pageWidth / 2, y, { align: 'center' });
       doc.text(fmtBRL(valorParcela), pageWidth - 30, y, { align: 'right' });
       y += 6;
+    }
+
+    if (parcelas > 1) {
+      y += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(`Total a pagar: ${fmtBRL(totalAPagar)}`, 14, y); y += 5;
+      if (custoParcelamento > 0) {
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Custo do parcelamento: ${fmtBRL(custoParcelamento)}`, 14, y); y += 5;
+      }
     }
 
     y += 8;
@@ -353,7 +382,7 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
                 <span className="text-muted-foreground">Atraso: </span>
                 <Badge variant="destructive" className="text-xs">{diasAtraso} dias ({mesesAtraso} meses)</Badge>
               </div>
-              {periodoConsultado && (
+              {aplicarINPC && periodoConsultado && (
                 <div className="text-muted-foreground text-xs">
                   Período consultado: {periodoConsultado}
                 </div>
@@ -363,39 +392,52 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
 
           <Separator />
 
-          {/* Correção monetária */}
+          {/* Correção Monetária - INPC checkbox */}
           <div className="space-y-3">
             <Label className="font-semibold">Correção Monetária</Label>
-            <RadioGroup
-              value={tipoCorrecao}
-              onValueChange={(v) => setTipoCorrecao(v as 'selic' | 'inpc')}
-              className="flex gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="selic" id="selic" />
-                <Label htmlFor="selic">Selic Diária</Label>
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="space-y-0.5">
+                <Label htmlFor="inpc-check" className="text-sm font-medium">INPC (Índice Nacional de Preços ao Consumidor)</Label>
+                {aplicarINPC && (
+                  <p className="text-xs text-muted-foreground">Taxa acumulada: {taxaAcumulada.toFixed(4)}%</p>
+                )}
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="inpc" id="inpc" />
-                <Label htmlFor="inpc">INPC</Label>
-              </div>
-            </RadioGroup>
+              <Checkbox
+                id="inpc-check"
+                checked={aplicarINPC}
+                onCheckedChange={(checked) => setAplicarINPC(checked === true)}
+              />
+            </div>
+          </div>
 
-            <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground whitespace-nowrap">Taxa acumulada (%):</Label>
-              {loadingTaxa ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Consultando BCB...
-                </div>
-              ) : (
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={taxaAcumulada}
-                  onChange={(e) => setTaxaAcumulada(parseFloat(e.target.value) || 0)}
-                  className="w-32"
-                />
-              )}
+          {/* Juros e Multa checkboxes */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="space-y-0.5">
+                <Label htmlFor="juros-check" className="text-sm font-medium">Juros de Mora (1% a.m.)</Label>
+                {aplicarJuros && mesesAtraso > 0 && (
+                  <p className="text-xs text-muted-foreground">{mesesAtraso} meses = {fmtBRL(juros)}</p>
+                )}
+              </div>
+              <Checkbox
+                id="juros-check"
+                checked={aplicarJuros}
+                onCheckedChange={(checked) => setAplicarJuros(checked === true)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="space-y-0.5">
+                <Label htmlFor="multa-check" className="text-sm font-medium">Multa (2%)</Label>
+                {aplicarMulta && (
+                  <p className="text-xs text-muted-foreground">{fmtBRL(multa)}</p>
+                )}
+              </div>
+              <Checkbox
+                id="multa-check"
+                checked={aplicarMulta}
+                onCheckedChange={(checked) => setAplicarMulta(checked === true)}
+              />
             </div>
           </div>
 
@@ -434,7 +476,7 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
                   <RadioGroupItem value="mensal" id="freq-mensal" />
                   <Label htmlFor="freq-mensal">Mensal</Label>
                 </div>
-            </RadioGroup>
+              </RadioGroup>
             </div>
 
             <div className="space-y-2">
@@ -465,20 +507,26 @@ export function CalculadoraDebitoDialog({ contratos, devedor }: CalculadoraDebit
                   <span className="text-muted-foreground">Valor Original</span>
                   <span>{fmtBRL(valorOriginal)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Multa (2%)</span>
-                  <span>{fmtBRL(multa)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Juros de Mora (1% a.m. × {mesesAtraso} meses)</span>
-                  <span>{fmtBRL(juros)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Correção ({tipoCorrecao === 'selic' ? 'Selic' : 'INPC'} - {taxaAcumulada.toFixed(4)}%)
-                  </span>
-                  <span>{fmtBRL(correcao)}</span>
-                </div>
+                {aplicarMulta && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Multa (2%)</span>
+                    <span>{fmtBRL(multa)}</span>
+                  </div>
+                )}
+                {aplicarJuros && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Juros de Mora (1% a.m. × {mesesAtraso} meses)</span>
+                    <span>{fmtBRL(juros)}</span>
+                  </div>
+                )}
+                {aplicarINPC && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Correção INPC ({taxaAcumulada.toFixed(4)}%)
+                    </span>
+                    <span>{fmtBRL(correcao)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-bold text-base">
                   <span>Total Atualizado</span>
