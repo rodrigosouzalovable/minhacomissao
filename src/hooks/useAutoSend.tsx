@@ -1,0 +1,210 @@
+import { createContext, useContext, useState, useRef, useCallback, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+interface ClienteData {
+  cpf: string;
+  nome: string;
+  telefone: string;
+  atraso: string;
+  saldo: number;
+}
+
+type SendStatus = 'idle' | 'sending' | 'success' | 'error';
+
+const formatPrimeiroNome = (nome: string): string => {
+  const primeiro = nome.trim().split(/\s+/)[0].toLowerCase();
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1);
+};
+
+const formatCurrency = (value: number): string =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const replaceVariables = (template: string, cliente: ClienteData): string =>
+  template
+    .replace(/\{nome\}/g, cliente.nome)
+    .replace(/\{primeiro_nome\}/g, formatPrimeiroNome(cliente.nome))
+    .replace(/\{cpf\}/g, cliente.cpf)
+    .replace(/\{atraso\}/g, String(cliente.atraso))
+    .replace(/\{saldo\}/g, formatCurrency(cliente.saldo));
+
+interface AutoSendProgress {
+  current: number;
+  total: number;
+}
+
+interface AutoSendContextType {
+  autoSending: boolean;
+  autoProgress: AutoSendProgress | null;
+  sendStatus: Record<number, SendStatus>;
+  sendTimestamps: Record<number, string>;
+  startAutoSend: (params: {
+    clientes: ClienteData[];
+    mensagensSalvas: string[];
+    uazapiConfig: { server_url: string; instance_token: string } | null;
+    minSec: number;
+    maxSec: number;
+    historicoId: string | null;
+    userId: string;
+    existingStatus: Record<number, SendStatus>;
+    existingChecked: Set<number>;
+  }) => void;
+  stopAutoSend: () => void;
+}
+
+const AutoSendContext = createContext<AutoSendContextType | undefined>(undefined);
+
+const SEND_STATUS_BASE = 'acionamento_send_status';
+const SEND_TIMESTAMPS_BASE = 'acionamento_send_timestamps';
+
+export function AutoSendProvider({ children }: { children: ReactNode }) {
+  const [autoSending, setAutoSending] = useState(false);
+  const [autoProgress, setAutoProgress] = useState<AutoSendProgress | null>(null);
+  const [sendStatus, setSendStatus] = useState<Record<number, SendStatus>>({});
+  const [sendTimestamps, setSendTimestamps] = useState<Record<number, string>>({});
+
+  const autoSendingRef = useRef(false);
+  const lastUsedMsgIndexRef = useRef<number | null>(null);
+
+  const getRotatedMessage = (mensagensSalvas: string[]): string | null => {
+    if (mensagensSalvas.length === 0) return null;
+    if (mensagensSalvas.length === 1) {
+      lastUsedMsgIndexRef.current = 0;
+      return mensagensSalvas[0];
+    }
+    let newIndex: number;
+    do {
+      newIndex = Math.floor(Math.random() * mensagensSalvas.length);
+    } while (newIndex === lastUsedMsgIndexRef.current);
+    lastUsedMsgIndexRef.current = newIndex;
+    return mensagensSalvas[newIndex];
+  };
+
+  const sendSingle = async (
+    cliente: ClienteData,
+    index: number,
+    mensagensSalvas: string[],
+    uazapiConfig: { server_url: string; instance_token: string } | null,
+    historicoId: string | null,
+    userId: string,
+  ) => {
+    const template = getRotatedMessage(mensagensSalvas);
+    if (!template) return;
+
+    setSendStatus(prev => {
+      const next = { ...prev, [index]: 'sending' as SendStatus };
+      return next;
+    });
+
+    try {
+      const msg = replaceVariables(template, cliente);
+      const body: any = { telefone: cliente.telefone, mensagem: msg };
+      if (uazapiConfig) {
+        body.uazapi_server_url = uazapiConfig.server_url;
+        body.uazapi_instance_token = uazapiConfig.instance_token;
+      }
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
+      if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro');
+
+      setSendStatus(prev => {
+        const next = { ...prev, [index]: 'success' as SendStatus };
+        if (historicoId) localStorage.setItem(`${SEND_STATUS_BASE}_${userId}_${historicoId}`, JSON.stringify(next));
+        return next;
+      });
+      setSendTimestamps(prev => {
+        const next = { ...prev, [index]: new Date().toISOString() };
+        if (historicoId) localStorage.setItem(`${SEND_TIMESTAMPS_BASE}_${userId}_${historicoId}`, JSON.stringify(next));
+        return next;
+      });
+      toast.success(`Mensagem enviada para ${formatPrimeiroNome(cliente.nome)}`);
+    } catch (err: any) {
+      setSendStatus(prev => {
+        const next = { ...prev, [index]: 'error' as SendStatus };
+        if (historicoId) localStorage.setItem(`${SEND_STATUS_BASE}_${userId}_${historicoId}`, JSON.stringify(next));
+        return next;
+      });
+      toast.error(`Falha ao enviar para ${formatPrimeiroNome(cliente.nome)}: ${err.message}`);
+    }
+  };
+
+  const startAutoSend = useCallback(({ clientes, mensagensSalvas, uazapiConfig, minSec, maxSec, historicoId, userId, existingStatus, existingChecked }: {
+    clientes: ClienteData[];
+    mensagensSalvas: string[];
+    uazapiConfig: { server_url: string; instance_token: string } | null;
+    minSec: number;
+    maxSec: number;
+    historicoId: string | null;
+    userId: string;
+    existingStatus: Record<number, SendStatus>;
+    existingChecked: Set<number>;
+  }) => {
+    if (autoSendingRef.current) return;
+
+    // Initialize status from existing
+    setSendStatus(existingStatus);
+
+    const pendentesSnapshot = clientes
+      .map((c, i) => ({ ...c, originalIndex: i }))
+      .filter(c => existingStatus[c.originalIndex] !== 'success' && existingStatus[c.originalIndex] !== 'error' && !existingChecked.has(c.originalIndex));
+
+    if (pendentesSnapshot.length === 0) {
+      toast.error('Não há clientes pendentes para enviar');
+      return;
+    }
+
+    autoSendingRef.current = true;
+    setAutoSending(true);
+
+    const run = async () => {
+      let lastDelay = -1;
+
+      for (let i = 0; i < pendentesSnapshot.length; i++) {
+        if (!autoSendingRef.current) break;
+
+        setAutoProgress({ current: i + 1, total: pendentesSnapshot.length });
+
+        const cliente = pendentesSnapshot[i];
+        await sendSingle(cliente, cliente.originalIndex, mensagensSalvas, uazapiConfig, historicoId, userId);
+
+        if (i < pendentesSnapshot.length - 1 && autoSendingRef.current) {
+          let delay: number;
+          do {
+            delay = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
+          } while (delay === lastDelay && maxSec - minSec >= 1);
+          lastDelay = delay;
+          await new Promise(resolve => setTimeout(resolve, delay * 1000));
+        }
+      }
+
+      autoSendingRef.current = false;
+      setAutoSending(false);
+      setAutoProgress(null);
+      if (pendentesSnapshot.length > 0) {
+        toast.success('Envio automático finalizado');
+      }
+    };
+
+    run();
+  }, []);
+
+  const stopAutoSend = useCallback(() => {
+    autoSendingRef.current = false;
+    setAutoSending(false);
+    setAutoProgress(null);
+    toast.info('Envio automático parado');
+  }, []);
+
+  return (
+    <AutoSendContext.Provider value={{ autoSending, autoProgress, sendStatus, sendTimestamps, startAutoSend, stopAutoSend }}>
+      {children}
+    </AutoSendContext.Provider>
+  );
+}
+
+export function useAutoSend() {
+  const context = useContext(AutoSendContext);
+  if (context === undefined) {
+    throw new Error('useAutoSend must be used within an AutoSendProvider');
+  }
+  return context;
+}
