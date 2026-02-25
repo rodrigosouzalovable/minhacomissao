@@ -544,12 +544,12 @@ export default function Acionamento() {
   );
 
   const pendentes = useMemo(
-    () => clientesComIndex.filter(c => sendStatus[c.originalIndex] !== 'success' && !manualChecked.has(c.originalIndex)),
+    () => clientesComIndex.filter(c => sendStatus[c.originalIndex] !== 'success' && sendStatus[c.originalIndex] !== 'error' && !manualChecked.has(c.originalIndex)),
     [clientesComIndex, sendStatus, manualChecked]
   );
 
   const enviados = useMemo(
-    () => clientesComIndex.filter(c => sendStatus[c.originalIndex] === 'success' || manualChecked.has(c.originalIndex)),
+    () => clientesComIndex.filter(c => sendStatus[c.originalIndex] === 'success' || sendStatus[c.originalIndex] === 'error' || manualChecked.has(c.originalIndex)),
     [clientesComIndex, sendStatus, manualChecked]
   );
 
@@ -913,6 +913,7 @@ export default function Acionamento() {
                       <TableBody>
                         {enviados.map((c) => {
                           const wasSent = sendStatus[c.originalIndex] === 'success';
+                          const wasError = sendStatus[c.originalIndex] === 'error';
                           const wasManual = manualChecked.has(c.originalIndex);
                           return (
                             <TableRow key={c.originalIndex}>
@@ -927,7 +928,12 @@ export default function Acionamento() {
                                       <Check className="h-3 w-3 mr-1" /> Enviado
                                     </Badge>
                                   )}
-                                  {wasManual && !wasSent && (
+                                  {wasError && (
+                                    <Badge variant="destructive">
+                                      <X className="h-3 w-3 mr-1" /> Erro
+                                    </Badge>
+                                  )}
+                                  {wasManual && !wasSent && !wasError && (
                                     <div className="flex items-center gap-2">
                                       <Badge variant="secondary">Manual</Badge>
                                       <Checkbox
