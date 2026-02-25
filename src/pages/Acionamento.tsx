@@ -608,13 +608,16 @@ export default function Acionamento() {
     }
     setTestingConnection(true);
     try {
-      const response = await fetch(`${uazapiServerUrl}/status/${uazapiInstanceToken}`);
-      if (response.ok) {
+      const { data, error } = await supabase.functions.invoke('test-uazapi-connection', {
+        body: { server_url: uazapiServerUrl, instance_token: uazapiInstanceToken }
+      });
+      if (error) throw error;
+      if (data?.ok) {
         toast.success('Conexão com UAZAPI bem-sucedida!');
       } else {
         toast.error('UAZAPI respondeu com erro. Verifique suas credenciais.');
       }
-    } catch (error) {
+    } catch (error: any) {
       toast.error('Não foi possível conectar à UAZAPI. Verifique o Server URL.');
     } finally {
       setTestingConnection(false);
