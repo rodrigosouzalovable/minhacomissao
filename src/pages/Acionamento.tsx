@@ -607,8 +607,16 @@ export default function Acionamento() {
 
         {/* Upload + Histórico */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Importar Planilha</CardTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTab(activeTab === 'config' ? 'pendentes' : 'config')}
+              className={activeTab === 'config' ? 'text-primary' : 'text-muted-foreground'}
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
@@ -735,13 +743,6 @@ export default function Acionamento() {
                   onClick={() => setActiveTab('enviados')}
                 >
                   ENVIADOS ({enviadosHoje} hoje)
-                </Button>
-                <Button
-                  variant={activeTab === 'config' ? 'default' : 'outline'}
-                  onClick={() => setActiveTab('config')}
-                >
-                  <Settings className="h-4 w-4 mr-2" /> CONFIGURAÇÃO
-                  {uazapiConfigured && <Badge variant="secondary" className="ml-2 text-xs">Ativa</Badge>}
                 </Button>
               </div>
             </CardHeader>
