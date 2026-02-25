@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -98,6 +98,7 @@ export default function Acionamento() {
   const [uazapiInstanceToken, setUazapiInstanceToken] = useState('');
   const [uazapiConfigured, setUazapiConfigured] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
   const uazapiConfigRef = useRef<{ server_url: string; instance_token: string } | null>(null);
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
@@ -600,6 +601,26 @@ export default function Acionamento() {
     }
   };
 
+  const handleTestUazapiConnection = async () => {
+    if (!uazapiServerUrl || !uazapiInstanceToken) {
+      toast.error('Preencha o Server URL e o Instance Token');
+      return;
+    }
+    setTestingConnection(true);
+    try {
+      const response = await fetch(`${uazapiServerUrl}/status/${uazapiInstanceToken}`);
+      if (response.ok) {
+        toast.success('Conexão com UAZAPI bem-sucedida!');
+      } else {
+        toast.error('UAZAPI respondeu com erro. Verifique suas credenciais.');
+      }
+    } catch (error) {
+      toast.error('Não foi possível conectar à UAZAPI. Verifique o Server URL.');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -947,10 +968,16 @@ export default function Acionamento() {
                             onChange={(e) => setUazapiInstanceToken(e.target.value)}
                           />
                         </div>
-                        <Button onClick={handleSaveUazapiConfig} disabled={savingConfig}>
-                          {savingConfig ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                          Salvar configuração
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button onClick={handleSaveUazapiConfig} disabled={savingConfig}>
+                            {savingConfig ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                            Salvar configuração
+                          </Button>
+                          <Button variant="outline" onClick={handleTestUazapiConnection} disabled={testingConnection || !uazapiServerUrl || !uazapiInstanceToken}>
+                            {testingConnection ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wifi className="h-4 w-4 mr-2" />}
+                            Testar conexão
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   )}
