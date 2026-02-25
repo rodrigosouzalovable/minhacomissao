@@ -1,45 +1,42 @@
 
 
-# Correção do envio de mensagens via UAZAPI
+# Persistência por Usuário e Controle de Envio Automático no Acionamento
 
-## Problema identificado
+## Problemas Identificados
 
-Os logs da edge function `send-whatsapp` mostram claramente o erro:
+### 1. Dados compartilhados entre todos os logins (CRÍTICO)
+Todas as chaves do localStorage são globais (ex: `acionamento_historico`, `acionamento_ativo`). Isso significa que se o funcionário A importa uma planilha e o funcionário B faz login no mesmo navegador, B verá os dados de A. Mesmo em navegadores diferentes, se dois funcionários acessarem o mesmo dispositivo, os dados se misturam.
 
-```
-Resposta da UAZAPI: { code: 405, message: "Method Not Allowed.", data: {} }
-```
+### 2. Envio automático retoma sem consentimento
+Ao recarregar a página ou navegar de volta, o sistema automaticamente retoma o envio se havia um estado salvo em `AUTO_SENDING_KEY`. Isso pode causar envios indesejados.
 
-A URL usada é `${server_url}/sendText/${instance_token}` -- o token está na URL. Porém, a UAZAPI v2 exige autenticação via **header `token`**, não na URL. O endpoint `test-uazapi-connection` já foi corrigido para usar o header e funciona. Agora o `send-whatsapp` precisa da mesma correção.
+### 3. Botão "Parar" funciona corretamente
+O mecanismo de parada (`autoSendingRef.current = false`) está correto. O loop verifica essa flag antes de cada envio e para após o envio em andamento concluir. Não há problema aqui.
 
 ## Solução
 
-### Alteração em `supabase/functions/send-whatsapp/index.ts`
+### Alteração em `src/pages/Acionamento.tsx`
 
-Mudar o bloco UAZAPI de:
-```typescript
-const uazapiUrl = `${uazapi_server_url}/sendText/${uazapi_instance_token}`;
-fetch(uazapiUrl, {
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ phone, message })
-});
+**Tornar todas as chaves do localStorage específicas por usuário**, incluindo o `user.id` em cada chave:
+
+```text
+Antes:  'acionamento_historico'
+Depois: 'acionamento_historico_<user.id>'
 ```
 
-Para:
-```typescript
-const cleanUrl = uazapi_server_url.replace(/\/+$/, '');
-const uazapiUrl = `${cleanUrl}/sendText`;
-fetch(uazapiUrl, {
-  headers: { 
-    'Content-Type': 'application/json',
-    'token': uazapi_instance_token 
-  },
-  body: JSON.stringify({ phone, message })
-});
-```
+Chaves afetadas (7 no total):
+- `MENSAGENS_KEY` → mensagens salvas
+- `HISTORICO_KEY` → histórico de importações
+- `ACTIVE_KEY` → planilha ativa
+- `SEND_STATUS_KEY` → status de envio por cliente
+- `MANUAL_CHECKED_KEY` → marcações manuais
+- `SEND_TIMESTAMPS_KEY` → timestamps de envio
+- `AUTO_SENDING_KEY` → estado do envio automático
 
-A mudança é: remover o token da URL e passá-lo como header `token`, consistente com o formato v2 da UAZAPI que já funciona no teste de conexão.
+**Implementação**: As constantes deixarão de ser fixas e passarão a ser derivadas do `user.id` via uma função helper. O `useEffect` de carregamento será condicionado ao `user` estar disponível.
 
-### Resumo
-- **1 arquivo editado**: `supabase/functions/send-whatsapp/index.ts` (corrigir autenticação UAZAPI)
+**Envio automático**: O auto-resume só será executado se a chave correspondente ao usuário logado tiver estado `active: true`. Ao trocar de usuário, o novo login não verá nem retomará envios de outro usuário.
+
+### Resumo de alterações
+- **1 arquivo**: `src/pages/Acionamento.tsx` — prefixar todas as chaves localStorage com `user.id`
 
