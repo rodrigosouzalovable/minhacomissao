@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { AutoSendProvider } from "@/hooks/useAutoSend";
 
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -109,6 +110,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <AutoSendProvider>
           <Routes>
             <Route path="/" element={<PortalHome />} />
             <Route path="/:creditor" element={<PortalConsulta />} />
@@ -138,6 +140,7 @@ const App = () => (
             <Route path="/admin/acionamento" element={<ProtectedRoute><Acionamento /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </AutoSendProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

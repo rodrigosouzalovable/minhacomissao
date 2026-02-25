@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useAutoSend } from '@/hooks/useAutoSend';
 import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, Send } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -108,10 +109,8 @@ export default function Acionamento() {
   const uazapiConfigRef = useRef<{ server_url: string; instance_token: string } | null>(null);
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
-  const [autoSending, setAutoSending] = useState(false);
-  const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
-  const autoSendingRef = useRef(false);
   const activeHistoricoIdRef = useRef<string | null>(null);
+  const { autoSending, autoProgress, sendStatus: contextSendStatus, sendTimestamps: contextSendTimestamps, startAutoSend, stopAutoSend } = useAutoSend();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -412,64 +411,29 @@ export default function Acionamento() {
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const runAutoSendLoop = async (clientesList: ClienteData[], statusMap: Record<number, SendStatus>, checkedSet: Set<number>, minSec: number, maxSec: number, historicoId: string | null) => {
-    autoSendingRef.current = true;
-    setAutoSending(true);
-
-    // snapshot current pendentes using provided data
-    const pendentesSnapshot = clientesList
-      .map((c, i) => ({ ...c, originalIndex: i }))
-      .filter(c => statusMap[c.originalIndex] !== 'success' && !checkedSet.has(c.originalIndex));
-
-    if (pendentesSnapshot.length === 0) {
-      toast.error('Não há clientes pendentes para enviar');
-      autoSendingRef.current = false;
-      setAutoSending(false);
-      localStorage.removeItem(AUTO_SENDING_KEY);
-      return;
+  // Sync context sendStatus/sendTimestamps into local state when auto-sending
+  useEffect(() => {
+    if (autoSending) {
+      setSendStatus(contextSendStatus);
     }
+  }, [autoSending, contextSendStatus]);
 
-    // Save auto-send state to localStorage
-    localStorage.setItem(AUTO_SENDING_KEY, JSON.stringify({
-      active: true,
-      historicoId: historicoId,
-      minSec,
-      maxSec,
-    }));
-
-    let lastDelay = -1;
-
-    for (let i = 0; i < pendentesSnapshot.length; i++) {
-      if (!autoSendingRef.current) break;
-
-      setAutoProgress({ current: i + 1, total: pendentesSnapshot.length });
-
-      const cliente = pendentesSnapshot[i];
-      await handleSend(cliente.originalIndex);
-
-      // Wait random delay before next (skip delay after last one)
-      if (i < pendentesSnapshot.length - 1 && autoSendingRef.current) {
-        let delay: number;
-        do {
-          delay = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
-        } while (delay === lastDelay && maxSec - minSec >= 1);
-        lastDelay = delay;
-
-        await new Promise(resolve => setTimeout(resolve, delay * 1000));
-      }
+  useEffect(() => {
+    if (autoSending) {
+      setSendTimestamps(contextSendTimestamps);
     }
+  }, [autoSending, contextSendTimestamps]);
 
-    autoSendingRef.current = false;
-    setAutoSending(false);
-    setAutoProgress(null);
-    localStorage.removeItem(AUTO_SENDING_KEY);
-    if (pendentesSnapshot.length > 0) {
+  // When auto-send finishes, switch to enviados tab
+  const prevAutoSending = useRef(autoSending);
+  useEffect(() => {
+    if (prevAutoSending.current && !autoSending) {
       setActiveTab('enviados');
-      toast.success('Envio automático finalizado');
     }
-  };
+    prevAutoSending.current = autoSending;
+  }, [autoSending]);
 
-  const handleAutoSend = async () => {
+  const handleAutoSend = () => {
     if (mensagensSalvas.length === 0) {
       toast.error('Salve pelo menos uma mensagem antes de iniciar');
       return;
@@ -483,59 +447,21 @@ export default function Acionamento() {
       return;
     }
 
-    await runAutoSendLoop(clientes, sendStatus, manualChecked, autoMinSec, autoMaxSec, activeHistoricoId);
-  };
-
-  const handleAutoSendResume = async (item: HistoricoItem, minSec: number, maxSec: number) => {
-    // Load saved messages
-    const savedMsgs = localStorage.getItem(MENSAGENS_KEY);
-    let msgs: string[] = [];
-    if (savedMsgs) {
-      try { msgs = JSON.parse(savedMsgs); } catch {}
-    }
-    if (msgs.length === 0) {
-      toast.error('Sem mensagens salvas para retomar o envio');
-      localStorage.removeItem(AUTO_SENDING_KEY);
-      return;
-    }
-
-    // Restore historico data
-    setClientes(item.clientes);
-    setActiveHistoricoId(item.id);
-    localStorage.setItem(ACTIVE_KEY, item.id);
-
-    // Load persisted send status
-    let statusMap: Record<number, SendStatus> = {};
-    const savedStatus = localStorage.getItem(`${SEND_STATUS_KEY}_${item.id}`);
-    if (savedStatus) {
-      try { statusMap = JSON.parse(savedStatus); } catch {}
-    }
-    setSendStatus(statusMap);
-
-    let checkedSet = new Set<number>();
-    const savedManual = localStorage.getItem(`${MANUAL_CHECKED_KEY}_${item.id}`);
-    if (savedManual) {
-      try { checkedSet = new Set(JSON.parse(savedManual)); } catch {}
-    }
-    setManualChecked(checkedSet);
-
-    const savedTs = localStorage.getItem(`${SEND_TIMESTAMPS_KEY}_${item.id}`);
-    if (savedTs) {
-      try { setSendTimestamps(JSON.parse(savedTs)); } catch {}
-    }
-
-    setMensagensSalvas(msgs);
-    toast.info('Retomando envio automático...');
-
-    await runAutoSendLoop(item.clientes, statusMap, checkedSet, minSec, maxSec, item.id);
+    startAutoSend({
+      clientes,
+      mensagensSalvas,
+      uazapiConfig: uazapiConfigRef.current,
+      minSec: autoMinSec,
+      maxSec: autoMaxSec,
+      historicoId: activeHistoricoId,
+      userId: uid,
+      existingStatus: sendStatus,
+      existingChecked: manualChecked,
+    });
   };
 
   const handleStopAutoSend = () => {
-    autoSendingRef.current = false;
-    setAutoSending(false);
-    setAutoProgress(null);
-    localStorage.removeItem(AUTO_SENDING_KEY);
-    toast.info('Envio automático parado');
+    stopAutoSend();
   };
 
   const clientesComIndex = useMemo(
