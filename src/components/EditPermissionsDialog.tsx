@@ -29,6 +29,13 @@ const AVAILABLE_TABS = [
   { path: '/retornos', label: 'Retornos' },
   { path: '/clientes', label: 'Clientes' },
   { path: '/comissoes', label: 'Minhas Comissões' },
+  { path: '/equipe/acordos', label: 'Acordos da Equipe' },
+  { path: '/admin/usuarios', label: 'Usuários' },
+  { path: '/admin/equipes', label: 'Equipes' },
+  { path: '/admin/auditoria', label: 'Auditoria' },
+  { path: '/admin/financeiro', label: 'Financeiro' },
+  { path: '/admin/importar-devedores', label: 'Importar Devedores' },
+  { path: '/admin/acionamento', label: 'Acionamento' },
 ];
 
 const CREDORES = [
