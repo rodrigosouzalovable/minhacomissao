@@ -33,23 +33,50 @@ serve(async (req) => {
     if (uazapi_server_url && uazapi_instance_token) {
       // UAZAPI flow (employees)
       const cleanUrl = uazapi_server_url.replace(/\/+$/, '');
-      const uazapiUrl = `${cleanUrl}/sendText`;
-      console.log('Enviando via UAZAPI...');
+      
+      // Try /message/sendText first (v2 standard), fallback to /sendText
+      const endpoints = [
+        `${cleanUrl}/message/sendText`,
+        `${cleanUrl}/sendText`,
+        `${cleanUrl}/send/text`,
+      ];
+      
+      let lastError = null;
+      let success = false;
 
-      response = await fetch(uazapiUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'token': uazapi_instance_token,
-        },
-        body: JSON.stringify({
+      for (const uazapiUrl of endpoints) {
+        console.log(`Tentando endpoint: ${uazapiUrl}`);
+        
+        const requestBody = JSON.stringify({
           number: telefoneCompleto,
           text: mensagem,
-        }),
-      });
+        });
+        console.log('Body:', requestBody);
 
-      data = await response.json();
-      console.log('Resposta da UAZAPI:', data);
+        response = await fetch(uazapiUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'token': uazapi_instance_token,
+          },
+          body: requestBody,
+        });
+
+        data = await response.json();
+        console.log(`Resposta de ${uazapiUrl}:`, JSON.stringify(data));
+        
+        if (response.ok) {
+          success = true;
+          break;
+        }
+        
+        lastError = data;
+        console.log(`Endpoint ${uazapiUrl} falhou com status ${response.status}`);
+      }
+
+      if (!success) {
+        throw new Error(lastError?.message || lastError?.error || 'Nenhum endpoint UAZAPI funcionou');
+      }
     } else {
       // Z-API flow (admin - existing behavior)
       const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
@@ -80,7 +107,7 @@ serve(async (req) => {
       console.log('Resposta da Z-API:', data);
     }
 
-    if (!response.ok) {
+    if (!response!.ok && !(uazapi_server_url && uazapi_instance_token)) {
       throw new Error(data.message || data.error || 'Erro ao enviar mensagem');
     }
 
