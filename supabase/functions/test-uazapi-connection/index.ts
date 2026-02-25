@@ -18,17 +18,75 @@ Deno.serve(async (req) => {
       });
     }
 
-    const response = await fetch(`${server_url}/status/${instance_token}`);
-    const data = await response.text();
+    const cleanUrl = server_url.replace(/\/+$/, '');
 
-    let parsed;
-    try {
-      parsed = JSON.parse(data);
-    } catch {
-      parsed = { raw: data };
+    // Try v2 endpoint first: /instance/status with token header
+    const endpoints = [
+      `${cleanUrl}/instance/status`,
+      `${cleanUrl}/status`,
+    ];
+
+    let lastResponse = null;
+    let lastData = null;
+
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Tentando endpoint: ${endpoint}`);
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'token': instance_token,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const text = await response.text();
+        let parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = { raw: text };
+        }
+
+        console.log(`Resposta de ${endpoint}: status=${response.status}, data=${JSON.stringify(parsed)}`);
+
+        if (response.ok) {
+          return new Response(JSON.stringify({ ok: true, status: response.status, data: parsed, endpoint }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        lastResponse = response;
+        lastData = parsed;
+      } catch (e) {
+        console.log(`Erro ao tentar ${endpoint}: ${e.message}`);
+        lastData = { error: e.message };
+      }
     }
 
-    return new Response(JSON.stringify({ ok: response.ok, status: response.status, data: parsed }), {
+    // Also try legacy format: /status/${token} in URL
+    try {
+      const legacyEndpoint = `${cleanUrl}/status/${instance_token}`;
+      console.log(`Tentando endpoint legado: ${legacyEndpoint}`);
+      const response = await fetch(legacyEndpoint);
+      const text = await response.text();
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = { raw: text };
+      }
+
+      console.log(`Resposta legada: status=${response.status}, data=${JSON.stringify(parsed)}`);
+
+      return new Response(JSON.stringify({ ok: response.ok, status: response.status, data: parsed, endpoint: legacyEndpoint }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (e) {
+      console.log(`Erro no endpoint legado: ${e.message}`);
+    }
+
+    return new Response(JSON.stringify({ ok: false, status: lastResponse?.status || 0, data: lastData, error: 'Nenhum endpoint respondeu com sucesso' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
