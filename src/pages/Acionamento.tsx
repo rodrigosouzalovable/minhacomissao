@@ -690,6 +690,9 @@ export default function Acionamento() {
                 </Badge>
               )}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Formato esperado: <strong>Coluna A</strong> = CPF, <strong>Coluna B</strong> = Nome, <strong>Coluna C</strong> = Telefone, <strong>Coluna D</strong> = Atraso, <strong>Coluna E</strong> = Saldo
+            </p>
 
             {historico.length > 0 && (
               <div className="space-y-2">
