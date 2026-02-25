@@ -1,74 +1,43 @@
 
 
-# Configuração UAZAPI por Funcionário no Acionamento
+# Atualizar lista de abas no dialog de Editar Permissões
 
-## Resumo
-Adicionar uma aba "Configuração" na página de Acionamento onde cada funcionário pode configurar suas credenciais da UAZAPI (Server URL e Instance Token). O admin continua usando a Z-API existente. O sistema detecta automaticamente qual API usar ao enviar mensagens.
+## Problema
+O dialog de Editar Permissões em `EditPermissionsDialog.tsx` lista apenas 7 abas fixas, mas o sistema tem mais abas disponíveis (como "Acordos da Equipe", "Acionamento", etc.). Quando novas abas forem criadas, elas precisam aparecer automaticamente.
 
-## Alterações
+## Solução
 
-### 1. Nova tabela no banco de dados: `user_whatsapp_config`
+### Alteração em `src/components/EditPermissionsDialog.tsx`
 
-```sql
-CREATE TABLE public.user_whatsapp_config (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL UNIQUE,
-  provider TEXT NOT NULL DEFAULT 'uazapi',
-  server_url TEXT NOT NULL,
-  instance_token TEXT NOT NULL,
-  criado_em TIMESTAMPTZ DEFAULT now(),
-  atualizado_em TIMESTAMPTZ DEFAULT now()
-);
+Atualizar a constante `AVAILABLE_TABS` para incluir todas as abas existentes no sistema, espelhando a lista de `navItems` do `AppLayout.tsx`:
 
-ALTER TABLE public.user_whatsapp_config ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage their own config"
-  ON public.user_whatsapp_config
-  FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+```typescript
+const AVAILABLE_TABS = [
+  { path: '/conta', label: 'Minha Conta' },
+  { path: '/dashboard', label: 'Dashboard' },
+  { path: '/acordos', label: 'Meus Acordos' },
+  { path: '/acordos/novo', label: 'Novo Acordo' },
+  { path: '/retornos', label: 'Retornos' },
+  { path: '/clientes', label: 'Clientes' },
+  { path: '/comissoes', label: 'Minhas Comissões' },
+  { path: '/equipe/acordos', label: 'Acordos da Equipe' },
+  { path: '/admin/usuarios', label: 'Usuários' },
+  { path: '/admin/equipes', label: 'Equipes' },
+  { path: '/admin/auditoria', label: 'Auditoria' },
+  { path: '/admin/financeiro', label: 'Financeiro' },
+  { path: '/admin/importar-devedores', label: 'Importar Devedores' },
+  { path: '/admin/acionamento', label: 'Acionamento' },
+];
 ```
 
-### 2. Atualizar Edge Function `send-whatsapp`
+Isso inclui todas as 14 abas do sistema. Para facilitar a manutenção futura, a lista será centralizada neste componente e refletirá todas as rotas protegidas do `AppLayout`.
 
-Aceitar parâmetros opcionais `uazapi_server_url` e `uazapi_instance_token` no body da requisição. Se presentes, usar a UAZAPI em vez da Z-API.
+### Alteração no `AppLayout.tsx`
 
-- **Z-API (admin)**: `https://api.z-api.io/instances/{id}/token/{token}/send-text` com header `Client-Token`
-- **UAZAPI (funcionários)**: `{server_url}/sendText/{instance_token}` com body `{ phone, message }`
+Ajustar a lógica de filtragem para que, quando `abasPermitidas` estiver configurada, ela seja respeitada para **todas** as abas (não apenas as não-admin). Isso permite que o admin conceda acesso seletivo a abas administrativas para funcionários específicos, se desejado. A lógica atual já funciona corretamente pois só aplica o filtro para não-admins.
 
-Lógica:
-```
-if (uazapi_server_url && uazapi_instance_token) {
-  // Usar UAZAPI
-  url = `${uazapi_server_url}/sendText/${uazapi_instance_token}`
-  body = { phone, message }
-} else {
-  // Usar Z-API (comportamento atual)
-}
-```
+Nenhuma mudança necessária no `AppLayout.tsx` -- a lógica atual já cobre o cenário.
 
-### 3. Alterar `src/pages/Acionamento.tsx`
-
-#### Nova aba "Configuração"
-- Adicionar um terceiro botão de aba: "CONFIGURAÇÃO"
-- Formulário com campos:
-  - **Server URL** (input text) — ex: `https://certificadoracnpj.uazapi.com`
-  - **Instance Token** (input text) — ex: `c01095d6-64d4-4b33-9c1f-86a09948dc7c`
-- Botão "Salvar configuração" que persiste no banco (`user_whatsapp_config`)
-- Mostrar status "Configurado" ou "Não configurado" com badge
-
-#### Lógica de envio
-- Importar `useAuth` para obter o user ID
-- Importar `useUserRole` para detectar admin
-- Ao montar a página, buscar config do usuário em `user_whatsapp_config`
-- No `handleSend`:
-  - Se o usuário for admin (sem config UAZAPI), enviar sem parâmetros extras (usa Z-API)
-  - Se o usuário tiver config UAZAPI, passar `uazapi_server_url` e `uazapi_instance_token` no body da chamada
-
-### 4. Detalhes técnicos
-
-- O `activeTab` muda de `'pendentes' | 'enviados'` para `'pendentes' | 'enviados' | 'config'`
-- A aba "Configuração" aparece para todos os usuários, mas admins verão uma mensagem indicando que usam a API padrão do sistema
-- As credenciais UAZAPI são armazenadas no banco (não no localStorage) para segurança
-- A edge function mantém retrocompatibilidade total — sem parâmetros UAZAPI, usa Z-API
+### Resumo das mudanças
+- **1 arquivo**: `src/components/EditPermissionsDialog.tsx` -- atualizar `AVAILABLE_TABS` com todas as 14 abas do sistema
 
