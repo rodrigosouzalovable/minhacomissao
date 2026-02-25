@@ -8,11 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, Send } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -91,7 +93,10 @@ export default function Acionamento() {
   const [sendTimestamps, setSendTimestamps] = useState<Record<number, string>>({});
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados' | 'config'>('pendentes');
+  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados'>('pendentes');
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
   
   // UAZAPI config state
   const [uazapiServerUrl, setUazapiServerUrl] = useState('');
@@ -625,7 +630,30 @@ export default function Acionamento() {
     }
   };
 
-  return (
+  const handleTestSend = async () => {
+    if (!testPhone.trim()) {
+      toast.error('Digite um número de telefone para teste');
+      return;
+    }
+    setSendingTest(true);
+    try {
+      const body: any = { telefone: testPhone.trim(), mensagem: 'mensagem teste' };
+      const config = uazapiConfigRef.current;
+      if (config) {
+        body.uazapi_server_url = config.server_url;
+        body.uazapi_instance_token = config.instance_token;
+      }
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
+      if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro ao enviar');
+      toast.success('Mensagem de teste enviada com sucesso!');
+    } catch (err: any) {
+      toast.error(`Erro ao enviar teste: ${err.message}`);
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
+
     <AppLayout>
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">Acionamento</h1>
@@ -637,8 +665,8 @@ export default function Acionamento() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setActiveTab(activeTab === 'config' ? 'pendentes' : 'config')}
-              className={activeTab === 'config' ? 'text-primary' : 'text-muted-foreground'}
+              onClick={() => setConfigDialogOpen(true)}
+              className="text-muted-foreground"
             >
               <Settings className="h-5 w-5" />
             </Button>
@@ -753,7 +781,7 @@ export default function Acionamento() {
         </Card>
 
         {/* Lista de clientes com abas */}
-        {(clientes.length > 0 || activeTab === 'config') && (
+        {clientes.length > 0 && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -931,65 +959,92 @@ export default function Acionamento() {
                 </>
               )}
 
-              {activeTab === 'config' && (
-                <div className="space-y-6">
-                  {isAdmin ? (
-                    <div className="rounded-md border p-4 bg-muted/30">
-                      <p className="text-sm text-muted-foreground">
-                        Sua conta de administrador utiliza a <strong>Z-API</strong> configurada no sistema. Não é necessário configurar credenciais aqui.
-                      </p>
-                      <Badge variant="default" className="mt-2">Z-API (Padrão do sistema)</Badge>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold">Configuração UAZAPI</h3>
-                        {uazapiConfigured ? (
-                          <Badge variant="default">Configurado</Badge>
-                        ) : (
-                          <Badge variant="destructive">Não configurado</Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Configure suas credenciais da UAZAPI para enviar mensagens pelo seu próprio número de WhatsApp.
-                      </p>
-                      <div className="space-y-3 max-w-md">
-                        <div className="space-y-2">
-                          <Label htmlFor="server-url">Server URL</Label>
-                          <Input
-                            id="server-url"
-                            placeholder="https://certificadoracnpj.uazapi.com"
-                            value={uazapiServerUrl}
-                            onChange={(e) => setUazapiServerUrl(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="instance-token">Instance Token</Label>
-                          <Input
-                            id="instance-token"
-                            placeholder="c01095d6-64d4-4b33-9c1f-86a09948dc7c"
-                            value={uazapiInstanceToken}
-                            onChange={(e) => setUazapiInstanceToken(e.target.value)}
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button onClick={handleSaveUazapiConfig} disabled={savingConfig}>
-                            {savingConfig ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                            Salvar configuração
-                          </Button>
-                          <Button variant="outline" onClick={handleTestUazapiConnection} disabled={testingConnection || !uazapiServerUrl || !uazapiInstanceToken}>
-                            {testingConnection ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wifi className="h-4 w-4 mr-2" />}
-                            Testar conexão
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Config moved to Dialog */}
             </CardContent>
           </Card>
         )}
+
+        {/* Config Dialog */}
+        <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Configurações</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6">
+              {isAdmin ? (
+                <div className="rounded-md border p-4 bg-muted/30">
+                  <p className="text-sm text-muted-foreground">
+                    Sua conta de administrador utiliza a <strong>Z-API</strong> configurada no sistema. Não é necessário configurar credenciais aqui.
+                  </p>
+                  <Badge variant="default" className="mt-2">Z-API (Padrão do sistema)</Badge>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold">Configuração UAZAPI</h3>
+                    {uazapiConfigured ? (
+                      <Badge variant="default">Configurado</Badge>
+                    ) : (
+                      <Badge variant="destructive">Não configurado</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Configure suas credenciais da UAZAPI para enviar mensagens pelo seu próprio número de WhatsApp.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="server-url">Server URL</Label>
+                      <Input
+                        id="server-url"
+                        placeholder="https://certificadoracnpj.uazapi.com"
+                        value={uazapiServerUrl}
+                        onChange={(e) => setUazapiServerUrl(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="instance-token">Instance Token</Label>
+                      <Input
+                        id="instance-token"
+                        placeholder="c01095d6-64d4-4b33-9c1f-86a09948dc7c"
+                        value={uazapiInstanceToken}
+                        onChange={(e) => setUazapiInstanceToken(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleSaveUazapiConfig} disabled={savingConfig}>
+                        {savingConfig ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                        Salvar
+                      </Button>
+                      <Button variant="outline" onClick={handleTestUazapiConnection} disabled={testingConnection || !uazapiServerUrl || !uazapiInstanceToken}>
+                        {testingConnection ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wifi className="h-4 w-4 mr-2" />}
+                        Testar conexão
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold">Testar envio</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="test-phone">Telefone para teste</Label>
+                  <Input
+                    id="test-phone"
+                    placeholder="11999999999"
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleTestSend} disabled={sendingTest || !testPhone.trim()}>
+                  {sendingTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                  Testar envio
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
