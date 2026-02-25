@@ -7,9 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -77,6 +80,8 @@ const WhatsAppIcon = () => (
 );
 
 export default function Acionamento() {
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [clientes, setClientes] = useState<ClienteData[]>([]);
   const [mensagem, setMensagem] = useState('');
   const [mensagensSalvas, setMensagensSalvas] = useState<string[]>([]);
@@ -86,7 +91,14 @@ export default function Acionamento() {
   const [sendTimestamps, setSendTimestamps] = useState<Record<number, string>>({});
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados'>('pendentes');
+  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados' | 'config'>('pendentes');
+  
+  // UAZAPI config state
+  const [uazapiServerUrl, setUazapiServerUrl] = useState('');
+  const [uazapiInstanceToken, setUazapiInstanceToken] = useState('');
+  const [uazapiConfigured, setUazapiConfigured] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const uazapiConfigRef = useRef<{ server_url: string; instance_token: string } | null>(null);
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
   const [autoSending, setAutoSending] = useState(false);
@@ -133,6 +145,25 @@ export default function Acionamento() {
       }
     }
   }, []);
+
+  // Fetch UAZAPI config from database
+  useEffect(() => {
+    if (!user) return;
+    const fetchConfig = async () => {
+      const { data } = await supabase
+        .from('user_whatsapp_config')
+        .select('server_url, instance_token')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data) {
+        setUazapiServerUrl(data.server_url);
+        setUazapiInstanceToken(data.instance_token);
+        setUazapiConfigured(true);
+        uazapiConfigRef.current = { server_url: data.server_url, instance_token: data.instance_token };
+      }
+    };
+    fetchConfig();
+  }, [user]);
 
   // Resume auto-send if it was active when the user navigated away
   useEffect(() => {
@@ -354,9 +385,14 @@ export default function Acionamento() {
 
     try {
       const msg = replaceVariables(template, cliente);
-      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-        body: { telefone: cliente.telefone, mensagem: msg },
-      });
+      const body: any = { telefone: cliente.telefone, mensagem: msg };
+      // If user has UAZAPI config (non-admin), pass credentials
+      const config = uazapiConfigRef.current;
+      if (config) {
+        body.uazapi_server_url = config.server_url;
+        body.uazapi_instance_token = config.instance_token;
+      }
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
 
       if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro');
       setSendStatus((prev) => {
@@ -537,6 +573,33 @@ export default function Acionamento() {
     [enviados, sendTimestamps]
   );
 
+  const handleSaveUazapiConfig = async () => {
+    if (!user) return;
+    if (!uazapiServerUrl.trim() || !uazapiInstanceToken.trim()) {
+      toast.error('Preencha todos os campos');
+      return;
+    }
+    setSavingConfig(true);
+    try {
+      const { error } = await supabase
+        .from('user_whatsapp_config')
+        .upsert({
+          user_id: user.id,
+          server_url: uazapiServerUrl.trim(),
+          instance_token: uazapiInstanceToken.trim(),
+          atualizado_em: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+      if (error) throw error;
+      setUazapiConfigured(true);
+      uazapiConfigRef.current = { server_url: uazapiServerUrl.trim(), instance_token: uazapiInstanceToken.trim() };
+      toast.success('Configuração salva com sucesso!');
+    } catch (err: any) {
+      toast.error(`Erro ao salvar: ${err.message}`);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -657,7 +720,7 @@ export default function Acionamento() {
         </Card>
 
         {/* Lista de clientes com abas */}
-        {clientes.length > 0 && (
+        {(clientes.length > 0 || activeTab === 'config') && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -672,6 +735,13 @@ export default function Acionamento() {
                   onClick={() => setActiveTab('enviados')}
                 >
                   ENVIADOS ({enviadosHoje} hoje)
+                </Button>
+                <Button
+                  variant={activeTab === 'config' ? 'default' : 'outline'}
+                  onClick={() => setActiveTab('config')}
+                >
+                  <Settings className="h-4 w-4 mr-2" /> CONFIGURAÇÃO
+                  {uazapiConfigured && <Badge variant="secondary" className="ml-2 text-xs">Ativa</Badge>}
                 </Button>
               </div>
             </CardHeader>
@@ -833,6 +903,57 @@ export default function Acionamento() {
                     </Table>
                   )}
                 </>
+              )}
+
+              {activeTab === 'config' && (
+                <div className="space-y-6">
+                  {isAdmin ? (
+                    <div className="rounded-md border p-4 bg-muted/30">
+                      <p className="text-sm text-muted-foreground">
+                        Sua conta de administrador utiliza a <strong>Z-API</strong> configurada no sistema. Não é necessário configurar credenciais aqui.
+                      </p>
+                      <Badge variant="default" className="mt-2">Z-API (Padrão do sistema)</Badge>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-semibold">Configuração UAZAPI</h3>
+                        {uazapiConfigured ? (
+                          <Badge variant="default">Configurado</Badge>
+                        ) : (
+                          <Badge variant="destructive">Não configurado</Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Configure suas credenciais da UAZAPI para enviar mensagens pelo seu próprio número de WhatsApp.
+                      </p>
+                      <div className="space-y-3 max-w-md">
+                        <div className="space-y-2">
+                          <Label htmlFor="server-url">Server URL</Label>
+                          <Input
+                            id="server-url"
+                            placeholder="https://certificadoracnpj.uazapi.com"
+                            value={uazapiServerUrl}
+                            onChange={(e) => setUazapiServerUrl(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="instance-token">Instance Token</Label>
+                          <Input
+                            id="instance-token"
+                            placeholder="c01095d6-64d4-4b33-9c1f-86a09948dc7c"
+                            value={uazapiInstanceToken}
+                            onChange={(e) => setUazapiInstanceToken(e.target.value)}
+                          />
+                        </div>
+                        <Button onClick={handleSaveUazapiConfig} disabled={savingConfig}>
+                          {savingConfig ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                          Salvar configuração
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

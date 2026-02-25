@@ -7,13 +7,12 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { telefone, mensagem } = await req.json();
+    const { telefone, mensagem, uazapi_server_url, uazapi_instance_token } = await req.json();
     
     console.log('Recebendo requisição para enviar WhatsApp:', { telefone });
 
@@ -21,7 +20,6 @@ serve(async (req) => {
       throw new Error('Telefone não informado');
     }
 
-    // Formatar telefone (remover caracteres especiais, adicionar código do país)
     const telefoneFormatado = telefone.replace(/\D/g, '');
     const telefoneCompleto = telefoneFormatado.startsWith('55') 
       ? telefoneFormatado 
@@ -29,48 +27,68 @@ serve(async (req) => {
 
     console.log('Telefone formatado:', telefoneCompleto);
 
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    let response: Response;
+    let data: any;
 
-    if (!instanceId || !token || !clientToken) {
-      console.error('Credenciais Z-API não configuradas');
-      throw new Error('Credenciais Z-API não configuradas');
+    if (uazapi_server_url && uazapi_instance_token) {
+      // UAZAPI flow (employees)
+      const uazapiUrl = `${uazapi_server_url}/sendText/${uazapi_instance_token}`;
+      console.log('Enviando via UAZAPI...');
+
+      response = await fetch(uazapiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: telefoneCompleto,
+          message: mensagem,
+        }),
+      });
+
+      data = await response.json();
+      console.log('Resposta da UAZAPI:', data);
+    } else {
+      // Z-API flow (admin - existing behavior)
+      const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
+      const token = Deno.env.get('ZAPI_TOKEN');
+      const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+
+      if (!instanceId || !token || !clientToken) {
+        console.error('Credenciais Z-API não configuradas');
+        throw new Error('Credenciais Z-API não configuradas');
+      }
+
+      const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+      console.log('Enviando via Z-API...');
+
+      response = await fetch(zapiUrl, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Client-Token': clientToken,
+        },
+        body: JSON.stringify({
+          phone: telefoneCompleto,
+          message: mensagem,
+        }),
+      });
+
+      data = await response.json();
+      console.log('Resposta da Z-API:', data);
     }
 
-    const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
-    
-    console.log('Enviando mensagem para Z-API...');
-
-    const response = await fetch(zapiUrl, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Client-Token': clientToken
-      },
-      body: JSON.stringify({
-        phone: telefoneCompleto,
-        message: mensagem
-      })
-    });
-
-    const data = await response.json();
-    
-    console.log('Resposta da Z-API:', data);
-
     if (!response.ok) {
-      throw new Error(data.message || 'Erro ao enviar mensagem via Z-API');
+      throw new Error(data.message || data.error || 'Erro ao enviar mensagem');
     }
 
     return new Response(JSON.stringify({ success: true, data }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Erro na função send-whatsapp:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
