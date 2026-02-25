@@ -32,12 +32,16 @@ serve(async (req) => {
 
     if (uazapi_server_url && uazapi_instance_token) {
       // UAZAPI flow (employees)
-      const uazapiUrl = `${uazapi_server_url}/sendText/${uazapi_instance_token}`;
+      const cleanUrl = uazapi_server_url.replace(/\/+$/, '');
+      const uazapiUrl = `${cleanUrl}/sendText`;
       console.log('Enviando via UAZAPI...');
 
       response = await fetch(uazapiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'token': uazapi_instance_token,
+        },
         body: JSON.stringify({
           phone: telefoneCompleto,
           message: mensagem,
