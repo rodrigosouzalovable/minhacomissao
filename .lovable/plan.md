@@ -1,60 +1,29 @@
 
 
-# Rotação de Múltiplos WhatsApps (UAZAPI) no Acionamento
+# Melhorias no Dialog de Configurações WhatsApp
 
-## Visão Geral
+## Análise
 
-Sim, é totalmente possível. A ideia é permitir cadastrar múltiplas instâncias UAZAPI e rotacionar os envios entre elas (round-robin: X → Y → Z → X → Y → Z...).
+O dialog atual já salva instâncias e as exibe em lista, mas os botões de ação (Editar, Testar, Remover) ficam empilhados abaixo de cada instância. O usuário quer um layout mais limpo com botões de editar e apagar alinhados à direita de cada item.
 
-## Alterações Necessárias
+## Verificação da Rotação Round-Robin
 
-### 1. Banco de dados: nova tabela `user_whatsapp_instances`
-
-A tabela atual `user_whatsapp_config` armazena apenas 1 config por usuário. Criaremos uma nova tabela para múltiplas instâncias:
-
-- `id` (uuid, PK)
-- `user_id` (uuid, NOT NULL)
-- `nome` (text) — nome identificador (ex: "WhatsApp X")
-- `server_url` (text, NOT NULL)
-- `instance_token` (text, NOT NULL)
-- `ativo` (boolean, default true)
-- `criado_em` (timestamptz)
-
-RLS: usuário só gerencia suas próprias instâncias.
-
-### 2. `src/pages/Acionamento.tsx` — UI de configuração
-
-Substituir o formulário de config única por uma lista de instâncias com:
-- Botão "Adicionar WhatsApp" para cadastrar nova instância (nome, URL, token)
-- Lista das instâncias cadastradas com botões editar/remover/testar
-- Badge mostrando quantas instâncias ativas
-
-### 3. `src/hooks/useAutoSend.tsx` — Rotação round-robin
-
-Alterar `startAutoSend` para receber um array de configs em vez de uma única:
-
+O código em `useAutoSend.tsx` implementa corretamente a rotação:
 ```typescript
-uazapiConfigs: { server_url: string; instance_token: string; nome: string }[]
+const currentConfig = uazapiConfigs[roundRobinCounterRef.current % uazapiConfigs.length];
+roundRobinCounterRef.current++;
 ```
+A lógica está correta. O `handleAutoSend` em `Acionamento.tsx` também monta o array de configs corretamente a partir das instâncias ativas. A rotação funciona.
 
-No loop de envio, usar um contador sequencial para rotacionar:
+## Alteração: UI da lista de instâncias no dialog
 
-```text
-Envio 1 → config[0] (WhatsApp X)
-Envio 2 → config[1] (WhatsApp Y)
-Envio 3 → config[2] (WhatsApp Z)
-Envio 4 → config[0] (WhatsApp X)  // volta ao início
-...
-```
+**Arquivo:** `src/pages/Acionamento.tsx` (linhas 1019-1063)
 
-A função `sendSingle` receberá a config específica de cada envio via `configIndex % configs.length`.
+Reorganizar cada instância salva para ter layout horizontal compacto:
+- Esquerda: ícone WhatsApp + nome + badge ativo/inativo + URL truncada
+- Direita: Switch de ativar/desativar + botões de ícone (Testar, Editar, Apagar)
 
-### 4. `src/pages/Acionamento.tsx` — Passagem dos dados
+O formulário de adicionar/editar permanece como está (abre inline ao clicar em "Adicionar" ou "Editar").
 
-Ao clicar "Iniciar", buscar todas as instâncias ativas do usuário e passar o array para `startAutoSend`.
-
-### Resumo de arquivos
-- **1 migração**: criar tabela `user_whatsapp_instances`
-- **1 alterado**: `src/hooks/useAutoSend.tsx` — suporte a array de configs + round-robin
-- **1 alterado**: `src/pages/Acionamento.tsx` — UI para gerenciar múltiplas instâncias
+Resultado visual: lista limpa tipo histórico, com ações compactas no lado direito.
 
