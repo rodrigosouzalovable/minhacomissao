@@ -1017,47 +1017,52 @@ export default function Acionamento() {
                     <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância cadastrada</p>
                   )}
                   {instances.map((inst) => (
-                    <div key={inst.id} className={`rounded-md border p-3 space-y-2 ${inst.ativo ? '' : 'opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <WhatsAppIcon />
-                          <span className="font-medium text-sm">{inst.nome || 'Sem nome'}</span>
-                          {inst.ativo ? (
-                            <Badge variant="default" className="text-xs">Ativo</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">Inativo</Badge>
-                          )}
+                    <div key={inst.id} className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <WhatsAppIcon />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-sm truncate">{inst.nome || 'Sem nome'}</span>
+                            <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
+                              {inst.ativo ? 'Ativo' : 'Inativo'}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
                         <Switch
                           checked={inst.ativo}
                           onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
+                          className="scale-90"
                         />
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{inst.server_url}</p>
-                      <div className="flex gap-1">
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
-                        >
-                          <Pencil className="h-3 w-3 mr-1" /> Editar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
                           onClick={() => handleTestInstance(inst)}
                           disabled={testingInstanceId === inst.id}
+                          title="Testar conexão"
                         >
-                          {testingInstanceId === inst.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wifi className="h-3 w-3 mr-1" />}
-                          Testar
+                          {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
                         </Button>
                         <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteInstance(inst.id)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
+                          title="Editar"
                         >
-                          <Trash2 className="h-3 w-3 mr-1" /> Remover
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteInstance(inst.id)}
+                          title="Remover"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
