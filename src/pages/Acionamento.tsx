@@ -10,12 +10,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, Send } from 'lucide-react';
+import type { UazapiInstance } from '@/hooks/useAutoSend';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, Send, Plus, Pencil } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -83,6 +85,13 @@ const WhatsAppIcon = () => (
   </svg>
 );
 
+interface InstanceFormData {
+  id?: string;
+  nome: string;
+  server_url: string;
+  instance_token: string;
+}
+
 export default function Acionamento() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
@@ -100,13 +109,12 @@ export default function Acionamento() {
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
   
-  // UAZAPI config state
-  const [uazapiServerUrl, setUazapiServerUrl] = useState('');
-  const [uazapiInstanceToken, setUazapiInstanceToken] = useState('');
-  const [uazapiConfigured, setUazapiConfigured] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
-  const uazapiConfigRef = useRef<{ server_url: string; instance_token: string } | null>(null);
+  // Multi-instance UAZAPI state
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean }>>([]);
+  const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
+  const [savingInstance, setSavingInstance] = useState(false);
+  const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
+
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
   const activeHistoricoIdRef = useRef<string | null>(null);
@@ -114,7 +122,6 @@ export default function Acionamento() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // User-scoped localStorage keys
   const uid = user?.id || '';
   const MENSAGENS_KEY = getKey(MENSAGENS_BASE, uid);
   const HISTORICO_KEY = getKey(HISTORICO_BASE, uid);
@@ -124,12 +131,11 @@ export default function Acionamento() {
   const SEND_TIMESTAMPS_KEY = getKey(SEND_TIMESTAMPS_BASE, uid);
   const AUTO_SENDING_KEY = getKey(AUTO_SENDING_BASE, uid);
 
-  // Keep ref in sync with state
   useEffect(() => {
     activeHistoricoIdRef.current = activeHistoricoId;
   }, [activeHistoricoId]);
 
-  // Load saved data when user is available
+  // Load saved data
   useEffect(() => {
     if (!user) return;
     const savedMsgs = localStorage.getItem(MENSAGENS_KEY);
@@ -161,30 +167,26 @@ export default function Acionamento() {
         }
       }
     }
-    // Clear any auto-sending state on load — only send when user clicks the button
     localStorage.removeItem(AUTO_SENDING_KEY);
   }, [user]);
 
-  // Fetch UAZAPI config from database
+  // Fetch UAZAPI instances from database
   useEffect(() => {
     if (!user) return;
-    const fetchConfig = async () => {
+    const fetchInstances = async () => {
       const { data } = await supabase
-        .from('user_whatsapp_config')
-        .select('server_url, instance_token')
+        .from('user_whatsapp_instances' as any)
+        .select('id, nome, server_url, instance_token, ativo')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .order('criado_em', { ascending: true });
       if (data) {
-        setUazapiServerUrl(data.server_url);
-        setUazapiInstanceToken(data.instance_token);
-        setUazapiConfigured(true);
-        uazapiConfigRef.current = { server_url: data.server_url, instance_token: data.instance_token };
+        setInstances(data as any);
       }
     };
-    fetchConfig();
+    fetchInstances();
   }, [user]);
 
-  // Auto-resume is intentionally DISABLED — auto-send only starts when user clicks the button
+  const activeInstances = useMemo(() => instances.filter(i => i.ativo), [instances]);
 
   const saveManualChecked = (checked: Set<number>) => {
     setManualChecked(checked);
@@ -360,6 +362,13 @@ export default function Acionamento() {
     return mensagensSalvas[newIndex];
   };
 
+  const getFirstActiveConfig = (): UazapiInstance | null => {
+    if (activeInstances.length > 0) {
+      return { server_url: activeInstances[0].server_url, instance_token: activeInstances[0].instance_token, nome: activeInstances[0].nome };
+    }
+    return null;
+  };
+
   const handleSend = async (index: number) => {
     const template = getRotatedMessage();
     if (!template) {
@@ -373,8 +382,7 @@ export default function Acionamento() {
     try {
       const msg = replaceVariables(template, cliente);
       const body: any = { telefone: cliente.telefone, mensagem: msg };
-      // If user has UAZAPI config (non-admin), pass credentials
-      const config = uazapiConfigRef.current;
+      const config = getFirstActiveConfig();
       if (config) {
         body.uazapi_server_url = config.server_url;
         body.uazapi_instance_token = config.instance_token;
@@ -447,10 +455,17 @@ export default function Acionamento() {
       return;
     }
 
+    // Build configs array from active instances
+    const configs: UazapiInstance[] = activeInstances.map(i => ({
+      server_url: i.server_url,
+      instance_token: i.instance_token,
+      nome: i.nome,
+    }));
+
     startAutoSend({
       clientes,
       mensagensSalvas,
-      uazapiConfig: uazapiConfigRef.current,
+      uazapiConfigs: configs,
       minSec: autoMinSec,
       maxSec: autoMaxSec,
       historicoId: activeHistoricoId,
@@ -487,54 +502,94 @@ export default function Acionamento() {
     [enviados, sendTimestamps]
   );
 
-  const handleSaveUazapiConfig = async () => {
-    if (!user) return;
-    if (!uazapiServerUrl.trim() || !uazapiInstanceToken.trim()) {
-      toast.error('Preencha todos os campos');
+  // Instance management
+  const handleSaveInstance = async () => {
+    if (!user || !editingInstance) return;
+    if (!editingInstance.server_url.trim() || !editingInstance.instance_token.trim()) {
+      toast.error('Preencha Server URL e Instance Token');
       return;
     }
-    setSavingConfig(true);
+    setSavingInstance(true);
     try {
-      const { error } = await supabase
-        .from('user_whatsapp_config')
-        .upsert({
-          user_id: user.id,
-          server_url: uazapiServerUrl.trim(),
-          instance_token: uazapiInstanceToken.trim(),
-          atualizado_em: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-      if (error) throw error;
-      setUazapiConfigured(true);
-      uazapiConfigRef.current = { server_url: uazapiServerUrl.trim(), instance_token: uazapiInstanceToken.trim() };
-      toast.success('Configuração salva com sucesso!');
+      if (editingInstance.id) {
+        // Update
+        const { error } = await supabase
+          .from('user_whatsapp_instances' as any)
+          .update({
+            nome: editingInstance.nome.trim() || null,
+            server_url: editingInstance.server_url.trim(),
+            instance_token: editingInstance.instance_token.trim(),
+          } as any)
+          .eq('id', editingInstance.id);
+        if (error) throw error;
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, nome: editingInstance.nome.trim(), server_url: editingInstance.server_url.trim(), instance_token: editingInstance.instance_token.trim() } : i));
+        toast.success('Instância atualizada!');
+      } else {
+        // Insert
+        const { data, error } = await supabase
+          .from('user_whatsapp_instances' as any)
+          .insert({
+            user_id: user.id,
+            nome: editingInstance.nome.trim() || null,
+            server_url: editingInstance.server_url.trim(),
+            instance_token: editingInstance.instance_token.trim(),
+          } as any)
+          .select()
+          .single();
+        if (error) throw error;
+        setInstances(prev => [...prev, data as any]);
+        toast.success('WhatsApp adicionado!');
+      }
+      setEditingInstance(null);
     } catch (err: any) {
-      toast.error(`Erro ao salvar: ${err.message}`);
+      toast.error(`Erro: ${err.message}`);
     } finally {
-      setSavingConfig(false);
+      setSavingInstance(false);
     }
   };
 
-  const handleTestUazapiConnection = async () => {
-    if (!uazapiServerUrl || !uazapiInstanceToken) {
-      toast.error('Preencha o Server URL e o Instance Token');
+  const handleDeleteInstance = async (id: string) => {
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .delete()
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro ao remover: ${error.message}`);
       return;
     }
-    setTestingConnection(true);
+    setInstances(prev => prev.filter(i => i.id !== id));
+    toast.success('Instância removida');
+  };
+
+  const handleToggleInstance = async (id: string, ativo: boolean) => {
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update({ ativo } as any)
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+      return;
+    }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, ativo } : i));
+  };
+
+  const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
+    setTestingInstanceId(instance.id);
     try {
       const { data, error } = await supabase.functions.invoke('test-uazapi-connection', {
-        body: { server_url: uazapiServerUrl, instance_token: uazapiInstanceToken }
+        body: { server_url: instance.server_url, instance_token: instance.instance_token }
       });
       if (error) throw error;
       if (data?.ok) {
-        toast.success(`Conexão com UAZAPI bem-sucedida! (${data.endpoint})`);
+        toast.success(`Conexão bem-sucedida! (${data.endpoint})`);
       } else {
         const detail = data?.data?.message || data?.data?.error || data?.error || JSON.stringify(data?.data);
-        toast.error(`UAZAPI respondeu com erro (status ${data?.status}): ${detail}`);
+        toast.error(`Erro (status ${data?.status}): ${detail}`);
       }
     } catch (error: any) {
-      toast.error(`Não foi possível conectar à UAZAPI: ${error.message || 'Verifique o Server URL.'}`);
+      toast.error(`Não foi possível conectar: ${error.message}`);
     } finally {
-      setTestingConnection(false);
+      setTestingInstanceId(null);
     }
   };
 
@@ -546,7 +601,7 @@ export default function Acionamento() {
     setSendingTest(true);
     try {
       const body: any = { telefone: testPhone.trim(), mensagem: 'mensagem teste' };
-      const config = uazapiConfigRef.current;
+      const config = getFirstActiveConfig();
       if (config) {
         body.uazapi_server_url = config.server_url;
         body.uazapi_instance_token = config.instance_token;
@@ -561,9 +616,6 @@ export default function Acionamento() {
     }
   };
 
-
-
-
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -573,14 +625,21 @@ export default function Acionamento() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Importar Planilha</CardTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setConfigDialogOpen(true)}
-              className="text-muted-foreground"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {!isAdmin && activeInstances.length > 0 && (
+                <Badge variant="secondary">
+                  {activeInstances.length} WhatsApp{activeInstances.length > 1 ? 's' : ''} ativo{activeInstances.length > 1 ? 's' : ''}
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setConfigDialogOpen(true)}
+                className="text-muted-foreground"
+              >
+                <Settings className="h-5 w-5" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
@@ -714,7 +773,6 @@ export default function Acionamento() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Auto-send controls */}
               {activeTab === 'pendentes' && (
                 <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
                   <span className="text-sm font-medium">Envio automático:</span>
@@ -878,17 +936,15 @@ export default function Acionamento() {
                   )}
                 </>
               )}
-
-              {/* Config moved to Dialog */}
             </CardContent>
           </Card>
         )}
 
         {/* Config Dialog */}
         <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Configurações</DialogTitle>
+              <DialogTitle>Configurações WhatsApp</DialogTitle>
             </DialogHeader>
             <div className="space-y-6">
               {isAdmin ? (
@@ -900,47 +956,111 @@ export default function Acionamento() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold">Configuração UAZAPI</h3>
-                    {uazapiConfigured ? (
-                      <Badge variant="default">Configurado</Badge>
-                    ) : (
-                      <Badge variant="destructive">Não configurado</Badge>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Cadastre múltiplos WhatsApps para rotação automática dos envios.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setEditingInstance({ nome: '', server_url: '', instance_token: '' })}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar
+                    </Button>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Configure suas credenciais da UAZAPI para enviar mensagens pelo seu próprio número de WhatsApp.
-                  </p>
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="server-url">Server URL</Label>
-                      <Input
-                        id="server-url"
-                        placeholder="https://certificadoracnpj.uazapi.com"
-                        value={uazapiServerUrl}
-                        onChange={(e) => setUazapiServerUrl(e.target.value)}
-                      />
+
+                  {/* Instance form (add/edit) */}
+                  {editingInstance && (
+                    <div className="rounded-md border p-4 space-y-3 bg-muted/20">
+                      <h4 className="text-sm font-semibold">{editingInstance.id ? 'Editar instância' : 'Nova instância'}</h4>
+                      <div className="space-y-2">
+                        <Label>Nome (opcional)</Label>
+                        <Input
+                          placeholder="Ex: WhatsApp X"
+                          value={editingInstance.nome}
+                          onChange={(e) => setEditingInstance({ ...editingInstance, nome: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Server URL</Label>
+                        <Input
+                          placeholder="https://certificadoracnpj.uazapi.com"
+                          value={editingInstance.server_url}
+                          onChange={(e) => setEditingInstance({ ...editingInstance, server_url: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Instance Token</Label>
+                        <Input
+                          placeholder="c01095d6-64d4-4b33-9c1f-86a09948dc7c"
+                          value={editingInstance.instance_token}
+                          onChange={(e) => setEditingInstance({ ...editingInstance, instance_token: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={handleSaveInstance} disabled={savingInstance} size="sm">
+                          {savingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                          Salvar
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setEditingInstance(null)}>
+                          Cancelar
+                        </Button>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="instance-token">Instance Token</Label>
-                      <Input
-                        id="instance-token"
-                        placeholder="c01095d6-64d4-4b33-9c1f-86a09948dc7c"
-                        value={uazapiInstanceToken}
-                        onChange={(e) => setUazapiInstanceToken(e.target.value)}
-                      />
+                  )}
+
+                  {/* Instances list */}
+                  {instances.length === 0 && !editingInstance && (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância cadastrada</p>
+                  )}
+                  {instances.map((inst) => (
+                    <div key={inst.id} className={`rounded-md border p-3 space-y-2 ${inst.ativo ? '' : 'opacity-60'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <WhatsAppIcon />
+                          <span className="font-medium text-sm">{inst.nome || 'Sem nome'}</span>
+                          {inst.ativo ? (
+                            <Badge variant="default" className="text-xs">Ativo</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">Inativo</Badge>
+                          )}
+                        </div>
+                        <Switch
+                          checked={inst.ativo}
+                          onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{inst.server_url}</p>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
+                        >
+                          <Pencil className="h-3 w-3 mr-1" /> Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTestInstance(inst)}
+                          disabled={testingInstanceId === inst.id}
+                        >
+                          {testingInstanceId === inst.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wifi className="h-3 w-3 mr-1" />}
+                          Testar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteInstance(inst.id)}
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" /> Remover
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button onClick={handleSaveUazapiConfig} disabled={savingConfig}>
-                        {savingConfig ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                        Salvar
-                      </Button>
-                      <Button variant="outline" onClick={handleTestUazapiConnection} disabled={testingConnection || !uazapiServerUrl || !uazapiInstanceToken}>
-                        {testingConnection ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wifi className="h-4 w-4 mr-2" />}
-                        Testar conexão
-                      </Button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               )}
 

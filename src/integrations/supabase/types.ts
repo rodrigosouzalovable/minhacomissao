@@ -822,6 +822,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_whatsapp_instances: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          id: string
+          instance_token: string
+          nome: string | null
+          server_url: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          instance_token: string
+          nome?: string | null
+          server_url: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          instance_token?: string
+          nome?: string | null
+          server_url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       whatsapp_fila: {
         Row: {
           agendado_para: string

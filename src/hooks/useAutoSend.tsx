@@ -10,6 +10,12 @@ interface ClienteData {
   saldo: number;
 }
 
+export interface UazapiInstance {
+  server_url: string;
+  instance_token: string;
+  nome?: string;
+}
+
 type SendStatus = 'idle' | 'sending' | 'success' | 'error';
 
 const formatPrimeiroNome = (nome: string): string => {
@@ -41,7 +47,7 @@ interface AutoSendContextType {
   startAutoSend: (params: {
     clientes: ClienteData[];
     mensagensSalvas: string[];
-    uazapiConfig: { server_url: string; instance_token: string } | null;
+    uazapiConfigs: UazapiInstance[];
     minSec: number;
     maxSec: number;
     historicoId: string | null;
@@ -65,6 +71,7 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
 
   const autoSendingRef = useRef(false);
   const lastUsedMsgIndexRef = useRef<number | null>(null);
+  const roundRobinCounterRef = useRef(0);
 
   const getRotatedMessage = (mensagensSalvas: string[]): string | null => {
     if (mensagensSalvas.length === 0) return null;
@@ -84,7 +91,7 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
     cliente: ClienteData,
     index: number,
     mensagensSalvas: string[],
-    uazapiConfig: { server_url: string; instance_token: string } | null,
+    uazapiConfig: UazapiInstance | null,
     historicoId: string | null,
     userId: string,
   ) => {
@@ -106,6 +113,7 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
       if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro');
 
+      const configName = uazapiConfig?.nome || '';
       setSendStatus(prev => {
         const next = { ...prev, [index]: 'success' as SendStatus };
         if (historicoId) localStorage.setItem(`${SEND_STATUS_BASE}_${userId}_${historicoId}`, JSON.stringify(next));
@@ -116,7 +124,8 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
         if (historicoId) localStorage.setItem(`${SEND_TIMESTAMPS_BASE}_${userId}_${historicoId}`, JSON.stringify(next));
         return next;
       });
-      toast.success(`Mensagem enviada para ${formatPrimeiroNome(cliente.nome)}`);
+      const suffix = configName ? ` (via ${configName})` : '';
+      toast.success(`Mensagem enviada para ${formatPrimeiroNome(cliente.nome)}${suffix}`);
     } catch (err: any) {
       setSendStatus(prev => {
         const next = { ...prev, [index]: 'error' as SendStatus };
@@ -127,10 +136,10 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const startAutoSend = useCallback(({ clientes, mensagensSalvas, uazapiConfig, minSec, maxSec, historicoId, userId, existingStatus, existingChecked }: {
+  const startAutoSend = useCallback(({ clientes, mensagensSalvas, uazapiConfigs, minSec, maxSec, historicoId, userId, existingStatus, existingChecked }: {
     clientes: ClienteData[];
     mensagensSalvas: string[];
-    uazapiConfig: { server_url: string; instance_token: string } | null;
+    uazapiConfigs: UazapiInstance[];
     minSec: number;
     maxSec: number;
     historicoId: string | null;
@@ -140,8 +149,8 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
   }) => {
     if (autoSendingRef.current) return;
 
-    // Initialize status from existing
     setSendStatus(existingStatus);
+    roundRobinCounterRef.current = 0;
 
     const pendentesSnapshot = clientes
       .map((c, i) => ({ ...c, originalIndex: i }))
@@ -164,7 +173,14 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
         setAutoProgress({ current: i + 1, total: pendentesSnapshot.length });
 
         const cliente = pendentesSnapshot[i];
-        await sendSingle(cliente, cliente.originalIndex, mensagensSalvas, uazapiConfig, historicoId, userId);
+        
+        // Round-robin: pick config based on counter
+        const currentConfig = uazapiConfigs.length > 0
+          ? uazapiConfigs[roundRobinCounterRef.current % uazapiConfigs.length]
+          : null;
+        roundRobinCounterRef.current++;
+
+        await sendSingle(cliente, cliente.originalIndex, mensagensSalvas, currentConfig, historicoId, userId);
 
         if (i < pendentesSnapshot.length - 1 && autoSendingRef.current) {
           let delay: number;
