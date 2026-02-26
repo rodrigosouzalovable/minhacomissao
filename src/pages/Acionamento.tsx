@@ -947,29 +947,30 @@ export default function Acionamento() {
               <DialogTitle>Configurações WhatsApp</DialogTitle>
             </DialogHeader>
             <div className="space-y-6">
-              {isAdmin ? (
+              {isAdmin && (
                 <div className="rounded-md border p-4 bg-muted/30">
                   <p className="text-sm text-muted-foreground">
-                    Sua conta de administrador utiliza a <strong>Z-API</strong> configurada no sistema. Não é necessário configurar credenciais aqui.
+                    Sua conta de administrador também utiliza a <strong>Z-API</strong> configurada no sistema como fallback. Caso não tenha instâncias UAZAPI ativas, o envio será feito pela Z-API.
                   </p>
                   <Badge variant="default" className="mt-2">Z-API (Padrão do sistema)</Badge>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Cadastre múltiplos WhatsApps para rotação automática dos envios.
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => setEditingInstance({ nome: '', server_url: '', instance_token: '' })}
-                    >
-                      <Plus className="h-4 w-4 mr-1" /> Adicionar
-                    </Button>
+              )}
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Cadastre múltiplos WhatsApps para rotação automática dos envios.
+                    </p>
                   </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setEditingInstance({ nome: '', server_url: '', instance_token: '' })}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar
+                  </Button>
+                </div>
 
                   {/* Instance form (add/edit) */}
                   {editingInstance && (
@@ -1062,7 +1063,6 @@ export default function Acionamento() {
                     </div>
                   ))}
                 </div>
-              )}
 
               <Separator />
 
