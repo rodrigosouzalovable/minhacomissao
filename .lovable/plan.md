@@ -1,57 +1,60 @@
 
 
-# Envio Automático Persistente Entre Abas
+# Rotação de Múltiplos WhatsApps (UAZAPI) no Acionamento
 
-## Problema
+## Visão Geral
 
-O envio automático vive dentro do componente `Acionamento.tsx`. Quando o usuário navega para outra página (ex: Dashboard, Acordos), o componente é desmontado pelo React Router e o loop de envio para imediatamente. O estado se perde.
+Sim, é totalmente possível. A ideia é permitir cadastrar múltiplas instâncias UAZAPI e rotacionar os envios entre elas (round-robin: X → Y → Z → X → Y → Z...).
 
-## Solução
+## Alterações Necessárias
 
-Criar um **Context Provider global** (`AutoSendProvider`) que vive no nível do `App.tsx`, acima de todas as rotas. Isso garante que o loop de envio automático continue rodando independentemente da página em que o usuário esteja.
+### 1. Banco de dados: nova tabela `user_whatsapp_instances`
 
-### Arquitetura
+A tabela atual `user_whatsapp_config` armazena apenas 1 config por usuário. Criaremos uma nova tabela para múltiplas instâncias:
 
-```text
-App.tsx
-  └── AuthProvider
-        └── AutoSendProvider  ← NOVO (persiste entre rotas)
-              └── Routes
-                    ├── /dashboard
-                    ├── /acordos
-                    ├── /admin/acionamento  ← usa useAutoSend() para controlar
-                    └── ...
+- `id` (uuid, PK)
+- `user_id` (uuid, NOT NULL)
+- `nome` (text) — nome identificador (ex: "WhatsApp X")
+- `server_url` (text, NOT NULL)
+- `instance_token` (text, NOT NULL)
+- `ativo` (boolean, default true)
+- `criado_em` (timestamptz)
+
+RLS: usuário só gerencia suas próprias instâncias.
+
+### 2. `src/pages/Acionamento.tsx` — UI de configuração
+
+Substituir o formulário de config única por uma lista de instâncias com:
+- Botão "Adicionar WhatsApp" para cadastrar nova instância (nome, URL, token)
+- Lista das instâncias cadastradas com botões editar/remover/testar
+- Badge mostrando quantas instâncias ativas
+
+### 3. `src/hooks/useAutoSend.tsx` — Rotação round-robin
+
+Alterar `startAutoSend` para receber um array de configs em vez de uma única:
+
+```typescript
+uazapiConfigs: { server_url: string; instance_token: string; nome: string }[]
 ```
 
-### Alterações
+No loop de envio, usar um contador sequencial para rotacionar:
 
-**1. Novo arquivo: `src/hooks/useAutoSend.tsx`**
-- Context Provider com toda a lógica do loop de envio automático
-- Expõe: `startAutoSend()`, `stopAutoSend()`, `autoSending`, `autoProgress`
-- Mantém refs internas para `clientes`, `mensagensSalvas`, config UAZAPI, etc.
-- O loop usa `useRef` para evitar stale closures
-- Atualiza `sendStatus` e `sendTimestamps` no localStorage em tempo real
-- Limpa estado ao completar ou ao chamar `stopAutoSend()`
+```text
+Envio 1 → config[0] (WhatsApp X)
+Envio 2 → config[1] (WhatsApp Y)
+Envio 3 → config[2] (WhatsApp Z)
+Envio 4 → config[0] (WhatsApp X)  // volta ao início
+...
+```
 
-**2. Alterar: `src/App.tsx`**
-- Envolver as rotas com `<AutoSendProvider>`
+A função `sendSingle` receberá a config específica de cada envio via `configIndex % configs.length`.
 
-**3. Alterar: `src/pages/Acionamento.tsx`**
-- Remover a lógica interna de `runAutoSendLoop`, `handleAutoSend`, `handleStopAutoSend`
-- Importar `useAutoSend()` do novo hook
-- Ao clicar "Iniciar": chamar `startAutoSend(clientes, mensagensSalvas, config, min, max, historicoId)`
-- Ao clicar "Parar": chamar `stopAutoSend()`
-- Sincronizar `sendStatus` e `sendTimestamps` do contexto com o estado local do componente (via callback ou subscription)
-- O componente continua responsável pela UI, importação de planilhas e gerenciamento de mensagens
+### 4. `src/pages/Acionamento.tsx` — Passagem dos dados
 
-### Comportamento esperado
-- Usuário clica "Iniciar" → envio começa
-- Usuário muda de aba (Dashboard, Acordos, etc.) → envio continua
-- Usuário volta ao Acionamento → vê o progresso atualizado
-- Usuário clica "Parar" → envio para imediatamente
-- Usuário fecha/recarrega a página → envio para (não retoma automaticamente)
+Ao clicar "Iniciar", buscar todas as instâncias ativas do usuário e passar o array para `startAutoSend`.
 
 ### Resumo de arquivos
-- **1 novo**: `src/hooks/useAutoSend.tsx`
-- **2 alterados**: `src/App.tsx`, `src/pages/Acionamento.tsx`
+- **1 migração**: criar tabela `user_whatsapp_instances`
+- **1 alterado**: `src/hooks/useAutoSend.tsx` — suporte a array de configs + round-robin
+- **1 alterado**: `src/pages/Acionamento.tsx` — UI para gerenciar múltiplas instâncias
 
