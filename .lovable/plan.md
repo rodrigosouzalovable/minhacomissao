@@ -1,29 +1,31 @@
 
 
-# Melhorias no Dialog de Configurações WhatsApp
+# Melhorias no Acionamento — URL padrão + desativação automática
 
-## Análise
+## 1. URL pré-definida no formulário de nova instância
 
-O dialog atual já salva instâncias e as exibe em lista, mas os botões de ação (Editar, Testar, Remover) ficam empilhados abaixo de cada instância. O usuário quer um layout mais limpo com botões de editar e apagar alinhados à direita de cada item.
+**Arquivo:** `src/pages/Acionamento.tsx` (linha 969)
 
-## Verificação da Rotação Round-Robin
+Ao clicar em "Adicionar", o `server_url` já virá preenchido com `https://certificadoracnpj.uazapi.com`:
 
-O código em `useAutoSend.tsx` implementa corretamente a rotação:
 ```typescript
-const currentConfig = uazapiConfigs[roundRobinCounterRef.current % uazapiConfigs.length];
-roundRobinCounterRef.current++;
+setEditingInstance({ nome: '', server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' })
 ```
-A lógica está correta. O `handleAutoSend` em `Acionamento.tsx` também monta o array de configs corretamente a partir das instâncias ativas. A rotação funciona.
 
-## Alteração: UI da lista de instâncias no dialog
+## 2. Desativação automática de instância com falha de envio
 
-**Arquivo:** `src/pages/Acionamento.tsx` (linhas 1019-1063)
+**Arquivo:** `src/hooks/useAutoSend.tsx`
 
-Reorganizar cada instância salva para ter layout horizontal compacto:
-- Esquerda: ícone WhatsApp + nome + badge ativo/inativo + URL truncada
-- Direita: Switch de ativar/desativar + botões de ícone (Testar, Editar, Apagar)
+No `catch` da função `sendSingle`, quando ocorre erro de envio e a config é UAZAPI, contar erros consecutivos por instância. Após **3 erros consecutivos** na mesma instância, desativá-la automaticamente no banco (`ativo = false`) e exibir toast de aviso.
 
-O formulário de adicionar/editar permanece como está (abre inline ao clicar em "Adicionar" ou "Editar").
+Implementação:
+- Adicionar um `ref` para rastrear erros consecutivos por `server_url + instance_token`
+- No `catch`: incrementar contador. Se ≥ 3, chamar `supabase.from('user_whatsapp_instances').update({ ativo: false })` filtrando pelo token
+- No sucesso: zerar o contador daquela instância
+- Remover a instância desativada do array de configs em uso para que o round-robin pule para a próxima
+- Toast: `"WhatsApp {nome} desativado automaticamente após falhas consecutivas"`
 
-Resultado visual: lista limpa tipo histórico, com ações compactas no lado direito.
+### Arquivos alterados
+- `src/pages/Acionamento.tsx` — valor padrão do server_url
+- `src/hooks/useAutoSend.tsx` — lógica de desativação automática por falhas consecutivas
 
