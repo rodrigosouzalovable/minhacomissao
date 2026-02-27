@@ -72,7 +72,8 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
   const autoSendingRef = useRef(false);
   const lastUsedMsgIndexRef = useRef<number | null>(null);
   const roundRobinCounterRef = useRef(0);
-
+  const consecutiveErrorsRef = useRef<Record<string, number>>({});
+  const disabledInstancesRef = useRef<Set<string>>(new Set());
   const getRotatedMessage = (mensagensSalvas: string[]): string | null => {
     if (mensagensSalvas.length === 0) return null;
     if (mensagensSalvas.length === 1) {
@@ -86,6 +87,8 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
     lastUsedMsgIndexRef.current = newIndex;
     return mensagensSalvas[newIndex];
   };
+
+  const getInstanceKey = (config: UazapiInstance) => `${config.server_url}::${config.instance_token}`;
 
   const sendSingle = async (
     cliente: ClienteData,
@@ -113,6 +116,12 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
       if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro');
 
+      // Reset consecutive errors on success
+      if (uazapiConfig) {
+        const key = getInstanceKey(uazapiConfig);
+        consecutiveErrorsRef.current[key] = 0;
+      }
+
       const configName = uazapiConfig?.nome || '';
       setSendStatus(prev => {
         const next = { ...prev, [index]: 'success' as SendStatus };
@@ -133,6 +142,27 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
         return next;
       });
       toast.error(`Falha ao enviar para ${formatPrimeiroNome(cliente.nome)}: ${err.message}`);
+
+      // Track consecutive errors and auto-deactivate after 3
+      if (uazapiConfig) {
+        const key = getInstanceKey(uazapiConfig);
+        const count = (consecutiveErrorsRef.current[key] || 0) + 1;
+        consecutiveErrorsRef.current[key] = count;
+
+        if (count >= 3 && !disabledInstancesRef.current.has(key)) {
+          disabledInstancesRef.current.add(key);
+          const instanceName = uazapiConfig.nome || 'Sem nome';
+          toast.warning(`WhatsApp "${instanceName}" desativado automaticamente após falhas consecutivas`);
+          
+          // Deactivate in database
+          supabase
+            .from('user_whatsapp_instances')
+            .update({ ativo: false })
+            .eq('instance_token', uazapiConfig.instance_token)
+            .eq('server_url', uazapiConfig.server_url)
+            .then();
+        }
+      }
     }
   };
 
@@ -151,6 +181,8 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
 
     setSendStatus(existingStatus);
     roundRobinCounterRef.current = 0;
+    consecutiveErrorsRef.current = {};
+    disabledInstancesRef.current = new Set();
 
     const pendentesSnapshot = clientes
       .map((c, i) => ({ ...c, originalIndex: i }))
@@ -166,17 +198,21 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
 
     const run = async () => {
       let lastDelay = -1;
+      let activeConfigs = [...uazapiConfigs];
 
       for (let i = 0; i < pendentesSnapshot.length; i++) {
         if (!autoSendingRef.current) break;
+
+        // Filter out disabled instances
+        activeConfigs = activeConfigs.filter(c => !disabledInstancesRef.current.has(getInstanceKey(c)));
 
         setAutoProgress({ current: i + 1, total: pendentesSnapshot.length });
 
         const cliente = pendentesSnapshot[i];
         
-        // Round-robin: pick config based on counter
-        const currentConfig = uazapiConfigs.length > 0
-          ? uazapiConfigs[roundRobinCounterRef.current % uazapiConfigs.length]
+        // Round-robin: pick config from active configs
+        const currentConfig = activeConfigs.length > 0
+          ? activeConfigs[roundRobinCounterRef.current % activeConfigs.length]
           : null;
         roundRobinCounterRef.current++;
 

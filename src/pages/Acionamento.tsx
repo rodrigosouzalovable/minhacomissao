@@ -966,7 +966,7 @@ export default function Acionamento() {
                   </div>
                   <Button
                     size="sm"
-                    onClick={() => setEditingInstance({ nome: '', server_url: '', instance_token: '' })}
+                    onClick={() => setEditingInstance({ nome: '', server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' })}
                   >
                     <Plus className="h-4 w-4 mr-1" /> Adicionar
                   </Button>
