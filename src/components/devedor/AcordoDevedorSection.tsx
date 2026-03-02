@@ -236,6 +236,43 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
     setEditingIndex(null);
   };
 
+  const handleSalvarAcordoTexto = async () => {
+    if (!observacoes.trim()) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('acordos_devedor' as any)
+        .insert({
+          devedor_cpf: cpfNorm,
+          valor_total: 0,
+          num_parcelas: 0,
+          data_primeiro_vencimento: format(new Date(), 'yyyy-MM-dd'),
+          criado_por: userId,
+          observacoes: observacoes.trim(),
+        } as any);
+
+      if (error) throw error;
+
+      if (contratosIds.length > 0) {
+        await supabase
+          .from('devedores')
+          .update({ ativo: false })
+          .in('id', contratosIds);
+      }
+
+      toast.success('Acordo salvo com sucesso!');
+      setDialogOpen(false);
+      setObservacoes('');
+      onContratosArquivados();
+      fetchAcordos();
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro ao salvar acordo: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleConfirmarAcordo = async () => {
     if (!previewParcelas || previewParcelas.length === 0) return;
 
@@ -513,7 +550,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           <DialogHeader>
             <DialogTitle>Novo Acordo</DialogTitle>
             <DialogDescription>
-              Descreva a negociação feita com o cliente e importe o PDF do acordo.
+              Descreva a negociação feita com o cliente. Você pode salvar apenas as observações ou importar o PDF do acordo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -543,9 +580,23 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                 rows={5}
               />
             </div>
-            <Button onClick={handleImportPdf} disabled={extracting} className="w-full">
-              <Upload className="h-4 w-4 mr-2" /> Importar PDF do Acordo
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={handleSalvarAcordoTexto}
+                disabled={saving || !observacoes.trim()}
+                variant="outline"
+                className="w-full"
+              >
+                {saving ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
+                ) : (
+                  <><Save className="h-4 w-4 mr-2" /> Salvar Acordo (somente texto)</>
+                )}
+              </Button>
+              <Button onClick={handleImportPdf} disabled={extracting} className="w-full">
+                <Upload className="h-4 w-4 mr-2" /> Importar PDF do Acordo
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
