@@ -40,8 +40,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error as Error | null };
+
+    // Check if user is active
+    const userId = data.user?.id;
+    if (userId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profile && (profile as any).ativo === false) {
+        await supabase.auth.signOut();
+        return { error: new Error('Sua conta está inativa. Entre em contato com o administrador.') };
+      }
+    }
+
+    return { error: null };
   };
 
   const signUp = async (email: string, password: string, nome: string) => {
