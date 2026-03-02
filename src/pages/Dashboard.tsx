@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { PlusCircle, FileText, DollarSign, Clock, CheckCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { format } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
 
 interface DashboardData {
@@ -125,7 +126,7 @@ export default function Dashboard() {
 
         {/* Seção de Metas - Apenas para Admin */}
         {isAdmin && (
-          <MetasMensal mesAno="2026-02" />
+          <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />
         )}
 
         {/* Cards de resumo */}
