@@ -93,6 +93,7 @@ export default function DevedorDetalhe() {
   // Notificação Extrajudicial state
   const [notifDialogOpen, setNotifDialogOpen] = useState(false);
   const [notifContent, setNotifContent] = useState('');
+  const [showAllContratos, setShowAllContratos] = useState(false);
 
   // Termo de Acordo state
   const [termoDialogOpen, setTermoDialogOpen] = useState(false);
@@ -900,12 +901,16 @@ ${bodyContent}
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {[...contratos].sort((a, b) => {
-                    if (!a.data_vencimento && !b.data_vencimento) return 0;
-                    if (!a.data_vencimento) return 1;
-                    if (!b.data_vencimento) return -1;
-                    return a.data_vencimento.localeCompare(b.data_vencimento);
-                  }).map((contrato) => {
+                  {(() => {
+                    const sorted = [...contratos].sort((a, b) => {
+                      if (!a.data_vencimento && !b.data_vencimento) return 0;
+                      if (!a.data_vencimento) return 1;
+                      if (!b.data_vencimento) return -1;
+                      return a.data_vencimento.localeCompare(b.data_vencimento);
+                    });
+                    const visible = showAllContratos ? sorted : sorted.slice(0, 2);
+                    return visible;
+                  })().map((contrato) => {
                     const dias = getDiasAtraso(contrato.data_vencimento);
                     return (
                       <Collapsible
@@ -966,6 +971,16 @@ ${bodyContent}
                       </Collapsible>
                     );
                   })}
+                  {contratos.length > 2 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowAllContratos(prev => !prev)}
+                    >
+                      {showAllContratos ? `Mostrar apenas 2 contratos` : `Ver todos os ${contratos.length} contratos`}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
