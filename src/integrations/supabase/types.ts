@@ -80,6 +80,39 @@ export type Database = {
         }
         Relationships: []
       }
+      acordos_devedor: {
+        Row: {
+          criado_em: string
+          criado_por: string
+          data_primeiro_vencimento: string
+          devedor_cpf: string
+          id: string
+          num_parcelas: number
+          status: string
+          valor_total: number
+        }
+        Insert: {
+          criado_em?: string
+          criado_por: string
+          data_primeiro_vencimento: string
+          devedor_cpf: string
+          id?: string
+          num_parcelas: number
+          status?: string
+          valor_total: number
+        }
+        Update: {
+          criado_em?: string
+          criado_por?: string
+          data_primeiro_vencimento?: string
+          devedor_cpf?: string
+          id?: string
+          num_parcelas?: number
+          status?: string
+          valor_total?: number
+        }
+        Relationships: []
+      }
       auditoria_divergencias: {
         Row: {
           acordo_id: string | null
@@ -599,6 +632,47 @@ export type Database = {
             columns: ["acordo_id"]
             isOneToOne: false
             referencedRelation: "acordos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parcelas_devedor: {
+        Row: {
+          acordo_id: string
+          criado_em: string
+          data_pagamento: string | null
+          data_vencimento: string
+          id: string
+          numero_parcela: number
+          pago: boolean
+          valor: number
+        }
+        Insert: {
+          acordo_id: string
+          criado_em?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          id?: string
+          numero_parcela: number
+          pago?: boolean
+          valor: number
+        }
+        Update: {
+          acordo_id?: string
+          criado_em?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          id?: string
+          numero_parcela?: number
+          pago?: boolean
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parcelas_devedor_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos_devedor"
             referencedColumns: ["id"]
           },
         ]
