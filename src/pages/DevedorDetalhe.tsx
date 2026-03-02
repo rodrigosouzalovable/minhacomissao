@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { differenceInDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Plus, FileText, Phone, Download, DollarSign, User, MoreHorizontal, Pencil, Trash2, Loader2, Mic, MicOff } from 'lucide-react';
 import jsPDF from 'jspdf';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
@@ -100,6 +100,74 @@ export default function DevedorDetalhe() {
   const [termoInput, setTermoInput] = useState('');
   const [termoContent, setTermoContent] = useState('');
   const [termoGenerating, setTermoGenerating] = useState(false);
+
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeAudio(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      toast.error('Não foi possível acessar o microfone.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.readAsDataURL(audioBlob);
+      });
+
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audio: base64 },
+      });
+
+      if (error) throw error;
+      if (data?.text) {
+        setTermoInput(prev => prev ? `${prev}\n${data.text}` : data.text);
+        toast.success('Áudio transcrito com sucesso!');
+      } else {
+        toast.error('Não foi possível transcrever o áudio.');
+      }
+    } catch (err) {
+      console.error('Erro ao transcrever:', err);
+      toast.error('Erro ao transcrever o áudio.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -840,7 +908,24 @@ ${bodyContent}
               {!termoContent ? (
                 <div className="space-y-4 p-1">
                   <div className="space-y-2">
-                    <Label>Descreva o acordo feito com o cliente</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Descreva o acordo feito com o cliente</Label>
+                      <Button
+                        type="button"
+                        variant={isRecording ? 'destructive' : 'outline'}
+                        size="sm"
+                        onClick={isRecording ? stopRecording : startRecording}
+                        disabled={isTranscribing}
+                      >
+                        {isTranscribing ? (
+                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Transcrevendo...</>
+                        ) : isRecording ? (
+                          <><MicOff className="h-4 w-4 mr-1" /> Parar</>
+                        ) : (
+                          <><Mic className="h-4 w-4 mr-1" /> Gravar Áudio</>
+                        )}
+                      </Button>
+                    </div>
                     <Textarea
                       value={termoInput}
                       onChange={(e) => setTermoInput(e.target.value)}
