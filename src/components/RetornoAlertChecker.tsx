@@ -31,6 +31,7 @@ export function RetornoAlertChecker() {
     if (!user) return;
 
     const now = new Date();
+    const past5Min = new Date(now.getTime() - 5 * 60 * 1000);
     const in2Min = new Date(now.getTime() + 2 * 60 * 1000);
 
     const { data, error } = await supabase
@@ -39,7 +40,7 @@ export function RetornoAlertChecker() {
       .eq('user_id', user.id)
       .eq('status', 'pendente')
       .lte('data_retorno', in2Min.toISOString())
-      .gte('data_retorno', now.toISOString());
+      .gte('data_retorno', past5Min.toISOString());
 
     if (error || !data || data.length === 0) return;
 
