@@ -67,6 +67,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
   // Estado para edição da meta
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [newMetaValue, setNewMetaValue] = useState('');
+  const [newMesAno, setNewMesAno] = useState(mesAno);
   const [saving, setSaving] = useState(false);
 
   // Memoizar datas para evitar recriação a cada render
@@ -269,6 +270,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
 
   const handleOpenEditDialog = () => {
     setNewMetaValue(formatCurrency(metaValor));
+    setNewMesAno(mesAno);
     setEditDialogOpen(true);
   };
 
@@ -286,10 +288,12 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
       return;
     }
 
+    const targetMesAno = newMesAno || mesAno;
+    
     const { error } = await supabase
       .from('metas_mensais')
       .upsert({
-        mes_ano: mesAno,
+        mes_ano: targetMesAno,
         valor: numericValue,
         atualizado_em: new Date().toISOString(),
       }, {
@@ -403,9 +407,18 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="meta-value">Valor da Meta</Label>
+                <Label htmlFor="meta-mes-new">Mês</Label>
                 <Input
-                  id="meta-value"
+                  id="meta-mes-new"
+                  type="month"
+                  value={newMesAno}
+                  onChange={(e) => setNewMesAno(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="meta-value-new">Valor da Meta</Label>
+                <Input
+                  id="meta-value-new"
                   placeholder="R$ 0,00"
                   value={newMetaValue}
                   onChange={handleMetaInputChange}
@@ -695,6 +708,15 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="meta-mes">Mês</Label>
+              <Input
+                id="meta-mes"
+                type="month"
+                value={newMesAno}
+                onChange={(e) => setNewMesAno(e.target.value)}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="meta-value">Valor da Meta</Label>
               <Input
