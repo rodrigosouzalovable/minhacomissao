@@ -58,7 +58,7 @@ export function usePaymentReminders() {
           numero_parcela,
           data_prevista,
           valor_parcela,
-          acordos!inner(cliente_nome, user_id)
+          acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
         .eq('acordos.user_id', user.id)
@@ -76,6 +76,7 @@ export function usePaymentReminders() {
         data_prevista: pagamento.data_prevista,
         valor_parcela: pagamento.valor_parcela,
         cliente_nome: pagamento.acordos.cliente_nome,
+        cliente_telefone: pagamento.acordos.cliente_telefone,
         tipo: pagamento.data_prevista === hoje ? 'hoje' : 'tres_dias',
         categoria: 'pagamento',
       })) as PaymentReminder[];
@@ -100,7 +101,7 @@ export function usePaymentReminders() {
           numero_parcela,
           data_prevista,
           valor_parcela,
-          acordos!inner(cliente_nome, user_id)
+          acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
         .eq('acordos.user_id', user.id)
@@ -118,6 +119,7 @@ export function usePaymentReminders() {
         data_prevista: pagamento.data_prevista,
         valor_parcela: pagamento.valor_parcela,
         cliente_nome: pagamento.acordos.cliente_nome,
+        cliente_telefone: pagamento.acordos.cliente_telefone,
         tipo: 'vencido',
         categoria: 'pagamento',
       })) as PaymentReminder[];

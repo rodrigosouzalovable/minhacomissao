@@ -65,9 +65,17 @@ export function PaymentReminders() {
                 <CopyButton value={lembrete.cliente_nome} label="Nome" preserveText />
               </span>
             </div>
-            <span className="text-muted-foreground text-xs">
-              {isPagamento ? `Parcela ${lembrete.numero_parcela}` : 'Retorno agendado'}
-            </span>
+            {lembrete.cliente_telefone ? (
+              <span className="text-muted-foreground text-xs flex items-center gap-1">
+                <Phone className="h-3 w-3 shrink-0" />
+                {lembrete.cliente_telefone}
+                <CopyButton value={lembrete.cliente_telefone} label="Telefone" />
+              </span>
+            ) : (
+              <span className="text-muted-foreground text-xs">
+                {isPagamento ? 'Sem telefone' : 'Retorno agendado'}
+              </span>
+            )}
           </div>
           {isPagamento && lembrete.valor_parcela && (
             <span className="font-semibold text-foreground text-sm ml-2">
@@ -109,12 +117,20 @@ export function PaymentReminders() {
                 <CopyButton value={lembrete.cliente_nome} label="Nome" preserveText />
               </span>
             </div>
-            <span className="text-muted-foreground text-xs">
-              {isPagamento 
-                ? `Parcela ${lembrete.numero_parcela} • ${lembrete.tipo === 'vencido' ? 'Vencida' : lembrete.tipo === 'hoje' ? 'Vence hoje' : 'Vence em 3 dias'}`
-                : `Retorno • ${lembrete.tipo === 'hoje' ? 'Hoje' : 'Em 3 dias'}`
-              }
-            </span>
+            {lembrete.cliente_telefone ? (
+              <span className="text-muted-foreground text-xs flex items-center gap-1">
+                <Phone className="h-3 w-3 shrink-0" />
+                {lembrete.cliente_telefone}
+                <CopyButton value={lembrete.cliente_telefone} label="Telefone" />
+              </span>
+            ) : (
+              <span className="text-muted-foreground text-xs">
+                {isPagamento 
+                  ? `${lembrete.tipo === 'vencido' ? 'Vencida' : lembrete.tipo === 'hoje' ? 'Vence hoje' : 'Vence em 3 dias'}`
+                  : `Retorno • ${lembrete.tipo === 'hoje' ? 'Hoje' : 'Em 3 dias'}`
+                }
+              </span>
+            )}
           </div>
           {isPagamento && lembrete.valor_parcela && (
             <span className="font-semibold text-foreground text-sm ml-2">
