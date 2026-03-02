@@ -153,6 +153,7 @@ export default function AcordoDetalhe() {
   const marcarComoPago = async (pagamentoId: string) => {
     try {
       const dataHoje = new Date().toISOString().split('T')[0];
+      const pagamento = pagamentos.find(p => p.id === pagamentoId);
       
       const { error } = await supabase
         .from('pagamentos')
@@ -164,6 +165,23 @@ export default function AcordoDetalhe() {
       // Reproduzir som de sucesso
       const audio = new Audio(successSound);
       audio.play().catch(err => console.log('Erro ao reproduzir som:', err));
+
+      // Atualizar meta pessoal do funcionário no localStorage
+      if (pagamento && user) {
+        const valor = Number(pagamento.valor_parcela);
+        const uid = user.id;
+        const currentDay = new Date().toISOString().slice(0, 10);
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        
+        const diarioKey = `meta_recebido_diario_${uid}_${currentDay}`;
+        const mensalKey = `meta_recebido_mensal_${uid}_${currentMonth}`;
+        
+        const prevDiario = Number(localStorage.getItem(diarioKey)) || 0;
+        localStorage.setItem(diarioKey, String(prevDiario + valor));
+        
+        const prevMensal = Number(localStorage.getItem(mensalKey)) || 0;
+        localStorage.setItem(mensalKey, String(prevMensal + valor));
+      }
 
       setPagamentos(prev =>
         prev.map(p =>
@@ -199,12 +217,31 @@ export default function AcordoDetalhe() {
 
   const desmarcarComoPago = async (pagamentoId: string) => {
     try {
+      const pagamento = pagamentos.find(p => p.id === pagamentoId);
+      
       const { error } = await supabase
         .from('pagamentos')
         .update({ status: 'pendente', data_paga: null })
         .eq('id', pagamentoId);
 
       if (error) throw error;
+
+      // Reverter meta pessoal do funcionário no localStorage
+      if (pagamento && user) {
+        const valor = Number(pagamento.valor_parcela);
+        const uid = user.id;
+        const currentDay = new Date().toISOString().slice(0, 10);
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        
+        const diarioKey = `meta_recebido_diario_${uid}_${currentDay}`;
+        const mensalKey = `meta_recebido_mensal_${uid}_${currentMonth}`;
+        
+        const prevDiario = Number(localStorage.getItem(diarioKey)) || 0;
+        localStorage.setItem(diarioKey, String(Math.max(0, prevDiario - valor)));
+        
+        const prevMensal = Number(localStorage.getItem(mensalKey)) || 0;
+        localStorage.setItem(mensalKey, String(Math.max(0, prevMensal - valor)));
+      }
 
       setPagamentos(prev =>
         prev.map(p =>

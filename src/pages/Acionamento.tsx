@@ -49,7 +49,8 @@ const SEND_TIMESTAMPS_BASE = 'acionamento_send_timestamps';
 const AUTO_SENDING_BASE = 'acionamento_auto_sending_state';
 const META_DIARIA_BASE = 'acionamento_meta_diaria';
 const META_MENSAL_BASE = 'acionamento_meta_mensal';
-const ENVIOS_MENSAL_BASE = 'acionamento_envios_mensal';
+const RECEBIDO_DIARIO_BASE = 'meta_recebido_diario';
+const RECEBIDO_MENSAL_BASE = 'meta_recebido_mensal';
 
 const isToday = (isoString: string): boolean => {
   const date = new Date(isoString);
@@ -115,7 +116,8 @@ export default function Acionamento() {
   const [metaDialogOpen, setMetaDialogOpen] = useState(false);
   const [metaDiaria, setMetaDiaria] = useState<number>(0);
   const [metaMensal, setMetaMensal] = useState<number>(0);
-  const [enviosMensal, setEnviosMensal] = useState<number>(0);
+  const [recebidoDiario, setRecebidoDiario] = useState<number>(0);
+  const [recebidoMensal, setRecebidoMensal] = useState<number>(0);
   
   // Multi-instance UAZAPI state
   const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean }>>([]);
@@ -141,7 +143,9 @@ export default function Acionamento() {
   const META_DIARIA_KEY = getKey(META_DIARIA_BASE, uid);
   const META_MENSAL_KEY = getKey(META_MENSAL_BASE, uid);
   const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const ENVIOS_MENSAL_KEY = getKey(ENVIOS_MENSAL_BASE, uid) + '_' + currentMonthKey;
+  const currentDayKey = new Date().toISOString().slice(0, 10);
+  const RECEBIDO_DIARIO_KEY = getKey(RECEBIDO_DIARIO_BASE, uid) + '_' + currentDayKey;
+  const RECEBIDO_MENSAL_KEY = getKey(RECEBIDO_MENSAL_BASE, uid) + '_' + currentMonthKey;
 
   useEffect(() => {
     activeHistoricoIdRef.current = activeHistoricoId;
@@ -185,8 +189,10 @@ export default function Acionamento() {
     if (savedMetaDiaria) setMetaDiaria(Number(savedMetaDiaria) || 0);
     const savedMetaMensal = localStorage.getItem(META_MENSAL_KEY);
     if (savedMetaMensal) setMetaMensal(Number(savedMetaMensal) || 0);
-    const savedEnviosMensal = localStorage.getItem(ENVIOS_MENSAL_KEY);
-    if (savedEnviosMensal) setEnviosMensal(Number(savedEnviosMensal) || 0);
+    const savedRecDiario = localStorage.getItem(RECEBIDO_DIARIO_KEY);
+    if (savedRecDiario) setRecebidoDiario(Number(savedRecDiario) || 0);
+    const savedRecMensal = localStorage.getItem(RECEBIDO_MENSAL_KEY);
+    if (savedRecMensal) setRecebidoMensal(Number(savedRecMensal) || 0);
   }, [user]);
 
   // Fetch UAZAPI instances from database
@@ -413,12 +419,6 @@ export default function Acionamento() {
         const next = { ...prev, [index]: 'success' as SendStatus };
         const hId = activeHistoricoIdRef.current;
         if (hId) localStorage.setItem(`${SEND_STATUS_KEY}_${hId}`, JSON.stringify(next));
-        return next;
-      });
-      // Increment monthly sends
-      setEnviosMensal((prev) => {
-        const next = prev + 1;
-        localStorage.setItem(ENVIOS_MENSAL_KEY, String(next));
         return next;
       });
       setSendTimestamps((prev) => {
@@ -1137,33 +1137,35 @@ export default function Acionamento() {
             <div className="space-y-5 py-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="meta-diaria">Meta Diária</Label>
+                  <Label htmlFor="meta-diaria">Meta Diária (R$)</Label>
                   <Input
                     id="meta-diaria"
                     type="number"
                     min={0}
+                    step={0.01}
                     value={metaDiaria || ''}
                     onChange={(e) => {
                       const v = Number(e.target.value) || 0;
                       setMetaDiaria(v);
                       localStorage.setItem(META_DIARIA_KEY, String(v));
                     }}
-                    placeholder="Ex: 50"
+                    placeholder="Ex: 5000"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="meta-mensal">Meta Mensal</Label>
+                  <Label htmlFor="meta-mensal">Meta Mensal (R$)</Label>
                   <Input
                     id="meta-mensal"
                     type="number"
                     min={0}
+                    step={0.01}
                     value={metaMensal || ''}
                     onChange={(e) => {
                       const v = Number(e.target.value) || 0;
                       setMetaMensal(v);
                       localStorage.setItem(META_MENSAL_KEY, String(v));
                     }}
-                    placeholder="Ex: 1000"
+                    placeholder="Ex: 100000"
                   />
                 </div>
               </div>
@@ -1175,18 +1177,18 @@ export default function Acionamento() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">Progresso Diário</span>
                   <span className="text-muted-foreground">
-                    {enviadosHoje} / {metaDiaria || '—'}
+                    {formatCurrency(recebidoDiario)} / {metaDiaria ? formatCurrency(metaDiaria) : '—'}
                   </span>
                 </div>
-                <Progress value={metaDiaria > 0 ? Math.min((enviadosHoje / metaDiaria) * 100, 100) : 0} className="h-3" />
-                {metaDiaria > 0 && enviadosHoje >= metaDiaria && (
+                <Progress value={metaDiaria > 0 ? Math.min((recebidoDiario / metaDiaria) * 100, 100) : 0} className="h-3" />
+                {metaDiaria > 0 && recebidoDiario >= metaDiaria && (
                   <p className="text-xs text-primary font-medium flex items-center gap-1">
                     <Check className="h-3 w-3" /> Meta diária atingida! 🎉
                   </p>
                 )}
-                {metaDiaria > 0 && enviadosHoje < metaDiaria && (
+                {metaDiaria > 0 && recebidoDiario < metaDiaria && (
                   <p className="text-xs text-muted-foreground">
-                    Faltam {metaDiaria - enviadosHoje} acionamentos hoje
+                    Faltam {formatCurrency(metaDiaria - recebidoDiario)} hoje
                   </p>
                 )}
               </div>
@@ -1196,18 +1198,18 @@ export default function Acionamento() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">Progresso Mensal</span>
                   <span className="text-muted-foreground">
-                    {enviosMensal + enviadosHoje} / {metaMensal || '—'}
+                    {formatCurrency(recebidoMensal)} / {metaMensal ? formatCurrency(metaMensal) : '—'}
                   </span>
                 </div>
-                <Progress value={metaMensal > 0 ? Math.min(((enviosMensal + enviadosHoje) / metaMensal) * 100, 100) : 0} className="h-3" />
-                {metaMensal > 0 && (enviosMensal + enviadosHoje) >= metaMensal && (
+                <Progress value={metaMensal > 0 ? Math.min((recebidoMensal / metaMensal) * 100, 100) : 0} className="h-3" />
+                {metaMensal > 0 && recebidoMensal >= metaMensal && (
                   <p className="text-xs text-primary font-medium flex items-center gap-1">
                     <Check className="h-3 w-3" /> Meta mensal atingida! 🎉
                   </p>
                 )}
-                {metaMensal > 0 && (enviosMensal + enviadosHoje) < metaMensal && (
+                {metaMensal > 0 && recebidoMensal < metaMensal && (
                   <p className="text-xs text-muted-foreground">
-                    Faltam {metaMensal - (enviosMensal + enviadosHoje)} acionamentos este mês
+                    Faltam {formatCurrency(metaMensal - recebidoMensal)} este mês
                   </p>
                 )}
               </div>
