@@ -19,6 +19,26 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
+    // Dados jurídicos completos dos credores
+    const credoresJuridicos: Record<string, string> = {
+      'MONTREAL': 'MONTREAL - MONTADORA DE MÓVEIS E ELETRO-DOMÉSTICOS LTDA., pessoa jurídica de direito privado, inscrita no CNPJ nº 07.019.882/0001-86, com sede na Av. Eurípedes de Menezes, qd. 04, lts. 01/13 e 28/36, Setor Parque Industrial, CEP: 74993-540, Aparecida de Goiânia-GO',
+    };
+
+    const credorNormalizado = (credor || '').toUpperCase().trim();
+    const credorCompleto = credoresJuridicos[credorNormalizado] || credor || 'Não informado';
+    const isMontreal = credorNormalizado === 'MONTREAL';
+
+    // Cláusula obrigatória para Montreal
+    const clausulaMontrealBaixa = isMontreal ? `
+
+IMPORTANTE: O termo DEVE conter obrigatoriamente a seguinte cláusula (pode ser a CLÁUSULA QUARTA ou outra numeração adequada):
+
+CLÁUSULA [NÚMERO] - DAS RESPONSABILIDADES PELA BAIXA DE PENDÊNCIAS
+
+É de inteira e exclusiva responsabilidade da DEVEDORA o pagamento de quaisquer custas, taxas e emolumentos cartorários necessários à baixa de protestos ou pendências existentes em seu nome e no de suas filiais.
+
+PARÁGRAFO ÚNICO: A CREDORA compromete-se a fornecer a Carta de Anuência para cancelamento dos protestos em cartório somente após o recebimento integral e a efetiva compensação das parcelas pactuadas neste instrumento, devendo a DEVEDORA providenciar o protocolo e pagamento das custas perante os respectivos tabelionatos.` : '';
+
     const systemPrompt = `Você é um advogado brasileiro com mais de 20 anos de experiência em direito civil e empresarial, especializado em acordos extrajudiciais de cobrança. Você redige termos de acordo extrajudiciais completos e profissionais.
 
 INSTRUÇÕES:
@@ -38,7 +58,7 @@ DADOS DO DEVEDOR:
 - Nome: ${clienteNome}
 - CPF/CNPJ: ${clienteCpf}
 
-CREDOR: ${credor || 'Não informado'}
+CREDOR: ${credorCompleto}
 
 VALOR TOTAL DA DÍVIDA: R$ ${valorTotal ? Number(valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : 'Não informado'}
 
@@ -46,6 +66,7 @@ ${contratos ? `CONTRATOS EM ABERTO:\n${contratos}` : ''}
 
 DESCRIÇÃO DO ACORDO FEITO:
 ${descricaoAcordo}
+${clausulaMontrealBaixa}
 
 Gere o termo completo e profissional.`;
 
