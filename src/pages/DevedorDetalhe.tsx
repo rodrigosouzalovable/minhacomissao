@@ -971,16 +971,6 @@ ${bodyContent}
             </Card>
           </div>
 
-          {/* Acordos do Cliente */}
-          <div className="lg:col-span-2">
-            <AcordoDevedorSection
-              cpf={devedor.cpf}
-              userId={user?.id || ''}
-              contratosIds={contratos.map(c => c.id)}
-              onContratosArquivados={fetchData}
-            />
-          </div>
-
           {/* Right: Eventos */}
           <div>
             <Card className="sticky top-4">
@@ -1097,6 +1087,14 @@ ${bodyContent}
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Acordos do Cliente */}
+        <AcordoDevedorSection
+          cpf={devedor.cpf}
+          userId={user?.id || ''}
+          contratosIds={contratos.map(c => c.id)}
+          onContratosArquivados={fetchData}
+        />
       </div>
     </AppLayout>
   );
