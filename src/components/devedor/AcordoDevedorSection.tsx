@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Check, X, Handshake, Upload, Loader2, Pencil, Save } from 'lucide-react';
+import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface AcordoDevedor {
@@ -235,6 +236,21 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
     }
   };
 
+  const handleExcluirAcordo = async (acordoId: string) => {
+    try {
+      // Parcelas are deleted by CASCADE
+      const { error } = await supabase
+        .from('acordos_devedor' as any)
+        .delete()
+        .eq('id', acordoId);
+      if (error) throw error;
+      toast.success('Acordo excluído com sucesso!');
+      fetchAcordos();
+    } catch (err: any) {
+      toast.error('Erro ao excluir acordo: ' + (err.message || 'Tente novamente.'));
+    }
+  };
+
   const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
@@ -339,9 +355,32 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                         {acordo.num_parcelas}x • {pagas}/{acordo.num_parcelas} pagas
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(acordo.criado_em).toLocaleDateString('pt-BR')}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(acordo.criado_em).toLocaleDateString('pt-BR')}
+                      </span>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir Acordo</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir este acordo de {fmtBRL(acordo.valor_total)}? Todas as parcelas serão removidas. Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleExcluirAcordo(acordo.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
 
                   <Table>
