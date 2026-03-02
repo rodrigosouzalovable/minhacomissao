@@ -23,22 +23,25 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY não está configurada');
     }
 
-    console.log('Recebido PDF para extração de dados do acordo');
+    console.log('Recebido PDF para extração de parcelas do acordo');
 
     const systemPrompt = `Você é um especialista em extrair dados de documentos de cálculo de débito e acordos de cobrança brasileiros.
-Analise o PDF fornecido e extraia as seguintes informações:
+Analise o PDF fornecido e extraia CADA PARCELA individualmente.
 
-1. Valor total negociado/acordo - procure por "Valor Total", "Total do Acordo", "Valor Negociado", ou a soma dos valores
-2. Número de parcelas - procure por quantas parcelas existem no documento, conte as linhas de parcelas
-3. Data do primeiro vencimento - a data da primeira parcela, formato AAAA-MM-DD
+Para cada parcela, extraia:
+- numero_parcela: número da parcela (1, 2, 3...)
+- valor: valor da parcela em reais (número decimal, ex: 500.00)
+- data_vencimento: data de vencimento no formato AAAA-MM-DD
+
+Também extraia:
+- valor_total: soma total de todas as parcelas
 
 IMPORTANTE:
 - Analise tabelas com parcelas, datas de vencimento e valores
-- Se houver uma tabela com parcelas numeradas, conte quantas parcelas existem
-- O valor total é geralmente a soma de todas as parcelas
-- A data do primeiro vencimento é a data da parcela 1 ou a primeira data listada
+- Cada linha da tabela de parcelas deve ser uma entrada separada
 - Retorne valores numéricos sem formatação (sem R$, sem pontos de milhar, use ponto como separador decimal)
-- Para datas, retorne no formato AAAA-MM-DD`;
+- Para datas, retorne no formato AAAA-MM-DD
+- Se houver entrada/sinal separada das demais parcelas, inclua como parcela 1`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -49,17 +52,11 @@ IMPORTANTE:
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          {
-            role: 'system',
-            content: systemPrompt,
-          },
+          { role: 'system', content: systemPrompt },
           {
             role: 'user',
             content: [
-              {
-                type: 'text',
-                text: 'Extraia os dados de parcelas e valores deste documento PDF de cálculo de débito/acordo:',
-              },
+              { type: 'text', text: 'Extraia todas as parcelas deste documento PDF de cálculo de débito/acordo:' },
               {
                 type: 'image_url',
                 image_url: {
@@ -72,50 +69,49 @@ IMPORTANTE:
         tools: [{
           type: "function",
           function: {
-            name: "extract_pdf_acordo_data",
-            description: "Extrai dados estruturados do PDF de acordo/cálculo de débito",
+            name: "extract_parcelas",
+            description: "Extrai parcelas individuais do PDF de acordo",
             parameters: {
               type: "object",
               properties: {
-                valor_total: { 
-                  type: "number",
-                  description: "Valor total do acordo/negociação em reais (ex: 5000.00)"
-                },
-                num_parcelas: { 
-                  type: "number",
-                  description: "Número total de parcelas"
-                },
-                data_primeiro_vencimento: { 
-                  type: "string",
-                  description: "Data do primeiro vencimento no formato AAAA-MM-DD"
+                valor_total: { type: "number", description: "Valor total do acordo" },
+                parcelas: {
+                  type: "array",
+                  description: "Lista de parcelas extraídas",
+                  items: {
+                    type: "object",
+                    properties: {
+                      numero_parcela: { type: "number", description: "Número da parcela" },
+                      valor: { type: "number", description: "Valor da parcela" },
+                      data_vencimento: { type: "string", description: "Data de vencimento AAAA-MM-DD" },
+                    },
+                    required: ["numero_parcela", "valor", "data_vencimento"],
+                    additionalProperties: false,
+                  },
                 },
               },
-              required: ["valor_total", "num_parcelas", "data_primeiro_vencimento"],
-              additionalProperties: false
-            }
-          }
+              required: ["valor_total", "parcelas"],
+              additionalProperties: false,
+            },
+          },
         }],
-        tool_choice: { type: "function", function: { name: "extract_pdf_acordo_data" } }
+        tool_choice: { type: "function", function: { name: "extract_parcelas" } },
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Erro no AI Gateway:', response.status, errorText);
-      
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: 'Taxa de requisições excedida. Tente novamente em alguns segundos.' }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({ error: 'Taxa de requisições excedida. Tente novamente.' }), {
+          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: 'Créditos insuficientes.' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      
       throw new Error(`Erro no gateway de IA: ${response.status}`);
     }
 
@@ -123,7 +119,7 @@ IMPORTANTE:
     console.log('Resposta da IA:', JSON.stringify(result, null, 2));
 
     const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall || toolCall.function.name !== 'extract_pdf_acordo_data') {
+    if (!toolCall || toolCall.function.name !== 'extract_parcelas') {
       throw new Error('Não foi possível extrair dados do PDF');
     }
 
@@ -134,12 +130,10 @@ IMPORTANTE:
       JSON.stringify({ success: true, data: extractedData }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (error) {
     console.error('Erro na extração:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro ao processar PDF';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro ao processar PDF' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
