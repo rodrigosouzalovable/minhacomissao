@@ -175,12 +175,43 @@ export default function AcordoDetalhe() {
         
         const diarioKey = `meta_recebido_diario_${uid}_${currentDay}`;
         const mensalKey = `meta_recebido_mensal_${uid}_${currentMonth}`;
+        const metaDiariaKey = `acionamento_meta_diaria_${uid}`;
+        const metaMensalKey = `acionamento_meta_mensal_${uid}`;
         
         const prevDiario = Number(localStorage.getItem(diarioKey)) || 0;
-        localStorage.setItem(diarioKey, String(prevDiario + valor));
+        const novoDiario = prevDiario + valor;
+        localStorage.setItem(diarioKey, String(novoDiario));
         
         const prevMensal = Number(localStorage.getItem(mensalKey)) || 0;
-        localStorage.setItem(mensalKey, String(prevMensal + valor));
+        const novoMensal = prevMensal + valor;
+        localStorage.setItem(mensalKey, String(novoMensal));
+
+        // Verificar se atingiu metas
+        const metaDiaria = Number(localStorage.getItem(metaDiariaKey)) || 0;
+        const metaMensal = Number(localStorage.getItem(metaMensalKey)) || 0;
+
+        if (metaDiaria > 0 && prevDiario < metaDiaria && novoDiario >= metaDiaria) {
+          // Tocar som de celebração
+          const celebrationAudio = new Audio(successSound);
+          celebrationAudio.play().catch(() => {});
+          setTimeout(() => celebrationAudio.play().catch(() => {}), 300);
+          toast({
+            title: '🎉 Meta Diária Atingida!',
+            description: `Parabéns! Você alcançou sua meta diária de R$ ${metaDiaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`,
+          });
+        }
+
+        if (metaMensal > 0 && prevMensal < metaMensal && novoMensal >= metaMensal) {
+          const celebrationAudio = new Audio(successSound);
+          setTimeout(() => {
+            celebrationAudio.play().catch(() => {});
+            setTimeout(() => celebrationAudio.play().catch(() => {}), 300);
+          }, 1500);
+          toast({
+            title: '🏆 Meta Mensal Atingida!',
+            description: `Incrível! Você alcançou sua meta mensal de R$ ${metaMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`,
+          });
+        }
       }
 
       setPagamentos(prev =>
