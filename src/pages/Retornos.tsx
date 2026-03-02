@@ -152,6 +152,7 @@ export default function Retornos() {
     clienteTelefone: '',
     observacao: '',
     dataRetorno: '',
+    horaRetorno: '',
     valorTotal: '',
     numeroParcelas: '',
     valorPrimeiraParcela: '',
@@ -387,13 +388,18 @@ export default function Retornos() {
         dataPrimeiroPagamento: form.dataPrimeiroPagamento || null,
       });
 
+      // Concatenar data + hora para salvar como timestamptz
+      const dataRetornoFinal = form.horaRetorno 
+        ? `${validated.dataRetorno}T${form.horaRetorno}:00` 
+        : validated.dataRetorno;
+
       const { error } = await supabase.from('retornos').insert({
         user_id: user.id,
         cliente_nome: validated.clienteNome,
         cliente_cpf: validated.clienteCpf,
         cliente_telefone: validated.clienteTelefone,
         observacao: validated.observacao || null,
-        data_retorno: validated.dataRetorno,
+        data_retorno: dataRetornoFinal,
         valor_total: validated.valorTotal,
         numero_parcelas: validated.numeroParcelas,
         valor_primeira_parcela: validated.valorPrimeiraParcela,
@@ -415,6 +421,7 @@ export default function Retornos() {
         clienteTelefone: '',
         observacao: '',
         dataRetorno: '',
+        horaRetorno: '',
         valorTotal: '',
         numeroParcelas: '',
         valorPrimeiraParcela: '',
@@ -558,17 +565,19 @@ export default function Retornos() {
   const getStatusBadge = (status: string, dataRetorno: string) => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    const dataRet = new Date(dataRetorno + 'T00:00:00');
+    const dataRet = new Date(dataRetorno.includes('T') ? dataRetorno : dataRetorno + 'T00:00:00');
+    const dataRetDate = new Date(dataRet);
+    dataRetDate.setHours(0, 0, 0, 0);
 
     if (status === 'concluido') {
       return <Badge variant="secondary">Concluído</Badge>;
     }
 
-    if (dataRet < hoje) {
+    if (dataRetDate < hoje) {
       return <Badge variant="destructive">Atrasado</Badge>;
     }
 
-    if (dataRet.getTime() === hoje.getTime()) {
+    if (dataRetDate.getTime() === hoje.getTime()) {
       return <Badge className="bg-amber-500 hover:bg-amber-600">Hoje</Badge>;
     }
 
@@ -799,15 +808,26 @@ export default function Retornos() {
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="dataRetorno">Data de Retorno *</Label>
-                  <Input
-                    id="dataRetorno"
-                    type="date"
-                    value={form.dataRetorno}
-                    onChange={(e) => setForm({ ...form, dataRetorno: e.target.value })}
-                    required
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="dataRetorno">Data de Retorno *</Label>
+                    <Input
+                      id="dataRetorno"
+                      type="date"
+                      value={form.dataRetorno}
+                      onChange={(e) => setForm({ ...form, dataRetorno: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="horaRetorno">Horário do Retorno</Label>
+                    <Input
+                      id="horaRetorno"
+                      type="time"
+                      value={form.horaRetorno}
+                      onChange={(e) => setForm({ ...form, horaRetorno: e.target.value })}
+                    />
+                  </div>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={isLoading || !isFormValid()}>
@@ -868,7 +888,17 @@ export default function Retornos() {
                           <div className="flex items-center gap-2">
                             <Calendar className="h-3 w-3" />
                             <span>
-                              Retorno: {format(new Date(retorno.data_retorno + 'T00:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                              Retorno: {(() => {
+                                const dataStr = retorno.data_retorno;
+                                const hasTime = dataStr.includes('T') && !dataStr.endsWith('T00:00:00');
+                                const date = new Date(dataStr.includes('T') ? dataStr : dataStr + 'T00:00:00');
+                                const formatted = format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+                                if (hasTime) {
+                                  const hora = format(date, 'HH:mm');
+                                  return `${formatted} às ${hora}`;
+                                }
+                                return formatted;
+                              })()}
                             </span>
                           </div>
                           {retorno.profiles?.nome && (
