@@ -31,16 +31,23 @@ export function RetornoAlertChecker() {
     if (!user) return;
 
     const now = new Date();
+    // Build UTC-based window: compare against UTC times since DB stores as UTC
     const past5Min = new Date(now.getTime() - 5 * 60 * 1000);
     const in2Min = new Date(now.getTime() + 2 * 60 * 1000);
+
+    // We need to compare in "user local time" because the user entered local time 
+    // but it was stored as UTC. So we shift the window by the timezone offset.
+    const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+    const past5MinUtc = new Date(past5Min.getTime() + offsetMs);
+    const in2MinUtc = new Date(in2Min.getTime() + offsetMs);
 
     const { data, error } = await supabase
       .from('retornos')
       .select('id, cliente_nome, cliente_cpf, cliente_telefone, observacao, data_retorno')
       .eq('user_id', user.id)
       .eq('status', 'pendente')
-      .lte('data_retorno', in2Min.toISOString())
-      .gte('data_retorno', past5Min.toISOString());
+      .lte('data_retorno', in2MinUtc.toISOString())
+      .gte('data_retorno', past5MinUtc.toISOString());
 
     if (error || !data || data.length === 0) return;
 

@@ -565,9 +565,9 @@ export default function Retornos() {
   const getStatusBadge = (status: string, dataRetorno: string) => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    const dataRet = new Date(dataRetorno.includes('T') ? dataRetorno : dataRetorno + 'T00:00:00');
-    const dataRetDate = new Date(dataRet);
-    dataRetDate.setHours(0, 0, 0, 0);
+    const dataRet = new Date(dataRetorno);
+    // Use UTC values to build a local-only date for comparison
+    const dataRetDate = new Date(dataRet.getUTCFullYear(), dataRet.getUTCMonth(), dataRet.getUTCDate());
 
     if (status === 'concluido') {
       return <Badge variant="secondary">Concluído</Badge>;
@@ -890,12 +890,21 @@ export default function Retornos() {
                             <span>
                               Retorno: {(() => {
                                 const dataStr = retorno.data_retorno;
-                                const hasTime = dataStr.includes('T') && !dataStr.endsWith('T00:00:00');
-                                const date = new Date(dataStr.includes('T') ? dataStr : dataStr + 'T00:00:00');
-                                const formatted = format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+                                // Check if it has a meaningful time (not midnight)
+                                const date = new Date(dataStr);
+                                const hasTime = dataStr.includes('T');
+                                // Use UTC values to avoid timezone shift
+                                const year = date.getUTCFullYear();
+                                const month = date.getUTCMonth();
+                                const day = date.getUTCDate();
+                                const localDate = new Date(year, month, day);
+                                const formatted = format(localDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
                                 if (hasTime) {
-                                  const hora = format(date, 'HH:mm');
-                                  return `${formatted} às ${hora}`;
+                                  const hours = String(date.getUTCHours()).padStart(2, '0');
+                                  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                                  if (hours !== '00' || minutes !== '00') {
+                                    return `${formatted} às ${hours}:${minutes}`;
+                                  }
                                 }
                                 return formatted;
                               })()}
