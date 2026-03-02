@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2 } from 'lucide-react';
+import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface AcordoDevedor {
@@ -52,6 +54,16 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
 
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [observacoes, setObservacoes] = useState('');
+
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   // Preview state (after PDF extraction, before saving)
   const [previewParcelas, setPreviewParcelas] = useState<ParcelaPreview[] | null>(null);
   const [previewValorTotal, setPreviewValorTotal] = useState(0);
@@ -94,6 +106,68 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
   useEffect(() => { fetchAcordos(); }, [fetchAcordos]);
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeAudio(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      toast.error('Não foi possível acessar o microfone.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.readAsDataURL(audioBlob);
+      });
+
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audio: base64 },
+      });
+
+      if (error) throw error;
+      if (data?.text) {
+        setObservacoes(prev => prev ? `${prev}\n${data.text}` : data.text);
+        toast.success('Áudio transcrito com sucesso!');
+      } else {
+        toast.error('Não foi possível transcrever o áudio.');
+      }
+    } catch (err) {
+      console.error('Erro ao transcrever:', err);
+      toast.error('Erro ao transcrever o áudio.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const handleImportPdf = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -107,6 +181,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       }
 
       setExtracting(true);
+      setDialogOpen(false);
       try {
         const reader = new FileReader();
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -177,6 +252,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           num_parcelas: previewParcelas.length,
           data_primeiro_vencimento: primeiraData,
           criado_por: userId,
+          observacoes: observacoes || null,
         } as any)
         .select()
         .single();
@@ -260,7 +336,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           <CardTitle className="flex items-center gap-2 text-base">
             <Handshake className="h-4 w-4" /> Acordos do Cliente
           </CardTitle>
-          <Button size="sm" onClick={handleImportPdf} disabled={extracting}>
+          <Button size="sm" onClick={() => { setObservacoes(''); setDialogOpen(true); }} disabled={extracting}>
             {extracting ? (
               <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Analisando PDF...</>
             ) : (
@@ -430,6 +506,49 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           </div>
         )}
       </CardContent>
+
+      {/* Dialog Novo Acordo */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Novo Acordo</DialogTitle>
+            <DialogDescription>
+              Descreva a negociação feita com o cliente e importe o PDF do acordo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Detalhes da negociação</Label>
+                <Button
+                  type="button"
+                  variant={isRecording ? 'destructive' : 'outline'}
+                  size="sm"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={isTranscribing}
+                >
+                  {isTranscribing ? (
+                    <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Transcrevendo...</>
+                  ) : isRecording ? (
+                    <><MicOff className="h-4 w-4 mr-1" /> Parar</>
+                  ) : (
+                    <><Mic className="h-4 w-4 mr-1" /> Gravar Áudio</>
+                  )}
+                </Button>
+              </div>
+              <Textarea
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Descreva como foi a negociação, valores combinados, condições especiais..."
+                rows={5}
+              />
+            </div>
+            <Button onClick={handleImportPdf} disabled={extracting} className="w-full">
+              <Upload className="h-4 w-4 mr-2" /> Importar PDF do Acordo
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

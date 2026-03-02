@@ -88,6 +88,7 @@ export type Database = {
           devedor_cpf: string
           id: string
           num_parcelas: number
+          observacoes: string | null
           status: string
           valor_total: number
         }
@@ -98,6 +99,7 @@ export type Database = {
           devedor_cpf: string
           id?: string
           num_parcelas: number
+          observacoes?: string | null
           status?: string
           valor_total: number
         }
@@ -108,6 +110,7 @@ export type Database = {
           devedor_cpf?: string
           id?: string
           num_parcelas?: number
+          observacoes?: string | null
           status?: string
           valor_total?: number
         }
