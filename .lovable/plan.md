@@ -1,30 +1,21 @@
 
 
-## Plano: Campo de Horário no Retorno + Popup de Lembrete Global
+## Diagnóstico
 
-### O que será feito
+O cliente JOZY ALVES DE SOUZA CRUZ LEMES não aparece porque suas permissões de usuário filtram os credores visíveis. O sistema usa a tabela `user_permissions` com a coluna `credores` (padrão: `['ume_novo_mundo']`). Na página Clientes, o código filtra os credores exibidos com base nessa lista de permissões (linhas 122-124 de `Clientes.tsx`).
 
-1. **Adicionar campo de horário ao formulário de retorno** (Retornos.tsx)
-   - Ao lado do campo "Data de Retorno", adicionar um `<Input type="time">` para selecionar o horário
-   - Adicionar `horaRetorno` ao estado do formulário
-   - Concatenar data + hora ao salvar no banco (campo `data_retorno` já é string, salvar como `YYYY-MM-DDTHH:MM`)
+O credor "MONTREAL" tem o slug `montreal` no mapeamento `CREDOR_SLUG_MAP`. Como esse slug não está nas suas permissões, os clientes desse credor são filtrados.
 
-2. **Alterar coluna `data_retorno` no banco** 
-   - Atualmente é `date` — precisa aceitar timestamp. Migração SQL: `ALTER TABLE retornos ALTER COLUMN data_retorno TYPE timestamptz USING data_retorno::timestamptz;`
-   - Isso permite armazenar data e hora juntos
+## Solução
 
-3. **Criar componente global de notificação de retorno** (novo: `src/components/RetornoAlertChecker.tsx`)
-   - Componente montado no `AppLayout` (presente em todas as páginas protegidas)
-   - A cada 30 segundos, consulta `retornos` do usuário logado onde `data_retorno` está dentro dos próximos 1-2 minutos e `status = 'pendente'`
-   - Quando encontrar um retorno agendado para o horário atual, exibe um `AlertDialog` no centro da tela com os dados do cliente e toca o som de notificação
-   - Marca o retorno como "notificado" (via campo local ou update no status) para não repetir o alerta
+Executar um UPDATE na tabela `user_permissions` para adicionar `montreal` à lista de credores do usuário Rodrigo Ribeiro de Souza (`user_id = ee649720-b8ce-47a2-859e-100a3a9ae6bb`):
 
-4. **Atualizar exibição** nas listagens de retornos para mostrar a hora junto da data
+```sql
+UPDATE user_permissions 
+SET credores = array_append(credores, 'montreal')
+WHERE user_id = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb'
+  AND NOT ('montreal' = ANY(credores));
+```
 
-### Detalhes Técnicos
-
-- **Migração SQL**: Alterar tipo da coluna `data_retorno` de `date` para `timestamptz`
-- **Novo componente**: `RetornoAlertChecker` com `setInterval` de 30s, montado dentro de `AppLayout`
-- **Arquivos modificados**: `Retornos.tsx` (formulário + listagem), `AppLayout.tsx` (montar checker), novo componente
-- **Som**: Reutilizar `success-sound.mp3` já existente no projeto
+Nenhuma alteração de código é necessária — apenas a atualização dos dados de permissão no banco.
 
