@@ -891,6 +891,22 @@ ${bodyContent}
                     <DollarSign className="h-4 w-4" /> Contratos
                   </CardTitle>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const allOpen = contratos.every(c => openContratos[c.id]);
+                        const newState: Record<string, boolean> = {};
+                        contratos.forEach(c => { newState[c.id] = !allOpen; });
+                        setOpenContratos(newState);
+                      }}
+                    >
+                      {contratos.every(c => openContratos[c.id]) ? (
+                        <><ChevronDown className="h-4 w-4 mr-1" /> Minimizar</>
+                      ) : (
+                        <><ChevronRight className="h-4 w-4 mr-1" /> Expandir</>
+                      )}
+                    </Button>
                     <CalculadoraDebitoDialog contratos={contratos} devedor={devedor} />
                     <span className="text-lg font-bold text-destructive">
                       Total: {totalEmAtraso.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
