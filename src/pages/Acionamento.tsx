@@ -17,7 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, Send, Plus, Pencil } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, Send, Plus, Pencil, Target } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -46,6 +47,9 @@ const SEND_STATUS_BASE = 'acionamento_send_status';
 const MANUAL_CHECKED_BASE = 'acionamento_manual_checked';
 const SEND_TIMESTAMPS_BASE = 'acionamento_send_timestamps';
 const AUTO_SENDING_BASE = 'acionamento_auto_sending_state';
+const META_DIARIA_BASE = 'acionamento_meta_diaria';
+const META_MENSAL_BASE = 'acionamento_meta_mensal';
+const ENVIOS_MENSAL_BASE = 'acionamento_envios_mensal';
 
 const isToday = (isoString: string): boolean => {
   const date = new Date(isoString);
@@ -108,6 +112,10 @@ export default function Acionamento() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
+  const [metaDialogOpen, setMetaDialogOpen] = useState(false);
+  const [metaDiaria, setMetaDiaria] = useState<number>(0);
+  const [metaMensal, setMetaMensal] = useState<number>(0);
+  const [enviosMensal, setEnviosMensal] = useState<number>(0);
   
   // Multi-instance UAZAPI state
   const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean }>>([]);
@@ -130,6 +138,10 @@ export default function Acionamento() {
   const MANUAL_CHECKED_KEY = getKey(MANUAL_CHECKED_BASE, uid);
   const SEND_TIMESTAMPS_KEY = getKey(SEND_TIMESTAMPS_BASE, uid);
   const AUTO_SENDING_KEY = getKey(AUTO_SENDING_BASE, uid);
+  const META_DIARIA_KEY = getKey(META_DIARIA_BASE, uid);
+  const META_MENSAL_KEY = getKey(META_MENSAL_BASE, uid);
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const ENVIOS_MENSAL_KEY = getKey(ENVIOS_MENSAL_BASE, uid) + '_' + currentMonthKey;
 
   useEffect(() => {
     activeHistoricoIdRef.current = activeHistoricoId;
@@ -168,6 +180,13 @@ export default function Acionamento() {
       }
     }
     localStorage.removeItem(AUTO_SENDING_KEY);
+    // Load meta values
+    const savedMetaDiaria = localStorage.getItem(META_DIARIA_KEY);
+    if (savedMetaDiaria) setMetaDiaria(Number(savedMetaDiaria) || 0);
+    const savedMetaMensal = localStorage.getItem(META_MENSAL_KEY);
+    if (savedMetaMensal) setMetaMensal(Number(savedMetaMensal) || 0);
+    const savedEnviosMensal = localStorage.getItem(ENVIOS_MENSAL_KEY);
+    if (savedEnviosMensal) setEnviosMensal(Number(savedEnviosMensal) || 0);
   }, [user]);
 
   // Fetch UAZAPI instances from database
@@ -394,6 +413,12 @@ export default function Acionamento() {
         const next = { ...prev, [index]: 'success' as SendStatus };
         const hId = activeHistoricoIdRef.current;
         if (hId) localStorage.setItem(`${SEND_STATUS_KEY}_${hId}`, JSON.stringify(next));
+        return next;
+      });
+      // Increment monthly sends
+      setEnviosMensal((prev) => {
+        const next = prev + 1;
+        localStorage.setItem(ENVIOS_MENSAL_KEY, String(next));
         return next;
       });
       setSendTimestamps((prev) => {
@@ -631,6 +656,15 @@ export default function Acionamento() {
                   {activeInstances.length} WhatsApp{activeInstances.length > 1 ? 's' : ''} ativo{activeInstances.length > 1 ? 's' : ''}
                 </Badge>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMetaDialogOpen(true)}
+                className="text-muted-foreground gap-1"
+              >
+                <Target className="h-4 w-4" />
+                <span className="text-xs">Meta</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -1086,6 +1120,96 @@ export default function Acionamento() {
                   {sendingTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
                   Testar envio
                 </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Meta Pessoal */}
+        <Dialog open={metaDialogOpen} onOpenChange={setMetaDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Minha Meta
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="meta-diaria">Meta Diária</Label>
+                  <Input
+                    id="meta-diaria"
+                    type="number"
+                    min={0}
+                    value={metaDiaria || ''}
+                    onChange={(e) => {
+                      const v = Number(e.target.value) || 0;
+                      setMetaDiaria(v);
+                      localStorage.setItem(META_DIARIA_KEY, String(v));
+                    }}
+                    placeholder="Ex: 50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meta-mensal">Meta Mensal</Label>
+                  <Input
+                    id="meta-mensal"
+                    type="number"
+                    min={0}
+                    value={metaMensal || ''}
+                    onChange={(e) => {
+                      const v = Number(e.target.value) || 0;
+                      setMetaMensal(v);
+                      localStorage.setItem(META_MENSAL_KEY, String(v));
+                    }}
+                    placeholder="Ex: 1000"
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Progresso Diário */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Progresso Diário</span>
+                  <span className="text-muted-foreground">
+                    {enviadosHoje} / {metaDiaria || '—'}
+                  </span>
+                </div>
+                <Progress value={metaDiaria > 0 ? Math.min((enviadosHoje / metaDiaria) * 100, 100) : 0} className="h-3" />
+                {metaDiaria > 0 && enviadosHoje >= metaDiaria && (
+                  <p className="text-xs text-primary font-medium flex items-center gap-1">
+                    <Check className="h-3 w-3" /> Meta diária atingida! 🎉
+                  </p>
+                )}
+                {metaDiaria > 0 && enviadosHoje < metaDiaria && (
+                  <p className="text-xs text-muted-foreground">
+                    Faltam {metaDiaria - enviadosHoje} acionamentos hoje
+                  </p>
+                )}
+              </div>
+
+              {/* Progresso Mensal */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Progresso Mensal</span>
+                  <span className="text-muted-foreground">
+                    {enviosMensal + enviadosHoje} / {metaMensal || '—'}
+                  </span>
+                </div>
+                <Progress value={metaMensal > 0 ? Math.min(((enviosMensal + enviadosHoje) / metaMensal) * 100, 100) : 0} className="h-3" />
+                {metaMensal > 0 && (enviosMensal + enviadosHoje) >= metaMensal && (
+                  <p className="text-xs text-primary font-medium flex items-center gap-1">
+                    <Check className="h-3 w-3" /> Meta mensal atingida! 🎉
+                  </p>
+                )}
+                {metaMensal > 0 && (enviosMensal + enviadosHoje) < metaMensal && (
+                  <p className="text-xs text-muted-foreground">
+                    Faltam {metaMensal - (enviosMensal + enviadosHoje)} acionamentos este mês
+                  </p>
+                )}
               </div>
             </div>
           </DialogContent>
