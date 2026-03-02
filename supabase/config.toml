@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.notify-cpf-consulta]
 verify_jwt = false
+
+[functions.extract-pdf-acordo]
+verify_jwt = false

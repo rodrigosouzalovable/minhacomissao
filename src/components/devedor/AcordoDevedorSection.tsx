@@ -8,8 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Check, X, Handshake } from 'lucide-react';
+import { Plus, Check, X, Handshake, Upload, Loader2 } from 'lucide-react';
 import { addMonths, format } from 'date-fns';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AcordoDevedor {
   id: string;
@@ -45,10 +46,12 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   const [valorTotal, setValorTotal] = useState('');
   const [numParcelas, setNumParcelas] = useState('');
   const [dataVencimento, setDataVencimento] = useState('');
+  const [pdfFileName, setPdfFileName] = useState('');
 
   const cpfNorm = cpf.replace(/\D/g, '');
 
@@ -84,6 +87,42 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   }, [cpfNorm]);
 
   useEffect(() => { fetchAcordos(); }, [fetchAcordos]);
+
+  const handlePdfImport = async (file: File) => {
+    if (file.type !== 'application/pdf') {
+      toast.error('Selecione um arquivo PDF.');
+      return;
+    }
+    setExtracting(true);
+    setPdfFileName(file.name);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const { data, error } = await supabase.functions.invoke('extract-pdf-acordo', {
+        body: { pdfBase64: base64 },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const extracted = data.data;
+      if (extracted.valor_total) setValorTotal(String(extracted.valor_total));
+      if (extracted.num_parcelas) setNumParcelas(String(extracted.num_parcelas));
+      if (extracted.data_primeiro_vencimento) setDataVencimento(extracted.data_primeiro_vencimento);
+
+      toast.success('Dados extraídos do PDF com sucesso! Revise antes de criar.');
+    } catch (err: any) {
+      console.error('Erro ao extrair PDF:', err);
+      toast.error('Erro ao extrair dados do PDF: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const handleCriarAcordo = async () => {
     const valor = parseFloat(valorTotal);
@@ -146,6 +185,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       setValorTotal('');
       setNumParcelas('');
       setDataVencimento('');
+      setPdfFileName('');
       onContratosArquivados();
       fetchAcordos();
     } catch (err: any) {
@@ -190,6 +230,43 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
             <DialogContent>
               <DialogHeader><DialogTitle>Lançar Acordo</DialogTitle></DialogHeader>
               <div className="space-y-4 py-2">
+                {/* PDF Import */}
+                <div className="space-y-2">
+                  <Label>Importar PDF do Acordo (opcional)</Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={extracting}
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.pdf';
+                        input.onchange = (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (file) handlePdfImport(file);
+                        };
+                        input.click();
+                      }}
+                    >
+                      {extracting ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Analisando PDF...</>
+                      ) : (
+                        <><Upload className="h-4 w-4 mr-1" /> {pdfFileName || 'Selecionar PDF'}</>
+                      )}
+                    </Button>
+                  </div>
+                  {pdfFileName && !extracting && (
+                    <Alert>
+                      <AlertDescription className="text-xs">
+                        Dados extraídos de <strong>{pdfFileName}</strong>. Revise os campos abaixo antes de criar o acordo.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   <Label>Valor Total Negociado (R$)</Label>
                   <Input
