@@ -240,34 +240,26 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
     if (!observacoes.trim()) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('acordos_devedor' as any)
-        .insert({
-          devedor_cpf: cpfNorm,
-          valor_total: 0,
-          num_parcelas: 0,
-          data_primeiro_vencimento: format(new Date(), 'yyyy-MM-dd'),
-          criado_por: userId,
-          observacoes: observacoes.trim(),
-        } as any);
+      const { data, error } = await supabase.functions.invoke('extract-texto-acordo', {
+        body: { texto: observacoes.trim() },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      if (contratosIds.length > 0) {
-        await supabase
-          .from('devedores')
-          .update({ ativo: false })
-          .in('id', contratosIds);
+      const extracted = data.data;
+      if (!extracted?.parcelas || extracted.parcelas.length === 0) {
+        toast.error('Não foi possível identificar parcelas no texto. Detalhe melhor os valores e datas.');
+        return;
       }
 
-      toast.success('Acordo salvo com sucesso!');
+      setPreviewParcelas(extracted.parcelas.sort((a: ParcelaPreview, b: ParcelaPreview) => a.numero_parcela - b.numero_parcela));
+      setPreviewValorTotal(extracted.valor_total || extracted.parcelas.reduce((s: number, p: ParcelaPreview) => s + p.valor, 0));
       setDialogOpen(false);
-      setObservacoes('');
-      onContratosArquivados();
-      fetchAcordos();
+      toast.success(`${extracted.parcelas.length} parcelas identificadas! Revise e confirme.`);
     } catch (err: any) {
       console.error(err);
-      toast.error('Erro ao salvar acordo: ' + (err.message || 'Tente novamente.'));
+      toast.error('Erro ao interpretar acordo: ' + (err.message || 'Tente novamente.'));
     } finally {
       setSaving(false);
     }
@@ -588,9 +580,9 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                 className="w-full"
               >
                 {saving ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analisando com IA...</>
                 ) : (
-                  <><Save className="h-4 w-4 mr-2" /> Salvar Acordo (somente texto)</>
+                  <><Save className="h-4 w-4 mr-2" /> Gerar Parcelas com IA</>
                 )}
               </Button>
               <Button onClick={handleImportPdf} disabled={extracting} className="w-full">
