@@ -39,6 +39,7 @@ interface UserWithRole {
   role: AppRole;
   criado_em: string;
   whatsappHabilitado: boolean;
+  ativo: boolean;
 }
 
 const roleLabels: Record<AppRole, string> = {
@@ -96,6 +97,7 @@ export default function AdminUsuarios() {
           role: userRole?.role ?? 'funcionario',
           criado_em: profile.criado_em,
           whatsappHabilitado: profile.whatsapp_lembretes_habilitado ?? false,
+          ativo: (profile as any).ativo ?? true,
         };
       });
 
@@ -167,6 +169,32 @@ export default function AdminUsuarios() {
       toast({
         title: 'Erro',
         description: 'Não foi possível atualizar a configuração.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const updateAtivoMutation = useMutation({
+    mutationFn: async ({ userId, ativo }: { userId: string; ativo: boolean }) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ ativo } as any)
+        .eq('id', userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({
+        title: 'Status atualizado',
+        description: 'O status do usuário foi atualizado com sucesso.',
+      });
+    },
+    onError: (error) => {
+      console.error('Error updating ativo:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível atualizar o status do usuário.',
         variant: 'destructive',
       });
     },
@@ -409,6 +437,7 @@ export default function AdminUsuarios() {
                     <TableHead>Email</TableHead>
                     <TableHead>Papel Atual</TableHead>
                     <TableHead>Novo Papel</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <MessageCircle className="h-4 w-4" />
@@ -442,6 +471,20 @@ export default function AdminUsuarios() {
                             <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
                         </Select>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Switch
+                            checked={user.ativo}
+                            onCheckedChange={(checked) =>
+                              updateAtivoMutation.mutate({ userId: user.id, ativo: checked })
+                            }
+                            disabled={updateAtivoMutation.isPending}
+                          />
+                          <Badge variant={user.ativo ? 'default' : 'secondary'}>
+                            {user.ativo ? 'Ativo' : 'Inativo'}
+                          </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Switch

@@ -605,6 +605,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          ativo: boolean
           atualizado_em: string
           criado_em: string
           email: string
@@ -613,6 +614,7 @@ export type Database = {
           whatsapp_lembretes_habilitado: boolean
         }
         Insert: {
+          ativo?: boolean
           atualizado_em?: string
           criado_em?: string
           email: string
@@ -621,6 +623,7 @@ export type Database = {
           whatsapp_lembretes_habilitado?: boolean
         }
         Update: {
+          ativo?: boolean
           atualizado_em?: string
           criado_em?: string
           email?: string
