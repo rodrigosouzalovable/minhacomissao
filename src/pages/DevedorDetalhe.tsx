@@ -23,6 +23,7 @@ import jsPDF from 'jspdf';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
 import { CalculadoraDebitoDialog } from '@/components/devedor/CalculadoraDebitoDialog';
+import { AcordoDevedorSection } from '@/components/devedor/AcordoDevedorSection';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface Devedor {
@@ -968,6 +969,16 @@ ${bodyContent}
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Acordos do Cliente */}
+          <div className="lg:col-span-2">
+            <AcordoDevedorSection
+              cpf={devedor.cpf}
+              userId={user?.id || ''}
+              contratosIds={contratos.map(c => c.id)}
+              onContratosArquivados={fetchData}
+            />
           </div>
 
           {/* Right: Eventos */}
