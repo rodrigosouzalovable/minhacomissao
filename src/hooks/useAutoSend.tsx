@@ -26,13 +26,29 @@ const formatPrimeiroNome = (nome: string): string => {
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
+const calcAvista = (saldo: number): string => formatCurrency(saldo * 0.5);
+
+const calcParcelado = (saldo: number): string => {
+  const valorComDesconto = saldo * 0.7;
+  const opcoes: string[] = [];
+  for (let i = 2; i <= 24; i++) {
+    const valorParcela = valorComDesconto / i;
+    if (valorParcela >= 120) {
+      opcoes.push(`- ${i}x de ${formatCurrency(valorParcela)}`);
+    }
+  }
+  return opcoes.join('\n');
+};
+
 const replaceVariables = (template: string, cliente: ClienteData): string =>
   template
     .replace(/\{nome\}/g, cliente.nome)
     .replace(/\{primeiro_nome\}/g, formatPrimeiroNome(cliente.nome))
     .replace(/\{cpf\}/g, cliente.cpf)
     .replace(/\{atraso\}/g, String(cliente.atraso))
-    .replace(/\{saldo\}/g, formatCurrency(cliente.saldo));
+    .replace(/\{saldo\}/g, formatCurrency(cliente.saldo))
+    .replace(/\{avista\}/g, calcAvista(cliente.saldo))
+    .replace(/\{parcelado\}/g, calcParcelado(cliente.saldo));
 
 interface AutoSendProgress {
   current: number;
