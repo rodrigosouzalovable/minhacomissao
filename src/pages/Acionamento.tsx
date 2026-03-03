@@ -636,14 +636,19 @@ export default function Acionamento() {
     }
   };
 
-  const handleTestSend = async () => {
+  const handleTestSend = async (msgOverride?: string) => {
     if (!testPhone.trim()) {
       toast.error('Digite um número de telefone para teste');
       return;
     }
+    const msgToSend = msgOverride || mensagem;
+    if (!msgToSend.trim()) {
+      toast.error('Digite uma mensagem antes de testar');
+      return;
+    }
     setSendingTest(true);
     try {
-      const body: any = { telefone: testPhone.trim(), mensagem: 'mensagem teste' };
+      const body: any = { telefone: testPhone.trim(), mensagem: msgToSend.trim() };
       const config = getFirstActiveConfig();
       if (config) {
         body.uazapi_server_url = config.server_url;
@@ -778,9 +783,27 @@ export default function Acionamento() {
               placeholder="Digite a mensagem usando as variáveis acima..."
               rows={6}
             />
-            <Button onClick={handleSaveMessage}>
-              <Save className="h-4 w-4 mr-2" /> Salvar mensagem
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button onClick={handleSaveMessage}>
+                <Save className="h-4 w-4 mr-2" /> Salvar mensagem
+              </Button>
+              <div className="flex gap-2 items-center">
+                <Input
+                  placeholder="Número para teste (ex: 62999999999)"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  className="w-64"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => handleTestSend()}
+                  disabled={sendingTest || !testPhone.trim() || !mensagem.trim()}
+                >
+                  {sendingTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                  Testar envio
+                </Button>
+              </div>
+            </div>
 
             {mensagensSalvas.length > 0 && (
               <div className="space-y-2">
@@ -1134,7 +1157,7 @@ export default function Acionamento() {
                     onChange={(e) => setTestPhone(e.target.value)}
                   />
                 </div>
-                <Button onClick={handleTestSend} disabled={sendingTest || !testPhone.trim()}>
+                <Button onClick={() => handleTestSend()} disabled={sendingTest || !testPhone.trim()}>
                   {sendingTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
                   Testar envio
                 </Button>
