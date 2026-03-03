@@ -19,27 +19,91 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    // Dados jurídicos completos dos credores
     const credoresJuridicos: Record<string, string> = {
-      'MONTREAL': 'MONTREAL - MONTADORA DE MÓVEIS E ELETRO-DOMÉSTICOS LTDA., pessoa jurídica de direito privado, inscrita no CNPJ nº 07.019.882/0001-86, com sede na Av. Eurípedes de Menezes, qd. 04, lts. 01/13 e 28/36, Setor Parque Industrial, CEP: 74993-540, Aparecida de Goiânia-GO',
+      'MONTREAL': 'MONTREAL - MONTADORA DE MÓVEIS E ELETRO-DOMÉSTICOS LTDA., pessoa jurídica de direito privado, inscrita no CNPJ nº 07.019.882/0001-86, com sede na Av. Eurípedes de Menezes, qd. 04, lts. 01/13 e 28/36, Setor Parque Industrial, CEP: 74.993-540, na cidade de Aparecida de Goiânia-GO, neste ato representada na forma de seus atos constitutivos.',
     };
 
     const credorNormalizado = (credor || '').toUpperCase().trim();
     const credorCompleto = credoresJuridicos[credorNormalizado] || credor || 'Não informado';
     const isMontreal = credorNormalizado === 'MONTREAL';
 
-    // Cláusula obrigatória para Montreal
-    const clausulaMontrealBaixa = isMontreal ? `
+    let systemPrompt: string;
+    let userPrompt: string;
 
-IMPORTANTE: O termo DEVE conter obrigatoriamente a seguinte cláusula (pode ser a CLÁUSULA QUARTA ou outra numeração adequada):
+    if (isMontreal) {
+      systemPrompt = `Você é um advogado brasileiro com mais de 20 anos de experiência em direito civil e empresarial. Você gera termos de acordo extrajudicial seguindo um modelo fixo e padronizado para a Montreal.
 
-CLÁUSULA [NÚMERO] - DAS RESPONSABILIDADES PELA BAIXA DE PENDÊNCIAS
+INSTRUÇÕES CRÍTICAS:
+- Siga EXATAMENTE a estrutura de cláusulas abaixo, SEM adicionar nem remover cláusulas
+- NÃO mencione inteligência artificial em nenhum momento
+- Retorne APENAS o texto puro do termo, sem formatação markdown (sem **, ##, etc.)
+- Use numeração por extenso (PRIMEIRA, SEGUNDA, etc.)
+- Inclua espaços para assinatura ao final
+- Use a data atual para o termo
+- Adapte os dados do devedor e do acordo conforme fornecido`;
 
-É de inteira e exclusiva responsabilidade da DEVEDORA o pagamento de quaisquer custas, taxas e emolumentos cartorários necessários à baixa de protestos ou pendências existentes em seu nome e no de suas filiais.
+      userPrompt = `Gere um INSTRUMENTO PARTICULAR DE ACORDO EXTRAJUDICIAL E DE RECONHECIMENTO, CONFISSÃO E PARCELAMENTO DE DÍVIDA seguindo EXATAMENTE esta estrutura:
 
-PARÁGRAFO ÚNICO: A CREDORA compromete-se a fornecer a Carta de Anuência para cancelamento dos protestos em cartório somente após o recebimento integral e a efetiva compensação das parcelas pactuadas neste instrumento, devendo a DEVEDORA providenciar o protocolo e pagamento das custas perante os respectivos tabelionatos.` : '';
+TÍTULO: INSTRUMENTO PARTICULAR DE ACORDO EXTRAJUDICIAL E DE RECONHECIMENTO, CONFISSÃO E PARCELAMENTO DE DÍVIDA
 
-    const systemPrompt = `Você é um advogado brasileiro com mais de 20 anos de experiência em direito civil e empresarial, especializado em acordos extrajudiciais de cobrança. Você redige termos de acordo extrajudiciais completos e profissionais.
+"Pelo presente instrumento particular, as partes abaixo qualificadas:"
+
+CREDORA:
+${credorCompleto}
+
+DEVEDORA:
+- Nome: ${clienteNome}
+- CPF/CNPJ: ${clienteCpf}
+
+CLÁUSULA PRIMEIRA - DO OBJETO E DO RECONHECIMENTO E CONFISSÃO DA DÍVIDA:
+A DEVEDORA reconhece e confessa, de forma irrevogável e irretratável, a dívida objeto deste acordo, nos termos dos arts. 389, 395 e 784, III, do Código de Processo Civil, e renuncia a qualquer alegação futura de nulidade, inexigibilidade, excesso de execução ou discussão quanto à origem do débito, por se tratar de uma dívida líquida, certa e exigível, perante a CREDORA, oriunda de inadimplemento contratual, referente aos seguintes títulos e contratos:
+
+${contratos ? contratos : 'Contratos não especificados'}
+
+O montante principal atualizado da dívida perfaz o valor total de: R$ ${valorTotal ? Number(valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : 'Não informado'}.
+
+CLÁUSULA SEGUNDA - DA TRANSAÇÃO E DOS PAGAMENTOS:
+Descreva aqui as condições de pagamento com base na descrição do acordo abaixo. Inclua o montante total negociado, número de parcelas, valor de cada parcela.
+PARÁGRAFO ÚNICO: O vencimento da primeira parcela, as demais no mesmo dia dos meses subsequentes. Pagamentos via boleto bancário ou transferência para conta indicada pela CREDORA.
+
+CLÁUSULA TERCEIRA - DAS RESPONSABILIDADES PELAS BAIXAS DE PENDÊNCIAS:
+É de inteira e exclusiva responsabilidade da DEVEDORA o pagamento de quaisquer custas, taxas e emolumentos cartorários, necessários à baixa de processo, protestos ou pendências existentes em seu nome e no de suas filiais; inclusive, em empresas restritivas de créditos.
+PARÁGRAFO ÚNICO: A CREDORA se compromete a fornecer a Carta de Anuência, para cancelamento dos protestos em cartório, somente após o recebimento integral e a efetiva compensação de todas as parcelas pactuadas neste instrumento, sendo que a DEVEDORA deverá providenciar o protocolo e pagamento das custas perante os respectivos tabelionatos.
+
+CLÁUSULA QUARTA - DO INADIMPLEMENTO E DAS PENALIDADES:
+O não pagamento de qualquer das parcelas, nas datas aprazadas, constituirá a DEVEDORA em mora, independentemente de notificação judicial ou extrajudicial.
+PARÁGRAFO PRIMEIRO: Na hipótese de atraso superior a 05 (cinco) dias, no pagamento de qualquer parcela, ocorrerá o vencimento antecipado de toda a dívida remanescente, autorizando a CREDORA a promover a imediata execução do saldo devedor integral, sem prejuízo da inscrição do nome da DEVEDORA nos órgãos de proteção ao crédito (SPC/SERASA) e novos protestos.
+PARÁGRAFO SEGUNDO: Em caso de inadimplemento, sobre o saldo devedor total incidirá multa penalizadora de 20% (vinte por cento), juros moratórios de 1% (um por cento) ao mês e correção monetária pelos índices das Taxas da SELIC Diária do BACEN; e mais 20% (vinte por cento) de honorários advocatícios, calculados sobre o valor total e atualizado do débito.
+
+CLÁUSULA QUINTA - DA NOVAÇÃO:
+A presente transação é realizada em caráter excepcional e não importa em novação da dívida original. O descumprimento do presente acordo permite à CREDORA a cobrança do débito original, nos termos dos contratos discriminados na Cláusula Primeira, subtraindo-se apenas os valores eventualmente pagos.
+
+CLÁUSULA SEXTA - DAS DISPOSIÇÕES GERAIS:
+O presente acordo constitui título executivo extrajudicial, nos termos do art. 784, III e IV, do Código de Processo Civil. Qualquer tolerância por parte da CREDORA, quanto ao cumprimento das cláusulas do presente acordo, será considerada mera liberalidade, não constituindo renúncia, perdão, alteração ou novação das obrigações aqui assumidas.
+
+CLÁUSULA SÉTIMA - DO FORO:
+As partes elegem o Foro da Comarca de Aparecida de Goiânia-GO, para dirimirem quaisquer eventuais dúvidas ou litígios oriundos deste instrumento, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
+
+"E, por estarem assim justas e contratadas, as partes assinam o presente instrumento em 02 (duas) vias de igual teor e forma, para um só efeito, na presença de 02 (duas) testemunhas."
+
+Local e data: Aparecida de Goiânia-GO, [data atual por extenso].
+
+Espaços para assinatura:
+- MONTREAL - MONTADORA DE MÓVEIS E ELETRO-DOMÉSTICOS LTDA. (CREDORA)
+- ${clienteNome} (DEVEDOR(A))
+
+TESTEMUNHAS:
+1. Nome: / CPF:
+2. Nome: / CPF:
+
+DESCRIÇÃO DO ACORDO FEITO (use para preencher a CLÁUSULA SEGUNDA):
+${descricaoAcordo}
+
+Gere o termo completo seguindo EXATAMENTE esta estrutura com 7 cláusulas. Adapte apenas a CLÁUSULA SEGUNDA com os dados do acordo descrito acima. Escreva todos os valores por extenso entre parênteses.`;
+
+    } else {
+      // Generic template for non-Montreal creditors
+      systemPrompt = `Você é um advogado brasileiro com mais de 20 anos de experiência em direito civil e empresarial, especializado em acordos extrajudiciais de cobrança. Você redige termos de acordo extrajudiciais completos e profissionais.
 
 INSTRUÇÕES:
 - Gere um TERMO DE ACORDO EXTRAJUDICIAL completo e profissional
@@ -52,7 +116,7 @@ INSTRUÇÕES:
 - Use a data atual para o termo
 - Seja detalhista nas cláusulas de inadimplemento e penalidades`;
 
-    const userPrompt = `Gere um Termo de Acordo Extrajudicial com base nas seguintes informações:
+      userPrompt = `Gere um Termo de Acordo Extrajudicial com base nas seguintes informações:
 
 DADOS DO DEVEDOR:
 - Nome: ${clienteNome}
@@ -66,9 +130,9 @@ ${contratos ? `CONTRATOS EM ABERTO:\n${contratos}` : ''}
 
 DESCRIÇÃO DO ACORDO FEITO:
 ${descricaoAcordo}
-${clausulaMontrealBaixa}
 
 Gere o termo completo e profissional.`;
+    }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -108,7 +172,6 @@ Gere o termo completo e profissional.`;
     const result = await response.json();
     const termoGerado = result.choices?.[0]?.message?.content || '';
 
-    // Remove any markdown formatting that might slip through
     const termoLimpo = termoGerado
       .replace(/\*\*/g, '')
       .replace(/##\s*/g, '')
