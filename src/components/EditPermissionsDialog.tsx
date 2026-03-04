@@ -36,6 +36,7 @@ const AVAILABLE_TABS = [
   { path: '/admin/financeiro', label: 'Financeiro' },
   { path: '/admin/importar-devedores', label: 'Importar Devedores' },
   { path: '/admin/acionamento', label: 'Acionamento' },
+  { path: '/meta', label: 'Meta' },
 ];
 
 const CREDORES = [
