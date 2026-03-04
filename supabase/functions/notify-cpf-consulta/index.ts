@@ -13,24 +13,18 @@ serve(async (req) => {
 
   try {
     const { cpf, nome, credor, totalDebitos } = await req.json();
-
     console.log('Notificação de consulta CPF:', { cpf, nome, credor, totalDebitos });
 
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+    const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-    if (!instanceId || !token || !clientToken) {
-      throw new Error('Credenciais Z-API não configuradas');
-    }
+    if (!serverUrl || !instanceToken) throw new Error('Credenciais UAZAPI não configuradas');
 
-    // Formatar CPF
     const cpfLimpo = (cpf || '').replace(/\D/g, '');
     const cpfFormatado = cpfLimpo.length === 11
       ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
       : cpf;
 
-    // Data/hora no fuso de Brasília
     const agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
     const mensagem = `📋 *CONSULTA NO PORTAL*
@@ -44,23 +38,26 @@ serve(async (req) => {
 _Portal de Acordos - Souza e Ribeiro_`;
 
     const telefoneAdmin = '5562991672674';
+    const cleanUrl = serverUrl.replace(/\/+$/, '');
+    const endpoints = [
+      `${cleanUrl}/message/sendText`,
+      `${cleanUrl}/sendText`,
+      `${cleanUrl}/send/text`,
+    ];
 
-    const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+    let success = false;
+    for (const url of endpoints) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': instanceToken },
+        body: JSON.stringify({ number: telefoneAdmin, text: mensagem }),
+      });
+      const data = await response.json();
+      console.log(`Resposta UAZAPI (${url}):`, data);
+      if (response.ok) { success = true; break; }
+    }
 
-    const response = await fetch(zapiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Client-Token': clientToken,
-      },
-      body: JSON.stringify({
-        phone: telefoneAdmin,
-        message: mensagem,
-      }),
-    });
-
-    const data = await response.json();
-    console.log('Resposta Z-API:', data);
+    if (!success) throw new Error('Falha ao enviar via UAZAPI');
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

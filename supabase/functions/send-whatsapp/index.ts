@@ -6,6 +6,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone: string, mensagem: string) {
+  const cleanUrl = serverUrl.replace(/\/+$/, '');
+  const endpoints = [
+    `${cleanUrl}/message/sendText`,
+    `${cleanUrl}/sendText`,
+    `${cleanUrl}/send/text`,
+  ];
+
+  let lastError = null;
+  for (const url of endpoints) {
+    console.log(`Tentando endpoint: ${url}`);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'token': instanceToken },
+      body: JSON.stringify({ number: telefone, text: mensagem }),
+    });
+    const data = await response.json();
+    console.log(`Resposta de ${url}:`, JSON.stringify(data));
+    if (response.ok) return data;
+    lastError = data;
+    console.log(`Endpoint ${url} falhou com status ${response.status}`);
+  }
+  throw new Error(lastError?.message || lastError?.error || 'Nenhum endpoint UAZAPI funcionou');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,9 +41,7 @@ serve(async (req) => {
     
     console.log('Recebendo requisição para enviar WhatsApp:', { telefone });
 
-    if (!telefone) {
-      throw new Error('Telefone não informado');
-    }
+    if (!telefone) throw new Error('Telefone não informado');
 
     const telefoneFormatado = telefone.replace(/\D/g, '');
     const telefoneCompleto = telefoneFormatado.startsWith('55') 
@@ -27,89 +50,15 @@ serve(async (req) => {
 
     console.log('Telefone formatado:', telefoneCompleto);
 
-    let response: Response;
-    let data: any;
+    // Use provided credentials or fall back to global UAZAPI secrets
+    const serverUrl = uazapi_server_url || Deno.env.get('UAZAPI_SERVER_URL');
+    const instanceToken = uazapi_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-    if (uazapi_server_url && uazapi_instance_token) {
-      // UAZAPI flow (employees)
-      const cleanUrl = uazapi_server_url.replace(/\/+$/, '');
-      
-      // Try /message/sendText first (v2 standard), fallback to /sendText
-      const endpoints = [
-        `${cleanUrl}/message/sendText`,
-        `${cleanUrl}/sendText`,
-        `${cleanUrl}/send/text`,
-      ];
-      
-      let lastError = null;
-      let success = false;
-
-      for (const uazapiUrl of endpoints) {
-        console.log(`Tentando endpoint: ${uazapiUrl}`);
-        
-        const requestBody = JSON.stringify({
-          number: telefoneCompleto,
-          text: mensagem,
-        });
-        console.log('Body:', requestBody);
-
-        response = await fetch(uazapiUrl, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'token': uazapi_instance_token,
-          },
-          body: requestBody,
-        });
-
-        data = await response.json();
-        console.log(`Resposta de ${uazapiUrl}:`, JSON.stringify(data));
-        
-        if (response.ok) {
-          success = true;
-          break;
-        }
-        
-        lastError = data;
-        console.log(`Endpoint ${uazapiUrl} falhou com status ${response.status}`);
-      }
-
-      if (!success) {
-        throw new Error(lastError?.message || lastError?.error || 'Nenhum endpoint UAZAPI funcionou');
-      }
-    } else {
-      // Z-API flow (admin - existing behavior)
-      const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-      const token = Deno.env.get('ZAPI_TOKEN');
-      const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-
-      if (!instanceId || !token || !clientToken) {
-        console.error('Credenciais Z-API não configuradas');
-        throw new Error('Credenciais Z-API não configuradas');
-      }
-
-      const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
-      console.log('Enviando via Z-API...');
-
-      response = await fetch(zapiUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Client-Token': clientToken,
-        },
-        body: JSON.stringify({
-          phone: telefoneCompleto,
-          message: mensagem,
-        }),
-      });
-
-      data = await response.json();
-      console.log('Resposta da Z-API:', data);
+    if (!serverUrl || !instanceToken) {
+      throw new Error('Credenciais UAZAPI não configuradas');
     }
 
-    if (!response!.ok && !(uazapi_server_url && uazapi_instance_token)) {
-      throw new Error(data.message || data.error || 'Erro ao enviar mensagem');
-    }
+    const data = await sendViaUazapi(serverUrl, instanceToken, telefoneCompleto, mensagem);
 
     return new Response(JSON.stringify({ success: true, data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

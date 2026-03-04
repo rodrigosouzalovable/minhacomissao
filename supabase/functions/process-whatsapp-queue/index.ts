@@ -7,6 +7,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone: string, mensagem: string) {
+  const cleanUrl = serverUrl.replace(/\/+$/, '');
+  const endpoints = [
+    `${cleanUrl}/message/sendText`,
+    `${cleanUrl}/sendText`,
+    `${cleanUrl}/send/text`,
+  ];
+  let lastError = null;
+  for (const url of endpoints) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'token': instanceToken },
+      body: JSON.stringify({ number: telefone, text: mensagem }),
+    });
+    const data = await response.json();
+    if (response.ok) return data;
+    lastError = data;
+  }
+  throw new Error(lastError?.message || lastError?.error || 'Nenhum endpoint UAZAPI funcionou');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -19,23 +40,17 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verificar se está dentro do horário comercial (8h-18h Brasília)
     const agora = new Date();
     const horaAtualUTC = agora.getUTCHours();
     const horaAtualBrasilia = (horaAtualUTC - 3 + 24) % 24;
 
     if (horaAtualBrasilia < 8 || horaAtualBrasilia >= 18) {
       console.log(`Fora do horário comercial (${horaAtualBrasilia}h Brasília), pulando...`);
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: 'Fora do horário comercial',
-        enviado: false
-      }), {
+      return new Response(JSON.stringify({ success: true, message: 'Fora do horário comercial', enviado: false }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Buscar a próxima mensagem pendente que já pode ser enviada
     const { data: mensagensPendentes, error: buscaError } = await supabase
       .from('whatsapp_fila')
       .select('*')
@@ -44,18 +59,10 @@ serve(async (req) => {
       .order('agendado_para', { ascending: true })
       .limit(1);
 
-    if (buscaError) {
-      console.error('Erro ao buscar mensagens pendentes:', buscaError);
-      throw buscaError;
-    }
+    if (buscaError) throw buscaError;
 
     if (!mensagensPendentes || mensagensPendentes.length === 0) {
-      console.log('Nenhuma mensagem pendente para enviar');
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: 'Nenhuma mensagem pendente',
-        enviado: false
-      }), {
+      return new Response(JSON.stringify({ success: true, message: 'Nenhuma mensagem pendente', enviado: false }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
@@ -63,104 +70,35 @@ serve(async (req) => {
     const mensagem = mensagensPendentes[0];
     console.log(`Processando mensagem ${mensagem.id} para ${mensagem.telefone}...`);
 
-    // Enviar via Z-API
     try {
-      const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-      const token = Deno.env.get('ZAPI_TOKEN');
-      const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+      const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+      const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-      if (!instanceId || !token || !clientToken) {
-        throw new Error('Credenciais Z-API não configuradas');
-      }
+      if (!serverUrl || !instanceToken) throw new Error('Credenciais UAZAPI não configuradas');
 
-      const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+      await sendViaUazapi(serverUrl, instanceToken, mensagem.telefone, mensagem.mensagem);
 
-      const response = await fetch(zapiUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Client-Token': clientToken
-        },
-        body: JSON.stringify({
-          phone: mensagem.telefone,
-          message: mensagem.mensagem
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Erro ao enviar mensagem via Z-API');
-      }
-
-      // Atualizar status para enviado
-      await supabase
-        .from('whatsapp_fila')
-        .update({
-          status: 'enviado',
-          enviado_em: new Date().toISOString()
-        })
-        .eq('id', mensagem.id);
-
-      // Registrar no log
-      await supabase
-        .from('whatsapp_lembretes_log')
-        .insert({
-          pagamento_id: mensagem.pagamento_id,
-          tipo_lembrete: mensagem.tipo_lembrete,
-          sucesso: true
-        });
+      await supabase.from('whatsapp_fila').update({ status: 'enviado', enviado_em: new Date().toISOString() }).eq('id', mensagem.id);
+      await supabase.from('whatsapp_lembretes_log').insert({ pagamento_id: mensagem.pagamento_id, tipo_lembrete: mensagem.tipo_lembrete, sucesso: true });
 
       console.log(`Mensagem ${mensagem.id} enviada com sucesso!`);
-
-      return new Response(JSON.stringify({ 
-        success: true, 
-        enviado: true,
-        mensagem_id: mensagem.id
-      }), {
+      return new Response(JSON.stringify({ success: true, enviado: true, mensagem_id: mensagem.id }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
-
     } catch (sendError) {
       console.error(`Erro ao enviar mensagem ${mensagem.id}:`, sendError);
-      
       const erroMsg = sendError instanceof Error ? sendError.message : 'Erro desconhecido';
-
-      // Atualizar status para erro
-      await supabase
-        .from('whatsapp_fila')
-        .update({
-          status: 'erro',
-          erro_mensagem: erroMsg
-        })
-        .eq('id', mensagem.id);
-
-      // Registrar erro no log
-      await supabase
-        .from('whatsapp_lembretes_log')
-        .insert({
-          pagamento_id: mensagem.pagamento_id,
-          tipo_lembrete: mensagem.tipo_lembrete,
-          sucesso: false,
-          erro_mensagem: erroMsg
-        });
-
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: erroMsg,
-        mensagem_id: mensagem.id
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      await supabase.from('whatsapp_fila').update({ status: 'erro', erro_mensagem: erroMsg }).eq('id', mensagem.id);
+      await supabase.from('whatsapp_lembretes_log').insert({ pagamento_id: mensagem.pagamento_id, tipo_lembrete: mensagem.tipo_lembrete, sucesso: false, erro_mensagem: erroMsg });
+      return new Response(JSON.stringify({ success: false, error: erroMsg, mensagem_id: mensagem.id }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-
   } catch (error) {
     console.error('Erro na função process-whatsapp-queue:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
