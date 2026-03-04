@@ -301,29 +301,31 @@ Referência: ${mesNomes[mesRef]}/${anoRef}
 }
 
 async function sendWhatsApp(telefone: string, mensagem: string): Promise<void> {
-  const instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
-  const token = Deno.env.get("ZAPI_TOKEN");
-  const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
+  const serverUrl = Deno.env.get("UAZAPI_SERVER_URL");
+  const instanceToken = Deno.env.get("UAZAPI_INSTANCE_TOKEN");
 
-  if (!instanceId || !token || !clientToken) {
-    throw new Error("Credenciais Z-API não configuradas");
+  if (!serverUrl || !instanceToken) {
+    throw new Error("Credenciais UAZAPI não configuradas");
   }
 
-  const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+  const cleanUrl = serverUrl.replace(/\/+$/, '');
+  const endpoints = [
+    `${cleanUrl}/message/sendText`,
+    `${cleanUrl}/sendText`,
+    `${cleanUrl}/send/text`,
+  ];
 
-  const response = await fetch(zapiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Client-Token": clientToken,
-    },
-    body: JSON.stringify({ phone: telefone, message: mensagem }),
-  });
-
-  if (!response.ok) {
+  let lastError: any = null;
+  for (const url of endpoints) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "token": instanceToken },
+      body: JSON.stringify({ number: telefone, text: mensagem }),
+    });
     const data = await response.json();
-    throw new Error(data.message || "Erro ao enviar via Z-API");
+    if (response.ok) return;
+    lastError = data;
   }
 
-  await response.json();
+  throw new Error(lastError?.message || "Erro ao enviar via UAZAPI");
 }

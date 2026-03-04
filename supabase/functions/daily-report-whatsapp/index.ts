@@ -159,39 +159,40 @@ serve(async (req) => {
 
     console.log('Mensagem gerada:', mensagem);
 
-    // Enviar via Z-API
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    // Enviar via UAZAPI
+    const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+    const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-    if (!instanceId || !token || !clientToken) {
-      console.error('Credenciais Z-API não configuradas');
-      throw new Error('Credenciais Z-API não configuradas');
+    if (!serverUrl || !instanceToken) {
+      console.error('Credenciais UAZAPI não configuradas');
+      throw new Error('Credenciais UAZAPI não configuradas');
     }
 
     const telefoneDestino = '5562991672674'; // 62 99167-2674
-
-    const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+    const cleanUrl = serverUrl.replace(/\/+$/, '');
+    const endpoints = [
+      `${cleanUrl}/message/sendText`,
+      `${cleanUrl}/sendText`,
+      `${cleanUrl}/send/text`,
+    ];
 
     console.log('Enviando relatório para:', telefoneDestino);
 
-    const response = await fetch(zapiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Client-Token': clientToken
-      },
-      body: JSON.stringify({
-        phone: telefoneDestino,
-        message: mensagem
-      })
-    });
+    let data: any;
+    let sent = false;
+    for (const url of endpoints) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': instanceToken },
+        body: JSON.stringify({ number: telefoneDestino, text: mensagem }),
+      });
+      data = await response.json();
+      console.log(`Resposta UAZAPI (${url}):`, data);
+      if (response.ok) { sent = true; break; }
+    }
 
-    const data = await response.json();
-    console.log('Resposta da Z-API:', data);
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Erro ao enviar mensagem via Z-API');
+    if (!sent) {
+      throw new Error(data?.message || 'Erro ao enviar mensagem via UAZAPI');
     }
 
     return new Response(
