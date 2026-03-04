@@ -571,6 +571,33 @@ export type Database = {
           },
         ]
       }
+      metas_funcionarios: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          id: string
+          mes_ano: string
+          user_id: string
+          valor_meta: number
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          mes_ano: string
+          user_id: string
+          valor_meta?: number
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          mes_ano?: string
+          user_id?: string
+          valor_meta?: number
+        }
+        Relationships: []
+      }
       metas_mensais: {
         Row: {
           atualizado_em: string | null
