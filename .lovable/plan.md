@@ -1,41 +1,76 @@
 
 
-## Plan: Add Payment Variables (`{avista}` and `{parcelado}`) to Acionamento
+## Plan: Create a dedicated "Meta" page with personal monthly goals
 
-### What will change
+### Current State
+There's already a basic goal system in the Acionamento page using localStorage for daily/monthly goals. The user wants a dedicated sidebar page called "Meta" that is more complete, creative, and persistent.
 
-Two new dynamic variables will be available in the messaging system:
+### What will be built
 
-1. **`{avista}`** — Shows the debt value with 50% discount, formatted as currency (e.g., `R$ 790,50`)
-2. **`{parcelado}`** — Auto-generates all installment options from 2x to 24x (with 30% discount), filtering out any option where the installment value is below R$120,00. Each option is displayed on its own line (e.g., `- 3x de R$ 368,90`)
+A new **Meta** page (`/meta`) accessible from the sidebar for all employees. Each user sets their own monthly monetary goal (e.g., R$ 10.000). The system automatically tracks progress when installments are marked as paid, and displays:
 
-### Example output
-
-For a client with saldo R$ 1.581,00:
-- `{avista}` → `R$ 790,50`
-- `{parcelado}` →
-```
-- 2x de R$ 553,35
-- 3x de R$ 368,90
-- 4x de R$ 276,68
-- 5x de R$ 221,34
-- 6x de R$ 184,45
-- 7x de R$ 158,10
-- 8x de R$ 138,34
-- 9x de R$ 122,97
-```
-(stops at 9x because 10x = R$ 110,67 < R$ 120,00)
+- **Monthly goal** with progress bar and percentage
+- **Daily target** (remaining amount / remaining business days in the month)
+- **Weekly target** (daily target x 5)
+- **Amount achieved today / this week / this month** (from paid installments)
+- **Visual celebrations** when milestones are hit (25%, 50%, 75%, 100%)
+- **Calendar heatmap** showing daily performance throughout the month
+- **Motivational stats**: best day, streak of consecutive days meeting target
 
 ### Technical changes
 
-**1. `src/pages/Acionamento.tsx`**
-- Update the `variables` array to include `{avista}` and `{parcelado}` with descriptions
-- Update the `replaceVariables` function to calculate:
-  - `{avista}`: `saldo * 0.5` formatted as BRL currency
-  - `{parcelado}`: iterate 2x–24x on `saldo * 0.7`, keep only where `valor / parcelas >= 120`, format each as `- Nx de R$ X,XX` joined by newlines
+**1. Database: `metas_funcionarios` table**
+- Columns: `id`, `user_id`, `mes_ano` (text, e.g. "2026-03"), `valor_meta` (numeric), `criado_em`, `atualizado_em`
+- Unique constraint on `(user_id, mes_ano)`
+- RLS: users can manage their own rows, admins can see all
 
-**2. `src/hooks/useAutoSend.tsx`**
-- Update the `replaceVariables` function with the same logic (this is used during auto-send)
+**2. New page: `src/pages/MetaPessoal.tsx`**
+- Month selector (defaults to current month)
+- Input to set/edit the monthly goal
+- Dashboard cards showing:
+  - Meta mensal + progress bar
+  - Valor necessário por dia (meta restante / dias úteis restantes)
+  - Valor necessário por semana (diário x 5)
+  - Total recebido hoje / esta semana / este mês
+- Calendar grid showing each day's performance with color coding
+- The "recebido" values come from the `pagamentos` table (sum of `valor_parcela` where `status = 'pago'` and `data_paga` is in the relevant period, filtered by the user's `acordos`)
 
-Both files have their own `replaceVariables` — both need the same update. The minimum installment threshold will be R$ 120,00 as specified.
+**3. Sidebar update: `src/components/layout/AppLayout.tsx`**
+- Add nav item `{ href: '/meta', label: 'Meta', icon: Target }` available to all users
+
+**4. Router update: `src/App.tsx`**
+- Add route `/meta` as a ProtectedRoute
+
+**5. Update `src/pages/AcordoDetalhe.tsx`**
+- Keep existing localStorage logic for instant feedback, but also ensure the Meta page reads from the database for accurate totals
+
+**6. Update `src/pages/Acionamento.tsx`**
+- The existing meta dialog can link to the new Meta page or remain as a quick shortcut
+
+### Database migration SQL
+```sql
+CREATE TABLE public.metas_funcionarios (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  mes_ano text NOT NULL,
+  valor_meta numeric NOT NULL DEFAULT 0,
+  criado_em timestamptz NOT NULL DEFAULT now(),
+  atualizado_em timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(user_id, mes_ano)
+);
+
+ALTER TABLE public.metas_funcionarios ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own metas" ON public.metas_funcionarios
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own metas" ON public.metas_funcionarios
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own metas" ON public.metas_funcionarios
+  FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all metas" ON public.metas_funcionarios
+  FOR SELECT TO authenticated USING (has_role(auth.uid(), 'admin'));
+```
 
