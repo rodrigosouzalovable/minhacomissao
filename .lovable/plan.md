@@ -1,68 +1,43 @@
 
 
-## Diagnóstico
+## Correção do Parsing do Webhook UAZAPI
 
-O webhook ESTÁ chegando da UAZAPI (confirmado nos logs), mas a Edge Function não consegue extrair o telefone e o texto da mensagem porque o **formato do payload da UAZAPI é diferente** do que o código espera.
+### Problema
+O payload da UAZAPI tem uma estrutura específica diferente do esperado. Os dados estão em:
+- **Telefone**: `payload.message.chatid` (ex: `"556282184790@s.whatsapp.net"`) ou `payload.chat.wa_chatid`
+- **Texto**: `payload.message.text` (ex: `"Olá"`)
+- **fromMe**: `payload.message.fromMe`
+- **isGroup**: `payload.message.isGroup` ou `payload.chat.wa_isGroup`
 
-**Payload recebido** (visível nos logs):
-```json
-{
-  "BaseUrl": "https://certificadoracnpj.uazapi.com",
-  "EventType": "messages",
-  "chat": { "id": "ra51f0e4f6ed00d", ... },
-  ...
-}
-```
+O código atual tenta `payload.chat.id` que retorna um ID interno (`r3794054a18cbb7`) e não encontra o texto porque não verifica `payload.message.text`.
 
-**O que o código espera:**
-```
-message.key.remoteJid → telefone
-message.message.conversation → texto
-message.fromMe → ignorar mensagens do bot
-```
+### Correção
 
-A UAZAPI envia os dados em campos como `from`, `body`, `fromMe`, `isGroup` etc. diretamente no payload ou dentro de um objeto diferente. Como o código não encontra `telefone` nem `texto`, ele retorna `{ ignored: true, reason: 'no phone or text' }` silenciosamente.
-
-## Plano de Correção
-
-### 1. Aumentar log do payload para debug
-Logar o payload completo (sem truncar a 500 chars) para ver a estrutura exata.
-
-### 2. Atualizar parsing do webhook na Edge Function `whatsapp-chatbot`
-Adaptar a extração de dados para o formato real da UAZAPI, que tipicamente envia:
-- `payload.from` ou `payload.chat.id` → número do telefone
-- `payload.body` ou `payload.text` → texto da mensagem  
-- `payload.fromMe` → se foi enviado pelo bot
-- `payload.isGroup` → se é grupo
-- `payload.key.remoteJid` → alternativa para o número
-
-O código será atualizado para tentar múltiplos caminhos de extração para cobrir diferentes versões do payload UAZAPI:
+Atualizar `supabase/functions/whatsapp-chatbot/index.ts` - reordenar a prioridade de extração:
 
 ```typescript
-// Extrair telefone - tentar múltiplos caminhos
-const remoteJid = payload?.key?.remoteJid 
-  || payload?.from 
-  || payload?.chat?.id 
-  || payload?.message?.key?.remoteJid 
+// Telefone - priorizar campos corretos da UAZAPI
+const remoteJid = payload?.message?.chatid
+  || payload?.chat?.wa_chatid
+  || payload?.message?.sender_pn
+  || payload?.key?.remoteJid
+  || payload?.from
   || '';
 
-// Extrair texto - tentar múltiplos caminhos  
-const texto = (payload?.body 
-  || payload?.text 
+// Texto - priorizar payload.message.text
+const texto = (payload?.message?.text
+  || payload?.body
+  || payload?.text
   || payload?.message?.body
-  || payload?.message?.conversation 
-  || payload?.message?.extendedTextMessage?.text 
-  || payload?.message?.message?.conversation
+  || payload?.message?.conversation
+  || payload?.message?.content?.text
   || '').trim();
 
-// Verificar fromMe e isGroup
-const isFromMe = payload?.fromMe ?? payload?.key?.fromMe ?? false;
-const isGroup = payload?.isGroup ?? remoteJid.includes('@g.us') ?? false;
+// fromMe e isGroup
+const isFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? false;
+const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? false;
 ```
 
-### 3. Logar dados extraídos para debugging
-Após a extração, logar os valores para confirmar que estão corretos antes de processar.
-
 ### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — atualizar parsing do payload
+- `supabase/functions/whatsapp-chatbot/index.ts`
 
