@@ -157,7 +157,14 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
         if (historicoId) localStorage.setItem(`${SEND_STATUS_BASE}_${userId}_${historicoId}`, JSON.stringify(next));
         return next;
       });
-      toast.error(`Falha ao enviar para ${formatPrimeiroNome(cliente.nome)}: ${err.message}`);
+      const errMsg = err.message || '';
+      const isDisconnected = errMsg.toLowerCase().includes('disconnected') || errMsg.includes('503');
+      const instanceName = uazapiConfig?.nome || 'Sem nome';
+      if (isDisconnected) {
+        toast.error(`WhatsApp "${instanceName}" está desconectado. Reconecte o aparelho.`);
+      } else {
+        toast.error(`Falha ao enviar para ${formatPrimeiroNome(cliente.nome)}: ${errMsg}`);
+      }
 
       // Track consecutive errors and auto-deactivate after 3
       if (uazapiConfig) {
