@@ -1,66 +1,68 @@
 
 
-## Plan: Chatbot WhatsApp Automático para Negociação de Dívidas
+## Diagnóstico
 
-### Como funciona
+O webhook ESTÁ chegando da UAZAPI (confirmado nos logs), mas a Edge Function não consegue extrair o telefone e o texto da mensagem porque o **formato do payload da UAZAPI é diferente** do que o código espera.
 
-Sim, é possível. A UAZAPI suporta **webhooks** (como mostra seu print) que notificam sua aplicação quando uma mensagem é recebida. O fluxo será:
-
-```text
-Cliente envia msg → UAZAPI Webhook → Edge Function (chatbot) → Consulta banco → Responde via UAZAPI
+**Payload recebido** (visível nos logs):
+```json
+{
+  "BaseUrl": "https://certificadoracnpj.uazapi.com",
+  "EventType": "messages",
+  "chat": { "id": "ra51f0e4f6ed00d", ... },
+  ...
+}
 ```
 
-### O que precisa ser feito
-
-**1. Configurar o Webhook na UAZAPI (manual, no painel UAZAPI)**
-- Em cada instância, configurar o webhook apontando para sua Edge Function
-- URL: `https://cymdrkeukockakfzjeen.supabase.co/functions/v1/whatsapp-chatbot`
-- Habilitar o webhook, ativar `addUrlEvents` e `addUrlTypesMessages`
-- Em "Escutar eventos", colocar `messages`
-- Em "Excluir dos eventos escutados", colocar `wasSentByApi` e `isGroupYes`
-
-**2. Criar tabela `chatbot_conversas` para gerenciar estado da conversa**
-- Armazena o telefone do cliente, o passo atual (aguardando_cpf, cpf_recebido, etc.) e dados temporários
-- Permite que o bot saiba em qual etapa está cada conversa
-
-**3. Criar Edge Function `whatsapp-chatbot`**
-- Recebe o webhook da UAZAPI com a mensagem do cliente
-- Consulta o estado da conversa pelo número de telefone
-- Fluxo do bot:
-  1. **Mensagem inicial recebida** → Responde com saudação e pede o CPF
-  2. **CPF recebido** → Consulta a tabela `devedores` usando a função `consultar_debitos_por_cpf`
-  3. **Débitos encontrados** → Calcula desconto 50% (à vista) e 30% (parcelado com opções de 2x a 24x, mínimo R$90/parcela) e envia a proposta formatada
-  4. **Débitos não encontrados** → Informa que não há pendências para o CPF
-- Envia respostas usando o endpoint UAZAPI `/message/sendText`
-
-**4. Adicionar página de configuração no admin (opcional, fase 2)**
-- Toggle para ativar/desativar chatbot por instância
-- Personalizar mensagens do bot
-
-### Fluxo da conversa do bot
-
-```text
-Bot: "Olá! Sou o assistente virtual da Souza e Ribeiro. 
-      Para consultar sua situação, por favor informe seu CPF."
-
-Cliente: "123.456.789-00"
-
-Bot: "Encontrei 3 contratos em seu nome, totalizando R$ 5.000,00.
-
-      💰 QUITAÇÃO À VISTA (50% OFF):
-      R$ 2.500,00 em parcela única
-
-      📋 PARCELADO (30% OFF):
-      R$ 3.500,00 em até 24x de R$ 145,83
-
-      Para negociar, entre em contato: (62) 98218-3144"
+**O que o código espera:**
+```
+message.key.remoteJid → telefone
+message.message.conversation → texto
+message.fromMe → ignorar mensagens do bot
 ```
 
-### Arquivos a criar/modificar
-- **Migração SQL**: Criar tabela `chatbot_conversas` (telefone, etapa, dados, timestamps)
-- **`supabase/functions/whatsapp-chatbot/index.ts`**: Edge Function principal do chatbot
-- **`supabase/config.toml`**: Registrar a função com `verify_jwt = false` (webhook externo)
+A UAZAPI envia os dados em campos como `from`, `body`, `fromMe`, `isGroup` etc. diretamente no payload ou dentro de um objeto diferente. Como o código não encontra `telefone` nem `texto`, ele retorna `{ ignored: true, reason: 'no phone or text' }` silenciosamente.
 
-### Pré-requisito do seu lado
-Você precisará configurar o webhook manualmente no painel da UAZAPI para cada instância que deseja ativar o chatbot, conforme a tela que você mostrou no print.
+## Plano de Correção
+
+### 1. Aumentar log do payload para debug
+Logar o payload completo (sem truncar a 500 chars) para ver a estrutura exata.
+
+### 2. Atualizar parsing do webhook na Edge Function `whatsapp-chatbot`
+Adaptar a extração de dados para o formato real da UAZAPI, que tipicamente envia:
+- `payload.from` ou `payload.chat.id` → número do telefone
+- `payload.body` ou `payload.text` → texto da mensagem  
+- `payload.fromMe` → se foi enviado pelo bot
+- `payload.isGroup` → se é grupo
+- `payload.key.remoteJid` → alternativa para o número
+
+O código será atualizado para tentar múltiplos caminhos de extração para cobrir diferentes versões do payload UAZAPI:
+
+```typescript
+// Extrair telefone - tentar múltiplos caminhos
+const remoteJid = payload?.key?.remoteJid 
+  || payload?.from 
+  || payload?.chat?.id 
+  || payload?.message?.key?.remoteJid 
+  || '';
+
+// Extrair texto - tentar múltiplos caminhos  
+const texto = (payload?.body 
+  || payload?.text 
+  || payload?.message?.body
+  || payload?.message?.conversation 
+  || payload?.message?.extendedTextMessage?.text 
+  || payload?.message?.message?.conversation
+  || '').trim();
+
+// Verificar fromMe e isGroup
+const isFromMe = payload?.fromMe ?? payload?.key?.fromMe ?? false;
+const isGroup = payload?.isGroup ?? remoteJid.includes('@g.us') ?? false;
+```
+
+### 3. Logar dados extraídos para debugging
+Após a extração, logar os valores para confirmar que estão corretos antes de processar.
+
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — atualizar parsing do payload
 
