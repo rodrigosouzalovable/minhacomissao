@@ -62,12 +62,18 @@ serve(async (req) => {
 
   try {
     const payload = await req.json();
-    console.log('Webhook recebido:', JSON.stringify(payload).substring(0, 500));
+    console.log('Webhook recebido (FULL):', JSON.stringify(payload));
 
-    // Extract message info from UAZAPI webhook payload
-    const message = payload?.message || payload;
-    const isFromMe = message?.fromMe || message?.key?.fromMe || false;
-    const isGroup = message?.isGroup || (message?.key?.remoteJid || '').includes('@g.us') || false;
+    // Extract message info from UAZAPI webhook payload - try multiple paths
+    const isFromMe = payload?.fromMe ?? payload?.key?.fromMe ?? payload?.message?.fromMe ?? false;
+    const remoteJid = payload?.key?.remoteJid 
+      || payload?.from 
+      || payload?.chat?.id 
+      || payload?.message?.key?.remoteJid 
+      || '';
+    const isGroup = payload?.isGroup ?? remoteJid.includes('@g.us') ?? false;
+
+    console.log('Dados extraídos:', { isFromMe, remoteJid, isGroup });
 
     // Ignore messages sent by the bot itself or from groups
     if (isFromMe || isGroup) {
@@ -76,13 +82,17 @@ serve(async (req) => {
       });
     }
 
-    // Extract phone number and text
-    const remoteJid = message?.key?.remoteJid || message?.from || '';
+    // Extract phone number and text - try multiple paths
     const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    const texto = (message?.message?.conversation || 
-                   message?.message?.extendedTextMessage?.text || 
-                   message?.body || 
-                   message?.text || '').trim();
+    const texto = (payload?.body 
+                   || payload?.text 
+                   || payload?.message?.body
+                   || payload?.message?.conversation 
+                   || payload?.message?.extendedTextMessage?.text 
+                   || payload?.message?.message?.conversation
+                   || '').trim();
+
+    console.log('Telefone e texto extraídos:', { telefone, texto });
 
     if (!telefone || !texto) {
       return new Response(JSON.stringify({ success: true, ignored: true, reason: 'no phone or text' }), {
