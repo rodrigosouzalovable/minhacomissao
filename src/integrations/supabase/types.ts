@@ -200,6 +200,39 @@ export type Database = {
           },
         ]
       }
+      chatbot_conversas: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          dados: Json | null
+          etapa: string
+          id: string
+          instance_token: string | null
+          server_url: string | null
+          telefone: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          dados?: Json | null
+          etapa?: string
+          id?: string
+          instance_token?: string | null
+          server_url?: string | null
+          telefone: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          dados?: Json | null
+          etapa?: string
+          id?: string
+          instance_token?: string | null
+          server_url?: string | null
+          telefone?: string
+        }
+        Relationships: []
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean
