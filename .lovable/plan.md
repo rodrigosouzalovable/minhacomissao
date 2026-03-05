@@ -1,43 +1,31 @@
 
 
-## Correção do Parsing do Webhook UAZAPI
+## Diagnóstico
 
-### Problema
-O payload da UAZAPI tem uma estrutura específica diferente do esperado. Os dados estão em:
-- **Telefone**: `payload.message.chatid` (ex: `"556282184790@s.whatsapp.net"`) ou `payload.chat.wa_chatid`
-- **Texto**: `payload.message.text` (ex: `"Olá"`)
-- **fromMe**: `payload.message.fromMe`
-- **isGroup**: `payload.message.isGroup` ou `payload.chat.wa_isGroup`
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-O código atual tenta `payload.chat.id` que retorna um ID interno (`r3794054a18cbb7`) e não encontra o texto porque não verifica `payload.message.text`.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-### Correção
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-Atualizar `supabase/functions/whatsapp-chatbot/index.ts` - reordenar a prioridade de extração:
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+
+## Correção
+
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
 ```typescript
-// Telefone - priorizar campos corretos da UAZAPI
-const remoteJid = payload?.message?.chatid
-  || payload?.chat?.wa_chatid
-  || payload?.message?.sender_pn
-  || payload?.key?.remoteJid
-  || payload?.from
-  || '';
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-// Texto - priorizar payload.message.text
-const texto = (payload?.message?.text
-  || payload?.body
-  || payload?.text
-  || payload?.message?.body
-  || payload?.message?.conversation
-  || payload?.message?.content?.text
-  || '').trim();
-
-// fromMe e isGroup
-const isFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? false;
-const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? false;
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
 ### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts`
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
