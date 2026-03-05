@@ -64,14 +64,15 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Webhook recebido (FULL):', JSON.stringify(payload));
 
-    // Extract message info from UAZAPI webhook payload - try multiple paths
-    const isFromMe = payload?.fromMe ?? payload?.key?.fromMe ?? payload?.message?.fromMe ?? false;
-    const remoteJid = payload?.key?.remoteJid 
-      || payload?.from 
-      || payload?.chat?.id 
-      || payload?.message?.key?.remoteJid 
+    // Extract message info from UAZAPI webhook payload - prioritize correct UAZAPI fields
+    const isFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? payload?.key?.fromMe ?? false;
+    const remoteJid = payload?.message?.chatid
+      || payload?.chat?.wa_chatid
+      || payload?.message?.sender_pn
+      || payload?.key?.remoteJid
+      || payload?.from
       || '';
-    const isGroup = payload?.isGroup ?? remoteJid.includes('@g.us') ?? false;
+    const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? remoteJid.includes('@g.us') ?? false;
 
     console.log('Dados extraídos:', { isFromMe, remoteJid, isGroup });
 
@@ -84,12 +85,13 @@ serve(async (req) => {
 
     // Extract phone number and text - try multiple paths
     const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    const texto = (payload?.body 
+    const texto = (payload?.message?.text
+                   || payload?.body 
                    || payload?.text 
                    || payload?.message?.body
                    || payload?.message?.conversation 
                    || payload?.message?.extendedTextMessage?.text 
-                   || payload?.message?.message?.conversation
+                   || payload?.message?.content?.text
                    || '').trim();
 
     console.log('Telefone e texto extraídos:', { telefone, texto });
