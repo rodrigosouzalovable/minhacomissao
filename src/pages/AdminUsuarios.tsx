@@ -23,12 +23,23 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2 } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
 import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -56,12 +67,14 @@ const roleBadgeVariants: Record<AppRole, 'default' | 'secondary' | 'destructive'
 
 export default function AdminUsuarios() {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<UserWithRole | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
   
   // Estados para criação de novo usuário
   const [newUserNome, setNewUserNome] = useState('');
@@ -272,6 +285,37 @@ export default function AdminUsuarios() {
       resetPasswordMutation.mutate({ userId: resetPasswordUser.id, newPassword });
     }
   };
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const response = await supabase.functions.invoke('delete-user-admin', {
+        body: { userId },
+      });
+
+      if (response.error) throw response.error;
+      if (!response.data.success) throw new Error(response.data.error);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({
+        title: 'Usuário excluído',
+        description: 'O usuário foi excluído com sucesso.',
+      });
+      setDeleteUser(null);
+    },
+    onError: (error: Error) => {
+      console.error('Error deleting user:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível excluir o usuário.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const stats = {
     total: users?.length ?? 0,
@@ -535,6 +579,15 @@ export default function AdminUsuarios() {
                               <Settings2 className="h-4 w-4 mr-1" />
                               Permissões
                             </Button>
+                            {user.id !== currentUser?.id && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => setDeleteUser(user)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -564,6 +617,28 @@ export default function AdminUsuarios() {
           userId={permissionsUser?.id ?? ''}
           userName={permissionsUser?.nome ?? ''}
         />
+
+        <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir usuário</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir o usuário <strong>{deleteUser?.nome}</strong> ({deleteUser?.email})?
+                Esta ação não pode ser desfeita. Todos os dados relacionados serão removidos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteUser && deleteUserMutation.mutate(deleteUser.id)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleteUserMutation.isPending}
+              >
+                {deleteUserMutation.isPending ? 'Excluindo...' : 'Excluir'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </div>
     </AppLayout>
