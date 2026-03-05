@@ -1041,7 +1041,7 @@ export default function Acionamento() {
                           const wasManual = manualChecked.has(c.originalIndex);
                           const timestamp = sendTimestamps[c.originalIndex];
                           const formattedTimestamp = timestamp
-                            ? new Date(timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            ? new Date(timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
                             : '—';
                           return (
                             <TableRow key={c.originalIndex}>
