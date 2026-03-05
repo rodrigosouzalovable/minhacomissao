@@ -1030,6 +1030,7 @@ export default function Acionamento() {
                           <TableHead>Telefone</TableHead>
                           <TableHead>Atraso</TableHead>
                           <TableHead>Saldo</TableHead>
+                          <TableHead>Enviado em</TableHead>
                           <TableHead className="w-24 text-right">Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1038,12 +1039,17 @@ export default function Acionamento() {
                           const wasSent = sendStatus[c.originalIndex] === 'success';
                           const wasError = sendStatus[c.originalIndex] === 'error';
                           const wasManual = manualChecked.has(c.originalIndex);
+                          const timestamp = sendTimestamps[c.originalIndex];
+                          const formattedTimestamp = timestamp
+                            ? new Date(timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '—';
                           return (
                             <TableRow key={c.originalIndex}>
                               <TableCell className="font-medium">{c.nome}</TableCell>
                               <TableCell>{c.telefone}</TableCell>
                               <TableCell>{c.atraso}</TableCell>
                               <TableCell>{formatCurrency(c.saldo)}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{formattedTimestamp}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   {wasSent && (
