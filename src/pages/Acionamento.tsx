@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,13 +11,14 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, Send, Plus, Pencil, Target } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import * as XLSX from 'xlsx';
 
@@ -142,6 +143,8 @@ export default function Acionamento() {
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
+  const [checkingConnections, setCheckingConnections] = useState(false);
 
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
@@ -228,6 +231,42 @@ export default function Acionamento() {
     };
     fetchInstances();
   }, [user]);
+
+  const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
+    const activeOnes = instancesToCheck.filter(i => i.ativo);
+    if (activeOnes.length === 0) return;
+
+    setCheckingConnections(true);
+    const initialStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
+    activeOnes.forEach(i => { initialStatus[i.id] = 'checking'; });
+    setConnectionStatus(prev => ({ ...prev, ...initialStatus }));
+
+    await Promise.all(activeOnes.map(async (inst) => {
+      try {
+        const { data, error } = await supabase.functions.invoke('test-uazapi-connection', {
+          body: { server_url: inst.server_url, instance_token: inst.instance_token }
+        });
+        if (error) throw error;
+        const isConnected = data?.ok && data?.data?.status?.connected === true;
+        setConnectionStatus(prev => ({ ...prev, [inst.id]: isConnected ? 'connected' : 'disconnected' }));
+      } catch {
+        setConnectionStatus(prev => ({ ...prev, [inst.id]: 'disconnected' }));
+      }
+    }));
+    setCheckingConnections(false);
+  }, []);
+
+  // Check connections when instances are loaded
+  useEffect(() => {
+    if (instances.length > 0) {
+      checkInstanceConnections(instances);
+    }
+  }, [instances, checkInstanceConnections]);
+
+  const disconnectedInstances = useMemo(() => 
+    instances.filter(i => i.ativo && connectionStatus[i.id] === 'disconnected'),
+    [instances, connectionStatus]
+  );
 
   const activeInstances = useMemo(() => instances.filter(i => i.ativo), [instances]);
 
@@ -667,7 +706,32 @@ export default function Acionamento() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Acionamento</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Acionamento</h1>
+          {instances.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => checkInstanceConnections(instances)}
+              disabled={checkingConnections}
+              className="text-muted-foreground"
+            >
+              {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="ml-1 text-xs">Verificar conexões</span>
+            </Button>
+          )}
+        </div>
+
+        {/* Alert banner for disconnected instances */}
+        {disconnectedInstances.length > 0 && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>WhatsApp desconectado</AlertTitle>
+            <AlertDescription>
+              {disconnectedInstances.map(i => i.nome || 'Sem nome').join(', ')} — Reconecte os aparelhos no painel UAZAPI.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Upload + Histórico */}
         <Card>
@@ -1091,7 +1155,9 @@ export default function Acionamento() {
                   {instances.length === 0 && !editingInstance && (
                     <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância cadastrada</p>
                   )}
-                  {instances.map((inst) => (
+                  {instances.map((inst) => {
+                    const status = connectionStatus[inst.id];
+                    return (
                     <div key={inst.id} className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <WhatsAppIcon />
@@ -1101,6 +1167,21 @@ export default function Acionamento() {
                             <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
                               {inst.ativo ? 'Ativo' : 'Inativo'}
                             </Badge>
+                            {inst.ativo && status === 'connected' && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
+                                Conectado
+                              </Badge>
+                            )}
+                            {inst.ativo && status === 'disconnected' && (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-destructive-foreground mr-1" />
+                                Desconectado
+                              </Badge>
+                            )}
+                            {inst.ativo && status === 'checking' && (
+                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                         </div>
@@ -1141,7 +1222,8 @@ export default function Acionamento() {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
               <Separator />
