@@ -108,9 +108,10 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get UAZAPI credentials from secrets (global config)
-    const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    // Use credentials from webhook payload (same instance that received the message), fallback to global secrets
+    const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
+    const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    console.log('Credenciais UAZAPI:', { serverUrl, tokenSource: payload?.token ? 'payload' : 'env' });
 
     if (!serverUrl || !instanceToken) {
       console.error('Credenciais UAZAPI não configuradas');
