@@ -24,13 +24,14 @@ serve(async (req) => {
     )
 
     const token = authHeader.replace('Bearer ', '')
-    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token)
-    if (claimsError || !claimsData?.claims) {
-      throw new Error('Usuário não autenticado')
-    }
+    const parts = token.split('.')
+    if (parts.length !== 3) throw new Error('Token inválido')
 
-    const callingUserId = claimsData.claims.sub as string
-    const callingEmail = claimsData.claims.email as string
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    const callingUserId = payload.sub
+    const callingEmail = payload.email
+
+    if (!callingUserId) throw new Error('Usuário não autenticado')
 
     const { data: isAdmin, error: roleError } = await supabaseClient
       .rpc('has_role', { _user_id: callingUserId, _role: 'admin' })
