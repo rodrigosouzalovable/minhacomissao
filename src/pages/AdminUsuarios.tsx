@@ -629,6 +629,13 @@ export default function AdminUsuarios() {
           userName={permissionsUser?.nome ?? ''}
         />
 
+        <WhatsAppLembreteConfigDialog
+          open={!!whatsappConfigUser}
+          onOpenChange={(open) => !open && setWhatsappConfigUser(null)}
+          userId={whatsappConfigUser?.id ?? ''}
+          userName={whatsappConfigUser?.nome ?? ''}
+        />
+
         <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>

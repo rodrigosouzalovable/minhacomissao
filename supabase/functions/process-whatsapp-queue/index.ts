@@ -71,10 +71,13 @@ serve(async (req) => {
     console.log(`Processando mensagem ${mensagem.id} para ${mensagem.telefone}...`);
 
     try {
-      const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-      const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+      // Use per-message credentials if available, fallback to global
+      const serverUrl = mensagem.server_url || Deno.env.get('UAZAPI_SERVER_URL');
+      const instanceToken = mensagem.instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
       if (!serverUrl || !instanceToken) throw new Error('Credenciais UAZAPI não configuradas');
+
+      console.log(`Usando instância: ${serverUrl} (${mensagem.server_url ? 'per-user' : 'global'})`);
 
       await sendViaUazapi(serverUrl, instanceToken, mensagem.telefone, mensagem.mensagem);
 
