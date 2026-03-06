@@ -176,7 +176,7 @@ serve(async (req) => {
       throw new Error('Credenciais UAZAPI não configuradas');
     }
 
-    console.log('Usando instância:', activeInstance?.nome || 'global');
+    console.log('Usando instância:', adminProfile ? 'profile admin' : 'global env');
 
     const telefoneDestino = '5562991672674'; // 62 99167-2674
     const cleanUrl = serverUrl.replace(/\/+$/, '');
