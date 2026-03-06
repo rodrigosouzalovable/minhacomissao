@@ -159,23 +159,24 @@ serve(async (req) => {
 
     console.log('Mensagem gerada:', mensagem);
 
-    // Buscar uma instância UAZAPI ativa do banco
-    const { data: instances } = await supabase
-      .from('user_whatsapp_instances')
-      .select('server_url, instance_token, nome')
-      .eq('ativo', true)
+    // Buscar credenciais UAZAPI do perfil admin configurado
+    const { data: adminProfiles } = await supabase
+      .from('profiles')
+      .select('whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
+      .not('whatsapp_lembrete_server_url', 'is', null)
+      .not('whatsapp_lembrete_instance_token', 'is', null)
       .limit(1);
 
-    const activeInstance = instances?.[0];
-    const serverUrl = activeInstance?.server_url || Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = activeInstance?.instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    const adminProfile = adminProfiles?.[0];
+    const serverUrl = adminProfile?.whatsapp_lembrete_server_url || Deno.env.get('UAZAPI_SERVER_URL');
+    const instanceToken = adminProfile?.whatsapp_lembrete_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
     if (!serverUrl || !instanceToken) {
       console.error('Credenciais UAZAPI não configuradas');
       throw new Error('Credenciais UAZAPI não configuradas');
     }
 
-    console.log('Usando instância:', activeInstance?.nome || 'global');
+    console.log('Usando instância:', adminProfile ? 'profile admin' : 'global env');
 
     const telefoneDestino = '5562991672674'; // 62 99167-2674
     const cleanUrl = serverUrl.replace(/\/+$/, '');
