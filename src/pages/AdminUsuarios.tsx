@@ -542,8 +542,7 @@ export default function AdminUsuarios() {
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col gap-2">
-                          <div className="flex gap-2">
+                          <div className="flex gap-1 flex-wrap">
                             <Button
                               size="sm"
                               onClick={() => handleSaveRole(user.id)}
@@ -555,45 +554,47 @@ export default function AdminUsuarios() {
                             >
                               Salvar
                             </Button>
-                          </div>
-                          <div className="flex gap-2">
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="outline"
+                              className="h-8 w-8"
                               onClick={() => setResetPasswordUser(user)}
+                              title="Redefinir Senha"
                             >
-                              <KeyRound className="h-4 w-4 mr-1" />
-                              Senha
+                              <KeyRound className="h-4 w-4" />
                             </Button>
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="outline"
+                              className="h-8 w-8"
                               onClick={() => navigate(`/admin/usuarios/${user.id}/comissoes`)}
+                              title="Comissões"
                             >
-                              <DollarSign className="h-4 w-4 mr-1" />
-                              Comissões
+                              <DollarSign className="h-4 w-4" />
                             </Button>
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="outline"
+                              className="h-8 w-8"
                               onClick={() => setPermissionsUser(user)}
+                              title="Permissões"
                             >
-                              <Settings2 className="h-4 w-4 mr-1" />
-                              Permissões
+                              <Settings2 className="h-4 w-4" />
                             </Button>
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="outline"
+                              className="h-8 w-8"
                               onClick={() => setWhatsappConfigUser(user)}
-                              className="text-green-600 border-green-600/30 hover:bg-green-50"
+                              title="Configurar UAZAPI"
                             >
-                              <MessageCircle className="h-4 w-4 mr-1" />
-                              UAZAPI
+                              <MessageCircle className="h-4 w-4" />
                             </Button>
                             {user.id !== currentUser?.id && (
                               <Button
-                                size="sm"
+                                size="icon"
                                 variant="destructive"
+                                className="h-8 w-8"
                                 onClick={() => setDeleteUser(user)}
                               >
                                 <Trash2 className="h-4 w-4" />
