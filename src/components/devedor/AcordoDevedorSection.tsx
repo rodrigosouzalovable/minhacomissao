@@ -303,12 +303,8 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
       if (parcErr) throw parcErr;
 
-      if (contratosIds.length > 0) {
-        await supabase
-          .from('devedores')
-          .update({ ativo: false })
-          .in('id', contratosIds);
-      }
+      // Contratos NÃO são mais desativados automaticamente ao criar acordo.
+      // A desativação deve ser feita manualmente pelo administrador.
 
       toast.success('Acordo criado com sucesso!');
       setPreviewParcelas(null);
