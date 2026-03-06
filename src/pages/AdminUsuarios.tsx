@@ -23,7 +23,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2, Trash2 } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2, Trash2, ArrowLeftRight } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
