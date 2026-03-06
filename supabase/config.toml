@@ -48,5 +48,8 @@ verify_jwt = false
 [functions.extract-pdf-acordo]
 verify_jwt = false
 
+[functions.delete-user-admin]
+verify_jwt = false
+
 [functions.whatsapp-chatbot]
 verify_jwt = false
