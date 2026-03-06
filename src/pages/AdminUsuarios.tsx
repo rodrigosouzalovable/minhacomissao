@@ -78,6 +78,7 @@ export default function AdminUsuarios() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
   const [whatsappConfigUser, setWhatsappConfigUser] = useState<UserWithRole | null>(null);
+  const [transferUser, setTransferUser] = useState<UserWithRole | null>(null);
   
   // Estados para criação de novo usuário
   const [newUserNome, setNewUserNome] = useState('');
