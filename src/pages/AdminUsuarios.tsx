@@ -647,6 +647,15 @@ export default function AdminUsuarios() {
           userName={whatsappConfigUser?.nome ?? ''}
         />
 
+        {transferUser && users && (
+          <TransferAcordosDialog
+            open={!!transferUser}
+            onOpenChange={(open) => !open && setTransferUser(null)}
+            sourceUser={{ id: transferUser.id, nome: transferUser.nome, email: transferUser.email }}
+            allUsers={users.map((u) => ({ id: u.id, nome: u.nome, email: u.email }))}
+          />
+        )}
+
         <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
