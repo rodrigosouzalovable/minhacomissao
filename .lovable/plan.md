@@ -1,41 +1,31 @@
 
 
-## Lembretes WhatsApp por Funcionário
+## Diagnóstico
 
-### Situação Atual
-- Os lembretes de pagamento usam credenciais UAZAPI **globais** (do admin) para enviar todas as mensagens
-- Cada funcionário já tem um toggle "WhatsApp habilitado" no perfil, mas todos os envios saem pela mesma instância
-- A tabela `whatsapp_fila` não armazena qual instância UAZAPI usar
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-### O que será feito
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-#### 1. Migração: Adicionar campos de instância na fila e no perfil
-- Adicionar `server_url` e `instance_token` à tabela `whatsapp_fila` para que cada mensagem saiba por qual instância enviar
-- Adicionar `whatsapp_lembrete_server_url` e `whatsapp_lembrete_instance_token` à tabela `profiles` para armazenar a instância principal de lembretes de cada usuário
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-#### 2. Componente: Dialog de configuração WhatsApp do usuário
-- Criar `WhatsAppConfigDialog` com campos Server URL e Instance Token
-- O admin poderá configurar a instância principal de cada funcionário diretamente na página de Usuários
-- Botão com ícone WhatsApp ao lado dos botões de ação existentes
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-#### 3. Atualizar Edge Function `check-payment-reminders`
-- Ao buscar parcelas pendentes, também buscar as credenciais UAZAPI do perfil do usuário dono do acordo
-- Inserir `server_url` e `instance_token` do usuário na fila junto com a mensagem
-- Se o usuário não tiver instância configurada, usar fallback das credenciais globais
+## Correção
 
-#### 4. Atualizar Edge Function `process-whatsapp-queue`
-- Ao processar uma mensagem da fila, usar `server_url` e `instance_token` da própria mensagem
-- Fallback para credenciais globais se os campos estiverem vazios (compatibilidade com mensagens antigas)
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-#### 5. UI na página AdminUsuarios
-- Adicionar botão "WhatsApp" na coluna de ações de cada usuário
-- Ao clicar, abre o dialog com os campos de configuração da instância UAZAPI
-- Mostrar badge indicando se o usuário tem instância configurada
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-### Arquivos a modificar
-- **Migração SQL**: adicionar colunas em `whatsapp_fila` e `profiles`
-- **`src/components/WhatsAppLembreteConfigDialog.tsx`**: novo componente
-- **`src/pages/AdminUsuarios.tsx`**: adicionar botão e dialog
-- **`supabase/functions/check-payment-reminders/index.ts`**: buscar credenciais do usuário
-- **`supabase/functions/process-whatsapp-queue/index.ts`**: usar credenciais por mensagem
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
+
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
 import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
+import { WhatsAppLembreteConfigDialog } from '@/components/WhatsAppLembreteConfigDialog';
 import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog,
@@ -75,6 +76,7 @@ export default function AdminUsuarios() {
   const [permissionsUser, setPermissionsUser] = useState<UserWithRole | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
+  const [whatsappConfigUser, setWhatsappConfigUser] = useState<UserWithRole | null>(null);
   
   // Estados para criação de novo usuário
   const [newUserNome, setNewUserNome] = useState('');
@@ -579,6 +581,15 @@ export default function AdminUsuarios() {
                               <Settings2 className="h-4 w-4 mr-1" />
                               Permissões
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setWhatsappConfigUser(user)}
+                              className="text-green-600 border-green-600/30 hover:bg-green-50"
+                            >
+                              <MessageCircle className="h-4 w-4 mr-1" />
+                              UAZAPI
+                            </Button>
                             {user.id !== currentUser?.id && (
                               <Button
                                 size="sm"
@@ -616,6 +627,13 @@ export default function AdminUsuarios() {
           onOpenChange={(open) => !open && setPermissionsUser(null)}
           userId={permissionsUser?.id ?? ''}
           userName={permissionsUser?.nome ?? ''}
+        />
+
+        <WhatsAppLembreteConfigDialog
+          open={!!whatsappConfigUser}
+          onOpenChange={(open) => !open && setWhatsappConfigUser(null)}
+          userId={whatsappConfigUser?.id ?? ''}
+          userName={whatsappConfigUser?.nome ?? ''}
         />
 
         <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>

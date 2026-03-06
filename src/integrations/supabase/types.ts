@@ -748,6 +748,8 @@ export type Database = {
           email: string
           id: string
           nome: string
+          whatsapp_lembrete_instance_token: string | null
+          whatsapp_lembrete_server_url: string | null
           whatsapp_lembretes_habilitado: boolean
         }
         Insert: {
@@ -757,6 +759,8 @@ export type Database = {
           email: string
           id: string
           nome: string
+          whatsapp_lembrete_instance_token?: string | null
+          whatsapp_lembrete_server_url?: string | null
           whatsapp_lembretes_habilitado?: boolean
         }
         Update: {
@@ -766,6 +770,8 @@ export type Database = {
           email?: string
           id?: string
           nome?: string
+          whatsapp_lembrete_instance_token?: string | null
+          whatsapp_lembrete_server_url?: string | null
           whatsapp_lembretes_habilitado?: boolean
         }
         Relationships: []
@@ -999,8 +1005,10 @@ export type Database = {
           enviado_em: string | null
           erro_mensagem: string | null
           id: string
+          instance_token: string | null
           mensagem: string
           pagamento_id: string
+          server_url: string | null
           status: string | null
           telefone: string
           tipo_lembrete: string
@@ -1011,8 +1019,10 @@ export type Database = {
           enviado_em?: string | null
           erro_mensagem?: string | null
           id?: string
+          instance_token?: string | null
           mensagem: string
           pagamento_id: string
+          server_url?: string | null
           status?: string | null
           telefone: string
           tipo_lembrete: string
@@ -1023,8 +1033,10 @@ export type Database = {
           enviado_em?: string | null
           erro_mensagem?: string | null
           id?: string
+          instance_token?: string | null
           mensagem?: string
           pagamento_id?: string
+          server_url?: string | null
           status?: string | null
           telefone?: string
           tipo_lembrete?: string
