@@ -13,7 +13,7 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       throw new Error('Não autorizado')
     }
 
@@ -23,10 +23,14 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const { data: { user: callingUser }, error: userError } = await supabaseClient.auth.getUser()
-    if (userError || !callingUser) {
+    const token = authHeader.replace('Bearer ', '')
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token)
+    if (claimsError || !claimsData?.claims) {
       throw new Error('Usuário não autenticado')
     }
+
+    const callingUserId = claimsData.claims.sub as string
+    const callingEmail = claimsData.claims.email as string
 
     const { data: isAdmin, error: roleError } = await supabaseClient
       .rpc('has_role', { _user_id: callingUser.id, _role: 'admin' })
