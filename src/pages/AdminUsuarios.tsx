@@ -581,6 +581,15 @@ export default function AdminUsuarios() {
                               <Settings2 className="h-4 w-4 mr-1" />
                               Permissões
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setWhatsappConfigUser(user)}
+                              className="text-green-600 border-green-600/30 hover:bg-green-50"
+                            >
+                              <MessageCircle className="h-4 w-4 mr-1" />
+                              UAZAPI
+                            </Button>
                             {user.id !== currentUser?.id && (
                               <Button
                                 size="sm"
