@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
 import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
+import { WhatsAppLembreteConfigDialog } from '@/components/WhatsAppLembreteConfigDialog';
 import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog,
