@@ -73,7 +73,7 @@ serve(async (req) => {
       throw deleteError
     }
 
-    console.log(`SUCCESS: Admin ${callingUser.email} deleted user ${userId}`)
+    console.log(`SUCCESS: Admin ${callingEmail} deleted user ${userId}`)
 
     return new Response(
       JSON.stringify({ success: true, message: 'Usuário excluído com sucesso' }),
