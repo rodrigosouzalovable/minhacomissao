@@ -159,14 +159,23 @@ serve(async (req) => {
 
     console.log('Mensagem gerada:', mensagem);
 
-    // Enviar via UAZAPI
-    const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    // Buscar uma instância UAZAPI ativa do banco
+    const { data: instances } = await supabase
+      .from('user_whatsapp_instances')
+      .select('server_url, instance_token, nome')
+      .eq('ativo', true)
+      .limit(1);
+
+    const activeInstance = instances?.[0];
+    const serverUrl = activeInstance?.server_url || Deno.env.get('UAZAPI_SERVER_URL');
+    const instanceToken = activeInstance?.instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
     if (!serverUrl || !instanceToken) {
       console.error('Credenciais UAZAPI não configuradas');
       throw new Error('Credenciais UAZAPI não configuradas');
     }
+
+    console.log('Usando instância:', activeInstance?.nome || 'global');
 
     const telefoneDestino = '5562991672674'; // 62 99167-2674
     const cleanUrl = serverUrl.replace(/\/+$/, '');
