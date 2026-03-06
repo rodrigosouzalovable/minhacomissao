@@ -33,7 +33,7 @@ serve(async (req) => {
     const callingEmail = claimsData.claims.email as string
 
     const { data: isAdmin, error: roleError } = await supabaseClient
-      .rpc('has_role', { _user_id: callingUser.id, _role: 'admin' })
+      .rpc('has_role', { _user_id: callingUserId, _role: 'admin' })
 
     if (roleError || !isAdmin) {
       throw new Error('Apenas administradores podem excluir usuários')
@@ -45,7 +45,7 @@ serve(async (req) => {
       throw new Error('ID do usuário é obrigatório')
     }
 
-    if (userId === callingUser.id) {
+    if (userId === callingUserId) {
       throw new Error('Você não pode excluir sua própria conta')
     }
 
