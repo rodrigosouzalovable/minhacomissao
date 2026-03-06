@@ -15,6 +15,10 @@ serve(async (req) => {
   try {
     console.log('Iniciando geração do relatório diário...');
 
+    // Ler user_id do body (enviado pelo frontend)
+    const { user_id } = await req.json().catch(() => ({}));
+    console.log('user_id recebido:', user_id);
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -22,9 +26,9 @@ serve(async (req) => {
 
     // Obter data de hoje no fuso de Brasília
     const now = new Date();
-    const brasiliaOffset = -3 * 60; // UTC-3
+    const brasiliaOffset = -3 * 60;
     const brasiliaTime = new Date(now.getTime() + (brasiliaOffset + now.getTimezoneOffset()) * 60000);
-    const hoje = brasiliaTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    const hoje = brasiliaTime.toISOString().split('T')[0];
 
     console.log('Data do relatório:', hoje);
 
@@ -35,24 +39,15 @@ serve(async (req) => {
       .gte('criado_em', `${hoje}T00:00:00-03:00`)
       .lte('criado_em', `${hoje}T23:59:59-03:00`);
 
-    if (acordosError) {
-      console.error('Erro ao buscar acordos:', acordosError);
-      throw acordosError;
-    }
+    if (acordosError) throw acordosError;
 
     console.log('Acordos encontrados hoje:', acordosHoje?.length || 0);
 
     // Buscar todos os profiles para mapear user_id -> nome
-    const { data: profiles, error: profilesError } = await supabase
+    const { data: profiles } = await supabase
       .from('profiles')
       .select('id, nome');
 
-    if (profilesError) {
-      console.error('Erro ao buscar profiles:', profilesError);
-      throw profilesError;
-    }
-
-    // Criar mapa de user_id para nome
     const profileMap: Record<string, string> = {};
     if (profiles) {
       for (const profile of profiles) {
@@ -76,10 +71,7 @@ serve(async (req) => {
       .eq('data_paga', hoje)
       .eq('status', 'pago');
 
-    if (pagamentosError) {
-      console.error('Erro ao buscar pagamentos:', pagamentosError);
-      throw pagamentosError;
-    }
+    if (pagamentosError) throw pagamentosError;
 
     console.log('Pagamentos encontrados hoje:', pagamentosHoje?.length || 0);
 
@@ -88,25 +80,18 @@ serve(async (req) => {
     let acordosDosPagamentos: { id: string; user_id: string }[] = [];
     
     if (acordoIds.length > 0) {
-      const { data: acordosData, error: acordosDataError } = await supabase
+      const { data: acordosData } = await supabase
         .from('acordos')
         .select('id, user_id')
         .in('id', acordoIds);
-
-      if (acordosDataError) {
-        console.error('Erro ao buscar acordos dos pagamentos:', acordosDataError);
-        throw acordosDataError;
-      }
       acordosDosPagamentos = acordosData || [];
     }
 
-    // Criar mapa de acordo_id para user_id
     const acordoUserMap: Record<string, string> = {};
     for (const acordo of acordosDosPagamentos) {
       acordoUserMap[acordo.id] = acordo.user_id;
     }
 
-    // Calcular valores por funcionário e total geral
     let totalGeral = 0;
     const valoresPorFuncionario: Record<string, number> = {};
     
@@ -115,19 +100,14 @@ serve(async (req) => {
         const userId = acordoUserMap[pagamento.acordo_id];
         const nome = userId ? (profileMap[userId] || 'Desconhecido') : 'Desconhecido';
         const valor = Number(pagamento.valor_parcela) || 0;
-        
         valoresPorFuncionario[nome] = (valoresPorFuncionario[nome] || 0) + valor;
         totalGeral += valor;
       }
     }
 
-    // Formatar data para exibição
     const dataFormatada = brasiliaTime.toLocaleDateString('pt-BR');
 
-    // Montar mensagem
     let mensagem = `📊 *RELATÓRIO DIÁRIO - ${dataFormatada}*\n\n`;
-
-    // Seção de acordos lançados
     mensagem += `📝 *ACORDOS LANÇADOS HOJE:*\n`;
     const funcionariosAcordos = Object.entries(acordosPorFuncionario).sort((a, b) => b[1] - a[1]);
     
@@ -159,26 +139,57 @@ serve(async (req) => {
 
     console.log('Mensagem gerada:', mensagem);
 
-    // Buscar credenciais UAZAPI do perfil admin configurado
-    const { data: adminProfiles } = await supabase
-      .from('profiles')
-      .select('whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
-      .not('whatsapp_lembrete_server_url', 'is', null)
-      .not('whatsapp_lembrete_instance_token', 'is', null)
-      .limit(1);
+    // === BUSCAR CREDENCIAIS UAZAPI ===
+    // 1. Prioridade: perfil do usuário que disparou (user_id do frontend)
+    let serverUrl: string | null = null;
+    let instanceToken: string | null = null;
+    let fonte = '';
 
-    const adminProfile = adminProfiles?.[0];
-    const serverUrl = adminProfile?.whatsapp_lembrete_server_url || Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = adminProfile?.whatsapp_lembrete_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    if (user_id) {
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
+        .eq('id', user_id)
+        .single();
+
+      if (userProfile?.whatsapp_lembrete_server_url && userProfile?.whatsapp_lembrete_instance_token) {
+        serverUrl = userProfile.whatsapp_lembrete_server_url;
+        instanceToken = userProfile.whatsapp_lembrete_instance_token;
+        fonte = 'perfil do usuário logado';
+      }
+    }
+
+    // 2. Fallback: qualquer perfil com credenciais configuradas
+    if (!serverUrl || !instanceToken) {
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
+        .not('whatsapp_lembrete_server_url', 'is', null)
+        .not('whatsapp_lembrete_instance_token', 'is', null)
+        .limit(1);
+
+      const adminProfile = adminProfiles?.[0];
+      if (adminProfile?.whatsapp_lembrete_server_url && adminProfile?.whatsapp_lembrete_instance_token) {
+        serverUrl = adminProfile.whatsapp_lembrete_server_url;
+        instanceToken = adminProfile.whatsapp_lembrete_instance_token;
+        fonte = 'perfil admin genérico';
+      }
+    }
+
+    // 3. Último fallback: variáveis de ambiente
+    if (!serverUrl || !instanceToken) {
+      serverUrl = Deno.env.get('UAZAPI_SERVER_URL') || null;
+      instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || null;
+      fonte = 'variáveis de ambiente';
+    }
 
     if (!serverUrl || !instanceToken) {
-      console.error('Credenciais UAZAPI não configuradas');
       throw new Error('Credenciais UAZAPI não configuradas');
     }
 
-    console.log('Usando instância:', adminProfile ? 'profile admin' : 'global env');
+    console.log('Usando credenciais de:', fonte);
 
-    const telefoneDestino = '5562991672674'; // 62 99167-2674
+    const telefoneDestino = '5562991672674';
     const cleanUrl = serverUrl.replace(/\/+$/, '');
     const endpoints = [
       `${cleanUrl}/message/sendText`,
@@ -209,11 +220,8 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         message: 'Relatório enviado com sucesso',
-        data: {
-          acordosLancados: acordosPorFuncionario,
-          parcelasPagas: valoresPorFuncionario,
-          totalGeral
-        }
+        fonte,
+        data: { acordosLancados: acordosPorFuncionario, parcelasPagas: valoresPorFuncionario, totalGeral }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
