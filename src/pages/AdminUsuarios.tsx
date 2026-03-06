@@ -592,6 +592,15 @@ export default function AdminUsuarios() {
                             >
                               <MessageCircle className="h-4 w-4" />
                             </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8"
+                              onClick={() => setTransferUser(user)}
+                              title="Transferir Acordos"
+                            >
+                              <ArrowLeftRight className="h-4 w-4" />
+                            </Button>
                             {user.id !== currentUser?.id && (
                               <Button
                                 size="icon"
