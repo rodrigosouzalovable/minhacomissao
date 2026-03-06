@@ -1,63 +1,31 @@
 
 
-## Problema
+## Diagnóstico
 
-O relatório diário está sendo enviado pelo número **6282183144** (instância global UAZAPI nos secrets do ambiente), em vez de usar as credenciais UAZAPI que você cadastrou no seu perfil via "Configurar UAZAPI".
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-A função `daily-report-whatsapp` busca credenciais da tabela `profiles` com `whatsapp_lembrete_server_url` e `whatsapp_lembrete_instance_token`, mas a query genérica (`limit(1)`) pode estar pegando o perfil errado, ou as credenciais do seu perfil podem não estar sendo encontradas.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-Além disso, o frontend não passa o `user_id` do usuário logado para a Edge Function, então ela não sabe qual perfil usar.
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-## Solução
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-### 1. Frontend - Passar o user_id do usuário logado
+## Correção
 
-Em `src/pages/EquipeAcordos.tsx`, alterar a chamada para enviar o `user_id` do usuário autenticado:
-
-```typescript
-const { data: { user } } = await supabase.auth.getUser();
-const { data, error } = await supabase.functions.invoke('daily-report-whatsapp', {
-  body: { user_id: user?.id }
-});
-```
-
-### 2. Edge Function - Buscar credenciais do perfil específico
-
-Em `supabase/functions/daily-report-whatsapp/index.ts`, alterar para:
-
-1. Ler o `user_id` do body da requisição
-2. Buscar as credenciais UAZAPI **desse perfil específico** primeiro
-3. Fallback para qualquer perfil com credenciais configuradas
-4. Último fallback para variáveis de ambiente globais
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
 ```typescript
-const { user_id } = await req.json().catch(() => ({}));
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-// Primeiro: buscar do perfil do usuário que clicou
-let serverUrl, instanceToken;
-if (user_id) {
-  const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
-    .eq('id', user_id)
-    .single();
-  serverUrl = userProfile?.whatsapp_lembrete_server_url;
-  instanceToken = userProfile?.whatsapp_lembrete_instance_token;
-}
-
-// Fallback: qualquer perfil com credenciais
-if (!serverUrl || !instanceToken) {
-  // ... busca genérica existente
-}
-
-// Último fallback: env vars
-serverUrl = serverUrl || Deno.env.get('UAZAPI_SERVER_URL');
-instanceToken = instanceToken || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-### 3. Mesma lógica para `notify-cpf-consulta`
-
-Atualizar também a função `notify-cpf-consulta` para buscar credenciais do perfil correto (o admin com número 62991672674).
-
-Neste caso, como não há um usuário logado disparando, buscar especificamente pelo perfil que tem o telefone cadastrado ou manter a busca genérica na tabela `profiles`.
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

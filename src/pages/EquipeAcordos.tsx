@@ -64,7 +64,10 @@ export default function EquipeAcordos() {
     try {
       setEnviandoRelatorio(true);
       
-      const { data, error } = await supabase.functions.invoke('daily-report-whatsapp');
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.functions.invoke('daily-report-whatsapp', {
+        body: { user_id: currentUser?.id }
+      });
       
       if (error) throw error;
       
