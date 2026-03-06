@@ -23,13 +23,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2, Trash2 } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2, Trash2, ArrowLeftRight } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import type { Database } from '@/integrations/supabase/types';
 import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
 import { WhatsAppLembreteConfigDialog } from '@/components/WhatsAppLembreteConfigDialog';
+import { TransferAcordosDialog } from '@/components/TransferAcordosDialog';
 import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog,
@@ -77,6 +78,7 @@ export default function AdminUsuarios() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
   const [whatsappConfigUser, setWhatsappConfigUser] = useState<UserWithRole | null>(null);
+  const [transferUser, setTransferUser] = useState<UserWithRole | null>(null);
   
   // Estados para criação de novo usuário
   const [newUserNome, setNewUserNome] = useState('');
@@ -590,6 +592,15 @@ export default function AdminUsuarios() {
                             >
                               <MessageCircle className="h-4 w-4" />
                             </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8"
+                              onClick={() => setTransferUser(user)}
+                              title="Transferir Acordos"
+                            >
+                              <ArrowLeftRight className="h-4 w-4" />
+                            </Button>
                             {user.id !== currentUser?.id && (
                               <Button
                                 size="icon"
@@ -635,6 +646,15 @@ export default function AdminUsuarios() {
           userId={whatsappConfigUser?.id ?? ''}
           userName={whatsappConfigUser?.nome ?? ''}
         />
+
+        {transferUser && users && (
+          <TransferAcordosDialog
+            open={!!transferUser}
+            onOpenChange={(open) => !open && setTransferUser(null)}
+            sourceUser={{ id: transferUser.id, nome: transferUser.nome, email: transferUser.email }}
+            allUsers={users.map((u) => ({ id: u.id, nome: u.nome, email: u.email }))}
+          />
+        )}
 
         <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
           <AlertDialogContent>
