@@ -1,19 +1,31 @@
 
 
-# Remover limite de iterações do agente
+## Diagnóstico
 
-O erro "Agente atingiu limite de iterações" acontece porque o agente tem um cap fixo (30 iterações). Você quer remover isso para treinar a IA sem interrupções.
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-## Mudança
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-### `server.js`
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-Remover o limite fixo de iterações. Em vez de `MAX_ITERATIONS = 30`, usar apenas o timeout de 5 minutos como proteção. O loop `for` vira um `while(true)` controlado pelo timeout e pelo flag de abort.
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-- Linha 779: remover `MAX_ITERATIONS`
-- Linha 824: trocar `for (let i = 0; i < MAX_ITERATIONS; i++)` por `for (let i = 0; ; i++)` (loop infinito controlado pelo timeout que já existe na linha 830-847)
-- Linha 849: remover `/${MAX_ITERATIONS}` da mensagem de status
-- Linhas 1024-1032: remover o bloco "Max iterations reached" — agora o loop só termina por: `done`, `error`, `abort`, `timeout`, ou `confiança baixa`
+## Correção
 
-O timeout de 5 minutos (linha 830-847) continua como proteção contra loops infinitos.
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
+
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

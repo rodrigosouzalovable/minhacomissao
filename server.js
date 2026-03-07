@@ -776,7 +776,7 @@ app.post('/automacao/agent', async (req, res) => {
   }
 
   abortAgent = false; // Reset abort flag
-  const MAX_ITERATIONS = max_iterations || 30;
+  // Sem limite fixo de iterações — controlado apenas pelo timeout de 5 min
   const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
   const startTime = Date.now();
   const history = [];
@@ -821,7 +821,7 @@ app.post('/automacao/agent', async (req, res) => {
 
     const analyzeUrl = `${supabase_url || process.env.SUPABASE_URL || 'https://cymdrkeukockakfzjeen.supabase.co'}/functions/v1/analyze-cobmais-screen`;
 
-    for (let i = 0; i < MAX_ITERATIONS; i++) {
+    for (let i = 0; ; i++) {
       // Check abort flag
       if (abortAgent) {
         updateStatus('stopped', 'Agente interrompido pelo usuário');
@@ -846,7 +846,7 @@ app.post('/automacao/agent', async (req, res) => {
         });
       }
 
-      updateStatus('agent', `Iteração ${i + 1}/${MAX_ITERATIONS}: analisando tela...`);
+      updateStatus('agent', `Iteração ${i + 1}: analisando tela...`);
 
       // 1. Capture screenshot
       let screenshot;
@@ -1021,15 +1021,7 @@ app.post('/automacao/agent', async (req, res) => {
       updateStatus('agent', `Iteração ${i + 1}: ${aiAction.description} → ${actionResult}`);
     }
 
-    // Max iterations reached
-    updateStatus('erro', 'Agente atingiu limite de iterações');
-    return res.json({
-      success: false,
-      error: 'Agente atingiu o limite máximo de 30 iterações',
-      history,
-      iterations: MAX_ITERATIONS,
-      tempo_ms: Date.now() - startTime,
-    });
+    // Loop só termina por: done, error, abort, timeout ou confiança baixa
   } catch (err) {
     console.error('❌ Erro no agente:', err.message);
     return res.json({
