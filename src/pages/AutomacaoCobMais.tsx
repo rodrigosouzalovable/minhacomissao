@@ -203,8 +203,8 @@ export default function AutomacaoCobMais() {
               </div>
               <Separator />
               <div>
-                <Label>Email CobMais</Label>
-                <Input placeholder="email@cobmais.com" value={cobmaisEmail} onChange={e => setCobmaisEmail(e.target.value)} />
+              <Label>Login CobMais</Label>
+                <Input placeholder="seu.usuario" value={cobmaisEmail} onChange={e => setCobmaisEmail(e.target.value)} />
               </div>
               <div>
                 <Label>Senha CobMais</Label>
