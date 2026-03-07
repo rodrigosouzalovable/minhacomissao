@@ -269,6 +269,72 @@ export default function AutomacaoCobMais() {
     }
   };
 
+  // Video upload handler
+  const handleVideoUpload = async () => {
+    if (!videoFile || !videoFlowName.trim()) return;
+    if (videoFile.size > 20 * 1024 * 1024) {
+      toast.error('Vídeo muito grande. Máximo: 20MB');
+      return;
+    }
+
+    setUploadingVideo(true);
+    setVideoProgress(10);
+    setVideoProgressLabel('Enviando vídeo...');
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const ext = videoFile.name.split('.').pop() || 'webm';
+      const filePath = `${session.user.id}/${Date.now()}.${ext}`;
+
+      setVideoProgress(20);
+      const { error: uploadError } = await supabase.storage
+        .from('cobmais-videos')
+        .upload(filePath, videoFile);
+
+      if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`);
+
+      setVideoProgress(50);
+      setVideoProgressLabel('Processando com IA... (pode levar até 2 min)');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/process-cobmais-video`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ video_path: filePath, nome_fluxo: videoFlowName.trim() }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Erro ao processar vídeo');
+      }
+
+      setVideoProgress(100);
+      setVideoProgressLabel('Concluído!');
+      toast.success(`🎓 Vídeo processado! ${result.total_passos} passos extraídos.`);
+      if (result.resumo) {
+        toast.info(result.resumo, { duration: 8000 });
+      }
+
+      // Cleanup
+      setVideoFile(null);
+      setVideoFlowName('');
+      setShowVideoUpload(false);
+      loadSessoes();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao processar vídeo');
+    } finally {
+      setUploadingVideo(false);
+      setVideoProgress(0);
+      setVideoProgressLabel('');
+    }
+  };
+
   const handleDeleteSession = async (sessaoId: string) => {
     if (!confirm('Excluir esta sessão e todo o conhecimento associado?')) return;
     const result = await invokeFunction({ action: 'delete_session', sessao_id: sessaoId });
