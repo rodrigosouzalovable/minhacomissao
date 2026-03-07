@@ -1,40 +1,31 @@
 
 
-# Chat com a IA sobre o Conhecimento Aprendido
+## Diagnóstico
 
-## O que será construído
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-Um chat integrado na seção "Conhecimento Aprendido" onde você conversa com a IA sobre o que ela aprendeu. A IA analisa todos os passos gravados nas sessões e responde suas perguntas. Se ela identificar lacunas ou dúvidas, sugere que você envie um novo vídeo explicando o ponto específico.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Implementação
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-### 1. Nova Edge Function `chat-cobmais-knowledge`
-- Recebe a mensagem do usuário + histórico do chat
-- Busca todos os dados da tabela `cobmais_conhecimento` e `cobmais_sessoes_gravadas`
-- Monta um system prompt instruindo a IA a: responder sobre o que aprendeu, listar dúvidas/lacunas, e sugerir envio de novo vídeo quando não souber algo
-- Usa Gemini 3 Flash (streaming) para resposta rápida
-- Retorna stream SSE
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-### 2. UI do Chat na seção Conhecimento (`AutomacaoCobMais.tsx`)
-- Adicionar abaixo da tabela de sessões um card de chat com:
-  - Área de mensagens (scroll) com markdown rendering
-  - Input + botão enviar
-  - Streaming token-by-token da resposta
-- Quando a IA sugerir enviar vídeo, um botão inline abre o dialog de upload de vídeo
-- Estado: `chatMessages`, `chatInput`, `isChatLoading`
+## Correção
 
-### 3. System Prompt da IA
-O prompt instrui a IA a:
-- Analisar todos os fluxos gravados e seus passos
-- Responder em português sobre o que sabe fazer
-- Identificar passos vagos ou incompletos e pedir esclarecimento
-- Sugerir explicitamente "envie um novo vídeo explicando [X]" quando houver lacuna
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-## Arquivos
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/chat-cobmais-knowledge/index.ts` | Nova edge function com streaming |
-| `supabase/config.toml` | Registrar a nova function |
-| `src/pages/AutomacaoCobMais.tsx` | Chat UI na seção Conhecimento |
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
+
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

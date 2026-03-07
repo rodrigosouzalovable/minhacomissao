@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,6 +69,13 @@ export default function AutomacaoCobMais() {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoProgressLabel, setVideoProgressLabel] = useState('');
+
+  // Chat with AI state
+  type ChatMsg = { role: 'user' | 'assistant'; content: string };
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -345,6 +353,102 @@ export default function AutomacaoCobMais() {
         setViewingSessaoId(null);
         setSelectedSessaoKnowledge([]);
       }
+    }
+  };
+
+  // Chat with AI about knowledge
+  const handleChatSend = async () => {
+    const text = chatInput.trim();
+    if (!text || isChatLoading) return;
+
+    const userMsg: ChatMsg = { role: 'user', content: text };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setIsChatLoading(true);
+
+    const allMessages = [...chatMessages, userMsg];
+    let assistantSoFar = '';
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const resp = await fetch(`${supabaseUrl}/functions/v1/chat-cobmais-knowledge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ messages: allMessages }),
+      });
+
+      if (!resp.ok || !resp.body) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erro ao conectar com a IA');
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = '';
+      let streamDone = false;
+
+      const upsertAssistant = (chunk: string) => {
+        assistantSoFar += chunk;
+        setChatMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant') {
+            return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
+          }
+          return [...prev, { role: 'assistant', content: assistantSoFar }];
+        });
+      };
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') { streamDone = true; break; }
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) upsertAssistant(content);
+          } catch {
+            textBuffer = line + '\n' + textBuffer;
+            break;
+          }
+        }
+      }
+
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (raw.startsWith(':') || raw.trim() === '') continue;
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) upsertAssistant(content);
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao conversar com a IA');
+    } finally {
+      setIsChatLoading(false);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
   };
 
@@ -725,7 +829,92 @@ export default function AutomacaoCobMais() {
           </CardContent>
         </Card>
 
-        {/* Fila & Logs */}
+        {/* Chat com IA sobre o conhecimento */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              💬 Conversar com a IA sobre o Conhecimento
+            </CardTitle>
+            <CardDescription>
+              Pergunte à IA o que ela aprendeu, se tem dúvidas ou se precisa de mais treinamento.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Messages area */}
+              <ScrollArea className="h-80 rounded-md border p-4 bg-muted/30">
+                <div className="space-y-4">
+                  {chatMessages.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Brain className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">Comece perguntando algo como:</p>
+                      <div className="flex flex-wrap gap-2 justify-center mt-3">
+                        {['O que você sabe fazer?', 'Tem alguma dúvida?', 'Sabe gerar boleto?'].map(q => (
+                          <Button key={q} variant="outline" size="sm" onClick={() => { setChatInput(q); }}>
+                            {q}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-card border'
+                      }`}>
+                        {msg.role === 'assistant' ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            {/* Check if AI suggests sending video */}
+                            {msg.content.includes('📹') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2"
+                                onClick={() => setShowVideoUpload(true)}
+                              >
+                                <FileVideo className="h-4 w-4 mr-1" />
+                                Enviar Vídeo de Treinamento
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <p>{msg.content}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {isChatLoading && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
+                    <div className="flex justify-start">
+                      <div className="bg-card border rounded-lg px-4 py-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+              </ScrollArea>
+
+              {/* Input area */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Pergunte à IA sobre o que ela aprendeu..."
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
+                  disabled={isChatLoading}
+                />
+                <Button onClick={handleChatSend} disabled={!chatInput.trim() || isChatLoading}>
+                  {isChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
