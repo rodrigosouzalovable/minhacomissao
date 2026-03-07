@@ -1,56 +1,31 @@
 
 
-## Streaming de Vídeo do Robô CobMais
+## Diagnóstico
 
-### Resumo
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-Adicionar um player de streaming ao painel de Automação CobMais que exibe em tempo real a tela do navegador Playwright rodando no servidor local. Isso permite acompanhar o robô executando o fluxo de geração de boletos sem precisar acessar o computador local.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-### Arquitetura
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-O servidor Playwright local (via ngrok) já aceita conexões HTTP. A abordagem mais simples e compatível com a arquitetura atual é **polling de screenshots** em vez de WebSocket/Socket.IO, pois:
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-- Não requer instalar `socket.io-client` (dependência pesada)
-- Funciona através do ngrok sem configuração extra
-- Não precisa de mudanças no CORS do servidor local além do que já existe
-- Mais resiliente a desconexões
+## Correção
 
-```text
-┌─────────────────┐     polling (GET /screenshot)     ┌──────────────────┐
-│  Frontend React  │ ◄──────────────────────────────► │ Servidor Playwright│
-│  (Meus Acordos)  │     a cada ~1s via fetch          │  (local + ngrok)  │
-└─────────────────┘                                    └──────────────────┘
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-O frontend faz `fetch` direto ao ngrok URL (já configurado no campo `serverUrl`) pedindo um screenshot a cada 1 segundo. O servidor Playwright precisa expor um endpoint `GET /screenshot` que retorna uma imagem base64 ou JPEG.
-
-### O que será criado/modificado
-
-**1. Novo componente `src/components/RoboStreamViewer.tsx`**
-- Player de imagem que faz polling de screenshots do servidor Playwright
-- Indicador de conexão (conectado/desconectado)
-- Botão play/pause para iniciar/parar o polling
-- Overlay de status mostrando a etapa atual da automação
-- Log de eventos da automação (últimos 10)
-- Usa `serverUrl` do estado pai para montar a URL de polling
-- Estilizado com shadcn/ui (Card, Badge, Button, ScrollArea) para manter consistência visual
-
-**2. Modificação em `src/pages/AutomacaoCobMais.tsx`**
-- Adicionar nova aba "Streaming" no painel ou seção dedicada abaixo do console
-- Renderizar `RoboStreamViewer` passando `serverUrl` como prop
-- O streaming só aparece quando o robô está online
-
-### Requisito no servidor Playwright local
-
-O servidor local precisa expor um endpoint:
-```
-GET /screenshot
-→ Response: { image: "data:image/jpeg;base64,...", url: "página atual", status: "executando" }
-```
-
-Sem esse endpoint, o player mostrará "Aguardando streaming..." — o que é aceitável como estado inicial.
-
-### Dependências
-
-Nenhuma nova dependência necessária. Usa `fetch` nativo + componentes shadcn/ui existentes.
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
