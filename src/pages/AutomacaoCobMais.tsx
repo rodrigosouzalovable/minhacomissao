@@ -733,7 +733,9 @@ export default function AutomacaoCobMais() {
 
         {/* Streaming */}
         {roboStatus === 'online' && serverUrl && (
-          <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
+          <div ref={streamingRef}>
+            <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
+          </div>
         )}
 
         {/* Código do Robô */}
