@@ -127,20 +127,51 @@ ${knowledgeContext}
         type: "function",
         function: {
           name: "executar_automacao",
-          description: "Executa uma ação de automação no robô CobMais. Use quando o usuário pedir para executar, emitir, gerar, buscar ou fazer qualquer ação no sistema CobMais.",
+          description: "Executa um fluxo COMPLEXO multi-passo no robô CobMais usando IA de visão. Use APENAS quando não souber os seletores ou para fluxos longos. Para ações simples, prefira executar_acao_direta.",
           parameters: {
             type: "object",
             properties: {
               objetivo: {
                 type: "string",
-                description: "Descrição em linguagem natural do que deve ser feito, ex: 'Emitir boleto à vista do CPF 059.919.151-13 por R$ 300,00 para pagamento em 10/03/2026'"
+                description: "Descrição em linguagem natural do que deve ser feito"
               },
               max_iterations: {
                 type: "number",
-                description: "Número máximo de ações que o robô pode executar. Use 1 para ações simples (um clique, um preenchimento). Use 3-5 para fluxos multi-passo como 'acessar link E fazer login' ou 'pesquisar CPF e abrir ficha'. Padrão: 1"
+                description: "Número máximo de ações. Use 1-5. Padrão: 1"
               }
             },
             required: ["objetivo"],
+            additionalProperties: false
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "executar_acao_direta",
+          description: "Executa UMA ação INSTANTÂNEA no navegador sem análise de visão. Muito mais rápido (~1s vs ~10s). Use para cliques, preenchimentos, teclas e navegação quando souber o que fazer.",
+          parameters: {
+            type: "object",
+            properties: {
+              action: {
+                type: "string",
+                enum: ["click", "fill", "keypress", "navigate", "scroll", "select"],
+                description: "Tipo da ação a executar"
+              },
+              selector: {
+                type: "string",
+                description: "Seletor CSS do elemento (ex: '#btnPesquisar', '.btn-success') OU texto visível do botão (ex: 'Entrar', 'NÃO, OBRIGADO'). Para keypress, nome da tecla."
+              },
+              value: {
+                type: "string",
+                description: "Valor para fill (texto a digitar), keypress (nome da tecla: F5, Enter, Escape), ou select (opção a selecionar)"
+              },
+              url: {
+                type: "string",
+                description: "URL para navigate (ex: 'https://app.cobmais.com.br/cob/pesquisa')"
+              }
+            },
+            required: ["action"],
             additionalProperties: false
           }
         }
