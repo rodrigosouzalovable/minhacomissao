@@ -524,61 +524,144 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   console.log('✅ Tela de boletos aberta');
 
   // ── PASSO 12: Selecionar Todos e Imprimir ──
-  updateStatus('executando', 'Passo 12: Selecionando boletos e imprimindo...');
+  async function selecionarTodosEImprimir() {
+    updateStatus('executando', 'Passo 12: Selecionando boletos e imprimindo...');
 
-  const ckbSelectors = [
-    '#ckbTodosBoletos',
-    'input#ckbTodosBoletos',
-    'input[type="checkbox"][id*="Todos"]',
-    'input[type="checkbox"][id*="todos"]',
-    'label:has-text("Selecionar Todos")',
-  ];
+    // Marcar "Selecionar Todos" - usar label pois checkbox está em span.nice-checkbox
+    const ckbSelectors = [
+      'label[for="ckbTodosBoletos"]',
+      'label:has-text("Selecionar Todos")',
+      '#ckbTodosBoletos',
+      'input#ckbTodosBoletos',
+    ];
 
-  for (const sel of ckbSelectors) {
-    try {
-      const el = await pg.$(sel);
-      if (el) {
-        await el.click();
-        console.log(\`   Marcou Selecionar Todos: \${sel}\`);
-        break;
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-
-  await delay(1000);
-
-  const imprimirSelectors = [
-    '#btnConfirmarBoleto',
-    'button#btnConfirmarBoleto',
-    'button:has-text("Imprimir")',
-    'a:has-text("Imprimir")',
-    '#btnImprimir',
-    'button[id*="Imprimir"]',
-    'input[value="Imprimir"]',
-  ];
-
-  for (const sel of imprimirSelectors) {
-    try {
-      const el = await pg.$(sel);
-      if (el) {
-        const href = await el.getAttribute('href');
-        if (href && (href.includes('gerapdf') || href.includes('.pdf'))) {
-          boletoUrl = href.startsWith('http') ? href : \`\${COBMAIS_URL}\${href}\`;
-          console.log(\`   📄 URL do boleto via href: \${boletoUrl}\`);
-        } else {
+    let selecionouTodos = false;
+    for (const sel of ckbSelectors) {
+      try {
+        const el = await pg.$(sel);
+        if (el) {
+          await el.scrollIntoViewIfNeeded();
+          await delay(300);
           await el.click();
-          console.log(\`   Clicou em Imprimir: \${sel}\`);
+          selecionouTodos = true;
+          console.log(\`   Marcou Selecionar Todos: \${sel}\`);
+          break;
         }
-        break;
-      }
-    } catch (e) {
-      continue;
+      } catch (e) { continue; }
     }
+
+    if (!selecionouTodos) {
+      try {
+        await pg.evaluate(() => {
+          const cb = document.querySelector('#ckbTodosBoletos');
+          if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); return; }
+          const labels = document.querySelectorAll('label');
+          for (const l of labels) {
+            if (l.textContent && l.textContent.includes('Selecionar Todos')) { l.click(); return; }
+          }
+        });
+        console.log('   Marcou Selecionar Todos via JavaScript');
+      } catch (e) {
+        console.log('⚠️ Não conseguiu marcar Selecionar Todos');
+      }
+    }
+
+    await delay(1000);
+
+    // Clicar em Imprimir
+    const imprimirSelectors = [
+      '#btnConfirmarBoleto',
+      'button#btnConfirmarBoleto',
+      'button:has-text("Imprimir")',
+      'a:has-text("Imprimir")',
+    ];
+
+    for (const sel of imprimirSelectors) {
+      try {
+        const el = await pg.$(sel);
+        if (el) {
+          await el.scrollIntoViewIfNeeded();
+          await delay(300);
+          const href = await el.getAttribute('href');
+          if (href && (href.includes('gerapdf') || href.includes('.pdf'))) {
+            boletoUrl = href.startsWith('http') ? href : \`\${COBMAIS_URL}\${href}\`;
+          } else {
+            await el.click();
+            console.log(\`   Clicou em Imprimir: \${sel}\`);
+          }
+          break;
+        }
+      } catch (e) { continue; }
+    }
+
+    await delay(5000);
+
+    // Verificar erro de email
+    let erroEmail = false;
+    try {
+      const toastEl = await pg.$('div.toast-message');
+      if (toastEl) {
+        const toastText = await toastEl.textContent();
+        if (toastText && (toastText.toLowerCase().includes('email') || toastText.toLowerCase().includes('e-mail'))) {
+          erroEmail = true;
+          console.log(\`⚠️ Erro de email: \${toastText}\`);
+        }
+      }
+    } catch (e) {}
+
+    if (erroEmail) {
+      console.log('🔄 Recuperação: cadastrar email...');
+      updateStatus('executando', 'Cadastrando email do cliente...');
+
+      // Fechar modal
+      for (const sel of ['#btnFecharBoleto', 'button:has-text("Cancelar")', 'button.close']) {
+        try { const el = await pg.$(sel); if (el) { await el.click(); break; } } catch (e) { continue; }
+      }
+      await delay(2000);
+
+      // Aba Email
+      for (const sel of ['a[href="#tabEmail"]', 'a:has-text("E-mail")', 'a:has-text("Email")']) {
+        try { const el = await pg.$(sel); if (el) { await el.scrollIntoViewIfNeeded(); await delay(300); await el.click(); break; } } catch (e) { continue; }
+      }
+      await delay(2000);
+
+      // + Novo
+      for (const sel of ['a#btnNovoItem', '#btnNovoItem', 'a:has-text("Novo")']) {
+        try { const el = await pg.$(sel); if (el) { await el.scrollIntoViewIfNeeded(); await delay(300); await el.click(); break; } } catch (e) { continue; }
+      }
+      await delay(2000);
+
+      // Preencher email
+      for (const sel of ['input#txtEmail', 'input[id*="Email"]', 'input[type="email"]']) {
+        try { const el = await pg.$(sel); if (el) { await pg.fill(sel, 'email@email.com'); break; } } catch (e) { continue; }
+      }
+      await delay(1000);
+
+      // Salvar
+      for (const sel of ['button#btnSalvarEmail', '#btnSalvarEmail', 'button:has-text("Salvar")']) {
+        try { const el = await pg.$(sel); if (el) { await el.click(); break; } } catch (e) { continue; }
+      }
+      await delay(3000);
+      console.log('✅ Email cadastrado');
+
+      // Refazer emissão
+      updateStatus('executando', 'Refazendo emissão de boleto...');
+      for (const sel of dropdownSelectors) {
+        try { const el = await pg.$(sel); if (el) { await el.scrollIntoViewIfNeeded(); await delay(300); await el.click(); break; } } catch (e) { continue; }
+      }
+      await delay(2000);
+      for (const sel of emitirSelectors) {
+        try { const el = await pg.$(sel); if (el) { await el.click(); break; } } catch (e) { continue; }
+      }
+      await delay(3000);
+
+      return await selecionarTodosEImprimir();
+    }
+
+    await delay(3000);
   }
 
-  await delay(8000);
+  await selecionarTodosEImprimir();
 
   if (!boletoUrl) {
     const pages = context.pages();

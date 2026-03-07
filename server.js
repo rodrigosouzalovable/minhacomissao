@@ -524,63 +524,200 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   console.log('✅ Tela de boletos aberta');
 
   // ── PASSO 12: Selecionar Todos e Imprimir ──
-  updateStatus('executando', 'Passo 12: Selecionando boletos e imprimindo...');
+  async function selecionarTodosEImprimir() {
+    updateStatus('executando', 'Passo 12: Selecionando boletos e imprimindo...');
 
-  // Marcar "Selecionar Todos"
-  const ckbSelectors = [
-    '#ckbTodosBoletos',
-    'input#ckbTodosBoletos',
-    'input[type="checkbox"][id*="Todos"]',
-    'input[type="checkbox"][id*="todos"]',
-    'label:has-text("Selecionar Todos")',
-  ];
+    // Marcar "Selecionar Todos" - usar label pois o checkbox está dentro de span.nice-checkbox
+    const ckbSelectors = [
+      'label[for="ckbTodosBoletos"]',
+      'label:has-text("Selecionar Todos")',
+      '#ckbTodosBoletos',
+      'input#ckbTodosBoletos',
+      'input[type="checkbox"][id*="Todos"]',
+    ];
 
-  for (const sel of ckbSelectors) {
-    try {
-      const el = await pg.$(sel);
-      if (el) {
-        await el.click();
-        console.log(`   Marcou Selecionar Todos: ${sel}`);
-        break;
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-
-  await delay(1000);
-
-  // Clicar em Imprimir / Confirmar Boleto
-  const imprimirSelectors = [
-    '#btnConfirmarBoleto',
-    'button#btnConfirmarBoleto',
-    'button:has-text("Imprimir")',
-    'a:has-text("Imprimir")',
-    '#btnImprimir',
-    'button[id*="Imprimir"]',
-    'input[value="Imprimir"]',
-  ];
-
-  for (const sel of imprimirSelectors) {
-    try {
-      const el = await pg.$(sel);
-      if (el) {
-        const href = await el.getAttribute('href');
-        if (href && (href.includes('gerapdf') || href.includes('.pdf'))) {
-          boletoUrl = href.startsWith('http') ? href : `${COBMAIS_URL}${href}`;
-          console.log(`   📄 URL do boleto via href: ${boletoUrl}`);
-        } else {
+    let selecionouTodos = false;
+    for (const sel of ckbSelectors) {
+      try {
+        const el = await pg.$(sel);
+        if (el) {
+          await el.scrollIntoViewIfNeeded();
+          await delay(300);
           await el.click();
-          console.log(`   Clicou em Imprimir: ${sel}`);
+          selecionouTodos = true;
+          console.log(`   Marcou Selecionar Todos: ${sel}`);
+          break;
         }
-        break;
+      } catch (e) {
+        continue;
       }
-    } catch (e) {
-      continue;
     }
+
+    if (!selecionouTodos) {
+      // Fallback: clicar via JavaScript
+      try {
+        await pg.evaluate(() => {
+          const cb = document.querySelector('#ckbTodosBoletos');
+          if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); return; }
+          const labels = document.querySelectorAll('label');
+          for (const l of labels) {
+            if (l.textContent && l.textContent.includes('Selecionar Todos')) { l.click(); return; }
+          }
+        });
+        console.log('   Marcou Selecionar Todos via JavaScript');
+      } catch (e) {
+        console.log('⚠️ Não conseguiu marcar Selecionar Todos');
+      }
+    }
+
+    await delay(1000);
+
+    // Clicar em Imprimir / Confirmar Boleto
+    const imprimirSelectors = [
+      '#btnConfirmarBoleto',
+      'button#btnConfirmarBoleto',
+      'button:has-text("Imprimir")',
+      'a:has-text("Imprimir")',
+      '#btnImprimir',
+    ];
+
+    for (const sel of imprimirSelectors) {
+      try {
+        const el = await pg.$(sel);
+        if (el) {
+          await el.scrollIntoViewIfNeeded();
+          await delay(300);
+          const href = await el.getAttribute('href');
+          if (href && (href.includes('gerapdf') || href.includes('.pdf'))) {
+            boletoUrl = href.startsWith('http') ? href : `${COBMAIS_URL}${href}`;
+            console.log(`   📄 URL do boleto via href: ${boletoUrl}`);
+          } else {
+            await el.click();
+            console.log(`   Clicou em Imprimir: ${sel}`);
+          }
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    await delay(5000);
+
+    // ── Verificar erro de email ──
+    let erroEmail = false;
+    try {
+      const toastEl = await pg.$('div.toast-message');
+      if (toastEl) {
+        const toastText = await toastEl.textContent();
+        if (toastText && (toastText.toLowerCase().includes('email') || toastText.toLowerCase().includes('e-mail'))) {
+          erroEmail = true;
+          console.log(`⚠️ Erro de email detectado: ${toastText}`);
+        }
+      }
+    } catch (e) {}
+
+    // Fallback: verificar qualquer texto de erro de email na página
+    if (!erroEmail) {
+      try {
+        const pageText = await pg.textContent('body');
+        if (pageText && pageText.includes('Email do cliente não pode ficar em branco')) {
+          erroEmail = true;
+          console.log('⚠️ Erro de email detectado no body');
+        }
+      } catch (e) {}
+    }
+
+    if (erroEmail) {
+      console.log('🔄 Iniciando recuperação: cadastrar email...');
+      updateStatus('executando', 'Cadastrando email do cliente...');
+
+      // Fechar modal de boleto
+      const fecharSelectors = ['#btnFecharBoleto', 'button:has-text("Cancelar")', 'button.close', '.modal .close'];
+      for (const sel of fecharSelectors) {
+        try {
+          const el = await pg.$(sel);
+          if (el) { await el.click(); console.log(`   Fechou modal: ${sel}`); break; }
+        } catch (e) { continue; }
+      }
+      await delay(2000);
+
+      // Clicar na aba "E-mail"
+      const emailTabSelectors = ['a[href="#tabEmail"]', 'a:has-text("E-mail")', 'a:has-text("Email")', 'li a[href*="Email"]'];
+      for (const sel of emailTabSelectors) {
+        try {
+          const el = await pg.$(sel);
+          if (el) { await el.scrollIntoViewIfNeeded(); await delay(300); await el.click(); console.log(`   Abriu aba Email: ${sel}`); break; }
+        } catch (e) { continue; }
+      }
+      await delay(2000);
+
+      // Clicar em "+ Novo"
+      const novoSelectors = ['a#btnNovoItem', '#btnNovoItem', 'a:has-text("Novo")', 'button:has-text("Novo")'];
+      for (const sel of novoSelectors) {
+        try {
+          const el = await pg.$(sel);
+          if (el) { await el.scrollIntoViewIfNeeded(); await delay(300); await el.click(); console.log(`   Clicou em Novo: ${sel}`); break; }
+        } catch (e) { continue; }
+      }
+      await delay(2000);
+
+      // Preencher email
+      const emailInputSelectors = ['input#txtEmail', 'input[id*="Email"]', 'input[type="email"]', 'input[name*="email"]'];
+      for (const sel of emailInputSelectors) {
+        try {
+          const el = await pg.$(sel);
+          if (el) {
+            await pg.fill(sel, '');
+            await pg.fill(sel, 'email@email.com');
+            console.log(`   Preencheu email: ${sel}`);
+            break;
+          }
+        } catch (e) { continue; }
+      }
+      await delay(1000);
+
+      // Salvar email
+      const salvarEmailSelectors = ['button#btnSalvarEmail', '#btnSalvarEmail', 'button:has-text("Salvar")'];
+      for (const sel of salvarEmailSelectors) {
+        try {
+          const el = await pg.$(sel);
+          if (el) { await el.click(); console.log(`   Salvou email: ${sel}`); break; }
+        } catch (e) { continue; }
+      }
+      await delay(3000);
+      console.log('✅ Email cadastrado');
+
+      // Refazer emissão: dropdown amarelo > Emitir Boleto > Selecionar Todos > Imprimir
+      updateStatus('executando', 'Refazendo emissão de boleto...');
+
+      // Dropdown amarelo
+      for (const sel of dropdownSelectors) {
+        try {
+          const el = await pg.$(sel);
+          if (el) { await el.scrollIntoViewIfNeeded(); await delay(300); await el.click(); console.log(`   Re-clicou dropdown: ${sel}`); break; }
+        } catch (e) { continue; }
+      }
+      await delay(2000);
+
+      // Emitir Boletos
+      for (const sel of emitirSelectors) {
+        try {
+          const el = await pg.$(sel);
+          if (el) { await el.click(); console.log(`   Re-clicou Emitir: ${sel}`); break; }
+        } catch (e) { continue; }
+      }
+      await delay(3000);
+
+      // Recursão: tentar selecionar e imprimir novamente
+      return await selecionarTodosEImprimir();
+    }
+
+    // Sem erro de email - aguardar mais para PDF
+    await delay(3000);
   }
 
-  await delay(8000);
+  await selecionarTodosEImprimir();
 
   // Verificar URLs em todas as abas abertas
   if (!boletoUrl) {
