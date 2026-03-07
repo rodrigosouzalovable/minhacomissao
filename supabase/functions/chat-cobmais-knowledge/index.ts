@@ -99,7 +99,14 @@ ${knowledgeContext}
 15. SEMPRE pergunte ao usuário qual o próximo passo após confirmar a execução
 16. Se o comando do usuário envolve múltiplas ações, use max_iterations adequado para executar tudo de uma vez em vez de parar a cada ação
 17. Informe que o usuário pode acompanhar em tempo real no **"Streaming do Robô"** acima do chat
-18. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário`;
+18. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário
+
+## IMPORTANTE - Análise de Imagens/Screenshots:
+21. Quando o usuário enviar uma imagem ou screenshot junto com a mensagem, ANALISE VISUALMENTE a imagem
+22. Identifique botões, campos, links, menus e elementos visuais na screenshot
+23. Use essa informação visual para decidir exatamente onde clicar ou o que preencher
+24. Descreva o que você vê na imagem e confirme com o usuário antes de executar
+25. Se o usuário apontar "clique aqui" ou "neste botão", identifique o elemento na imagem e use no objetivo da automação`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");

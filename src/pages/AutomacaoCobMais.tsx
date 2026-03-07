@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye, Upload, Video, FileVideo } from 'lucide-react';
+import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye, Upload, Video, FileVideo, ImagePlus, X } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { RoboStreamViewer } from '@/components/RoboStreamViewer';
 import { RoboCodeViewer } from '@/components/RoboCodeViewer';
@@ -71,13 +71,28 @@ export default function AutomacaoCobMais() {
   const [videoProgressLabel, setVideoProgressLabel] = useState('');
 
   // Chat with AI state
-  type ChatMsg = { role: 'user' | 'assistant'; content: string };
+  type ChatMsg = { role: 'user' | 'assistant'; content: string | any[]; image?: string };
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [chatImage, setChatImage] = useState<string | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef<HTMLDivElement>(null);
   const chatAbortRef = useRef<AbortController | null>(null);
+  const chatImageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleChatImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Imagem muito grande. Máximo: 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setChatImage(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -373,11 +388,24 @@ export default function AutomacaoCobMais() {
   // Chat with AI about knowledge
   const handleChatSend = async () => {
     const text = chatInput.trim();
-    if (!text || isChatLoading) return;
+    if (!text && !chatImage) return;
+    if (isChatLoading) return;
 
-    const userMsg: ChatMsg = { role: 'user', content: text };
+    // Build multimodal content if image attached
+    let userContent: string | any[];
+    if (chatImage) {
+      userContent = [
+        { type: 'text', text },
+        { type: 'image_url', image_url: { url: chatImage } },
+      ];
+    } else {
+      userContent = text;
+    }
+
+    const userMsg: ChatMsg = { role: 'user', content: userContent, image: chatImage || undefined };
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput('');
+    setChatImage(null);
     setIsChatLoading(true);
 
     // Auto-scroll to streaming section
@@ -385,7 +413,7 @@ export default function AutomacaoCobMais() {
       streamingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
 
-    const allMessages = [...chatMessages, userMsg];
+    const allMessages = [...chatMessages, { role: 'user' as const, content: userContent }];
     let assistantSoFar = '';
 
     // Show "executing automation" toast if response takes more than 5s
@@ -900,7 +928,11 @@ export default function AutomacaoCobMais() {
                       </div>
                     </div>
                   )}
-                  {chatMessages.map((msg, i) => (
+                  {chatMessages.map((msg, i) => {
+                    const textContent = typeof msg.content === 'string' 
+                      ? msg.content 
+                      : (msg.content as any[])?.find((c: any) => c.type === 'text')?.text || '';
+                    return (
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
                         msg.role === 'user'
@@ -909,9 +941,8 @@ export default function AutomacaoCobMais() {
                       }`}>
                         {msg.role === 'assistant' ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none">
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                            {/* Check if AI suggests sending video */}
-                            {msg.content.includes('📹') && (
+                            <ReactMarkdown>{textContent}</ReactMarkdown>
+                            {textContent.includes('📹') && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -924,11 +955,17 @@ export default function AutomacaoCobMais() {
                             )}
                           </div>
                         ) : (
-                          <p>{msg.content}</p>
+                          <div>
+                            {msg.image && (
+                              <img src={msg.image} alt="Screenshot enviado" className="rounded-md max-h-48 mb-2" />
+                            )}
+                            <p>{textContent}</p>
+                          </div>
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {isChatLoading && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
                     <div className="flex justify-start">
                       <div className="bg-card border rounded-lg px-4 py-2">
@@ -940,21 +977,53 @@ export default function AutomacaoCobMais() {
                 </div>
               </ScrollArea>
 
+              {/* Image preview */}
+              {chatImage && (
+                <div className="relative inline-block">
+                  <img src={chatImage} alt="Preview" className="rounded-md max-h-32 border" />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                    onClick={() => setChatImage(null)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+
               {/* Input area */}
+              <input
+                type="file"
+                accept="image/*"
+                ref={chatImageInputRef}
+                className="hidden"
+                onChange={handleChatImageSelect}
+              />
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => chatImageInputRef.current?.click()}
+                  disabled={isChatLoading}
+                  title="Anexar imagem/screenshot"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
                 <Input
-                  placeholder="Pergunte à IA sobre o que ela aprendeu..."
+                  placeholder="Pergunte à IA ou envie um print mostrando onde clicar..."
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
                   disabled={isChatLoading}
+                  className="flex-1"
                 />
                 {isChatLoading ? (
                   <Button variant="destructive" onClick={() => chatAbortRef.current?.abort()} title="Parar">
                     <Square className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button onClick={handleChatSend} disabled={!chatInput.trim()}>
+                  <Button onClick={handleChatSend} disabled={!chatInput.trim() && !chatImage}>
                     <Send className="h-4 w-4" />
                   </Button>
                 )}
