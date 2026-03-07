@@ -277,7 +277,7 @@ async function handleRecordStart(adminClient: any, body: any, userId: string) {
     .limit(1)
     .maybeSingle()
 
-  if (!config?.server_url) return { error: 'URL do servidor não configurada', status: 400 }
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
 
   const { data: sessao, error } = await adminClient
     .from('cobmais_sessoes_gravadas')
