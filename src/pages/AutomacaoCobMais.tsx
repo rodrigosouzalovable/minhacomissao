@@ -365,6 +365,11 @@ export default function AutomacaoCobMais() {
     setChatInput('');
     setIsChatLoading(true);
 
+    // Auto-scroll to streaming section
+    setTimeout(() => {
+      streamingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+
     const allMessages = [...chatMessages, userMsg];
     let assistantSoFar = '';
 
