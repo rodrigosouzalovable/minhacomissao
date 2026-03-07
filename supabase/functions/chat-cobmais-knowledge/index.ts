@@ -77,7 +77,16 @@ ${knowledgeContext}
 9. Quando o usuário PEDIR para executar algo (emitir boleto, gerar boleto, buscar cliente, fazer algo no CobMais), você DEVE usar a tool "executar_automacao" passando o objetivo em linguagem natural
 10. NÃO apenas descreva os passos — EXECUTE chamando a tool
 11. Exemplos de quando executar: "emita o boleto", "gere um boleto", "busque o cliente", "faça login", "execute o fluxo X"
-12. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"`;
+12. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
+
+## CRÍTICO - Quando a automação FALHAR:
+13. Se a automação retornar erro ou não conseguir completar, **NÃO apenas reporte o erro**. Você DEVE:
+    - Explicar exatamente em qual passo falhou e o que aconteceu
+    - **PERGUNTAR ao usuário** como ele faria para resolver (ex: "Não consegui encontrar o botão X na tela. Pode me explicar onde ele fica ou qual o caminho alternativo?")
+    - Sugerir que o usuário envie um vídeo de treinamento mostrando o passo que faltou: "📹 **Se preferir, envie um vídeo mostrando como fazer [o passo que falhou] para que eu aprenda**"
+    - Oferecer tentar novamente se o usuário der instruções: "Se me explicar como fazer, posso tentar novamente!"
+14. Seja específico nas perguntas — use os detalhes do erro para formular perguntas direcionadas
+15. Se houve passos que foram executados com sucesso antes da falha, liste-os para dar contexto ao usuário`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
