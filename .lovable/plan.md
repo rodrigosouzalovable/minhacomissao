@@ -1,31 +1,28 @@
 
 
-## Diagnóstico
+## Correção: "Selecionar Todos" + Tratamento de Erro de Email
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+### Problema 1: "Selecionar Todos" nao clica
+Dos screenshots, o checkbox `#ckbTodosBoletos` esta dentro de um wrapper `span.nice-checkbox`. Playwright pode nao conseguir clicar no input diretamente. A solucao e clicar na **label** `label[for="ckbTodosBoletos"]` que e o elemento clicavel visivel.
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+### Problema 2: Erro de email acontece DEPOIS do Imprimir
+O erro "Email do cliente nao pode ficar em branco" aparece como um **toast amarelo** (`div.toast-message`) APOS clicar em Imprimir no modal de boleto. O codigo atual tenta tratar email no passo de salvar acordo, mas o erro real e no passo de emissao de boleto.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+### Fluxo de recuperacao de email (dos screenshots):
+1. Detectar toast de erro apos clicar Imprimir
+2. Fechar modal de boleto (botao "Cancelar" / `#btnFecharBoleto`)
+3. Clicar na aba "E-mail" (`a[href="#tabEmail"]`)
+4. Clicar em "+ Novo" (`a#btnNovoItem`)
+5. Preencher `input#txtEmail` com "email@email.com"
+6. Clicar em "Salvar" (`button#btnSalvarEmail`)
+7. Aguardar e refazer o fluxo de emissao (dropdown amarelo > Emitir Boleto > Selecionar Todos > Imprimir)
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+### Alteracoes
 
-## Correção
+**`server.js`** - Passo 12:
+- Mudar seletor de "Selecionar Todos" para `label[for="ckbTodosBoletos"]` como primeira opcao
+- Apos clicar em Imprimir, verificar se apareceu toast de erro de email
+- Se sim, executar sub-fluxo: fechar modal > aba Email > Novo > preencher > salvar > refazer emissao
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
-
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
-
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+**`src/components/RoboCodeViewer.tsx`** - Atualizar codigo exibido na aba "Codigo do Robo"
 
