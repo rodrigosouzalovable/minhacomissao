@@ -931,9 +931,15 @@ export default function AutomacaoCobMais() {
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
                   disabled={isChatLoading}
                 />
-                <Button onClick={handleChatSend} disabled={!chatInput.trim() || isChatLoading}>
-                  {isChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+                {isChatLoading ? (
+                  <Button variant="destructive" onClick={() => chatAbortRef.current?.abort()} title="Parar">
+                    <Square className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button onClick={handleChatSend} disabled={!chatInput.trim()}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
