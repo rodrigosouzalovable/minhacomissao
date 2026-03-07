@@ -374,6 +374,11 @@ export default function AutomacaoCobMais() {
     const allMessages = [...chatMessages, userMsg];
     let assistantSoFar = '';
 
+    // Show "executing automation" toast if response takes more than 5s
+    const slowTimer = setTimeout(() => {
+      toast.info('⚙️ Automação em execução no robô... Aguarde, isso pode levar alguns minutos.', { duration: 30000, id: 'automation-running' });
+    }, 5000);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Não autenticado');
