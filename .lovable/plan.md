@@ -1,31 +1,26 @@
 
 
+# Streaming "Desconectado" - Problema do ngrok
+
 ## Diagnóstico
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+O problema **nao e no server.js**. O robô está online (a verificação de status funciona via Edge Function). O problema é que o **RoboStreamViewer** faz chamadas diretas do navegador para a URL do ngrok, e o ngrok free exibe uma página de aviso (interstitial) que bloqueia a resposta JSON.
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+Nos logs de rede, todas as chamadas GET `/screenshot` retornam HTML do ngrok (ERR_NGROK_6024) em vez do JSON esperado com a imagem.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Solução
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+Adicionar o header `ngrok-skip-browser-warning: true` nas chamadas fetch do `RoboStreamViewer.tsx`. Esse header faz o ngrok pular a página de aviso e entregar a resposta real do servidor.
 
-## Correção
+## Arquivo
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+| Arquivo | Mudanca |
+|---|---|
+| `src/components/RoboStreamViewer.tsx` | Adicionar header `ngrok-skip-browser-warning: true` no fetch de `/screenshot` |
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+### Detalhe tecnico
+Na funcao `fetchScreenshot`, alterar o fetch para incluir:
+```ts
+headers: { 'ngrok-skip-browser-warning': 'true' }
 ```
-
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
