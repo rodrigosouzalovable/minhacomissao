@@ -200,6 +200,116 @@ export type Database = {
           },
         ]
       }
+      automacao_comandos: {
+        Row: {
+          acao: string
+          criado_em: string
+          erro: string | null
+          executado_em: string | null
+          id: string
+          parametros: Json
+          resultado: Json | null
+          status: string
+          tempo_execucao_ms: number | null
+          user_id: string
+        }
+        Insert: {
+          acao: string
+          criado_em?: string
+          erro?: string | null
+          executado_em?: string | null
+          id?: string
+          parametros?: Json
+          resultado?: Json | null
+          status?: string
+          tempo_execucao_ms?: number | null
+          user_id: string
+        }
+        Update: {
+          acao?: string
+          criado_em?: string
+          erro?: string | null
+          executado_em?: string | null
+          id?: string
+          parametros?: Json
+          resultado?: Json | null
+          status?: string
+          tempo_execucao_ms?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      automacao_config: {
+        Row: {
+          atualizado_em: string
+          cobmais_email: string
+          cobmais_senha: string
+          criado_em: string
+          id: string
+          server_url: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          cobmais_email?: string
+          cobmais_senha?: string
+          criado_em?: string
+          id?: string
+          server_url?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          cobmais_email?: string
+          cobmais_senha?: string
+          criado_em?: string
+          id?: string
+          server_url?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      automacao_logs: {
+        Row: {
+          comando_id: string | null
+          criado_em: string
+          detalhes: Json | null
+          id: string
+          mensagem: string
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          comando_id?: string | null
+          criado_em?: string
+          detalhes?: Json | null
+          id?: string
+          mensagem?: string
+          tipo?: string
+          user_id: string
+        }
+        Update: {
+          comando_id?: string | null
+          criado_em?: string
+          detalhes?: Json | null
+          id?: string
+          mensagem?: string
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automacao_logs_comando_id_fkey"
+            columns: ["comando_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_comandos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chatbot_conversas: {
         Row: {
           atualizado_em: string
