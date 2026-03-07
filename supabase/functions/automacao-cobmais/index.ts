@@ -121,7 +121,7 @@ async function handleStatus(adminClient: any) {
 
 async function handleExecute(adminClient: any, body: any, userId: string) {
   const { acao, parametros } = body
-  if (!acao) return { error: 'Campo acao é obrigatório', status: 400 }
+  if (!acao) return { error: 'Campo acao é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
