@@ -1,31 +1,32 @@
 
 
-## Diagnóstico
+# IA pergunta ao usuário quando não consegue executar
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problema
+Quando a automação falha ou encontra algo inesperado, a IA apenas reporta o erro. O usuário quer que ela **pergunte como fazer** para aprender e tentar de novo.
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+## Solução
+Ajustar o prompt do sistema e o resultado da tool para instruir a IA a fazer perguntas específicas quando a automação falha, em vez de apenas reportar o erro.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Mudanças
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/chat-cobmais-knowledge/index.ts` | Atualizar system prompt + enriquecer mensagem de erro da tool |
 
-## Correção
+### Detalhes
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+1. **System prompt** — adicionar regras:
+   - Quando a automação falhar ou retornar erro, **pergunte ao usuário** como proceder (ex: "Não consegui encontrar o botão X. Pode me explicar onde ele fica ou como devo fazer?")
+   - Sugira enviar um vídeo de treinamento se o fluxo não estiver nos conhecimentos
+   - Ofereça tentar novamente com as instruções do usuário
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+2. **Mensagem de erro da tool** — quando `automationResult.success === false`, incluir no `toolResultContent` uma instrução como:
+   ```
+   "A automação falhou: [erro]. IMPORTANTE: Pergunte ao usuário como ele faria para resolver isso. 
+   Seja específico sobre o que deu errado e peça orientação clara. 
+   Se possível, sugira que ele envie um vídeo mostrando o passo que faltou."
+   ```
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
-
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+3. **Incluir detalhes do histórico** — se o resultado da automação tiver `history` (passos executados), incluir na mensagem para a IA saber exatamente onde parou e perguntar sobre o passo específico que falhou.
 
