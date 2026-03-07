@@ -702,6 +702,258 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   };
 }
 
+// ===== ENDPOINT: AGENTE INTELIGENTE =====
+app.post('/automacao/agent', async (req, res) => {
+  const { objective, parametros, cobmais_email, cobmais_senha, supabase_url } = req.body;
+
+  if (!objective) {
+    return res.json({ success: false, error: 'Campo objective é obrigatório' });
+  }
+
+  const MAX_ITERATIONS = 30;
+  const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+  const startTime = Date.now();
+  const history = [];
+  let boletoUrl = null;
+
+  try {
+    const pg = await initBrowser();
+    updateStatus('agent', \`Agente iniciado: \${objective}\`);
+
+    // Setup PDF/boleto URL interceptor
+    pg.on('response', async (response) => {
+      const url = response.url();
+      if (url.includes('gerapdf') || url.includes('GerarPDF') || url.includes('boleto') || url.includes('.pdf')) {
+        boletoUrl = url;
+        console.log(\`   📄 [Agent] Boleto URL capturada: \${url}\`);
+      }
+    });
+
+    const context = pg.context();
+    context.on('page', async (newPage) => {
+      const newUrl = newPage.url();
+      if (newUrl.includes('gerapdf') || newUrl.includes('.pdf') || newUrl.includes('boleto')) {
+        boletoUrl = newUrl;
+      }
+      try {
+        await newPage.waitForLoadState('networkidle', { timeout: 10000 });
+        const finalUrl = newPage.url();
+        if (finalUrl.includes('gerapdf') || finalUrl.includes('.pdf')) {
+          boletoUrl = finalUrl;
+        }
+      } catch (e) {}
+    });
+
+    // Inject credentials into objective context
+    let fullObjective = objective;
+    if (cobmais_email && cobmais_senha) {
+      fullObjective += \`\\n\\nCredenciais CobMais: usuário="\${cobmais_email}", senha="\${cobmais_senha}"\`;
+    }
+    if (parametros) {
+      fullObjective += \`\\nParâmetros: \${JSON.stringify(parametros)}\`;
+    }
+
+    const analyzeUrl = \`\${supabase_url || process.env.SUPABASE_URL || 'https://cymdrkeukockakfzjeen.supabase.co'}/functions/v1/analyze-cobmais-screen\`;
+
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+      // Check timeout
+      if (Date.now() - startTime > TIMEOUT_MS) {
+        updateStatus('erro', 'Timeout: agente excedeu 5 minutos');
+        return res.json({
+          success: false,
+          error: 'Timeout: agente excedeu limite de 5 minutos',
+          history,
+          iterations: i,
+          tempo_ms: Date.now() - startTime,
+        });
+      }
+
+      updateStatus('agent', \`Iteração \${i + 1}/\${MAX_ITERATIONS}: analisando tela...\`);
+
+      // 1. Capture screenshot
+      let screenshot;
+      try {
+        const screenshotBuffer = await pg.screenshot({ type: 'jpeg', quality: 40 });
+        screenshot = \`data:image/jpeg;base64,\${screenshotBuffer.toString('base64')}\`;
+      } catch (e) {
+        console.log('❌ Erro ao capturar screenshot:', e.message);
+        history.push({ action: 'screenshot_error', description: 'Falha ao capturar tela', result: e.message });
+        continue;
+      }
+
+      const currentUrl = pg.url();
+
+      // 2. Call AI
+      let aiAction;
+      try {
+        const aiRes = await fetch(analyzeUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            screenshot,
+            objective: fullObjective,
+            history,
+            current_url: currentUrl,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const aiData = await aiRes.json();
+        if (!aiData.success || !aiData.action) {
+          console.log('⚠️ IA não retornou ação válida:', JSON.stringify(aiData));
+          history.push({ action: 'ai_error', description: 'IA não retornou ação válida', result: aiData.error || 'unknown' });
+          await delay(2000);
+          continue;
+        }
+        aiAction = aiData.action;
+      } catch (e) {
+        console.log('❌ Erro ao chamar IA:', e.message);
+        history.push({ action: 'ai_call_error', description: 'Falha na chamada da IA', result: e.message });
+        await delay(3000);
+        continue;
+      }
+
+      console.log(\`🤖 [Agent \${i + 1}] \${aiAction.action}: \${aiAction.description} (conf: \${aiAction.confidence})\`);
+
+      // 3. Check confidence threshold
+      if (aiAction.confidence < 0.7 && aiAction.action !== 'done' && aiAction.action !== 'error') {
+        console.log(\`⚠️ Confiança baixa (\${aiAction.confidence}), parando para revisão humana\`);
+        history.push({
+          action: aiAction.action,
+          description: aiAction.description,
+          result: \`Parado: confiança baixa (\${aiAction.confidence})\`,
+        });
+        updateStatus('paused', \`Confiança baixa (\${aiAction.confidence}) - revisão necessária\`);
+        return res.json({
+          success: false,
+          error: \`Agente parou: confiança baixa (\${aiAction.confidence}). Ação sugerida: \${aiAction.description}\`,
+          suggested_action: aiAction,
+          history,
+          iterations: i + 1,
+          tempo_ms: Date.now() - startTime,
+        });
+      }
+
+      // 4. Check if done
+      if (aiAction.done || aiAction.action === 'done') {
+        updateStatus('sucesso', \`Agente concluiu: \${aiAction.description}\`);
+        const finalBoletoUrl = aiAction.result_data?.boleto_url || boletoUrl;
+        history.push({ action: 'done', description: aiAction.description, result: 'concluido' });
+        return res.json({
+          success: true,
+          boleto_url: finalBoletoUrl || null,
+          mensagem: aiAction.description,
+          result_data: aiAction.result_data || {},
+          history,
+          iterations: i + 1,
+          tempo_ms: Date.now() - startTime,
+        });
+      }
+
+      // 5. Check if error
+      if (aiAction.action === 'error') {
+        updateStatus('erro', aiAction.error_message || aiAction.description);
+        history.push({ action: 'error', description: aiAction.description, result: aiAction.error_message });
+        return res.json({
+          success: false,
+          error: aiAction.error_message || aiAction.description,
+          history,
+          iterations: i + 1,
+          tempo_ms: Date.now() - startTime,
+        });
+      }
+
+      // 6. Execute action
+      let actionResult = 'ok';
+      try {
+        switch (aiAction.action) {
+          case 'click': {
+            const el = await pg.\$(aiAction.selector);
+            if (el) {
+              await el.scrollIntoViewIfNeeded();
+              await delay(300);
+              await el.click();
+            } else {
+              const clicked = await pg.evaluate((sel) => {
+                const e = document.querySelector(sel);
+                if (e) { e.scrollIntoView({ block: 'center' }); e.click(); return true; }
+                return false;
+              }, aiAction.selector);
+              if (!clicked) actionResult = \`Elemento não encontrado: \${aiAction.selector}\`;
+            }
+            await delay(2000);
+            break;
+          }
+          case 'fill': {
+            await pg.waitForSelector(aiAction.selector, { timeout: 5000 });
+            await pg.click(aiAction.selector, { clickCount: 3 });
+            await pg.fill(aiAction.selector, '');
+            await pg.type(aiAction.selector, aiAction.value || '', { delay: 50 });
+            await delay(500);
+            break;
+          }
+          case 'scroll': {
+            const dir = (aiAction.value || 'down').toLowerCase();
+            await pg.evaluate((direction) => {
+              window.scrollBy(0, direction === 'up' ? -400 : 400);
+            }, dir);
+            await delay(1000);
+            break;
+          }
+          case 'wait': {
+            const waitMs = parseInt(aiAction.value || '3000', 10);
+            await delay(Math.min(waitMs, 10000));
+            break;
+          }
+          case 'navigate': {
+            await pg.goto(aiAction.value || '', { waitUntil: 'networkidle', timeout: 15000 }).catch(() => {});
+            await delay(2000);
+            break;
+          }
+          case 'select': {
+            await pg.selectOption(aiAction.selector, aiAction.value || '');
+            await delay(1000);
+            break;
+          }
+          default:
+            actionResult = \`Ação desconhecida: \${aiAction.action}\`;
+        }
+      } catch (e) {
+        actionResult = \`Erro: \${e.message}\`;
+        console.log(\`❌ Erro ao executar \${aiAction.action}: \${e.message}\`);
+      }
+
+      history.push({
+        action: aiAction.action,
+        selector: aiAction.selector,
+        value: aiAction.value,
+        description: aiAction.description,
+        confidence: aiAction.confidence,
+        result: actionResult,
+      });
+
+      updateStatus('agent', \`Iteração \${i + 1}: \${aiAction.description} → \${actionResult}\`);
+    }
+
+    // Max iterations reached
+    updateStatus('erro', 'Agente atingiu limite de iterações');
+    return res.json({
+      success: false,
+      error: 'Agente atingiu o limite máximo de 30 iterações',
+      history,
+      iterations: MAX_ITERATIONS,
+      tempo_ms: Date.now() - startTime,
+    });
+  } catch (err) {
+    console.error('❌ Erro no agente:', err.message);
+    return res.json({
+      success: false,
+      error: err.message,
+      history,
+      tempo_ms: Date.now() - startTime,
+    });
+  }
+});
+
 // ===== INICIAR SERVIDOR =====
 app.listen(PORT, async () => {
   console.log(\`\\n🤖 Servidor Playwright rodando na porta \${PORT}\`);
@@ -720,7 +972,7 @@ process.on('SIGINT', async () => {
   console.log('\\n🛑 Fechando navegador...');
   if (browser) await browser.close();
   process.exit();
-});`;
+});\`;
 
 export function RoboCodeViewer() {
   const [copied, setCopied] = useState(false);
