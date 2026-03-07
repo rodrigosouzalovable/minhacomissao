@@ -846,7 +846,7 @@ app.post('/automacao/agent', async (req, res) => {
         });
       }
 
-      updateStatus('agent', `Iteração ${i + 1}/${MAX_ITERATIONS}: analisando tela...`);
+      updateStatus('agent', `Iteração ${i + 1}: analisando tela...`);
 
       // 1. Capture screenshot
       let screenshot;
