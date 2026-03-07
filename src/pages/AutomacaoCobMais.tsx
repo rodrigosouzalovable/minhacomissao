@@ -457,6 +457,8 @@ export default function AutomacaoCobMais() {
     } catch (err: any) {
       toast.error(err.message || 'Erro ao conversar com a IA');
     } finally {
+      clearTimeout(slowTimer);
+      toast.dismiss('automation-running');
       setIsChatLoading(false);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
