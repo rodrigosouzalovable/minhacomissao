@@ -130,7 +130,7 @@ async function handleExecute(adminClient: any, body: any, userId: string) {
     .limit(1)
     .maybeSingle()
 
-  if (!config?.server_url) return { error: 'URL do servidor não configurada', status: 400 }
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
 
   const timeoutMs = acao === 'gerar_boleto' ? 180000 : 120000
   const effectiveUserId = userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId
