@@ -202,7 +202,7 @@ export default function AutomacaoCobMais() {
     }
   };
 
-
+  const handleExecute = async () => {
     if (!selectedAcao) return toast.error('Selecione uma ação');
     setExecuting(true);
     setLastResult(null);
