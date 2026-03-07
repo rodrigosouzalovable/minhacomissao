@@ -184,6 +184,24 @@ Deno.serve(async (req) => {
           const tempo = Date.now() - startTime
 
           if (res.ok && resultado.success !== false) {
+            // Validate gerar_boleto must return boleto_url
+            if (acao === 'gerar_boleto' && !resultado.boleto_url) {
+              const erro = 'Robô retornou sucesso mas sem boleto_url — fluxo incompleto'
+              console.error(`[gerar_boleto] FALHA: resultado sem boleto_url. Resultado completo:`, JSON.stringify(resultado))
+
+              await adminClient
+                .from('automacao_comandos')
+                .update({ status: 'erro', erro, resultado, tempo_execucao_ms: tempo, executado_em: new Date().toISOString() })
+                .eq('id', comandoId)
+
+              await adminClient.from('automacao_logs').insert({
+                comando_id: comandoId, user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId, tipo: 'erro',
+                mensagem: erro, detalhes: resultado
+              })
+
+              return new Response(JSON.stringify({ success: false, error: erro, resultado, tempo_ms: tempo }), { headers: corsHeaders })
+            }
+
             await adminClient
               .from('automacao_comandos')
               .update({ status: 'concluido', resultado, tempo_execucao_ms: tempo, executado_em: new Date().toISOString() })
