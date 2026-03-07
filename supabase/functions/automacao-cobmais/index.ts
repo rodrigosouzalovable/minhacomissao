@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
         const { data: config } = await adminClient
           .from('automacao_config')
-          .select('server_url')
+          .select('server_url, cobmais_email, cobmais_senha')
           .order('criado_em', { ascending: false })
           .limit(1)
           .maybeSingle()
