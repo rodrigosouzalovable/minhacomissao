@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.automacao-cobmais]
 verify_jwt = false
+
+[functions.analyze-cobmais-screen]
+verify_jwt = false

@@ -245,6 +245,96 @@ Deno.serve(async (req) => {
         }
       }
 
+      case 'agent_execute': {
+        const { objetivo, parametros: agentParams } = body
+        if (!objetivo) {
+          return new Response(JSON.stringify({ error: 'Campo objetivo é obrigatório' }), { status: 400, headers: corsHeaders })
+        }
+
+        const { data: config } = await adminClient
+          .from('automacao_config')
+          .select('server_url, cobmais_email, cobmais_senha')
+          .order('criado_em', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (!config?.server_url) {
+          return new Response(JSON.stringify({ error: 'URL do servidor não configurada' }), { status: 400, headers: corsHeaders })
+        }
+
+        const { data: comando } = await adminClient
+          .from('automacao_comandos')
+          .insert({
+            user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId,
+            acao: `agent: ${objetivo.substring(0, 50)}`,
+            parametros: agentParams || {},
+            status: 'executando',
+          })
+          .select('id')
+          .single()
+
+        const comandoId = comando?.id
+        const startTime = Date.now()
+
+        await adminClient.from('automacao_logs').insert({
+          comando_id: comandoId,
+          user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId,
+          tipo: 'info',
+          mensagem: `Agente iniciado: ${objetivo}`,
+          detalhes: agentParams || {},
+        })
+
+        try {
+          const res = await fetch(`${config.server_url}/automacao/agent`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+              'User-Agent': 'MeusAcordos/1.0',
+            },
+            body: JSON.stringify({
+              objective: objetivo,
+              parametros: agentParams || {},
+              cobmais_email: config.cobmais_email,
+              cobmais_senha: config.cobmais_senha,
+              supabase_url: Deno.env.get('SUPABASE_URL'),
+            }),
+            signal: AbortSignal.timeout(360000), // 6 min timeout
+          })
+
+          const resultado = await res.json()
+          const tempo = Date.now() - startTime
+
+          const status = resultado.success ? 'concluido' : 'erro'
+          const erro = resultado.success ? null : (resultado.error || 'Erro desconhecido')
+
+          await adminClient
+            .from('automacao_comandos')
+            .update({ status, erro, resultado, tempo_execucao_ms: tempo, executado_em: new Date().toISOString() })
+            .eq('id', comandoId)
+
+          await adminClient.from('automacao_logs').insert({
+            comando_id: comandoId,
+            user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId,
+            tipo: resultado.success ? 'sucesso' : 'erro',
+            mensagem: `Agente ${status}: ${resultado.mensagem || resultado.error || ''} (${resultado.iterations || 0} iterações)`,
+            detalhes: { history: resultado.history, iterations: resultado.iterations },
+          })
+
+          return new Response(JSON.stringify({ success: resultado.success, resultado, tempo_ms: tempo }), { headers: corsHeaders })
+        } catch (err) {
+          const tempo = Date.now() - startTime
+          const erro = err instanceof Error ? err.message : 'Erro de conexão'
+
+          await adminClient
+            .from('automacao_comandos')
+            .update({ status: 'erro', erro, tempo_execucao_ms: tempo, executado_em: new Date().toISOString() })
+            .eq('id', comandoId)
+
+          return new Response(JSON.stringify({ success: false, error: erro, tempo_ms: tempo }), { headers: corsHeaders })
+        }
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Ação desconhecida: ${action}` }), { status: 400, headers: corsHeaders })
     }
