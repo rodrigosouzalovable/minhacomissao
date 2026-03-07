@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 const ACOES_DISPONIVEIS = [
+  { value: 'gerar_boleto', label: '🎫 Gerar Boleto CobMais', params: ['cpf', 'valor_final', 'tipo_pagamento', 'parcelas'] },
   { value: 'buscar_cliente', label: 'Buscar Cliente', params: ['cpf'] },
   { value: 'criar_cobranca', label: 'Criar Cobrança', params: ['cpf', 'valor'] },
   { value: 'registrar_acordo', label: 'Registrar Acordo', params: ['cpf', 'valor', 'parcelas'] },
