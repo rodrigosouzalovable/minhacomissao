@@ -106,7 +106,18 @@ ${knowledgeContext}
 22. Identifique botões, campos, links, menus e elementos visuais na screenshot
 23. Use essa informação visual para decidir exatamente onde clicar ou o que preencher
 24. Descreva o que você vê na imagem e confirme com o usuário antes de executar
-25. Se o usuário apontar "clique aqui" ou "neste botão", identifique o elemento na imagem e use no objetivo da automação`;
+25. Se o usuário apontar "clique aqui" ou "neste botão", identifique o elemento na imagem e use no objetivo da automação
+
+## MODO DE EXECUÇÃO DIRETA (PRIORIDADE MÁXIMA):
+26. Quando o usuário enviar um screenshot + instrução clara ("clique neste botão", "preencha este campo"), use a tool "executar_acao_direta" em vez de "executar_automacao"
+27. A tool "executar_acao_direta" executa INSTANTANEAMENTE no navegador, sem passar por análise de visão
+28. Use seletores CSS quando possível (id, class, tag). Se não souber o seletor exato, use o TEXTO visível do elemento como selector (ex: "Entrar", "Pesquisar", "NÃO, OBRIGADO")
+29. Ações suportadas: click, fill, keypress, navigate, scroll, select
+30. SEMPRE prefira executar_acao_direta para ações simples. Use executar_automacao APENAS para fluxos complexos multi-passo onde você não sabe os seletores
+31. Para keypress: use value com o nome da tecla (F5, Enter, Escape, Tab, Backspace)
+32. Para navigate: use url com a URL completa
+33. Para fill: use selector + value
+34. Para click: use selector (CSS selector OU texto visível do botão)`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -116,20 +127,51 @@ ${knowledgeContext}
         type: "function",
         function: {
           name: "executar_automacao",
-          description: "Executa uma ação de automação no robô CobMais. Use quando o usuário pedir para executar, emitir, gerar, buscar ou fazer qualquer ação no sistema CobMais.",
+          description: "Executa um fluxo COMPLEXO multi-passo no robô CobMais usando IA de visão. Use APENAS quando não souber os seletores ou para fluxos longos. Para ações simples, prefira executar_acao_direta.",
           parameters: {
             type: "object",
             properties: {
               objetivo: {
                 type: "string",
-                description: "Descrição em linguagem natural do que deve ser feito, ex: 'Emitir boleto à vista do CPF 059.919.151-13 por R$ 300,00 para pagamento em 10/03/2026'"
+                description: "Descrição em linguagem natural do que deve ser feito"
               },
               max_iterations: {
                 type: "number",
-                description: "Número máximo de ações que o robô pode executar. Use 1 para ações simples (um clique, um preenchimento). Use 3-5 para fluxos multi-passo como 'acessar link E fazer login' ou 'pesquisar CPF e abrir ficha'. Padrão: 1"
+                description: "Número máximo de ações. Use 1-5. Padrão: 1"
               }
             },
             required: ["objetivo"],
+            additionalProperties: false
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "executar_acao_direta",
+          description: "Executa UMA ação INSTANTÂNEA no navegador sem análise de visão. Muito mais rápido (~1s vs ~10s). Use para cliques, preenchimentos, teclas e navegação quando souber o que fazer.",
+          parameters: {
+            type: "object",
+            properties: {
+              action: {
+                type: "string",
+                enum: ["click", "fill", "keypress", "navigate", "scroll", "select"],
+                description: "Tipo da ação a executar"
+              },
+              selector: {
+                type: "string",
+                description: "Seletor CSS do elemento (ex: '#btnPesquisar', '.btn-success') OU texto visível do botão (ex: 'Entrar', 'NÃO, OBRIGADO'). Para keypress, nome da tecla."
+              },
+              value: {
+                type: "string",
+                description: "Valor para fill (texto a digitar), keypress (nome da tecla: F5, Enter, Escape), ou select (opção a selecionar)"
+              },
+              url: {
+                type: "string",
+                description: "URL para navigate (ex: 'https://app.cobmais.com.br/cob/pesquisa')"
+              }
+            },
+            required: ["action"],
             additionalProperties: false
           }
         }
@@ -183,94 +225,98 @@ ${knowledgeContext}
     ];
 
     if (toolCalls && toolCalls.length > 0) {
-      // AI wants to call the tool
       const toolCall = toolCalls[0];
       const args = JSON.parse(toolCall.function.arguments || "{}");
-      const objetivo = args.objetivo;
-      const maxIterations = args.max_iterations || 1;
+      const toolName = toolCall.function.name;
 
-      console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}, max_iterations: ${maxIterations}`);
-
-      // Fire-and-forget: dispatch automation WITHOUT awaiting
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-      fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          action: "agent_execute",
-          objetivo,
-          parametros: {},
-          max_iterations: Math.min(maxIterations, 10),
-          _internal: true,
-        }),
-      }).then(res => res.text()).then(t => {
-        console.log("[chat-cobmais-knowledge] Automation dispatched, response:", t.substring(0, 200));
-      }).catch(err => {
-        console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
-      });
+      let toolResultContent = "";
 
-      // Save user instruction as learned knowledge (fire-and-forget)
-      (async () => {
+      if (toolName === "executar_acao_direta") {
+        // DIRECT ACTION: execute synchronously for instant feedback
+        const { action: directAction, selector, value, url: directUrl } = args;
+        console.log(`[chat-cobmais-knowledge] Direct action: ${directAction}, selector: ${selector}, value: ${value}`);
+
         try {
-          // Get or create the "chat_aprendido" session
-          let { data: session } = await adminClient.from("cobmais_sessoes_gravadas")
-            .select("id, total_passos")
-            .eq("nome", "chat_aprendido")
-            .single();
-
-          if (!session) {
-            const { data: newSession } = await adminClient.from("cobmais_sessoes_gravadas")
-              .insert({ nome: "chat_aprendido", status: "finalizado", criado_por: userId, total_passos: 0, descricao: "Conhecimento aprendido via chat" })
-              .select("id, total_passos")
-              .single();
-            session = newSession;
-          }
-
-          if (session) {
-            const nextStep = (session.total_passos || 0) + 1;
-            // Detect action type from objetivo
-            const objLower = objetivo.toLowerCase();
-            let acao = "navigate";
-            if (objLower.includes("f5") || objLower.includes("enter") || objLower.includes("escape") || objLower.includes("tab") || objLower.includes("tecla") || objLower.includes("pressio")) acao = "keypress";
-            else if (objLower.includes("clic") || objLower.includes("botão") || objLower.includes("botao")) acao = "click";
-            else if (objLower.includes("preench") || objLower.includes("digit") || objLower.includes("escrev")) acao = "fill";
-            else if (objLower.includes("scroll") || objLower.includes("rolar")) acao = "scroll";
-
-            await adminClient.from("cobmais_conhecimento").insert({
-              sessao_id: session.id,
-              nome_fluxo: "chat_aprendido",
-              passo_numero: nextStep,
-              acao,
-              descricao_tela: objetivo,
-            });
-            await adminClient.from("cobmais_sessoes_gravadas").update({ total_passos: nextStep }).eq("id", session.id);
-            console.log(`[chat-cobmais-knowledge] Saved knowledge: step ${nextStep}, action: ${acao}`);
-          }
+          const directRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+            body: JSON.stringify({
+              action: "acao_direta",
+              direct_action: directAction,
+              direct_selector: selector,
+              direct_value: value,
+              direct_url: directUrl,
+              _internal: true,
+            }),
+          });
+          const directResult = await directRes.json();
+          const tempo = directResult.tempo_ms || 0;
+          toolResultContent = directResult.success
+            ? `Ação direta executada com sucesso em ${tempo}ms! Ação: ${directAction}${selector ? ` no elemento "${selector}"` : ""}${value ? ` com valor "${value}"` : ""}. Confirme ao usuário e pergunte o próximo passo.`
+            : `Erro na ação direta: ${directResult.error || "desconhecido"}. Informe o usuário.`;
         } catch (err) {
-          console.error("[chat-cobmais-knowledge] Error saving knowledge:", err);
+          toolResultContent = `Erro de conexão ao executar ação direta: ${err instanceof Error ? err.message : "desconhecido"}`;
         }
-      })();
+      } else {
+        // AGENT MODE: fire-and-forget for complex flows
+        const objetivo = args.objetivo;
+        const maxIterations = args.max_iterations || 1;
+        console.log(`[chat-cobmais-knowledge] Agent: ${objetivo}, max_iterations: ${maxIterations}`);
 
-      const toolResultContent = `Automação disparada com sucesso! O robô executou 1 ação para o objetivo: "${objetivo}". Confirme ao usuário que a ação foi executada e pergunte qual o próximo passo.`;
+        fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            action: "agent_execute",
+            objetivo,
+            parametros: {},
+            max_iterations: Math.min(maxIterations, 10),
+            _internal: true,
+          }),
+        }).then(res => res.text()).then(t => {
+          console.log("[chat-cobmais-knowledge] Automation dispatched:", t.substring(0, 200));
+        }).catch(err => {
+          console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
+        });
+
+        // Save knowledge (fire-and-forget)
+        (async () => {
+          try {
+            let { data: session } = await adminClient.from("cobmais_sessoes_gravadas")
+              .select("id, total_passos").eq("nome", "chat_aprendido").single();
+            if (!session) {
+              const { data: ns } = await adminClient.from("cobmais_sessoes_gravadas")
+                .insert({ nome: "chat_aprendido", status: "finalizado", criado_por: userId, total_passos: 0, descricao: "Conhecimento aprendido via chat" })
+                .select("id, total_passos").single();
+              session = ns;
+            }
+            if (session) {
+              const nextStep = (session.total_passos || 0) + 1;
+              const objLower = objetivo.toLowerCase();
+              let acao = "navigate";
+              if (objLower.includes("f5") || objLower.includes("enter") || objLower.includes("escape") || objLower.includes("tab") || objLower.includes("tecla") || objLower.includes("pressio")) acao = "keypress";
+              else if (objLower.includes("clic") || objLower.includes("botão") || objLower.includes("botao")) acao = "click";
+              else if (objLower.includes("preench") || objLower.includes("digit") || objLower.includes("escrev")) acao = "fill";
+              else if (objLower.includes("scroll") || objLower.includes("rolar")) acao = "scroll";
+              await adminClient.from("cobmais_conhecimento").insert({ sessao_id: session.id, nome_fluxo: "chat_aprendido", passo_numero: nextStep, acao, descricao_tela: objetivo });
+              await adminClient.from("cobmais_sessoes_gravadas").update({ total_passos: nextStep }).eq("id", session.id);
+            }
+          } catch (err) { console.error("[chat-cobmais-knowledge] Error saving knowledge:", err); }
+        })();
+
+        toolResultContent = `Automação disparada com sucesso! O robô está executando o objetivo: "${objetivo}". Confirme ao usuário e pergunte o próximo passo.`;
+      }
 
       finalMessages = [
         ...finalMessages,
         firstChoice.message,
-        {
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: toolResultContent,
-        },
+        { role: "tool", tool_call_id: toolCall.id, content: toolResultContent },
       ];
     } else if (firstChoice?.message?.content) {
-      finalMessages = [
-        ...finalMessages,
-      ];
+      finalMessages = [...finalMessages];
     }
 
     // 2nd call: streaming, with full context
