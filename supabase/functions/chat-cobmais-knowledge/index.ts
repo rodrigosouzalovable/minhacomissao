@@ -61,7 +61,12 @@ serve(async (req) => {
       }).join("\n\n");
     }
 
+    const credenciaisSection = cobmaisConfig?.cobmais_email
+      ? `\n## Credenciais CobMais:\nEmail: ${cobmaisConfig.cobmais_email}, Senha: ${cobmaisConfig.cobmais_senha}.\nQuando o usuário pedir para fazer login, use essas credenciais no objetivo da automação. NUNCA exiba a senha no chat — apenas use-a internamente no objetivo da tool.`
+      : `\n## Credenciais CobMais:\nNENHUMA CREDENCIAL CONFIGURADA. Peça ao usuário para configurar na seção "Configuração do Servidor".`;
+
     const systemPrompt = `Você é a IA do sistema de automação CobMais. Seu papel é conversar com o administrador sobre o que você aprendeu nos treinamentos E também EXECUTAR ações quando solicitado.
+${credenciaisSection}
 
 ## Seu conhecimento atual:
 ${knowledgeContext}
