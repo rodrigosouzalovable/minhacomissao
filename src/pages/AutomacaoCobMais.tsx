@@ -849,6 +849,96 @@ export default function AutomacaoCobMais() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Video upload dialog */}
+      <Dialog open={showVideoUpload} onOpenChange={v => { if (!uploadingVideo) setShowVideoUpload(v); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileVideo className="h-5 w-5" />
+              Enviar Vídeo de Treinamento
+            </DialogTitle>
+            <DialogDescription>
+              Grave sua tela com narração usando uma extensão como Screen Recorder. A IA vai analisar o vídeo e extrair os passos automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Nome do Fluxo</Label>
+              <Input
+                placeholder="Ex: gerar_boleto, cadastrar_email"
+                value={videoFlowName}
+                onChange={e => setVideoFlowName(e.target.value)}
+                disabled={uploadingVideo}
+              />
+            </div>
+            <div>
+              <Label>Vídeo (.webm ou .mp4)</Label>
+              <div className="mt-2">
+                {videoFile ? (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                    <Video className="h-5 w-5 text-primary shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{videoFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{(videoFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                    </div>
+                    {!uploadingVideo && (
+                      <Button variant="ghost" size="sm" onClick={() => setVideoFile(null)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                    <span className="text-sm text-muted-foreground">Clique para selecionar o vídeo</span>
+                    <span className="text-xs text-muted-foreground mt-1">Máx. 20MB • .webm ou .mp4</span>
+                    <input
+                      type="file"
+                      accept="video/webm,video/mp4,.webm,.mp4"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) setVideoFile(file);
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+            {uploadingVideo && (
+              <div className="space-y-2">
+                <Progress value={videoProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">{videoProgressLabel}</p>
+              </div>
+            )}
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-2">
+              <p>💡 <strong>Dicas:</strong></p>
+              <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+                <li>Grave vídeos curtos e focados (2-5 min por fluxo)</li>
+                <li>Narre em voz alta o que você está fazendo e por quê</li>
+                <li>Exemplo: "Agora clico no botão amarelo para abrir o menu de boletos"</li>
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVideoUpload(false)} disabled={uploadingVideo}>Cancelar</Button>
+            <Button onClick={handleVideoUpload} disabled={!videoFile || !videoFlowName.trim() || uploadingVideo}>
+              {uploadingVideo ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Enviar e Processar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
