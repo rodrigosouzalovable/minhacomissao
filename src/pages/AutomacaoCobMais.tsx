@@ -312,6 +312,11 @@ export default function AutomacaoCobMais() {
           </Card>
         </div>
 
+        {/* Streaming */}
+        {roboStatus === 'online' && serverUrl && (
+          <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
+        )}
+
         {/* Fila & Logs */}
         <Card>
           <CardHeader>
