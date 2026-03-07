@@ -363,7 +363,7 @@ async function handleGetKnowledge(adminClient: any, body: any) {
 
 async function handleDeleteSession(adminClient: any, body: any) {
   const { sessao_id } = body
-  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', status: 400 }
+  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', _httpStatus: 400 }
 
   await adminClient.from('cobmais_sessoes_gravadas').delete().eq('id', sessao_id)
   return { success: true }
