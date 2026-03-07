@@ -776,7 +776,7 @@ app.post('/automacao/agent', async (req, res) => {
   }
 
   abortAgent = false; // Reset abort flag
-  const MAX_ITERATIONS = max_iterations || 30;
+  // Sem limite fixo de iterações — controlado apenas pelo timeout de 5 min
   const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
   const startTime = Date.now();
   const history = [];
