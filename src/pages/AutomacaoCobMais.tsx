@@ -318,6 +318,9 @@ export default function AutomacaoCobMais() {
           <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
         )}
 
+        {/* Código do Robô */}
+        <RoboCodeViewer />
+
         {/* Fila & Logs */}
         <Card>
           <CardHeader>
