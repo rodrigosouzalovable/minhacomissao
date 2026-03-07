@@ -390,9 +390,21 @@ export default function AutomacaoCobMais() {
     const text = chatInput.trim();
     if (!text || isChatLoading) return;
 
-    const userMsg: ChatMsg = { role: 'user', content: text };
+    // Build multimodal content if image attached
+    let userContent: string | any[];
+    if (chatImage) {
+      userContent = [
+        { type: 'text', text },
+        { type: 'image_url', image_url: { url: chatImage } },
+      ];
+    } else {
+      userContent = text;
+    }
+
+    const userMsg: ChatMsg = { role: 'user', content: userContent, image: chatImage || undefined };
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput('');
+    setChatImage(null);
     setIsChatLoading(true);
 
     // Auto-scroll to streaming section
@@ -400,7 +412,7 @@ export default function AutomacaoCobMais() {
       streamingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
 
-    const allMessages = [...chatMessages, userMsg];
+    const allMessages = [...chatMessages, { role: 'user' as const, content: userContent }];
     let assistantSoFar = '';
 
     // Show "executing automation" toast if response takes more than 5s
