@@ -976,29 +976,29 @@ app.post('/automacao/agent', async (req, res) => {
             await pg.evaluate((direction) => {
               window.scrollBy(0, direction === 'up' ? -400 : 400);
             }, dir);
-            await delay(1000);
+            await delay(500);
             break;
           }
           case 'wait': {
-            const waitMs = parseInt(aiAction.value || '3000', 10);
-            await delay(Math.min(waitMs, 10000));
+            const waitMs = parseInt(aiAction.value || '2000', 10);
+            await delay(Math.min(waitMs, 5000));
             break;
           }
           case 'navigate': {
             await pg.goto(aiAction.value || '', { waitUntil: 'networkidle', timeout: 15000 }).catch(() => {});
-            await delay(2000);
+            await delay(1000);
             break;
           }
           case 'select': {
             await pg.selectOption(aiAction.selector, aiAction.value || '');
-            await delay(1000);
+            await delay(500);
             break;
           }
           case 'keypress': {
             const key = aiAction.value || 'F5';
             console.log(`⌨️ Pressionando tecla: ${key}`);
             await pg.keyboard.press(key);
-            await delay(2000);
+            await delay(1000);
             break;
           }
           default:
