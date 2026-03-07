@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -37,6 +38,8 @@ export default function AutomacaoCobMais() {
   const [lastResult, setLastResult] = useState<any>(null);
   const [comandos, setComandos] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [chatbotAtivo, setChatbotAtivo] = useState(true);
+  const [togglingChatbot, setTogglingChatbot] = useState(false);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -91,11 +94,38 @@ export default function AutomacaoCobMais() {
     if (data) setLogs(data);
   }, []);
 
+  const loadChatbotConfig = useCallback(async () => {
+    const { data } = await supabase
+      .from('chatbot_config')
+      .select('ativo')
+      .limit(1)
+      .single();
+    if (data) setChatbotAtivo(data.ativo);
+  }, []);
+
+  const toggleChatbot = async (checked: boolean) => {
+    setTogglingChatbot(true);
+    try {
+      const { error } = await supabase
+        .from('chatbot_config')
+        .update({ ativo: checked, atualizado_em: new Date().toISOString() } as any)
+        .not('id', 'is', null);
+      if (error) throw error;
+      setChatbotAtivo(checked);
+      toast.success(checked ? 'Chatbot WhatsApp ativado' : 'Chatbot WhatsApp desativado');
+    } catch {
+      toast.error('Erro ao alterar status do chatbot');
+    } finally {
+      setTogglingChatbot(false);
+    }
+  };
+
   useEffect(() => {
     loadConfig();
     loadComandos();
     loadLogs();
-  }, [loadConfig, loadComandos, loadLogs]);
+    loadChatbotConfig();
+  }, [loadConfig, loadComandos, loadLogs, loadChatbotConfig]);
 
   useEffect(() => {
     if (!serverUrl) return;
@@ -156,7 +186,7 @@ export default function AutomacaoCobMais() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -168,6 +198,21 @@ export default function AutomacaoCobMais() {
               <Badge variant={roboStatus === 'online' ? 'default' : 'destructive'} className="text-lg px-4 py-1">
                 {roboStatus === 'checking' ? 'Verificando...' : roboStatus === 'online' ? 'ONLINE' : 'OFFLINE'}
               </Badge>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2"><MessageCircle className="h-4 w-4" />Chatbot WhatsApp</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-3">
+              <Switch
+                checked={chatbotAtivo}
+                onCheckedChange={toggleChatbot}
+                disabled={togglingChatbot}
+              />
+              <span className={`text-sm font-medium ${chatbotAtivo ? 'text-green-600' : 'text-destructive'}`}>
+                {chatbotAtivo ? 'Ativado' : 'Desativado'}
+              </span>
             </CardContent>
           </Card>
           <Card>
