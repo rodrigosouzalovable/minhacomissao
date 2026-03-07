@@ -304,7 +304,7 @@ async function handleRecordStart(adminClient: any, body: any, userId: string) {
 
 async function handleRecordStop(adminClient: any, body: any) {
   const { sessao_id } = body
-  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', status: 400 }
+  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
