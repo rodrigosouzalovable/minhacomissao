@@ -94,11 +94,38 @@ export default function AutomacaoCobMais() {
     if (data) setLogs(data);
   }, []);
 
+  const loadChatbotConfig = useCallback(async () => {
+    const { data } = await supabase
+      .from('chatbot_config')
+      .select('ativo')
+      .limit(1)
+      .single();
+    if (data) setChatbotAtivo(data.ativo);
+  }, []);
+
+  const toggleChatbot = async (checked: boolean) => {
+    setTogglingChatbot(true);
+    try {
+      const { error } = await supabase
+        .from('chatbot_config')
+        .update({ ativo: checked, atualizado_em: new Date().toISOString() } as any)
+        .not('id', 'is', null);
+      if (error) throw error;
+      setChatbotAtivo(checked);
+      toast.success(checked ? 'Chatbot WhatsApp ativado' : 'Chatbot WhatsApp desativado');
+    } catch {
+      toast.error('Erro ao alterar status do chatbot');
+    } finally {
+      setTogglingChatbot(false);
+    }
+  };
+
   useEffect(() => {
     loadConfig();
     loadComandos();
     loadLogs();
-  }, [loadConfig, loadComandos, loadLogs]);
+    loadChatbotConfig();
+  }, [loadConfig, loadComandos, loadLogs, loadChatbotConfig]);
 
   useEffect(() => {
     if (!serverUrl) return;
