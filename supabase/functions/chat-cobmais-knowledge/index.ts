@@ -176,8 +176,9 @@ ${knowledgeContext}
       const toolCall = toolCalls[0];
       const args = JSON.parse(toolCall.function.arguments || "{}");
       const objetivo = args.objetivo;
+      const maxIterations = args.max_iterations || 1;
 
-      console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}`);
+      console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}, max_iterations: ${maxIterations}`);
 
       // Fire-and-forget: dispatch automation WITHOUT awaiting
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -193,7 +194,7 @@ ${knowledgeContext}
           action: "agent_execute",
           objetivo,
           parametros: {},
-          max_iterations: 1,
+          max_iterations: Math.min(maxIterations, 10),
           _internal: true,
         }),
       }).then(res => res.text()).then(t => {

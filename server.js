@@ -873,7 +873,7 @@ app.post('/automacao/agent', async (req, res) => {
             history,
             current_url: currentUrl,
           }),
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(20000),
         });
         const aiData = await aiRes.json();
         if (!aiData.success || !aiData.action) {
