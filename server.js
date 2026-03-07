@@ -821,7 +821,7 @@ app.post('/automacao/agent', async (req, res) => {
 
     const analyzeUrl = `${supabase_url || process.env.SUPABASE_URL || 'https://cymdrkeukockakfzjeen.supabase.co'}/functions/v1/analyze-cobmais-screen`;
 
-    for (let i = 0; i < MAX_ITERATIONS; i++) {
+    for (let i = 0; ; i++) {
       // Check abort flag
       if (abortAgent) {
         updateStatus('stopped', 'Agente interrompido pelo usuário');
