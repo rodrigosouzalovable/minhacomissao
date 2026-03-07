@@ -121,7 +121,7 @@ async function handleStatus(adminClient: any) {
 
 async function handleExecute(adminClient: any, body: any, userId: string) {
   const { acao, parametros } = body
-  if (!acao) return { error: 'Campo acao é obrigatório', status: 400 }
+  if (!acao) return { error: 'Campo acao é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
@@ -130,7 +130,7 @@ async function handleExecute(adminClient: any, body: any, userId: string) {
     .limit(1)
     .maybeSingle()
 
-  if (!config?.server_url) return { error: 'URL do servidor não configurada', status: 400 }
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
 
   const timeoutMs = acao === 'gerar_boleto' ? 180000 : 120000
   const effectiveUserId = userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId
@@ -187,7 +187,7 @@ async function handleExecute(adminClient: any, body: any, userId: string) {
 
 async function handleAgentExecute(adminClient: any, body: any, userId: string) {
   const { objetivo, parametros: agentParams } = body
-  if (!objetivo) return { error: 'Campo objetivo é obrigatório', status: 400 }
+  if (!objetivo) return { error: 'Campo objetivo é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
@@ -196,7 +196,7 @@ async function handleAgentExecute(adminClient: any, body: any, userId: string) {
     .limit(1)
     .maybeSingle()
 
-  if (!config?.server_url) return { error: 'URL do servidor não configurada', status: 400 }
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
 
   const effectiveUserId = userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId
 
@@ -268,7 +268,7 @@ async function handleAgentExecute(adminClient: any, body: any, userId: string) {
 
 async function handleRecordStart(adminClient: any, body: any, userId: string) {
   const { nome, descricao } = body
-  if (!nome) return { error: 'Campo nome é obrigatório', status: 400 }
+  if (!nome) return { error: 'Campo nome é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
@@ -277,7 +277,7 @@ async function handleRecordStart(adminClient: any, body: any, userId: string) {
     .limit(1)
     .maybeSingle()
 
-  if (!config?.server_url) return { error: 'URL do servidor não configurada', status: 400 }
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
 
   const { data: sessao, error } = await adminClient
     .from('cobmais_sessoes_gravadas')
@@ -285,7 +285,7 @@ async function handleRecordStart(adminClient: any, body: any, userId: string) {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao criar sessão: ' + error.message, status: 500 }
+  if (error) return { error: 'Erro ao criar sessão: ' + error.message, _httpStatus: 500 }
 
   // Tell local server to start recording
   try {
@@ -304,7 +304,7 @@ async function handleRecordStart(adminClient: any, body: any, userId: string) {
 
 async function handleRecordStop(adminClient: any, body: any) {
   const { sessao_id } = body
-  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', status: 400 }
+  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
@@ -363,7 +363,7 @@ async function handleGetKnowledge(adminClient: any, body: any) {
 
 async function handleDeleteSession(adminClient: any, body: any) {
   const { sessao_id } = body
-  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', status: 400 }
+  if (!sessao_id) return { error: 'Campo sessao_id é obrigatório', _httpStatus: 400 }
 
   await adminClient.from('cobmais_sessoes_gravadas').delete().eq('id', sessao_id)
   return { success: true }
@@ -430,10 +430,9 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: `Ação desconhecida: ${action}` }), { status: 400, headers: corsHeaders })
     }
 
-    const rawStatus = result.status
-    delete result.status
-    const statusCode = (typeof rawStatus === 'number' && rawStatus >= 200 && rawStatus <= 599) ? rawStatus : 200
-    return new Response(JSON.stringify(result), { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    const httpStatus = (typeof result._httpStatus === 'number' && result._httpStatus >= 200 && result._httpStatus <= 599) ? result._httpStatus : 200
+    delete result._httpStatus
+    return new Response(JSON.stringify(result), { status: httpStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal error'
     return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders })
