@@ -290,7 +290,7 @@ async function handleStop(adminClient: any) {
   }
 }
 
-
+async function handleRecordStart(adminClient: any, body: any, userId: string) {
   const { nome, descricao } = body
   if (!nome) return { error: 'Campo nome é obrigatório', _httpStatus: 400 }
 
