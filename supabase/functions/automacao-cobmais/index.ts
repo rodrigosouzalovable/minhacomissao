@@ -187,7 +187,7 @@ async function handleExecute(adminClient: any, body: any, userId: string) {
 
 async function handleAgentExecute(adminClient: any, body: any, userId: string) {
   const { objetivo, parametros: agentParams } = body
-  if (!objetivo) return { error: 'Campo objetivo é obrigatório', status: 400 }
+  if (!objetivo) return { error: 'Campo objetivo é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
