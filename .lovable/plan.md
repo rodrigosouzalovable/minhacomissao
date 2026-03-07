@@ -1,31 +1,58 @@
 
 
-## Diagnóstico
+# Sistema de Aprendizado: IA observa você usando o CobMais
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Ideia
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+Criar um **modo gravação** onde o robô Playwright captura screenshots + suas ações enquanto você navega no CobMais. Essas "lições" são salvas no banco de dados e automaticamente injetadas no prompt da IA, fazendo ela aprender permanentemente como o sistema funciona.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Como funciona
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+1. **Modo Gravação**: Você clica "Gravar Sessão" na página de automação. O robô começa a capturar screenshots a cada ação que você faz (cliques, preenchimentos) no navegador Playwright.
 
-## Correção
+2. **Armazenamento**: Cada passo é salvo numa tabela `cobmais_conhecimento` com:
+   - Descrição da tela (gerada pela IA ao ver o screenshot)
+   - Ação executada (clique, preenchimento, navegação)
+   - Seletor CSS usado
+   - URL da página
+   - Ordem do passo dentro do fluxo
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+3. **Uso pelo Agente**: Quando o agente IA executa, o sistema busca lições relevantes da tabela e injeta no prompt, tipo: "Quando estiver na tela X, o passo correto é clicar em Y".
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+## Alterações
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+| Componente | O que muda |
+|---|---|
+| **Nova tabela `cobmais_conhecimento`** | Armazena fluxos aprendidos: nome do fluxo, passos com descrição, seletor, URL, screenshot_description |
+| **Nova tabela `cobmais_sessoes_gravadas`** | Metadados das sessões gravadas (nome, data, número de passos) |
+| **Edge Function `analyze-cobmais-screen`** | Busca conhecimento relevante do banco e injeta no SYSTEM_PROMPT antes de chamar a IA |
+| **`server.js`** | Novo endpoint `/automacao/gravar` que ativa modo gravação: intercepta eventos do Playwright (clicks, inputs) e envia para o backend |
+| **`server.js`** | Novo endpoint `/automacao/parar-gravacao` para finalizar sessão |
+| **`AutomacaoCobMais.tsx`** | Novo botão "Gravar Sessão" + "Parar Gravação" na interface, e aba para ver/gerenciar lições aprendidas |
+
+## Fluxo do Usuário
+
+1. Abre a página de Automação CobMais
+2. Clica "🎓 Gravar Sessão" e dá um nome (ex: "Como gerar boleto")
+3. Navega normalmente no CobMais pelo navegador Playwright (visível no stream)
+4. O sistema captura cada clique/input + screenshot + URL
+5. Ao terminar, clica "Parar Gravação"
+6. A IA analisa os screenshots e gera descrições de cada passo
+7. Próxima vez que o agente rodar, ele já terá esse conhecimento
+
+## Estrutura da tabela
+
+```text
+cobmais_conhecimento
+├── id (uuid)
+├── sessao_id (uuid, FK → cobmais_sessoes_gravadas)
+├── nome_fluxo (text) — ex: "gerar_boleto"
+├── passo_numero (int)
+├── descricao_tela (text) — gerada pela IA
+├── acao (text) — click, fill, navigate
+├── seletor (text) — CSS selector
+├── valor (text) — valor preenchido, se aplicável
+├── url_pagina (text)
+├── criado_em (timestamptz)
 ```
-
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
