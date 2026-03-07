@@ -237,65 +237,20 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
     }
   }
 
-  await delay(4000);
-  console.log('✅ Devedor selecionado');
+  await delay(5000);
+  console.log('✅ Devedor selecionado - ficha aberta');
 
-  // ── PASSO 6: Selecionar parcelas ──
-  updateStatus('executando', 'Passo 6: Selecionando parcelas...');
-
-  const selectAllSelectors = [
-    'input[type="checkbox"]#chkAll',
-    'input[type="checkbox"][id*="chkAll"]',
-    'input[type="checkbox"][id*="selectAll"]',
-    '#chkTodos',
-    'th input[type="checkbox"]',
-  ];
-
-  let selectedAll = false;
-  for (const sel of selectAllSelectors) {
-    try {
-      const el = await pg.$(sel);
-      if (el) {
-        await el.click();
-        selectedAll = true;
-        console.log(\`   Marcou selecionar todos: \${sel}\`);
-        break;
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-
-  if (!selectedAll) {
-    const checkboxes = await pg.$$('table tbody input[type="checkbox"]');
-    for (const cb of checkboxes) {
-      try {
-        await cb.click();
-        await delay(200);
-      } catch (e) {
-        continue;
-      }
-    }
-    if (checkboxes.length > 0) {
-      console.log(\`   Marcou \${checkboxes.length} parcelas individualmente\`);
-    } else {
-      console.log('⚠️ Nenhuma parcela encontrada para selecionar');
-    }
-  }
-
-  await delay(1000);
-  console.log('✅ Parcelas selecionadas');
-
-  // ── PASSO 7: Clicar em Cálculo ──
-  updateStatus('executando', 'Passo 7: Abrindo cálculo...');
+  // ── PASSO 6: Clicar em Cálculo (scroll + click) ──
+  updateStatus('executando', 'Passo 6: Abrindo cálculo...');
 
   const calcSelectors = [
     '#btnCalcular',
+    'a#btnCalcular',
+    '#divCalculo a',
     '#divCalculo button',
-    'button:has-text("Cálculo")',
-    'button:has-text("Calculo")',
     'a:has-text("Cálculo")',
-    '#btnCalculo',
+    'a:has-text("Calculo")',
+    'button:has-text("Cálculo")',
   ];
 
   let calcClicked = false;
@@ -303,25 +258,55 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
     try {
       const el = await pg.$(sel);
       if (el) {
+        await el.scrollIntoViewIfNeeded();
+        await delay(500);
         await el.click();
         calcClicked = true;
         console.log(\`   Clicou em Cálculo: \${sel}\`);
         break;
       }
     } catch (e) {
+      console.log(\`   Tentativa \${sel} falhou: \${e.message}\`);
       continue;
     }
   }
 
   if (!calcClicked) {
-    throw new Error('Botão "Cálculo" não encontrado na página');
+    console.log('   Tentando via JavaScript...');
+    try {
+      await pg.evaluate(() => {
+        const el = document.querySelector('#btnCalcular') || document.querySelector('a[id="btnCalcular"]');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.click();
+          return true;
+        }
+        const links = document.querySelectorAll('a');
+        for (const link of links) {
+          if (link.textContent && link.textContent.trim().includes('álculo')) {
+            link.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            link.click();
+            return true;
+          }
+        }
+        return false;
+      });
+      calcClicked = true;
+      console.log('   Clicou via JavaScript');
+    } catch (e) {
+      console.log(\`   JavaScript também falhou: \${e.message}\`);
+    }
   }
 
-  await delay(3000);
+  if (!calcClicked) {
+    throw new Error('Botão "Cálculo" não encontrado na página.');
+  }
+
+  await delay(4000);
   console.log('✅ Tela de cálculo aberta');
 
-  // ── PASSO 8: Preencher valor negociado ──
-  updateStatus('executando', \`Passo 8: Preenchendo valor R$ \${valor_final}...\`);
+  // ── PASSO 7: Preencher valor negociado ──
+  updateStatus('executando', \`Passo 7: Preenchendo valor R$ \${valor_final}...\`);
 
   const valorFormatado = parseFloat(valor_final).toFixed(2).replace('.', ',');
 
@@ -362,12 +347,13 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   await delay(1000);
   console.log(\`✅ Valor preenchido: R$ \${valorFormatado}\`);
 
-  // ── PASSO 9: Clicar em Atualizar (botão verde) ──
-  updateStatus('executando', 'Passo 9: Clicando em Atualizar...');
+  // ── PASSO 8: Clicar em Atualizar (botão verde) ──
+  updateStatus('executando', 'Passo 8: Clicando em Atualizar...');
 
   const atualizarSelectors = [
     '#btnAtualizarCalculo',
     'button#btnAtualizarCalculo',
+    'button.btn-success:has-text("Atualizar")',
     'button:has-text("Atualizar")',
     'input[value="Atualizar"]',
   ];
@@ -377,6 +363,8 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
     try {
       const el = await pg.$(sel);
       if (el) {
+        await el.scrollIntoViewIfNeeded();
+        await delay(300);
         await el.click();
         atualizarClicked = true;
         console.log(\`   Clicou em Atualizar: \${sel}\`);
@@ -394,8 +382,8 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   await delay(3000);
   console.log('✅ Cálculo atualizado');
 
-  // ── PASSO 10: Salvar o acordo ──
-  updateStatus('executando', 'Passo 10: Salvando acordo...');
+  // ── PASSO 9: Salvar o acordo ──
+  updateStatus('executando', 'Passo 9: Salvando acordo...');
 
   let boletoUrl = null;
 
@@ -424,8 +412,14 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
     } catch (e) {}
   });
 
-  await pg.waitForSelector('#btnSalvarCalc', { timeout: 5000 });
-  await pg.click('#btnSalvarCalc');
+  const btnSalvar = await pg.$('#btnSalvarCalc');
+  if (btnSalvar) {
+    await btnSalvar.scrollIntoViewIfNeeded();
+    await delay(300);
+    await btnSalvar.click();
+  } else {
+    await pg.click('button:has-text("Salvar"), button.btn-primary:has-text("Salvar")');
+  }
   await delay(5000);
 
   // Verificar se CobMais pediu e-mail
@@ -445,7 +439,8 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
           if (el) {
             await pg.fill(sel, 'email@email.com');
             console.log('   Preencheu e-mail');
-            await pg.click('#btnSalvarCalc');
+            const btnSalvar2 = await pg.$('#btnSalvarCalc');
+            if (btnSalvar2) await btnSalvar2.click();
             await delay(5000);
             break;
           }
@@ -458,8 +453,8 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
 
   console.log('✅ Acordo salvo');
 
-  // ── PASSO 11: Clicar no dropdown amarelo (Acordo) ──
-  updateStatus('executando', 'Passo 11: Abrindo menu de Acordo...');
+  // ── PASSO 10: Clicar no dropdown amarelo (Acordo) ──
+  updateStatus('executando', 'Passo 10: Abrindo menu de Acordo...');
 
   await delay(3000);
 
@@ -476,6 +471,8 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
     try {
       const el = await pg.$(sel);
       if (el) {
+        await el.scrollIntoViewIfNeeded();
+        await delay(300);
         await el.click();
         dropdownClicked = true;
         console.log(\`   Clicou no dropdown amarelo: \${sel}\`);
@@ -487,14 +484,14 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   }
 
   if (!dropdownClicked) {
-    console.log('⚠️ Dropdown amarelo não encontrado, tentando buscar boleto diretamente...');
+    console.log('⚠️ Dropdown amarelo não encontrado');
   }
 
   await delay(2000);
   console.log('✅ Menu de acordo aberto');
 
-  // ── PASSO 12: Clicar em Emitir Boletos ──
-  updateStatus('executando', 'Passo 12: Clicando em Emitir Boletos...');
+  // ── PASSO 11: Clicar em Emitir Boletos ──
+  updateStatus('executando', 'Passo 11: Clicando em Emitir Boletos...');
 
   const emitirSelectors = [
     'a.gerar-boleto',
@@ -526,14 +523,15 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   await delay(3000);
   console.log('✅ Tela de boletos aberta');
 
-  // ── PASSO 13: Selecionar Todos e Imprimir ──
-  updateStatus('executando', 'Passo 13: Selecionando boletos e imprimindo...');
+  // ── PASSO 12: Selecionar Todos e Imprimir ──
+  updateStatus('executando', 'Passo 12: Selecionando boletos e imprimindo...');
 
   const ckbSelectors = [
     '#ckbTodosBoletos',
     'input#ckbTodosBoletos',
     'input[type="checkbox"][id*="Todos"]',
     'input[type="checkbox"][id*="todos"]',
+    'label:has-text("Selecionar Todos")',
   ];
 
   for (const sel of ckbSelectors) {
@@ -552,6 +550,8 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   await delay(1000);
 
   const imprimirSelectors = [
+    '#btnConfirmarBoleto',
+    'button#btnConfirmarBoleto',
     'button:has-text("Imprimir")',
     'a:has-text("Imprimir")',
     '#btnImprimir',
