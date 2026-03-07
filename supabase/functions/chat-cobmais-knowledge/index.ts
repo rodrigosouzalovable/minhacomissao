@@ -36,10 +36,13 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const [sessionsRes, knowledgeRes] = await Promise.all([
+    const [sessionsRes, knowledgeRes, configRes] = await Promise.all([
       adminClient.from("cobmais_sessoes_gravadas").select("*").order("criado_em", { ascending: false }),
       adminClient.from("cobmais_conhecimento").select("*").order("sessao_id, passo_numero"),
+      adminClient.from("automacao_config").select("cobmais_email, cobmais_senha").order("criado_em", { ascending: false }).limit(1).maybeSingle(),
     ]);
+
+    const cobmaisConfig = configRes.data;
 
     const sessions = sessionsRes.data || [];
     const knowledge = knowledgeRes.data || [];
@@ -58,7 +61,12 @@ serve(async (req) => {
       }).join("\n\n");
     }
 
+    const credenciaisSection = cobmaisConfig?.cobmais_email
+      ? `\n## Credenciais CobMais:\nEmail: ${cobmaisConfig.cobmais_email}, Senha: ${cobmaisConfig.cobmais_senha}.\nQuando o usuário pedir para fazer login, use essas credenciais no objetivo da automação. NUNCA exiba a senha no chat — apenas use-a internamente no objetivo da tool.`
+      : `\n## Credenciais CobMais:\nNENHUMA CREDENCIAL CONFIGURADA. Peça ao usuário para configurar na seção "Configuração do Servidor".`;
+
     const systemPrompt = `Você é a IA do sistema de automação CobMais. Seu papel é conversar com o administrador sobre o que você aprendeu nos treinamentos E também EXECUTAR ações quando solicitado.
+${credenciaisSection}
 
 ## Seu conhecimento atual:
 ${knowledgeContext}
@@ -81,6 +89,7 @@ ${knowledgeContext}
 13. Exemplos de quando executar: "acesse o link X", "pesquise pelo CPF Y", "clique no botão Z", "preencha o campo com valor W", "atualize a página clicando F5", "pressione Enter", "pressione Escape para fechar o modal"
 14. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
 19. Você suporta ação de TECLAS (keypress): F5 (atualizar página), Enter, Escape, Tab, Backspace, etc. Quando o usuário pedir para atualizar a página, pressionar Enter ou qualquer tecla, use a tool executar_automacao com objetivo descritivo como "pressionar F5 para atualizar a página"
+20. Quando o usuário pedir para fazer login ou preencher credenciais, INCLUA email e senha no objetivo da automação, ex: "Preencher o campo de email com X e o campo de senha com Y e clicar em Entrar". NUNCA mostre a senha no chat.
 
 ## IMPORTANTE - Confirmação após cada ação:
 15. SEMPRE pergunte ao usuário qual o próximo passo após confirmar a execução
