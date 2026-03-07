@@ -302,8 +302,33 @@ Deno.serve(async (req) => {
             signal: AbortSignal.timeout(360000), // 6 min timeout
           })
 
-          const resultado = await res.json()
           const tempo = Date.now() - startTime
+          const contentType = res.headers.get('content-type') || ''
+
+          if (!contentType.includes('application/json')) {
+            const bodyText = await res.text()
+            const erro = `Servidor local retornou ${contentType || 'HTML'} em vez de JSON. Verifique se o server.js está atualizado com o endpoint /automacao/agent e se o servidor foi reiniciado.`
+            console.error(`[agent_execute] Resposta não-JSON (status ${res.status}):`, bodyText.substring(0, 200))
+
+            await adminClient
+              .from('automacao_comandos')
+              .update({ status: 'erro', erro, tempo_execucao_ms: tempo, executado_em: new Date().toISOString() })
+              .eq('id', comandoId)
+
+            return new Response(JSON.stringify({ success: false, error: erro, tempo_ms: tempo }), { headers: corsHeaders })
+          }
+
+          let resultado: any
+          try {
+            resultado = await res.json()
+          } catch (parseErr) {
+            const erro = 'Falha ao interpretar resposta do servidor local (JSON inválido)'
+            await adminClient
+              .from('automacao_comandos')
+              .update({ status: 'erro', erro, tempo_execucao_ms: tempo, executado_em: new Date().toISOString() })
+              .eq('id', comandoId)
+            return new Response(JSON.stringify({ success: false, error: erro, tempo_ms: tempo }), { headers: corsHeaders })
+          }
 
           const status = resultado.success ? 'concluido' : 'erro'
           const erro = resultado.success ? null : (resultado.error || 'Erro desconhecido')
