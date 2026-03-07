@@ -266,7 +266,30 @@ async function handleAgentExecute(adminClient: any, body: any, userId: string) {
   }
 }
 
-async function handleRecordStart(adminClient: any, body: any, userId: string) {
+async function handleStop(adminClient: any) {
+  const { data: config } = await adminClient
+    .from('automacao_config')
+    .select('server_url')
+    .order('criado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
+
+  try {
+    const res = await fetch(`${config.server_url}/automacao/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', 'User-Agent': 'MeusAcordos/1.0' },
+      signal: AbortSignal.timeout(5000),
+    })
+    const data = await res.json()
+    return { success: true, ...data }
+  } catch (err) {
+    return { success: false, error: 'Servidor não respondeu ao comando de parada' }
+  }
+}
+
+
   const { nome, descricao } = body
   if (!nome) return { error: 'Campo nome é obrigatório', _httpStatus: 400 }
 
