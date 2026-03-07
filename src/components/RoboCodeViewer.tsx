@@ -867,7 +867,7 @@ app.post('/automacao/agent', async (req, res) => {
       try {
         switch (aiAction.action) {
           case 'click': {
-            const el = await pg.\$(aiAction.selector);
+            const el = await pg.$(aiAction.selector);
             if (el) {
               await el.scrollIntoViewIfNeeded();
               await delay(300);
