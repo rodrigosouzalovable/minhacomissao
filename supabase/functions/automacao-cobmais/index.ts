@@ -11,40 +11,53 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    )
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
-    }
-    const userId = user.id
-
-    const adminClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
-    const { data: roleData } = await adminClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle()
-
-    if (!roleData) {
-      return new Response(JSON.stringify({ error: 'Admin access required' }), { status: 403, headers: corsHeaders })
-    }
-
     const body = await req.json()
     const { action } = body
+
+    // Internal calls from other edge functions skip auth
+    const isInternalCall = body._internal === true
+
+    let userId = 'system'
+    let adminClient: any
+
+    if (isInternalCall) {
+      adminClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      )
+    } else {
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
+      }
+
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
+      )
+
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
+      }
+      userId = user.id
+
+      adminClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      )
+      const { data: roleData } = await adminClient
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle()
+
+      if (!roleData) {
+        return new Response(JSON.stringify({ error: 'Admin access required' }), { status: 403, headers: corsHeaders })
+      }
+    }
 
     switch (action) {
       case 'get_config': {
@@ -139,9 +152,12 @@ Deno.serve(async (req) => {
           return new Response(JSON.stringify({ error: 'URL do servidor não configurada' }), { status: 400, headers: corsHeaders })
         }
 
+        // Determine timeout based on action type
+        const timeoutMs = acao === 'gerar_boleto' ? 180000 : 120000
+
         const { data: comando } = await adminClient
           .from('automacao_comandos')
-          .insert({ user_id: userId, acao, parametros: parametros || {}, status: 'executando' })
+          .insert({ user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId, acao, parametros: parametros || {}, status: 'executando' })
           .select('id')
           .single()
 
@@ -149,7 +165,7 @@ Deno.serve(async (req) => {
         const startTime = Date.now()
 
         await adminClient.from('automacao_logs').insert({
-          comando_id: comandoId, user_id: userId, tipo: 'info',
+          comando_id: comandoId, user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId, tipo: 'info',
           mensagem: `Iniciando ação: ${acao}`, detalhes: parametros || {}
         })
 
@@ -162,7 +178,7 @@ Deno.serve(async (req) => {
               'User-Agent': 'MeusAcordos/1.0',
             },
             body: JSON.stringify({ acao, parametros: parametros || {} }),
-            signal: AbortSignal.timeout(120000)
+            signal: AbortSignal.timeout(timeoutMs)
           })
           const resultado = await res.json()
           const tempo = Date.now() - startTime
@@ -174,7 +190,7 @@ Deno.serve(async (req) => {
               .eq('id', comandoId)
 
             await adminClient.from('automacao_logs').insert({
-              comando_id: comandoId, user_id: userId, tipo: 'sucesso',
+              comando_id: comandoId, user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId, tipo: 'sucesso',
               mensagem: `Ação ${acao} concluída em ${tempo}ms`, detalhes: resultado
             })
 
@@ -187,7 +203,7 @@ Deno.serve(async (req) => {
               .eq('id', comandoId)
 
             await adminClient.from('automacao_logs').insert({
-              comando_id: comandoId, user_id: userId, tipo: 'erro',
+              comando_id: comandoId, user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId, tipo: 'erro',
               mensagem: `Erro na ação ${acao}: ${erro}`, detalhes: resultado
             })
 
@@ -203,7 +219,7 @@ Deno.serve(async (req) => {
             .eq('id', comandoId)
 
           await adminClient.from('automacao_logs').insert({
-            comando_id: comandoId, user_id: userId, tipo: 'erro',
+            comando_id: comandoId, user_id: userId === 'system' ? '00000000-0000-0000-0000-000000000000' : userId, tipo: 'erro',
             mensagem: `Falha na ação ${acao}: ${erro}`
           })
 
