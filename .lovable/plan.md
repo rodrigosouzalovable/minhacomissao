@@ -1,31 +1,52 @@
 
 
-## Diagnóstico
+# Dar à IA do chat acesso às credenciais do CobMais
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problema
+Quando você pediu "coloque o login e a senha, caso você não saiba, me pergunte", a IA do chat **não sabe** quais são as credenciais — elas estão salvas na tabela `automacao_config` mas não são carregadas no contexto da IA. O agente no `server.js` recebe as credenciais corretamente (linhas 815-816 já fazem append no objetivo), mas a IA do chat não consegue:
+1. Informar ao usuário quais credenciais serão usadas
+2. Incluir as credenciais no objetivo enviado ao agente de forma explícita
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+Além disso, o agente pode ter ficado travado tentando decidir o que fazer sem ter clareza no objetivo.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Solução
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+### `supabase/functions/chat-cobmais-knowledge/index.ts`
 
-## Correção
+1. **Carregar credenciais do `automacao_config`** junto com sessions/knowledge no início da função
+2. **Incluir no system prompt** uma seção informando à IA: "Você tem as credenciais CobMais configuradas: email=X. Quando o usuário pedir para fazer login, use a tool com objetivo claro como 'Fazer login com email X e senha Y'"
+3. **Adicionar regra no prompt**: "Quando o usuário pedir para preencher login/senha, inclua as credenciais no objetivo da automação. Se não houver credenciais configuradas, peça ao usuário para configurá-las na seção de Configuração"
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+### Detalhes técnicos
 
 ```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+// Junto com sessions/knowledge fetch, adicionar:
+const configRes = await adminClient.from("automacao_config")
+  .select("cobmais_email, cobmais_senha")
+  .order("criado_em", { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+const cobmaisConfig = configRes.data;
 ```
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+No system prompt, adicionar seção:
+```
+## Credenciais CobMais:
+${cobmaisConfig?.cobmais_email 
+  ? `Email: ${cobmaisConfig.cobmais_email}, Senha: ${cobmaisConfig.cobmais_senha}. 
+     Quando o usuário pedir para fazer login, use essas credenciais no objetivo.`
+  : `NENHUMA CREDENCIAL CONFIGURADA. Peça ao usuário para configurar na seção "Configuração do Servidor".`}
+```
+
+Adicionar regra 20 no prompt:
+```
+20. Quando o usuário pedir para fazer login ou preencher credenciais, INCLUA email e senha no objetivo 
+    da automação, ex: "Preencher o campo de email com X e o campo de senha com Y e clicar em Entrar"
+```
+
+Isso garante que:
+- A IA sabe as credenciais e pode informar ao usuário
+- O objetivo enviado ao agente é claro e específico
+- Se não houver credenciais, a IA pede ao usuário
 
