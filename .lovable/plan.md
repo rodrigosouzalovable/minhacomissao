@@ -1,31 +1,38 @@
 
 
-## Diagnóstico
+# Tornar a execução de automação assíncrona no chat
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problema
+Quando o usuário dá um comando no chat, a edge function `chat-cobmais-knowledge` chama `automacao-cobmais` com `agent_execute` e **espera o resultado completo** (até 6 minutos de timeout). O agente roda 30 iterações de análise de tela, cada uma demorando vários segundos. A resposta do chat só aparece depois que toda a automação termina.
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+## Solução
+Tornar a chamada de automação **assíncrona (fire-and-forget)**. O chat dispara a automação sem esperar o resultado e responde imediatamente ao usuário, que pode acompanhar em tempo real pelo Streaming do Robô que já existe na tela.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Mudanças
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+| Arquivo | O que muda |
+|---|---|
+| `supabase/functions/chat-cobmais-knowledge/index.ts` | Dispara automação sem `await`, retorna imediatamente para a 2a chamada da IA |
 
-## Correção
+### Detalhes
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+1. **Fire-and-forget**: Ao detectar tool call, disparar o `fetch` para `automacao-cobmais` **sem await** (apenas iniciar a promise, sem esperar)
+2. **Tool result imediato**: Em vez de esperar o resultado real, retornar uma mensagem como: `"Automação iniciada com sucesso! O robô está executando o objetivo: [X]. O usuário pode acompanhar em tempo real na seção 'Streaming do Robô' acima."`
+3. **System prompt**: Adicionar instrução para a IA informar que a automação foi disparada e que o usuário deve acompanhar pelo streaming, e que pode perguntar no chat depois se teve algum problema
+4. Isso faz o chat responder em ~5-8 segundos (2 chamadas rápidas à IA) em vez de minutos
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+### Fluxo novo
+```text
+Usuário digita comando
+       ↓
+1a chamada IA (2-3s) → detecta tool call
+       ↓
+Dispara automação (fire-and-forget, sem esperar)
+       ↓
+2a chamada IA (2-3s) → streama "Automação iniciada! Acompanhe pelo streaming..."
+       ↓
+Total: ~5-8 segundos
+       ↓
+Robô executa em background (usuário vê no streaming)
 ```
-
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
