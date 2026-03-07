@@ -81,19 +81,23 @@ ${knowledgeContext}
 7. Quando listar passos de um fluxo, mostre de forma clara e numerada
 8. Se houver passos sem seletor CSS ou com descrição vaga, marque como ⚠️ (passo incompleto)
 
-## IMPORTANTE - Execução de ações (MODO PASSO A PASSO):
+## IMPORTANTE - Execução de ações:
 9. Quando o usuário PEDIR para executar algo, você DEVE usar a tool "executar_automacao" passando o objetivo em linguagem natural
 10. NÃO apenas descreva os passos — EXECUTE chamando a tool
-11. A cada comando, o robô executa APENAS UMA AÇÃO (1 iteração). Depois ele para e espera o próximo comando do usuário.
-12. Após executar, SEMPRE confirme ao usuário o que foi feito. Diga algo como: "✅ **Feito!** Naveguei até [URL]. Veja o resultado no streaming acima. O que devo fazer agora?"
+11. Use o parâmetro max_iterations para controlar quantas ações o robô executa:
+    - Ação simples (1 clique, 1 tecla): max_iterations=1
+    - Fluxo curto (acessar link + preencher algo): max_iterations=3
+    - Fluxo completo (acessar + login + navegar): max_iterations=5
+    - SEMPRE use max_iterations >= 3 quando o comando envolve mais de uma ação
+12. Após executar, confirme ao usuário o que foi feito. Diga algo como: "✅ **Feito!** Veja o resultado no streaming acima."
 13. Exemplos de quando executar: "acesse o link X", "pesquise pelo CPF Y", "clique no botão Z", "preencha o campo com valor W", "atualize a página clicando F5", "pressione Enter", "pressione Escape para fechar o modal"
 14. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
 19. Você suporta ação de TECLAS (keypress): F5 (atualizar página), Enter, Escape, Tab, Backspace, etc. Quando o usuário pedir para atualizar a página, pressionar Enter ou qualquer tecla, use a tool executar_automacao com objetivo descritivo como "pressionar F5 para atualizar a página"
-20. Quando o usuário pedir para fazer login ou preencher credenciais, INCLUA email e senha no objetivo da automação, ex: "Preencher o campo de email com X e o campo de senha com Y e clicar em Entrar". NUNCA mostre a senha no chat.
+20. Quando o usuário pedir para fazer login ou preencher credenciais, INCLUA email e senha no objetivo da automação, ex: "Preencher o campo de email com X e o campo de senha com Y e clicar em Entrar". NUNCA mostre a senha no chat. Use max_iterations=5 para login.
 
 ## IMPORTANTE - Confirmação após cada ação:
 15. SEMPRE pergunte ao usuário qual o próximo passo após confirmar a execução
-16. Se o usuário disser "acesse o link X e depois pesquise Y", execute APENAS o primeiro passo (acessar o link) e depois pergunte se pode prosseguir com o segundo
+16. Se o comando do usuário envolve múltiplas ações, use max_iterations adequado para executar tudo de uma vez em vez de parar a cada ação
 17. Informe que o usuário pode acompanhar em tempo real no **"Streaming do Robô"** acima do chat
 18. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário`;
 
@@ -112,6 +116,10 @@ ${knowledgeContext}
               objetivo: {
                 type: "string",
                 description: "Descrição em linguagem natural do que deve ser feito, ex: 'Emitir boleto à vista do CPF 059.919.151-13 por R$ 300,00 para pagamento em 10/03/2026'"
+              },
+              max_iterations: {
+                type: "number",
+                description: "Número máximo de ações que o robô pode executar. Use 1 para ações simples (um clique, um preenchimento). Use 3-5 para fluxos multi-passo como 'acessar link E fazer login' ou 'pesquisar CPF e abrir ficha'. Padrão: 1"
               }
             },
             required: ["objetivo"],
@@ -172,8 +180,9 @@ ${knowledgeContext}
       const toolCall = toolCalls[0];
       const args = JSON.parse(toolCall.function.arguments || "{}");
       const objetivo = args.objetivo;
+      const maxIterations = args.max_iterations || 1;
 
-      console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}`);
+      console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}, max_iterations: ${maxIterations}`);
 
       // Fire-and-forget: dispatch automation WITHOUT awaiting
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -189,7 +198,7 @@ ${knowledgeContext}
           action: "agent_execute",
           objetivo,
           parametros: {},
-          max_iterations: 1,
+          max_iterations: Math.min(maxIterations, 10),
           _internal: true,
         }),
       }).then(res => res.text()).then(t => {

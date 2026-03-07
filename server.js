@@ -851,7 +851,7 @@ app.post('/automacao/agent', async (req, res) => {
       // 1. Capture screenshot
       let screenshot;
       try {
-        const screenshotBuffer = await pg.screenshot({ type: 'jpeg', quality: 40 });
+        const screenshotBuffer = await pg.screenshot({ type: 'jpeg', quality: 25 });
         screenshot = `data:image/jpeg;base64,${screenshotBuffer.toString('base64')}`;
       } catch (e) {
         console.log('❌ Erro ao capturar screenshot:', e.message);
@@ -873,20 +873,20 @@ app.post('/automacao/agent', async (req, res) => {
             history,
             current_url: currentUrl,
           }),
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(20000),
         });
         const aiData = await aiRes.json();
         if (!aiData.success || !aiData.action) {
           console.log('⚠️ IA não retornou ação válida:', JSON.stringify(aiData));
           history.push({ action: 'ai_error', description: 'IA não retornou ação válida', result: aiData.error || 'unknown' });
-          await delay(2000);
+          await delay(1000);
           continue;
         }
         aiAction = aiData.action;
       } catch (e) {
         console.log('❌ Erro ao chamar IA:', e.message);
         history.push({ action: 'ai_call_error', description: 'Falha na chamada da IA', result: e.message });
-        await delay(3000);
+        await delay(1500);
         continue;
       }
 
@@ -948,8 +948,8 @@ app.post('/automacao/agent', async (req, res) => {
           case 'click': {
             const el = await pg.$(aiAction.selector);
             if (el) {
-              await el.scrollIntoViewIfNeeded();
-              await delay(300);
+            await el.scrollIntoViewIfNeeded();
+              await delay(200);
               await el.click();
             } else {
               // Fallback: try via evaluate
@@ -960,15 +960,15 @@ app.post('/automacao/agent', async (req, res) => {
               }, aiAction.selector);
               if (!clicked) actionResult = `Elemento não encontrado: ${aiAction.selector}`;
             }
-            await delay(2000);
+            await delay(1000);
             break;
           }
           case 'fill': {
             await pg.waitForSelector(aiAction.selector, { timeout: 5000 });
             await pg.click(aiAction.selector, { clickCount: 3 });
             await pg.fill(aiAction.selector, '');
-            await pg.type(aiAction.selector, aiAction.value || '', { delay: 50 });
-            await delay(500);
+            await pg.type(aiAction.selector, aiAction.value || '', { delay: 20 });
+            await delay(300);
             break;
           }
           case 'scroll': {
@@ -976,29 +976,29 @@ app.post('/automacao/agent', async (req, res) => {
             await pg.evaluate((direction) => {
               window.scrollBy(0, direction === 'up' ? -400 : 400);
             }, dir);
-            await delay(1000);
+            await delay(500);
             break;
           }
           case 'wait': {
-            const waitMs = parseInt(aiAction.value || '3000', 10);
-            await delay(Math.min(waitMs, 10000));
+            const waitMs = parseInt(aiAction.value || '2000', 10);
+            await delay(Math.min(waitMs, 5000));
             break;
           }
           case 'navigate': {
             await pg.goto(aiAction.value || '', { waitUntil: 'networkidle', timeout: 15000 }).catch(() => {});
-            await delay(2000);
+            await delay(1000);
             break;
           }
           case 'select': {
             await pg.selectOption(aiAction.selector, aiAction.value || '');
-            await delay(1000);
+            await delay(500);
             break;
           }
           case 'keypress': {
             const key = aiAction.value || 'F5';
             console.log(`⌨️ Pressionando tecla: ${key}`);
             await pg.keyboard.press(key);
-            await delay(2000);
+            await delay(1000);
             break;
           }
           default:
