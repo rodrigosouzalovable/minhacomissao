@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap } from 'lucide-react';
 import { RoboStreamViewer } from '@/components/RoboStreamViewer';
 import { RoboCodeViewer } from '@/components/RoboCodeViewer';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +43,12 @@ export default function AutomacaoCobMais() {
   const [logs, setLogs] = useState<any[]>([]);
   const [chatbotAtivo, setChatbotAtivo] = useState(true);
   const [togglingChatbot, setTogglingChatbot] = useState(false);
+
+  // Agent mode state
+  const [modoAgente, setModoAgente] = useState(false);
+  const [agentObjective, setAgentObjective] = useState('');
+  const [agentRunning, setAgentRunning] = useState(false);
+  const [agentResult, setAgentResult] = useState<any>(null);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -169,6 +176,27 @@ export default function AutomacaoCobMais() {
     }
   };
 
+  const handleAgentExecute = async () => {
+    if (!agentObjective.trim()) return toast.error('Descreva o que o robô deve fazer');
+    setAgentRunning(true);
+    setAgentResult(null);
+    try {
+      const result = await invokeFunction({ action: 'agent_execute', objetivo: agentObjective, parametros: paramValues });
+      setAgentResult(result);
+      if (result.success) {
+        toast.success('Agente concluiu a tarefa com sucesso!');
+      } else {
+        toast.error(result.error || result.resultado?.error || 'Erro na execução do agente');
+      }
+      loadComandos();
+      loadLogs();
+    } catch {
+      toast.error('Erro ao executar agente');
+    } finally {
+      setAgentRunning(false);
+    }
+  };
+
   const currentParams = ACOES_DISPONIVEIS.find(a => a.value === selectedAcao)?.params || [];
 
   const statusColor = roboStatus === 'online' ? 'bg-green-500' : roboStatus === 'checking' ? 'bg-yellow-500' : 'bg-destructive';
@@ -182,9 +210,19 @@ export default function AutomacaoCobMais() {
             <h1 className="text-2xl font-bold">Robô CobMais</h1>
             <p className="text-muted-foreground">Automação de tarefas no CobMais via Playwright</p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <div className={`h-3 w-3 rounded-full ${statusColor} animate-pulse`} />
-            <span className="text-sm font-medium capitalize">{roboStatus === 'checking' ? 'Verificando...' : roboStatus}</span>
+          <div className="ml-auto flex items-center gap-4">
+            {/* Agent mode toggle */}
+            <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
+              <Zap className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Script</span>
+              <Switch checked={modoAgente} onCheckedChange={setModoAgente} />
+              <Brain className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">Agente IA</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`h-3 w-3 rounded-full ${statusColor} animate-pulse`} />
+              <span className="text-sm font-medium capitalize">{roboStatus === 'checking' ? 'Verificando...' : roboStatus}</span>
+            </div>
           </div>
         </div>
 
@@ -220,10 +258,15 @@ export default function AutomacaoCobMais() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><List className="h-4 w-4" />Comandos Executados</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                {modoAgente ? <Brain className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                Modo Atual
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <span className="text-3xl font-bold">{comandos.length}</span>
+              <Badge variant={modoAgente ? 'default' : 'secondary'} className="text-lg px-4 py-1">
+                {modoAgente ? '🧠 AGENTE IA' : '📜 SCRIPT'}
+              </Badge>
             </CardContent>
           </Card>
           <Card>
@@ -266,51 +309,139 @@ export default function AutomacaoCobMais() {
             </CardContent>
           </Card>
 
-          {/* Console */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Terminal className="h-5 w-5" />Console de Comandos</CardTitle>
-              <CardDescription>Envie comandos para o robô CobMais</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Ação</Label>
-                <Select value={selectedAcao} onValueChange={v => { setSelectedAcao(v); setParamValues({}); }}>
-                  <SelectTrigger><SelectValue placeholder="Selecione uma ação" /></SelectTrigger>
-                  <SelectContent>
-                    {ACOES_DISPONIVEIS.map(a => (
-                      <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {currentParams.map(param => (
-                <div key={param}>
-                  <Label className="capitalize">{param}</Label>
-                  <Input
-                    placeholder={param === 'cpf' ? '000.000.000-00' : param === 'valor' ? '1500.00' : param}
-                    value={paramValues[param] || ''}
-                    onChange={e => setParamValues(prev => ({ ...prev, [param]: e.target.value }))}
+          {/* Console - Script or Agent mode */}
+          {modoAgente ? (
+            <Card className="border-primary/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-primary" />
+                  Agente Inteligente
+                </CardTitle>
+                <CardDescription>
+                  Descreva em texto livre o que o robô deve fazer. A IA analisará a tela e decidirá as ações automaticamente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>O que você quer que o robô faça?</Label>
+                  <Textarea
+                    placeholder="Ex: Gerar boleto para o CPF 123.456.789-00 com valor de R$ 1.500,00 em 3 parcelas"
+                    value={agentObjective}
+                    onChange={e => setAgentObjective(e.target.value)}
+                    className="min-h-[100px]"
                   />
                 </div>
-              ))}
-              <Button onClick={handleExecute} disabled={executing || !selectedAcao || roboStatus !== 'online'} className="w-full">
-                {executing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                Executar
-              </Button>
-              {roboStatus !== 'online' && selectedAcao && (
-                <p className="text-sm text-destructive">O robô precisa estar online para executar comandos.</p>
-              )}
-              {lastResult && (
-                <div className="mt-2">
-                  <Label>Resultado:</Label>
-                  <ScrollArea className="h-32 rounded-md border p-3 bg-muted">
-                    <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(lastResult, null, 2)}</pre>
-                  </ScrollArea>
+                <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
+                  <p>🧠 <strong>Gemini Vision</strong> analisa a tela a cada passo</p>
+                  <p>🔄 Máx. <strong>30 iterações</strong> | Timeout: <strong>5 min</strong></p>
+                  <p>⚠️ Para automaticamente se confiança &lt; 70%</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <Button
+                  onClick={handleAgentExecute}
+                  disabled={agentRunning || !agentObjective.trim() || roboStatus !== 'online'}
+                  className="w-full"
+                  size="lg"
+                >
+                  {agentRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Agente em execução...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="h-4 w-4 mr-2" />
+                      Executar Agente
+                    </>
+                  )}
+                </Button>
+                {roboStatus !== 'online' && agentObjective.trim() && (
+                  <p className="text-sm text-destructive">O robô precisa estar online para o agente funcionar.</p>
+                )}
+                {agentResult && (
+                  <div className="mt-2 space-y-2">
+                    <Label>Resultado do Agente:</Label>
+                    <Badge variant={agentResult.success ? 'default' : 'destructive'}>
+                      {agentResult.success ? '✅ Sucesso' : '❌ Erro'}
+                    </Badge>
+                    {agentResult.resultado?.iterations && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {agentResult.resultado.iterations} iterações | {((agentResult.tempo_ms || 0) / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                    {/* Agent history */}
+                    {agentResult.resultado?.history && (
+                      <ScrollArea className="h-48 rounded-md border p-3 bg-muted">
+                        <div className="space-y-1">
+                          {(agentResult.resultado.history as any[]).map((h: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 text-xs">
+                              <span className="text-muted-foreground shrink-0 font-mono">{i + 1}.</span>
+                              <Badge variant={h.result === 'ok' || h.result === 'concluido' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
+                                {h.action}
+                              </Badge>
+                              <span className="truncate">{h.description}</span>
+                              {h.confidence && (
+                                <span className="text-muted-foreground shrink-0">({Math.round(h.confidence * 100)}%)</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                    {!agentResult.resultado?.history && (
+                      <ScrollArea className="h-32 rounded-md border p-3 bg-muted">
+                        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(agentResult, null, 2)}</pre>
+                      </ScrollArea>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Terminal className="h-5 w-5" />Console de Comandos</CardTitle>
+                <CardDescription>Envie comandos para o robô CobMais</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>Ação</Label>
+                  <Select value={selectedAcao} onValueChange={v => { setSelectedAcao(v); setParamValues({}); }}>
+                    <SelectTrigger><SelectValue placeholder="Selecione uma ação" /></SelectTrigger>
+                    <SelectContent>
+                      {ACOES_DISPONIVEIS.map(a => (
+                        <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {currentParams.map(param => (
+                  <div key={param}>
+                    <Label className="capitalize">{param}</Label>
+                    <Input
+                      placeholder={param === 'cpf' ? '000.000.000-00' : param === 'valor' ? '1500.00' : param}
+                      value={paramValues[param] || ''}
+                      onChange={e => setParamValues(prev => ({ ...prev, [param]: e.target.value }))}
+                    />
+                  </div>
+                ))}
+                <Button onClick={handleExecute} disabled={executing || !selectedAcao || roboStatus !== 'online'} className="w-full">
+                  {executing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                  Executar
+                </Button>
+                {roboStatus !== 'online' && selectedAcao && (
+                  <p className="text-sm text-destructive">O robô precisa estar online para executar comandos.</p>
+                )}
+                {lastResult && (
+                  <div className="mt-2">
+                    <Label>Resultado:</Label>
+                    <ScrollArea className="h-32 rounded-md border p-3 bg-muted">
+                      <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(lastResult, null, 2)}</pre>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Streaming */}
