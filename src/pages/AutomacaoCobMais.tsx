@@ -189,6 +189,19 @@ export default function AutomacaoCobMais() {
     }
   };
 
+  const handleStopAutomation = async () => {
+    try {
+      const result = await invokeFunction({ action: 'stop' });
+      if (result.success) {
+        toast.success('🛑 Robô interrompido com sucesso. Pode dar um novo comando.');
+      } else {
+        toast.error(result.error || 'Erro ao parar robô');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao parar robô');
+    }
+  };
+
   const handleExecute = async () => {
     if (!selectedAcao) return toast.error('Selecione uma ação');
     setExecuting(true);
@@ -488,6 +501,11 @@ export default function AutomacaoCobMais() {
             <p className="text-muted-foreground">Automação de tarefas no CobMais via Playwright</p>
           </div>
           <div className="ml-auto flex items-center gap-4">
+            {/* Stop automation button */}
+            <Button variant="destructive" size="sm" onClick={handleStopAutomation} disabled={roboStatus !== 'online'}>
+              <Square className="h-4 w-4 mr-1" />
+              Parar Robô
+            </Button>
             {/* Recording button */}
             {isRecording ? (
               <Button variant="destructive" size="sm" onClick={handleStopRecording} className="animate-pulse">

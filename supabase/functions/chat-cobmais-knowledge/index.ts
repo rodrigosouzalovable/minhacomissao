@@ -73,17 +73,19 @@ ${knowledgeContext}
 7. Quando listar passos de um fluxo, mostre de forma clara e numerada
 8. Se houver passos sem seletor CSS ou com descrição vaga, marque como ⚠️ (passo incompleto)
 
-## IMPORTANTE - Execução de ações:
-9. Quando o usuário PEDIR para executar algo (emitir boleto, gerar boleto, buscar cliente, fazer algo no CobMais), você DEVE usar a tool "executar_automacao" passando o objetivo em linguagem natural
+## IMPORTANTE - Execução de ações (MODO PASSO A PASSO):
+9. Quando o usuário PEDIR para executar algo, você DEVE usar a tool "executar_automacao" passando o objetivo em linguagem natural
 10. NÃO apenas descreva os passos — EXECUTE chamando a tool
-11. Exemplos de quando executar: "emita o boleto", "gere um boleto", "busque o cliente", "faça login", "execute o fluxo X"
-12. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
+11. A cada comando, o robô executa APENAS UMA AÇÃO (1 iteração). Depois ele para e espera o próximo comando do usuário.
+12. Após executar, SEMPRE confirme ao usuário o que foi feito. Diga algo como: "✅ **Feito!** Naveguei até [URL]. Veja o resultado no streaming acima. O que devo fazer agora?"
+13. Exemplos de quando executar: "acesse o link X", "pesquise pelo CPF Y", "clique no botão Z", "preencha o campo com valor W"
+14. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
 
-## IMPORTANTE - Automação assíncrona:
-13. Quando a tool "executar_automacao" for chamada, a automação é disparada em background e o resultado NÃO é esperado
-14. Informe ao usuário que a automação foi iniciada e que ele pode acompanhar em tempo real na seção **"Streaming do Robô"** acima do chat
-15. Diga algo como: "🤖 **Automação iniciada!** Acompanhe a execução em tempo real na seção 'Streaming do Robô' acima. Se algo der errado, me avise aqui no chat que eu ajudo!"
-16. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário`;
+## IMPORTANTE - Confirmação após cada ação:
+15. SEMPRE pergunte ao usuário qual o próximo passo após confirmar a execução
+16. Se o usuário disser "acesse o link X e depois pesquise Y", execute APENAS o primeiro passo (acessar o link) e depois pergunte se pode prosseguir com o segundo
+17. Informe que o usuário pode acompanhar em tempo real no **"Streaming do Robô"** acima do chat
+18. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -177,6 +179,7 @@ ${knowledgeContext}
           action: "agent_execute",
           objetivo,
           parametros: {},
+          max_iterations: 1,
           _internal: true,
         }),
       }).then(res => res.text()).then(t => {
@@ -185,7 +188,7 @@ ${knowledgeContext}
         console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
       });
 
-      const toolResultContent = `Automação disparada com sucesso em background! Objetivo: "${objetivo}". O robô já está executando. O usuário pode acompanhar em tempo real na seção "Streaming do Robô" na tela.`;
+      const toolResultContent = `Automação disparada com sucesso! O robô executou 1 ação para o objetivo: "${objetivo}". Confirme ao usuário que a ação foi executada e pergunte qual o próximo passo.`;
 
       finalMessages = [
         ...finalMessages,

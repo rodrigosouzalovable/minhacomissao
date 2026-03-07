@@ -222,6 +222,7 @@ async function handleAgentExecute(adminClient: any, body: any, userId: string) {
         objective: objetivo, parametros: agentParams || {},
         cobmais_email: config.cobmais_email, cobmais_senha: config.cobmais_senha,
         supabase_url: Deno.env.get('SUPABASE_URL'),
+        max_iterations: body.max_iterations || undefined,
       }),
       signal: AbortSignal.timeout(360000),
     })
@@ -266,7 +267,30 @@ async function handleAgentExecute(adminClient: any, body: any, userId: string) {
   }
 }
 
-async function handleRecordStart(adminClient: any, body: any, userId: string) {
+async function handleStop(adminClient: any) {
+  const { data: config } = await adminClient
+    .from('automacao_config')
+    .select('server_url')
+    .order('criado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
+
+  try {
+    const res = await fetch(`${config.server_url}/automacao/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', 'User-Agent': 'MeusAcordos/1.0' },
+      signal: AbortSignal.timeout(5000),
+    })
+    const data = await res.json()
+    return { success: true, ...data }
+  } catch (err) {
+    return { success: false, error: 'Servidor não respondeu ao comando de parada' }
+  }
+}
+
+
   const { nome, descricao } = body
   if (!nome) return { error: 'Campo nome é obrigatório', _httpStatus: 400 }
 
@@ -410,6 +434,9 @@ Deno.serve(async (req) => {
         break
       case 'agent_execute':
         result = await handleAgentExecute(adminClient, body, userId)
+        break
+      case 'stop':
+        result = await handleStop(adminClient)
         break
       case 'record_start':
         result = await handleRecordStart(adminClient, body, userId)

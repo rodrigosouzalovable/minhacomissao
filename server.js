@@ -25,6 +25,7 @@ let browser = null;
 let page = null;
 let currentStatus = 'idle';
 let currentMessage = '';
+let abortAgent = false; // Flag to stop agent execution
 
 // ===== INICIALIZAR NAVEGADOR =====
 async function initBrowser() {
@@ -65,7 +66,14 @@ app.get('/status', (req, res) => {
   });
 });
 
-// ===== ENDPOINT: SCREENSHOT =====
+// ===== ENDPOINT: PARAR AGENTE =====
+app.post('/automacao/stop', (req, res) => {
+  abortAgent = true;
+  updateStatus('stopped', 'Agente interrompido pelo usuário');
+  console.log('🛑 Agente interrompido pelo usuário');
+  res.json({ success: true, message: 'Agente interrompido' });
+});
+
 app.get('/screenshot', async (req, res) => {
   try {
     if (!page) {
@@ -761,13 +769,14 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
 
 // ===== ENDPOINT: AGENTE INTELIGENTE =====
 app.post('/automacao/agent', async (req, res) => {
-  const { objective, parametros, cobmais_email, cobmais_senha, supabase_url } = req.body;
+  const { objective, parametros, cobmais_email, cobmais_senha, supabase_url, max_iterations } = req.body;
 
   if (!objective) {
     return res.json({ success: false, error: 'Campo objective é obrigatório' });
   }
 
-  const MAX_ITERATIONS = 30;
+  abortAgent = false; // Reset abort flag
+  const MAX_ITERATIONS = max_iterations || 30;
   const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
   const startTime = Date.now();
   const history = [];
@@ -813,6 +822,18 @@ app.post('/automacao/agent', async (req, res) => {
     const analyzeUrl = `${supabase_url || process.env.SUPABASE_URL || 'https://cymdrkeukockakfzjeen.supabase.co'}/functions/v1/analyze-cobmais-screen`;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
+      // Check abort flag
+      if (abortAgent) {
+        updateStatus('stopped', 'Agente interrompido pelo usuário');
+        return res.json({
+          success: false,
+          error: 'Agente interrompido pelo usuário',
+          history,
+          iterations: i,
+          tempo_ms: Date.now() - startTime,
+        });
+      }
+
       // Check timeout
       if (Date.now() - startTime > TIMEOUT_MS) {
         updateStatus('erro', 'Timeout: agente excedeu 5 minutos');
