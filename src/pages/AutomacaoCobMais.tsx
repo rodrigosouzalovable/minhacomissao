@@ -71,13 +71,28 @@ export default function AutomacaoCobMais() {
   const [videoProgressLabel, setVideoProgressLabel] = useState('');
 
   // Chat with AI state
-  type ChatMsg = { role: 'user' | 'assistant'; content: string };
+  type ChatMsg = { role: 'user' | 'assistant'; content: string | any[]; image?: string };
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [chatImage, setChatImage] = useState<string | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef<HTMLDivElement>(null);
   const chatAbortRef = useRef<AbortController | null>(null);
+  const chatImageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleChatImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Imagem muito grande. Máximo: 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setChatImage(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
