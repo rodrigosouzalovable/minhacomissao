@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
         const { data: config } = await adminClient
           .from('automacao_config')
-          .select('server_url')
+          .select('server_url, cobmais_email, cobmais_senha')
           .order('criado_em', { ascending: false })
           .limit(1)
           .maybeSingle()
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
               'ngrok-skip-browser-warning': 'true',
               'User-Agent': 'MeusAcordos/1.0',
             },
-            body: JSON.stringify({ acao, parametros: parametros || {} }),
+            body: JSON.stringify({ acao, parametros: parametros || {}, cobmais_email: config.cobmais_email, cobmais_senha: config.cobmais_senha }),
             signal: AbortSignal.timeout(timeoutMs)
           })
           const resultado = await res.json()
