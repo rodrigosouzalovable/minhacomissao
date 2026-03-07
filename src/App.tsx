@@ -35,6 +35,7 @@ import PortalHome from "./pages/PortalHome";
 import CredorDashboard from "./pages/CredorDashboard";
 import Acionamento from "./pages/Acionamento";
 import MetaPessoal from "./pages/MetaPessoal";
+import AutomacaoCobMais from "./pages/AutomacaoCobMais";
 
 const queryClient = new QueryClient();
 
