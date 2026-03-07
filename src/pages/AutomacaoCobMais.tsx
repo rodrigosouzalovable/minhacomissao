@@ -186,7 +186,7 @@ export default function AutomacaoCobMais() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -198,6 +198,21 @@ export default function AutomacaoCobMais() {
               <Badge variant={roboStatus === 'online' ? 'default' : 'destructive'} className="text-lg px-4 py-1">
                 {roboStatus === 'checking' ? 'Verificando...' : roboStatus === 'online' ? 'ONLINE' : 'OFFLINE'}
               </Badge>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2"><MessageCircle className="h-4 w-4" />Chatbot WhatsApp</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-3">
+              <Switch
+                checked={chatbotAtivo}
+                onCheckedChange={toggleChatbot}
+                disabled={togglingChatbot}
+              />
+              <span className={`text-sm font-medium ${chatbotAtivo ? 'text-green-600' : 'text-destructive'}`}>
+                {chatbotAtivo ? 'Ativado' : 'Desativado'}
+              </span>
             </CardContent>
           </Card>
           <Card>
