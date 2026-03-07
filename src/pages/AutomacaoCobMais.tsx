@@ -380,6 +380,9 @@ export default function AutomacaoCobMais() {
       toast.info('⚙️ Automação em execução no robô... Aguarde, isso pode levar alguns minutos.', { duration: 30000, id: 'automation-running' });
     }, 5000);
 
+    const abortController = new AbortController();
+    chatAbortRef.current = abortController;
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Não autenticado');
@@ -392,6 +395,7 @@ export default function AutomacaoCobMais() {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ messages: allMessages }),
+        signal: abortController.signal,
       });
 
       if (!resp.ok || !resp.body) {
