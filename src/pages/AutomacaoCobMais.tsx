@@ -103,7 +103,6 @@ export default function AutomacaoCobMais() {
   }, [invokeFunction]);
 
   const checkStatus = useCallback(async () => {
-    setRoboStatus('checking');
     try {
       const result = await invokeFunction({ action: 'status' });
       setRoboStatus(result?.status === 'online' ? 'online' : 'offline');
