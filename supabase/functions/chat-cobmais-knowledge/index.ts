@@ -225,94 +225,98 @@ ${knowledgeContext}
     ];
 
     if (toolCalls && toolCalls.length > 0) {
-      // AI wants to call the tool
       const toolCall = toolCalls[0];
       const args = JSON.parse(toolCall.function.arguments || "{}");
-      const objetivo = args.objetivo;
-      const maxIterations = args.max_iterations || 1;
+      const toolName = toolCall.function.name;
 
-      console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}, max_iterations: ${maxIterations}`);
-
-      // Fire-and-forget: dispatch automation WITHOUT awaiting
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-      fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          action: "agent_execute",
-          objetivo,
-          parametros: {},
-          max_iterations: Math.min(maxIterations, 10),
-          _internal: true,
-        }),
-      }).then(res => res.text()).then(t => {
-        console.log("[chat-cobmais-knowledge] Automation dispatched, response:", t.substring(0, 200));
-      }).catch(err => {
-        console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
-      });
+      let toolResultContent = "";
 
-      // Save user instruction as learned knowledge (fire-and-forget)
-      (async () => {
+      if (toolName === "executar_acao_direta") {
+        // DIRECT ACTION: execute synchronously for instant feedback
+        const { action: directAction, selector, value, url: directUrl } = args;
+        console.log(`[chat-cobmais-knowledge] Direct action: ${directAction}, selector: ${selector}, value: ${value}`);
+
         try {
-          // Get or create the "chat_aprendido" session
-          let { data: session } = await adminClient.from("cobmais_sessoes_gravadas")
-            .select("id, total_passos")
-            .eq("nome", "chat_aprendido")
-            .single();
-
-          if (!session) {
-            const { data: newSession } = await adminClient.from("cobmais_sessoes_gravadas")
-              .insert({ nome: "chat_aprendido", status: "finalizado", criado_por: userId, total_passos: 0, descricao: "Conhecimento aprendido via chat" })
-              .select("id, total_passos")
-              .single();
-            session = newSession;
-          }
-
-          if (session) {
-            const nextStep = (session.total_passos || 0) + 1;
-            // Detect action type from objetivo
-            const objLower = objetivo.toLowerCase();
-            let acao = "navigate";
-            if (objLower.includes("f5") || objLower.includes("enter") || objLower.includes("escape") || objLower.includes("tab") || objLower.includes("tecla") || objLower.includes("pressio")) acao = "keypress";
-            else if (objLower.includes("clic") || objLower.includes("botão") || objLower.includes("botao")) acao = "click";
-            else if (objLower.includes("preench") || objLower.includes("digit") || objLower.includes("escrev")) acao = "fill";
-            else if (objLower.includes("scroll") || objLower.includes("rolar")) acao = "scroll";
-
-            await adminClient.from("cobmais_conhecimento").insert({
-              sessao_id: session.id,
-              nome_fluxo: "chat_aprendido",
-              passo_numero: nextStep,
-              acao,
-              descricao_tela: objetivo,
-            });
-            await adminClient.from("cobmais_sessoes_gravadas").update({ total_passos: nextStep }).eq("id", session.id);
-            console.log(`[chat-cobmais-knowledge] Saved knowledge: step ${nextStep}, action: ${acao}`);
-          }
+          const directRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+            body: JSON.stringify({
+              action: "acao_direta",
+              direct_action: directAction,
+              direct_selector: selector,
+              direct_value: value,
+              direct_url: directUrl,
+              _internal: true,
+            }),
+          });
+          const directResult = await directRes.json();
+          const tempo = directResult.tempo_ms || 0;
+          toolResultContent = directResult.success
+            ? `Ação direta executada com sucesso em ${tempo}ms! Ação: ${directAction}${selector ? ` no elemento "${selector}"` : ""}${value ? ` com valor "${value}"` : ""}. Confirme ao usuário e pergunte o próximo passo.`
+            : `Erro na ação direta: ${directResult.error || "desconhecido"}. Informe o usuário.`;
         } catch (err) {
-          console.error("[chat-cobmais-knowledge] Error saving knowledge:", err);
+          toolResultContent = `Erro de conexão ao executar ação direta: ${err instanceof Error ? err.message : "desconhecido"}`;
         }
-      })();
+      } else {
+        // AGENT MODE: fire-and-forget for complex flows
+        const objetivo = args.objetivo;
+        const maxIterations = args.max_iterations || 1;
+        console.log(`[chat-cobmais-knowledge] Agent: ${objetivo}, max_iterations: ${maxIterations}`);
 
-      const toolResultContent = `Automação disparada com sucesso! O robô executou 1 ação para o objetivo: "${objetivo}". Confirme ao usuário que a ação foi executada e pergunte qual o próximo passo.`;
+        fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            action: "agent_execute",
+            objetivo,
+            parametros: {},
+            max_iterations: Math.min(maxIterations, 10),
+            _internal: true,
+          }),
+        }).then(res => res.text()).then(t => {
+          console.log("[chat-cobmais-knowledge] Automation dispatched:", t.substring(0, 200));
+        }).catch(err => {
+          console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
+        });
+
+        // Save knowledge (fire-and-forget)
+        (async () => {
+          try {
+            let { data: session } = await adminClient.from("cobmais_sessoes_gravadas")
+              .select("id, total_passos").eq("nome", "chat_aprendido").single();
+            if (!session) {
+              const { data: ns } = await adminClient.from("cobmais_sessoes_gravadas")
+                .insert({ nome: "chat_aprendido", status: "finalizado", criado_por: userId, total_passos: 0, descricao: "Conhecimento aprendido via chat" })
+                .select("id, total_passos").single();
+              session = ns;
+            }
+            if (session) {
+              const nextStep = (session.total_passos || 0) + 1;
+              const objLower = objetivo.toLowerCase();
+              let acao = "navigate";
+              if (objLower.includes("f5") || objLower.includes("enter") || objLower.includes("escape") || objLower.includes("tab") || objLower.includes("tecla") || objLower.includes("pressio")) acao = "keypress";
+              else if (objLower.includes("clic") || objLower.includes("botão") || objLower.includes("botao")) acao = "click";
+              else if (objLower.includes("preench") || objLower.includes("digit") || objLower.includes("escrev")) acao = "fill";
+              else if (objLower.includes("scroll") || objLower.includes("rolar")) acao = "scroll";
+              await adminClient.from("cobmais_conhecimento").insert({ sessao_id: session.id, nome_fluxo: "chat_aprendido", passo_numero: nextStep, acao, descricao_tela: objetivo });
+              await adminClient.from("cobmais_sessoes_gravadas").update({ total_passos: nextStep }).eq("id", session.id);
+            }
+          } catch (err) { console.error("[chat-cobmais-knowledge] Error saving knowledge:", err); }
+        })();
+
+        toolResultContent = `Automação disparada com sucesso! O robô está executando o objetivo: "${objetivo}". Confirme ao usuário e pergunte o próximo passo.`;
+      }
 
       finalMessages = [
         ...finalMessages,
         firstChoice.message,
-        {
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: toolResultContent,
-        },
+        { role: "tool", tool_call_id: toolCall.id, content: toolResultContent },
       ];
     } else if (firstChoice?.message?.content) {
-      finalMessages = [
-        ...finalMessages,
-      ];
+      finalMessages = [...finalMessages];
     }
 
     // 2nd call: streaming, with full context
