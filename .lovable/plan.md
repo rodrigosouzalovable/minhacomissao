@@ -1,49 +1,31 @@
 
 
-# Aprendizado por Vídeo Narrado — Análise de Viabilidade e Plano
+## Diagnóstico
 
-## A ideia é excelente
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-Gravar a tela com narração em voz é como treinar um novo funcionário: você mostra e explica ao mesmo tempo. A IA pode extrair **muito mais contexto** de um vídeo narrado do que apenas capturando cliques e seletores CSS (que é o sistema atual).
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Como funcionaria tecnicamente
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-1. **Você grava** a tela usando a extensão Screen Recorder (gera um arquivo .webm ou .mp4)
-2. **Faz upload** do vídeo na página de Automação CobMais
-3. **Uma Edge Function** processa o vídeo em 2 etapas:
-   - **Transcrição do áudio**: extrai o que você falou (já temos isso com Gemini)
-   - **Análise visual**: extrai frames-chave e descreve cada tela/ação visível
-4. **A IA combina** fala + visual para gerar passos estruturados no formato `cobmais_conhecimento`
-5. O conhecimento fica **permanentemente salvo** e é injetado no prompt do Agente
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-## Modelo de IA
+## Correção
 
-O Gemini 2.5 Pro (que já usamos) suporta **vídeo + áudio nativamente** — ele pode receber o vídeo inteiro e entender tanto o que está na tela quanto o que está sendo dito. Não precisamos de serviços externos.
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-## Alterações necessárias
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-| Componente | Mudança |
-|---|---|
-| **Storage bucket** | Criar bucket `cobmais-videos` para armazenar os vídeos enviados |
-| **Nova Edge Function `process-cobmais-video`** | Recebe o vídeo, envia ao Gemini com prompt para extrair passos estruturados (ação, seletor, descrição narrada), salva na tabela `cobmais_conhecimento` |
-| **UI `AutomacaoCobMais.tsx`** | Adicionar área de upload de vídeo na aba Conhecimento, com indicador de progresso e resultado do processamento |
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
 
-## Fluxo do usuário
-
-1. Grava a tela + narração com a extensão Chrome
-2. Abre a aba "Conhecimento" na Automação CobMais
-3. Clica "Enviar Vídeo de Treinamento", dá um nome ao fluxo (ex: "Como gerar boleto")
-4. Faz upload do arquivo .webm/.mp4
-5. Aguarda processamento (~30-60s)
-6. Visualiza os passos extraídos pela IA
-7. Próxima execução do agente já usa esse conhecimento
-
-## Limitações a considerar
-
-- **Tamanho do vídeo**: Gemini aceita até ~1h de vídeo, mas o upload no Lovable tem limite de 20MB. Vídeos curtos e focados (2-5 min por fluxo) são ideais.
-- **Qualidade dos seletores**: A IA pode não identificar seletores CSS exatos a partir do vídeo — ela vai gerar descrições textuais que complementam os seletores já gravados pelo Playwright.
-
-## Resultado esperado
-
-O sistema atual (gravação Playwright) captura **seletores técnicos** mas sem contexto humano. O vídeo narrado adiciona **explicações em linguagem natural** — "aqui eu clico no botão amarelo porque é onde fica o menu de boletos". A combinação dos dois métodos cria um conhecimento muito mais rico.
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

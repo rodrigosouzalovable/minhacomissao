@@ -13,7 +13,8 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye } from 'lucide-react';
+import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye, Upload, Video, FileVideo } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { RoboStreamViewer } from '@/components/RoboStreamViewer';
 import { RoboCodeViewer } from '@/components/RoboCodeViewer';
 import { supabase } from '@/integrations/supabase/client';
@@ -59,6 +60,14 @@ export default function AutomacaoCobMais() {
   const [sessoes, setSessoes] = useState<any[]>([]);
   const [selectedSessaoKnowledge, setSelectedSessaoKnowledge] = useState<any[]>([]);
   const [viewingSessaoId, setViewingSessaoId] = useState<string | null>(null);
+
+  // Video upload state
+  const [showVideoUpload, setShowVideoUpload] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoFlowName, setVideoFlowName] = useState('');
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoProgressLabel, setVideoProgressLabel] = useState('');
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -257,6 +266,72 @@ export default function AutomacaoCobMais() {
     if (result?.conhecimento) {
       setSelectedSessaoKnowledge(result.conhecimento);
       setViewingSessaoId(sessaoId);
+    }
+  };
+
+  // Video upload handler
+  const handleVideoUpload = async () => {
+    if (!videoFile || !videoFlowName.trim()) return;
+    if (videoFile.size > 20 * 1024 * 1024) {
+      toast.error('Vídeo muito grande. Máximo: 20MB');
+      return;
+    }
+
+    setUploadingVideo(true);
+    setVideoProgress(10);
+    setVideoProgressLabel('Enviando vídeo...');
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const ext = videoFile.name.split('.').pop() || 'webm';
+      const filePath = `${session.user.id}/${Date.now()}.${ext}`;
+
+      setVideoProgress(20);
+      const { error: uploadError } = await supabase.storage
+        .from('cobmais-videos')
+        .upload(filePath, videoFile);
+
+      if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`);
+
+      setVideoProgress(50);
+      setVideoProgressLabel('Processando com IA... (pode levar até 2 min)');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/process-cobmais-video`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ video_path: filePath, nome_fluxo: videoFlowName.trim() }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Erro ao processar vídeo');
+      }
+
+      setVideoProgress(100);
+      setVideoProgressLabel('Concluído!');
+      toast.success(`🎓 Vídeo processado! ${result.total_passos} passos extraídos.`);
+      if (result.resumo) {
+        toast.info(result.resumo, { duration: 8000 });
+      }
+
+      // Cleanup
+      setVideoFile(null);
+      setVideoFlowName('');
+      setShowVideoUpload(false);
+      loadSessoes();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao processar vídeo');
+    } finally {
+      setUploadingVideo(false);
+      setVideoProgress(0);
+      setVideoProgressLabel('');
     }
   };
 
@@ -564,12 +639,17 @@ export default function AutomacaoCobMais() {
                 <GraduationCap className="h-5 w-5" />
                 🎓 Conhecimento Aprendido
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={loadSessoes}>
-                <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowVideoUpload(true)}>
+                  <FileVideo className="h-4 w-4 mr-1" /> Enviar Vídeo
+                </Button>
+                <Button variant="outline" size="sm" onClick={loadSessoes}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+                </Button>
+              </div>
             </div>
             <CardDescription>
-              Sessões gravadas onde a IA observou você navegando no CobMais. Este conhecimento é usado automaticamente pelo agente.
+              Sessões gravadas e vídeos de treinamento. O conhecimento é usado automaticamente pelo agente IA.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -765,6 +845,96 @@ export default function AutomacaoCobMais() {
             <Button onClick={handleStartRecording} disabled={!recordingName.trim()}>
               <GraduationCap className="h-4 w-4 mr-2" />
               Iniciar Gravação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video upload dialog */}
+      <Dialog open={showVideoUpload} onOpenChange={v => { if (!uploadingVideo) setShowVideoUpload(v); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileVideo className="h-5 w-5" />
+              Enviar Vídeo de Treinamento
+            </DialogTitle>
+            <DialogDescription>
+              Grave sua tela com narração usando uma extensão como Screen Recorder. A IA vai analisar o vídeo e extrair os passos automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Nome do Fluxo</Label>
+              <Input
+                placeholder="Ex: gerar_boleto, cadastrar_email"
+                value={videoFlowName}
+                onChange={e => setVideoFlowName(e.target.value)}
+                disabled={uploadingVideo}
+              />
+            </div>
+            <div>
+              <Label>Vídeo (.webm ou .mp4)</Label>
+              <div className="mt-2">
+                {videoFile ? (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                    <Video className="h-5 w-5 text-primary shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{videoFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{(videoFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                    </div>
+                    {!uploadingVideo && (
+                      <Button variant="ghost" size="sm" onClick={() => setVideoFile(null)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                    <span className="text-sm text-muted-foreground">Clique para selecionar o vídeo</span>
+                    <span className="text-xs text-muted-foreground mt-1">Máx. 20MB • .webm ou .mp4</span>
+                    <input
+                      type="file"
+                      accept="video/webm,video/mp4,.webm,.mp4"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) setVideoFile(file);
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+            {uploadingVideo && (
+              <div className="space-y-2">
+                <Progress value={videoProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">{videoProgressLabel}</p>
+              </div>
+            )}
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-2">
+              <p>💡 <strong>Dicas:</strong></p>
+              <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+                <li>Grave vídeos curtos e focados (2-5 min por fluxo)</li>
+                <li>Narre em voz alta o que você está fazendo e por quê</li>
+                <li>Exemplo: "Agora clico no botão amarelo para abrir o menu de boletos"</li>
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVideoUpload(false)} disabled={uploadingVideo}>Cancelar</Button>
+            <Button onClick={handleVideoUpload} disabled={!videoFile || !videoFlowName.trim() || uploadingVideo}>
+              {uploadingVideo ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Enviar e Processar
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
