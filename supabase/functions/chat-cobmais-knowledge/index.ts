@@ -85,7 +85,7 @@ ${knowledgeContext}
 15. SEMPRE pergunte ao usuário qual o próximo passo após confirmar a execução
 16. Se o usuário disser "acesse o link X e depois pesquise Y", execute APENAS o primeiro passo (acessar o link) e depois pergunte se pode prosseguir com o segundo
 17. Informe que o usuário pode acompanhar em tempo real no **"Streaming do Robô"** acima do chat
-18. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário`;`;
+18. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
