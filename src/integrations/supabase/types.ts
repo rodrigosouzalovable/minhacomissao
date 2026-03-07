@@ -310,6 +310,33 @@ export type Database = {
           },
         ]
       }
+      chat_ia_mensagens: {
+        Row: {
+          content: string
+          criado_em: string
+          id: string
+          image: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          criado_em?: string
+          id?: string
+          image?: string | null
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          criado_em?: string
+          id?: string
+          image?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chatbot_config: {
         Row: {
           ativo: boolean

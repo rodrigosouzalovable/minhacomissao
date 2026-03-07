@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,8 +76,61 @@ export default function AutomacaoCobMais() {
   const [chatInput, setChatInput] = useState('');
   const [chatImage, setChatImage] = useState<string | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatLoaded, setChatLoaded] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef<HTMLDivElement>(null);
+
+  // Load persisted chat messages on mount
+  useEffect(() => {
+    const loadChat = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setChatLoaded(true); return; }
+      const { data } = await supabase
+        .from('chat_ia_mensagens')
+        .select('role, content, image, criado_em')
+        .eq('user_id', user.id)
+        .order('criado_em', { ascending: true })
+        .limit(100);
+      if (data && data.length > 0) {
+        setChatMessages(data.map(m => {
+          let content: string | any[] = m.content;
+          try { const parsed = JSON.parse(m.content); if (Array.isArray(parsed)) content = parsed; } catch {}
+          return { role: m.role as 'user' | 'assistant', content, image: m.image || undefined };
+        }));
+      }
+      setChatLoaded(true);
+    };
+    loadChat();
+  }, []);
+
+  // Persist chat messages when they change (after initial load)
+  const prevMsgCountRef = useRef(0);
+  useEffect(() => {
+    if (!chatLoaded || chatMessages.length === 0) return;
+    // Only save new messages (appended at the end)
+    const newCount = chatMessages.length;
+    const prevCount = prevMsgCountRef.current;
+    prevMsgCountRef.current = newCount;
+    if (newCount <= prevCount) return;
+    const newMsgs = chatMessages.slice(prevCount);
+    const saveNew = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const rows = newMsgs
+        .filter(m => typeof m.content === 'string' ? m.content.trim() : true)
+        .map(m => ({
+          user_id: user.id,
+          role: m.role,
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+          image: m.image || null,
+        }));
+      if (rows.length > 0) {
+        await supabase.from('chat_ia_mensagens').insert(rows as any);
+      }
+    };
+    // Only save when not loading (streaming complete)
+    if (!isChatLoading) saveNew();
+  }, [chatMessages, chatLoaded, isChatLoading]);
   const chatAbortRef = useRef<AbortController | null>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -901,14 +954,32 @@ export default function AutomacaoCobMais() {
 
         {/* Chat com IA sobre o conhecimento */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5" />
-              💬 Conversar com a IA sobre o Conhecimento
-            </CardTitle>
-            <CardDescription>
-              Pergunte à IA o que ela aprendeu, se tem dúvidas ou se precisa de mais treinamento.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" />
+                💬 Conversar com a IA sobre o Conhecimento
+              </CardTitle>
+              <CardDescription>
+                Pergunte à IA o que ela aprendeu, se tem dúvidas ou se precisa de mais treinamento.
+              </CardDescription>
+            </div>
+            {chatMessages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={async () => {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (user) await supabase.from('chat_ia_mensagens').delete().eq('user_id', user.id);
+                  setChatMessages([]);
+                  prevMsgCountRef.current = 0;
+                  toast.success('Histórico limpo');
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-1" /> Limpar
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
