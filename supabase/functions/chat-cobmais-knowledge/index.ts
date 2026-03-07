@@ -89,6 +89,7 @@ ${knowledgeContext}
 13. Exemplos de quando executar: "acesse o link X", "pesquise pelo CPF Y", "clique no botão Z", "preencha o campo com valor W", "atualize a página clicando F5", "pressione Enter", "pressione Escape para fechar o modal"
 14. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
 19. Você suporta ação de TECLAS (keypress): F5 (atualizar página), Enter, Escape, Tab, Backspace, etc. Quando o usuário pedir para atualizar a página, pressionar Enter ou qualquer tecla, use a tool executar_automacao com objetivo descritivo como "pressionar F5 para atualizar a página"
+20. Quando o usuário pedir para fazer login ou preencher credenciais, INCLUA email e senha no objetivo da automação, ex: "Preencher o campo de email com X e o campo de senha com Y e clicar em Entrar". NUNCA mostre a senha no chat.
 
 ## IMPORTANTE - Confirmação após cada ação:
 15. SEMPRE pergunte ao usuário qual o próximo passo após confirmar a execução
