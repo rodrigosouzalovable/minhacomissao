@@ -967,8 +967,8 @@ app.post('/automacao/agent', async (req, res) => {
             await pg.waitForSelector(aiAction.selector, { timeout: 5000 });
             await pg.click(aiAction.selector, { clickCount: 3 });
             await pg.fill(aiAction.selector, '');
-            await pg.type(aiAction.selector, aiAction.value || '', { delay: 50 });
-            await delay(500);
+            await pg.type(aiAction.selector, aiAction.value || '', { delay: 20 });
+            await delay(300);
             break;
           }
           case 'scroll': {
