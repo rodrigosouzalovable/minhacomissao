@@ -27,6 +27,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
+    const userId = claimsData.claims.sub;
     const { messages } = await req.json();
 
     // Fetch all knowledge data using service role
@@ -57,7 +58,7 @@ serve(async (req) => {
       }).join("\n\n");
     }
 
-    const systemPrompt = `Você é a IA do sistema de automação CobMais. Seu papel é conversar com o administrador sobre o que você aprendeu nos treinamentos (sessões gravadas e vídeos narrados).
+    const systemPrompt = `Você é a IA do sistema de automação CobMais. Seu papel é conversar com o administrador sobre o que você aprendeu nos treinamentos E também EXECUTAR ações quando solicitado.
 
 ## Seu conhecimento atual:
 ${knowledgeContext}
@@ -70,12 +71,41 @@ ${knowledgeContext}
 5. Seja honesto sobre o que sabe e o que não sabe
 6. Use markdown para formatar as respostas (listas, negrito, etc.)
 7. Quando listar passos de um fluxo, mostre de forma clara e numerada
-8. Se houver passos sem seletor CSS ou com descrição vaga, marque como ⚠️ (passo incompleto)`;
+8. Se houver passos sem seletor CSS ou com descrição vaga, marque como ⚠️ (passo incompleto)
+
+## IMPORTANTE - Execução de ações:
+9. Quando o usuário PEDIR para executar algo (emitir boleto, gerar boleto, buscar cliente, fazer algo no CobMais), você DEVE usar a tool "executar_automacao" passando o objetivo em linguagem natural
+10. NÃO apenas descreva os passos — EXECUTE chamando a tool
+11. Exemplos de quando executar: "emita o boleto", "gere um boleto", "busque o cliente", "faça login", "execute o fluxo X"
+12. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "executar_automacao",
+          description: "Executa uma ação de automação no robô CobMais. Use quando o usuário pedir para executar, emitir, gerar, buscar ou fazer qualquer ação no sistema CobMais.",
+          parameters: {
+            type: "object",
+            properties: {
+              objetivo: {
+                type: "string",
+                description: "Descrição em linguagem natural do que deve ser feito, ex: 'Emitir boleto à vista do CPF 059.919.151-13 por R$ 300,00 para pagamento em 10/03/2026'"
+              }
+            },
+            required: ["objetivo"],
+            additionalProperties: false
+          }
+        }
+      }
+    ];
+
+    // 1st call: non-streaming, with tools, to decide if we need to execute
+    console.log("[chat-cobmais-knowledge] 1st call: checking for tool usage...");
+    const firstResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -87,29 +117,119 @@ ${knowledgeContext}
           { role: "system", content: systemPrompt },
           ...messages,
         ],
-        stream: true,
+        tools,
+        stream: false,
       }),
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
+    if (!firstResponse.ok) {
+      if (firstResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Tente novamente em alguns segundos." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
+      if (firstResponse.status === 402) {
         return new Response(JSON.stringify({ error: "Créditos insuficientes." }), {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      const t = await firstResponse.text();
+      console.error("AI gateway error (1st call):", firstResponse.status, t);
       return new Response(JSON.stringify({ error: "Erro no gateway de IA" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(response.body, {
+    const firstResult = await firstResponse.json();
+    const firstChoice = firstResult.choices?.[0];
+    const toolCalls = firstChoice?.message?.tool_calls;
+
+    let finalMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages,
+    ];
+
+    if (toolCalls && toolCalls.length > 0) {
+      // AI wants to call the tool
+      const toolCall = toolCalls[0];
+      const args = JSON.parse(toolCall.function.arguments || "{}");
+      const objetivo = args.objetivo;
+
+      console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}`);
+
+      // Call automacao-cobmais internally
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+      let automationResult: any;
+      try {
+        const autoRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            action: "agent_execute",
+            objetivo,
+            parametros: {},
+            _internal: true,
+          }),
+          signal: AbortSignal.timeout(360000),
+        });
+        automationResult = await autoRes.json();
+        console.log("[chat-cobmais-knowledge] Automation result:", JSON.stringify(automationResult).substring(0, 500));
+      } catch (err) {
+        automationResult = { success: false, error: err instanceof Error ? err.message : "Erro ao executar automação" };
+        console.error("[chat-cobmais-knowledge] Automation error:", err);
+      }
+
+      // Build tool result message
+      const toolResultContent = automationResult.success
+        ? `Automação executada com sucesso! Resultado: ${JSON.stringify(automationResult.resultado || automationResult, null, 2)}`
+        : `Erro na automação: ${automationResult.error || JSON.stringify(automationResult)}`;
+
+      finalMessages = [
+        ...finalMessages,
+        firstChoice.message, // assistant message with tool_calls
+        {
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: toolResultContent,
+        },
+      ];
+    } else if (firstChoice?.message?.content) {
+      // No tool call, AI responded directly - just stream the same content
+      // We'll do a 2nd streaming call with the same messages for consistent UX
+      finalMessages = [
+        ...finalMessages,
+      ];
+    }
+
+    // 2nd call: streaming, with full context
+    console.log("[chat-cobmais-knowledge] 2nd call: streaming final response...");
+    const streamResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: finalMessages,
+        stream: true,
+      }),
+    });
+
+    if (!streamResponse.ok) {
+      const t = await streamResponse.text();
+      console.error("AI gateway error (2nd call):", streamResponse.status, t);
+      return new Response(JSON.stringify({ error: "Erro no gateway de IA" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(streamResponse.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
