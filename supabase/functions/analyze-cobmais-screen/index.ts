@@ -74,22 +74,52 @@ async function fetchKnowledge(supabaseClient: any, objective: string): Promise<s
     
     if (error || !data || data.length === 0) return ''
 
-    // Group by flow
+    // Group by flow and filter noise
     const flows: Record<string, any[]> = {}
     for (const step of data) {
+      // Skip chrome-error URLs
+      if (step.url_pagina?.includes('chrome-error://')) continue
+      // Skip generic selectors with no useful info
+      if (step.acao === 'click' && step.seletor === 'div.login') continue
+      
       if (!flows[step.nome_fluxo]) flows[step.nome_fluxo] = []
       flows[step.nome_fluxo].push(step)
     }
 
     let knowledgeText = '\n\n## 🎓 CONHECIMENTO APRENDIDO (gravado por humano)\nUse estas lições como guia prioritário. Estes passos foram gravados por um humano navegando o CobMais real.\n'
 
-    for (const [flowName, steps] of Object.entries(flows)) {
-      knowledgeText += `\n### Fluxo: "${flowName}" (${steps.length} passos)\n`
+    for (const [flowName, rawSteps] of Object.entries(flows)) {
+      // Filter consecutive duplicate navigates (keep only the last one with a new base URL)
+      const steps: any[] = []
+      let lastNavBaseUrl = ''
+      for (const step of rawSteps) {
+        if (step.acao === 'navigate') {
+          const baseUrl = (step.url_pagina || '').split('?')[0].split('#')[0]
+          if (baseUrl === lastNavBaseUrl) continue // skip duplicate
+          if ((step.url_pagina || '').includes('/connect/authorize/callback')) continue // skip OAuth redirects
+          lastNavBaseUrl = baseUrl
+        } else {
+          lastNavBaseUrl = '' // reset after non-navigate
+        }
+        steps.push(step)
+      }
+
+      knowledgeText += `\n### Fluxo: "${flowName}" (${steps.length} passos úteis)\n`
+      let stepNum = 0
       for (const step of steps) {
-        knowledgeText += `  ${step.passo_numero}. [${step.acao}] `
+        stepNum++
+        const icon = step.acao === 'click' || step.acao === 'fill' ? '⭐' : ''
+        knowledgeText += `  ${stepNum}. ${icon}[${step.acao}] `
         if (step.seletor) knowledgeText += `seletor="${step.seletor}" `
-        if (step.valor) knowledgeText += `valor="${step.valor}" `
-        if (step.url_pagina) knowledgeText += `url="${step.url_pagina}" `
+        if (step.valor) {
+          // Truncate long URLs in valor
+          const truncVal = step.valor.length > 80 ? step.valor.substring(0, 80) + '...' : step.valor
+          knowledgeText += `valor="${truncVal}" `
+        }
+        if (step.url_pagina) {
+          const shortUrl = step.url_pagina.split('?')[0]
+          knowledgeText += `url="${shortUrl}" `
+        }
         if (step.screenshot_description) knowledgeText += `— ${step.screenshot_description}`
         if (step.descricao_tela) knowledgeText += ` (tela: ${step.descricao_tela})`
         knowledgeText += '\n'
