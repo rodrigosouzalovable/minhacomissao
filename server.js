@@ -822,6 +822,18 @@ app.post('/automacao/agent', async (req, res) => {
     const analyzeUrl = `${supabase_url || process.env.SUPABASE_URL || 'https://cymdrkeukockakfzjeen.supabase.co'}/functions/v1/analyze-cobmais-screen`;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
+      // Check abort flag
+      if (abortAgent) {
+        updateStatus('stopped', 'Agente interrompido pelo usuário');
+        return res.json({
+          success: false,
+          error: 'Agente interrompido pelo usuário',
+          history,
+          iterations: i,
+          tempo_ms: Date.now() - startTime,
+        });
+      }
+
       // Check timeout
       if (Date.now() - startTime > TIMEOUT_MS) {
         updateStatus('erro', 'Timeout: agente excedeu 5 minutos');
