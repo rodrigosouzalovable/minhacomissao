@@ -1,41 +1,31 @@
 
 
-# Melhorar o Sistema de Aprendizado
+## Diagnóstico
 
-## Problemas Identificados
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-1. **Sessão com erro não foi limpa**: 2 passos com URLs `chrome-error://` que vão confundir a IA
-2. **Excesso de eventos `navigate`**: Redirecionamentos automáticos do browser (login OAuth) são capturados como "passos", gerando ruído. Dos 24 passos, ~15 são navegações automáticas.
-3. **Faltam as ações de boleto**: A gravação parou antes dos cliques reais de geração de boleto
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Solução
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-### 1. Limpar dados ruins (migração SQL)
-- Deletar todos os registros da sessão com erro (`c21aeb07`)
-- Deletar a própria sessão
-- Filtrar navegações duplicadas consecutivas da sessão boa (manter apenas a última de cada URL)
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-### 2. Melhorar o filtro de gravação no `server.js`
-- Ignorar `navigate` events para URLs que são redirecionamentos (mesma URL repetida, `chrome-error://`, callbacks OAuth)
-- Ignorar cliques em elementos genéricos como `div.login` quando não têm seletor específico
-- Só gravar `navigate` quando a URL base realmente muda
+## Correção
 
-### 3. Adicionar aba "Conhecimento" na UI (`AutomacaoCobMais.tsx`)
-- Mostrar lista de sessões gravadas com status e total de passos
-- Botão para deletar sessões ruins
-- Visualização dos passos de cada sessão em formato legível
-- Botão para "testar" o conhecimento: rodar o agente com um objetivo que corresponda ao fluxo gravado
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-### 4. Melhorar injeção de conhecimento no `analyze-cobmais-screen`
-- Filtrar passos do tipo `navigate` consecutivos antes de injetar no prompt
-- Dar mais peso a ações `click` e `fill` (são as mais úteis)
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-## Arquivos a modificar
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
 
-| Arquivo | Mudança |
-|---------|---------|
-| SQL migration | Limpar sessão com erro + remover navigates duplicados |
-| `server.js` | Filtrar navigates duplicados/automáticos durante gravação |
-| `src/pages/AutomacaoCobMais.tsx` | Aba de visualização do conhecimento aprendido |
-| `supabase/functions/analyze-cobmais-screen/index.ts` | Filtrar navigates consecutivos antes de injetar no prompt |
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

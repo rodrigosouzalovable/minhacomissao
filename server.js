@@ -1116,9 +1116,32 @@ app.post('/automacao/gravar', async (req, res) => {
       }, true);
     });
 
-    // Also track navigation
+    // Also track navigation - with dedup filter
+    let lastRecordedUrl = '';
     pg.on('framenavigated', (frame) => {
       if (frame === pg.mainFrame() && recording && recordingSession) {
+        const url = frame.url();
+        
+        // Skip noise: chrome-error, same URL as last, about:blank, callback/auth redirects
+        if (
+          url.includes('chrome-error://') ||
+          url === 'about:blank' ||
+          url === lastRecordedUrl ||
+          url.includes('/connect/authorize/callback')
+        ) {
+          console.log(`⏭️ Navigate ignorado (ruído): ${url.substring(0, 80)}`);
+          return;
+        }
+        
+        // Extract base URL (without query params) for comparison
+        const baseUrl = url.split('?')[0].split('#')[0];
+        const lastBaseUrl = lastRecordedUrl.split('?')[0].split('#')[0];
+        if (baseUrl === lastBaseUrl) {
+          console.log(`⏭️ Navigate ignorado (mesma base URL): ${baseUrl}`);
+          return;
+        }
+
+        lastRecordedUrl = url;
         recordingSession.step_count++;
         const step = {
           sessao_id: recordingSession.sessao_id,
@@ -1126,9 +1149,9 @@ app.post('/automacao/gravar', async (req, res) => {
           passo_numero: recordingSession.step_count,
           acao: 'navigate',
           seletor: null,
-          valor: frame.url(),
-          url_pagina: frame.url(),
-          descricao_tela: `Navegou para ${frame.url()}`,
+          valor: url,
+          url_pagina: url,
+          descricao_tela: `Navegou para ${url.split('?')[0]}`,
         };
         fetch(`${recordingSession.supabase_url}/rest/v1/cobmais_conhecimento`, {
           method: 'POST',
@@ -1140,7 +1163,7 @@ app.post('/automacao/gravar', async (req, res) => {
           },
           body: JSON.stringify(step),
         }).catch(() => {});
-        console.log(`📝 Passo ${recordingSession.step_count} gravado: [navigate] ${frame.url()}`);
+        console.log(`📝 Passo ${recordingSession.step_count} gravado: [navigate] ${url.split('?')[0]}`);
       }
     });
 
