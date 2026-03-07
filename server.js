@@ -25,6 +25,7 @@ let browser = null;
 let page = null;
 let currentStatus = 'idle';
 let currentMessage = '';
+let abortAgent = false; // Flag to stop agent execution
 
 // ===== INICIALIZAR NAVEGADOR =====
 async function initBrowser() {
