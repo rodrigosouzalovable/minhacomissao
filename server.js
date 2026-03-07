@@ -1199,20 +1199,3 @@ process.on('SIGINT', async () => {
   if (browser) await browser.close();
   process.exit();
 });
-  console.log(`\n🤖 Servidor Playwright rodando na porta ${PORT}`);
-  console.log(`📡 Configure o ngrok: ngrok http ${PORT}\n`);
-
-  try {
-    await initBrowser();
-    updateStatus('idle', 'Pronto para automação');
-  } catch (err) {
-    console.error('Erro ao iniciar navegador:', err.message);
-  }
-});
-
-// Cleanup ao fechar
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Fechando navegador...');
-  if (browser) await browser.close();
-  process.exit();
-});

@@ -12,7 +12,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye } from 'lucide-react';
 import { RoboStreamViewer } from '@/components/RoboStreamViewer';
 import { RoboCodeViewer } from '@/components/RoboCodeViewer';
 import { supabase } from '@/integrations/supabase/client';
@@ -49,6 +50,15 @@ export default function AutomacaoCobMais() {
   const [agentObjective, setAgentObjective] = useState('');
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentResult, setAgentResult] = useState<any>(null);
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
+  const [recordingName, setRecordingName] = useState('');
+  const [showRecordDialog, setShowRecordDialog] = useState(false);
+  const [sessoes, setSessoes] = useState<any[]>([]);
+  const [selectedSessaoKnowledge, setSelectedSessaoKnowledge] = useState<any[]>([]);
+  const [viewingSessaoId, setViewingSessaoId] = useState<string | null>(null);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -112,6 +122,11 @@ export default function AutomacaoCobMais() {
     if (data) setChatbotAtivo(data.ativo);
   }, []);
 
+  const loadSessoes = useCallback(async () => {
+    const result = await invokeFunction({ action: 'get_sessions' });
+    if (result?.sessoes) setSessoes(result.sessoes);
+  }, [invokeFunction]);
+
   const toggleChatbot = async (checked: boolean) => {
     setTogglingChatbot(true);
     try {
@@ -134,7 +149,8 @@ export default function AutomacaoCobMais() {
     loadComandos();
     loadLogs();
     loadChatbotConfig();
-  }, [loadConfig, loadComandos, loadLogs, loadChatbotConfig]);
+    loadSessoes();
+  }, [loadConfig, loadComandos, loadLogs, loadChatbotConfig, loadSessoes]);
 
   useEffect(() => {
     if (!serverUrl) return;
@@ -197,6 +213,66 @@ export default function AutomacaoCobMais() {
     }
   };
 
+  // Recording handlers
+  const handleStartRecording = async () => {
+    if (!recordingName.trim()) return toast.error('Dê um nome para o fluxo');
+    setShowRecordDialog(false);
+    try {
+      const result = await invokeFunction({ action: 'record_start', nome: recordingName.trim() });
+      if (result.success) {
+        setIsRecording(true);
+        setRecordingSessionId(result.sessao_id);
+        toast.success(`🎓 Gravação iniciada: "${recordingName}"`);
+        if (result.warning) {
+          toast.warning(result.warning);
+        }
+      } else {
+        toast.error(result.error || 'Erro ao iniciar gravação');
+      }
+    } catch {
+      toast.error('Erro ao iniciar gravação');
+    }
+  };
+
+  const handleStopRecording = async () => {
+    if (!recordingSessionId) return;
+    try {
+      const result = await invokeFunction({ action: 'record_stop', sessao_id: recordingSessionId });
+      if (result.success) {
+        toast.success(`🎓 Gravação finalizada com ${result.total_passos} passos!`);
+        setIsRecording(false);
+        setRecordingSessionId(null);
+        setRecordingName('');
+        loadSessoes();
+      } else {
+        toast.error(result.error || 'Erro ao parar gravação');
+      }
+    } catch {
+      toast.error('Erro ao parar gravação');
+    }
+  };
+
+  const handleViewKnowledge = async (sessaoId: string) => {
+    const result = await invokeFunction({ action: 'get_knowledge', sessao_id: sessaoId });
+    if (result?.conhecimento) {
+      setSelectedSessaoKnowledge(result.conhecimento);
+      setViewingSessaoId(sessaoId);
+    }
+  };
+
+  const handleDeleteSession = async (sessaoId: string) => {
+    if (!confirm('Excluir esta sessão e todo o conhecimento associado?')) return;
+    const result = await invokeFunction({ action: 'delete_session', sessao_id: sessaoId });
+    if (result.success) {
+      toast.success('Sessão excluída');
+      loadSessoes();
+      if (viewingSessaoId === sessaoId) {
+        setViewingSessaoId(null);
+        setSelectedSessaoKnowledge([]);
+      }
+    }
+  };
+
   const currentParams = ACOES_DISPONIVEIS.find(a => a.value === selectedAcao)?.params || [];
 
   const statusColor = roboStatus === 'online' ? 'bg-green-500' : roboStatus === 'checking' ? 'bg-yellow-500' : 'bg-destructive';
@@ -211,6 +287,18 @@ export default function AutomacaoCobMais() {
             <p className="text-muted-foreground">Automação de tarefas no CobMais via Playwright</p>
           </div>
           <div className="ml-auto flex items-center gap-4">
+            {/* Recording button */}
+            {isRecording ? (
+              <Button variant="destructive" size="sm" onClick={handleStopRecording} className="animate-pulse">
+                <Square className="h-4 w-4 mr-1" />
+                Parar Gravação
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setShowRecordDialog(true)} disabled={roboStatus !== 'online'}>
+                <GraduationCap className="h-4 w-4 mr-1" />
+                Gravar Sessão
+              </Button>
+            )}
             {/* Agent mode toggle */}
             <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5">
               <Zap className="h-4 w-4 text-muted-foreground" />
@@ -225,6 +313,20 @@ export default function AutomacaoCobMais() {
             </div>
           </div>
         </div>
+
+        {/* Recording indicator */}
+        {isRecording && (
+          <Card className="border-destructive bg-destructive/5">
+            <CardContent className="flex items-center gap-3 py-3">
+              <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
+              <span className="font-medium text-destructive">🎓 Gravando: "{recordingName}"</span>
+              <span className="text-sm text-muted-foreground">— Navegue normalmente no CobMais pelo stream. Seus cliques e preenchimentos estão sendo gravados.</span>
+              <Button variant="destructive" size="sm" onClick={handleStopRecording} className="ml-auto">
+                <Square className="h-4 w-4 mr-1" /> Parar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <Card>
@@ -335,6 +437,9 @@ export default function AutomacaoCobMais() {
                   <p>🧠 <strong>Gemini Vision</strong> analisa a tela a cada passo</p>
                   <p>🔄 Máx. <strong>30 iterações</strong> | Timeout: <strong>5 min</strong></p>
                   <p>⚠️ Para automaticamente se confiança &lt; 70%</p>
+                  {sessoes.length > 0 && (
+                    <p>🎓 <strong>{sessoes.length} fluxo(s) aprendido(s)</strong> serão usados como referência</p>
+                  )}
                 </div>
                 <Button
                   onClick={handleAgentExecute}
@@ -368,7 +473,6 @@ export default function AutomacaoCobMais() {
                         {agentResult.resultado.iterations} iterações | {((agentResult.tempo_ms || 0) / 1000).toFixed(1)}s
                       </span>
                     )}
-                    {/* Agent history */}
                     {agentResult.resultado?.history && (
                       <ScrollArea className="h-48 rounded-md border p-3 bg-muted">
                         <div className="space-y-1">
@@ -452,6 +556,95 @@ export default function AutomacaoCobMais() {
         {/* Código do Robô */}
         <RoboCodeViewer />
 
+        {/* Knowledge base - Learned sessions */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5" />
+                🎓 Conhecimento Aprendido
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={loadSessoes}>
+                <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+              </Button>
+            </div>
+            <CardDescription>
+              Sessões gravadas onde a IA observou você navegando no CobMais. Este conhecimento é usado automaticamente pelo agente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sessoes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>Nenhuma sessão gravada ainda.</p>
+                <p className="text-sm mt-1">Clique em "Gravar Sessão" para ensinar a IA como usar o CobMais.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome do Fluxo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Passos</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sessoes.map(s => (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-medium">{s.nome}</TableCell>
+                        <TableCell>
+                          <Badge variant={s.status === 'concluida' ? 'default' : s.status === 'gravando' ? 'secondary' : 'destructive'}>
+                            {s.status === 'concluida' ? '✅ Concluída' : s.status === 'gravando' ? '🔴 Gravando' : s.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{s.total_passos}</TableCell>
+                        <TableCell className="text-sm">{format(new Date(s.criado_em), 'dd/MM/yyyy HH:mm')}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewKnowledge(s.id)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteSession(s.id)} className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Knowledge detail view */}
+                {viewingSessaoId && selectedSessaoKnowledge.length > 0 && (
+                  <div className="mt-4">
+                    <Label className="text-sm font-medium mb-2 block">
+                      Passos gravados ({selectedSessaoKnowledge.length}):
+                    </Label>
+                    <ScrollArea className="h-64 rounded-md border p-3 bg-muted">
+                      <div className="space-y-2">
+                        {selectedSessaoKnowledge.map((step, i) => (
+                          <div key={step.id || i} className="flex items-start gap-2 text-xs border-b border-border/50 pb-2">
+                            <span className="text-muted-foreground shrink-0 font-mono w-6">{step.passo_numero}.</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                              {step.acao}
+                            </Badge>
+                            {step.seletor && <code className="text-primary text-[10px]">{step.seletor}</code>}
+                            {step.valor && <span className="text-muted-foreground truncate max-w-[200px]">"{step.valor}"</span>}
+                            {step.descricao_tela && <span className="text-muted-foreground italic truncate">{step.descricao_tela}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Fila & Logs */}
         <Card>
           <CardHeader>
@@ -534,6 +727,48 @@ export default function AutomacaoCobMais() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Record session dialog */}
+      <Dialog open={showRecordDialog} onOpenChange={setShowRecordDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5" />
+              Gravar Sessão de Aprendizado
+            </DialogTitle>
+            <DialogDescription>
+              A IA vai observar enquanto você navega no CobMais. Seus cliques e preenchimentos serão gravados como "lições" que o agente usará no futuro.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Nome do Fluxo</Label>
+              <Input
+                placeholder="Ex: gerar_boleto, cadastrar_email, buscar_cliente"
+                value={recordingName}
+                onChange={e => setRecordingName(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Use nomes descritivos como "gerar_boleto" ou "cadastrar_email_devedor"</p>
+            </div>
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-2">
+              <p>📋 <strong>Como funciona:</strong></p>
+              <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
+                <li>O robô vai começar a capturar seus cliques e preenchimentos</li>
+                <li>Navegue normalmente no CobMais pelo stream de vídeo</li>
+                <li>Quando terminar, clique "Parar Gravação"</li>
+                <li>Os passos serão salvos e usados pelo agente IA automaticamente</li>
+              </ol>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRecordDialog(false)}>Cancelar</Button>
+            <Button onClick={handleStartRecording} disabled={!recordingName.trim()}>
+              <GraduationCap className="h-4 w-4 mr-2" />
+              Iniciar Gravação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
