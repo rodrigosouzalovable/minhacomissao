@@ -1,35 +1,31 @@
 
 
-## Atualização do server.js com Seletores Exatos do CobMais
+## Diagnóstico
 
-Os screenshots com DevTools revelam os seletores exatos para cada etapa após abrir a ficha do cliente. O robô atual está falhando porque os passos 6-10 usam seletores genéricos. Vou corrigir com os IDs reais.
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-### Mapeamento de Seletores (dos screenshots)
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-| Passo | Elemento | Seletor Real |
-|-------|----------|-------------|
-| Abrir Cálculo | Botão "Cálculo" | `#btnCalcular` (dentro de `#divCalculo`) |
-| Valor Final | Input do valor | `input#txtValorFinal` (já correto) |
-| Atualizar | Botão verde | `button#btnAtualizarCalculo` |
-| Salvar Acordo | Botão azul | `button#btnSalvarCalc` (já correto) |
-| Dropdown Acordo | Botão amarelo ▼ | `span.ev-btn.ev-btn-amarelo` |
-| Emitir Boletos | Link no dropdown | `a.gerar-boleto` |
-| Selecionar Todos | Checkbox | `#ckbTodosBoletos` |
-| Imprimir | Botão imprimir | Botão "Imprimir" no modal |
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-### Fluxo Correto (Passos 6-10 reescritos)
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-1. **Passo 6**: Clicar em `#btnCalcular` para abrir o modal de cálculo
-2. **Passo 7**: Preencher `input#txtValorFinal` com o valor negociado
-3. **Passo 8**: Clicar em `button#btnAtualizarCalculo` (botão verde "Atualizar")
-4. **Passo 9**: Clicar em `button#btnSalvarCalc` (botão "Salvar Acordo")
-5. **Passo 10**: Aguardar voltar à ficha, clicar no dropdown amarelo `span.ev-btn.ev-btn-amarelo`
-6. **Passo 11**: Clicar em `a.gerar-boleto` ("Emitir Boletos")
-7. **Passo 12**: Marcar `#ckbTodosBoletos` ("Selecionar Todos")
-8. **Passo 13**: Clicar em "Imprimir" e capturar URL do PDF
+## Correção
 
-### Alterações
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-1. **`server.js`**: Reescrever passos 6-10 com o fluxo correto de 8 sub-passos usando seletores exatos
-2. **`src/components/RoboCodeViewer.tsx`**: Atualizar o código exibido na aba "Código do Robô" para refletir a versão corrigida
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
+
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

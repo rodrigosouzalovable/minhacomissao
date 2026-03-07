@@ -148,7 +148,6 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
       throw new Error('Credenciais do CobMais não configuradas');
     }
 
-    // Seletores corretos: input#Username e input#Password
     await pg.waitForSelector('input#Username', { timeout: 10000 });
     await pg.fill('input#Username', '');
     await pg.fill('input#Username', cobmais_email);
@@ -193,12 +192,10 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   // ── PASSO 4: Pesquisar CPF ──
   updateStatus('executando', \`Passo 4: Pesquisando CPF \${cpfLimpo}...\`);
 
-  // Seletor correto: input#txtCPFCNPJ
   await pg.waitForSelector('input#txtCPFCNPJ', { timeout: 10000 });
   await pg.fill('input#txtCPFCNPJ', '');
   await pg.fill('input#txtCPFCNPJ', cpfLimpo);
 
-  // Botão pesquisar: #btnPesquisar
   await pg.waitForSelector('#btnPesquisar', { timeout: 5000 });
   await pg.click('#btnPesquisar');
 
@@ -293,13 +290,12 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   updateStatus('executando', 'Passo 7: Abrindo cálculo...');
 
   const calcSelectors = [
+    '#btnCalcular',
+    '#divCalculo button',
     'button:has-text("Cálculo")',
     'button:has-text("Calculo")',
     'a:has-text("Cálculo")',
-    'a:has-text("Calculo")',
     '#btnCalculo',
-    'button[id*="Calculo"]',
-    'input[value="Cálculo"]',
   ];
 
   let calcClicked = false;
@@ -329,7 +325,6 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
 
   const valorFormatado = parseFloat(valor_final).toFixed(2).replace('.', ',');
 
-  // Seletor correto: input#txtValorFinal
   await pg.waitForSelector('input#txtValorFinal', { timeout: 10000 });
   await pg.click('input#txtValorFinal', { clickCount: 3 });
   await pg.fill('input#txtValorFinal', '');
@@ -341,7 +336,6 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
       'input[id*="parcela"]',
       'input[id*="Parcela"]',
       'select#ddlParcelas',
-      'select[id*="parcela"]',
     ];
 
     for (const sel of parcelasSelectors) {
@@ -368,8 +362,40 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   await delay(1000);
   console.log(\`✅ Valor preenchido: R$ \${valorFormatado}\`);
 
-  // ── PASSO 9: Salvar o acordo ──
-  updateStatus('executando', 'Passo 9: Salvando acordo...');
+  // ── PASSO 9: Clicar em Atualizar (botão verde) ──
+  updateStatus('executando', 'Passo 9: Clicando em Atualizar...');
+
+  const atualizarSelectors = [
+    '#btnAtualizarCalculo',
+    'button#btnAtualizarCalculo',
+    'button:has-text("Atualizar")',
+    'input[value="Atualizar"]',
+  ];
+
+  let atualizarClicked = false;
+  for (const sel of atualizarSelectors) {
+    try {
+      const el = await pg.$(sel);
+      if (el) {
+        await el.click();
+        atualizarClicked = true;
+        console.log(\`   Clicou em Atualizar: \${sel}\`);
+        break;
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  if (!atualizarClicked) {
+    console.log('⚠️ Botão Atualizar não encontrado, continuando...');
+  }
+
+  await delay(3000);
+  console.log('✅ Cálculo atualizado');
+
+  // ── PASSO 10: Salvar o acordo ──
+  updateStatus('executando', 'Passo 10: Salvando acordo...');
 
   let boletoUrl = null;
 
@@ -398,7 +424,6 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
     } catch (e) {}
   });
 
-  // Seletor correto: #btnSalvarCalc
   await pg.waitForSelector('#btnSalvarCalc', { timeout: 5000 });
   await pg.click('#btnSalvarCalc');
   await delay(5000);
@@ -433,44 +458,127 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
 
   console.log('✅ Acordo salvo');
 
-  // ── PASSO 10: Capturar URL do boleto ──
-  updateStatus('executando', 'Passo 10: Capturando boleto...');
+  // ── PASSO 11: Clicar no dropdown amarelo (Acordo) ──
+  updateStatus('executando', 'Passo 11: Abrindo menu de Acordo...');
 
-  if (!boletoUrl) {
-    const printSelectors = [
-      'a:has-text("Imprimir")',
-      'button:has-text("Imprimir")',
-      'a:has-text("Boleto")',
-      'button:has-text("Boleto")',
-      'a[href*="gerapdf"]',
-      'a[href*="boleto"]',
-      'a[href*="GerarPDF"]',
-      '#btnImprimir',
-      'button[id*="Imprimir"]',
-      'a[id*="Imprimir"]',
-    ];
+  await delay(3000);
 
-    for (const sel of printSelectors) {
-      try {
-        const el = await pg.$(sel);
-        if (el) {
-          const href = await el.getAttribute('href');
-          if (href && (href.includes('gerapdf') || href.includes('.pdf'))) {
-            boletoUrl = href.startsWith('http') ? href : \`\${COBMAIS_URL}\${href}\`;
-            console.log(\`   📄 URL do boleto via href: \${boletoUrl}\`);
-          } else {
-            await el.click();
-            console.log(\`   Clicou em: \${sel}\`);
-          }
-          break;
-        }
-      } catch (e) {
-        continue;
+  const dropdownSelectors = [
+    'span.ev-btn.ev-btn-amarelo',
+    '.ev-btn-amarelo',
+    'button.ev-btn-amarelo',
+    'a.ev-btn-amarelo',
+    'span.ev-btn:has-text("Acordo")',
+  ];
+
+  let dropdownClicked = false;
+  for (const sel of dropdownSelectors) {
+    try {
+      const el = await pg.$(sel);
+      if (el) {
+        await el.click();
+        dropdownClicked = true;
+        console.log(\`   Clicou no dropdown amarelo: \${sel}\`);
+        break;
       }
+    } catch (e) {
+      continue;
     }
-
-    await delay(5000);
   }
+
+  if (!dropdownClicked) {
+    console.log('⚠️ Dropdown amarelo não encontrado, tentando buscar boleto diretamente...');
+  }
+
+  await delay(2000);
+  console.log('✅ Menu de acordo aberto');
+
+  // ── PASSO 12: Clicar em Emitir Boletos ──
+  updateStatus('executando', 'Passo 12: Clicando em Emitir Boletos...');
+
+  const emitirSelectors = [
+    'a.gerar-boleto',
+    'a:has-text("Emitir Boleto")',
+    'a:has-text("Gerar Boleto")',
+    'a:has-text("Boleto")',
+    'li a.gerar-boleto',
+  ];
+
+  let emitirClicked = false;
+  for (const sel of emitirSelectors) {
+    try {
+      const el = await pg.$(sel);
+      if (el) {
+        await el.click();
+        emitirClicked = true;
+        console.log(\`   Clicou em Emitir Boletos: \${sel}\`);
+        break;
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  if (!emitirClicked) {
+    console.log('⚠️ Link "Emitir Boletos" não encontrado');
+  }
+
+  await delay(3000);
+  console.log('✅ Tela de boletos aberta');
+
+  // ── PASSO 13: Selecionar Todos e Imprimir ──
+  updateStatus('executando', 'Passo 13: Selecionando boletos e imprimindo...');
+
+  const ckbSelectors = [
+    '#ckbTodosBoletos',
+    'input#ckbTodosBoletos',
+    'input[type="checkbox"][id*="Todos"]',
+    'input[type="checkbox"][id*="todos"]',
+  ];
+
+  for (const sel of ckbSelectors) {
+    try {
+      const el = await pg.$(sel);
+      if (el) {
+        await el.click();
+        console.log(\`   Marcou Selecionar Todos: \${sel}\`);
+        break;
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  await delay(1000);
+
+  const imprimirSelectors = [
+    'button:has-text("Imprimir")',
+    'a:has-text("Imprimir")',
+    '#btnImprimir',
+    'button[id*="Imprimir"]',
+    'input[value="Imprimir"]',
+  ];
+
+  for (const sel of imprimirSelectors) {
+    try {
+      const el = await pg.$(sel);
+      if (el) {
+        const href = await el.getAttribute('href');
+        if (href && (href.includes('gerapdf') || href.includes('.pdf'))) {
+          boletoUrl = href.startsWith('http') ? href : \`\${COBMAIS_URL}\${href}\`;
+          console.log(\`   📄 URL do boleto via href: \${boletoUrl}\`);
+        } else {
+          await el.click();
+          console.log(\`   Clicou em Imprimir: \${sel}\`);
+        }
+        break;
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  await delay(8000);
 
   if (!boletoUrl) {
     const pages = context.pages();
