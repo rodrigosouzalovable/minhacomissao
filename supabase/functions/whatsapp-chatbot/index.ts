@@ -123,6 +123,20 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Check if chatbot is globally enabled
+    const { data: chatbotConfig } = await supabase
+      .from('chatbot_config')
+      .select('ativo')
+      .limit(1)
+      .single();
+
+    if (!chatbotConfig?.ativo) {
+      console.log('Chatbot desativado globalmente. Ignorando mensagem.');
+      return new Response(JSON.stringify({ success: true, ignored: true, reason: 'chatbot_disabled' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
