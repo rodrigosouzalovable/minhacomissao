@@ -77,6 +77,7 @@ export default function AutomacaoCobMais() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef<HTMLDivElement>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -379,6 +380,9 @@ export default function AutomacaoCobMais() {
       toast.info('⚙️ Automação em execução no robô... Aguarde, isso pode levar alguns minutos.', { duration: 30000, id: 'automation-running' });
     }, 5000);
 
+    const abortController = new AbortController();
+    chatAbortRef.current = abortController;
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Não autenticado');
@@ -391,6 +395,7 @@ export default function AutomacaoCobMais() {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ messages: allMessages }),
+        signal: abortController.signal,
       });
 
       if (!resp.ok || !resp.body) {
@@ -455,8 +460,13 @@ export default function AutomacaoCobMais() {
         }
       }
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao conversar com a IA');
+      if (err.name === 'AbortError') {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: '⏹️ Comando interrompido pelo usuário.' }]);
+      } else {
+        toast.error(err.message || 'Erro ao conversar com a IA');
+      }
     } finally {
+      chatAbortRef.current = null;
       clearTimeout(slowTimer);
       toast.dismiss('automation-running');
       setIsChatLoading(false);
@@ -921,9 +931,15 @@ export default function AutomacaoCobMais() {
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
                   disabled={isChatLoading}
                 />
-                <Button onClick={handleChatSend} disabled={!chatInput.trim() || isChatLoading}>
-                  {isChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+                {isChatLoading ? (
+                  <Button variant="destructive" onClick={() => chatAbortRef.current?.abort()} title="Parar">
+                    <Square className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button onClick={handleChatSend} disabled={!chatInput.trim()}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
