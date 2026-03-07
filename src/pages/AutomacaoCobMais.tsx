@@ -54,8 +54,8 @@ export default function AutomacaoCobMais() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Não autenticado');
     
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const res = await fetch(`https://${projectId}.supabase.co/functions/v1/automacao-cobmais`, {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const res = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
