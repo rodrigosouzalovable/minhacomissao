@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 Deno.serve(async (req) => {
@@ -22,14 +22,12 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token)
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
     }
-    const userId = claimsData.claims.sub as string
+    const userId = user.id
 
-    // Check admin
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -84,7 +82,7 @@ Deno.serve(async (req) => {
       case 'status': {
         const { data: config } = await adminClient
           .from('automacao_config')
-          .select('server_url, status')
+          .select('id, server_url, status')
           .order('criado_em', { ascending: false })
           .limit(1)
           .maybeSingle()
@@ -96,24 +94,31 @@ Deno.serve(async (req) => {
         try {
           const res = await fetch(`${config.server_url}/status`, { 
             method: 'GET',
+            headers: {
+              'ngrok-skip-browser-warning': 'true',
+              'User-Agent': 'MeusAcordos/1.0',
+            },
             signal: AbortSignal.timeout(5000)
           })
           const data = await res.json()
-          const newStatus = data.online ? 'online' : 'offline'
+          const newStatus = data.status === 'online' || data.online ? 'online' : 'offline'
           
           await adminClient
             .from('automacao_config')
             .update({ status: newStatus, atualizado_em: new Date().toISOString() })
-            .eq('id', config.server_url)
+            .eq('id', config.id)
 
           return new Response(JSON.stringify({ success: true, status: newStatus, data }), { headers: corsHeaders })
-        } catch {
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : 'Servidor não respondeu'
+          console.error('Status check error:', errorMsg)
+          
           await adminClient
             .from('automacao_config')
             .update({ status: 'offline', atualizado_em: new Date().toISOString() })
-            .not('server_url', 'eq', '')
+            .eq('id', config.id)
 
-          return new Response(JSON.stringify({ success: true, status: 'offline', message: 'Servidor não respondeu' }), { headers: corsHeaders })
+          return new Response(JSON.stringify({ success: true, status: 'offline', message: errorMsg }), { headers: corsHeaders })
         }
       }
 
@@ -134,7 +139,6 @@ Deno.serve(async (req) => {
           return new Response(JSON.stringify({ error: 'URL do servidor não configurada' }), { status: 400, headers: corsHeaders })
         }
 
-        // Insert command
         const { data: comando } = await adminClient
           .from('automacao_comandos')
           .insert({ user_id: userId, acao, parametros: parametros || {}, status: 'executando' })
@@ -144,19 +148,19 @@ Deno.serve(async (req) => {
         const comandoId = comando?.id
         const startTime = Date.now()
 
-        // Log start
         await adminClient.from('automacao_logs').insert({
-          comando_id: comandoId,
-          user_id: userId,
-          tipo: 'info',
-          mensagem: `Iniciando ação: ${acao}`,
-          detalhes: parametros || {}
+          comando_id: comandoId, user_id: userId, tipo: 'info',
+          mensagem: `Iniciando ação: ${acao}`, detalhes: parametros || {}
         })
 
         try {
           const res = await fetch(`${config.server_url}/automacao/cobmais`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+              'User-Agent': 'MeusAcordos/1.0',
+            },
             body: JSON.stringify({ acao, parametros: parametros || {} }),
             signal: AbortSignal.timeout(120000)
           })
