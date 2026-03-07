@@ -30,7 +30,7 @@ export function RoboStreamViewer({ serverUrl, roboOnline }: RoboStreamViewerProp
     if (!serverUrl) return;
     try {
       const url = serverUrl.replace(/\/$/, '');
-      const res = await fetch(`${url}/screenshot`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${url}/screenshot`, { signal: AbortSignal.timeout(5000), headers: { 'ngrok-skip-browser-warning': 'true' } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
