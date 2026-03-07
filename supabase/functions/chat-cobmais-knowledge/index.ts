@@ -36,10 +36,13 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const [sessionsRes, knowledgeRes] = await Promise.all([
+    const [sessionsRes, knowledgeRes, configRes] = await Promise.all([
       adminClient.from("cobmais_sessoes_gravadas").select("*").order("criado_em", { ascending: false }),
       adminClient.from("cobmais_conhecimento").select("*").order("sessao_id, passo_numero"),
+      adminClient.from("automacao_config").select("cobmais_email, cobmais_senha").order("criado_em", { ascending: false }).limit(1).maybeSingle(),
     ]);
+
+    const cobmaisConfig = configRes.data;
 
     const sessions = sessionsRes.data || [];
     const knowledge = knowledgeRes.data || [];
