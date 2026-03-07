@@ -79,14 +79,11 @@ ${knowledgeContext}
 11. Exemplos de quando executar: "emita o boleto", "gere um boleto", "busque o cliente", "faça login", "execute o fluxo X"
 12. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
 
-## CRÍTICO - Quando a automação FALHAR:
-13. Se a automação retornar erro ou não conseguir completar, **NÃO apenas reporte o erro**. Você DEVE:
-    - Explicar exatamente em qual passo falhou e o que aconteceu
-    - **PERGUNTAR ao usuário** como ele faria para resolver (ex: "Não consegui encontrar o botão X na tela. Pode me explicar onde ele fica ou qual o caminho alternativo?")
-    - Sugerir que o usuário envie um vídeo de treinamento mostrando o passo que faltou: "📹 **Se preferir, envie um vídeo mostrando como fazer [o passo que falhou] para que eu aprenda**"
-    - Oferecer tentar novamente se o usuário der instruções: "Se me explicar como fazer, posso tentar novamente!"
-14. Seja específico nas perguntas — use os detalhes do erro para formular perguntas direcionadas
-15. Se houve passos que foram executados com sucesso antes da falha, liste-os para dar contexto ao usuário`;
+## IMPORTANTE - Automação assíncrona:
+13. Quando a tool "executar_automacao" for chamada, a automação é disparada em background e o resultado NÃO é esperado
+14. Informe ao usuário que a automação foi iniciada e que ele pode acompanhar em tempo real na seção **"Streaming do Robô"** acima do chat
+15. Diga algo como: "🤖 **Automação iniciada!** Acompanhe a execução em tempo real na seção 'Streaming do Robô' acima. Se algo der errado, me avise aqui no chat que eu ajudo!"
+16. Se o usuário reportar um problema após a execução, pergunte detalhes e sugira enviar um vídeo de treinamento se necessário`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
