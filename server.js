@@ -948,8 +948,8 @@ app.post('/automacao/agent', async (req, res) => {
           case 'click': {
             const el = await pg.$(aiAction.selector);
             if (el) {
-              await el.scrollIntoViewIfNeeded();
-              await delay(300);
+            await el.scrollIntoViewIfNeeded();
+              await delay(200);
               await el.click();
             } else {
               // Fallback: try via evaluate
@@ -960,7 +960,7 @@ app.post('/automacao/agent', async (req, res) => {
               }, aiAction.selector);
               if (!clicked) actionResult = `Elemento não encontrado: ${aiAction.selector}`;
             }
-            await delay(2000);
+            await delay(1000);
             break;
           }
           case 'fill': {
