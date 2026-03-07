@@ -769,13 +769,14 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
 
 // ===== ENDPOINT: AGENTE INTELIGENTE =====
 app.post('/automacao/agent', async (req, res) => {
-  const { objective, parametros, cobmais_email, cobmais_senha, supabase_url } = req.body;
+  const { objective, parametros, cobmais_email, cobmais_senha, supabase_url, max_iterations } = req.body;
 
   if (!objective) {
     return res.json({ success: false, error: 'Campo objective é obrigatório' });
   }
 
-  const MAX_ITERATIONS = 30;
+  abortAgent = false; // Reset abort flag
+  const MAX_ITERATIONS = max_iterations || 30;
   const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
   const startTime = Date.now();
   const history = [];
