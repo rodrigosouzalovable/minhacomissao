@@ -364,6 +364,89 @@ export type Database = {
         }
         Relationships: []
       }
+      cobmais_conhecimento: {
+        Row: {
+          acao: string
+          criado_em: string
+          descricao_tela: string | null
+          id: string
+          nome_fluxo: string
+          passo_numero: number
+          screenshot_description: string | null
+          seletor: string | null
+          sessao_id: string
+          url_pagina: string | null
+          valor: string | null
+        }
+        Insert: {
+          acao: string
+          criado_em?: string
+          descricao_tela?: string | null
+          id?: string
+          nome_fluxo: string
+          passo_numero: number
+          screenshot_description?: string | null
+          seletor?: string | null
+          sessao_id: string
+          url_pagina?: string | null
+          valor?: string | null
+        }
+        Update: {
+          acao?: string
+          criado_em?: string
+          descricao_tela?: string | null
+          id?: string
+          nome_fluxo?: string
+          passo_numero?: number
+          screenshot_description?: string | null
+          seletor?: string | null
+          sessao_id?: string
+          url_pagina?: string | null
+          valor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobmais_conhecimento_sessao_id_fkey"
+            columns: ["sessao_id"]
+            isOneToOne: false
+            referencedRelation: "cobmais_sessoes_gravadas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobmais_sessoes_gravadas: {
+        Row: {
+          criado_em: string
+          criado_por: string
+          descricao: string | null
+          finalizado_em: string | null
+          id: string
+          nome: string
+          status: string
+          total_passos: number
+        }
+        Insert: {
+          criado_em?: string
+          criado_por: string
+          descricao?: string | null
+          finalizado_em?: string | null
+          id?: string
+          nome: string
+          status?: string
+          total_passos?: number
+        }
+        Update: {
+          criado_em?: string
+          criado_por?: string
+          descricao?: string | null
+          finalizado_em?: string | null
+          id?: string
+          nome?: string
+          status?: string
+          total_passos?: number
+        }
+        Relationships: []
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean

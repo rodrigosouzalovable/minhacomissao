@@ -1013,6 +1013,173 @@ app.post('/automacao/agent', async (req, res) => {
   }
 });
 
+// ===== MODO GRAVAÇÃO: Estado =====
+let recording = false;
+let recordingSession = null; // { sessao_id, nome_fluxo, supabase_url, supabase_key, step_count }
+
+// ===== ENDPOINT: INICIAR GRAVAÇÃO =====
+app.post('/automacao/gravar', async (req, res) => {
+  const { sessao_id, nome_fluxo, supabase_url, supabase_key } = req.body;
+
+  if (!sessao_id || !nome_fluxo) {
+    return res.json({ success: false, error: 'sessao_id e nome_fluxo são obrigatórios' });
+  }
+
+  try {
+    const pg = await initBrowser();
+
+    recordingSession = { sessao_id, nome_fluxo, supabase_url, supabase_key, step_count: 0 };
+    recording = true;
+
+    // Expose helper to intercept user actions
+    await pg.exposeFunction('__recordAction', async (actionData) => {
+      if (!recording || !recordingSession) return;
+      recordingSession.step_count++;
+      const step = {
+        sessao_id: recordingSession.sessao_id,
+        nome_fluxo: recordingSession.nome_fluxo,
+        passo_numero: recordingSession.step_count,
+        acao: actionData.type,
+        seletor: actionData.selector || null,
+        valor: actionData.value || null,
+        url_pagina: actionData.url || null,
+        descricao_tela: actionData.description || null,
+      };
+
+      // Save to Supabase
+      try {
+        const saveRes = await fetch(`${recordingSession.supabase_url}/rest/v1/cobmais_conhecimento`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': recordingSession.supabase_key,
+            'Authorization': `Bearer ${recordingSession.supabase_key}`,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify(step),
+        });
+        if (!saveRes.ok) {
+          console.log(`⚠️ Erro ao salvar passo ${recordingSession.step_count}:`, await saveRes.text());
+        } else {
+          console.log(`📝 Passo ${recordingSession.step_count} gravado: [${actionData.type}] ${actionData.selector || ''}`);
+        }
+      } catch (e) {
+        console.log(`⚠️ Erro ao salvar passo: ${e.message}`);
+      }
+    }).catch(() => {
+      // Function might already be exposed from previous session
+    });
+
+    // Inject recording script into the page
+    await pg.evaluate(() => {
+      if (window.__recordingActive) return;
+      window.__recordingActive = true;
+
+      // Helper to build CSS selector
+      function getSelector(el) {
+        if (el.id) return `#${el.id}`;
+        if (el.name) return `[name="${el.name}"]`;
+        const tag = el.tagName.toLowerCase();
+        const classes = Array.from(el.classList).slice(0, 2).join('.');
+        if (classes) return `${tag}.${classes}`;
+        return tag;
+      }
+
+      // Track clicks
+      document.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!target || !target.tagName) return;
+        const selector = getSelector(target);
+        const text = (target.textContent || '').trim().substring(0, 50);
+        window.__recordAction({
+          type: 'click',
+          selector,
+          value: text,
+          url: window.location.href,
+          description: `Clicou em ${selector} (${text})`,
+        });
+      }, true);
+
+      // Track input changes
+      document.addEventListener('change', (e) => {
+        const target = e.target;
+        if (!target || !target.tagName) return;
+        const selector = getSelector(target);
+        const value = target.value || '';
+        window.__recordAction({
+          type: 'fill',
+          selector,
+          value,
+          url: window.location.href,
+          description: `Preencheu ${selector} com "${value.substring(0, 30)}"`,
+        });
+      }, true);
+    });
+
+    // Also track navigation
+    pg.on('framenavigated', (frame) => {
+      if (frame === pg.mainFrame() && recording && recordingSession) {
+        recordingSession.step_count++;
+        const step = {
+          sessao_id: recordingSession.sessao_id,
+          nome_fluxo: recordingSession.nome_fluxo,
+          passo_numero: recordingSession.step_count,
+          acao: 'navigate',
+          seletor: null,
+          valor: frame.url(),
+          url_pagina: frame.url(),
+          descricao_tela: `Navegou para ${frame.url()}`,
+        };
+        fetch(`${recordingSession.supabase_url}/rest/v1/cobmais_conhecimento`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': recordingSession.supabase_key,
+            'Authorization': `Bearer ${recordingSession.supabase_key}`,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify(step),
+        }).catch(() => {});
+        console.log(`📝 Passo ${recordingSession.step_count} gravado: [navigate] ${frame.url()}`);
+      }
+    });
+
+    console.log(`🎓 Gravação iniciada: "${nome_fluxo}" (sessão: ${sessao_id})`);
+    updateStatus('recording', `Gravando: ${nome_fluxo}`);
+
+    res.json({ success: true, message: `Gravação iniciada: ${nome_fluxo}` });
+  } catch (err) {
+    console.error('Erro ao iniciar gravação:', err.message);
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// ===== ENDPOINT: PARAR GRAVAÇÃO =====
+app.post('/automacao/parar-gravacao', async (req, res) => {
+  if (!recording) {
+    return res.json({ success: false, error: 'Nenhuma gravação ativa' });
+  }
+
+  const totalSteps = recordingSession?.step_count || 0;
+  const flowName = recordingSession?.nome_fluxo || 'desconhecido';
+
+  recording = false;
+  recordingSession = null;
+
+  // Remove recording script from page
+  try {
+    const pg = await initBrowser();
+    await pg.evaluate(() => {
+      window.__recordingActive = false;
+    });
+  } catch {}
+
+  console.log(`🎓 Gravação finalizada: "${flowName}" com ${totalSteps} passos`);
+  updateStatus('idle', 'Gravação finalizada');
+
+  res.json({ success: true, total_passos: totalSteps, nome_fluxo: flowName });
+});
+
 // ===== INICIAR SERVIDOR =====
 app.listen(PORT, async () => {
   console.log(`\n🤖 Servidor Playwright rodando na porta ${PORT}`);
