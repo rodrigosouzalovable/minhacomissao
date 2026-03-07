@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.analyze-cobmais-screen]
 verify_jwt = false
+
+[functions.process-cobmais-video]
+verify_jwt = false
