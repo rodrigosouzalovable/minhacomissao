@@ -488,6 +488,11 @@ export default function AutomacaoCobMais() {
             <p className="text-muted-foreground">Automação de tarefas no CobMais via Playwright</p>
           </div>
           <div className="ml-auto flex items-center gap-4">
+            {/* Stop automation button */}
+            <Button variant="destructive" size="sm" onClick={handleStopAutomation} disabled={roboStatus !== 'online'}>
+              <Square className="h-4 w-4 mr-1" />
+              Parar Robô
+            </Button>
             {/* Recording button */}
             {isRecording ? (
               <Button variant="destructive" size="sm" onClick={handleStopRecording} className="animate-pulse">
