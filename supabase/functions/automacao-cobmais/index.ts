@@ -268,7 +268,7 @@ async function handleAgentExecute(adminClient: any, body: any, userId: string) {
 
 async function handleRecordStart(adminClient: any, body: any, userId: string) {
   const { nome, descricao } = body
-  if (!nome) return { error: 'Campo nome é obrigatório', status: 400 }
+  if (!nome) return { error: 'Campo nome é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
     .from('automacao_config')
