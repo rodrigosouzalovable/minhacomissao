@@ -430,8 +430,9 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: `Ação desconhecida: ${action}` }), { status: 400, headers: corsHeaders })
     }
 
-    const statusCode = result.status || 200
+    const rawStatus = result.status
     delete result.status
+    const statusCode = (typeof rawStatus === 'number' && rawStatus >= 200 && rawStatus <= 599) ? rawStatus : 200
     return new Response(JSON.stringify(result), { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal error'
