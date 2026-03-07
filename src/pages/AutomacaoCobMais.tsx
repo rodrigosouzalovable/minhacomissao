@@ -1015,6 +1015,21 @@ export default function AutomacaoCobMais() {
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
+                  onPaste={e => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of Array.from(items)) {
+                      if (item.type.startsWith('image/')) {
+                        e.preventDefault();
+                        const file = item.getAsFile();
+                        if (!file || file.size > 5 * 1024 * 1024) return;
+                        const reader = new FileReader();
+                        reader.onload = () => setChatImage(reader.result as string);
+                        reader.readAsDataURL(file);
+                        break;
+                      }
+                    }
+                  }}
                   disabled={isChatLoading}
                   className="flex-1"
                 />
