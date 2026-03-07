@@ -284,14 +284,32 @@ export default function EquipeAcordos() {
           return;
         }
 
-        // Buscar acordos de todos os funcionários
-        const { data: acordosData, error: acordosError } = await supabase
-          .from('acordos')
-          .select('*')
-          .in('user_id', funcionarioIds)
-          .order('criado_em', { ascending: false });
+        // Buscar acordos de todos os funcionários (paginado para evitar limite de 1000)
+        let allAcordos: any[] = [];
+        const PAGE_SIZE = 1000;
+        let from = 0;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const { data: batch, error: batchError } = await supabase
+            .from('acordos')
+            .select('*')
+            .in('user_id', funcionarioIds)
+            .order('criado_em', { ascending: false })
+            .range(from, from + PAGE_SIZE - 1);
 
-        if (acordosError) throw acordosError;
+          if (batchError) throw batchError;
+          
+          if (batch && batch.length > 0) {
+            allAcordos = [...allAcordos, ...batch];
+            from += PAGE_SIZE;
+            hasMore = batch.length === PAGE_SIZE;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        const acordosData = allAcordos;
 
         // Mapear acordos com nomes dos funcionários
         const acordosComNome = (acordosData || []).map(acordo => {
