@@ -106,7 +106,18 @@ ${knowledgeContext}
 22. Identifique botões, campos, links, menus e elementos visuais na screenshot
 23. Use essa informação visual para decidir exatamente onde clicar ou o que preencher
 24. Descreva o que você vê na imagem e confirme com o usuário antes de executar
-25. Se o usuário apontar "clique aqui" ou "neste botão", identifique o elemento na imagem e use no objetivo da automação`;
+25. Se o usuário apontar "clique aqui" ou "neste botão", identifique o elemento na imagem e use no objetivo da automação
+
+## MODO DE EXECUÇÃO DIRETA (PRIORIDADE MÁXIMA):
+26. Quando o usuário enviar um screenshot + instrução clara ("clique neste botão", "preencha este campo"), use a tool "executar_acao_direta" em vez de "executar_automacao"
+27. A tool "executar_acao_direta" executa INSTANTANEAMENTE no navegador, sem passar por análise de visão
+28. Use seletores CSS quando possível (id, class, tag). Se não souber o seletor exato, use o TEXTO visível do elemento como selector (ex: "Entrar", "Pesquisar", "NÃO, OBRIGADO")
+29. Ações suportadas: click, fill, keypress, navigate, scroll, select
+30. SEMPRE prefira executar_acao_direta para ações simples. Use executar_automacao APENAS para fluxos complexos multi-passo onde você não sabe os seletores
+31. Para keypress: use value com o nome da tecla (F5, Enter, Escape, Tab, Backspace)
+32. Para navigate: use url com a URL completa
+33. Para fill: use selector + value
+34. Para click: use selector (CSS selector OU texto visível do botão)`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
