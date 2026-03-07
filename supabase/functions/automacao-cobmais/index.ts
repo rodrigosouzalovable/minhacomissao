@@ -222,6 +222,7 @@ async function handleAgentExecute(adminClient: any, body: any, userId: string) {
         objective: objetivo, parametros: agentParams || {},
         cobmais_email: config.cobmais_email, cobmais_senha: config.cobmais_senha,
         supabase_url: Deno.env.get('SUPABASE_URL'),
+        max_iterations: body.max_iterations || undefined,
       }),
       signal: AbortSignal.timeout(360000),
     })
