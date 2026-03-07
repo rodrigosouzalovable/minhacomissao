@@ -76,6 +76,7 @@ export default function AutomacaoCobMais() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const streamingRef = useRef<HTMLDivElement>(null);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
