@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
               'ngrok-skip-browser-warning': 'true',
               'User-Agent': 'MeusAcordos/1.0',
             },
-            body: JSON.stringify({ acao, parametros: parametros || {} }),
+            body: JSON.stringify({ acao, parametros: parametros || {}, cobmais_email: config.cobmais_email, cobmais_senha: config.cobmais_senha }),
             signal: AbortSignal.timeout(timeoutMs)
           })
           const resultado = await res.json()
