@@ -417,7 +417,7 @@ export function RoboCodeViewer() {
           </ol>
         </div>
 
-        <ScrollArea className="h-[500px] rounded-md border bg-[#1e1e2e] p-4">
+        <ScrollArea className="h-[500px] rounded-md border bg-muted p-4">
           <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">{SERVER_JS_CODE}</pre>
         </ScrollArea>
       </CardContent>
