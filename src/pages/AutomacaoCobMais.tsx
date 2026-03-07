@@ -189,7 +189,20 @@ export default function AutomacaoCobMais() {
     }
   };
 
-  const handleExecute = async () => {
+  const handleStopAutomation = async () => {
+    try {
+      const result = await invokeFunction({ action: 'stop' });
+      if (result.success) {
+        toast.success('🛑 Robô interrompido com sucesso. Pode dar um novo comando.');
+      } else {
+        toast.error(result.error || 'Erro ao parar robô');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao parar robô');
+    }
+  };
+
+
     if (!selectedAcao) return toast.error('Selecione uma ação');
     setExecuting(true);
     setLastResult(null);
