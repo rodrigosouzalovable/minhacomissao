@@ -453,6 +453,9 @@ Deno.serve(async (req) => {
       case 'delete_session':
         result = await handleDeleteSession(adminClient, body)
         break
+      case 'acao_direta':
+        result = await handleAcaoDireta(adminClient, body, userId)
+        break
       default:
         return new Response(JSON.stringify({ error: `Ação desconhecida: ${action}` }), { status: 400, headers: corsHeaders })
     }

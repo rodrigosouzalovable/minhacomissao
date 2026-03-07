@@ -766,6 +766,89 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
     tempo_ms: tempo
   };
 }
+// ===== ENDPOINT: AÇÃO DIRETA (sem IA de visão) =====
+app.post('/automacao/acao-direta', async (req, res) => {
+  const { action, selector, value, url } = req.body;
+
+  if (!action) {
+    return res.json({ success: false, error: 'Campo action é obrigatório' });
+  }
+
+  try {
+    const pg = await initBrowser();
+    const startTime = Date.now();
+    updateStatus('executando', `Ação direta: ${action} ${selector || value || url || ''}`);
+
+    switch (action) {
+      case 'navigate': {
+        if (!url) return res.json({ success: false, error: 'Campo url é obrigatório para navigate' });
+        await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+        await delay(1000);
+        break;
+      }
+      case 'click': {
+        if (!selector) return res.json({ success: false, error: 'Campo selector é obrigatório para click' });
+        const el = await pg.$(selector);
+        if (!el) {
+          // Fallback: try text-based selector
+          try {
+            await pg.click(`text=${selector}`, { timeout: 3000 });
+          } catch {
+            return res.json({ success: false, error: `Elemento não encontrado: ${selector}` });
+          }
+        } else {
+          await el.scrollIntoViewIfNeeded();
+          await delay(200);
+          await el.click();
+        }
+        await delay(200);
+        break;
+      }
+      case 'fill': {
+        if (!selector || value === undefined) return res.json({ success: false, error: 'Campos selector e value são obrigatórios para fill' });
+        const fillEl = await pg.$(selector);
+        if (!fillEl) return res.json({ success: false, error: `Elemento não encontrado: ${selector}` });
+        await fillEl.scrollIntoViewIfNeeded();
+        await pg.fill(selector, '');
+        await pg.type(selector, value, { delay: 20 });
+        await delay(200);
+        break;
+      }
+      case 'keypress': {
+        const key = value || selector || 'Enter';
+        await pg.keyboard.press(key);
+        await delay(200);
+        break;
+      }
+      case 'scroll': {
+        if (selector) {
+          const scrollEl = await pg.$(selector);
+          if (scrollEl) await scrollEl.scrollIntoViewIfNeeded();
+        } else {
+          await pg.evaluate(() => window.scrollBy(0, 400));
+        }
+        await delay(200);
+        break;
+      }
+      case 'select': {
+        if (!selector || !value) return res.json({ success: false, error: 'Campos selector e value são obrigatórios para select' });
+        await pg.selectOption(selector, value);
+        await delay(200);
+        break;
+      }
+      default:
+        return res.json({ success: false, error: `Ação desconhecida: ${action}` });
+    }
+
+    const tempo = Date.now() - startTime;
+    updateStatus('idle', `Ação direta concluída em ${tempo}ms`);
+    res.json({ success: true, action, tempo_ms: tempo, url: pg.url() });
+  } catch (err) {
+    console.error('❌ Erro ação direta:', err.message);
+    updateStatus('erro', err.message);
+    res.json({ success: false, error: err.message });
+  }
+});
 
 // ===== ENDPOINT: AGENTE INTELIGENTE =====
 app.post('/automacao/agent', async (req, res) => {
