@@ -163,52 +163,33 @@ ${knowledgeContext}
 
       console.log(`[chat-cobmais-knowledge] Tool called: executar_automacao, objetivo: ${objetivo}`);
 
-      // Call automacao-cobmais internally
+      // Fire-and-forget: dispatch automation WITHOUT awaiting
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-      let automationResult: any;
-      try {
-        const autoRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({
-            action: "agent_execute",
-            objetivo,
-            parametros: {},
-            _internal: true,
-          }),
-          signal: AbortSignal.timeout(360000),
-        });
-        automationResult = await autoRes.json();
-        console.log("[chat-cobmais-knowledge] Automation result:", JSON.stringify(automationResult).substring(0, 500));
-      } catch (err) {
-        automationResult = { success: false, error: err instanceof Error ? err.message : "Erro ao executar automação" };
-        console.error("[chat-cobmais-knowledge] Automation error:", err);
-      }
+      fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          action: "agent_execute",
+          objetivo,
+          parametros: {},
+          _internal: true,
+        }),
+      }).then(res => res.text()).then(t => {
+        console.log("[chat-cobmais-knowledge] Automation dispatched, response:", t.substring(0, 200));
+      }).catch(err => {
+        console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
+      });
 
-      // Build tool result message
-      let toolResultContent: string;
-      if (automationResult.success) {
-        toolResultContent = `Automação executada com sucesso! Resultado: ${JSON.stringify(automationResult.resultado || automationResult, null, 2)}`;
-      } else {
-        const historyInfo = automationResult.history 
-          ? `\n\nPassos executados antes da falha:\n${JSON.stringify(automationResult.history, null, 2)}` 
-          : "";
-        const lastStep = automationResult.lastStep 
-          ? `\nÚltimo passo tentado: ${JSON.stringify(automationResult.lastStep)}` 
-          : "";
-        toolResultContent = `A automação FALHOU: ${automationResult.error || JSON.stringify(automationResult)}${lastStep}${historyInfo}
-
-INSTRUÇÃO IMPORTANTE: Você DEVE perguntar ao usuário como ele faria para resolver este problema. Seja específico sobre o que deu errado e peça orientação clara. Sugira que ele envie um vídeo de treinamento mostrando o passo que faltou. Ofereça tentar novamente após receber as instruções.`;
-      }
+      const toolResultContent = `Automação disparada com sucesso em background! Objetivo: "${objetivo}". O robô já está executando. O usuário pode acompanhar em tempo real na seção "Streaming do Robô" na tela.`;
 
       finalMessages = [
         ...finalMessages,
-        firstChoice.message, // assistant message with tool_calls
+        firstChoice.message,
         {
           role: "tool",
           tool_call_id: toolCall.id,
@@ -216,8 +197,6 @@ INSTRUÇÃO IMPORTANTE: Você DEVE perguntar ao usuário como ele faria para res
         },
       ];
     } else if (firstChoice?.message?.content) {
-      // No tool call, AI responded directly - just stream the same content
-      // We'll do a 2nd streaming call with the same messages for consistent UX
       finalMessages = [
         ...finalMessages,
       ];
