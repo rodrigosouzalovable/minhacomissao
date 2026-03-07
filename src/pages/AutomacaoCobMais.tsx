@@ -61,6 +61,14 @@ export default function AutomacaoCobMais() {
   const [selectedSessaoKnowledge, setSelectedSessaoKnowledge] = useState<any[]>([]);
   const [viewingSessaoId, setViewingSessaoId] = useState<string | null>(null);
 
+  // Video upload state
+  const [showVideoUpload, setShowVideoUpload] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoFlowName, setVideoFlowName] = useState('');
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoProgressLabel, setVideoProgressLabel] = useState('');
+
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Não autenticado');
