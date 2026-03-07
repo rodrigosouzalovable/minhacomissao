@@ -639,12 +639,17 @@ export default function AutomacaoCobMais() {
                 <GraduationCap className="h-5 w-5" />
                 🎓 Conhecimento Aprendido
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={loadSessoes}>
-                <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowVideoUpload(true)}>
+                  <FileVideo className="h-4 w-4 mr-1" /> Enviar Vídeo
+                </Button>
+                <Button variant="outline" size="sm" onClick={loadSessoes}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+                </Button>
+              </div>
             </div>
             <CardDescription>
-              Sessões gravadas onde a IA observou você navegando no CobMais. Este conhecimento é usado automaticamente pelo agente.
+              Sessões gravadas e vídeos de treinamento. O conhecimento é usado automaticamente pelo agente IA.
             </CardDescription>
           </CardHeader>
           <CardContent>
