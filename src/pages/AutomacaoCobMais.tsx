@@ -927,7 +927,11 @@ export default function AutomacaoCobMais() {
                       </div>
                     </div>
                   )}
-                  {chatMessages.map((msg, i) => (
+                  {chatMessages.map((msg, i) => {
+                    const textContent = typeof msg.content === 'string' 
+                      ? msg.content 
+                      : (msg.content as any[])?.find((c: any) => c.type === 'text')?.text || '';
+                    return (
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
                         msg.role === 'user'
@@ -936,9 +940,8 @@ export default function AutomacaoCobMais() {
                       }`}>
                         {msg.role === 'assistant' ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none">
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                            {/* Check if AI suggests sending video */}
-                            {msg.content.includes('📹') && (
+                            <ReactMarkdown>{textContent}</ReactMarkdown>
+                            {textContent.includes('📹') && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -951,11 +954,17 @@ export default function AutomacaoCobMais() {
                             )}
                           </div>
                         ) : (
-                          <p>{msg.content}</p>
+                          <div>
+                            {msg.image && (
+                              <img src={msg.image} alt="Screenshot enviado" className="rounded-md max-h-48 mb-2" />
+                            )}
+                            <p>{textContent}</p>
+                          </div>
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {isChatLoading && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
                     <div className="flex justify-start">
                       <div className="bg-card border rounded-lg px-4 py-2">
