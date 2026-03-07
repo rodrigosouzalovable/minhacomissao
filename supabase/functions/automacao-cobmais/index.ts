@@ -285,7 +285,7 @@ async function handleRecordStart(adminClient: any, body: any, userId: string) {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao criar sessão: ' + error.message, status: 500 }
+  if (error) return { error: 'Erro ao criar sessão: ' + error.message, _httpStatus: 500 }
 
   // Tell local server to start recording
   try {
