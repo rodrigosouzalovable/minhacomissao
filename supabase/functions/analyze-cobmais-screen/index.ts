@@ -218,7 +218,7 @@ Se encontrou um erro irrecuperável, retorne action="error".`
                   },
                   value: {
                     type: 'string',
-                    description: 'Valor para preencher (action=fill) ou URL (action=navigate) ou direção (action=scroll: up/down)',
+                    description: 'Valor para preencher (action=fill) ou URL (action=navigate) ou direção (action=scroll: up/down) ou tecla (action=keypress: F5, Enter, Escape, Tab, Backspace)',
                   },
                   description: {
                     type: 'string',

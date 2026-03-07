@@ -994,6 +994,13 @@ app.post('/automacao/agent', async (req, res) => {
             await delay(1000);
             break;
           }
+          case 'keypress': {
+            const key = aiAction.value || 'F5';
+            console.log(`⌨️ Pressionando tecla: ${key}`);
+            await pg.keyboard.press(key);
+            await delay(2000);
+            break;
+          }
           default:
             actionResult = `Ação desconhecida: ${aiAction.action}`;
         }
