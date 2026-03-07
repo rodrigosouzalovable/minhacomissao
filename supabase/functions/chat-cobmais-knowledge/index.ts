@@ -194,9 +194,20 @@ ${knowledgeContext}
       }
 
       // Build tool result message
-      const toolResultContent = automationResult.success
-        ? `Automação executada com sucesso! Resultado: ${JSON.stringify(automationResult.resultado || automationResult, null, 2)}`
-        : `Erro na automação: ${automationResult.error || JSON.stringify(automationResult)}`;
+      let toolResultContent: string;
+      if (automationResult.success) {
+        toolResultContent = `Automação executada com sucesso! Resultado: ${JSON.stringify(automationResult.resultado || automationResult, null, 2)}`;
+      } else {
+        const historyInfo = automationResult.history 
+          ? `\n\nPassos executados antes da falha:\n${JSON.stringify(automationResult.history, null, 2)}` 
+          : "";
+        const lastStep = automationResult.lastStep 
+          ? `\nÚltimo passo tentado: ${JSON.stringify(automationResult.lastStep)}` 
+          : "";
+        toolResultContent = `A automação FALHOU: ${automationResult.error || JSON.stringify(automationResult)}${lastStep}${historyInfo}
+
+INSTRUÇÃO IMPORTANTE: Você DEVE perguntar ao usuário como ele faria para resolver este problema. Seja específico sobre o que deu errado e peça orientação clara. Sugira que ele envie um vídeo de treinamento mostrando o passo que faltou. Ofereça tentar novamente após receber as instruções.`;
+      }
 
       finalMessages = [
         ...finalMessages,
