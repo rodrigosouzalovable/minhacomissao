@@ -203,6 +203,7 @@ export default function AutomacaoCobMais() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2"><MessageCircle className="h-4 w-4" />Chatbot WhatsApp</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">Controla as respostas automáticas do chatbot para todos os clientes</p>
             </CardHeader>
             <CardContent className="flex items-center gap-3">
               <Switch
