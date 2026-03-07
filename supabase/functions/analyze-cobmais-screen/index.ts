@@ -209,7 +209,7 @@ Se encontrou um erro irrecuperável, retorne action="error".`
                 properties: {
                   action: {
                     type: 'string',
-                    enum: ['click', 'fill', 'scroll', 'wait', 'navigate', 'select', 'done', 'error'],
+                    enum: ['click', 'fill', 'scroll', 'wait', 'navigate', 'select', 'keypress', 'done', 'error'],
                     description: 'Tipo de ação a executar',
                   },
                   selector: {
