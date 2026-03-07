@@ -1,31 +1,20 @@
 
 
-## Diagnóstico
+## Correção: Edge Function `agent_execute` recebe HTML do servidor local
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+### Diagnóstico
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+A Edge Function `automacao-cobmais` (caso `agent_execute`) chama `${config.server_url}/automacao/agent` no seu servidor local. O servidor responde com **HTML** em vez de JSON (provavelmente uma página 404 do Express ou do ngrok), e `await res.json()` falha com "Unexpected token '<'".
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+As chamadas de `/status` funcionam normalmente (retornam JSON), mas o endpoint `/automacao/agent` provavelmente **não existe ainda no seu servidor local** — você precisa copiar o `server.js` atualizado (que contém o endpoint `/automacao/agent`) e reiniciar o servidor.
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+### Alteração no código
 
-## Correção
+**`supabase/functions/automacao-cobmais/index.ts`** — No caso `agent_execute`, antes de fazer `res.json()`:
+- Verificar se `res.ok` é false
+- Verificar se o `Content-Type` da resposta é HTML
+- Se for HTML, retornar erro claro: "Servidor local retornou HTML — verifique se o server.js está atualizado com o endpoint /automacao/agent"
+- Envolver `res.json()` em try-catch adicional para mensagem amigável
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
-
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
-
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+Isso evita o erro genérico de JSON parse e orienta o usuário sobre o problema real.
 
