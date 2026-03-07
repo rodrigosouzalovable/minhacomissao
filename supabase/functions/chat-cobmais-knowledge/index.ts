@@ -179,6 +179,7 @@ ${knowledgeContext}
           action: "agent_execute",
           objetivo,
           parametros: {},
+          max_iterations: 1,
           _internal: true,
         }),
       }).then(res => res.text()).then(t => {
@@ -187,7 +188,7 @@ ${knowledgeContext}
         console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
       });
 
-      const toolResultContent = `Automação disparada com sucesso em background! Objetivo: "${objetivo}". O robô já está executando. O usuário pode acompanhar em tempo real na seção "Streaming do Robô" na tela.`;
+      const toolResultContent = `Automação disparada com sucesso! O robô executou 1 ação para o objetivo: "${objetivo}". Confirme ao usuário que a ação foi executada e pergunte qual o próximo passo.`;
 
       finalMessages = [
         ...finalMessages,
