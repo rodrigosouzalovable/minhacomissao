@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor } from 'lucide-react';
 import { RoboStreamViewer } from '@/components/RoboStreamViewer';
+import { RoboCodeViewer } from '@/components/RoboCodeViewer';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -316,6 +317,9 @@ export default function AutomacaoCobMais() {
         {roboStatus === 'online' && serverUrl && (
           <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
         )}
+
+        {/* Código do Robô */}
+        <RoboCodeViewer />
 
         {/* Fila & Logs */}
         <Card>
