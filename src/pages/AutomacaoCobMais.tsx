@@ -460,8 +460,13 @@ export default function AutomacaoCobMais() {
         }
       }
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao conversar com a IA');
+      if (err.name === 'AbortError') {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: '⏹️ Comando interrompido pelo usuário.' }]);
+      } else {
+        toast.error(err.message || 'Erro ao conversar com a IA');
+      }
     } finally {
+      chatAbortRef.current = null;
       clearTimeout(slowTimer);
       toast.dismiss('automation-running');
       setIsChatLoading(false);
