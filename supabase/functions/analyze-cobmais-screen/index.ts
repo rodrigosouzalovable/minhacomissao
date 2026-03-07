@@ -209,7 +209,7 @@ Se encontrou um erro irrecuperável, retorne action="error".`
                 properties: {
                   action: {
                     type: 'string',
-                    enum: ['click', 'fill', 'scroll', 'wait', 'navigate', 'select', 'done', 'error'],
+                    enum: ['click', 'fill', 'scroll', 'wait', 'navigate', 'select', 'keypress', 'done', 'error'],
                     description: 'Tipo de ação a executar',
                   },
                   selector: {
@@ -218,7 +218,7 @@ Se encontrou um erro irrecuperável, retorne action="error".`
                   },
                   value: {
                     type: 'string',
-                    description: 'Valor para preencher (action=fill) ou URL (action=navigate) ou direção (action=scroll: up/down)',
+                    description: 'Valor para preencher (action=fill) ou URL (action=navigate) ou direção (action=scroll: up/down) ou tecla (action=keypress: F5, Enter, Escape, Tab, Backspace)',
                   },
                   description: {
                     type: 'string',

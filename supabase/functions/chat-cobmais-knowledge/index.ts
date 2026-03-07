@@ -78,8 +78,9 @@ ${knowledgeContext}
 10. NÃO apenas descreva os passos — EXECUTE chamando a tool
 11. A cada comando, o robô executa APENAS UMA AÇÃO (1 iteração). Depois ele para e espera o próximo comando do usuário.
 12. Após executar, SEMPRE confirme ao usuário o que foi feito. Diga algo como: "✅ **Feito!** Naveguei até [URL]. Veja o resultado no streaming acima. O que devo fazer agora?"
-13. Exemplos de quando executar: "acesse o link X", "pesquise pelo CPF Y", "clique no botão Z", "preencha o campo com valor W"
+13. Exemplos de quando executar: "acesse o link X", "pesquise pelo CPF Y", "clique no botão Z", "preencha o campo com valor W", "atualize a página clicando F5", "pressione Enter", "pressione Escape para fechar o modal"
 14. Exemplos de quando NÃO executar: "o que você sabe fazer?", "quais fluxos você aprendeu?", "explique como funciona"
+19. Você suporta ação de TECLAS (keypress): F5 (atualizar página), Enter, Escape, Tab, Backspace, etc. Quando o usuário pedir para atualizar a página, pressionar Enter ou qualquer tecla, use a tool executar_automacao com objetivo descritivo como "pressionar F5 para atualizar a página"
 
 ## IMPORTANTE - Confirmação após cada ação:
 15. SEMPRE pergunte ao usuário qual o próximo passo após confirmar a execução
@@ -187,6 +188,48 @@ ${knowledgeContext}
       }).catch(err => {
         console.error("[chat-cobmais-knowledge] Automation dispatch error:", err);
       });
+
+      // Save user instruction as learned knowledge (fire-and-forget)
+      (async () => {
+        try {
+          // Get or create the "chat_aprendido" session
+          let { data: session } = await adminClient.from("cobmais_sessoes_gravadas")
+            .select("id, total_passos")
+            .eq("nome", "chat_aprendido")
+            .single();
+
+          if (!session) {
+            const { data: newSession } = await adminClient.from("cobmais_sessoes_gravadas")
+              .insert({ nome: "chat_aprendido", status: "finalizado", criado_por: userId, total_passos: 0, descricao: "Conhecimento aprendido via chat" })
+              .select("id, total_passos")
+              .single();
+            session = newSession;
+          }
+
+          if (session) {
+            const nextStep = (session.total_passos || 0) + 1;
+            // Detect action type from objetivo
+            const objLower = objetivo.toLowerCase();
+            let acao = "navigate";
+            if (objLower.includes("f5") || objLower.includes("enter") || objLower.includes("escape") || objLower.includes("tab") || objLower.includes("tecla") || objLower.includes("pressio")) acao = "keypress";
+            else if (objLower.includes("clic") || objLower.includes("botão") || objLower.includes("botao")) acao = "click";
+            else if (objLower.includes("preench") || objLower.includes("digit") || objLower.includes("escrev")) acao = "fill";
+            else if (objLower.includes("scroll") || objLower.includes("rolar")) acao = "scroll";
+
+            await adminClient.from("cobmais_conhecimento").insert({
+              sessao_id: session.id,
+              nome_fluxo: "chat_aprendido",
+              passo_numero: nextStep,
+              acao,
+              descricao_tela: objetivo,
+            });
+            await adminClient.from("cobmais_sessoes_gravadas").update({ total_passos: nextStep }).eq("id", session.id);
+            console.log(`[chat-cobmais-knowledge] Saved knowledge: step ${nextStep}, action: ${acao}`);
+          }
+        } catch (err) {
+          console.error("[chat-cobmais-knowledge] Error saving knowledge:", err);
+        }
+      })();
 
       const toolResultContent = `Automação disparada com sucesso! O robô executou 1 ação para o objetivo: "${objetivo}". Confirme ao usuário que a ação foi executada e pergunte qual o próximo passo.`;
 
