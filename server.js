@@ -851,7 +851,7 @@ app.post('/automacao/agent', async (req, res) => {
       // 1. Capture screenshot
       let screenshot;
       try {
-        const screenshotBuffer = await pg.screenshot({ type: 'jpeg', quality: 40 });
+        const screenshotBuffer = await pg.screenshot({ type: 'jpeg', quality: 25 });
         screenshot = `data:image/jpeg;base64,${screenshotBuffer.toString('base64')}`;
       } catch (e) {
         console.log('❌ Erro ao capturar screenshot:', e.message);
