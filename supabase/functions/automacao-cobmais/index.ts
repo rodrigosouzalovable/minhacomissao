@@ -435,6 +435,9 @@ Deno.serve(async (req) => {
       case 'agent_execute':
         result = await handleAgentExecute(adminClient, body, userId)
         break
+      case 'stop':
+        result = await handleStop(adminClient)
+        break
       case 'record_start':
         result = await handleRecordStart(adminClient, body, userId)
         break
