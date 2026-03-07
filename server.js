@@ -66,7 +66,14 @@ app.get('/status', (req, res) => {
   });
 });
 
-// ===== ENDPOINT: SCREENSHOT =====
+// ===== ENDPOINT: PARAR AGENTE =====
+app.post('/automacao/stop', (req, res) => {
+  abortAgent = true;
+  updateStatus('stopped', 'Agente interrompido pelo usuário');
+  console.log('🛑 Agente interrompido pelo usuário');
+  res.json({ success: true, message: 'Agente interrompido' });
+});
+
 app.get('/screenshot', async (req, res) => {
   try {
     if (!page) {
