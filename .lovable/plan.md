@@ -1,41 +1,31 @@
 
 
-## Problema identificado
+## Diagnóstico
 
-Existem dois controles separados que não estão conectados:
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-1. **Toggle na aba Usuários** (`whatsapp_lembretes_habilitado` na tabela `profiles`) — controla apenas o envio de **lembretes de pagamento**
-2. **Toggle na aba Robô CobMais** (`chatbot_config.ativo`) — controla as **respostas automáticas do chatbot**
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-Quando você desativa o WhatsApp na aba Usuários, isso só desliga os lembretes. O chatbot continua respondendo porque verifica apenas a tabela `chatbot_config`.
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-## Solução
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-Unificar a verificação: o chatbot WhatsApp deve respeitar **ambos** os controles. Se o toggle global do chatbot (`chatbot_config.ativo`) estiver desativado, o bot não responde. Isso já funciona.
+## Correção
 
-O que falta: o toggle na aba Usuários deve ter um significado mais claro, e o toggle do chatbot na página Robô CobMais deve ser o controle principal.
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-### Mudanças
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/AdminUsuarios.tsx` | Renomear o label do toggle de WhatsApp para "Lembretes" para ficar claro que controla apenas lembretes, não o chatbot |
-| `src/pages/AutomacaoCobMais.tsx` | Garantir que o card do Chatbot tenha descrição clara: "Controla as respostas automáticas do chatbot para todos os clientes" |
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
 
-Alternativamente, se o que o usuário quer é que o toggle na aba Usuários **também** controle o chatbot globalmente:
-
-### Mudança principal
-
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/whatsapp-chatbot/index.ts` | Além de verificar `chatbot_config.ativo`, verificar também se o admin (dono da instância UAZAPI) tem `whatsapp_lembretes_habilitado = true` no perfil. Se o toggle do admin estiver desativado, o chatbot não responde. |
-
-Isso significa que:
-- Toggle do **admin na aba Usuários** OFF → chatbot para de responder
-- Toggle do **Chatbot na aba Robô CobMais** OFF → chatbot para de responder
-- Ambos precisam estar ON para o chatbot funcionar
-
-### Detalhes técnicos
-
-No `whatsapp-chatbot/index.ts`, após verificar `chatbot_config.ativo`, adicionar uma consulta ao perfil do admin que possui a instância UAZAPI sendo usada. Se esse admin tiver `whatsapp_lembretes_habilitado = false`, ignorar a mensagem.
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

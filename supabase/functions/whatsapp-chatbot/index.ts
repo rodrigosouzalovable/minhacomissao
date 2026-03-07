@@ -140,6 +140,32 @@ serve(async (req) => {
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
+    // Check if the admin who owns this UAZAPI instance has WhatsApp enabled
+    if (instanceToken) {
+      const { data: instanceOwner } = await supabase
+        .from('user_whatsapp_instances')
+        .select('user_id')
+        .eq('instance_token', instanceToken)
+        .eq('ativo', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (instanceOwner?.user_id) {
+        const { data: ownerProfile } = await supabase
+          .from('profiles')
+          .select('whatsapp_lembretes_habilitado')
+          .eq('id', instanceOwner.user_id)
+          .single();
+
+        if (ownerProfile && !ownerProfile.whatsapp_lembretes_habilitado) {
+          console.log(`WhatsApp desabilitado para o dono da instância (${instanceOwner.user_id}). Ignorando mensagem.`);
+          return new Response(JSON.stringify({ success: true, ignored: true, reason: 'owner_whatsapp_disabled' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    }
+
     if (!serverUrl || !instanceToken) {
       console.error('Credenciais UAZAPI não configuradas');
       return new Response(JSON.stringify({ success: false, error: 'Credenciais não configuradas' }), {

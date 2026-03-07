@@ -489,7 +489,7 @@ export default function AdminUsuarios() {
                     <TableHead className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <MessageCircle className="h-4 w-4" />
-                        WhatsApp
+                        Lembretes
                       </div>
                     </TableHead>
                     <TableHead>Ações</TableHead>
