@@ -310,6 +310,27 @@ export type Database = {
           },
         ]
       }
+      chatbot_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          id: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       chatbot_conversas: {
         Row: {
           atualizado_em: string
