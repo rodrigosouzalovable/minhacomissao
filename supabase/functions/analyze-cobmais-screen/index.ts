@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const SYSTEM_PROMPT = `Você é um agente de automação web especializado no sistema CobMais (app.cobmais.com.br).
+const BASE_SYSTEM_PROMPT = `Você é um agente de automação web especializado no sistema CobMais (app.cobmais.com.br).
 Você recebe screenshots da tela atual do navegador e deve decidir a próxima ação para completar o objetivo.
 
 ## Estrutura do CobMais
@@ -39,6 +39,70 @@ Você recebe screenshots da tela atual do navegador e deve decidir a próxima a�
 ## Formato da Resposta
 Retorne SEMPRE via tool call com a próxima ação a executar.`;
 
+async function fetchKnowledge(supabaseClient: any, objective: string): Promise<string> {
+  try {
+    // Extract flow name hints from the objective
+    const flowKeywords: Record<string, string[]> = {
+      'gerar_boleto': ['boleto', 'gerar boleto', 'emitir boleto'],
+      'buscar_cliente': ['buscar', 'pesquisar', 'cliente', 'cpf'],
+      'login': ['login', 'entrar', 'logar'],
+      'cadastrar_email': ['email', 'e-mail', 'cadastrar email'],
+      'calculo': ['cálculo', 'calculo', 'calcular', 'valor'],
+    }
+
+    const objectiveLower = objective.toLowerCase()
+    const matchingFlows: string[] = []
+    
+    for (const [flow, keywords] of Object.entries(flowKeywords)) {
+      if (keywords.some(k => objectiveLower.includes(k))) {
+        matchingFlows.push(flow)
+      }
+    }
+
+    // Fetch all knowledge, prioritizing matching flows
+    let query = supabaseClient
+      .from('cobmais_conhecimento')
+      .select('nome_fluxo, passo_numero, descricao_tela, acao, seletor, valor, url_pagina, screenshot_description')
+      .order('nome_fluxo')
+      .order('passo_numero')
+
+    if (matchingFlows.length > 0) {
+      query = query.in('nome_fluxo', matchingFlows)
+    }
+
+    const { data, error } = await query.limit(100)
+    
+    if (error || !data || data.length === 0) return ''
+
+    // Group by flow
+    const flows: Record<string, any[]> = {}
+    for (const step of data) {
+      if (!flows[step.nome_fluxo]) flows[step.nome_fluxo] = []
+      flows[step.nome_fluxo].push(step)
+    }
+
+    let knowledgeText = '\n\n## 🎓 CONHECIMENTO APRENDIDO (gravado por humano)\nUse estas lições como guia prioritário. Estes passos foram gravados por um humano navegando o CobMais real.\n'
+
+    for (const [flowName, steps] of Object.entries(flows)) {
+      knowledgeText += `\n### Fluxo: "${flowName}" (${steps.length} passos)\n`
+      for (const step of steps) {
+        knowledgeText += `  ${step.passo_numero}. [${step.acao}] `
+        if (step.seletor) knowledgeText += `seletor="${step.seletor}" `
+        if (step.valor) knowledgeText += `valor="${step.valor}" `
+        if (step.url_pagina) knowledgeText += `url="${step.url_pagina}" `
+        if (step.screenshot_description) knowledgeText += `— ${step.screenshot_description}`
+        if (step.descricao_tela) knowledgeText += ` (tela: ${step.descricao_tela})`
+        knowledgeText += '\n'
+      }
+    }
+
+    return knowledgeText
+  } catch (err) {
+    console.error('Error fetching knowledge:', err)
+    return ''
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -59,6 +123,14 @@ Deno.serve(async (req) => {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
+
+    // Fetch learned knowledge from database
+    const adminClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+    const knowledgeText = await fetchKnowledge(adminClient, objective)
+    const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT + knowledgeText
 
     const historyText = (history || [])
       .map((h: any, i: number) => `${i + 1}. [${h.action}] ${h.description} → ${h.result || 'ok'}`)
