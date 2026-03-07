@@ -70,6 +70,13 @@ export default function AutomacaoCobMais() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoProgressLabel, setVideoProgressLabel] = useState('');
 
+  // Chat with AI state
+  type ChatMsg = { role: 'user' | 'assistant'; content: string };
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Não autenticado');
