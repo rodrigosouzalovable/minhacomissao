@@ -112,6 +112,10 @@ ${knowledgeContext}
               objetivo: {
                 type: "string",
                 description: "Descrição em linguagem natural do que deve ser feito, ex: 'Emitir boleto à vista do CPF 059.919.151-13 por R$ 300,00 para pagamento em 10/03/2026'"
+              },
+              max_iterations: {
+                type: "number",
+                description: "Número máximo de ações que o robô pode executar. Use 1 para ações simples (um clique, um preenchimento). Use 3-5 para fluxos multi-passo como 'acessar link E fazer login' ou 'pesquisar CPF e abrir ficha'. Padrão: 1"
               }
             },
             required: ["objetivo"],

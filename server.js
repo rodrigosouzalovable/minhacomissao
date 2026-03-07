@@ -879,14 +879,14 @@ app.post('/automacao/agent', async (req, res) => {
         if (!aiData.success || !aiData.action) {
           console.log('⚠️ IA não retornou ação válida:', JSON.stringify(aiData));
           history.push({ action: 'ai_error', description: 'IA não retornou ação válida', result: aiData.error || 'unknown' });
-          await delay(2000);
+          await delay(1000);
           continue;
         }
         aiAction = aiData.action;
       } catch (e) {
         console.log('❌ Erro ao chamar IA:', e.message);
         history.push({ action: 'ai_call_error', description: 'Falha na chamada da IA', result: e.message });
-        await delay(3000);
+        await delay(1500);
         continue;
       }
 
