@@ -388,7 +388,8 @@ export default function AutomacaoCobMais() {
   // Chat with AI about knowledge
   const handleChatSend = async () => {
     const text = chatInput.trim();
-    if (!text || isChatLoading) return;
+    if (!text && !chatImage) return;
+    if (isChatLoading) return;
 
     // Build multimodal content if image attached
     let userContent: string | any[];
