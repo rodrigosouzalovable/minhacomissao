@@ -1,31 +1,53 @@
 
 
-## Diagnóstico
+# Acelerar execução de comandos do chat para o robô
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problema identificado
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+O fluxo atual é lento porque cada comando do chat passa por **muitas camadas de latência encadeadas**:
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+1. **Chat → 1ª chamada IA** (~3-8s): Chamada non-streaming ao Gemini para decidir se usa tool call
+2. **Chat → Edge Function `automacao-cobmais`** (~1-2s): Dispatch fire-and-forget, mas passa por outra Edge Function
+3. **Edge Function → servidor local** (~1-2s): Chamada HTTP via ngrok
+4. **Servidor local → Edge Function `analyze-cobmais-screen`** (~5-15s): Captura screenshot + envia imagem base64 + IA analisa
+5. **Delays fixos no código**: `delay(2000)` após cada ação, `delay(300)` antes de clicks, `delay(2000)` após navigate
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+Para um login (3 ações: navigate + fill email + fill senha + click), são ~4 iterações × ~15s cada = **~60 segundos mínimo**. Isso explica a demora.
 
-## Correção
+## Otimizações propostas
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+### 1. Reduzir delays fixos no `server.js`
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+| Ação | Delay atual | Delay proposto |
+|------|-------------|----------------|
+| `click` (pré) | 300ms | 200ms |
+| `click` (pós) | 2000ms | 1000ms |
+| `fill` | 500ms + delay de digitação (50ms/char) | 300ms + delay 20ms/char |
+| `navigate` | 2000ms | 1000ms |
+| `scroll` | 1000ms | 500ms |
+| `keypress` | 2000ms | 1000ms |
+| `wait` (AI error retry) | 2000ms / 3000ms | 1000ms / 1500ms |
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
+### 2. Permitir múltiplas ações por iteração no chat
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+Atualmente `max_iterations: 1` no chat — a cada comando do chat, o robô faz **só 1 ação** e para. Para "acessar o link e fazer login", o usuário precisa dar ~4 comandos separados.
+
+Mudança: quando o objetivo é claro e multi-passo (ex: "acesse o link X e faça login"), enviar `max_iterations: 5` ao invés de 1, permitindo que o agente complete o fluxo sem parar a cada ação.
+
+Adicionar um parâmetro `max_iterations` na tool description para que a IA decida: ações simples = 1, fluxos complexos = 3-5.
+
+### 3. Reduzir qualidade/tamanho do screenshot
+
+Atualmente: JPEG quality 40. Mudar para quality 25 e reduzir resolução para diminuir o payload enviado à IA, acelerando upload e processamento.
+
+### 4. Timeout do `analyze-cobmais-screen` 
+
+Reduzir o `AbortSignal.timeout` de 30s para 20s e otimizar o prompt para ser mais conciso.
+
+## Arquivos a modificar
+
+| Arquivo | Mudança |
+|---|---|
+| `server.js` | Reduzir todos os delays, diminuir qualidade screenshot |
+| `supabase/functions/chat-cobmais-knowledge/index.ts` | Permitir `max_iterations` variável (1-5) na tool, IA decide |
 
