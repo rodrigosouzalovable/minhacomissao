@@ -38,6 +38,8 @@ export default function AutomacaoCobMais() {
   const [lastResult, setLastResult] = useState<any>(null);
   const [comandos, setComandos] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [chatbotAtivo, setChatbotAtivo] = useState(true);
+  const [togglingChatbot, setTogglingChatbot] = useState(false);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
