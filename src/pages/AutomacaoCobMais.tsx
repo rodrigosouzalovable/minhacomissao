@@ -976,21 +976,53 @@ export default function AutomacaoCobMais() {
                 </div>
               </ScrollArea>
 
+              {/* Image preview */}
+              {chatImage && (
+                <div className="relative inline-block">
+                  <img src={chatImage} alt="Preview" className="rounded-md max-h-32 border" />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                    onClick={() => setChatImage(null)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+
               {/* Input area */}
+              <input
+                type="file"
+                accept="image/*"
+                ref={chatImageInputRef}
+                className="hidden"
+                onChange={handleChatImageSelect}
+              />
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => chatImageInputRef.current?.click()}
+                  disabled={isChatLoading}
+                  title="Anexar imagem/screenshot"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
                 <Input
-                  placeholder="Pergunte à IA sobre o que ela aprendeu..."
+                  placeholder="Pergunte à IA ou envie um print mostrando onde clicar..."
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
                   disabled={isChatLoading}
+                  className="flex-1"
                 />
                 {isChatLoading ? (
                   <Button variant="destructive" onClick={() => chatAbortRef.current?.abort()} title="Parar">
                     <Square className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button onClick={handleChatSend} disabled={!chatInput.trim()}>
+                  <Button onClick={handleChatSend} disabled={!chatInput.trim() && !chatImage}>
                     <Send className="h-4 w-4" />
                   </Button>
                 )}
