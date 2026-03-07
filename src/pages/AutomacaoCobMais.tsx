@@ -76,6 +76,7 @@ export default function AutomacaoCobMais() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const streamingRef = useRef<HTMLDivElement>(null);
 
   const invokeFunction = useCallback(async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -364,6 +365,11 @@ export default function AutomacaoCobMais() {
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput('');
     setIsChatLoading(true);
+
+    // Auto-scroll to streaming section
+    setTimeout(() => {
+      streamingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
 
     const allMessages = [...chatMessages, userMsg];
     let assistantSoFar = '';
@@ -728,7 +734,9 @@ export default function AutomacaoCobMais() {
 
         {/* Streaming */}
         {roboStatus === 'online' && serverUrl && (
-          <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
+          <div ref={streamingRef}>
+            <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
+          </div>
         )}
 
         {/* Código do Robô */}

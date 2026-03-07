@@ -1,20 +1,31 @@
 
 
-# Auto-scroll para Streaming ao enviar comando no Chat
+## Diagnóstico
 
-## O que será feito
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-Quando você enviar uma mensagem no chat da IA, a página rolará automaticamente até a seção "Streaming do Robô" para que você possa acompanhar a execução em tempo real.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Implementação
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/AutomacaoCobMais.tsx` | Adicionar `useRef` no wrapper do `RoboStreamViewer` e chamar `scrollIntoView` no `handleChatSend` após enviar a mensagem |
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-### Detalhes técnicos
-- Criar `streamingRef = useRef<HTMLDivElement>(null)` 
-- Envolver o `<RoboStreamViewer>` em uma `<div ref={streamingRef}>`
-- No `handleChatSend`, após adicionar a mensagem do usuário, chamar `streamingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })`
-- Se o robô estiver offline (seção não visível), não rolar — o scroll só acontece quando a seção de streaming está renderizada
+## Correção
+
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
+
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
