@@ -73,7 +73,14 @@ async function triggerCobMaisRobot(supabase: any, cpf: string, valorFinal: numbe
   });
 
   const result = await res.json();
-  console.log('Resultado gerar_boleto:', JSON.stringify(result));
+  console.log('[triggerCobMaisRobot] Status HTTP:', res.status);
+  console.log('[triggerCobMaisRobot] Resultado completo:', JSON.stringify(result));
+  
+  if (result.success && !result.resultado?.boleto_url) {
+    console.warn('[triggerCobMaisRobot] ALERTA: sucesso=true mas boleto_url ausente!');
+    console.warn('[triggerCobMaisRobot] Campos no resultado:', result.resultado ? Object.keys(result.resultado).join(', ') : 'resultado vazio');
+  }
+  
   return result;
 }
 
