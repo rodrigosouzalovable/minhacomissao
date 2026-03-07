@@ -954,14 +954,32 @@ export default function AutomacaoCobMais() {
 
         {/* Chat com IA sobre o conhecimento */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5" />
-              💬 Conversar com a IA sobre o Conhecimento
-            </CardTitle>
-            <CardDescription>
-              Pergunte à IA o que ela aprendeu, se tem dúvidas ou se precisa de mais treinamento.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" />
+                💬 Conversar com a IA sobre o Conhecimento
+              </CardTitle>
+              <CardDescription>
+                Pergunte à IA o que ela aprendeu, se tem dúvidas ou se precisa de mais treinamento.
+              </CardDescription>
+            </div>
+            {chatMessages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={async () => {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (user) await supabase.from('chat_ia_mensagens').delete().eq('user_id', user.id);
+                  setChatMessages([]);
+                  prevMsgCountRef.current = 0;
+                  toast.success('Histórico limpo');
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-1" /> Limpar
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
