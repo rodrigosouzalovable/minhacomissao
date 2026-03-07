@@ -35,6 +35,7 @@ import PortalHome from "./pages/PortalHome";
 import CredorDashboard from "./pages/CredorDashboard";
 import Acionamento from "./pages/Acionamento";
 import MetaPessoal from "./pages/MetaPessoal";
+import AutomacaoCobMais from "./pages/AutomacaoCobMais";
 
 const queryClient = new QueryClient();
 
@@ -139,6 +140,7 @@ const App = () => (
             <Route path="/admin/financeiro" element={<AdminRoute><Financeiro /></AdminRoute>} />
             <Route path="/admin/importar-devedores" element={<AdminRoute><ImportarDevedores /></AdminRoute>} />
             <Route path="/admin/acionamento" element={<ProtectedRoute><Acionamento /></ProtectedRoute>} />
+            <Route path="/admin/automacao-cobmais" element={<AdminRoute><AutomacaoCobMais /></AdminRoute>} />
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

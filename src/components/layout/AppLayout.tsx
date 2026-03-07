@@ -20,7 +20,8 @@ import {
   FileSpreadsheet,
   Wallet,
   MessageSquare,
-  Target
+  Target,
+  Bot
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, adminOnly: true },
   { href: '/admin/importar-devedores', label: 'Importar Devedores', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/acionamento', label: 'Acionamento', icon: MessageSquare, adminOnly: true },
+  { href: '/admin/automacao-cobmais', label: 'Robô CobMais', icon: Bot, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
