@@ -1021,15 +1021,7 @@ app.post('/automacao/agent', async (req, res) => {
       updateStatus('agent', `Iteração ${i + 1}: ${aiAction.description} → ${actionResult}`);
     }
 
-    // Max iterations reached
-    updateStatus('erro', 'Agente atingiu limite de iterações');
-    return res.json({
-      success: false,
-      error: 'Agente atingiu o limite máximo de 30 iterações',
-      history,
-      iterations: MAX_ITERATIONS,
-      tempo_ms: Date.now() - startTime,
-    });
+    // Loop só termina por: done, error, abort, timeout ou confiança baixa
   } catch (err) {
     console.error('❌ Erro no agente:', err.message);
     return res.json({
