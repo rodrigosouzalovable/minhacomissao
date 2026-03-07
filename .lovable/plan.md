@@ -1,31 +1,24 @@
 
 
-## Diagnóstico
+# Adicionar envio de imagens no chat do CobMais
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## O que será feito
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+Permitir que o usuário envie screenshots no chat para mostrar à IA onde clicar. A imagem será convertida em base64, enviada junto com a mensagem, e a IA (Gemini) receberá como conteúdo multimodal para interpretar visualmente.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Mudanças
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+### 1. Frontend — `src/pages/AutomacaoCobMais.tsx`
 
-## Correção
+- Adicionar state para imagem selecionada (`chatImage: string | null`) e um `<input type="file" accept="image/*">` oculto
+- Adicionar botão de anexar imagem (ícone 📎 / `ImagePlus`) ao lado do input de texto
+- Mostrar preview da imagem selecionada acima do input com botão de remover
+- No `handleChatSend`: se houver imagem, enviar mensagem como array multimodal `[{type: "text", text}, {type: "image_url", image_url: {url: base64}}]`
+- Nas mensagens do usuário no chat: renderizar imagens inline quando `msg.content` for array ou quando houver `msg.image`
+- Atualizar tipo `ChatMsg` para suportar `image?: string`
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+### 2. Backend — `supabase/functions/chat-cobmais-knowledge/index.ts`
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
-
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+- Passar mensagens multimodais diretamente ao Gemini (já suporta content como array com `image_url`)
+- Adicionar instrução no system prompt: "Quando o usuário enviar uma imagem/screenshot, analise visualmente e identifique elementos, botões e campos. Use essa informação para decidir a próxima ação."
 
