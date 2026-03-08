@@ -587,6 +587,8 @@ INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cl
           }
 
           const nomeDevedor = debitos[0].nome;
+          const primeiroNome = nomeDevedor.split(' ')[0];
+          const primeiroNomeCapitalizado = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
           const totalContratos = debitos.length;
           const valorTotal = debitos.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
           const valorAvista = valorTotal * 0.5;
@@ -596,39 +598,52 @@ INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cl
           if (maxParcelas < 2) maxParcelas = 2;
           const valorParcelaMin = valorParcelado / maxParcelas;
 
+          // Fetch credor name from devedores table
+          const { data: devedorInfo } = await supabase
+            .from('devedores')
+            .select('credor')
+            .eq('cpf', cpf)
+            .eq('ativo', true)
+            .limit(1)
+            .single();
+          
+          // Map credor slug to display name
+          let credorNome = 'a empresa credora';
+          const credorSlug = devedorInfo?.credor || '';
+          if (credorSlug.includes('novo_mundo') || credorSlug.includes('ume')) {
+            credorNome = 'as Lojas Novo Mundo';
+          } else if (credorSlug) {
+            credorNome = credorSlug.replace(/_/g, ' ');
+          }
+
           const { data: acordoExistente } = await supabase
             .rpc('consultar_acordo_ativo_por_cpf', { p_cpf: cpf });
 
           let avisoAcordo = '';
           if (acordoExistente && acordoExistente.length > 0) {
             const acordo = acordoExistente[0];
-            avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione isso.`;
+            avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione brevemente.`;
           }
 
-          const fallbackProposta = `${nomeDevedor}, encontrei ${totalContratos} contrato(s) totalizando ${formatCurrency(valorTotal)}.
-
-💰 *À VISTA (50% OFF)*: ${formatCurrency(valorAvista)}
-📋 *PARCELADO (30% OFF)*: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-
-Responda *1* para à vista ou *2* para parcelar.
-📞 Fale com negociador: (62) 98218-3144`;
+          const fallbackProposta = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
 
           resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente ${nomeDevedor} confirmou sua identidade. Apresente as opções de negociação com empatia.
+            `CONTEXTO: O cliente ${primeiroNomeCapitalizado} confirmou o CPF. Agora apresente a proposta de forma CURTA e DIRETA como no WhatsApp.
 
 DADOS:
-- Nome: ${nomeDevedor}
-- CPF: ${formatCpf(cpf)}
-- Contratos: ${totalContratos}
+- Primeiro nome: ${primeiroNomeCapitalizado}
+- Credor: ${credorNome}
 - Dívida total: ${formatCurrency(valorTotal)}
-
-OPÇÕES:
-- À vista 50% desconto: ${formatCurrency(valorAvista)}
-- Parcelado 30% desconto: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-
+- À vista (50% desc): ${formatCurrency(valorAvista)}
+- Parcelado (30% desc): ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
 ${avisoAcordo}
 
-INSTRUÇÕES: Agradeça a confirmação, apresente as opções com *negrito* nos valores. Ofereça (62) 98218-3144.`,
+INSTRUÇÕES RÍGIDAS:
+- Máximo 2-3 frases. SEM numeração (1, 2). SEM emojis excessivos.
+- Use o primeiro nome "${primeiroNomeCapitalizado}" (não o nome completo).
+- Mencione "${credorNome}" na mensagem.
+- Tom conversacional como se fosse uma pessoa digitando no WhatsApp.
+- Exemplo de formato ideal: "Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?"`,
             historico,
             fallbackProposta
           );
