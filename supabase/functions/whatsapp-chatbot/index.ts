@@ -608,20 +608,42 @@ serve(async (req) => {
           else if (intencao?.includes('parcelado')) escolha = 'parcelado';
         }
 
+        // Ensure values are valid numbers with fallback
+        let vaOfertas = Number(dados.valor_avista);
+        let vpOfertas = Number(dados.valor_parcelado);
+        let mpOfertas = Number(dados.max_parcelas);
+        if (!vaOfertas || isNaN(vaOfertas)) {
+          let vt = Number(dados.valor_total);
+          if (!vt || isNaN(vt)) {
+            const cpfF = dados.cpf;
+            if (cpfF) {
+              const { data: df } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpfF });
+              if (df && df.length > 0) vt = df.reduce((s: number, d: any) => s + Number(d.valor_atualizado), 0);
+            }
+          }
+          if (vt && !isNaN(vt)) {
+            vaOfertas = vt * 0.5;
+            vpOfertas = vt * 0.7;
+            mpOfertas = Math.min(24, Math.floor(vpOfertas / VALOR_MINIMO_PARCELA));
+            if (mpOfertas < 2) mpOfertas = 2;
+            dados = { ...dados, valor_total: vt, valor_avista: vaOfertas, valor_parcelado: vpOfertas, max_parcelas: mpOfertas };
+          }
+        }
+
         if (escolha === 'avista') {
-          dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: dados.valor_avista };
+          dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: vaOfertas };
           resposta = `Você consegue fazer o pagamento hoje?`;
           await salvarEResponder('aguardando_pagamento_hoje');
           break;
 
         } else if (escolha === 'parcelado') {
-          dados = { ...dados, tipo_pagamento: 'parcelado', valor_final: dados.valor_parcelado };
+          dados = { ...dados, tipo_pagamento: 'parcelado', valor_final: vpOfertas };
           resposta = `Você consegue fazer o pagamento hoje?`;
           await salvarEResponder('aguardando_pagamento_hoje');
           break;
 
         } else {
-          resposta = `Desculpe, não entendi. Você prefere pagar *à vista* (${formatCurrency(dados.valor_avista)}) ou *parcelado* (${dados.max_parcelas}x de ${formatCurrency(dados.valor_parcelado / dados.max_parcelas)})?`;
+          resposta = `Desculpe, não entendi. Você prefere pagar *à vista* (${formatCurrency(vaOfertas)}) ou *parcelado* (${mpOfertas}x de ${formatCurrency(vpOfertas / mpOfertas)})?`;
           await salvarEResponder('oferta_valores');
           break;
         }
