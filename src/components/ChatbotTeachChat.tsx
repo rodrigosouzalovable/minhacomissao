@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { GraduationCap, Send, Loader2, Bot, User, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,35 +11,72 @@ interface ChatMessage {
   content: string;
 }
 
-interface Regra {
-  id: string;
-  gatilho: string;
-  resposta: string;
-  ativo: boolean;
-  criado_em: string;
-  atualizado_em: string;
-}
-
 interface Props {
   onRegraCreated: () => void;
 }
 
+const INITIAL_MESSAGE: ChatMessage = {
+  role: 'assistant',
+  content: 'Olá! 👋 Sou sua assistente de treinamento. Me ensine como devo responder seus clientes!\n\nVocê pode me dizer coisas como:\n- *"Quando o cliente perguntar sobre boleto, responda: Vou gerar seu boleto agora!"*\n- *"Se o cliente disser \'quero pagar\', responda com as opções de pagamento"*\n\nO que você quer me ensinar?'
+};
+
 export default function ChatbotTeachChat({ onRegraCreated }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: 'assistant',
-      content: 'Olá! 👋 Sou sua assistente de treinamento. Me ensine como devo responder seus clientes!\n\nVocê pode me dizer coisas como:\n- *"Quando o cliente perguntar sobre boleto, responda: Vou gerar seu boleto agora!"*\n- *"Se o cliente disser \'quero pagar\', responda com as opções de pagamento"*\n\nO que você quer me ensinar?'
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasLoaded = useRef(false);
+
+  // Load persisted messages on mount
+  useEffect(() => {
+    if (hasLoaded.current) return;
+    hasLoaded.current = true;
+    loadHistory();
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const loadHistory = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoadingHistory(false); return; }
+
+      const { data, error } = await supabase
+        .from('chat_ia_mensagens')
+        .select('role, content')
+        .eq('user_id', user.id)
+        .eq('image', 'teach-chatbot')
+        .order('criado_em', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        setMessages(data.map(d => ({ role: d.role as 'user' | 'assistant', content: d.content })));
+      }
+    } catch (e) {
+      console.error('Erro ao carregar histórico teach:', e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const persistMessage = async (msg: ChatMessage) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from('chat_ia_mensagens').insert({
+        user_id: user.id,
+        role: msg.role,
+        content: msg.content,
+        image: 'teach-chatbot',
+      });
+    } catch (e) {
+      console.error('Erro ao salvar mensagem:', e);
+    }
+  };
 
   const handleSend = async () => {
     const text = input.trim();
@@ -51,6 +87,7 @@ export default function ChatbotTeachChat({ onRegraCreated }: Props) {
     setMessages(updatedMessages);
     setInput('');
     setSending(true);
+    await persistMessage(userMsg);
 
     try {
       const { data, error } = await supabase.functions.invoke('teach-chatbot', {
@@ -61,6 +98,7 @@ export default function ChatbotTeachChat({ onRegraCreated }: Props) {
 
       const assistantMsg: ChatMessage = { role: 'assistant', content: data.reply };
       setMessages(prev => [...prev, assistantMsg]);
+      await persistMessage(assistantMsg);
 
       if (data.regra_criada) {
         toast.success('Regra criada com sucesso!');
@@ -69,7 +107,9 @@ export default function ChatbotTeachChat({ onRegraCreated }: Props) {
     } catch (err) {
       console.error('Erro ao ensinar IA:', err);
       toast.error('Erro ao processar. Tente novamente.');
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Desculpe, tive um problema. Pode tentar novamente?' }]);
+      const errMsg: ChatMessage = { role: 'assistant', content: 'Desculpe, tive um problema. Pode tentar novamente?' };
+      setMessages(prev => [...prev, errMsg]);
+      await persistMessage(errMsg);
     } finally {
       setSending(false);
     }
@@ -82,12 +122,21 @@ export default function ChatbotTeachChat({ onRegraCreated }: Props) {
     }
   };
 
-  const handleClear = () => {
-    setMessages([
-      {
-        role: 'assistant',
-        content: 'Conversa reiniciada! 🔄 O que você quer me ensinar agora?'
+  const handleClear = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('chat_ia_mensagens')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('image', 'teach-chatbot');
       }
+    } catch (e) {
+      console.error('Erro ao limpar histórico:', e);
+    }
+    setMessages([
+      { role: 'assistant', content: 'Conversa reiniciada! 🔄 O que você quer me ensinar agora?' }
     ]);
   };
 
@@ -110,31 +159,36 @@ export default function ChatbotTeachChat({ onRegraCreated }: Props) {
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col min-h-0 gap-3">
-        {/* Messages area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pr-1">
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.role === 'assistant' && (
-                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="h-3.5 w-3.5 text-primary" />
-                </div>
-              )}
-              <div
-                className={`rounded-lg px-3 py-2 max-w-[80%] text-sm whitespace-pre-wrap ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                }`}
-              >
-                {msg.content}
-              </div>
-              {msg.role === 'user' && (
-                <div className="h-7 w-7 rounded-full bg-secondary flex items-center justify-center shrink-0 mt-0.5">
-                  <User className="h-3.5 w-3.5" />
-                </div>
-              )}
+          {loadingHistory ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ))}
+          ) : (
+            messages.map((msg, i) => (
+              <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'assistant' && (
+                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                )}
+                <div
+                  className={`rounded-lg px-3 py-2 max-w-[80%] text-sm whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+                {msg.role === 'user' && (
+                  <div className="h-7 w-7 rounded-full bg-secondary flex items-center justify-center shrink-0 mt-0.5">
+                    <User className="h-3.5 w-3.5" />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
           {sending && (
             <div className="flex gap-2 justify-start">
               <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -147,7 +201,6 @@ export default function ChatbotTeachChat({ onRegraCreated }: Props) {
           )}
         </div>
 
-        {/* Input area */}
         <div className="flex gap-2 flex-shrink-0">
           <Textarea
             value={input}
