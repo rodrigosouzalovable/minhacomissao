@@ -75,6 +75,33 @@ async function notificarAdmin(serverUrl: string, instanceToken: string, telefone
   }
 }
 
+async function notificarAcordoFechado(serverUrl: string, instanceToken: string, telefoneCliente: string, dados: any) {
+  try {
+    const nomeCliente = dados.nome || 'cliente';
+    const primeiroNome = nomeCliente.split(' ')[0];
+    const tipo = dados.tipo_pagamento;
+    const dataPgto = dados.data_pagamento || 'hoje';
+
+    let detalhes = '';
+    if (tipo === 'avista') {
+      const valor = Number(dados.valor_final || dados.valor_avista);
+      detalhes = `à vista por ${formatCurrency(valor)}`;
+    } else {
+      const parcelas = Number(dados.parcelas || dados.max_parcelas);
+      const valorTotal = Number(dados.valor_final || dados.valor_parcelado);
+      const valorParcela = valorTotal / parcelas;
+      detalhes = `em ${parcelas}x de ${formatCurrency(valorParcela)}`;
+    }
+
+    const telefoneFormatado = telefoneCliente.replace(/^55/, '');
+    const msg = `Rodrigo, acabei de fechar um acordo com o cliente ${primeiroNome}, número ${telefoneFormatado}, ${detalhes}, para pagamento ${dataPgto}.`;
+    console.log(`[ACORDO] Notificando admin: ${msg}`);
+    await sendMessage(serverUrl, instanceToken, ADMIN_NUMERO, msg);
+  } catch (e) {
+    console.error('[ACORDO] Falha ao notificar admin sobre acordo:', e);
+  }
+}
+
 // AI only for INTENT interpretation — never for composing responses
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
   try {
@@ -756,6 +783,7 @@ serve(async (req) => {
           resposta = `Ok! Iremos te enviar o boleto para pagamento hoje.`;
           // TODO: here you can trigger boleto generation
           await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
+          await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
           break;
 
         } else if (isNao) {
@@ -771,6 +799,7 @@ serve(async (req) => {
             if (dias <= 7 && dias >= 0) {
               resposta = `OK, irei te enviar o boleto para essa data!`;
               await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(dataInformada) });
+              await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(dataInformada) });
             } else {
               resposta = `Infelizmente o prazo máximo para pagamento é de 7 dias. Poderia escolher uma data dentro desse período?`;
               await salvarEResponder('aguardando_data');
@@ -795,12 +824,14 @@ serve(async (req) => {
           if (intencao?.includes('hoje')) {
             resposta = `Ok! Iremos te enviar o boleto para pagamento hoje.`;
             await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
+            await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
             break;
           } else if (intencao?.includes('amanha')) {
             const amanha = new Date();
             amanha.setDate(amanha.getDate() + 1);
             resposta = `OK, irei te enviar o boleto para essa data!`;
             await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(amanha) });
+            await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(amanha) });
             break;
           }
 
@@ -826,6 +857,7 @@ serve(async (req) => {
 
         resposta = `OK, irei te enviar o boleto para essa data!`;
         await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(dataInformada) });
+        await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(dataInformada) });
         break;
       }
 
