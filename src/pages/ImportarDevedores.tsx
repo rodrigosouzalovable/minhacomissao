@@ -47,6 +47,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Tipo Título, H = Atraso (dias), I = Nro Nota, J = Desdob., K = Valor, L = Dt. Venc. Inicial',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total | Aba 2: Telefones (opcional)',
+  pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
 };
 
 export default function ImportarDevedores() {
