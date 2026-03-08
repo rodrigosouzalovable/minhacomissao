@@ -143,6 +143,52 @@ async function transcreverAudio(audioUrl: string): Promise<string> {
 
 const ADMIN_NUMERO = '5562991672674';
 
+function parseAdminInstruction(texto: string): { literal: boolean; conteudo: string } {
+  // Check for text wrapped in quotes (both regular and smart quotes)
+  const match = texto.match(/^[""\u201C](.+)[""\u201D]$/s);
+  if (match) return { literal: true, conteudo: match[1].trim() };
+  return { literal: false, conteudo: texto.trim() };
+}
+
+async function gerarRespostaComInstrucaoAdmin(instrucao: string, contextoConversa: any): Promise<string> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) return instrucao;
+
+    const historico = contextoConversa?.mensagens_historico || [];
+    const historicoTexto = historico.slice(-10).map((m: any) => `${m.role}: ${m.content}`).join('\n');
+    const nomeCliente = contextoConversa?.nome || 'cliente';
+    const primeiroNome = nomeCliente.split(' ')[0];
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um assistente de cobrança amigável e profissional. O administrador Rodrigo está instruindo como responder ao cliente ${primeiroNome}. 
+Gere uma resposta natural e amigável para o cliente baseada na instrução do administrador.
+Mantenha o tom informal e cordial. Não mencione o administrador. Responda APENAS com a mensagem para o cliente, sem explicações.`
+          },
+          {
+            role: 'user',
+            content: `Contexto da conversa:\n${historicoTexto}\n\nInstrução do administrador: "${instrucao}"\n\nGere a resposta para o cliente:`
+          },
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+      }),
+    });
+    if (!response.ok) return instrucao;
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim() || instrucao;
+  } catch {
+    return instrucao;
+  }
+}
+
 async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
   try {
     const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneInstancia} para o número ${telefoneCliente}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
@@ -511,6 +557,95 @@ serve(async (req) => {
 
     console.log(`Mensagem de ${telefone}: "${texto}"`);
 
+    // --- INTERCEPTAÇÃO: Admin respondendo instrução para cliente pendente ---
+    if (telefone === ADMIN_NUMERO) {
+      const instanceTokenAdmin = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+      const serverUrlAdmin = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
+
+      if (instanceTokenAdmin) {
+        // Look for pending client for this instance
+        const pendingKey = `admin_pending_${instanceTokenAdmin}`;
+        const { data: pendingRecord } = await supabase
+          .from('chatbot_conversas')
+          .select('dados')
+          .eq('telefone', pendingKey)
+          .eq('etapa', 'admin_pending')
+          .maybeSingle();
+
+        if (pendingRecord?.dados) {
+          const clienteTelefone = (pendingRecord.dados as any).cliente_telefone;
+          const clienteServerUrl = (pendingRecord.dados as any).server_url || serverUrlAdmin;
+          const clienteInstanceToken = (pendingRecord.dados as any).instance_token || instanceTokenAdmin;
+          const contextoCliente = (pendingRecord.dados as any).contexto || {};
+
+          if (clienteTelefone) {
+            console.log(`[ADMIN-REPLY] Admin respondendo para cliente ${clienteTelefone}: "${texto}"`);
+
+            // Parse instruction
+            const instrucao = parseAdminInstruction(texto);
+            let mensagemParaCliente: string;
+
+            if (instrucao.literal) {
+              // Literal: send exactly what admin wrote between quotes
+              mensagemParaCliente = instrucao.conteudo;
+              console.log(`[ADMIN-REPLY] Modo literal: "${mensagemParaCliente}"`);
+            } else {
+              // Guided: AI generates response based on admin instruction + context
+              mensagemParaCliente = await gerarRespostaComInstrucaoAdmin(instrucao.conteudo, contextoCliente);
+              console.log(`[ADMIN-REPLY] Modo IA: instrução="${instrucao.conteudo}" -> resposta="${mensagemParaCliente}"`);
+            }
+
+            // Send to client with typing simulation
+            const delay = Math.floor(Math.random() * 10000) + 5000;
+            await simulateTyping(clienteServerUrl, clienteInstanceToken, clienteTelefone, delay);
+            await sendMessage(clienteServerUrl, clienteInstanceToken, clienteTelefone, mensagemParaCliente);
+
+            // Unlock client conversation
+            const { data: clienteConv } = await supabase
+              .from('chatbot_conversas')
+              .select('etapa, dados')
+              .eq('telefone', clienteTelefone)
+              .maybeSingle();
+
+            if (clienteConv?.etapa === 'aguardando_humano') {
+              const etapaAnterior = (clienteConv.dados as any)?.etapa_antes_humano || 'proposta_enviada';
+              const dadosCliente = clienteConv.dados || {};
+              const dadosDesbloq = { ...(dadosCliente as any) };
+              delete dadosDesbloq.etapa_antes_humano;
+              // Add admin response to history
+              const historico = dadosDesbloq.mensagens_historico || [];
+              historico.push({ role: 'assistente', content: mensagemParaCliente, ts: new Date().toISOString() });
+              dadosDesbloq.mensagens_historico = historico.slice(-20);
+
+              await supabase.from('chatbot_conversas').upsert({
+                telefone: clienteTelefone,
+                etapa: etapaAnterior,
+                dados: dadosDesbloq,
+                atualizado_em: new Date().toISOString(),
+              }, { onConflict: 'telefone' });
+              console.log(`[ADMIN-REPLY] Cliente ${clienteTelefone} desbloqueado: aguardando_humano -> ${etapaAnterior}`);
+            }
+
+            // Remove pending record
+            await supabase.from('chatbot_conversas').delete().eq('telefone', pendingKey);
+
+            // Confirm to admin
+            await sendMessage(serverUrlAdmin!, instanceTokenAdmin, ADMIN_NUMERO, `✅ Mensagem enviada para ${clienteTelefone}.`);
+
+            return new Response(JSON.stringify({ success: true, admin_reply: true, cliente: clienteTelefone }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+      }
+
+      // If no pending client found, ignore admin message
+      console.log(`[ADMIN] Mensagem do admin sem cliente pendente, ignorando.`);
+      return new Response(JSON.stringify({ success: true, ignored: true, reason: 'admin_no_pending' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // --- DEBOUNCE: buffer de mensagens para evitar respostas duplicadas ---
     const debounceTimestamp = new Date().toISOString();
 
@@ -719,6 +854,16 @@ serve(async (req) => {
         server_url: serverUrl, instance_token: instanceToken,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: 'telefone' });
+
+      // Save admin_pending record so admin can reply via WhatsApp
+      const pendingKey = `admin_pending_${instanceToken}`;
+      await supabase.from('chatbot_conversas').upsert({
+        telefone: pendingKey,
+        etapa: 'admin_pending',
+        dados: { cliente_telefone: telefone, instance_token: instanceToken, server_url: serverUrl, contexto: dados },
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'telefone' });
+
       await notificarAdmin(serverUrl!, instanceToken!, telefone, telefoneInstancia, textoCliente);
     }
 
