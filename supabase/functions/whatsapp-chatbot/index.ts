@@ -794,6 +794,7 @@ serve(async (req) => {
           }, { onConflict: 'telefone' });
 
           await sendMessage(serverUrl, instanceToken, telefone, resposta);
+          jaEnviou = true;
 
           // Trigger robot
           try {
