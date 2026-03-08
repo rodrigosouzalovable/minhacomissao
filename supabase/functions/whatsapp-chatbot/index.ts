@@ -497,12 +497,10 @@ serve(async (req) => {
         }
 
         if (!debitos || debitos.length === 0) {
-          const fallback = `Ótima notícia! Não encontramos pendências para o CPF ${formatCpf(cpf)}. Se acredita que há algum erro, entre em contato: (62) 98218-3144.`;
-          
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Consultei o CPF ${formatCpf(cpf)} e NÃO há pendências. Dê a boa notícia de forma genuína. Ofereça o telefone (62) 98218-3144 caso o cliente acredite que há erro. Diga que pode digitar "menu" para nova consulta.`,
-            historico, fallback
-          );
+          const primeiroNomeSemDeb = nomeDevedor ? nomeDevedor.split(' ')[0] : '';
+          const primeiroNomeSemDebCap = primeiroNomeSemDeb ? primeiroNomeSemDeb.charAt(0).toUpperCase() + primeiroNomeSemDeb.slice(1).toLowerCase() : '';
+          const fallbackSemDeb = `Ótima notícia! Não encontramos pendências para o CPF ${formatCpf(cpf)}. Se acredita que há algum erro, entre em contato: (62) 98218-3144.`;
+          resposta = applyTemplate(templates, 'sem_debitos', { primeiro_nome: primeiroNomeSemDebCap || 'cliente', cpf_formatado: formatCpf(cpf), telefone_contato: '(62) 98218-3144' }, fallbackSemDeb);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
