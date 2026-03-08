@@ -824,6 +824,7 @@ serve(async (req) => {
           if (intencao?.includes('hoje')) {
             resposta = `Ok! Iremos te enviar o boleto para pagamento hoje.`;
             await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
+            await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
             break;
           } else if (intencao?.includes('amanha')) {
             const amanha = new Date();
