@@ -1,9 +1,43 @@
-## ✅ Concluído — Notificar admin quando a IA não entender o cliente
 
-Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-1. **`notificarAdmin()`** — envia WhatsApp para 5562991672674 com detalhes do que o cliente falou
-2. **`salvarSilenciosoENotificar()`** — salva estado como `aguardando_humano` sem responder ao cliente
-3. **4 pontos de fallback substituídos**: `proposta_enviada`, `oferta_valores`, `aguardando_pagamento_hoje`, `aguardando_data`
-4. **Etapa `aguardando_humano`** — ignora mensagens do cliente, re-notifica admin se insistir
-5. **Desbloqueio via `fromMe`** — quando admin envia mensagem para o cliente, conversa volta à etapa anterior
+# Bloquear chatbot para instâncias desativadas
+
+## Problema
+Quando uma instância UAZAPI é desativada (`ativo = false`), a query na linha 602 filtra por `ativo = true`, resultando em `instanceOwner = null`. O código pula o bloco de verificação e continua processando a mensagem normalmente — o chatbot continua respondendo.
+
+## Solução
+Adicionar uma segunda query (sem filtro `ativo`) para verificar se a instância existe mas está desativada. Se estiver, retornar silenciosamente sem responder.
+
+### Alteração em `supabase/functions/whatsapp-chatbot/index.ts` (linhas ~597-632)
+
+Após a query atual que busca instância ativa, adicionar:
+
+```typescript
+if (instanceToken) {
+  // First check if instance exists but is deactivated
+  const { data: instanceRecord } = await supabase
+    .from('user_whatsapp_instances')
+    .select('user_id, ativo')
+    .eq('instance_token', instanceToken)
+    .limit(1)
+    .maybeSingle();
+
+  if (instanceRecord && !instanceRecord.ativo) {
+    console.log(`[CHATBOT] Instance ${instanceToken} is deactivated, ignoring.`);
+    return new Response(JSON.stringify({ success: true, ignored: true, reason: 'instance_deactivated' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (instanceRecord?.user_id) {
+    // existing admin role check...
+    // existing lembretes check...
+  }
+}
+```
+
+Isso substitui a query dupla atual por uma única query sem filtro de `ativo`, verificando o status manualmente.
+
+## Arquivo alterado
+- `supabase/functions/whatsapp-chatbot/index.ts`
+
