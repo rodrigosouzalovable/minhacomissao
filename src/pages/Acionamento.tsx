@@ -18,8 +18,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle } from 'lucide-react';
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
+import ChatHistoryDialog from '@/components/ChatHistoryDialog';
 import { Progress } from '@/components/ui/progress';
 import * as XLSX from 'xlsx';
 
@@ -53,6 +54,21 @@ const META_DIARIA_BASE = 'acionamento_meta_diaria';
 const META_MENSAL_BASE = 'acionamento_meta_mensal';
 const RECEBIDO_DIARIO_BASE = 'meta_recebido_diario';
 const RECEBIDO_MENSAL_BASE = 'meta_recebido_mensal';
+
+const normalizePhoneForWhatsApp = (phone: string): string => {
+  const clean = phone.replace(/\D/g, '');
+  const full = clean.startsWith('55') ? clean : `55${clean}`;
+  // Remove 9th digit for BR mobile: 55 + DDD(2) + 9 + 8 digits → 55 + DDD(2) + 8 digits
+  if (full.length === 13 && full[4] === '9') {
+    return full.slice(0, 4) + full.slice(5);
+  }
+  return full;
+};
+
+interface ConversaInfo {
+  etapa: string;
+  historico: Array<{ role: string; content: string; ts?: string }>;
+}
 
 const isToday = (isoString: string): boolean => {
   const date = new Date(isoString);
@@ -163,6 +179,12 @@ export default function Acionamento() {
 
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
+  
+  // Conversation tracking state
+  const [conversasMap, setConversasMap] = useState<Record<string, ConversaInfo>>({});
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [selectedConversa, setSelectedConversa] = useState<{ etapa: string; historico: Array<{ role: string; content: string; ts?: string }>; telefone: string; clienteNome: string } | null>(null);
+  
   const activeHistoricoIdRef = useRef<string | null>(null);
   const { autoSending, autoProgress, sendStatus: contextSendStatus, sendTimestamps: contextSendTimestamps, startAutoSend, stopAutoSend } = useAutoSend();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -598,6 +620,61 @@ export default function Acionamento() {
     }).length,
     [enviados, sendTimestamps]
   );
+
+  // Fetch conversation states for enviados phones (polling every 30s)
+  const fetchConversas = useCallback(async () => {
+    if (enviados.length === 0) return;
+    const phones = enviados.map(c => normalizePhoneForWhatsApp(c.telefone));
+    const uniquePhones = [...new Set(phones)];
+    if (uniquePhones.length === 0) return;
+
+    const { data, error } = await supabase
+      .from('chatbot_conversas')
+      .select('telefone, etapa, dados')
+      .in('telefone', uniquePhones);
+
+    if (error || !data) return;
+
+    const map: Record<string, ConversaInfo> = {};
+    for (const row of data) {
+      const dados = row.dados as any;
+      const historico = Array.isArray(dados?.mensagens_historico) ? dados.mensagens_historico : [];
+      map[row.telefone] = { etapa: row.etapa, historico };
+    }
+    setConversasMap(map);
+  }, [enviados]);
+
+  useEffect(() => {
+    if (activeTab !== 'enviados' || enviados.length === 0) return;
+    fetchConversas();
+    const interval = setInterval(fetchConversas, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab, fetchConversas, enviados.length]);
+
+  const getConversaStatus = (telefone: string) => {
+    const normalized = normalizePhoneForWhatsApp(telefone);
+    const conversa = conversasMap[normalized];
+    if (!conversa) return null;
+    
+    const hasClientMsg = conversa.historico.some(m => m.role === 'cliente' || m.role === 'user');
+    if (conversa.etapa === 'acordo_finalizado') return 'acordo';
+    if (conversa.etapa === 'aguardando_humano') return 'aguardando';
+    if (hasClientMsg) return 'negociando';
+    return null;
+  };
+
+  const handleOpenChat = (cliente: { nome: string; telefone: string }) => {
+    const normalized = normalizePhoneForWhatsApp(cliente.telefone);
+    const conversa = conversasMap[normalized];
+    if (!conversa) return;
+    setSelectedConversa({
+      etapa: conversa.etapa,
+      historico: conversa.historico,
+      telefone: cliente.telefone,
+      clienteNome: cliente.nome,
+    });
+    setChatDialogOpen(true);
+  };
 
   // Instance management
   const handleSaveInstance = async () => {
@@ -1070,6 +1147,7 @@ export default function Acionamento() {
                           const formattedTimestamp = timestamp
                             ? new Date(timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
                             : '—';
+                          const conversaStatus = getConversaStatus(c.telefone);
                           return (
                             <TableRow key={c.originalIndex}>
                               <TableCell className="font-medium">{c.nome}</TableCell>
@@ -1080,17 +1158,44 @@ export default function Acionamento() {
                               <TableCell className="text-sm text-muted-foreground">{formattedTimestamp}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
-                                  {wasSent && (
+                                  {conversaStatus === 'negociando' && (
+                                    <Badge
+                                      variant="outline"
+                                      className="cursor-pointer bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30"
+                                      onClick={() => handleOpenChat(c)}
+                                    >
+                                      <MessageCircle className="h-3 w-3 mr-1" /> Em negociação
+                                    </Badge>
+                                  )}
+                                  {conversaStatus === 'aguardando' && (
+                                    <Badge
+                                      variant="outline"
+                                      className="cursor-pointer bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30"
+                                      onClick={() => handleOpenChat(c)}
+                                    >
+                                      <MessageCircle className="h-3 w-3 mr-1" /> Aguardando
+                                    </Badge>
+                                  )}
+                                  {conversaStatus === 'acordo' && (
+                                    <Badge
+                                      variant="outline"
+                                      className="cursor-pointer bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30"
+                                      onClick={() => handleOpenChat(c)}
+                                    >
+                                      <Check className="h-3 w-3 mr-1" /> Acordo
+                                    </Badge>
+                                  )}
+                                  {!conversaStatus && wasSent && (
                                     <Badge variant="default" className="bg-green-600 hover:bg-green-600">
                                       <Check className="h-3 w-3 mr-1" /> Enviado
                                     </Badge>
                                   )}
-                                  {wasError && (
+                                  {!conversaStatus && wasError && (
                                     <Badge variant="destructive">
                                       <X className="h-3 w-3 mr-1" /> Erro
                                     </Badge>
                                   )}
-                                  {wasManual && !wasSent && !wasError && (
+                                  {!conversaStatus && wasManual && !wasSent && !wasError && (
                                     <div className="flex items-center gap-2">
                                       <Badge variant="secondary">Manual</Badge>
                                       <Checkbox
@@ -1377,6 +1482,13 @@ export default function Acionamento() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Chat History Dialog */}
+        <ChatHistoryDialog
+          open={chatDialogOpen}
+          onOpenChange={setChatDialogOpen}
+          conversa={selectedConversa}
+        />
       </div>
     </AppLayout>
   );
