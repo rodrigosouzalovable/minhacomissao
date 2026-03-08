@@ -63,6 +63,19 @@ async function sendMessage(serverUrl: string, instanceToken: string, telefone: s
   throw new Error(lastError?.message || 'Falha ao enviar mensagem UAZAPI');
 }
 
+const ADMIN_NUMERO = '5562991672674';
+
+async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
+  try {
+    const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneCliente} para o número ${telefoneInstancia}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
+    console.log(`[ADMIN] Notificando admin: ${msg}`);
+    await sendMessage(serverUrl, instanceToken, ADMIN_NUMERO, msg);
+  } catch (e) {
+    console.error('[ADMIN] Falha ao notificar admin:', e);
+  }
+}
+}
+
 // AI only for INTENT interpretation — never for composing responses
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
   try {
