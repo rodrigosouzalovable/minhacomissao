@@ -1482,6 +1482,13 @@ export default function Acionamento() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Chat History Dialog */}
+        <ChatHistoryDialog
+          open={chatDialogOpen}
+          onOpenChange={setChatDialogOpen}
+          conversa={selectedConversa}
+        />
       </div>
     </AppLayout>
   );
