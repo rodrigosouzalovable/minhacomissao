@@ -13,6 +13,26 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
+function gerarListaParcelamento(valorParcelado: number): string {
+  const linhas: string[] = [];
+  for (let i = 2; i <= 24; i++) {
+    const valorParcela = valorParcelado / i;
+    if (valorParcela < VALOR_MINIMO_PARCELA) break;
+    linhas.push(`${i}x de *${formatCurrency(Math.ceil(valorParcela * 100) / 100)}*`);
+  }
+  return linhas.join('\n');
+}
+
+function gerarMensagemProposta(valorAvista: number, valorParcelado: number): string {
+  const listaParcelamento = gerarListaParcelamento(valorParcelado);
+  let msg = `Que ótimo! 🎉\n\nEstamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}* à vista.`;
+  if (listaParcelamento) {
+    msg += `\n\nOu podemos parcelar para você da seguinte forma:\n\n${listaParcelamento}`;
+  }
+  msg += `\n\nComo prefere pagar? Responda com o número de parcelas desejado (ex: *3x*) ou *à vista*.`;
+  return msg;
+}
+
 function extractCpf(text: string): string | null {
   const cleaned = text.replace(/\D/g, '');
   if (cleaned.length === 11) return cleaned;
