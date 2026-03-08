@@ -224,124 +224,142 @@ serve(async (req) => {
 
     // --- Track fromMe messages (outbound proposals) ---
     if (isFromMe) {
-      const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim().toLowerCase();
+      const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+      const textoFromMeLower = textoFromMe.toLowerCase();
       const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
-      if (destinoTelefone && (textoFromMe.includes('50% de desconto') || textoFromMe.includes('parcelas em aberto'))) {
-        console.log(`[fromMe] Proposta detectada para ${destinoTelefone}, atualizando estado...`);
+      // --- DESBLOQUEIO: admin respondeu manualmente a um cliente aguardando_humano ---
+      if (destinoTelefone) {
         const supabaseUrlFm = Deno.env.get('SUPABASE_URL')!;
         const supabaseKeyFm = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabaseFm = createClient(supabaseUrlFm, supabaseKeyFm);
 
-        const phoneSuffix = destinoTelefone.slice(-10);
-        const phoneSuffix11 = destinoTelefone.slice(-11);
-
-        // Find debtor by phone
-        let devedoresEncontrados: any[] = [];
-        const { data: devPorTel } = await supabaseFm
-          .from('devedores')
-          .select('nome, cpf, telefone, valor_atualizado, credor')
-          .eq('ativo', true)
-          .or(`telefone.ilike.%${phoneSuffix},telefone.ilike.%${phoneSuffix11}`);
-        devedoresEncontrados = devPorTel || [];
-
-        if (devedoresEncontrados.length === 0) {
-          const { data: telsAdicionais } = await supabaseFm
-            .from('devedor_telefones')
-            .select('devedor_cpf, numero')
-            .eq('ativo', true)
-            .or(`numero.ilike.%${phoneSuffix},numero.ilike.%${phoneSuffix11}`);
-          if (telsAdicionais && telsAdicionais.length > 0) {
-            const cpfsUnicos = [...new Set(telsAdicionais.map((t: any) => t.devedor_cpf))];
-            const { data: devPorCpf } = await supabaseFm
-              .from('devedores')
-              .select('nome, cpf, telefone, valor_atualizado, credor')
-              .eq('ativo', true)
-              .in('cpf', cpfsUnicos);
-            if (devPorCpf) devedoresEncontrados = devPorCpf;
-          }
-        }
-
-        const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
-        const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-        // Check if pre-hydrated data exists BEFORE deciding to use DB values
-        const { data: existingPreHydrated } = await supabaseFm
+        const { data: convAguardando } = await supabaseFm
           .from('chatbot_conversas')
-          .select('dados')
+          .select('etapa, dados')
           .eq('telefone', destinoTelefone)
           .maybeSingle();
 
-        const preHydrated = existingPreHydrated?.dados;
-        const hasPreHydration = preHydrated?.valor_total && preHydrated?.valor_avista;
-
-        if (hasPreHydration) {
-          // Pre-hydrated data from spreadsheet takes priority — preserve it
-          console.log(`[fromMe] Pre-hydrated data found for ${destinoTelefone}: valor_total=${preHydrated.valor_total}, preserving spreadsheet values`);
+        if (convAguardando?.etapa === 'aguardando_humano') {
+          const etapaAnterior = convAguardando.dados?.etapa_antes_humano || 'novo';
+          console.log(`[UNLOCK] Admin respondeu para ${destinoTelefone}, desbloqueando de aguardando_humano -> ${etapaAnterior}`);
+          const dadosDesbloq = { ...convAguardando.dados };
+          delete dadosDesbloq.etapa_antes_humano;
           await supabaseFm.from('chatbot_conversas').upsert({
             telefone: destinoTelefone,
-            etapa: 'proposta_enviada',
-            dados: {
-              ...preHydrated,
-              mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
-            },
-            server_url: serverUrlFm, instance_token: instanceTokenFm,
+            etapa: etapaAnterior,
+            dados: dadosDesbloq,
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
+        }
 
-          console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (dados da planilha preservados)`);
-        } else if (devedoresEncontrados.length > 0) {
-          const devedor = devedoresEncontrados[0];
-          const cpf = devedor.cpf.replace(/\D/g, '');
-          const valorTotal = devedoresEncontrados
-            .filter((d: any) => d.cpf.replace(/\D/g, '') === cpf)
-            .reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
-          const valorAvista = valorTotal * 0.5;
-          const valorParcelado = valorTotal * 0.7;
-          let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
-          if (maxParcelas > 24) maxParcelas = 24;
-          if (maxParcelas < 2) maxParcelas = 2;
-          const credorNome = getCredorNome(devedor.credor || '');
+        // --- Proposta detection (existing logic) ---
+        if (textoFromMeLower.includes('50% de desconto') || textoFromMeLower.includes('parcelas em aberto')) {
+          console.log(`[fromMe] Proposta detectada para ${destinoTelefone}, atualizando estado...`);
 
-          await supabaseFm.from('chatbot_conversas').upsert({
-            telefone: destinoTelefone,
-            etapa: 'proposta_enviada',
-            dados: {
-              cpf, nome: devedor.nome, valor_total: valorTotal,
-              valor_avista: valorAvista, valor_parcelado: valorParcelado,
-              max_parcelas: maxParcelas, credor: credorNome,
-              mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
-            },
-            server_url: serverUrlFm, instance_token: instanceTokenFm,
-            atualizado_em: new Date().toISOString(),
-          }, { onConflict: 'telefone' });
+          const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
+          const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-          console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (CPF: ${cpf})`);
-        } else {
-          // Devedor NOT in database (e.g. from spreadsheet import)
-          // Still reset to proposta_enviada — check if pre-hydration data exists
-          const { data: existingConv } = await supabaseFm
+          const phoneSuffix = destinoTelefone.slice(-10);
+          const phoneSuffix11 = destinoTelefone.slice(-11);
+
+          // Find debtor by phone
+          let devedoresEncontrados: any[] = [];
+          const { data: devPorTel } = await supabaseFm
+            .from('devedores')
+            .select('nome, cpf, telefone, valor_atualizado, credor')
+            .eq('ativo', true)
+            .or(`telefone.ilike.%${phoneSuffix},telefone.ilike.%${phoneSuffix11}`);
+          devedoresEncontrados = devPorTel || [];
+
+          if (devedoresEncontrados.length === 0) {
+            const { data: telsAdicionais } = await supabaseFm
+              .from('devedor_telefones')
+              .select('devedor_cpf, numero')
+              .eq('ativo', true)
+              .or(`numero.ilike.%${phoneSuffix},numero.ilike.%${phoneSuffix11}`);
+            if (telsAdicionais && telsAdicionais.length > 0) {
+              const cpfsUnicos = [...new Set(telsAdicionais.map((t: any) => t.devedor_cpf))];
+              const { data: devPorCpf } = await supabaseFm
+                .from('devedores')
+                .select('nome, cpf, telefone, valor_atualizado, credor')
+                .eq('ativo', true)
+                .in('cpf', cpfsUnicos);
+              if (devPorCpf) devedoresEncontrados = devPorCpf;
+            }
+          }
+
+          // Check if pre-hydrated data exists BEFORE deciding to use DB values
+          const { data: existingPreHydrated } = await supabaseFm
             .from('chatbot_conversas')
             .select('dados')
             .eq('telefone', destinoTelefone)
             .maybeSingle();
 
-          const existingDados = existingConv?.dados || {};
-          // Preserve pre-hydrated values if they exist, otherwise leave empty for fallback
-          const newDados = {
-            ...existingDados,
-            mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
-          };
+          const preHydrated = existingPreHydrated?.dados;
+          const hasPreHydration = preHydrated?.valor_total && preHydrated?.valor_avista;
 
-          await supabaseFm.from('chatbot_conversas').upsert({
-            telefone: destinoTelefone,
-            etapa: 'proposta_enviada',
-            dados: newDados,
-            server_url: serverUrlFm, instance_token: instanceTokenFm,
-            atualizado_em: new Date().toISOString(),
-          }, { onConflict: 'telefone' });
+          if (hasPreHydration) {
+            console.log(`[fromMe] Pre-hydrated data found for ${destinoTelefone}: valor_total=${preHydrated.valor_total}, preserving spreadsheet values`);
+            await supabaseFm.from('chatbot_conversas').upsert({
+              telefone: destinoTelefone,
+              etapa: 'proposta_enviada',
+              dados: {
+                ...preHydrated,
+                mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
+              },
+              server_url: serverUrlFm, instance_token: instanceTokenFm,
+              atualizado_em: new Date().toISOString(),
+            }, { onConflict: 'telefone' });
+            console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (dados da planilha preservados)`);
+          } else if (devedoresEncontrados.length > 0) {
+            const devedor = devedoresEncontrados[0];
+            const cpf = devedor.cpf.replace(/\D/g, '');
+            const valorTotal = devedoresEncontrados
+              .filter((d: any) => d.cpf.replace(/\D/g, '') === cpf)
+              .reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+            const valorAvista = valorTotal * 0.5;
+            const valorParcelado = valorTotal * 0.7;
+            let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
+            if (maxParcelas > 24) maxParcelas = 24;
+            if (maxParcelas < 2) maxParcelas = 2;
+            const credorNome = getCredorNome(devedor.credor || '');
 
-          console.log(`[fromMe] Proposta detectada para ${destinoTelefone} (devedor não no banco) - estado resetado para proposta_enviada`);
+            await supabaseFm.from('chatbot_conversas').upsert({
+              telefone: destinoTelefone,
+              etapa: 'proposta_enviada',
+              dados: {
+                cpf, nome: devedor.nome, valor_total: valorTotal,
+                valor_avista: valorAvista, valor_parcelado: valorParcelado,
+                max_parcelas: maxParcelas, credor: credorNome,
+                mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
+              },
+              server_url: serverUrlFm, instance_token: instanceTokenFm,
+              atualizado_em: new Date().toISOString(),
+            }, { onConflict: 'telefone' });
+            console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (CPF: ${cpf})`);
+          } else {
+            const { data: existingConv } = await supabaseFm
+              .from('chatbot_conversas')
+              .select('dados')
+              .eq('telefone', destinoTelefone)
+              .maybeSingle();
+
+            const existingDados = existingConv?.dados || {};
+            const newDados = {
+              ...existingDados,
+              mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
+            };
+
+            await supabaseFm.from('chatbot_conversas').upsert({
+              telefone: destinoTelefone,
+              etapa: 'proposta_enviada',
+              dados: newDados,
+              server_url: serverUrlFm, instance_token: instanceTokenFm,
+              atualizado_em: new Date().toISOString(),
+            }, { onConflict: 'telefone' });
+            console.log(`[fromMe] Proposta detectada para ${destinoTelefone} (devedor não no banco) - estado resetado para proposta_enviada`);
+          }
         }
       }
 
