@@ -151,6 +151,44 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
       });
       const suffix = configName ? ` (via ${configName})` : '';
       toast.success(`Mensagem enviada para ${formatPrimeiroNome(cliente.nome)}${suffix}`);
+
+      // Pre-hydrate chatbot state if message contains offer keywords
+      const msgLower = msg.toLowerCase();
+      if (msgLower.includes('50% de desconto') || msgLower.includes('parcelas em aberto')) {
+        try {
+          const cleanPhone = cliente.telefone.replace(/\D/g, '');
+          const phoneFull = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+          const saldo = cliente.saldo;
+          const valorAvista = saldo * 0.5;
+          const valorParcelado = saldo * 0.7;
+          let maxParcelas = 1;
+          for (let p = 24; p >= 2; p--) {
+            if (valorParcelado / p >= 90) { maxParcelas = p; break; }
+          }
+          if (maxParcelas < 2) maxParcelas = 2;
+
+          await supabase.from('chatbot_conversas').upsert({
+            telefone: phoneFull,
+            etapa: 'proposta_enviada',
+            dados: {
+              cpf: cliente.cpf.replace(/\D/g, ''),
+              nome: cliente.nome,
+              valor_total: saldo,
+              valor_avista: valorAvista,
+              valor_parcelado: valorParcelado,
+              max_parcelas: maxParcelas,
+              credor: 'Loja Novo Mundo',
+            },
+            server_url: uazapiConfig?.server_url || null,
+            instance_token: uazapiConfig?.instance_token || null,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+
+          console.log(`[AutoSend] Chatbot state pre-hydrated for ${phoneFull} (saldo: ${saldo})`);
+        } catch (e) {
+          console.error('[AutoSend] Failed to pre-hydrate chatbot state:', e);
+        }
+      }
     } catch (err: any) {
       setSendStatus(prev => {
         const next = { ...prev, [index]: 'error' as SendStatus };
