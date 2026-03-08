@@ -625,28 +625,7 @@ INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cl
             avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione brevemente.`;
           }
 
-          const fallbackProposta = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
-
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente ${primeiroNomeCapitalizado} confirmou o CPF. Agora apresente a proposta de forma CURTA e DIRETA como no WhatsApp.
-
-DADOS:
-- Primeiro nome: ${primeiroNomeCapitalizado}
-- Credor: ${credorNome}
-- Dívida total: ${formatCurrency(valorTotal)}
-- À vista (50% desc): ${formatCurrency(valorAvista)}
-- Parcelado (30% desc): ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-${avisoAcordo}
-
-INSTRUÇÕES RÍGIDAS:
-- Máximo 2-3 frases. SEM numeração (1, 2). SEM emojis excessivos.
-- Use o primeiro nome "${primeiroNomeCapitalizado}" (não o nome completo).
-- Mencione "${credorNome}" na mensagem.
-- Tom conversacional como se fosse uma pessoa digitando no WhatsApp.
-- Exemplo de formato ideal: "Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?"`,
-            historico,
-            fallbackProposta
-          );
+          resposta = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
 
           dados = {
             ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
