@@ -1,61 +1,31 @@
 
 
-# Delay randomizado + indicador "digitando" no chatbot WhatsApp
+## Diagnóstico
 
-## Objetivo
-Antes de enviar cada resposta, o chatbot aguarda 15-30 segundos (randomizado) e exibe o indicador "digitando..." no WhatsApp do cliente, simulando comportamento humano.
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-## Simulação de digitação (UAZAPI)
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-A UAZAPI expõe o endpoint `/chat/presence` (ou `/message/chatState`) para definir o estado "composing" (digitando). O chatbot chamará esse endpoint antes de enviar a mensagem.
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-## Mudanças em `supabase/functions/whatsapp-chatbot/index.ts`
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-### 1. Nova função `simulateTyping`
+## Correção
+
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+
 ```typescript
-async function simulateTyping(serverUrl: string, instanceToken: string, telefone: string, durationMs: number) {
-  const cleanUrl = serverUrl.replace(/\/+$/, '');
-  // Ativa "digitando..."
-  const endpoints = [
-    `${cleanUrl}/chat/presence`,
-    `${cleanUrl}/chatState`,
-  ];
-  for (const url of endpoints) {
-    try {
-      await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'token': instanceToken },
-        body: JSON.stringify({ number: telefone, state: 'composing' }),
-      });
-      break; // sucesso, não tenta próximo
-    } catch {}
-  }
-  // Aguarda a duração
-  await new Promise(r => setTimeout(r, durationMs));
-}
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-### 2. Delay randomizado + typing antes do envio (linha ~835)
-
-Onde hoje está:
-```typescript
-if (resposta) {
-  await sendMessage(serverUrl, instanceToken, telefone, resposta);
-}
-```
-
-Será:
-```typescript
-if (resposta) {
-  const delayMs = (Math.floor(Math.random() * 16) + 15) * 1000; // 15-30 seg
-  console.log(`Simulando digitação por ${delayMs/1000}s...`);
-  await simulateTyping(serverUrl, instanceToken, telefone, delayMs);
-  await sendMessage(serverUrl, instanceToken, telefone, resposta);
-}
-```
-
-## Resultado
-- O cliente verá "digitando..." por 15-30 segundos antes de cada resposta
-- Se o endpoint de presença não existir na versão do UAZAPI, o delay ainda funciona (silently fails)
-- Nenhuma mudança no banco de dados
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
