@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 
-type CredorLayout = 'padrao' | 'montreal' | 'cobmais';
+type CredorLayout = 'padrao' | 'montreal' | 'cobmais' | 'pesquisa';
 
 interface DevedorRow {
   cpf: string;
