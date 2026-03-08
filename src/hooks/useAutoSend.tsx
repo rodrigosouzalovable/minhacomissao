@@ -33,7 +33,7 @@ const calcParcelado = (saldo: number): string => {
   const opcoes: string[] = [];
   for (let i = 2; i <= 24; i++) {
     const valorParcela = valorComDesconto / i;
-    if (valorParcela >= 120) {
+    if (valorParcela >= 100) {
       opcoes.push(`- ${i}x de ${formatCurrency(valorParcela)}`);
     }
   }

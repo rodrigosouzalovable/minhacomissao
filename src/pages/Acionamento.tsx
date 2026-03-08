@@ -77,11 +77,25 @@ const calcParcelado = (saldo: number): string => {
   const opcoes: string[] = [];
   for (let i = 2; i <= 24; i++) {
     const valorParcela = valorComDesconto / i;
-    if (valorParcela >= 120) {
+    if (valorParcela >= 100) {
       opcoes.push(`- ${i}x de ${formatCurrency(valorParcela)}`);
     }
   }
   return opcoes.join('\n');
+};
+
+const calcParceladoDisplay = (saldo: number): string => {
+  const valorComDesconto = saldo * 0.7;
+  const opcoes: { parcelas: number; valor: number }[] = [];
+  for (let i = 2; i <= 24; i++) {
+    const valorParcela = valorComDesconto / i;
+    if (valorParcela >= 100) {
+      opcoes.push({ parcelas: i, valor: valorParcela });
+    }
+  }
+  if (opcoes.length === 0) return '—';
+  if (opcoes.length === 1) return `${opcoes[0].parcelas}x de ${formatCurrency(opcoes[0].valor)}`;
+  return `${opcoes[0].parcelas}x de ${formatCurrency(opcoes[0].valor)} até ${opcoes[opcoes.length - 1].parcelas}x de ${formatCurrency(opcoes[opcoes.length - 1].valor)}`;
 };
 
 const replaceVariables = (template: string, cliente: ClienteData): string =>
@@ -980,8 +994,9 @@ export default function Acionamento() {
                         <TableRow>
                           <TableHead>Nome</TableHead>
                           <TableHead>Telefone</TableHead>
-                          <TableHead>Atraso</TableHead>
                           <TableHead>Saldo</TableHead>
+                          <TableHead>À Vista</TableHead>
+                          <TableHead>Parcelado</TableHead>
                           <TableHead className="w-24 text-right">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -990,8 +1005,9 @@ export default function Acionamento() {
                           <TableRow key={c.originalIndex}>
                             <TableCell className="font-medium">{c.nome}</TableCell>
                             <TableCell>{c.telefone}</TableCell>
-                            <TableCell>{c.atraso}</TableCell>
                             <TableCell>{formatCurrency(c.saldo)}</TableCell>
+                            <TableCell className="text-green-600 font-medium">{calcAvista(c.saldo)}</TableCell>
+                            <TableCell className="text-xs max-w-[200px]">{calcParceladoDisplay(c.saldo)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <Checkbox
@@ -1038,8 +1054,9 @@ export default function Acionamento() {
                         <TableRow>
                           <TableHead>Nome</TableHead>
                           <TableHead>Telefone</TableHead>
-                          <TableHead>Atraso</TableHead>
                           <TableHead>Saldo</TableHead>
+                          <TableHead>À Vista</TableHead>
+                          <TableHead>Parcelado</TableHead>
                           <TableHead>Enviado em</TableHead>
                           <TableHead className="w-24 text-right">Status</TableHead>
                         </TableRow>
@@ -1057,8 +1074,9 @@ export default function Acionamento() {
                             <TableRow key={c.originalIndex}>
                               <TableCell className="font-medium">{c.nome}</TableCell>
                               <TableCell>{c.telefone}</TableCell>
-                              <TableCell>{c.atraso}</TableCell>
                               <TableCell>{formatCurrency(c.saldo)}</TableCell>
+                              <TableCell className="text-green-600 font-medium">{calcAvista(c.saldo)}</TableCell>
+                              <TableCell className="text-xs max-w-[200px]">{calcParceladoDisplay(c.saldo)}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">{formattedTimestamp}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">

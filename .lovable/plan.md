@@ -1,36 +1,31 @@
 
 
-# Reestruturar tabela "A ENVIAR" com colunas de valores calculados
+## Diagnóstico
 
-## Problema
-O chatbot continua pedindo CPF porque a pre-hydration não está funcionando de forma confiável. A abordagem de tentar sincronizar dados entre frontend e chatbot via `chatbot_conversas` é frágil.
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-## Nova abordagem
-Simplificar: mostrar os valores calculados diretamente na tabela do Acionamento para que o operador veja os descontos, e garantir que a pre-hydration salve os valores numéricos corretos no momento do envio.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Mudanças no `src/pages/Acionamento.tsx`
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-### 1. Novas colunas na tabela "A ENVIAR"
-Substituir a coluna **Atraso** pelas colunas:
-- **Saldo** — valor original (coluna E da planilha)
-- **À Vista** — saldo × 0.5 (50% de desconto)
-- **Parcelado** — saldo × 0.7, mostrando todas as opções de parcelas onde cada parcela >= R$ 100,00 (ex: "2x R$ 875,00 ... 17x R$ 102,94")
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-A tabela ficará: `Nome | Telefone | Saldo | À Vista | Parcelado | Ações`
+## Correção
 
-### 2. Função auxiliar para gerar texto de parcelamento
-Criar uma função `calcParceladoDisplay(saldo)` que retorna um texto compacto com a faixa de parcelas disponíveis (ex: "2x de R$ 875,00 até 17x de R$ 102,94") para exibir na célula da tabela.
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-### 3. Mesma mudança na aba "ENVIADOS"
-Aplicar as mesmas colunas na tabela de enviados.
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-### 4. Corrigir pre-hydration no `src/hooks/useAutoSend.tsx`
-Garantir que os valores numéricos (`valor_avista`, `valor_parcelado`, `valor_total`, `max_parcelas`) sejam salvos corretamente como números no `chatbot_conversas` — verificar se o `saldo` do `ClienteData` está chegando como número válido.
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
 
-### 5. Corrigir threshold de parcela mínima
-Alterar de R$ 120 para R$ 100 no `calcParcelado` (linha 80 do Acionamento) e no `useAutoSend.tsx`.
-
-## Arquivos alterados
-- `src/pages/Acionamento.tsx` — nova estrutura de colunas e funções de cálculo
-- `src/hooks/useAutoSend.tsx` — ajuste do threshold para R$ 100
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
