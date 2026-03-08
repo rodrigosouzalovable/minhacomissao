@@ -659,11 +659,8 @@ serve(async (req) => {
 
         } else if (isNegacao) {
           // Not the right person — fall back to CPF request
-          const fallback = `Desculpe pelo engano! 😊 Me informe seu CPF para que eu possa consultar sua situação.`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Identifiquei o cliente pelo telefone mas a pessoa disse que NÃO é ${dados.nome_candidato}. Peça desculpas pelo engano e solicite o CPF para consulta.`,
-            historico, fallback
-          );
+          const fallbackNeg = `Desculpe pelo engano! 😊 Me informe seu CPF para que eu possa consultar sua situação.`;
+          resposta = applyTemplate(templates, 'negacao_identidade', {}, fallbackNeg);
           dados = { mensagens_historico: dados.mensagens_historico || [] };
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
