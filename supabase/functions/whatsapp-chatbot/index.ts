@@ -595,24 +595,32 @@ serve(async (req) => {
 
     // Check instance owner
     if (instanceToken) {
-      const { data: instanceOwner } = await supabase
+      const { data: instanceRecord } = await supabase
         .from('user_whatsapp_instances')
-        .select('user_id')
+        .select('user_id, ativo')
         .eq('instance_token', instanceToken)
-        .eq('ativo', true)
         .limit(1)
         .maybeSingle();
-      if (instanceOwner?.user_id) {
+
+      // If instance exists but is deactivated, silently ignore
+      if (instanceRecord && !instanceRecord.ativo) {
+        console.log(`[CHATBOT] Instance ${instanceToken} is deactivated, ignoring.`);
+        return new Response(JSON.stringify({ success: true, ignored: true, reason: 'instance_deactivated' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (instanceRecord?.user_id) {
         // Check if owner is admin - chatbot only works for admin instances
         const { data: ownerRole } = await supabase
           .from('user_roles')
           .select('role')
-          .eq('user_id', instanceOwner.user_id)
+          .eq('user_id', instanceRecord.user_id)
           .eq('role', 'admin')
           .maybeSingle();
 
         if (!ownerRole) {
-          console.log(`[CHATBOT] Instance owner ${instanceOwner.user_id} is not admin, ignoring.`);
+          console.log(`[CHATBOT] Instance owner ${instanceRecord.user_id} is not admin, ignoring.`);
           return new Response(JSON.stringify({ success: true, ignored: true, reason: 'owner_not_admin' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -621,7 +629,7 @@ serve(async (req) => {
         const { data: ownerProfile } = await supabase
           .from('profiles')
           .select('whatsapp_lembretes_habilitado')
-          .eq('id', instanceOwner.user_id)
+          .eq('id', instanceRecord.user_id)
           .single();
         if (ownerProfile && !ownerProfile.whatsapp_lembretes_habilitado) {
           return new Response(JSON.stringify({ success: true, ignored: true, reason: 'owner_disabled' }), {
