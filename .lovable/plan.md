@@ -1,30 +1,31 @@
 
 
-# Forçar mensagem fixa (sem IA) na proposta após confirmação de CPF
+## Diagnóstico
 
-## Problema
-A função `gerarRespostaHumana` está ignorando as instruções e gerando respostas longas, com numeração, emojis e tom robótico. Mesmo com o fallback correto, a IA sobrescreve com texto longo.
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-## Solução
-**Remover a chamada à IA** no momento da proposta após confirmação de CPF. Usar diretamente a mensagem fixa (fallback) que já está no formato exato desejado:
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-> "Perfeito, Jose! A proposta disponível para *pagamento à vista é R$ 714,80*, pagando esse valor, você quita todas as parcelas em aberto com as Lojas Novo Mundo. Ou podemos parcelar para você da seguinte forma: *5x de R$ 200,14*. Como fica melhor para você?"
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-## Mudança em `supabase/functions/whatsapp-chatbot/index.ts`
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-**Linhas ~628-649**: Substituir o bloco que chama `gerarRespostaHumana` por uso direto do fallback:
+## Correção
+
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
 ```typescript
-// ANTES (linhas 628-649):
-const fallbackProposta = `Perfeito, ${primeiroNomeCapitalizado}! ...`;
-resposta = await gerarRespostaHumana(..., fallbackProposta);
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-// DEPOIS:
-resposta = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-Mesma abordagem será aplicada ao case `novo`/`aguardando_cpf` (linhas ~512-538) quando o CPF é digitado manualmente — a proposta também usará mensagem fixa curta em vez de IA.
-
-## Resultado
-A mensagem enviada será **exatamente** o texto curto e humano, sem variação da IA.
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
