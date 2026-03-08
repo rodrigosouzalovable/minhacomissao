@@ -783,6 +783,7 @@ serve(async (req) => {
           resposta = `Ok! Iremos te enviar o boleto para pagamento hoje.`;
           // TODO: here you can trigger boleto generation
           await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
+          await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
           break;
 
         } else if (isNao) {
