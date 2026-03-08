@@ -584,15 +584,15 @@ serve(async (req) => {
             .rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
 
           if (debitosError || !debitos || debitos.length === 0) {
-            const fallback = debitos?.length === 0
-              ? `Ótima notícia, ${dados.nome_candidato}! Não encontramos pendências no seu CPF. Se acredita que há algum erro, ligue para (62) 98218-3144.`
-              : `Desculpe, tive um problema ao consultar. Tente novamente ou ligue para (62) 98218-3144.`;
-            resposta = await gerarRespostaHumana(
-              debitosError
-                ? `CONTEXTO: Erro ao consultar débitos do cliente ${dados.nome_candidato}. Peça desculpas e ofereça (62) 98218-3144.`
-                : `CONTEXTO: O cliente ${dados.nome_candidato} confirmou identidade mas NÃO tem débitos. Dê a boa notícia.`,
-              historico, fallback
-            );
+            const prNomeConf = dados.nome_candidato?.split(' ')[0] || '';
+            const prNomeConfCap = prNomeConf ? prNomeConf.charAt(0).toUpperCase() + prNomeConf.slice(1).toLowerCase() : 'cliente';
+            if (debitos?.length === 0) {
+              const fallbackSemDeb2 = `Ótima notícia, ${prNomeConfCap}! Não encontramos pendências no seu CPF. Se acredita que há algum erro, ligue para (62) 98218-3144.`;
+              resposta = applyTemplate(templates, 'sem_debitos', { primeiro_nome: prNomeConfCap, telefone_contato: '(62) 98218-3144' }, fallbackSemDeb2);
+            } else {
+              const fallbackErro2 = `Desculpe, tive um problema ao consultar. Tente novamente ou ligue para (62) 98218-3144.`;
+              resposta = applyTemplate(templates, 'erro_consulta', { telefone_contato: '(62) 98218-3144' }, fallbackErro2);
+            }
             dados = addToHistorico(dados, 'assistente', resposta);
             await supabase.from('chatbot_conversas').upsert({
               telefone, etapa: 'sem_debitos', dados: { ...dados, cpf },
