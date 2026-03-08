@@ -86,7 +86,7 @@ async function interpretarIntencao(texto: string, opcoes: string[]): Promise<str
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash-lite',
         messages: [
-          { role: 'system', content: 'Você interpreta a intenção do cliente em uma negociação de dívida. Responda APENAS com uma das opções listadas.' },
+          { role: 'system', content: `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você interpreta a intenção do cliente em uma negociação de dívida. Responda APENAS com uma das opções listadas.` },
           { role: 'user', content: `O cliente disse: "${texto}"\n\nOpções: ${opcoes.join(', ')}\n\nResponda APENAS com uma das opções, ou "nenhuma".` },
         ],
         max_tokens: 30,

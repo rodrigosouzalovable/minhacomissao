@@ -7,7 +7,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SYSTEM_PROMPT = `Você é um assistente de treinamento para um chatbot de cobrança. O administrador vai te ensinar regras de resposta para o chatbot.
+function buildSystemPrompt() {
+  const hoje = new Date();
+  const dataHoje = hoje.toLocaleDateString('pt-BR');
+  const limite7 = new Date(hoje);
+  limite7.setDate(limite7.getDate() + 7);
+  const dataLimite7 = limite7.toLocaleDateString('pt-BR');
+
+  return `Você é um assistente de treinamento para um chatbot de cobrança. O administrador vai te ensinar regras de resposta para o chatbot.
+
+CONTEXTO TEMPORAL:
+- A data de hoje é: ${dataHoje}
+- Daqui a 7 dias será: ${dataLimite7}
+- Quando o admin mencionar "[DATA_LIMITE_7_DIAS]", substitua por ${dataLimite7}.
+- Você pode calcular qualquer data dinamicamente com base na data atual.
 
 Seu trabalho:
 1. Entender o que o admin quer ensinar (gatilho + resposta)
@@ -36,6 +49,7 @@ REGRAS:
 - Quando o admin só fizer uma pergunta genérica ou saudação, responda normalmente sem tentar criar regra
 - NUNCA invente gatilhos ou respostas. Use EXATAMENTE o que o admin definiu
 - O JSON deve ser a resposta COMPLETA quando for salvar (não misture texto + JSON)`;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -53,7 +67,7 @@ serve(async (req) => {
     // Messages may contain multimodal content (text + image_url)
     // Pass them through as-is since the gateway supports vision
     const aiMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: buildSystemPrompt() },
       ...messages.map((m: any) => ({
         role: m.role,
         content: m.content, // can be string or array of {type, text/image_url}
