@@ -158,6 +158,12 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
         try {
           const cleanPhone = cliente.telefone.replace(/\D/g, '');
           const phoneFull = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+          // Normalize to WhatsApp format: remove 9th digit for BR mobile numbers
+          // WhatsApp uses 55 + DDD(2) + 8 digits (no 9th digit)
+          let phoneWhatsApp = phoneFull;
+          if (phoneFull.length === 13 && phoneFull[4] === '9') {
+            phoneWhatsApp = phoneFull.slice(0, 4) + phoneFull.slice(5);
+          }
           const saldo = cliente.saldo;
           const valorAvista = saldo * 0.5;
           const valorParcelado = saldo * 0.7;
