@@ -77,11 +77,25 @@ const calcParcelado = (saldo: number): string => {
   const opcoes: string[] = [];
   for (let i = 2; i <= 24; i++) {
     const valorParcela = valorComDesconto / i;
-    if (valorParcela >= 120) {
+    if (valorParcela >= 100) {
       opcoes.push(`- ${i}x de ${formatCurrency(valorParcela)}`);
     }
   }
   return opcoes.join('\n');
+};
+
+const calcParceladoDisplay = (saldo: number): string => {
+  const valorComDesconto = saldo * 0.7;
+  const opcoes: { parcelas: number; valor: number }[] = [];
+  for (let i = 2; i <= 24; i++) {
+    const valorParcela = valorComDesconto / i;
+    if (valorParcela >= 100) {
+      opcoes.push({ parcelas: i, valor: valorParcela });
+    }
+  }
+  if (opcoes.length === 0) return '—';
+  if (opcoes.length === 1) return `${opcoes[0].parcelas}x de ${formatCurrency(opcoes[0].valor)}`;
+  return `${opcoes[0].parcelas}x de ${formatCurrency(opcoes[0].valor)} até ${opcoes[opcoes.length - 1].parcelas}x de ${formatCurrency(opcoes[opcoes.length - 1].valor)}`;
 };
 
 const replaceVariables = (template: string, cliente: ClienteData): string =>
