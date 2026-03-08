@@ -640,7 +640,8 @@ serve(async (req) => {
             avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione brevemente.`;
           }
 
-          resposta = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+          const fallbackPropConf = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+          resposta = applyTemplate(templates, 'proposta', { primeiro_nome: primeiroNomeCapitalizado, valor_avista: formatCurrency(valorAvista), valor_parcela: formatCurrency(valorParcelaMin), max_parcelas: String(maxParcelas), credor: credorNome, valor_parcelado: formatCurrency(valorParcelado), telefone_contato: '(62) 98218-3144' }, fallbackPropConf);
 
           dados = {
             ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
