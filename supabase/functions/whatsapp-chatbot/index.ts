@@ -556,9 +556,34 @@ serve(async (req) => {
           ['sim', 'consigo', 'sim consigo', 'quero', 'pode ser', 'sim como fica', 'aceito', 'quero sim', 'como fica', 'tô querendo', 'to querendo'].includes(textoLower);
 
         if (isSim) {
-          const valorAvista = dados.valor_avista;
-          const valorParcelado = dados.valor_parcelado;
-          const maxParcelas = dados.max_parcelas;
+          // Robust fallback: recalculate if values are missing/NaN
+          let valorAvista = Number(dados.valor_avista);
+          let valorParcelado = Number(dados.valor_parcelado);
+          let maxParcelas = Number(dados.max_parcelas);
+
+          if (!valorAvista || isNaN(valorAvista)) {
+            let valorTotal = Number(dados.valor_total);
+            if (!valorTotal || isNaN(valorTotal)) {
+              // Try to fetch from devedores by CPF
+              const cpfFallback = dados.cpf;
+              if (cpfFallback) {
+                const { data: devsFallback } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpfFallback });
+                if (devsFallback && devsFallback.length > 0) {
+                  valorTotal = devsFallback.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+                }
+              }
+            }
+            if (valorTotal && !isNaN(valorTotal)) {
+              valorAvista = valorTotal * 0.5;
+              valorParcelado = valorTotal * 0.7;
+              maxParcelas = Math.min(24, Math.floor(valorParcelado / VALOR_MINIMO_PARCELA));
+              if (maxParcelas < 2) maxParcelas = 2;
+              // Save back to dados for subsequent stages
+              dados = { ...dados, valor_total: valorTotal, valor_avista: valorAvista, valor_parcelado: valorParcelado, max_parcelas: maxParcelas };
+              console.log(`[Fallback] Recalculated: avista=${valorAvista}, parcelado=${valorParcelado}, maxParcelas=${maxParcelas}`);
+            }
+          }
+
           const valorParcelaMin = valorParcelado / maxParcelas;
 
           resposta = `Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}*. Ou podemos parcelar para você em *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
