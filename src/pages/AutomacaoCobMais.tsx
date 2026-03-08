@@ -106,13 +106,12 @@ export default function AutomacaoCobMais() {
   // Persist chat messages when they change (after initial load)
   const prevMsgCountRef = useRef(0);
   useEffect(() => {
-    if (!chatLoaded || chatMessages.length === 0) return;
-    // Only save new messages (appended at the end)
+    if (!chatLoaded || isChatLoading || chatMessages.length === 0) return;
     const newCount = chatMessages.length;
     const prevCount = prevMsgCountRef.current;
-    prevMsgCountRef.current = newCount;
     if (newCount <= prevCount) return;
     const newMsgs = chatMessages.slice(prevCount);
+    prevMsgCountRef.current = newCount;
     const saveNew = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -128,8 +127,7 @@ export default function AutomacaoCobMais() {
         await supabase.from('chat_ia_mensagens').insert(rows as any);
       }
     };
-    // Only save when not loading (streaming complete)
-    if (!isChatLoading) saveNew();
+    saveNew();
   }, [chatMessages, chatLoaded, isChatLoading]);
   const chatAbortRef = useRef<AbortController | null>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
