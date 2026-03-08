@@ -830,6 +830,20 @@ serve(async (req) => {
         break;
       }
 
+      // -------- AGUARDANDO HUMANO (IA não soube responder) --------
+      case 'aguardando_humano': {
+        // Não responde nada ao cliente, apenas re-notifica o admin se insistir
+        console.log(`[AGUARDANDO_HUMANO] Cliente ${telefone} insistiu: "${texto}" — re-notificando admin`);
+        await notificarAdmin(serverUrl!, instanceToken!, telefone, telefoneInstancia, texto);
+        // Salvar histórico sem mudar etapa
+        await supabase.from('chatbot_conversas').upsert({
+          telefone, etapa: 'aguardando_humano', dados,
+          server_url: serverUrl, instance_token: instanceToken,
+          atualizado_em: new Date().toISOString(),
+        }, { onConflict: 'telefone' });
+        break;
+      }
+
       // -------- ESTADOS FINAIS --------
       case 'acordo_finalizado':
       case 'sem_debitos':
