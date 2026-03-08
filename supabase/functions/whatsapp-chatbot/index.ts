@@ -125,7 +125,7 @@ const ADMIN_NUMERO = '5562991672674';
 
 async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
   try {
-    const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneCliente} para o número ${telefoneInstancia}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
+    const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneInstancia} para o número ${telefoneCliente}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
     console.log(`[ADMIN] Notificando admin: ${msg}`);
     await sendMessage(serverUrl, instanceToken, ADMIN_NUMERO, msg);
   } catch (e) {
