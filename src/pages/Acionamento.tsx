@@ -1091,6 +1091,10 @@ export default function Acionamento() {
                   )}
                 </>
               )}
+
+              {activeTab === 'ia' && isAdmin && (
+                <ChatbotTemplatesTab />
+              )}
             </CardContent>
           </Card>
         )}
