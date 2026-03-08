@@ -583,6 +583,21 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
       if (instanceOwner?.user_id) {
+        // Check if owner is admin - chatbot only works for admin instances
+        const { data: ownerRole } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', instanceOwner.user_id)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        if (!ownerRole) {
+          console.log(`[CHATBOT] Instance owner ${instanceOwner.user_id} is not admin, ignoring.`);
+          return new Response(JSON.stringify({ success: true, ignored: true, reason: 'owner_not_admin' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         const { data: ownerProfile } = await supabase
           .from('profiles')
           .select('whatsapp_lembretes_habilitado')
