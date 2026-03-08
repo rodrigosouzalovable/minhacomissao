@@ -912,6 +912,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         }, { onConflict: 'telefone' });
 
         await sendMessage(serverUrl, instanceToken, telefone, resposta);
+        jaEnviou = true;
 
         try {
           const result = await triggerCobMaisRobot(supabase, cpf, valorFinal, 'parcelado', numParcelas);
