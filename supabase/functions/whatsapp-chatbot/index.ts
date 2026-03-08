@@ -963,7 +963,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallback = `Para uma nova consulta, digite "menu". Para falar com um negociador: (62) 98218-3144.`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: O cliente já finalizou a negociação ou não tinha débitos, e está mandando uma nova mensagem ("${texto}"). Responda de forma amigável. Se quiser recomeçar, pode digitar "menu". Para falar com humano: (62) 98218-3144.`,
-          historico, fallback
+          historico, fallback, regrasTexto
         );
         dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
