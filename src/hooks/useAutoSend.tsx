@@ -174,7 +174,7 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
           if (maxParcelas < 2) maxParcelas = 2;
 
           await supabase.from('chatbot_conversas').upsert({
-            telefone: phoneFull,
+            telefone: phoneWhatsApp,
             etapa: 'proposta_enviada',
             dados: {
               cpf: cliente.cpf.replace(/\D/g, ''),
