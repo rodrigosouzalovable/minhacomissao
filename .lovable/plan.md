@@ -1,31 +1,48 @@
 
 
-## Diagnóstico
+# Chatbot WhatsApp humanizado com IA
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problema
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+Atualmente o chatbot usa mensagens **fixas e robotizadas** (switch/case com textos hardcoded). O cliente percebe que está falando com um robô.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Solução
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+Integrar a Lovable AI (Gemini) para gerar respostas humanizadas, mantendo toda a lógica de negócio (consulta CPF, propostas, geração de boleto). A IA recebe o contexto da conversa e os dados do devedor, e formula respostas naturais.
 
-## Correção
+### Arquitetura
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+O fluxo de negócio (etapas, cálculos, trigger do robô CobMais) permanece intacto. A mudança é que, em vez de retornar strings fixas, cada etapa passa um **contexto estruturado** para a IA que gera a resposta final.
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+### Mudanças no arquivo `supabase/functions/whatsapp-chatbot/index.ts`
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
+1. **Adicionar função `gerarRespostaHumana()`** que chama `ai.gateway.lovable.dev` com:
+   - System prompt definindo o tom (amigável, empático, profissional, como um negociador humano)
+   - Histórico recente da conversa (últimas 5-10 mensagens do `chatbot_conversas.dados`)
+   - Contexto da situação atual (dados do devedor, valores, etapa)
+   - Instruções para NÃO inventar dados — usar apenas os valores fornecidos
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+2. **Salvar histórico de mensagens** no campo `dados` da conversa (`chatbot_conversas`), adicionando array `mensagens_historico` com as últimas trocas
+
+3. **Substituir strings fixas** por chamadas à IA em cada case do switch:
+   - `novo` → IA gera saudação natural baseada no horário
+   - `aguardando_cpf` (CPF inválido) → IA pede o CPF de forma gentil
+   - `proposta_enviada` → IA apresenta os valores com empatia, reconhecendo a situação do cliente
+   - `aguardando_parcelas` → IA confirma e orienta de forma conversacional
+   - `acordo_finalizado` → IA parabeniza de forma genuína
+   - Respostas fora do esperado → IA interpreta a intenção e redireciona naturalmente
+
+4. **System prompt** com regras:
+   - Representar a "Souza e Ribeiro Negociações"
+   - Tom empático e humano, sem emojis excessivos
+   - Nunca inventar valores — usar apenas os dados fornecidos
+   - Manter respostas curtas (WhatsApp)
+   - Sempre oferecer o telefone (62) 98218-3144 quando relevante
+   - Entender variações de linguagem ("quero pagar", "aceito", "pode ser" = aceitação)
+
+5. **Fallback**: Se a IA falhar (timeout/erro), usar as mensagens fixas atuais como backup
+
+### Benefício adicional
+
+A IA consegue interpretar mensagens ambíguas. Hoje se o cliente escreve "quero pagar à vista" em vez de "1", o bot não entende. Com a IA, isso será interpretado corretamente.
 
