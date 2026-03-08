@@ -1016,13 +1016,7 @@ serve(async (req) => {
             }
           }
 
-          const valorParcelaMin = valorParcelado / maxParcelas;
-
-          const dadosOferta = { ...dados, valor_parcela_calc: valorParcelaMin };
-          const tmplEscolhaParcelado = templateMap.get('escolha_parcelado');
-          resposta = tmplEscolhaParcelado
-            ? aplicarVariaveisTemplate(tmplEscolhaParcelado, dadosOferta)
-            : `Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}*. Ou podemos parcelar para você em *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+          resposta = gerarMensagemProposta(valorAvista, valorParcelado);
 
           await salvarEResponder('oferta_valores');
           break;
