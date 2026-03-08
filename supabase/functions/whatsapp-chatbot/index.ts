@@ -830,10 +830,15 @@ serve(async (req) => {
           }
         }
 
+        // Detect greetings and interest expressions as positive signals
+        const isSaudacao = /^(ol[aá]|oi|bom dia|boa tarde|boa noite|e a[ií]|tudo bem|boa noite)/i.test(textoLower);
+        const isInteresse = /(como fica|qual.?valor|quanto|me fala|explica|fala mais|me interessa|tenho interesse|quero saber|quero ver|quero negociar|pode me explicar|como funciona|como que|qual proposta|qual a proposta)/i.test(textoLower);
+
         // Client responds to "consegue voltar a pagar com 50% de desconto?"
         const intencao = await interpretarIntencao(texto, ['sim', 'nao']);
         const isSim = intencao?.includes('sim') ||
-          ['sim', 'consigo', 'sim consigo', 'quero', 'pode ser', 'sim como fica', 'aceito', 'quero sim', 'como fica', 'tô querendo', 'to querendo'].includes(textoLower);
+          ['sim', 'consigo', 'sim consigo', 'quero', 'pode ser', 'sim como fica', 'aceito', 'quero sim', 'como fica', 'tô querendo', 'to querendo'].includes(textoLower) ||
+          isSaudacao || isInteresse;
 
         if (isSim) {
           // Robust fallback: recalculate if values are missing/NaN
@@ -948,6 +953,18 @@ serve(async (req) => {
           break;
 
         } else {
+          // Check for greetings/interest before giving up
+          const isSaudacaoOferta = /^(ol[aá]|oi|bom dia|boa tarde|boa noite|e a[ií]|tudo bem)/i.test(textoLower);
+          const isInteresseOferta = /(como fica|qual.?valor|quanto|me fala|explica|fala mais|me interessa|tenho interesse|quero saber|quero ver|como funciona|como que|qual proposta)/i.test(textoLower);
+
+          if (isSaudacaoOferta || isInteresseOferta) {
+            // Re-send the offer
+            const valorParcelaMin = vpOfertas / mpOfertas;
+            resposta = `Olá! 😊 Temos uma ótima oportunidade: quitação à vista por *${formatCurrency(vaOfertas)}* ou parcelado em *${mpOfertas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+            await salvarEResponder('oferta_valores');
+            break;
+          }
+
           // AI não entendeu — notificar admin e silenciar
           console.log(`[SILÊNCIO] oferta_valores: não entendeu escolha: "${texto}"`);
           await salvarSilenciosoENotificar('oferta_valores', texto);
