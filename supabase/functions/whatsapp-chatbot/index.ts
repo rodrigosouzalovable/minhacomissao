@@ -67,7 +67,7 @@ function formatCpf(cpf: string): string {
   return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
 }
 
-async function gerarRespostaHumana(contexto: string, historico: Array<{role: string, content: string}>, fallback: string): Promise<string> {
+async function gerarRespostaHumana(contexto: string, historico: Array<{role: string, content: string}>, fallback: string, regrasExtra?: string): Promise<string> {
   try {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -75,8 +75,13 @@ async function gerarRespostaHumana(contexto: string, historico: Array<{role: str
       return fallback;
     }
 
+    let systemPromptFinal = SYSTEM_PROMPT;
+    if (regrasExtra) {
+      systemPromptFinal += `\n\n## INSTRUÇÕES ADICIONAIS DO ADMINISTRADOR (PRIORIDADE MÁXIMA):\n${regrasExtra}`;
+    }
+
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPromptFinal },
       ...historico.slice(-10),
       { role: 'user', content: contexto },
     ];
