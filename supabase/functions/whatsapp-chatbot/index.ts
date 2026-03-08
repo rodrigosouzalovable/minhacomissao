@@ -27,6 +27,27 @@ REGRAS ABSOLUTAS:
 - Se o cliente demonstrar dificuldade financeira, seja ainda mais empático e destaque os descontos.
 - NUNCA pressione o cliente. Seja sempre gentil e paciente.`;
 
+async function simulateTyping(serverUrl: string, instanceToken: string, telefone: string, durationMs: number) {
+  const cleanUrl = serverUrl.replace(/\/+$/, '');
+  const endpoints = [
+    `${cleanUrl}/chat/presence`,
+    `${cleanUrl}/chatState`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': instanceToken },
+        body: JSON.stringify({ number: telefone, state: 'composing' }),
+      });
+      if (res.ok) break;
+    } catch (e) {
+      console.log(`Endpoint de presença ${url} falhou:`, e);
+    }
+  }
+  await new Promise(r => setTimeout(r, durationMs));
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
