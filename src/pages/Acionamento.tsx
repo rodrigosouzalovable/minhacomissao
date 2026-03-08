@@ -910,6 +910,15 @@ export default function Acionamento() {
                 >
                   ENVIADOS ({enviadosHoje} hoje)
                 </Button>
+                {isAdmin && (
+                  <Button
+                    variant={activeTab === 'ia' ? 'default' : 'outline'}
+                    onClick={() => setActiveTab('ia')}
+                  >
+                    <Bot className="h-4 w-4 mr-1" />
+                    IA
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
