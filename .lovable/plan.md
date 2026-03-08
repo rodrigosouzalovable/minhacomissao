@@ -1,31 +1,46 @@
 
 
-## Diagnóstico
+# Fix: Chat history persistence bug
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problem
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+The `prevMsgCountRef.current = newCount` line (line 113) runs **unconditionally**, even when `isChatLoading` is `true` and the save is skipped. This causes all messages to be "counted" but never actually inserted into the database.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Fix
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+In `src/pages/AutomacaoCobMais.tsx` (lines 108-133), restructure the effect so that:
 
-## Correção
+1. If `isChatLoading` is true, **return early without updating** `prevMsgCountRef`
+2. Only update `prevMsgCountRef.current = newCount` **after** the insert succeeds
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
-
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```tsx
+useEffect(() => {
+  if (!chatLoaded || isChatLoading || chatMessages.length === 0) return;
+  const newCount = chatMessages.length;
+  const prevCount = prevMsgCountRef.current;
+  if (newCount <= prevCount) return;
+  const newMsgs = chatMessages.slice(prevCount);
+  prevMsgCountRef.current = newCount; // only reached when not loading
+  const saveNew = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const rows = newMsgs
+      .filter(m => typeof m.content === 'string' ? m.content.trim() : true)
+      .map(m => ({
+        user_id: user.id,
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        image: m.image || null,
+      }));
+    if (rows.length > 0) {
+      await supabase.from('chat_ia_mensagens').insert(rows as any);
+    }
+  };
+  saveNew();
+}, [chatMessages, chatLoaded, isChatLoading]);
 ```
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+The key change: move the `isChatLoading` check to the **early return** at the top, so neither `prevMsgCountRef` nor the save runs while streaming. When streaming finishes and `isChatLoading` becomes `false`, the effect re-runs and correctly detects all new messages (user + assistant) and saves them in one batch.
+
+Single file change, ~5 lines modified.
 
