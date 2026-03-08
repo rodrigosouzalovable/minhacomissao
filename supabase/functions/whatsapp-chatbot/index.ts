@@ -540,6 +540,36 @@ serve(async (req) => {
       });
     }
 
+    // --- CARREGAR REGRAS CUSTOMIZADAS E TEMPLATES ---
+    const { data: regrasCustomizadas } = await supabase
+      .from('chatbot_regras')
+      .select('gatilho, resposta')
+      .eq('ativo', true);
+
+    const { data: templatesAtivos } = await supabase
+      .from('chatbot_templates')
+      .select('etapa, template')
+      .eq('ativo', true);
+
+    const templateMap = new Map<string, string>((templatesAtivos || []).map((t: any) => [t.etapa, t.template]));
+
+    // Helper para substituir variáveis nos templates
+    function aplicarVariaveisTemplate(tmpl: string, dadosCtx: any): string {
+      const primeiroNome = dadosCtx.nome ? dadosCtx.nome.split(' ')[0] : '';
+      const primeiroNomeCap = primeiroNome ? primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase() : '';
+      const cpfFormatadoTmpl = dadosCtx.cpf ? formatCpf(dadosCtx.cpf) : '';
+      return tmpl
+        .replace(/\{primeiro_nome\}/g, primeiroNomeCap)
+        .replace(/\{nome_completo\}/g, dadosCtx.nome || '')
+        .replace(/\{cpf_formatado\}/g, cpfFormatadoTmpl)
+        .replace(/\{valor_avista\}/g, dadosCtx.valor_avista ? formatCurrency(Number(dadosCtx.valor_avista)) : '')
+        .replace(/\{valor_parcela\}/g, dadosCtx.valor_parcela_calc ? formatCurrency(Number(dadosCtx.valor_parcela_calc)) : '')
+        .replace(/\{valor_parcelado\}/g, dadosCtx.valor_parcelado ? formatCurrency(Number(dadosCtx.valor_parcelado)) : '')
+        .replace(/\{max_parcelas\}/g, String(dadosCtx.max_parcelas || ''))
+        .replace(/\{credor\}/g, dadosCtx.credor || '')
+        .replace(/\{telefone_contato\}/g, '(62) 98218-3144');
+    }
+
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
