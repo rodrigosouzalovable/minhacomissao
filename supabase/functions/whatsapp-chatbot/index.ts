@@ -1015,6 +1015,32 @@ serve(async (req) => {
 
       // -------- CONSEGUE PAGAR HOJE? --------
       case 'aguardando_pagamento_hoje': {
+        // Detectar pedido de parcelas antes de classificar sim/não
+        const matchParcelasHoje = texto.match(/(\d+)\s*(?:x|vezes|parcelas?)/i) || texto.match(/em\s+(\d+)\b/i);
+        if (matchParcelasHoje) {
+          const parcelasPedidas = parseInt(matchParcelasHoje[1]);
+          const vpCalc = dados.valor_parcelado || dados.valor_final || 0;
+          
+          if (parcelasPedidas === 1) {
+            const vaCalc = dados.valor_avista || vpCalc * 0.5 / 0.7;
+            resposta = `À vista fica *${formatCurrency(vaCalc)}*. Você consegue fazer o pagamento hoje?`;
+            dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: vaCalc };
+            await salvarEResponder('aguardando_pagamento_hoje');
+            break;
+          } else if (parcelasPedidas >= 2 && parcelasPedidas <= 24 && vpCalc / parcelasPedidas >= 100) {
+            const valorParcCalc = vpCalc / parcelasPedidas;
+            resposta = `Em ${parcelasPedidas}x fica *${formatCurrency(valorParcCalc)}* cada parcela. Você consegue fazer o pagamento hoje?`;
+            dados = { ...dados, tipo_pagamento: 'parcelado', parcelas: parcelasPedidas, valor_final: vpCalc };
+            await salvarEResponder('aguardando_pagamento_hoje');
+            break;
+          } else {
+            const maxP = Math.floor(vpCalc / 100);
+            resposta = `O parcelamento pode ser de 2x a ${Math.min(maxP, 24)}x (parcela mínima de R$ 100). Como prefere?`;
+            await salvarEResponder('aguardando_pagamento_hoje');
+            break;
+          }
+        }
+
         const intencao = await interpretarIntencao(texto, ['sim', 'nao']);
         const isSim = intencao?.includes('sim') ||
           ['sim', 'consigo', 'sim consigo', 'hoje mesmo', 'pode ser', 'sim pode', 'ok'].includes(textoLower);
