@@ -459,13 +459,8 @@ serve(async (req) => {
           }
 
           // No match by phone — standard flow: ask for CPF
-          const fallback = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, por favor me informe seu CPF.`;
-          
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Primeiro contato com o cliente. Cumprimente de forma calorosa e peça o CPF para consultar a situação financeira. Seja breve e acolhedora.`,
-            historico,
-            fallback
-          );
+          const fallbackSaudacao = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, por favor me informe seu CPF.`;
+          resposta = applyTemplate(templates, 'saudacao', {}, fallbackSaudacao);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
