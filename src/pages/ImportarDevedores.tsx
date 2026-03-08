@@ -631,7 +631,12 @@ export default function ImportarDevedores() {
                       {rows.slice(0, 50).map((row, i) => (
                         <TableRow key={i}>
                           <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
-                          {isMontreal ? (
+                          {isPesquisa ? (
+                            <>
+                              <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                              <TableCell>{row.telefone || '-'}</TableCell>
+                            </>
+                          ) : isMontreal ? (
                             <>
                               <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
                               <TableCell>{row.contrato || '-'}</TableCell>
