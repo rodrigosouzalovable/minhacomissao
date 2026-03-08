@@ -328,7 +328,7 @@ serve(async (req) => {
     }
 
     // For greetings, only reset if not in middle of negotiation
-    if (['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'].includes(textoLower) && etapaAtual !== 'novo' && !['proposta_enviada', 'aguardando_parcelas'].includes(etapaAtual)) {
+    if (['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'sim'].includes(textoLower) && etapaAtual !== 'novo' && !['proposta_enviada', 'aguardando_parcelas', 'aguardando_confirmacao_identidade'].includes(etapaAtual)) {
       etapaAtual = 'novo';
       dados = { mensagens_historico: dados.mensagens_historico || [] };
     }
@@ -344,35 +344,148 @@ serve(async (req) => {
           const phoneSuffix = telefone.slice(-10); // last 10 digits
           const phoneSuffix11 = telefone.slice(-11); // last 11 digits
           
+          // Search in devedores.telefone
           const { data: devedoresPorTelefone } = await supabase
             .from('devedores')
             .select('nome, cpf, telefone, valor_atualizado')
             .eq('ativo', true)
             .or(`telefone.ilike.%${phoneSuffix},telefone.ilike.%${phoneSuffix11}`);
 
-          if (devedoresPorTelefone && devedoresPorTelefone.length > 0) {
-            const devedor = devedoresPorTelefone[0];
-            const cpfLimpo = devedor.cpf.replace(/\D/g, '');
-            const cpfFinal = cpfLimpo.slice(-3);
-            
-            console.log(`[AUTO-ID] Devedor encontrado pelo telefone: ${devedor.nome}, CPF final: ${cpfFinal}`);
+          // Also search in devedor_telefones table
+          let devedoresEncontrados = devedoresPorTelefone || [];
+          
+          if (devedoresEncontrados.length === 0) {
+            const { data: telefonesAdicionais } = await supabase
+              .from('devedor_telefones')
+              .select('devedor_cpf, numero')
+              .eq('ativo', true)
+              .or(`numero.ilike.%${phoneSuffix},numero.ilike.%${phoneSuffix11}`);
 
-            const fallbackConfirma = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Estou falando com *${devedor.nome}*, CPF final *${cpfFinal}*?`;
-            
-            resposta = await gerarRespostaHumana(
-              `CONTEXTO: O cliente respondeu a uma mensagem de cobrança. Pelo número de telefone, identifiquei que pode ser ${devedor.nome}, CPF final ${cpfFinal}. Cumprimente e pergunte se é ele(a) mesmo(a). Seja breve e acolhedora. NÃO peça CPF ainda, apenas confirme a identidade.`,
-              historico,
-              fallbackConfirma
-            );
+            if (telefonesAdicionais && telefonesAdicionais.length > 0) {
+              const cpfsUnicos = [...new Set(telefonesAdicionais.map((t: any) => t.devedor_cpf))];
+              console.log(`[AUTO-ID] Telefone encontrado em devedor_telefones, CPFs: ${cpfsUnicos.join(', ')}`);
+              
+              const { data: devedoresPorCpf } = await supabase
+                .from('devedores')
+                .select('nome, cpf, telefone, valor_atualizado')
+                .eq('ativo', true)
+                .in('cpf', cpfsUnicos);
+              
+              if (devedoresPorCpf && devedoresPorCpf.length > 0) {
+                devedoresEncontrados = devedoresPorCpf;
+              }
+            }
+          }
 
-            dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: devedor.nome };
-            dados = addToHistorico(dados, 'assistente', resposta);
-            await supabase.from('chatbot_conversas').upsert({
-              telefone, etapa: 'aguardando_confirmacao_identidade', dados,
-              server_url: serverUrl, instance_token: instanceToken,
-              atualizado_em: new Date().toISOString(),
-            }, { onConflict: 'telefone' });
-            break;
+          if (devedoresEncontrados.length > 0) {
+            const cpfsUnicos = [...new Set(devedoresEncontrados.map((d: any) => d.cpf.replace(/\D/g, '')))];
+            
+            if (cpfsUnicos.length === 1) {
+              // Single person — go DIRECTLY to proposal
+              const cpfLimpo = cpfsUnicos[0];
+              const nomeDevedor = devedoresEncontrados[0].nome;
+              console.log(`[AUTO-ID] Devedor único: ${nomeDevedor}, CPF: ${cpfLimpo} — proposta direta`);
+
+              const { data: debitos, error: debitosError } = await supabase
+                .rpc('consultar_debitos_por_cpf', { p_cpf: cpfLimpo });
+
+              if (debitosError || !debitos || debitos.length === 0) {
+                const fallback = `Olá, ${nomeDevedor}! 👋 Sou a Ana, da Souza e Ribeiro. ${!debitos || debitos.length === 0 ? 'Não encontrei pendências no seu CPF.' : 'Tive um problema ao consultar.'} Ligue para (62) 98218-3144 se precisar.`;
+                resposta = await gerarRespostaHumana(
+                  debitosError
+                    ? `CONTEXTO: Erro ao consultar débitos de ${nomeDevedor}. Peça desculpas e ofereça (62) 98218-3144.`
+                    : `CONTEXTO: ${nomeDevedor} identificado pelo telefone mas sem débitos. Dê a boa notícia.`,
+                  historico, fallback
+                );
+                dados = addToHistorico(dados, 'assistente', resposta);
+                await supabase.from('chatbot_conversas').upsert({
+                  telefone, etapa: 'sem_debitos', dados: { ...dados, cpf: cpfLimpo },
+                  server_url: serverUrl, instance_token: instanceToken,
+                  atualizado_em: new Date().toISOString(),
+                }, { onConflict: 'telefone' });
+                break;
+              }
+
+              const totalContratos = debitos.length;
+              const valorTotal = debitos.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+              const valorAvista = valorTotal * 0.5;
+              const valorParcelado = valorTotal * 0.7;
+              let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
+              if (maxParcelas > 24) maxParcelas = 24;
+              if (maxParcelas < 2) maxParcelas = 2;
+              const valorParcelaMin = valorParcelado / maxParcelas;
+
+              const { data: acordoExistente } = await supabase
+                .rpc('consultar_acordo_ativo_por_cpf', { p_cpf: cpfLimpo });
+
+              let avisoAcordo = '';
+              if (acordoExistente && acordoExistente.length > 0) {
+                const acordo = acordoExistente[0];
+                avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione isso.`;
+              }
+
+              const fallbackProposta = `Olá, ${nomeDevedor}! 👋 Sou a Ana, da Souza e Ribeiro. Encontrei ${totalContratos} contrato(s) totalizando ${formatCurrency(valorTotal)}.
+
+💰 *À VISTA (50% OFF)*: ${formatCurrency(valorAvista)}
+📋 *PARCELADO (30% OFF)*: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
+
+Responda *1* para à vista ou *2* para parcelar.
+📞 Fale com negociador: (62) 98218-3144`;
+
+              resposta = await gerarRespostaHumana(
+                `CONTEXTO: O cliente ${nomeDevedor} foi identificado pelo telefone. Apresente as opções diretamente.
+
+DADOS:
+- Nome: ${nomeDevedor}
+- Contratos: ${totalContratos}
+- Dívida total: ${formatCurrency(valorTotal)}
+
+OPÇÕES:
+- À vista 50% desconto: ${formatCurrency(valorAvista)}
+- Parcelado 30% desconto: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
+${avisoAcordo}
+
+INSTRUÇÕES: Cumprimente, apresente as opções com *negrito* nos valores. Ofereça (62) 98218-3144.`,
+                historico,
+                fallbackProposta
+              );
+
+              dados = {
+                ...dados, cpf: cpfLimpo, nome: nomeDevedor, valor_total: valorTotal,
+                valor_avista: valorAvista, valor_parcelado: valorParcelado,
+                max_parcelas: maxParcelas, total_contratos: totalContratos,
+              };
+              dados = addToHistorico(dados, 'assistente', resposta);
+
+              await supabase.from('chatbot_conversas').upsert({
+                telefone, etapa: 'proposta_enviada', dados,
+                server_url: serverUrl, instance_token: instanceToken,
+                atualizado_em: new Date().toISOString(),
+              }, { onConflict: 'telefone' });
+              break;
+            } else {
+              // Multiple CPFs — ask for confirmation
+              const devedor = devedoresEncontrados[0];
+              const cpfLimpo = devedor.cpf.replace(/\D/g, '');
+              const cpfFinal = cpfLimpo.slice(-3);
+              console.log(`[AUTO-ID] Múltiplos CPFs (${cpfsUnicos.length}), pedindo confirmação`);
+
+              const fallbackConfirma = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Estou falando com *${devedor.nome}*, CPF final *${cpfFinal}*?`;
+              resposta = await gerarRespostaHumana(
+                `CONTEXTO: Pelo telefone encontrei múltiplas pessoas. Perguntando se é ${devedor.nome}, CPF final ${cpfFinal}. Seja breve.`,
+                historico,
+                fallbackConfirma
+              );
+
+              dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: devedor.nome };
+              dados = addToHistorico(dados, 'assistente', resposta);
+              await supabase.from('chatbot_conversas').upsert({
+                telefone, etapa: 'aguardando_confirmacao_identidade', dados,
+                server_url: serverUrl, instance_token: instanceToken,
+                atualizado_em: new Date().toISOString(),
+              }, { onConflict: 'telefone' });
+              break;
+            }
           }
 
           // No match by phone — standard flow: ask for CPF
