@@ -391,6 +391,33 @@ export type Database = {
         }
         Relationships: []
       }
+      chatbot_regras: {
+        Row: {
+          ativo: boolean | null
+          atualizado_em: string | null
+          criado_em: string | null
+          gatilho: string
+          id: string
+          resposta: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          atualizado_em?: string | null
+          criado_em?: string | null
+          gatilho: string
+          id?: string
+          resposta: string
+        }
+        Update: {
+          ativo?: boolean | null
+          atualizado_em?: string | null
+          criado_em?: string | null
+          gatilho?: string
+          id?: string
+          resposta?: string
+        }
+        Relationships: []
+      }
       chatbot_templates: {
         Row: {
           ativo: boolean | null

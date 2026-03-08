@@ -208,6 +208,31 @@ function applyTemplate(templates: Record<string, string>, etapa: string, vars: R
   return result;
 }
 
+// Custom rules system: fetch rules and check for matches
+async function fetchRegras(supabase: any): Promise<Array<{gatilho: string, resposta: string}>> {
+  try {
+    const { data } = await supabase
+      .from('chatbot_regras')
+      .select('gatilho, resposta')
+      .eq('ativo', true);
+    return data || [];
+  } catch (err) {
+    console.error('[Regras] Erro ao buscar regras:', err);
+    return [];
+  }
+}
+
+function checkRegras(regras: Array<{gatilho: string, resposta: string}>, texto: string): string | null {
+  const textoLower = texto.toLowerCase();
+  for (const regra of regras) {
+    if (textoLower.includes(regra.gatilho.toLowerCase())) {
+      console.log(`[Regras] Match encontrado: gatilho="${regra.gatilho}"`);
+      return regra.resposta;
+    }
+  }
+  return null;
+}
+
 // Tool-calling to interpret user intent
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
   try {
@@ -300,8 +325,9 @@ serve(async (req) => {
       });
     }
 
-    // Fetch all active templates from DB
+    // Fetch all active templates and rules from DB
     const templates = await fetchTemplates(supabase);
+    const regras = await fetchRegras(supabase);
 
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
@@ -367,6 +393,26 @@ serve(async (req) => {
 
     let resposta = '';
     const historico = getHistorico(dados);
+
+    // Check custom rules BEFORE the main flow
+    const regraMatch = checkRegras(regras, texto);
+    if (regraMatch) {
+      resposta = regraMatch;
+      dados = addToHistorico(dados, 'assistente', resposta);
+      await supabase.from('chatbot_conversas').upsert({
+        telefone, etapa: etapaAtual, dados,
+        server_url: serverUrl, instance_token: instanceToken,
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'telefone' });
+
+      const delay = Math.floor(Math.random() * 15000) + 15000;
+      await simulateTyping(serverUrl!, instanceToken!, telefone, delay);
+      await sendMessage(serverUrl!, instanceToken!, telefone, resposta);
+
+      return new Response(JSON.stringify({ success: true, regra_match: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     switch (etapaAtual) {
       case 'novo':
