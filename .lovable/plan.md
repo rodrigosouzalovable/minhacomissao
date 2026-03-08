@@ -1,31 +1,47 @@
 
 
-## Diagnóstico
+# Fluxo humanizado: confirmar CPF + proposta curta e direta
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problema atual
+1. Quando o chatbot encontra o devedor pelo telefone, ele pula direto para a proposta sem confirmar CPF
+2. A proposta gerada pela IA é longa demais — parece robô, não humano
+3. Falta mencionar o credor (ex: "Lojas Novo Mundo") na proposta
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+## Novo fluxo
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
-
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
-
-## Correção
-
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
-
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```text
+Cliente responde "Sim, como fica" →
+  Chatbot encontra devedor pelo telefone →
+    "Só pra confirmar, seu CPF é 018.678.643-39?" →
+      Cliente confirma →
+        "Perfeito, Jose! A proposta para pagamento à vista é *R$ 714,80*,
+         pagando esse valor você quita todas as parcelas com as Lojas Novo Mundo.
+         Ou podemos parcelar: *5x de R$ 200,14*. Como fica melhor pra você?"
 ```
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+## Mudanças em `supabase/functions/whatsapp-chatbot/index.ts`
+
+### 1. Case `novo` — quando devedor único encontrado por telefone
+Em vez de ir direto para a proposta, o chatbot:
+- Busca o CPF e nome do devedor
+- Envia mensagem curta: "Só pra confirmar, seu CPF é XXX.XXX.XXX-XX?"
+- Salva os dados e muda etapa para `aguardando_confirmacao_identidade`
+
+### 2. Case `aguardando_confirmacao_identidade` — após confirmação
+- Consulta débitos via `consultar_debitos_por_cpf`
+- Busca o campo `credor` da tabela `devedores` para usar na mensagem
+- Gera proposta CURTA e direta no estilo:
+  > "Perfeito, {primeiro_nome}! A proposta disponível para *pagamento à vista é {valor_avista}*, pagando esse valor, você quita todas as parcelas em aberto com {credor}. Ou podemos parcelar para o senhor da seguinte forma: *{maxParcelas}x de {valorParcela}*. Como fica melhor para você?"
+- Instrução explícita à IA no prompt para ser breve (2-3 frases), sem enumerar opções, sem emojis excessivos
+
+### 3. Prompt da IA ajustado
+O contexto enviado à IA terá instruções mais rígidas:
+- Máximo 3 frases
+- Não usar numeração (1, 2)
+- Tom conversacional como se estivesse no WhatsApp de verdade
+- Incluir o nome do credor na mensagem
+- Usar apenas o primeiro nome do cliente
+
+### 4. Incluir `credor` na consulta de devedores
+Adicionar `credor` ao `select` das queries de devedores e ao `consultar_debitos_por_cpf` (que já retorna os dados necessários — o campo `credor` será buscado separadamente na tabela `devedores`).
 
