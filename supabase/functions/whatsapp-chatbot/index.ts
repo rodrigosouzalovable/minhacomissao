@@ -886,7 +886,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
           const fallbackMin = `Com ${numParcelas}x a parcela ficaria ${formatCurrency(valorParcela)}, abaixo do mínimo. O máximo é ${maxPossivel}x de ${formatCurrency(valorParcelado / maxPossivel)}.`;
           resposta = await gerarRespostaHumana(
             `CONTEXTO: O cliente pediu ${numParcelas}x mas a parcela ficaria ${formatCurrency(valorParcela)}, abaixo do mínimo de R$ 90,00. O máximo possível é ${maxPossivel}x de ${formatCurrency(valorParcelado / maxPossivel)}. Explique de forma gentil e sugira o máximo.`,
-            historico, fallbackMin
+            historico, fallbackMin, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
