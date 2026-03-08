@@ -55,6 +55,21 @@ const META_MENSAL_BASE = 'acionamento_meta_mensal';
 const RECEBIDO_DIARIO_BASE = 'meta_recebido_diario';
 const RECEBIDO_MENSAL_BASE = 'meta_recebido_mensal';
 
+const normalizePhoneForWhatsApp = (phone: string): string => {
+  const clean = phone.replace(/\D/g, '');
+  const full = clean.startsWith('55') ? clean : `55${clean}`;
+  // Remove 9th digit for BR mobile: 55 + DDD(2) + 9 + 8 digits → 55 + DDD(2) + 8 digits
+  if (full.length === 13 && full[4] === '9') {
+    return full.slice(0, 4) + full.slice(5);
+  }
+  return full;
+};
+
+interface ConversaInfo {
+  etapa: string;
+  historico: Array<{ role: string; content: string; ts?: string }>;
+}
+
 const isToday = (isoString: string): boolean => {
   const date = new Date(isoString);
   const today = new Date();
