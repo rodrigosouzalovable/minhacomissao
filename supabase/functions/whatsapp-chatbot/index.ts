@@ -394,6 +394,26 @@ serve(async (req) => {
     let resposta = '';
     const historico = getHistorico(dados);
 
+    // Check custom rules BEFORE the main flow
+    const regraMatch = checkRegras(regras, texto);
+    if (regraMatch) {
+      resposta = regraMatch;
+      dados = addToHistorico(dados, 'assistente', resposta);
+      await supabase.from('chatbot_conversas').upsert({
+        telefone, etapa: etapaAtual, dados,
+        server_url: serverUrl, instance_token: instanceToken,
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'telefone' });
+
+      const delay = Math.floor(Math.random() * 15000) + 15000;
+      await simulateTyping(serverUrl!, instanceToken!, telefone, delay);
+      await sendMessage(serverUrl!, instanceToken!, telefone, resposta);
+
+      return new Response(JSON.stringify({ success: true, regra_match: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     switch (etapaAtual) {
       case 'novo':
       case 'aguardando_cpf': {
