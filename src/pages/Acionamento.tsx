@@ -994,8 +994,9 @@ export default function Acionamento() {
                         <TableRow>
                           <TableHead>Nome</TableHead>
                           <TableHead>Telefone</TableHead>
-                          <TableHead>Atraso</TableHead>
                           <TableHead>Saldo</TableHead>
+                          <TableHead>À Vista</TableHead>
+                          <TableHead>Parcelado</TableHead>
                           <TableHead className="w-24 text-right">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1004,8 +1005,9 @@ export default function Acionamento() {
                           <TableRow key={c.originalIndex}>
                             <TableCell className="font-medium">{c.nome}</TableCell>
                             <TableCell>{c.telefone}</TableCell>
-                            <TableCell>{c.atraso}</TableCell>
                             <TableCell>{formatCurrency(c.saldo)}</TableCell>
+                            <TableCell className="text-green-600 font-medium">{calcAvista(c.saldo)}</TableCell>
+                            <TableCell className="text-xs max-w-[200px]">{calcParceladoDisplay(c.saldo)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <Checkbox
