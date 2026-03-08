@@ -1103,9 +1103,14 @@ serve(async (req) => {
           const isInteresseOferta = /(como fica|qual.?valor|quanto|me fala|explica|fala mais|me interessa|tenho interesse|quero saber|quero ver|como funciona|como que|qual proposta)/i.test(textoLower);
 
           if (isSaudacaoOferta || isInteresseOferta) {
-            // Re-send the offer
-            const valorParcelaMin = vpOfertas / mpOfertas;
-            resposta = `Olá! 😊 Temos uma ótima oportunidade: quitação à vista por *${formatCurrency(vaOfertas)}* ou parcelado em *${mpOfertas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+            // Re-send the offer with full list
+            const listaParc = gerarListaParcelamento(vpOfertas);
+            let msgReenvio = `Olá! 😊 Temos uma ótima oportunidade: quitação à vista por *${formatCurrency(vaOfertas)}*.`;
+            if (listaParc) {
+              msgReenvio += `\n\nOu podemos parcelar:\n\n${listaParc}`;
+            }
+            msgReenvio += `\n\nComo prefere pagar? Responda com o número de parcelas (ex: *3x*) ou *à vista*.`;
+            resposta = msgReenvio;
             await salvarEResponder('oferta_valores');
             break;
           }
