@@ -902,7 +902,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallbackConfirma = `Perfeito! Acordo em ${numParcelas}x de ${formatCurrency(valorParcela)}. Estou gerando seu boleto, aguarde...`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: O cliente ${dados.nome} confirmou ${numParcelas}x de ${formatCurrency(valorParcela)} (total ${formatCurrency(valorFinal)}). Confirme com entusiasmo e diga que está preparando o boleto. Peça para aguardar.`,
-          historico, fallbackConfirma
+          historico, fallbackConfirma, regrasTexto
         );
 
         dados = { ...dados, parcelas: numParcelas, valor_final: valorFinal, valor_parcela: valorParcela };
