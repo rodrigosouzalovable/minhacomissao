@@ -778,8 +778,15 @@ serve(async (req) => {
         // Waiting for CPF input
         const cpf = extractCpf(texto);
         if (!cpf) {
-          resposta = `Não consegui identificar um CPF válido. Por favor, envie seu CPF com 11 dígitos. Exemplo: 123.456.789-00`;
-          await salvarEResponder('aguardando_cpf');
+          const tentativasCpf = ((dados as any).tentativas_cpf || 0) + 1;
+          dados = { ...dados, tentativas_cpf: tentativasCpf };
+          
+          if (tentativasCpf <= 1) {
+            resposta = `Não consegui identificar um CPF válido. Por favor, envie seu CPF com 11 dígitos. Exemplo: 123.456.789-00`;
+            await salvarEResponder('aguardando_cpf');
+          } else {
+            await salvarSilenciosoENotificar('aguardando_cpf', texto);
+          }
           break;
         }
 
