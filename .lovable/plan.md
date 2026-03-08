@@ -1,31 +1,32 @@
 
 
+# Fix: Chatbot não encontra dados do cliente enviado pelo Acionamento
+
 ## Diagnóstico
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+O problema é que o devedor "Rodrigo" (CPF 1867864339, telefone 62981865213, saldo R$ 2.500) **NÃO EXISTE na tabela `devedores`** do banco de dados. A planilha é lida apenas no navegador (client-side) pelo Acionamento e nunca é persistida no banco.
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+Quando o cliente responde "Sim":
+1. O fromMe tracking tenta buscar o devedor pelo telefone → **não encontra** → não seta `proposta_enviada`
+2. O chatbot reseta para `novo` → busca pelo telefone → **não encontra** → pede CPF
+3. Cliente informa CPF → encontra JOSE CARLOS (outro devedor com mesmo CPF) → resposta errada
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+## Solução
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+Após enviar cada mensagem com sucesso pelo Acionamento, o sistema deve **salvar os dados do cliente na tabela `chatbot_conversas`** com o estado `proposta_enviada`, incluindo o saldo, nome, CPF e valores calculados. Assim, quando o cliente responder "Sim", o chatbot já terá todos os dados prontos.
 
-## Correção
+### Mudanças
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+**1. `src/hooks/useAutoSend.tsx`** — Após envio bem-sucedido de uma mensagem que contém palavras de proposta ("50% de desconto", "parcelas em aberto"), chamar `supabase.from('chatbot_conversas').upsert(...)` com:
+- `telefone` do cliente (formato limpo, sem formatação)
+- `etapa: 'proposta_enviada'`
+- `dados: { cpf, nome, valor_total: saldo, valor_avista: saldo*0.5, valor_parcelado: saldo*0.7, max_parcelas, credor, ... }`
+- `server_url` e `instance_token` da instância que enviou
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+Isso é feito **no client-side**, logo após o envio com sucesso, usando o `saldo` que já está disponível no objeto `ClienteData`.
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
+**2. `supabase/functions/whatsapp-chatbot/index.ts`** — No case `proposta_enviada`, se `dados.valor_avista` já existir, usar direto (já funciona hoje). Nenhuma mudança necessária aqui.
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+### Resultado
+Quando a mensagem for enviada pelo Acionamento e o cliente responder "Sim", o chatbot já terá o estado correto (`proposta_enviada`) com o saldo (R$ 2.500) e responderá exatamente: "Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de R$ 1.250,00. Ou podemos parcelar para você em Xx de R$ XXX,XX. Como fica melhor para você?"
 
