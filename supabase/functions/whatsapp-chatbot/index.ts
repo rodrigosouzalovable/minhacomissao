@@ -490,11 +490,8 @@ serve(async (req) => {
 
         if (debitosError) {
           console.error('Erro ao consultar débitos:', debitosError);
-          const fallback = `Desculpe, tive um problema ao consultar seus dados. Tente novamente mais tarde ou ligue para (62) 98218-3144.`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Houve um erro técnico ao consultar os dados do CPF. Peça desculpas e ofereça o telefone (62) 98218-3144 como alternativa.`,
-            historico, fallback
-          );
+          const fallbackErro = `Desculpe, tive um problema ao consultar seus dados. Tente novamente mais tarde ou ligue para (62) 98218-3144.`;
+          resposta = applyTemplate(templates, 'erro_consulta', { telefone_contato: '(62) 98218-3144' }, fallbackErro);
           dados = addToHistorico(dados, 'assistente', resposta);
           break;
         }
