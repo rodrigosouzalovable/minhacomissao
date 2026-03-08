@@ -680,6 +680,29 @@ serve(async (req) => {
     }
 
     // =============================================
+    // VERIFICAR REGRAS CUSTOMIZADAS (chatbot_regras)
+    // =============================================
+    // Regras só se aplicam em etapas ativas de negociação (não no fluxo inicial de identificação)
+    const etapasRegraPermitida = ['proposta_enviada', 'oferta_valores', 'aguardando_pagamento_hoje', 'aguardando_data', 'aguardando_humano'];
+    if (regrasCustomizadas && regrasCustomizadas.length > 0 && etapasRegraPermitida.includes(etapaAtual)) {
+      let regraAplicada = false;
+      for (const regra of regrasCustomizadas) {
+        if (textoLower.includes(regra.gatilho.toLowerCase())) {
+          console.log(`[REGRA] Gatilho "${regra.gatilho}" detectado em "${textoLower}" — aplicando resposta customizada`);
+          resposta = aplicarVariaveisTemplate(regra.resposta, dados);
+          await salvarEResponder(etapaAtual);
+          regraAplicada = true;
+          break;
+        }
+      }
+      if (regraAplicada) {
+        return new Response(JSON.stringify({ success: true, regra_aplicada: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // =============================================
     // FLUXO PRINCIPAL — RESPOSTAS FIXAS/EXATAS
     // =============================================
 
