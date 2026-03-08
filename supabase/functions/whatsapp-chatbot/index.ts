@@ -928,7 +928,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
             const fallbackErro = `Não consegui gerar o boleto automaticamente. Ligue para (62) 98218-3144 — seu acordo de ${numParcelas}x de ${formatCurrency(valorParcela)} já está pré-aprovado!`;
             resposta = await gerarRespostaHumana(
               `CONTEXTO: Não foi possível gerar o boleto automaticamente para ${dados.nome}. Acordo: ${numParcelas}x de ${formatCurrency(valorParcela)}. Oriente a ligar para (62) 98218-3144. O acordo já está pré-aprovado. Diga que pode digitar "menu" para nova consulta.`,
-              historico, fallbackErro
+              historico, fallbackErro, regrasTexto
             );
           }
         } catch (err) {
