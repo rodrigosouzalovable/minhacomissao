@@ -948,7 +948,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallback = `Seu boleto ainda está sendo gerado, por favor aguarde mais um pouquinho. Se demorar muito, ligue para (62) 98218-3144.`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: O cliente mandou mensagem enquanto o boleto ainda está sendo gerado. Peça paciência gentilmente. Se já faz mais de 3 minutos, sugira ligar para (62) 98218-3144.`,
-          historico, fallback
+          historico, fallback, regrasTexto
         );
         dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
