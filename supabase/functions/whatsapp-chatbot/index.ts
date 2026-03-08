@@ -252,7 +252,32 @@ serve(async (req) => {
         const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
         const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-        if (devedoresEncontrados.length > 0) {
+        // Check if pre-hydrated data exists BEFORE deciding to use DB values
+        const { data: existingPreHydrated } = await supabaseFm
+          .from('chatbot_conversas')
+          .select('dados')
+          .eq('telefone', destinoTelefone)
+          .maybeSingle();
+
+        const preHydrated = existingPreHydrated?.dados;
+        const hasPreHydration = preHydrated?.valor_total && preHydrated?.valor_avista;
+
+        if (hasPreHydration) {
+          // Pre-hydrated data from spreadsheet takes priority — preserve it
+          console.log(`[fromMe] Pre-hydrated data found for ${destinoTelefone}: valor_total=${preHydrated.valor_total}, preserving spreadsheet values`);
+          await supabaseFm.from('chatbot_conversas').upsert({
+            telefone: destinoTelefone,
+            etapa: 'proposta_enviada',
+            dados: {
+              ...preHydrated,
+              mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
+            },
+            server_url: serverUrlFm, instance_token: instanceTokenFm,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+
+          console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (dados da planilha preservados)`);
+        } else if (devedoresEncontrados.length > 0) {
           const devedor = devedoresEncontrados[0];
           const cpf = devedor.cpf.replace(/\D/g, '');
           const valorTotal = devedoresEncontrados
