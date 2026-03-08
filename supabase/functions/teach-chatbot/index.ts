@@ -40,9 +40,9 @@ serve(async (req) => {
   try {
     const { messages } = await req.json();
 
-    const openaiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiKey) {
-      throw new Error('OPENAI_API_KEY not configured');
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+    if (!lovableApiKey) {
+      throw new Error('LOVABLE_API_KEY not configured');
     }
 
     const aiMessages = [
@@ -50,14 +50,14 @@ serve(async (req) => {
       ...messages.map((m: any) => ({ role: m.role, content: m.content }))
     ];
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openaiKey}`,
+        'Authorization': `Bearer ${lovableApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'google/gemini-2.5-flash',
         messages: aiMessages,
         temperature: 0.7,
         max_tokens: 500,
@@ -72,9 +72,15 @@ serve(async (req) => {
     let finalReply = reply;
 
     try {
-      const parsed = JSON.parse(reply);
+      // Try to extract JSON from the reply (it might be wrapped in markdown code blocks)
+      let jsonStr = reply;
+      const jsonMatch = reply.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1];
+      }
+      
+      const parsed = JSON.parse(jsonStr);
       if (parsed.action === 'save' && parsed.gatilho && parsed.resposta) {
-        // Save the rule to the database
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabase = createClient(supabaseUrl, supabaseKey);
@@ -95,7 +101,7 @@ serve(async (req) => {
         }
       }
     } catch {
-      // Not JSON, normal text response - that's fine
+      // Not JSON, normal text response
     }
 
     return new Response(
