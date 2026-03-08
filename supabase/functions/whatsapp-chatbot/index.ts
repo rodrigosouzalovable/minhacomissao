@@ -686,9 +686,9 @@ serve(async (req) => {
           await salvarEResponder('oferta_valores');
           break;
         } else {
-          // Client said no or unclear — encourage gently
-          resposta = `Entendo. Se mudar de ideia, estamos aqui para ajudar! É uma ótima oportunidade com *50% de desconto*. Basta responder "sim" que seguimos. 😊`;
-          await salvarEResponder('proposta_enviada');
+          // Client said no or unclear — notify admin, stay silent
+          console.log(`[SILÊNCIO] proposta_enviada: cliente não aceitou/ambíguo: "${texto}"`);
+          await salvarSilenciosoENotificar('proposta_enviada', texto);
           break;
         }
       }
