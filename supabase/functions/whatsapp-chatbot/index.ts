@@ -408,7 +408,7 @@ serve(async (req) => {
       if (audioUrl) {
         console.log(`Áudio detectado de ${telefone}, URL: ${audioUrl}`);
         try {
-          texto = await transcreverAudio(audioUrl, serverUrlGlobal, instanceTokenGlobal, telefone);
+          texto = await transcreverAudio(audioUrl);
           console.log(`Transcrição do áudio de ${telefone}: "${texto}"`);
         } catch (err) {
           console.error(`Erro ao transcrever áudio de ${telefone}:`, err);
