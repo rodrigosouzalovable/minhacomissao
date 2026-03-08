@@ -1147,6 +1147,7 @@ export default function Acionamento() {
                           const formattedTimestamp = timestamp
                             ? new Date(timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
                             : '—';
+                          const conversaStatus = getConversaStatus(c.telefone);
                           return (
                             <TableRow key={c.originalIndex}>
                               <TableCell className="font-medium">{c.nome}</TableCell>
@@ -1157,17 +1158,44 @@ export default function Acionamento() {
                               <TableCell className="text-sm text-muted-foreground">{formattedTimestamp}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
-                                  {wasSent && (
+                                  {conversaStatus === 'negociando' && (
+                                    <Badge
+                                      variant="outline"
+                                      className="cursor-pointer bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30"
+                                      onClick={() => handleOpenChat(c)}
+                                    >
+                                      <MessageCircle className="h-3 w-3 mr-1" /> Em negociação
+                                    </Badge>
+                                  )}
+                                  {conversaStatus === 'aguardando' && (
+                                    <Badge
+                                      variant="outline"
+                                      className="cursor-pointer bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30"
+                                      onClick={() => handleOpenChat(c)}
+                                    >
+                                      <MessageCircle className="h-3 w-3 mr-1" /> Aguardando
+                                    </Badge>
+                                  )}
+                                  {conversaStatus === 'acordo' && (
+                                    <Badge
+                                      variant="outline"
+                                      className="cursor-pointer bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30"
+                                      onClick={() => handleOpenChat(c)}
+                                    >
+                                      <Check className="h-3 w-3 mr-1" /> Acordo
+                                    </Badge>
+                                  )}
+                                  {!conversaStatus && wasSent && (
                                     <Badge variant="default" className="bg-green-600 hover:bg-green-600">
                                       <Check className="h-3 w-3 mr-1" /> Enviado
                                     </Badge>
                                   )}
-                                  {wasError && (
+                                  {!conversaStatus && wasError && (
                                     <Badge variant="destructive">
                                       <X className="h-3 w-3 mr-1" /> Erro
                                     </Badge>
                                   )}
-                                  {wasManual && !wasSent && !wasError && (
+                                  {!conversaStatus && wasManual && !wasSent && !wasError && (
                                     <div className="flex items-center gap-2">
                                       <Badge variant="secondary">Manual</Badge>
                                       <Checkbox
