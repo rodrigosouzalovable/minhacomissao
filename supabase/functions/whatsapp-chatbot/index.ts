@@ -540,6 +540,36 @@ serve(async (req) => {
       });
     }
 
+    // --- CARREGAR REGRAS CUSTOMIZADAS E TEMPLATES ---
+    const { data: regrasCustomizadas } = await supabase
+      .from('chatbot_regras')
+      .select('gatilho, resposta')
+      .eq('ativo', true);
+
+    const { data: templatesAtivos } = await supabase
+      .from('chatbot_templates')
+      .select('etapa, template')
+      .eq('ativo', true);
+
+    const templateMap = new Map<string, string>((templatesAtivos || []).map((t: any) => [t.etapa, t.template]));
+
+    // Helper para substituir variáveis nos templates
+    function aplicarVariaveisTemplate(tmpl: string, dadosCtx: any): string {
+      const primeiroNome = dadosCtx.nome ? dadosCtx.nome.split(' ')[0] : '';
+      const primeiroNomeCap = primeiroNome ? primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase() : '';
+      const cpfFormatadoTmpl = dadosCtx.cpf ? formatCpf(dadosCtx.cpf) : '';
+      return tmpl
+        .replace(/\{primeiro_nome\}/g, primeiroNomeCap)
+        .replace(/\{nome_completo\}/g, dadosCtx.nome || '')
+        .replace(/\{cpf_formatado\}/g, cpfFormatadoTmpl)
+        .replace(/\{valor_avista\}/g, dadosCtx.valor_avista ? formatCurrency(Number(dadosCtx.valor_avista)) : '')
+        .replace(/\{valor_parcela\}/g, dadosCtx.valor_parcela_calc ? formatCurrency(Number(dadosCtx.valor_parcela_calc)) : '')
+        .replace(/\{valor_parcelado\}/g, dadosCtx.valor_parcelado ? formatCurrency(Number(dadosCtx.valor_parcelado)) : '')
+        .replace(/\{max_parcelas\}/g, String(dadosCtx.max_parcelas || ''))
+        .replace(/\{credor\}/g, dadosCtx.credor || '')
+        .replace(/\{telefone_contato\}/g, '(62) 98218-3144');
+    }
+
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
@@ -650,6 +680,29 @@ serve(async (req) => {
     }
 
     // =============================================
+    // VERIFICAR REGRAS CUSTOMIZADAS (chatbot_regras)
+    // =============================================
+    // Regras só se aplicam em etapas ativas de negociação (não no fluxo inicial de identificação)
+    const etapasRegraPermitida = ['proposta_enviada', 'oferta_valores', 'aguardando_pagamento_hoje', 'aguardando_data', 'aguardando_humano'];
+    if (regrasCustomizadas && regrasCustomizadas.length > 0 && etapasRegraPermitida.includes(etapaAtual)) {
+      let regraAplicada = false;
+      for (const regra of regrasCustomizadas) {
+        if (textoLower.includes(regra.gatilho.toLowerCase())) {
+          console.log(`[REGRA] Gatilho "${regra.gatilho}" detectado em "${textoLower}" — aplicando resposta customizada`);
+          resposta = aplicarVariaveisTemplate(regra.resposta, dados);
+          await salvarEResponder(etapaAtual);
+          regraAplicada = true;
+          break;
+        }
+      }
+      if (regraAplicada) {
+        return new Response(JSON.stringify({ success: true, regra_aplicada: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // =============================================
     // FLUXO PRINCIPAL — RESPOSTAS FIXAS/EXATAS
     // =============================================
 
@@ -714,7 +767,10 @@ serve(async (req) => {
           }
 
           // No match — ask CPF
-          resposta = `Olá! Para consultar sua situação, por favor me informe seu CPF.`;
+          const tmplSaudacao = templateMap.get('saudacao');
+          resposta = tmplSaudacao
+            ? aplicarVariaveisTemplate(tmplSaudacao, dados)
+            : `Olá! Para consultar sua situação, por favor me informe seu CPF.`;
           await salvarEResponder('aguardando_cpf');
           break;
         }
@@ -748,7 +804,11 @@ serve(async (req) => {
         const { data: devedorInfo } = await supabase.from('devedores').select('credor').eq('cpf', cpf).eq('ativo', true).limit(1).single();
         const credorNome = getCredorNome(devedorInfo?.credor || '');
 
-        resposta = `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
+        const dadosParaTemplate = { ...dados, cpf, nome: nomeDevedor, valor_avista: valorTotal * 0.5, valor_parcelado: valorTotal * 0.7, credor: credorNome };
+        const tmplProposta = templateMap.get('proposta');
+        resposta = tmplProposta
+          ? aplicarVariaveisTemplate(tmplProposta, dadosParaTemplate)
+          : `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
 
         const valorAvista = valorTotal * 0.5;
         const valorParcelado = valorTotal * 0.7;
@@ -799,7 +859,11 @@ serve(async (req) => {
           if (maxParcelas > 24) maxParcelas = 24;
           if (maxParcelas < 2) maxParcelas = 2;
 
-          resposta = `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
+          const dadosParaTemplate2 = { ...dados, cpf, nome: nomeDevedor, valor_avista: valorAvista, valor_parcelado: valorParcelado, max_parcelas: maxParcelas, credor: credorNome };
+          const tmplProposta2 = templateMap.get('proposta');
+          resposta = tmplProposta2
+            ? aplicarVariaveisTemplate(tmplProposta2, dadosParaTemplate2)
+            : `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
 
           dados = {
             ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
@@ -912,7 +976,11 @@ serve(async (req) => {
 
           const valorParcelaMin = valorParcelado / maxParcelas;
 
-          resposta = `Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}*. Ou podemos parcelar para você em *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+          const dadosOferta = { ...dados, valor_parcela_calc: valorParcelaMin };
+          const tmplEscolhaParcelado = templateMap.get('escolha_parcelado');
+          resposta = tmplEscolhaParcelado
+            ? aplicarVariaveisTemplate(tmplEscolhaParcelado, dadosOferta)
+            : `Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}*. Ou podemos parcelar para você em *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
 
           await salvarEResponder('oferta_valores');
           break;
