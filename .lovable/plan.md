@@ -1,40 +1,31 @@
 
 
-# Reordenar seções da página Robô CobMais
+## Diagnóstico
 
-## Ordem atual no código
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-1. Status cards (4 cards no topo)
-2. Configuração + Console de Comandos
-3. Streaming do Robô
-4. **Código do Robô (server.js)**
-5. **Conhecimento Aprendido**
-6. **Chat com a IA**
-7. Fila & Logs
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Ordem desejada (conforme as imagens)
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-1. Status cards ✅ (já está)
-2. Configuração + Console ✅ (já está)
-3. Streaming ✅ (já está)
-4. **Chat com a IA** ← mover para cima
-5. **Conhecimento Aprendido** ← mover para cima
-6. **Código do Robô** ← mover para baixo
-7. Fila & Logs ✅ (já está)
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-## Mudança
+## Correção
 
-Arquivo: `src/pages/AutomacaoCobMais.tsx`
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-Reordenar os 3 blocos JSX (linhas ~855-1119) trocando a ordem de:
-- Código do Robô (linha 858-859) → vai para depois do Conhecimento
-- Conhecimento Aprendido (linhas 861-953) → vai para depois do Chat
-- Chat com a IA (linhas 955-1119) → vai para logo após o Streaming
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-Nova sequência no JSX:
-1. Streaming (sem mudança)
-2. Chat com a IA (bloco linhas 955-1119)
-3. Conhecimento Aprendido (bloco linhas 861-953)
-4. Código do Robô (linha 858-859)
-5. Fila & Logs (sem mudança)
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+```
+
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 

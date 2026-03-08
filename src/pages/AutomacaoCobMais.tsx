@@ -855,103 +855,6 @@ export default function AutomacaoCobMais() {
           </div>
         )}
 
-        {/* Código do Robô */}
-        <RoboCodeViewer />
-
-        {/* Knowledge base - Learned sessions */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <GraduationCap className="h-5 w-5" />
-                🎓 Conhecimento Aprendido
-              </CardTitle>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowVideoUpload(true)}>
-                  <FileVideo className="h-4 w-4 mr-1" /> Enviar Vídeo
-                </Button>
-                <Button variant="outline" size="sm" onClick={loadSessoes}>
-                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
-                </Button>
-              </div>
-            </div>
-            <CardDescription>
-              Sessões gravadas e vídeos de treinamento. O conhecimento é usado automaticamente pelo agente IA.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {sessoes.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>Nenhuma sessão gravada ainda.</p>
-                <p className="text-sm mt-1">Clique em "Gravar Sessão" para ensinar a IA como usar o CobMais.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome do Fluxo</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Passos</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sessoes.map(s => (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-medium">{s.nome}</TableCell>
-                        <TableCell>
-                          <Badge variant={s.status === 'concluida' ? 'default' : s.status === 'gravando' ? 'secondary' : 'destructive'}>
-                            {s.status === 'concluida' ? '✅ Concluída' : s.status === 'gravando' ? '🔴 Gravando' : s.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{s.total_passos}</TableCell>
-                        <TableCell className="text-sm">{format(new Date(s.criado_em), 'dd/MM/yyyy HH:mm')}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => handleViewKnowledge(s.id)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteSession(s.id)} className="text-destructive hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-
-                {/* Knowledge detail view */}
-                {viewingSessaoId && selectedSessaoKnowledge.length > 0 && (
-                  <div className="mt-4">
-                    <Label className="text-sm font-medium mb-2 block">
-                      Passos gravados ({selectedSessaoKnowledge.length}):
-                    </Label>
-                    <ScrollArea className="h-64 rounded-md border p-3 bg-muted">
-                      <div className="space-y-2">
-                        {selectedSessaoKnowledge.map((step, i) => (
-                          <div key={step.id || i} className="flex items-start gap-2 text-xs border-b border-border/50 pb-2">
-                            <span className="text-muted-foreground shrink-0 font-mono w-6">{step.passo_numero}.</span>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
-                              {step.acao}
-                            </Badge>
-                            {step.seletor && <code className="text-primary text-[10px]">{step.seletor}</code>}
-                            {step.valor && <span className="text-muted-foreground truncate max-w-[200px]">"{step.valor}"</span>}
-                            {step.descricao_tela && <span className="text-muted-foreground italic truncate">{step.descricao_tela}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Chat com IA sobre o conhecimento */}
         <Card>
           <CardHeader className="flex flex-row items-start justify-between">
@@ -1117,6 +1020,103 @@ export default function AutomacaoCobMais() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Knowledge base - Learned sessions */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5" />
+                🎓 Conhecimento Aprendido
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowVideoUpload(true)}>
+                  <FileVideo className="h-4 w-4 mr-1" /> Enviar Vídeo
+                </Button>
+                <Button variant="outline" size="sm" onClick={loadSessoes}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+                </Button>
+              </div>
+            </div>
+            <CardDescription>
+              Sessões gravadas e vídeos de treinamento. O conhecimento é usado automaticamente pelo agente IA.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sessoes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>Nenhuma sessão gravada ainda.</p>
+                <p className="text-sm mt-1">Clique em "Gravar Sessão" para ensinar a IA como usar o CobMais.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome do Fluxo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Passos</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sessoes.map(s => (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-medium">{s.nome}</TableCell>
+                        <TableCell>
+                          <Badge variant={s.status === 'concluida' ? 'default' : s.status === 'gravando' ? 'secondary' : 'destructive'}>
+                            {s.status === 'concluida' ? '✅ Concluída' : s.status === 'gravando' ? '🔴 Gravando' : s.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{s.total_passos}</TableCell>
+                        <TableCell className="text-sm">{format(new Date(s.criado_em), 'dd/MM/yyyy HH:mm')}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewKnowledge(s.id)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteSession(s.id)} className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Knowledge detail view */}
+                {viewingSessaoId && selectedSessaoKnowledge.length > 0 && (
+                  <div className="mt-4">
+                    <Label className="text-sm font-medium mb-2 block">
+                      Passos gravados ({selectedSessaoKnowledge.length}):
+                    </Label>
+                    <ScrollArea className="h-64 rounded-md border p-3 bg-muted">
+                      <div className="space-y-2">
+                        {selectedSessaoKnowledge.map((step, i) => (
+                          <div key={step.id || i} className="flex items-start gap-2 text-xs border-b border-border/50 pb-2">
+                            <span className="text-muted-foreground shrink-0 font-mono w-6">{step.passo_numero}.</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                              {step.acao}
+                            </Badge>
+                            {step.seletor && <code className="text-primary text-[10px]">{step.seletor}</code>}
+                            {step.valor && <span className="text-muted-foreground truncate max-w-[200px]">"{step.valor}"</span>}
+                            {step.descricao_tela && <span className="text-muted-foreground italic truncate">{step.descricao_tela}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Código do Robô */}
+        <RoboCodeViewer />
 
         <Card>
           <CardHeader>
