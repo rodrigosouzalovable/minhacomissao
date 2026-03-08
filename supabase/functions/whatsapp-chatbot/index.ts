@@ -701,10 +701,7 @@ serve(async (req) => {
           const valorFinal = dados.valor_avista;
 
           const fallbackEspera = `Ótima escolha! Vou preparar seu boleto de ${formatCurrency(valorFinal)} à vista. Um momento, por favor...`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente ${dados.nome} escolheu pagar À VISTA. Valor: ${formatCurrency(valorFinal)}. Confirme a escolha com entusiasmo e diga que está preparando o boleto. Peça para aguardar.`,
-            historico, fallbackEspera
-          );
+          resposta = applyTemplate(templates, 'escolha_avista', { valor_avista: formatCurrency(valorFinal), telefone_contato: '(62) 98218-3144' }, fallbackEspera);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
