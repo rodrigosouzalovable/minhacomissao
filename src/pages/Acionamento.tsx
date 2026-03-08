@@ -560,31 +560,7 @@ export default function Acionamento() {
     prevAutoSending.current = autoSending;
   }, [autoSending]);
 
-  // Fetch conversation states for enviados phones (polling every 30s)
-  const fetchConversas = useCallback(async () => {
-    if (enviados.length === 0) return;
-    const phones = enviados.map(c => normalizePhoneForWhatsApp(c.telefone));
-    const uniquePhones = [...new Set(phones)];
-    if (uniquePhones.length === 0) return;
-
-    const { data, error } = await supabase
-      .from('chatbot_conversas')
-      .select('telefone, etapa, dados')
-      .in('telefone', uniquePhones);
-
-    if (error || !data) return;
-
-    const map: Record<string, ConversaInfo> = {};
-    for (const row of data) {
-      const dados = row.dados as any;
-      const historico = Array.isArray(dados?.mensagens_historico) ? dados.mensagens_historico : [];
-      map[row.telefone] = { etapa: row.etapa, historico };
-    }
-    setConversasMap(map);
-  }, [enviados]);
-
-  // We need enviados defined before this effect, so let me move it below
-  // Actually enviados is a useMemo so it's fine as a dependency
+  const handleAutoSend = () => {
     if (mensagensSalvas.length === 0) {
       toast.error('Salve pelo menos uma mensagem antes de iniciar');
       return;
