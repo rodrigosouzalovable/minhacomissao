@@ -442,6 +442,9 @@ serve(async (req) => {
 
     let resposta = '';
 
+    // Extract instance phone number from payload
+    const telefoneInstancia = (payload?.phone || payload?.instance?.wuid || payload?.wuid || '').replace(/\D/g, '') || 'desconhecido';
+
     // Helper to save state and respond
     async function salvarEResponder(novaEtapa: string, dadosExtra?: any) {
       dados = addToHistorico(dados, 'assistente', resposta);
@@ -454,6 +457,17 @@ serve(async (req) => {
       const delay = Math.floor(Math.random() * 16000) + 15000;
       await simulateTyping(serverUrl!, instanceToken!, telefone, delay);
       await sendMessage(serverUrl!, instanceToken!, telefone, resposta);
+    }
+
+    // Helper to save state WITHOUT responding (silence mode)
+    async function salvarSilenciosoENotificar(etapaOriginal: string, textoCliente: string) {
+      await supabase.from('chatbot_conversas').upsert({
+        telefone, etapa: 'aguardando_humano',
+        dados: { ...dados, etapa_antes_humano: etapaOriginal },
+        server_url: serverUrl, instance_token: instanceToken,
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'telefone' });
+      await notificarAdmin(serverUrl!, instanceToken!, telefone, telefoneInstancia, textoCliente);
     }
 
     // =============================================
