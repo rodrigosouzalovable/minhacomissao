@@ -14,6 +14,11 @@ Seu trabalho:
 2. Confirmar com o admin antes de salvar
 3. Quando o admin confirmar, responder com um JSON especial
 
+CAPACIDADE DE VISÃO:
+- Você pode receber imagens/screenshots. Analise o conteúdo visual e extraia todas as informações relevantes.
+- Se o admin enviar um print de uma conversa ou tela, descreva o que você vê e pergunte como o chatbot deve agir nessa situação.
+- Use as informações visuais para criar regras mais precisas.
+
 FLUXO:
 - O admin diz algo como "quando o cliente perguntar sobre boleto, responda X"
 - Você extrai o GATILHO (palavra-chave que o cliente vai dizer) e a RESPOSTA (o que o chatbot deve responder)
@@ -45,9 +50,14 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
+    // Messages may contain multimodal content (text + image_url)
+    // Pass them through as-is since the gateway supports vision
     const aiMessages = [
       { role: 'system', content: SYSTEM_PROMPT },
-      ...messages.map((m: any) => ({ role: m.role, content: m.content }))
+      ...messages.map((m: any) => ({
+        role: m.role,
+        content: m.content, // can be string or array of {type, text/image_url}
+      }))
     ];
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -60,9 +70,25 @@ serve(async (req) => {
         model: 'google/gemini-2.5-flash',
         messages: aiMessages,
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 800,
       }),
     });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ reply: 'Muitas requisições. Aguarde alguns segundos e tente novamente.', regra_criada: false }), {
+          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ reply: 'Créditos de IA insuficientes. Adicione créditos no workspace.', regra_criada: false }), {
+          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const errText = await response.text();
+      console.error('AI gateway error:', response.status, errText);
+      throw new Error(`AI error: ${response.status}`);
+    }
 
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content || 'Desculpe, não consegui processar. Tente novamente.';
@@ -72,7 +98,6 @@ serve(async (req) => {
     let finalReply = reply;
 
     try {
-      // Try to extract JSON from the reply (it might be wrapped in markdown code blocks)
       let jsonStr = reply;
       const jsonMatch = reply.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
       if (jsonMatch) {
@@ -87,10 +112,7 @@ serve(async (req) => {
 
         const { error } = await supabase
           .from('chatbot_regras')
-          .insert({
-            gatilho: parsed.gatilho,
-            resposta: parsed.resposta,
-          });
+          .insert({ gatilho: parsed.gatilho, resposta: parsed.resposta });
 
         if (error) {
           console.error('Error saving rule:', error);
