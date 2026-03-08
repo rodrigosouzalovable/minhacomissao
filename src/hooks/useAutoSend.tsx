@@ -163,7 +163,7 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
           const valorParcelado = saldo * 0.7;
           let maxParcelas = 1;
           for (let p = 24; p >= 2; p--) {
-            if (valorParcelado / p >= 90) { maxParcelas = p; break; }
+            if (valorParcelado / p >= 100) { maxParcelas = p; break; }
           }
           if (maxParcelas < 2) maxParcelas = 2;
 

@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const VALOR_MINIMO_PARCELA = 90;
+const VALOR_MINIMO_PARCELA = 100;
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -556,9 +556,34 @@ serve(async (req) => {
           ['sim', 'consigo', 'sim consigo', 'quero', 'pode ser', 'sim como fica', 'aceito', 'quero sim', 'como fica', 'tô querendo', 'to querendo'].includes(textoLower);
 
         if (isSim) {
-          const valorAvista = dados.valor_avista;
-          const valorParcelado = dados.valor_parcelado;
-          const maxParcelas = dados.max_parcelas;
+          // Robust fallback: recalculate if values are missing/NaN
+          let valorAvista = Number(dados.valor_avista);
+          let valorParcelado = Number(dados.valor_parcelado);
+          let maxParcelas = Number(dados.max_parcelas);
+
+          if (!valorAvista || isNaN(valorAvista)) {
+            let valorTotal = Number(dados.valor_total);
+            if (!valorTotal || isNaN(valorTotal)) {
+              // Try to fetch from devedores by CPF
+              const cpfFallback = dados.cpf;
+              if (cpfFallback) {
+                const { data: devsFallback } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpfFallback });
+                if (devsFallback && devsFallback.length > 0) {
+                  valorTotal = devsFallback.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+                }
+              }
+            }
+            if (valorTotal && !isNaN(valorTotal)) {
+              valorAvista = valorTotal * 0.5;
+              valorParcelado = valorTotal * 0.7;
+              maxParcelas = Math.min(24, Math.floor(valorParcelado / VALOR_MINIMO_PARCELA));
+              if (maxParcelas < 2) maxParcelas = 2;
+              // Save back to dados for subsequent stages
+              dados = { ...dados, valor_total: valorTotal, valor_avista: valorAvista, valor_parcelado: valorParcelado, max_parcelas: maxParcelas };
+              console.log(`[Fallback] Recalculated: avista=${valorAvista}, parcelado=${valorParcelado}, maxParcelas=${maxParcelas}`);
+            }
+          }
+
           const valorParcelaMin = valorParcelado / maxParcelas;
 
           resposta = `Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}*. Ou podemos parcelar para você em *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
@@ -583,20 +608,42 @@ serve(async (req) => {
           else if (intencao?.includes('parcelado')) escolha = 'parcelado';
         }
 
+        // Ensure values are valid numbers with fallback
+        let vaOfertas = Number(dados.valor_avista);
+        let vpOfertas = Number(dados.valor_parcelado);
+        let mpOfertas = Number(dados.max_parcelas);
+        if (!vaOfertas || isNaN(vaOfertas)) {
+          let vt = Number(dados.valor_total);
+          if (!vt || isNaN(vt)) {
+            const cpfF = dados.cpf;
+            if (cpfF) {
+              const { data: df } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpfF });
+              if (df && df.length > 0) vt = df.reduce((s: number, d: any) => s + Number(d.valor_atualizado), 0);
+            }
+          }
+          if (vt && !isNaN(vt)) {
+            vaOfertas = vt * 0.5;
+            vpOfertas = vt * 0.7;
+            mpOfertas = Math.min(24, Math.floor(vpOfertas / VALOR_MINIMO_PARCELA));
+            if (mpOfertas < 2) mpOfertas = 2;
+            dados = { ...dados, valor_total: vt, valor_avista: vaOfertas, valor_parcelado: vpOfertas, max_parcelas: mpOfertas };
+          }
+        }
+
         if (escolha === 'avista') {
-          dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: dados.valor_avista };
+          dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: vaOfertas };
           resposta = `Você consegue fazer o pagamento hoje?`;
           await salvarEResponder('aguardando_pagamento_hoje');
           break;
 
         } else if (escolha === 'parcelado') {
-          dados = { ...dados, tipo_pagamento: 'parcelado', valor_final: dados.valor_parcelado };
+          dados = { ...dados, tipo_pagamento: 'parcelado', valor_final: vpOfertas };
           resposta = `Você consegue fazer o pagamento hoje?`;
           await salvarEResponder('aguardando_pagamento_hoje');
           break;
 
         } else {
-          resposta = `Desculpe, não entendi. Você prefere pagar *à vista* (${formatCurrency(dados.valor_avista)}) ou *parcelado* (${dados.max_parcelas}x de ${formatCurrency(dados.valor_parcelado / dados.max_parcelas)})?`;
+          resposta = `Desculpe, não entendi. Você prefere pagar *à vista* (${formatCurrency(vaOfertas)}) ou *parcelado* (${mpOfertas}x de ${formatCurrency(vpOfertas / mpOfertas)})?`;
           await salvarEResponder('oferta_valores');
           break;
         }

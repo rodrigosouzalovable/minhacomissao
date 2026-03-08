@@ -1,57 +1,31 @@
 
 
-# Fix: Valores NaN na resposta do chatbot
-
 ## Diagnóstico
 
-Consultei diretamente o banco de dados e confirmei o problema. Quando o chatbot responde ao "Sim" do cliente na etapa `proposta_enviada`, ele tenta usar `dados.valor_avista` e `dados.valor_parcelado`, mas esses campos estão **vazios/undefined** na conversa salva.
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-A pre-hidratação do `useAutoSend.tsx` está salvando os dados no **telefone correto da planilha**, mas existem cenários onde esses valores não chegam — por exemplo, se a conversa já existia de uma interação anterior e os campos não foram populados, ou se o webhook `fromMe` sobrescreve os dados.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Solução: Fallback robusto no chatbot
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-Em vez de depender exclusivamente da pre-hidratação, adicionar **cálculo automático direto no chatbot** sempre que os valores estiverem faltando:
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-### Arquivo: `supabase/functions/whatsapp-chatbot/index.ts`
+## Correção
 
-**No case `proposta_enviada` (linha ~558):**
-Antes de montar a resposta, verificar se `dados.valor_avista` é um número válido. Se não for:
-1. Usar `dados.valor_total` para calcular (50% à vista, 30% parcelado)
-2. Se nem `valor_total` existir, buscar pelo CPF na tabela `devedores`
-3. Salvar os valores calculados de volta nos `dados` para próximas etapas
-
-**No case `oferta_valores` (linha ~585):**
-Mesma verificação de fallback antes de usar os valores.
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
 ```typescript
-// Exemplo do fallback:
-let valorAvista = Number(dados.valor_avista);
-let valorParcelado = Number(dados.valor_parcelado);
-let maxParcelas = Number(dados.max_parcelas);
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-if (!valorAvista || isNaN(valorAvista)) {
-  let valorTotal = Number(dados.valor_total);
-  if (!valorTotal || isNaN(valorTotal)) {
-    // Buscar no banco pelo CPF
-    const cpf = dados.cpf;
-    if (cpf) {
-      const { data: devs } = await supabase.from('devedores')...
-      valorTotal = soma dos valor_atualizado;
-    }
-  }
-  valorAvista = valorTotal * 0.5;
-  valorParcelado = valorTotal * 0.7;
-  maxParcelas = Math.min(24, Math.floor(valorParcelado / 100));
-  if (maxParcelas < 2) maxParcelas = 2;
-  // Salvar de volta nos dados
-  dados = { ...dados, valor_total: valorTotal, valor_avista: valorAvista, 
-            valor_parcelado: valorParcelado, max_parcelas: maxParcelas };
-}
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-### Arquivo: `src/hooks/useAutoSend.tsx`
-Manter a pre-hidratação como está (funciona como otimização), mas alterar o `min_parcelas` para R$ 100 conforme solicitado (atualmente R$ 90).
-
-## Resultado
-Mesmo se a pre-hidratação falhar por qualquer motivo, o chatbot **sempre** conseguirá calcular os valores corretos a partir do saldo, garantindo que nunca mais apareça "R$ NaN".
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
