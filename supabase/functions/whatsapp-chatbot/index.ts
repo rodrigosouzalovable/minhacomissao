@@ -325,8 +325,9 @@ serve(async (req) => {
       });
     }
 
-    // Fetch all active templates from DB
+    // Fetch all active templates and rules from DB
     const templates = await fetchTemplates(supabase);
+    const regras = await fetchRegras(supabase);
 
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
