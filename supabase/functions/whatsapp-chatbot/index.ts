@@ -509,33 +509,27 @@ serve(async (req) => {
           avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} em nome deste cliente, registrado por ${acordo.funcionario_nome}. Mencione isso.`;
         }
 
-        const fallbackProposta = `Olá, ${nomeDevedor}! Encontrei ${totalContratos} contrato(s), totalizando ${formatCurrency(valorTotal)}.
+        const primeiroNomeCpf = nomeDevedor.split(' ')[0];
+        const primeiroNomeCpfCap = primeiroNomeCpf.charAt(0).toUpperCase() + primeiroNomeCpf.slice(1).toLowerCase();
+        
+        // Fetch credor name
+        const { data: devedorInfoCpf } = await supabase
+          .from('devedores')
+          .select('credor')
+          .eq('cpf', cpf)
+          .eq('ativo', true)
+          .limit(1)
+          .single();
+        
+        let credorNomeCpf = 'a empresa credora';
+        const credorSlugCpf = devedorInfoCpf?.credor || '';
+        if (credorSlugCpf.includes('novo_mundo') || credorSlugCpf.includes('ume')) {
+          credorNomeCpf = 'as Lojas Novo Mundo';
+        } else if (credorSlugCpf) {
+          credorNomeCpf = credorSlugCpf.replace(/_/g, ' ');
+        }
 
-💰 *OPÇÃO 1 — À VISTA (50% OFF)*: ${formatCurrency(valorAvista)}
-📋 *OPÇÃO 2 — PARCELADO (30% OFF)*: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-
-Responda *1* para à vista ou *2* para parcelar.
-📞 Ou fale com um negociador: (62) 98218-3144`;
-
-        resposta = await gerarRespostaHumana(
-          `CONTEXTO: Encontrei os débitos do cliente. Apresente as opções de negociação de forma empática.
-
-DADOS DO CLIENTE:
-- Nome: ${nomeDevedor}
-- CPF: ${formatCpf(cpf)}
-- Total de contratos: ${totalContratos}
-- Valor total da dívida: ${formatCurrency(valorTotal)}
-
-OPÇÕES DE PAGAMENTO:
-- Opção 1 - À vista com 50% de desconto: ${formatCurrency(valorAvista)} (economia de ${formatCurrency(valorTotal - valorAvista)})
-- Opção 2 - Parcelado com 30% de desconto: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)} (parcela mínima R$ 90,00)
-
-${avisoAcordo}
-
-INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cliente responda com 1 ou 2, mas deixe claro que também aceita respostas em texto livre. Ofereça o telefone (62) 98218-3144. Use *negrito* nos valores.`,
-          historico,
-          fallbackProposta
-        );
+        resposta = `Perfeito, ${primeiroNomeCpfCap}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNomeCpf}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
 
         dados = { 
           ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
