@@ -747,10 +747,7 @@ serve(async (req) => {
           const valorParcelado = dados.valor_parcelado;
 
           const fallbackParcelas = `Você escolheu parcelar! Total: ${formatCurrency(valorParcelado)}. Em quantas vezes quer pagar? De 2 a ${maxParcelas}x (parcela mínima R$ 90,00).`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente ${dados.nome} escolheu PARCELAR. Valor total parcelado: ${formatCurrency(valorParcelado)}. Pergunte em quantas parcelas deseja (de 2 a ${maxParcelas}). Parcela mínima: R$ 90,00. Seja conversacional.`,
-            historico, fallbackParcelas
-          );
+          resposta = applyTemplate(templates, 'escolha_parcelado', { valor_parcelado: formatCurrency(valorParcelado), max_parcelas: String(maxParcelas), telefone_contato: '(62) 98218-3144' }, fallbackParcelas);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
