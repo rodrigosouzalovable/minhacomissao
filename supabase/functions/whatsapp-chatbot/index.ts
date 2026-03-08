@@ -1092,9 +1092,10 @@ serve(async (req) => {
           break;
 
         } else if (escolha === 'parcelado') {
+          const listaParc = gerarListaParcelamento(vpOfertas);
+          resposta = `Ótimo! Aqui estão as opções de parcelamento:\n\n${listaParc}\n\nEm quantas vezes deseja pagar? Responda com o número (ex: *3x*).`;
           dados = { ...dados, tipo_pagamento: 'parcelado', valor_final: vpOfertas };
-          resposta = `Você consegue fazer o pagamento hoje?`;
-          await salvarEResponder('aguardando_pagamento_hoje');
+          await salvarEResponder('oferta_valores');
           break;
 
         } else {
