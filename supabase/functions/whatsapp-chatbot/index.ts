@@ -859,7 +859,11 @@ serve(async (req) => {
           if (maxParcelas > 24) maxParcelas = 24;
           if (maxParcelas < 2) maxParcelas = 2;
 
-          resposta = `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
+          const dadosParaTemplate2 = { ...dados, cpf, nome: nomeDevedor, valor_avista: valorAvista, valor_parcelado: valorParcelado, max_parcelas: maxParcelas, credor: credorNome };
+          const tmplProposta2 = templateMap.get('proposta');
+          resposta = tmplProposta2
+            ? aplicarVariaveisTemplate(tmplProposta2, dadosParaTemplate2)
+            : `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
 
           dados = {
             ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
