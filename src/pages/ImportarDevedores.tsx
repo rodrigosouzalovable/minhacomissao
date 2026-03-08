@@ -399,6 +399,7 @@ export default function ImportarDevedores() {
 
   const isMontreal = credorSelecionado === 'montreal';
   const isCobmais = credorSelecionado === 'cobmais';
+  const isPesquisa = credorSelecionado === 'pesquisa';
 
   return (
     <AppLayout>
