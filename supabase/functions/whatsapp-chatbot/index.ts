@@ -831,6 +831,7 @@ serve(async (req) => {
             amanha.setDate(amanha.getDate() + 1);
             resposta = `OK, irei te enviar o boleto para essa data!`;
             await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(amanha) });
+            await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(amanha) });
             break;
           }
 
