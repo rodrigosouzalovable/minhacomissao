@@ -425,7 +425,8 @@ export default function ImportarDevedores() {
                 <SelectContent>
                   <SelectItem value="padrao">Padrão</SelectItem>
                   <SelectItem value="montreal">MONTREAL</SelectItem>
-                  <SelectItem value="cobmais">COBMAIS</SelectItem>
+                   <SelectItem value="cobmais">COBMAIS</SelectItem>
+                   <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
                 </SelectContent>
               </Select>
             </div>
