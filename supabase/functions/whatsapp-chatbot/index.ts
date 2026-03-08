@@ -426,7 +426,13 @@ serve(async (req) => {
     }
 
     let resposta = '';
+    let jaEnviou = false;
     const historico = getHistorico(dados);
+
+    // Build extra rules string for AI system prompt injection
+    const regrasTexto = regras.length > 0
+      ? regras.map(r => `- Quando o cliente mencionar "${r.gatilho}", responda: "${r.resposta}"`).join('\n')
+      : '';
 
     // Check custom rules BEFORE the main flow
     const regraMatch = checkRegras(regras, texto);
