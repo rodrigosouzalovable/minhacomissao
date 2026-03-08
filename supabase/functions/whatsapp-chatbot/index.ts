@@ -67,7 +67,7 @@ function formatCpf(cpf: string): string {
   return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
 }
 
-async function gerarRespostaHumana(contexto: string, historico: Array<{role: string, content: string}>, fallback: string): Promise<string> {
+async function gerarRespostaHumana(contexto: string, historico: Array<{role: string, content: string}>, fallback: string, regrasExtra?: string): Promise<string> {
   try {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -75,8 +75,13 @@ async function gerarRespostaHumana(contexto: string, historico: Array<{role: str
       return fallback;
     }
 
+    let systemPromptFinal = SYSTEM_PROMPT;
+    if (regrasExtra) {
+      systemPromptFinal += `\n\n## INSTRUÇÕES ADICIONAIS DO ADMINISTRADOR (PRIORIDADE MÁXIMA):\n${regrasExtra}`;
+    }
+
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPromptFinal },
       ...historico.slice(-10),
       { role: 'user', content: contexto },
     ];
@@ -274,6 +279,35 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Webhook recebido (FULL):', JSON.stringify(payload));
 
+    // --- Deduplicação por message ID ---
+    const messageId = payload?.message?.id || payload?.key?.id || payload?.messageId || '';
+    if (messageId) {
+      const supabaseUrlDedup = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKeyDedup = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const sbDedup = createClient(supabaseUrlDedup, supabaseKeyDedup);
+      
+      const { data: existente } = await sbDedup
+        .from('chatbot_conversas')
+        .select('dados')
+        .eq('telefone', '__dedup_' + messageId)
+        .maybeSingle();
+      
+      if (existente) {
+        console.log(`[DEDUP] Mensagem ${messageId} já processada, ignorando.`);
+        return new Response(JSON.stringify({ success: true, ignored: true, reason: 'duplicate' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Marcar como processada (TTL gerenciado por cleanup)
+      await sbDedup.from('chatbot_conversas').upsert({
+        telefone: '__dedup_' + messageId,
+        etapa: 'dedup',
+        dados: { processed_at: new Date().toISOString() },
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'telefone' });
+    }
+
     const isFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? payload?.key?.fromMe ?? false;
     const remoteJid = payload?.message?.chatid
       || payload?.chat?.wa_chatid
@@ -392,7 +426,13 @@ serve(async (req) => {
     }
 
     let resposta = '';
+    let jaEnviou = false;
     const historico = getHistorico(dados);
+
+    // Build extra rules string for AI system prompt injection
+    const regrasTexto = regras.length > 0
+      ? regras.map(r => `- Quando o cliente mencionar "${r.gatilho}", responda: "${r.resposta}"`).join('\n')
+      : '';
 
     // Check custom rules BEFORE the main flow
     const regraMatch = checkRegras(regras, texto);
@@ -487,7 +527,8 @@ serve(async (req) => {
               resposta = await gerarRespostaHumana(
                 `CONTEXTO: Pelo telefone encontrei múltiplas pessoas. Perguntando se é ${devedor.nome}, CPF final ${cpfFinal}. Seja breve.`,
                 historico,
-                fallbackConfirma
+                fallbackConfirma,
+                regrasTexto
               );
 
               dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: devedor.nome };
@@ -718,7 +759,7 @@ serve(async (req) => {
           const fallback = `Desculpe, não entendi. Você é *${dados.nome_candidato}*? Responda *sim* ou *não*.`;
           resposta = await gerarRespostaHumana(
             `CONTEXTO: Perguntei se o cliente é ${dados.nome_candidato} mas a resposta "${texto}" não ficou clara. Pergunte novamente de forma gentil se é ele(a) mesmo(a).`,
-            historico, fallback
+            historico, fallback, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -754,6 +795,7 @@ serve(async (req) => {
           }, { onConflict: 'telefone' });
 
           await sendMessage(serverUrl, instanceToken, telefone, resposta);
+          jaEnviou = true;
 
           // Trigger robot
           try {
@@ -763,13 +805,13 @@ serve(async (req) => {
               const fallbackSucesso = `Boleto gerado! Acesse: ${result.resultado.boleto_url}\nValor: ${formatCurrency(valorFinal)}\nApós o pagamento, sua situação será regularizada. Dúvidas: (62) 98218-3144`;
               resposta = await gerarRespostaHumana(
                 `CONTEXTO: Boleto gerado com SUCESSO para ${dados.nome}! Link do boleto: ${result.resultado.boleto_url}. Valor: ${formatCurrency(valorFinal)} à vista. Informe o link, parabenize pela decisão, diga que após pagamento a situação será regularizada. Ofereça (62) 98218-3144 para dúvidas. Diga que pode digitar "menu" para nova consulta.`,
-                historico, fallbackSucesso
+                historico, fallbackSucesso, regrasTexto
               );
             } else {
               const fallbackErro = `Não consegui gerar o boleto automaticamente. Por favor, ligue para (62) 98218-3144 — seu acordo de ${formatCurrency(valorFinal)} à vista já está pré-aprovado!`;
               resposta = await gerarRespostaHumana(
                 `CONTEXTO: Não foi possível gerar o boleto automaticamente para ${dados.nome}. Valor: ${formatCurrency(valorFinal)} à vista. Oriente o cliente a ligar para (62) 98218-3144 para finalizar. Tranquilize que o acordo já está pré-aprovado. Diga que pode digitar "menu" para nova consulta.`,
-                historico, fallbackErro
+                historico, fallbackErro, regrasTexto
               );
             }
           } catch (err) {
@@ -808,7 +850,7 @@ serve(async (req) => {
 - Opção 1 - À vista: ${formatCurrency(dados.valor_avista)}
 - Opção 2 - Parcelado: ${formatCurrency(dados.valor_parcelado)} em até ${dados.max_parcelas}x
 Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar "menu" para reiniciar.`,
-            historico, fallbackDuvida
+            historico, fallbackDuvida, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -828,7 +870,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
           const fallbackInvalido = `Número de parcelas inválido. Escolha entre 2 e ${maxParcelas}x (parcela mínima R$ 90,00).`;
           resposta = await gerarRespostaHumana(
             `CONTEXTO: O cliente respondeu "${texto}" mas não é um número válido de parcelas. Aceito entre 2 e ${maxParcelas}. Valor total: ${formatCurrency(valorParcelado)}. Parcela mínima R$ 90,00. Oriente gentilmente.`,
-            historico, fallbackInvalido
+            historico, fallbackInvalido, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -844,7 +886,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
           const fallbackMin = `Com ${numParcelas}x a parcela ficaria ${formatCurrency(valorParcela)}, abaixo do mínimo. O máximo é ${maxPossivel}x de ${formatCurrency(valorParcelado / maxPossivel)}.`;
           resposta = await gerarRespostaHumana(
             `CONTEXTO: O cliente pediu ${numParcelas}x mas a parcela ficaria ${formatCurrency(valorParcela)}, abaixo do mínimo de R$ 90,00. O máximo possível é ${maxPossivel}x de ${formatCurrency(valorParcelado / maxPossivel)}. Explique de forma gentil e sugira o máximo.`,
-            historico, fallbackMin
+            historico, fallbackMin, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -860,7 +902,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallbackConfirma = `Perfeito! Acordo em ${numParcelas}x de ${formatCurrency(valorParcela)}. Estou gerando seu boleto, aguarde...`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: O cliente ${dados.nome} confirmou ${numParcelas}x de ${formatCurrency(valorParcela)} (total ${formatCurrency(valorFinal)}). Confirme com entusiasmo e diga que está preparando o boleto. Peça para aguardar.`,
-          historico, fallbackConfirma
+          historico, fallbackConfirma, regrasTexto
         );
 
         dados = { ...dados, parcelas: numParcelas, valor_final: valorFinal, valor_parcela: valorParcela };
@@ -871,6 +913,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         }, { onConflict: 'telefone' });
 
         await sendMessage(serverUrl, instanceToken, telefone, resposta);
+        jaEnviou = true;
 
         try {
           const result = await triggerCobMaisRobot(supabase, cpf, valorFinal, 'parcelado', numParcelas);
@@ -879,13 +922,13 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
             const fallbackBoleto = `Acordo gerado! Boleto da 1ª parcela: ${result.resultado.boleto_url}\n${numParcelas}x de ${formatCurrency(valorParcela)}. Próximos boletos serão enviados mensalmente. Dúvidas: (62) 98218-3144`;
             resposta = await gerarRespostaHumana(
               `CONTEXTO: Boleto da 1ª parcela gerado com sucesso para ${dados.nome}! Link: ${result.resultado.boleto_url}. Acordo: ${numParcelas}x de ${formatCurrency(valorParcela)}, total ${formatCurrency(valorFinal)}. Informe o link, diga que os próximos boletos virão mensalmente. Parabenize e ofereça (62) 98218-3144. Diga que pode digitar "menu" para nova consulta.`,
-              historico, fallbackBoleto
+              historico, fallbackBoleto, regrasTexto
             );
           } else {
             const fallbackErro = `Não consegui gerar o boleto automaticamente. Ligue para (62) 98218-3144 — seu acordo de ${numParcelas}x de ${formatCurrency(valorParcela)} já está pré-aprovado!`;
             resposta = await gerarRespostaHumana(
               `CONTEXTO: Não foi possível gerar o boleto automaticamente para ${dados.nome}. Acordo: ${numParcelas}x de ${formatCurrency(valorParcela)}. Oriente a ligar para (62) 98218-3144. O acordo já está pré-aprovado. Diga que pode digitar "menu" para nova consulta.`,
-              historico, fallbackErro
+              historico, fallbackErro, regrasTexto
             );
           }
         } catch (err) {
@@ -905,7 +948,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallback = `Seu boleto ainda está sendo gerado, por favor aguarde mais um pouquinho. Se demorar muito, ligue para (62) 98218-3144.`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: O cliente mandou mensagem enquanto o boleto ainda está sendo gerado. Peça paciência gentilmente. Se já faz mais de 3 minutos, sugira ligar para (62) 98218-3144.`,
-          historico, fallback
+          historico, fallback, regrasTexto
         );
         dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
@@ -920,7 +963,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallback = `Para uma nova consulta, digite "menu". Para falar com um negociador: (62) 98218-3144.`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: O cliente já finalizou a negociação ou não tinha débitos, e está mandando uma nova mensagem ("${texto}"). Responda de forma amigável. Se quiser recomeçar, pode digitar "menu". Para falar com humano: (62) 98218-3144.`,
-          historico, fallback
+          historico, fallback, regrasTexto
         );
         dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
@@ -934,7 +977,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallback = `Olá! Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, me informe seu CPF.`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: Nova conversa ou estado desconhecido. Cumprimente e peça o CPF para consulta.`,
-          historico, fallback
+          historico, fallback, regrasTexto
         );
         dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
@@ -944,14 +987,16 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
       }
     }
 
-    // Send response
-    if (resposta) {
+    // Send response (only if not already sent by avista/parcelado branches)
+    if (resposta && !jaEnviou) {
       const delayMs = (Math.floor(Math.random() * 16) + 15) * 1000; // 15-30 seg
       console.log(`Simulando digitação por ${delayMs / 1000}s antes de responder ${telefone}...`);
       await simulateTyping(serverUrl, instanceToken, telefone, delayMs);
       console.log(`Enviando resposta para ${telefone}...`);
       await sendMessage(serverUrl, instanceToken, telefone, resposta);
       console.log('Resposta enviada com sucesso!');
+    } else if (jaEnviou) {
+      console.log('Resposta já foi enviada pelo branch específico, pulando envio final.');
     }
 
     return new Response(JSON.stringify({ success: true }), {
