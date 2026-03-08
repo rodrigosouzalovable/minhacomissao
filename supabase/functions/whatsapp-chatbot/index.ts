@@ -249,6 +249,9 @@ serve(async (req) => {
           }
         }
 
+        const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
+        const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
         if (devedoresEncontrados.length > 0) {
           const devedor = devedoresEncontrados[0];
           const cpf = devedor.cpf.replace(/\D/g, '');
@@ -261,9 +264,6 @@ serve(async (req) => {
           if (maxParcelas > 24) maxParcelas = 24;
           if (maxParcelas < 2) maxParcelas = 2;
           const credorNome = getCredorNome(devedor.credor || '');
-
-          const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
-          const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
           await supabaseFm.from('chatbot_conversas').upsert({
             telefone: destinoTelefone,
@@ -279,6 +279,31 @@ serve(async (req) => {
           }, { onConflict: 'telefone' });
 
           console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (CPF: ${cpf})`);
+        } else {
+          // Devedor NOT in database (e.g. from spreadsheet import)
+          // Still reset to proposta_enviada — check if pre-hydration data exists
+          const { data: existingConv } = await supabaseFm
+            .from('chatbot_conversas')
+            .select('dados')
+            .eq('telefone', destinoTelefone)
+            .maybeSingle();
+
+          const existingDados = existingConv?.dados || {};
+          // Preserve pre-hydrated values if they exist, otherwise leave empty for fallback
+          const newDados = {
+            ...existingDados,
+            mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
+          };
+
+          await supabaseFm.from('chatbot_conversas').upsert({
+            telefone: destinoTelefone,
+            etapa: 'proposta_enviada',
+            dados: newDados,
+            server_url: serverUrlFm, instance_token: instanceTokenFm,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+
+          console.log(`[fromMe] Proposta detectada para ${destinoTelefone} (devedor não no banco) - estado resetado para proposta_enviada`);
         }
       }
 
