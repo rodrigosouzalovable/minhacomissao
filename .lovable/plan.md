@@ -1,31 +1,35 @@
 
 
-## Diagnóstico
+# Corrigir auto-identificação do chatbot por telefone
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problemas identificados
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+1. **Busca de telefone incompleta**: O chatbot busca apenas na coluna `devedores.telefone`, mas os telefones também podem estar na tabela `devedor_telefones` (telefones adicionais cadastrados). Se o telefone importado foi convertido para `devedor_telefones`, o campo original fica vazio.
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+2. **Confirmação desnecessária**: Quando o cliente responde "Sim" a uma mensagem do Acionamento que já mencionou o nome dele (ex: "Olá JOSE CARLOS... com 50% de desconto?"), o chatbot não precisa perguntar "Estou falando com Jose Carlos?". Deve ir **direto para a proposta**.
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+3. **Estado antigo da conversa**: Se já existia um registro em `chatbot_conversas` para aquele telefone (de uma interação anterior), o "Sim" pode cair em um estado antigo em vez de `novo`. O texto "sim" não está na lista de resets (greetings/menu).
 
-## Correção
+## Mudanças em `supabase/functions/whatsapp-chatbot/index.ts`
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+### 1. Adicionar "sim" como trigger de reset para estado `novo`
+Na linha 331, incluir "sim" na lista de palavras que resetam a conversa se ela não estiver em negociação ativa, para que clientes que respondem "Sim" ao Acionamento iniciem um fluxo novo.
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+### 2. Expandir busca de telefone para incluir `devedor_telefones`
+No case `novo`, após buscar em `devedores.telefone`, buscar também em `devedor_telefones.numero` (filtrando `ativo = true`) e usar o `devedor_cpf` para cruzar com `devedores`.
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
+### 3. Ir direto para a proposta (sem confirmar identidade)
+Quando o cliente é encontrado pelo telefone no fluxo `novo`, em vez de perguntar "É você?", o chatbot:
+- Consulta os débitos via `consultar_debitos_por_cpf`
+- Apresenta a proposta diretamente com os valores reais (50% à vista, 30% parcelado)
+- Pula a etapa `aguardando_confirmacao_identidade`
+- Vai direto para `proposta_enviada`
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+A etapa `aguardando_confirmacao_identidade` permanece no código como fallback para casos manuais, mas não será mais usada no fluxo automático do Acionamento.
+
+### 4. Manter etapa de confirmação como fallback
+Se houver múltiplos devedores com o mesmo telefone, o chatbot ainda perguntará qual é, garantindo segurança.
+
+## Resultado esperado
+Cliente recebe "Olá JOSE CARLOS... 50% de desconto?" → responde "Sim" → chatbot responde direto: "Consigo liberar à vista por R$ 714,79 ou parcelar em 5x de R$ 200,14. Como fica melhor?"
 
