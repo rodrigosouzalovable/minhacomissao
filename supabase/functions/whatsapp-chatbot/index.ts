@@ -167,7 +167,6 @@ async function triggerCobMaisRobot(supabase: any, cpf: string, valorFinal: numbe
 function addToHistorico(dados: any, role: string, content: string): any {
   const historico = dados?.mensagens_historico || [];
   historico.push({ role, content, ts: new Date().toISOString() });
-  // Keep last 20 messages
   const trimmed = historico.slice(-20);
   return { ...dados, mensagens_historico: trimmed };
 }
@@ -177,6 +176,36 @@ function getHistorico(dados: any): Array<{role: string, content: string}> {
     role: m.role === 'cliente' ? 'user' : 'assistant',
     content: m.content,
   }));
+}
+
+// Template system: fetch from DB and replace variables
+async function fetchTemplates(supabase: any): Promise<Record<string, string>> {
+  try {
+    const { data } = await supabase
+      .from('chatbot_templates')
+      .select('etapa, template')
+      .eq('ativo', true);
+    const map: Record<string, string> = {};
+    if (data) {
+      for (const t of data) {
+        map[t.etapa] = t.template;
+      }
+    }
+    return map;
+  } catch (err) {
+    console.error('[Templates] Erro ao buscar templates:', err);
+    return {};
+  }
+}
+
+function applyTemplate(templates: Record<string, string>, etapa: string, vars: Record<string, string>, fallback: string): string {
+  const tpl = templates[etapa];
+  if (!tpl) return fallback;
+  let result = tpl;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return result;
 }
 
 // Tool-calling to interpret user intent
