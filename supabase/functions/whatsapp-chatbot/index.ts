@@ -759,7 +759,7 @@ serve(async (req) => {
           const fallback = `Desculpe, não entendi. Você é *${dados.nome_candidato}*? Responda *sim* ou *não*.`;
           resposta = await gerarRespostaHumana(
             `CONTEXTO: Perguntei se o cliente é ${dados.nome_candidato} mas a resposta "${texto}" não ficou clara. Pergunte novamente de forma gentil se é ele(a) mesmo(a).`,
-            historico, fallback
+            historico, fallback, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
