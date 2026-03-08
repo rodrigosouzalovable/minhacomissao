@@ -179,6 +179,12 @@ export default function Acionamento() {
 
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
+  
+  // Conversation tracking state
+  const [conversasMap, setConversasMap] = useState<Record<string, ConversaInfo>>({});
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [selectedConversa, setSelectedConversa] = useState<{ etapa: string; historico: Array<{ role: string; content: string; ts?: string }>; telefone: string; clienteNome: string } | null>(null);
+  
   const activeHistoricoIdRef = useRef<string | null>(null);
   const { autoSending, autoProgress, sendStatus: contextSendStatus, sendTimestamps: contextSendTimestamps, startAutoSend, stopAutoSend } = useAutoSend();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
