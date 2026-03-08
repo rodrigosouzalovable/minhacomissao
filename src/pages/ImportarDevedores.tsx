@@ -265,7 +265,7 @@ export default function ImportarDevedores() {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           const dataRows = json.slice(1);
-          parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
+          parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : credorSelecionado === 'pesquisa' ? parsePesquisa(dataRows) : parsePadrao(dataRows);
         }
         setRows(parsed);
         if (parsed.length === 0) {
