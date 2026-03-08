@@ -366,8 +366,10 @@ export type Database = {
           etapa: string
           id: string
           instance_token: string | null
+          mensagens_pendentes: string[] | null
           server_url: string | null
           telefone: string
+          ultimo_webhook_em: string | null
         }
         Insert: {
           atualizado_em?: string
@@ -376,8 +378,10 @@ export type Database = {
           etapa?: string
           id?: string
           instance_token?: string | null
+          mensagens_pendentes?: string[] | null
           server_url?: string | null
           telefone: string
+          ultimo_webhook_em?: string | null
         }
         Update: {
           atualizado_em?: string
@@ -386,8 +390,10 @@ export type Database = {
           etapa?: string
           id?: string
           instance_token?: string | null
+          mensagens_pendentes?: string[] | null
           server_url?: string | null
           telefone?: string
+          ultimo_webhook_em?: string | null
         }
         Relationships: []
       }
@@ -1386,6 +1392,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      chatbot_append_buffer: {
+        Args: { p_telefone: string; p_texto: string; p_timestamp: string }
+        Returns: undefined
+      }
       consultar_acordo_ativo_por_cpf: {
         Args: { p_cpf: string }
         Returns: {
