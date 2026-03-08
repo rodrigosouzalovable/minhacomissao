@@ -74,7 +74,6 @@ async function notificarAdmin(serverUrl: string, instanceToken: string, telefone
     console.error('[ADMIN] Falha ao notificar admin:', e);
   }
 }
-}
 
 // AI only for INTENT interpretation — never for composing responses
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
