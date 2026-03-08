@@ -302,9 +302,6 @@ serve(async (req) => {
 
     // Fetch all active templates from DB
     const templates = await fetchTemplates(supabase);
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
