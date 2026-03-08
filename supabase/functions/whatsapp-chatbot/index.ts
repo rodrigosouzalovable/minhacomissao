@@ -805,8 +805,9 @@ serve(async (req) => {
             break;
           }
 
-          resposta = `Não consegui entender a data. Por favor, informe o dia para pagamento (ex: "dia 15", "segunda", "amanhã").`;
-          await salvarEResponder('aguardando_data');
+          // AI não entendeu a data — notificar admin e silenciar
+          console.log(`[SILÊNCIO] aguardando_data: data não identificada: "${texto}"`);
+          await salvarSilenciosoENotificar('aguardando_data', texto);
           break;
         }
 
