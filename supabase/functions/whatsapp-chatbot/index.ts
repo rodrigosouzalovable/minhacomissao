@@ -779,8 +779,9 @@ serve(async (req) => {
             break;
           }
 
-          resposta = `Desculpe, não entendi. Você consegue fazer o pagamento *hoje*? Responda *sim* ou *não*.`;
-          await salvarEResponder('aguardando_pagamento_hoje');
+          // AI não entendeu — notificar admin e silenciar
+          console.log(`[SILÊNCIO] aguardando_pagamento_hoje: resposta ambígua: "${texto}"`);
+          await salvarSilenciosoENotificar('aguardando_pagamento_hoje', texto);
           break;
         }
       }
