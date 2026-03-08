@@ -491,6 +491,47 @@ serve(async (req) => {
 
     console.log(`Mensagem de ${telefone}: "${texto}"`);
 
+    // --- DEBOUNCE: buffer de mensagens para evitar respostas duplicadas ---
+    const debounceTimestamp = new Date().toISOString();
+
+    // Append mensagem ao buffer e registrar timestamp
+    await supabase.rpc('chatbot_append_buffer', {
+      p_telefone: telefone,
+      p_texto: texto,
+      p_timestamp: debounceTimestamp,
+    });
+
+    // Esperar 4 segundos para mensagens seguidas chegarem
+    await new Promise(r => setTimeout(r, 4000));
+
+    // Re-ler conversa para verificar se somos o webhook mais recente
+    const { data: convDebounce } = await supabase
+      .from('chatbot_conversas')
+      .select('ultimo_webhook_em, mensagens_pendentes')
+      .eq('telefone', telefone)
+      .maybeSingle();
+
+    if (convDebounce?.ultimo_webhook_em && convDebounce.ultimo_webhook_em > debounceTimestamp) {
+      console.log(`[DEBOUNCE] Webhook mais recente detectado para ${telefone}, abortando este.`);
+      return new Response(JSON.stringify({ success: true, deferred: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Somos o mais recente — pegar todas as mensagens pendentes e limpar buffer
+    const mensagensPendentes = convDebounce?.mensagens_pendentes || [texto];
+    if (mensagensPendentes.length > 1) {
+      console.log(`[DEBOUNCE] Combinando ${mensagensPendentes.length} mensagens de ${telefone}: ${JSON.stringify(mensagensPendentes)}`);
+      texto = mensagensPendentes.join('\n');
+    }
+    // Limpar buffer atomicamente
+    await supabase
+      .from('chatbot_conversas')
+      .update({ mensagens_pendentes: [], ultimo_webhook_em: null })
+      .eq('telefone', telefone);
+
+    // --- FIM DEBOUNCE ---
+
     // Chatbot ativo?
     const { data: chatbotConfig } = await supabase.from('chatbot_config').select('ativo').limit(1).single();
     if (!chatbotConfig?.ativo) {
