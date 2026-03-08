@@ -1,37 +1,31 @@
 
 
-# Auto-identificação do cliente por telefone no chatbot
+## Diagnóstico
 
-## Objetivo
-Quando o cliente responder a uma mensagem do Acionamento, o chatbot identifica automaticamente quem é pelo número de telefone (cruzando com a tabela `devedores`), confirma a identidade e já apresenta a proposta -- sem pedir CPF.
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-## Fluxo proposto
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-```text
-Cliente responde "Sim" →
-  Chatbot detecta conversa nova →
-    Busca telefone na tabela devedores →
-      ENCONTROU: "Estou falando com {nome}, CPF {cpf}?" →
-        Cliente confirma → Apresenta proposta (50% à vista / 30% parcelado)
-        Cliente nega → Pede CPF normalmente
-      NÃO ENCONTROU: Fluxo atual (pede CPF)
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+
+## Correção
+
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-## Mudanças em `supabase/functions/whatsapp-chatbot/index.ts`
-
-1. **Nova etapa `aguardando_confirmacao_identidade`**: Após encontrar o devedor pelo telefone, o chatbot pergunta "Estou falando com {nome}?" e aguarda confirmação.
-
-2. **Lookup por telefone no case `novo`**: Antes de pedir CPF, consultar `devedores` onde `telefone` contém os últimos 10-11 dígitos do número. Se encontrar resultado(s):
-   - Salvar CPF e nome nos `dados` da conversa
-   - IA gera mensagem confirmando identidade: "Olá! Estou falando com *{nome}*, CPF final *{últimos 3 dígitos}*?"
-   - Mudar etapa para `aguardando_confirmacao_identidade`
-
-3. **Novo case `aguardando_confirmacao_identidade`**: 
-   - Se cliente confirma (sim/isso/correto) → pula direto para consulta de débitos e proposta (reutiliza lógica existente)
-   - Se cliente nega → reseta para `aguardando_cpf` e pede CPF normalmente
-
-4. **Busca flexível de telefone**: O número no WhatsApp vem como `5562XXXXXXXX`. Na planilha pode estar como `62XXXXXXXX` ou `(62) XXXXX-XXXX`. A busca usará os últimos 10-11 dígitos limpos para matching.
-
-## Sem mudanças no banco de dados
-A tabela `devedores` já tem a coluna `telefone`. A busca será feita via query simples com `ilike` nos últimos dígitos.
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
