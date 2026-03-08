@@ -799,6 +799,7 @@ serve(async (req) => {
             if (dias <= 7 && dias >= 0) {
               resposta = `OK, irei te enviar o boleto para essa data!`;
               await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(dataInformada) });
+              await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(dataInformada) });
             } else {
               resposta = `Infelizmente o prazo máximo para pagamento é de 7 dias. Poderia escolher uma data dentro desse período?`;
               await salvarEResponder('aguardando_data');
