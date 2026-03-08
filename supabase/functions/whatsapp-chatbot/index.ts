@@ -850,7 +850,7 @@ serve(async (req) => {
 - Opção 1 - À vista: ${formatCurrency(dados.valor_avista)}
 - Opção 2 - Parcelado: ${formatCurrency(dados.valor_parcelado)} em até ${dados.max_parcelas}x
 Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar "menu" para reiniciar.`,
-            historico, fallbackDuvida
+            historico, fallbackDuvida, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
