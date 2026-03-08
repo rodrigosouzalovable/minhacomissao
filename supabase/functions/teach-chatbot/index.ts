@@ -67,7 +67,7 @@ serve(async (req) => {
     // Messages may contain multimodal content (text + image_url)
     // Pass them through as-is since the gateway supports vision
     const aiMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: buildSystemPrompt() },
       ...messages.map((m: any) => ({
         role: m.role,
         content: m.content, // can be string or array of {type, text/image_url}
