@@ -765,6 +765,16 @@ serve(async (req) => {
         server_url: serverUrl, instance_token: instanceToken,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: 'telefone' });
+
+      // Save admin_pending record so admin can reply via WhatsApp
+      const pendingKey = `admin_pending_${instanceToken}`;
+      await supabase.from('chatbot_conversas').upsert({
+        telefone: pendingKey,
+        etapa: 'admin_pending',
+        dados: { cliente_telefone: telefone, instance_token: instanceToken, server_url: serverUrl, contexto: dados },
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'telefone' });
+
       await notificarAdmin(serverUrl!, instanceToken!, telefone, telefoneInstancia, textoCliente);
     }
 
