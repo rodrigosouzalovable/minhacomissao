@@ -977,7 +977,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
         const fallback = `Olá! Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, me informe seu CPF.`;
         resposta = await gerarRespostaHumana(
           `CONTEXTO: Nova conversa ou estado desconhecido. Cumprimente e peça o CPF para consulta.`,
-          historico, fallback
+          historico, fallback, regrasTexto
         );
         dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
