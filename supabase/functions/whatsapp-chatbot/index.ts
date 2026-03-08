@@ -549,7 +549,8 @@ serve(async (req) => {
           credorNomeCpf = credorSlugCpf.replace(/_/g, ' ');
         }
 
-        resposta = `Perfeito, ${primeiroNomeCpfCap}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNomeCpf}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+        const fallbackPropCpf = `Perfeito, ${primeiroNomeCpfCap}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNomeCpf}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+        resposta = applyTemplate(templates, 'proposta', { primeiro_nome: primeiroNomeCpfCap, valor_avista: formatCurrency(valorAvista), valor_parcela: formatCurrency(valorParcelaMin), max_parcelas: String(maxParcelas), credor: credorNomeCpf, valor_parcelado: formatCurrency(valorParcelado), telefone_contato: '(62) 98218-3144' }, fallbackPropCpf);
 
         dados = { 
           ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
