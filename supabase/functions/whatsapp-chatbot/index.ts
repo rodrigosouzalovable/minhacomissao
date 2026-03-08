@@ -811,7 +811,7 @@ serve(async (req) => {
               const fallbackErro = `Não consegui gerar o boleto automaticamente. Por favor, ligue para (62) 98218-3144 — seu acordo de ${formatCurrency(valorFinal)} à vista já está pré-aprovado!`;
               resposta = await gerarRespostaHumana(
                 `CONTEXTO: Não foi possível gerar o boleto automaticamente para ${dados.nome}. Valor: ${formatCurrency(valorFinal)} à vista. Oriente o cliente a ligar para (62) 98218-3144 para finalizar. Tranquilize que o acordo já está pré-aprovado. Diga que pode digitar "menu" para nova consulta.`,
-                historico, fallbackErro
+                historico, fallbackErro, regrasTexto
               );
             }
           } catch (err) {
