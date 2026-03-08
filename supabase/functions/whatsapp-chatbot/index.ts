@@ -13,6 +13,26 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
+function gerarListaParcelamento(valorParcelado: number): string {
+  const linhas: string[] = [];
+  for (let i = 2; i <= 24; i++) {
+    const valorParcela = valorParcelado / i;
+    if (valorParcela < VALOR_MINIMO_PARCELA) break;
+    linhas.push(`${i}x de *${formatCurrency(Math.ceil(valorParcela * 100) / 100)}*`);
+  }
+  return linhas.join('\n');
+}
+
+function gerarMensagemProposta(valorAvista: number, valorParcelado: number): string {
+  const listaParcelamento = gerarListaParcelamento(valorParcelado);
+  let msg = `Que ótimo! 🎉\n\nEstamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}* à vista.`;
+  if (listaParcelamento) {
+    msg += `\n\nOu podemos parcelar para você da seguinte forma:\n\n${listaParcelamento}`;
+  }
+  msg += `\n\nComo prefere pagar? Responda com o número de parcelas desejado (ex: *3x*) ou *à vista*.`;
+  return msg;
+}
+
 function extractCpf(text: string): string | null {
   const cleaned = text.replace(/\D/g, '');
   if (cleaned.length === 11) return cleaned;
@@ -996,13 +1016,7 @@ serve(async (req) => {
             }
           }
 
-          const valorParcelaMin = valorParcelado / maxParcelas;
-
-          const dadosOferta = { ...dados, valor_parcela_calc: valorParcelaMin };
-          const tmplEscolhaParcelado = templateMap.get('escolha_parcelado');
-          resposta = tmplEscolhaParcelado
-            ? aplicarVariaveisTemplate(tmplEscolhaParcelado, dadosOferta)
-            : `Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}*. Ou podemos parcelar para você em *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+          resposta = gerarMensagemProposta(valorAvista, valorParcelado);
 
           await salvarEResponder('oferta_valores');
           break;
@@ -1078,9 +1092,10 @@ serve(async (req) => {
           break;
 
         } else if (escolha === 'parcelado') {
+          const listaParc = gerarListaParcelamento(vpOfertas);
+          resposta = `Ótimo! Aqui estão as opções de parcelamento:\n\n${listaParc}\n\nEm quantas vezes deseja pagar? Responda com o número (ex: *3x*).`;
           dados = { ...dados, tipo_pagamento: 'parcelado', valor_final: vpOfertas };
-          resposta = `Você consegue fazer o pagamento hoje?`;
-          await salvarEResponder('aguardando_pagamento_hoje');
+          await salvarEResponder('oferta_valores');
           break;
 
         } else {
@@ -1089,9 +1104,14 @@ serve(async (req) => {
           const isInteresseOferta = /(como fica|qual.?valor|quanto|me fala|explica|fala mais|me interessa|tenho interesse|quero saber|quero ver|como funciona|como que|qual proposta)/i.test(textoLower);
 
           if (isSaudacaoOferta || isInteresseOferta) {
-            // Re-send the offer
-            const valorParcelaMin = vpOfertas / mpOfertas;
-            resposta = `Olá! 😊 Temos uma ótima oportunidade: quitação à vista por *${formatCurrency(vaOfertas)}* ou parcelado em *${mpOfertas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+            // Re-send the offer with full list
+            const listaParc = gerarListaParcelamento(vpOfertas);
+            let msgReenvio = `Olá! 😊 Temos uma ótima oportunidade: quitação à vista por *${formatCurrency(vaOfertas)}*.`;
+            if (listaParc) {
+              msgReenvio += `\n\nOu podemos parcelar:\n\n${listaParc}`;
+            }
+            msgReenvio += `\n\nComo prefere pagar? Responda com o número de parcelas (ex: *3x*) ou *à vista*.`;
+            resposta = msgReenvio;
             await salvarEResponder('oferta_valores');
             break;
           }
