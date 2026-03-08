@@ -554,8 +554,34 @@ serve(async (req) => {
 
     let resposta = '';
 
-    // Extract instance phone number from payload
-    const telefoneInstancia = (payload?.phone || payload?.instance?.wuid || payload?.wuid || '').replace(/\D/g, '') || 'desconhecido';
+    // Extract instance phone number from payload or database
+    let telefoneInstancia = (payload?.phone || payload?.instance?.wuid || payload?.wuid || payload?.instanceId || '').replace(/\D/g, '') || '';
+    
+    // Fallback: buscar número da instância no banco usando o token
+    if (!telefoneInstancia && instanceToken) {
+      try {
+        const { data: instData } = await supabase
+          .from('user_whatsapp_instances')
+          .select('nome')
+          .eq('instance_token', instanceToken)
+          .eq('ativo', true)
+          .limit(1)
+          .single();
+        if (instData?.nome) {
+          telefoneInstancia = instData.nome.replace(/\D/g, '') || '';
+        }
+      } catch (e) {
+        console.log('[INSTANCE] Falha ao buscar número da instância no banco:', e);
+      }
+    }
+    
+    // Fallback: extrair do server_url se possível
+    if (!telefoneInstancia && serverUrl) {
+      const match = serverUrl.match(/(\d{10,13})/);
+      if (match) telefoneInstancia = match[1];
+    }
+    
+    if (!telefoneInstancia) telefoneInstancia = 'desconhecido';
 
     // Helper to save state and respond
     async function salvarEResponder(novaEtapa: string, dadosExtra?: any) {
