@@ -391,6 +391,33 @@ export type Database = {
         }
         Relationships: []
       }
+      chatbot_templates: {
+        Row: {
+          ativo: boolean | null
+          atualizado_em: string | null
+          descricao: string
+          etapa: string
+          id: string
+          template: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          atualizado_em?: string | null
+          descricao: string
+          etapa: string
+          id?: string
+          template: string
+        }
+        Update: {
+          ativo?: boolean | null
+          atualizado_em?: string | null
+          descricao?: string
+          etapa?: string
+          id?: string
+          template?: string
+        }
+        Relationships: []
+      }
       cobmais_conhecimento: {
         Row: {
           acao: string
