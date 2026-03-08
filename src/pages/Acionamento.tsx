@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy } from 'lucide-react';
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
 import { Progress } from '@/components/ui/progress';
@@ -1368,6 +1368,49 @@ export default function Acionamento() {
                     );
                   })}
                 </div>
+
+              {isAdmin && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <h3 className="text-base font-semibold">🔗 Webhook do Chatbot IA</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Configure este webhook em cada instância UAZAPI para que a IA responda automaticamente.
+                    </p>
+                    <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                      <Label className="text-xs text-muted-foreground">URL do Webhook</Label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs bg-background rounded px-2 py-1.5 border break-all select-all">
+                          {`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/whatsapp-chatbot`}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/whatsapp-chatbot`);
+                            toast.success('URL copiada!');
+                          }}
+                          title="Copiar URL"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="rounded-md border p-3 space-y-2">
+                      <p className="text-sm font-semibold">Passo a passo:</p>
+                      <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+                        <li>Acesse o painel da UAZAPI da instância desejada</li>
+                        <li>Vá em <strong>Configurações</strong> → <strong>Webhook</strong></li>
+                        <li>Cole a URL acima no campo de webhook</li>
+                        <li>Ative o evento <strong>onMessage</strong> (mensagens recebidas)</li>
+                        <li>Salve as configurações</li>
+                        <li>Repita para cada instância que deseja usar com a IA</li>
+                      </ol>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Separator />
 
