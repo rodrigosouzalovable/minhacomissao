@@ -395,7 +395,35 @@ serve(async (req) => {
     }
 
     const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    const texto = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+    let texto = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+
+    // Se não tem texto, verificar se é áudio e transcrever
+    if (!texto) {
+      const audioUrl = payload?.message?.mediaUrl 
+        || payload?.message?.audioMessage?.url 
+        || payload?.message?.audio?.url
+        || payload?.mediaUrl
+        || payload?.message?.audioMessage?.mediaUrl;
+
+      if (audioUrl) {
+        console.log(`Áudio detectado de ${telefone}, URL: ${audioUrl}`);
+        try {
+          texto = await transcreverAudio(audioUrl, serverUrlGlobal, instanceTokenGlobal, telefone);
+          console.log(`Transcrição do áudio de ${telefone}: "${texto}"`);
+        } catch (err) {
+          console.error(`Erro ao transcrever áudio de ${telefone}:`, err);
+          // Responder pedindo texto
+          const sUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
+          const iTok = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+          if (sUrl && iTok) {
+            await sendMessage(sUrl, iTok, telefone, 'Desculpe, não consegui ouvir seu áudio. Pode digitar sua resposta, por favor?');
+          }
+          return new Response(JSON.stringify({ success: true, audio_error: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    }
 
     if (!telefone || !texto) {
       return new Response(JSON.stringify({ success: true, ignored: true }), {
