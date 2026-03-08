@@ -279,6 +279,35 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Webhook recebido (FULL):', JSON.stringify(payload));
 
+    // --- Deduplicação por message ID ---
+    const messageId = payload?.message?.id || payload?.key?.id || payload?.messageId || '';
+    if (messageId) {
+      const supabaseUrlDedup = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKeyDedup = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const sbDedup = createClient(supabaseUrlDedup, supabaseKeyDedup);
+      
+      const { data: existente } = await sbDedup
+        .from('chatbot_conversas')
+        .select('dados')
+        .eq('telefone', '__dedup_' + messageId)
+        .maybeSingle();
+      
+      if (existente) {
+        console.log(`[DEDUP] Mensagem ${messageId} já processada, ignorando.`);
+        return new Response(JSON.stringify({ success: true, ignored: true, reason: 'duplicate' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Marcar como processada (TTL gerenciado por cleanup)
+      await sbDedup.from('chatbot_conversas').upsert({
+        telefone: '__dedup_' + messageId,
+        etapa: 'dedup',
+        dados: { processed_at: new Date().toISOString() },
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'telefone' });
+    }
+
     const isFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? payload?.key?.fromMe ?? false;
     const remoteJid = payload?.message?.chatid
       || payload?.chat?.wa_chatid
