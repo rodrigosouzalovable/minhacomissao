@@ -319,6 +319,42 @@ serve(async (req) => {
       case 'novo':
       case 'aguardando_cpf': {
         if (etapaAtual === 'novo') {
+          // Try to identify client by phone number first
+          const phoneSuffix = telefone.slice(-10); // last 10 digits
+          const phoneSuffix11 = telefone.slice(-11); // last 11 digits
+          
+          const { data: devedoresPorTelefone } = await supabase
+            .from('devedores')
+            .select('nome, cpf, telefone, valor_atualizado')
+            .eq('ativo', true)
+            .or(`telefone.ilike.%${phoneSuffix},telefone.ilike.%${phoneSuffix11}`);
+
+          if (devedoresPorTelefone && devedoresPorTelefone.length > 0) {
+            const devedor = devedoresPorTelefone[0];
+            const cpfLimpo = devedor.cpf.replace(/\D/g, '');
+            const cpfFinal = cpfLimpo.slice(-3);
+            
+            console.log(`[AUTO-ID] Devedor encontrado pelo telefone: ${devedor.nome}, CPF final: ${cpfFinal}`);
+
+            const fallbackConfirma = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Estou falando com *${devedor.nome}*, CPF final *${cpfFinal}*?`;
+            
+            resposta = await gerarRespostaHumana(
+              `CONTEXTO: O cliente respondeu a uma mensagem de cobrança. Pelo número de telefone, identifiquei que pode ser ${devedor.nome}, CPF final ${cpfFinal}. Cumprimente e pergunte se é ele(a) mesmo(a). Seja breve e acolhedora. NÃO peça CPF ainda, apenas confirme a identidade.`,
+              historico,
+              fallbackConfirma
+            );
+
+            dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: devedor.nome };
+            dados = addToHistorico(dados, 'assistente', resposta);
+            await supabase.from('chatbot_conversas').upsert({
+              telefone, etapa: 'aguardando_confirmacao_identidade', dados,
+              server_url: serverUrl, instance_token: instanceToken,
+              atualizado_em: new Date().toISOString(),
+            }, { onConflict: 'telefone' });
+            break;
+          }
+
+          // No match by phone — standard flow: ask for CPF
           const fallback = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, por favor me informe seu CPF.`;
           
           resposta = await gerarRespostaHumana(
@@ -445,6 +481,133 @@ INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cl
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'telefone' });
         break;
+      }
+
+      case 'aguardando_confirmacao_identidade': {
+        // Check if the client confirmed their identity
+        const confirmou = await interpretarIntencao(texto, ['sim', 'nao', 'nenhuma']);
+        const isConfirmacao = confirmou?.includes('sim') || 
+          ['sim', 'sou', 'sou eu', 'isso', 'correto', 'sou sim', 'eu mesmo', 'eu mesma', 'isso mesmo', 'exato', 'sou eu mesmo', 'sou eu mesma'].includes(textoLower);
+        const isNegacao = confirmou?.includes('nao') ||
+          ['não', 'nao', 'não sou', 'nao sou', 'errado', 'não é', 'nao e'].includes(textoLower);
+
+        if (isConfirmacao) {
+          // Confirmed! Use the candidate CPF to fetch debts directly
+          const cpf = dados.cpf_candidato;
+          console.log(`[AUTO-ID] Identidade confirmada: ${dados.nome_candidato}, CPF: ${cpf}`);
+
+          const { data: debitos, error: debitosError } = await supabase
+            .rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
+
+          if (debitosError || !debitos || debitos.length === 0) {
+            const fallback = debitos?.length === 0
+              ? `Ótima notícia, ${dados.nome_candidato}! Não encontramos pendências no seu CPF. Se acredita que há algum erro, ligue para (62) 98218-3144.`
+              : `Desculpe, tive um problema ao consultar. Tente novamente ou ligue para (62) 98218-3144.`;
+            resposta = await gerarRespostaHumana(
+              debitosError
+                ? `CONTEXTO: Erro ao consultar débitos do cliente ${dados.nome_candidato}. Peça desculpas e ofereça (62) 98218-3144.`
+                : `CONTEXTO: O cliente ${dados.nome_candidato} confirmou identidade mas NÃO tem débitos. Dê a boa notícia.`,
+              historico, fallback
+            );
+            dados = addToHistorico(dados, 'assistente', resposta);
+            await supabase.from('chatbot_conversas').upsert({
+              telefone, etapa: 'sem_debitos', dados: { ...dados, cpf },
+              atualizado_em: new Date().toISOString(),
+            }, { onConflict: 'telefone' });
+            break;
+          }
+
+          const nomeDevedor = debitos[0].nome;
+          const totalContratos = debitos.length;
+          const valorTotal = debitos.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+          const valorAvista = valorTotal * 0.5;
+          const valorParcelado = valorTotal * 0.7;
+          let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
+          if (maxParcelas > 24) maxParcelas = 24;
+          if (maxParcelas < 2) maxParcelas = 2;
+          const valorParcelaMin = valorParcelado / maxParcelas;
+
+          const { data: acordoExistente } = await supabase
+            .rpc('consultar_acordo_ativo_por_cpf', { p_cpf: cpf });
+
+          let avisoAcordo = '';
+          if (acordoExistente && acordoExistente.length > 0) {
+            const acordo = acordoExistente[0];
+            avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione isso.`;
+          }
+
+          const fallbackProposta = `${nomeDevedor}, encontrei ${totalContratos} contrato(s) totalizando ${formatCurrency(valorTotal)}.
+
+💰 *À VISTA (50% OFF)*: ${formatCurrency(valorAvista)}
+📋 *PARCELADO (30% OFF)*: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
+
+Responda *1* para à vista ou *2* para parcelar.
+📞 Fale com negociador: (62) 98218-3144`;
+
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: O cliente ${nomeDevedor} confirmou sua identidade. Apresente as opções de negociação com empatia.
+
+DADOS:
+- Nome: ${nomeDevedor}
+- CPF: ${formatCpf(cpf)}
+- Contratos: ${totalContratos}
+- Dívida total: ${formatCurrency(valorTotal)}
+
+OPÇÕES:
+- À vista 50% desconto: ${formatCurrency(valorAvista)}
+- Parcelado 30% desconto: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
+
+${avisoAcordo}
+
+INSTRUÇÕES: Agradeça a confirmação, apresente as opções com *negrito* nos valores. Ofereça (62) 98218-3144.`,
+            historico,
+            fallbackProposta
+          );
+
+          dados = {
+            ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
+            valor_avista: valorAvista, valor_parcelado: valorParcelado,
+            max_parcelas: maxParcelas, total_contratos: totalContratos,
+          };
+          dados = addToHistorico(dados, 'assistente', resposta);
+
+          await supabase.from('chatbot_conversas').upsert({
+            telefone, etapa: 'proposta_enviada', dados,
+            server_url: serverUrl, instance_token: instanceToken,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+          break;
+
+        } else if (isNegacao) {
+          // Not the right person — fall back to CPF request
+          const fallback = `Desculpe pelo engano! 😊 Me informe seu CPF para que eu possa consultar sua situação.`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: Identifiquei o cliente pelo telefone mas a pessoa disse que NÃO é ${dados.nome_candidato}. Peça desculpas pelo engano e solicite o CPF para consulta.`,
+            historico, fallback
+          );
+          dados = { mensagens_historico: dados.mensagens_historico || [] };
+          dados = addToHistorico(dados, 'assistente', resposta);
+          await supabase.from('chatbot_conversas').upsert({
+            telefone, etapa: 'aguardando_cpf', dados,
+            server_url: serverUrl, instance_token: instanceToken,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+          break;
+
+        } else {
+          // Unclear response
+          const fallback = `Desculpe, não entendi. Você é *${dados.nome_candidato}*? Responda *sim* ou *não*.`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: Perguntei se o cliente é ${dados.nome_candidato} mas a resposta "${texto}" não ficou clara. Pergunte novamente de forma gentil se é ele(a) mesmo(a).`,
+            historico, fallback
+          );
+          dados = addToHistorico(dados, 'assistente', resposta);
+          await supabase.from('chatbot_conversas').upsert({
+            telefone, etapa: 'aguardando_confirmacao_identidade', dados,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+          break;
+        }
       }
 
       case 'proposta_enviada': {
