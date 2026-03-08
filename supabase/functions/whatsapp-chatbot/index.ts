@@ -203,8 +203,86 @@ serve(async (req) => {
     const remoteJid = payload?.message?.chatid || payload?.chat?.wa_chatid || payload?.message?.sender_pn || payload?.key?.remoteJid || payload?.from || '';
     const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? remoteJid.includes('@g.us') ?? false;
 
-    if (isFromMe || isGroup) {
+    if (isGroup) {
       return new Response(JSON.stringify({ success: true, ignored: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // --- Track fromMe messages (outbound proposals) ---
+    if (isFromMe) {
+      const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim().toLowerCase();
+      const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+
+      if (destinoTelefone && (textoFromMe.includes('50% de desconto') || textoFromMe.includes('parcelas em aberto'))) {
+        console.log(`[fromMe] Proposta detectada para ${destinoTelefone}, atualizando estado...`);
+        const supabaseUrlFm = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKeyFm = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabaseFm = createClient(supabaseUrlFm, supabaseKeyFm);
+
+        const phoneSuffix = destinoTelefone.slice(-10);
+        const phoneSuffix11 = destinoTelefone.slice(-11);
+
+        // Find debtor by phone
+        let devedoresEncontrados: any[] = [];
+        const { data: devPorTel } = await supabaseFm
+          .from('devedores')
+          .select('nome, cpf, telefone, valor_atualizado, credor')
+          .eq('ativo', true)
+          .or(`telefone.ilike.%${phoneSuffix},telefone.ilike.%${phoneSuffix11}`);
+        devedoresEncontrados = devPorTel || [];
+
+        if (devedoresEncontrados.length === 0) {
+          const { data: telsAdicionais } = await supabaseFm
+            .from('devedor_telefones')
+            .select('devedor_cpf, numero')
+            .eq('ativo', true)
+            .or(`numero.ilike.%${phoneSuffix},numero.ilike.%${phoneSuffix11}`);
+          if (telsAdicionais && telsAdicionais.length > 0) {
+            const cpfsUnicos = [...new Set(telsAdicionais.map((t: any) => t.devedor_cpf))];
+            const { data: devPorCpf } = await supabaseFm
+              .from('devedores')
+              .select('nome, cpf, telefone, valor_atualizado, credor')
+              .eq('ativo', true)
+              .in('cpf', cpfsUnicos);
+            if (devPorCpf) devedoresEncontrados = devPorCpf;
+          }
+        }
+
+        if (devedoresEncontrados.length > 0) {
+          const devedor = devedoresEncontrados[0];
+          const cpf = devedor.cpf.replace(/\D/g, '');
+          const valorTotal = devedoresEncontrados
+            .filter((d: any) => d.cpf.replace(/\D/g, '') === cpf)
+            .reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+          const valorAvista = valorTotal * 0.5;
+          const valorParcelado = valorTotal * 0.7;
+          let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
+          if (maxParcelas > 24) maxParcelas = 24;
+          if (maxParcelas < 2) maxParcelas = 2;
+          const credorNome = getCredorNome(devedor.credor || '');
+
+          const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
+          const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+          await supabaseFm.from('chatbot_conversas').upsert({
+            telefone: destinoTelefone,
+            etapa: 'proposta_enviada',
+            dados: {
+              cpf, nome: devedor.nome, valor_total: valorTotal,
+              valor_avista: valorAvista, valor_parcelado: valorParcelado,
+              max_parcelas: maxParcelas, credor: credorNome,
+              mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
+            },
+            server_url: serverUrlFm, instance_token: instanceTokenFm,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+
+          console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (CPF: ${cpf})`);
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, ignored: true, tracked: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -611,6 +689,93 @@ serve(async (req) => {
       case 'acordo_finalizado':
       case 'sem_debitos':
       case 'gerando_boleto': {
+        // If client sends something meaningful (not just menu commands), restart the flow
+        const isResetCommand = ['menu', 'inicio', 'início', 'voltar', 'reiniciar'].includes(textoLower);
+        if (!isResetCommand) {
+          console.log(`[RESET] Estado terminal "${etapaAtual}" recebeu mensagem relevante, reiniciando fluxo...`);
+          // Reset to 'novo' and re-process by identifying client by phone
+          etapaAtual = 'novo';
+          dados = { mensagens_historico: dados.mensagens_historico || [] };
+
+          // Re-run the 'novo' logic: find client by phone
+          const phoneSuffix = telefone.slice(-10);
+          const phoneSuffix11 = telefone.slice(-11);
+
+          let devedoresReset: any[] = [];
+          const { data: devPorTelReset } = await supabase
+            .from('devedores')
+            .select('nome, cpf, telefone, valor_atualizado, credor')
+            .eq('ativo', true)
+            .or(`telefone.ilike.%${phoneSuffix},telefone.ilike.%${phoneSuffix11}`);
+          devedoresReset = devPorTelReset || [];
+
+          if (devedoresReset.length === 0) {
+            const { data: telsAdicionaisReset } = await supabase
+              .from('devedor_telefones')
+              .select('devedor_cpf, numero')
+              .eq('ativo', true)
+              .or(`numero.ilike.%${phoneSuffix},numero.ilike.%${phoneSuffix11}`);
+            if (telsAdicionaisReset && telsAdicionaisReset.length > 0) {
+              const cpfsUnicos = [...new Set(telsAdicionaisReset.map((t: any) => t.devedor_cpf))];
+              const { data: devPorCpfReset } = await supabase
+                .from('devedores')
+                .select('nome, cpf, telefone, valor_atualizado, credor')
+                .eq('ativo', true)
+                .in('cpf', cpfsUnicos);
+              if (devPorCpfReset) devedoresReset = devPorCpfReset;
+            }
+          }
+
+          if (devedoresReset.length > 0) {
+            const devedor = devedoresReset[0];
+            const cpf = devedor.cpf.replace(/\D/g, '');
+            const valorTotal = devedoresReset
+              .filter((d: any) => d.cpf.replace(/\D/g, '') === cpf)
+              .reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+            const valorAvista = valorTotal * 0.5;
+            const valorParcelado = valorTotal * 0.7;
+            let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
+            if (maxParcelas > 24) maxParcelas = 24;
+            if (maxParcelas < 2) maxParcelas = 2;
+            const credorNome = getCredorNome(devedor.credor || '');
+
+            // Check if the message is a positive response (client saying "sim" to a proposal)
+            const intencaoReset = await interpretarIntencao(texto, ['sim', 'nao']);
+            const isSimReset = intencaoReset?.includes('sim') ||
+              ['sim', 'consigo', 'sim consigo', 'quero', 'pode ser', 'sim como fica', 'aceito', 'quero sim', 'como fica'].includes(textoLower);
+
+            if (isSimReset) {
+              // Client is saying yes to the offer — show values directly
+              const valorParcelaMin = valorParcelado / maxParcelas;
+              resposta = `Que ótimo! Estamos com uma super oportunidade para você quitar todo débito em aberto pelo valor de *${formatCurrency(valorAvista)}*. Ou podemos parcelar para você em *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+              dados = {
+                ...dados, cpf, nome: devedor.nome, valor_total: valorTotal,
+                valor_avista: valorAvista, valor_parcelado: valorParcelado,
+                max_parcelas: maxParcelas, credor: credorNome,
+              };
+              await salvarEResponder('oferta_valores');
+              break;
+            } else {
+              // Not a clear "sim" — send the initial proposal
+              const primeiroNome = devedor.nome.split(' ')[0];
+              const primeiroNomeCap = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
+              resposta = `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
+              dados = {
+                ...dados, cpf, nome: devedor.nome, valor_total: valorTotal,
+                valor_avista: valorAvista, valor_parcelado: valorParcelado,
+                max_parcelas: maxParcelas, credor: credorNome,
+              };
+              await salvarEResponder('proposta_enviada');
+              break;
+            }
+          }
+
+          // No debtor found — ask for CPF
+          resposta = `Olá! Para consultar sua situação, por favor me informe seu CPF.`;
+          await salvarEResponder('aguardando_cpf');
+          break;
+        }
+
         resposta = `Para uma nova consulta, digite "menu". Para falar com um negociador: (62) 98218-3144.`;
         await salvarEResponder(etapaAtual);
         break;

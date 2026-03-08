@@ -1,60 +1,31 @@
 
 
-# Fix: Chatbot ignora mensagens enviadas manualmente (fromMe)
+## Diagnóstico
 
-## Problema
-O usuário envia a mensagem inicial manualmente ("Olá Rodrigo, você consegue voltar a pagar...") pelo Acionamento. O cliente responde "Sim". Mas a conversa no banco está no estado `acordo_finalizado` de uma interação anterior. O chatbot cai no case de estados finais (linha 611) e responde "Para uma nova consulta, digite menu".
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-O chatbot **ignora** mensagens `fromMe` (linha 206), então nunca sabe que você enviou a proposta manualmente.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Solução
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-Duas mudanças no `supabase/functions/whatsapp-chatbot/index.ts`:
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-### 1. Rastrear mensagens fromMe como contexto
-Quando uma mensagem `fromMe` chega e contém padrões como "50% de desconto" ou "parcelas em aberto", o chatbot deve:
-- Buscar o devedor pelo telefone de destino
-- Calcular os valores (à vista 50%, parcelado 30%)
-- Setar o estado da conversa para `proposta_enviada` com todos os dados
+## Correção
 
-Isso garante que quando o cliente responder "Sim", o chatbot está na etapa correta.
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
 
-### 2. Estados finais devem resetar em mensagens relevantes
-Quando a conversa está em `acordo_finalizado`/`sem_debitos` e o cliente envia algo que parece uma resposta positiva (sim, consigo, etc), em vez de dar o menu genérico, resetar para `novo` e reprocessar — assim o chatbot identifica o cliente pelo telefone e recomeça o fluxo.
-
-### Mudança concreta no código
-
-**Bloco fromMe (substituir o return simples por lógica de tracking):**
 ```typescript
-if (isFromMe) {
-  // Track outbound proposals to set conversation state
-  const textoLower = texto.toLowerCase();
-  if (textoLower.includes('50% de desconto') || textoLower.includes('parcelas em aberto')) {
-    // Find debtor by destination phone, calculate values, save as proposta_enviada
-    ...
-  }
-  return Response... // Still don't generate a reply for fromMe
-}
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-**Bloco de estados finais (adicionar reset automático):**
-```typescript
-case 'acordo_finalizado':
-case 'sem_debitos':
-case 'gerando_boleto': {
-  // If client sends something meaningful, restart the flow
-  if (!['menu', 'inicio'].includes(textoLower)) {
-    etapaAtual = 'novo';
-    dados = { mensagens_historico: dados.mensagens_historico || [] };
-    // Re-run the 'novo' case logic (identify by phone, etc.)
-    ...
-    break;
-  }
-  resposta = `Para uma nova consulta, digite "menu"...`;
-  ...
-}
-```
-
-## Arquivo alterado
-- `supabase/functions/whatsapp-chatbot/index.ts`
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
