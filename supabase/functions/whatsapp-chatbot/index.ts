@@ -63,6 +63,64 @@ async function sendMessage(serverUrl: string, instanceToken: string, telefone: s
   throw new Error(lastError?.message || 'Falha ao enviar mensagem UAZAPI');
 }
 
+async function transcreverAudio(audioUrl: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY não configurada');
+
+  console.log('[AUDIO] Baixando áudio de:', audioUrl);
+  const audioResponse = await fetch(audioUrl);
+  if (!audioResponse.ok) throw new Error(`Falha ao baixar áudio: ${audioResponse.status}`);
+
+  const audioBuffer = await audioResponse.arrayBuffer();
+  const audioBytes = new Uint8Array(audioBuffer);
+  
+  // Converter para base64
+  let binary = '';
+  for (let i = 0; i < audioBytes.length; i++) {
+    binary += String.fromCharCode(audioBytes[i]);
+  }
+  const audioBase64 = btoa(binary);
+  console.log('[AUDIO] Áudio convertido para base64, tamanho:', audioBase64.length);
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        {
+          role: 'system',
+          content: 'Você é um transcritor de áudio. Transcreva o áudio fornecido em texto. Retorne APENAS o texto transcrito, sem explicações ou formatação adicional. Se o áudio estiver em português, mantenha em português.',
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Transcreva o seguinte áudio para texto:' },
+            { type: 'input_audio', input_audio: { data: audioBase64, format: 'wav' } },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[AUDIO] Erro AI Gateway:', response.status, errorText);
+    throw new Error(`AI gateway error: ${response.status}`);
+  }
+
+  const result = await response.json();
+  const transcribed = (result.choices?.[0]?.message?.content || '').trim();
+  
+  if (!transcribed) throw new Error('Transcrição vazia');
+  
+  console.log('[AUDIO] Transcrição concluída:', transcribed);
+  return transcribed;
+}
+
 const ADMIN_NUMERO = '5562991672674';
 
 async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
