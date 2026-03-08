@@ -953,6 +953,18 @@ serve(async (req) => {
           break;
 
         } else {
+          // Check for greetings/interest before giving up
+          const isSaudacaoOferta = /^(ol[aá]|oi|bom dia|boa tarde|boa noite|e a[ií]|tudo bem)/i.test(textoLower);
+          const isInteresseOferta = /(como fica|qual.?valor|quanto|me fala|explica|fala mais|me interessa|tenho interesse|quero saber|quero ver|como funciona|como que|qual proposta)/i.test(textoLower);
+
+          if (isSaudacaoOferta || isInteresseOferta) {
+            // Re-send the offer
+            const valorParcelaMin = vpOfertas / mpOfertas;
+            resposta = `Olá! 😊 Temos uma ótima oportunidade: quitação à vista por *${formatCurrency(vaOfertas)}* ou parcelado em *${mpOfertas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+            await salvarEResponder('oferta_valores');
+            break;
+          }
+
           // AI não entendeu — notificar admin e silenciar
           console.log(`[SILÊNCIO] oferta_valores: não entendeu escolha: "${texto}"`);
           await salvarSilenciosoENotificar('oferta_valores', texto);
