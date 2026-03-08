@@ -125,7 +125,7 @@ const ADMIN_NUMERO = '5562991672674';
 
 async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
   try {
-    const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneCliente} para o número ${telefoneInstancia}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
+    const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneInstancia} para o número ${telefoneCliente}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
     console.log(`[ADMIN] Notificando admin: ${msg}`);
     await sendMessage(serverUrl, instanceToken, ADMIN_NUMERO, msg);
   } catch (e) {
@@ -554,8 +554,34 @@ serve(async (req) => {
 
     let resposta = '';
 
-    // Extract instance phone number from payload
-    const telefoneInstancia = (payload?.phone || payload?.instance?.wuid || payload?.wuid || '').replace(/\D/g, '') || 'desconhecido';
+    // Extract instance phone number from payload or database
+    let telefoneInstancia = (payload?.phone || payload?.instance?.wuid || payload?.wuid || payload?.instanceId || '').replace(/\D/g, '') || '';
+    
+    // Fallback: buscar número da instância no banco usando o token
+    if (!telefoneInstancia && instanceToken) {
+      try {
+        const { data: instData } = await supabase
+          .from('user_whatsapp_instances')
+          .select('nome')
+          .eq('instance_token', instanceToken)
+          .eq('ativo', true)
+          .limit(1)
+          .single();
+        if (instData?.nome) {
+          telefoneInstancia = instData.nome.replace(/\D/g, '') || '';
+        }
+      } catch (e) {
+        console.log('[INSTANCE] Falha ao buscar número da instância no banco:', e);
+      }
+    }
+    
+    // Fallback: extrair do server_url se possível
+    if (!telefoneInstancia && serverUrl) {
+      const match = serverUrl.match(/(\d{10,13})/);
+      if (match) telefoneInstancia = match[1];
+    }
+    
+    if (!telefoneInstancia) telefoneInstancia = 'desconhecido';
 
     // Helper to save state and respond
     async function salvarEResponder(novaEtapa: string, dadosExtra?: any) {
