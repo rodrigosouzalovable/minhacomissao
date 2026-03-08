@@ -18,7 +18,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot } from 'lucide-react';
+import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import { Progress } from '@/components/ui/progress';
 import * as XLSX from 'xlsx';
 
@@ -128,7 +129,7 @@ export default function Acionamento() {
   const [sendTimestamps, setSendTimestamps] = useState<Record<number, string>>({});
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados'>('pendentes');
+  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados' | 'ia'>('pendentes');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
@@ -909,6 +910,15 @@ export default function Acionamento() {
                 >
                   ENVIADOS ({enviadosHoje} hoje)
                 </Button>
+                {isAdmin && (
+                  <Button
+                    variant={activeTab === 'ia' ? 'default' : 'outline'}
+                    onClick={() => setActiveTab('ia')}
+                  >
+                    <Bot className="h-4 w-4 mr-1" />
+                    IA
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1080,6 +1090,10 @@ export default function Acionamento() {
                     </Table>
                   )}
                 </>
+              )}
+
+              {activeTab === 'ia' && isAdmin && (
+                <ChatbotTemplatesTab />
               )}
             </CardContent>
           </Card>

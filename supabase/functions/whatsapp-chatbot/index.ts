@@ -167,7 +167,6 @@ async function triggerCobMaisRobot(supabase: any, cpf: string, valorFinal: numbe
 function addToHistorico(dados: any, role: string, content: string): any {
   const historico = dados?.mensagens_historico || [];
   historico.push({ role, content, ts: new Date().toISOString() });
-  // Keep last 20 messages
   const trimmed = historico.slice(-20);
   return { ...dados, mensagens_historico: trimmed };
 }
@@ -177,6 +176,36 @@ function getHistorico(dados: any): Array<{role: string, content: string}> {
     role: m.role === 'cliente' ? 'user' : 'assistant',
     content: m.content,
   }));
+}
+
+// Template system: fetch from DB and replace variables
+async function fetchTemplates(supabase: any): Promise<Record<string, string>> {
+  try {
+    const { data } = await supabase
+      .from('chatbot_templates')
+      .select('etapa, template')
+      .eq('ativo', true);
+    const map: Record<string, string> = {};
+    if (data) {
+      for (const t of data) {
+        map[t.etapa] = t.template;
+      }
+    }
+    return map;
+  } catch (err) {
+    console.error('[Templates] Erro ao buscar templates:', err);
+    return {};
+  }
+}
+
+function applyTemplate(templates: Record<string, string>, etapa: string, vars: Record<string, string>, fallback: string): string {
+  const tpl = templates[etapa];
+  if (!tpl) return fallback;
+  let result = tpl;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return result;
 }
 
 // Tool-calling to interpret user intent
@@ -267,6 +296,12 @@ serve(async (req) => {
     if (!chatbotConfig?.ativo) {
       console.log('Chatbot desativado globalmente.');
       return new Response(JSON.stringify({ success: true, ignored: true, reason: 'chatbot_disabled' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fetch all active templates from DB
+    const templates = await fetchTemplates(supabase);
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -388,7 +423,7 @@ serve(async (req) => {
 
               const cpfFormatado = formatCpf(cpfLimpo);
               const fallbackConfirma = `Só pra confirmar, seu CPF é ${cpfFormatado}?`;
-              resposta = fallbackConfirma;
+              resposta = applyTemplate(templates, 'confirmacao_cpf', { cpf_formatado: cpfFormatado }, fallbackConfirma);
 
               dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: nomeDevedor };
               dados = addToHistorico(dados, 'assistente', resposta);
@@ -424,13 +459,8 @@ serve(async (req) => {
           }
 
           // No match by phone — standard flow: ask for CPF
-          const fallback = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, por favor me informe seu CPF.`;
-          
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Primeiro contato com o cliente. Cumprimente de forma calorosa e peça o CPF para consultar a situação financeira. Seja breve e acolhedora.`,
-            historico,
-            fallback
-          );
+          const fallbackSaudacao = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, por favor me informe seu CPF.`;
+          resposta = applyTemplate(templates, 'saudacao', {}, fallbackSaudacao);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -443,13 +473,8 @@ serve(async (req) => {
 
         const cpf = extractCpf(texto);
         if (!cpf) {
-          const fallback = `Não consegui identificar um CPF válido. Por favor, envie seu CPF com 11 dígitos. Exemplo: 123.456.789-00`;
-          
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente enviou "${texto}" mas não é um CPF válido. Peça gentilmente o CPF novamente, explicando o formato esperado (11 dígitos). Não seja robótico.`,
-            historico,
-            fallback
-          );
+          const fallbackCpfInv = `Não consegui identificar um CPF válido. Por favor, envie seu CPF com 11 dígitos. Exemplo: 123.456.789-00`;
+          resposta = applyTemplate(templates, 'cpf_invalido', {}, fallbackCpfInv);
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
             telefone, etapa: 'aguardando_cpf', dados,
@@ -465,22 +490,17 @@ serve(async (req) => {
 
         if (debitosError) {
           console.error('Erro ao consultar débitos:', debitosError);
-          const fallback = `Desculpe, tive um problema ao consultar seus dados. Tente novamente mais tarde ou ligue para (62) 98218-3144.`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Houve um erro técnico ao consultar os dados do CPF. Peça desculpas e ofereça o telefone (62) 98218-3144 como alternativa.`,
-            historico, fallback
-          );
+          const fallbackErro = `Desculpe, tive um problema ao consultar seus dados. Tente novamente mais tarde ou ligue para (62) 98218-3144.`;
+          resposta = applyTemplate(templates, 'erro_consulta', { telefone_contato: '(62) 98218-3144' }, fallbackErro);
           dados = addToHistorico(dados, 'assistente', resposta);
           break;
         }
 
         if (!debitos || debitos.length === 0) {
-          const fallback = `Ótima notícia! Não encontramos pendências para o CPF ${formatCpf(cpf)}. Se acredita que há algum erro, entre em contato: (62) 98218-3144.`;
-          
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Consultei o CPF ${formatCpf(cpf)} e NÃO há pendências. Dê a boa notícia de forma genuína. Ofereça o telefone (62) 98218-3144 caso o cliente acredite que há erro. Diga que pode digitar "menu" para nova consulta.`,
-            historico, fallback
-          );
+          const primeiroNomeSemDeb = nomeDevedor ? nomeDevedor.split(' ')[0] : '';
+          const primeiroNomeSemDebCap = primeiroNomeSemDeb ? primeiroNomeSemDeb.charAt(0).toUpperCase() + primeiroNomeSemDeb.slice(1).toLowerCase() : '';
+          const fallbackSemDeb = `Ótima notícia! Não encontramos pendências para o CPF ${formatCpf(cpf)}. Se acredita que há algum erro, entre em contato: (62) 98218-3144.`;
+          resposta = applyTemplate(templates, 'sem_debitos', { primeiro_nome: primeiroNomeSemDebCap || 'cliente', cpf_formatado: formatCpf(cpf), telefone_contato: '(62) 98218-3144' }, fallbackSemDeb);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -529,7 +549,8 @@ serve(async (req) => {
           credorNomeCpf = credorSlugCpf.replace(/_/g, ' ');
         }
 
-        resposta = `Perfeito, ${primeiroNomeCpfCap}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNomeCpf}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+        const fallbackPropCpf = `Perfeito, ${primeiroNomeCpfCap}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNomeCpf}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+        resposta = applyTemplate(templates, 'proposta', { primeiro_nome: primeiroNomeCpfCap, valor_avista: formatCurrency(valorAvista), valor_parcela: formatCurrency(valorParcelaMin), max_parcelas: String(maxParcelas), credor: credorNomeCpf, valor_parcelado: formatCurrency(valorParcelado), telefone_contato: '(62) 98218-3144' }, fallbackPropCpf);
 
         dados = { 
           ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
@@ -563,15 +584,15 @@ serve(async (req) => {
             .rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
 
           if (debitosError || !debitos || debitos.length === 0) {
-            const fallback = debitos?.length === 0
-              ? `Ótima notícia, ${dados.nome_candidato}! Não encontramos pendências no seu CPF. Se acredita que há algum erro, ligue para (62) 98218-3144.`
-              : `Desculpe, tive um problema ao consultar. Tente novamente ou ligue para (62) 98218-3144.`;
-            resposta = await gerarRespostaHumana(
-              debitosError
-                ? `CONTEXTO: Erro ao consultar débitos do cliente ${dados.nome_candidato}. Peça desculpas e ofereça (62) 98218-3144.`
-                : `CONTEXTO: O cliente ${dados.nome_candidato} confirmou identidade mas NÃO tem débitos. Dê a boa notícia.`,
-              historico, fallback
-            );
+            const prNomeConf = dados.nome_candidato?.split(' ')[0] || '';
+            const prNomeConfCap = prNomeConf ? prNomeConf.charAt(0).toUpperCase() + prNomeConf.slice(1).toLowerCase() : 'cliente';
+            if (debitos?.length === 0) {
+              const fallbackSemDeb2 = `Ótima notícia, ${prNomeConfCap}! Não encontramos pendências no seu CPF. Se acredita que há algum erro, ligue para (62) 98218-3144.`;
+              resposta = applyTemplate(templates, 'sem_debitos', { primeiro_nome: prNomeConfCap, telefone_contato: '(62) 98218-3144' }, fallbackSemDeb2);
+            } else {
+              const fallbackErro2 = `Desculpe, tive um problema ao consultar. Tente novamente ou ligue para (62) 98218-3144.`;
+              resposta = applyTemplate(templates, 'erro_consulta', { telefone_contato: '(62) 98218-3144' }, fallbackErro2);
+            }
             dados = addToHistorico(dados, 'assistente', resposta);
             await supabase.from('chatbot_conversas').upsert({
               telefone, etapa: 'sem_debitos', dados: { ...dados, cpf },
@@ -619,7 +640,8 @@ serve(async (req) => {
             avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione brevemente.`;
           }
 
-          resposta = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+          const fallbackPropConf = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
+          resposta = applyTemplate(templates, 'proposta', { primeiro_nome: primeiroNomeCapitalizado, valor_avista: formatCurrency(valorAvista), valor_parcela: formatCurrency(valorParcelaMin), max_parcelas: String(maxParcelas), credor: credorNome, valor_parcelado: formatCurrency(valorParcelado), telefone_contato: '(62) 98218-3144' }, fallbackPropConf);
 
           dados = {
             ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
@@ -637,11 +659,8 @@ serve(async (req) => {
 
         } else if (isNegacao) {
           // Not the right person — fall back to CPF request
-          const fallback = `Desculpe pelo engano! 😊 Me informe seu CPF para que eu possa consultar sua situação.`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: Identifiquei o cliente pelo telefone mas a pessoa disse que NÃO é ${dados.nome_candidato}. Peça desculpas pelo engano e solicite o CPF para consulta.`,
-            historico, fallback
-          );
+          const fallbackNeg = `Desculpe pelo engano! 😊 Me informe seu CPF para que eu possa consultar sua situação.`;
+          resposta = applyTemplate(templates, 'negacao_identidade', {}, fallbackNeg);
           dados = { mensagens_historico: dados.mensagens_historico || [] };
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -682,10 +701,7 @@ serve(async (req) => {
           const valorFinal = dados.valor_avista;
 
           const fallbackEspera = `Ótima escolha! Vou preparar seu boleto de ${formatCurrency(valorFinal)} à vista. Um momento, por favor...`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente ${dados.nome} escolheu pagar À VISTA. Valor: ${formatCurrency(valorFinal)}. Confirme a escolha com entusiasmo e diga que está preparando o boleto. Peça para aguardar.`,
-            historico, fallbackEspera
-          );
+          resposta = applyTemplate(templates, 'escolha_avista', { valor_avista: formatCurrency(valorFinal), telefone_contato: '(62) 98218-3144' }, fallbackEspera);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
@@ -731,10 +747,7 @@ serve(async (req) => {
           const valorParcelado = dados.valor_parcelado;
 
           const fallbackParcelas = `Você escolheu parcelar! Total: ${formatCurrency(valorParcelado)}. Em quantas vezes quer pagar? De 2 a ${maxParcelas}x (parcela mínima R$ 90,00).`;
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente ${dados.nome} escolheu PARCELAR. Valor total parcelado: ${formatCurrency(valorParcelado)}. Pergunte em quantas parcelas deseja (de 2 a ${maxParcelas}). Parcela mínima: R$ 90,00. Seja conversacional.`,
-            historico, fallbackParcelas
-          );
+          resposta = applyTemplate(templates, 'escolha_parcelado', { valor_parcelado: formatCurrency(valorParcelado), max_parcelas: String(maxParcelas), telefone_contato: '(62) 98218-3144' }, fallbackParcelas);
 
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
