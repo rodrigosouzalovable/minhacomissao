@@ -203,8 +203,86 @@ serve(async (req) => {
     const remoteJid = payload?.message?.chatid || payload?.chat?.wa_chatid || payload?.message?.sender_pn || payload?.key?.remoteJid || payload?.from || '';
     const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? remoteJid.includes('@g.us') ?? false;
 
-    if (isFromMe || isGroup) {
+    if (isGroup) {
       return new Response(JSON.stringify({ success: true, ignored: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // --- Track fromMe messages (outbound proposals) ---
+    if (isFromMe) {
+      const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim().toLowerCase();
+      const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+
+      if (destinoTelefone && (textoFromMe.includes('50% de desconto') || textoFromMe.includes('parcelas em aberto'))) {
+        console.log(`[fromMe] Proposta detectada para ${destinoTelefone}, atualizando estado...`);
+        const supabaseUrlFm = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKeyFm = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabaseFm = createClient(supabaseUrlFm, supabaseKeyFm);
+
+        const phoneSuffix = destinoTelefone.slice(-10);
+        const phoneSuffix11 = destinoTelefone.slice(-11);
+
+        // Find debtor by phone
+        let devedoresEncontrados: any[] = [];
+        const { data: devPorTel } = await supabaseFm
+          .from('devedores')
+          .select('nome, cpf, telefone, valor_atualizado, credor')
+          .eq('ativo', true)
+          .or(`telefone.ilike.%${phoneSuffix},telefone.ilike.%${phoneSuffix11}`);
+        devedoresEncontrados = devPorTel || [];
+
+        if (devedoresEncontrados.length === 0) {
+          const { data: telsAdicionais } = await supabaseFm
+            .from('devedor_telefones')
+            .select('devedor_cpf, numero')
+            .eq('ativo', true)
+            .or(`numero.ilike.%${phoneSuffix},numero.ilike.%${phoneSuffix11}`);
+          if (telsAdicionais && telsAdicionais.length > 0) {
+            const cpfsUnicos = [...new Set(telsAdicionais.map((t: any) => t.devedor_cpf))];
+            const { data: devPorCpf } = await supabaseFm
+              .from('devedores')
+              .select('nome, cpf, telefone, valor_atualizado, credor')
+              .eq('ativo', true)
+              .in('cpf', cpfsUnicos);
+            if (devPorCpf) devedoresEncontrados = devPorCpf;
+          }
+        }
+
+        if (devedoresEncontrados.length > 0) {
+          const devedor = devedoresEncontrados[0];
+          const cpf = devedor.cpf.replace(/\D/g, '');
+          const valorTotal = devedoresEncontrados
+            .filter((d: any) => d.cpf.replace(/\D/g, '') === cpf)
+            .reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
+          const valorAvista = valorTotal * 0.5;
+          const valorParcelado = valorTotal * 0.7;
+          let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
+          if (maxParcelas > 24) maxParcelas = 24;
+          if (maxParcelas < 2) maxParcelas = 2;
+          const credorNome = getCredorNome(devedor.credor || '');
+
+          const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
+          const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+          await supabaseFm.from('chatbot_conversas').upsert({
+            telefone: destinoTelefone,
+            etapa: 'proposta_enviada',
+            dados: {
+              cpf, nome: devedor.nome, valor_total: valorTotal,
+              valor_avista: valorAvista, valor_parcelado: valorParcelado,
+              max_parcelas: maxParcelas, credor: credorNome,
+              mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
+            },
+            server_url: serverUrlFm, instance_token: instanceTokenFm,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+
+          console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (CPF: ${cpf})`);
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, ignored: true, tracked: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
