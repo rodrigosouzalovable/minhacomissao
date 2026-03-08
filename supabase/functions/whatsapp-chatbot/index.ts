@@ -870,7 +870,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
           const fallbackInvalido = `Número de parcelas inválido. Escolha entre 2 e ${maxParcelas}x (parcela mínima R$ 90,00).`;
           resposta = await gerarRespostaHumana(
             `CONTEXTO: O cliente respondeu "${texto}" mas não é um número válido de parcelas. Aceito entre 2 e ${maxParcelas}. Valor total: ${formatCurrency(valorParcelado)}. Parcela mínima R$ 90,00. Oriente gentilmente.`,
-            historico, fallbackInvalido
+            historico, fallbackInvalido, regrasTexto
           );
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
