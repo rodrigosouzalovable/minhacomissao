@@ -208,6 +208,31 @@ function applyTemplate(templates: Record<string, string>, etapa: string, vars: R
   return result;
 }
 
+// Custom rules system: fetch rules and check for matches
+async function fetchRegras(supabase: any): Promise<Array<{gatilho: string, resposta: string}>> {
+  try {
+    const { data } = await supabase
+      .from('chatbot_regras')
+      .select('gatilho, resposta')
+      .eq('ativo', true);
+    return data || [];
+  } catch (err) {
+    console.error('[Regras] Erro ao buscar regras:', err);
+    return [];
+  }
+}
+
+function checkRegras(regras: Array<{gatilho: string, resposta: string}>, texto: string): string | null {
+  const textoLower = texto.toLowerCase();
+  for (const regra of regras) {
+    if (textoLower.includes(regra.gatilho.toLowerCase())) {
+      console.log(`[Regras] Match encontrado: gatilho="${regra.gatilho}"`);
+      return regra.resposta;
+    }
+  }
+  return null;
+}
+
 // Tool-calling to interpret user intent
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
   try {

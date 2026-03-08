@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Save, Loader2, Bot } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Save, Loader2, Bot, GraduationCap, Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -15,6 +17,15 @@ interface Template {
   descricao: string;
   template: string;
   ativo: boolean;
+  atualizado_em: string;
+}
+
+interface Regra {
+  id: string;
+  gatilho: string;
+  resposta: string;
+  ativo: boolean;
+  criado_em: string;
   atualizado_em: string;
 }
 
@@ -44,12 +55,21 @@ const ETAPA_LABELS: Record<string, string> = {
 
 export default function ChatbotTemplatesTab() {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [regras, setRegras] = useState<Regra[]>([]);
   const [loading, setLoading] = useState(true);
   const [editedTemplates, setEditedTemplates] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingRegra, setEditingRegra] = useState<Regra | null>(null);
+  const [novoGatilho, setNovoGatilho] = useState('');
+  const [novaResposta, setNovaResposta] = useState('');
+  const [savingRegra, setSavingRegra] = useState(false);
+
   useEffect(() => {
     fetchTemplates();
+    fetchRegras();
   }, []);
 
   const fetchTemplates = async () => {
@@ -64,6 +84,18 @@ export default function ChatbotTemplatesTab() {
       setTemplates(data || []);
     }
     setLoading(false);
+  };
+
+  const fetchRegras = async () => {
+    const { data, error } = await supabase
+      .from('chatbot_regras')
+      .select('*')
+      .order('criado_em', { ascending: false });
+    if (error) {
+      console.error('Erro ao carregar regras:', error);
+    } else {
+      setRegras(data || []);
+    }
   };
 
   const handleSave = async (template: Template) => {
@@ -99,6 +131,85 @@ export default function ChatbotTemplatesTab() {
     }
   };
 
+  const openNewRegra = () => {
+    setEditingRegra(null);
+    setNovoGatilho('');
+    setNovaResposta('');
+    setDialogOpen(true);
+  };
+
+  const openEditRegra = (regra: Regra) => {
+    setEditingRegra(regra);
+    setNovoGatilho(regra.gatilho);
+    setNovaResposta(regra.resposta);
+    setDialogOpen(true);
+  };
+
+  const handleSaveRegra = async () => {
+    if (!novoGatilho.trim() || !novaResposta.trim()) {
+      toast.error('Preencha ambos os campos');
+      return;
+    }
+
+    setSavingRegra(true);
+
+    if (editingRegra) {
+      const { error } = await supabase
+        .from('chatbot_regras')
+        .update({ gatilho: novoGatilho.trim(), resposta: novaResposta.trim(), atualizado_em: new Date().toISOString() })
+        .eq('id', editingRegra.id);
+
+      if (error) {
+        toast.error('Erro ao atualizar regra');
+      } else {
+        toast.success('Regra atualizada!');
+        fetchRegras();
+        setDialogOpen(false);
+      }
+    } else {
+      const { error } = await supabase
+        .from('chatbot_regras')
+        .insert({ gatilho: novoGatilho.trim(), resposta: novaResposta.trim() });
+
+      if (error) {
+        toast.error('Erro ao criar regra');
+      } else {
+        toast.success('Regra criada!');
+        fetchRegras();
+        setDialogOpen(false);
+      }
+    }
+
+    setSavingRegra(false);
+  };
+
+  const handleDeleteRegra = async (id: string) => {
+    const { error } = await supabase
+      .from('chatbot_regras')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Erro ao excluir regra');
+    } else {
+      toast.success('Regra excluída');
+      setRegras(prev => prev.filter(r => r.id !== id));
+    }
+  };
+
+  const handleToggleRegra = async (regra: Regra) => {
+    const { error } = await supabase
+      .from('chatbot_regras')
+      .update({ ativo: !regra.ativo, atualizado_em: new Date().toISOString() })
+      .eq('id', regra.id);
+
+    if (error) {
+      toast.error('Erro ao alterar status');
+    } else {
+      setRegras(prev => prev.map(r => r.id === regra.id ? { ...r, ativo: !r.ativo } : r));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-8">
@@ -109,6 +220,103 @@ export default function ChatbotTemplatesTab() {
 
   return (
     <div className="space-y-4">
+      {/* Botão Ensinar IA */}
+      <div className="flex justify-end">
+        <Button onClick={openNewRegra} className="gap-2">
+          <GraduationCap className="h-4 w-4" />
+          Ensinar IA
+        </Button>
+      </div>
+
+      {/* Card de regras personalizadas */}
+      {regras.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <GraduationCap className="h-4 w-4" />
+              Regras Personalizadas ({regras.length})
+            </CardTitle>
+            <CardDescription>
+              Quando o cliente disser algo que contenha o gatilho, a IA responderá com a resposta definida.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {regras.map(regra => (
+                <div key={regra.id} className={`flex items-start gap-3 p-3 rounded-lg border ${!regra.ativo ? 'opacity-50' : ''}`}>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs shrink-0">Gatilho</Badge>
+                      <span className="text-sm font-medium truncate">{regra.gatilho}</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Badge variant="secondary" className="text-xs shrink-0 mt-0.5">Resposta</Badge>
+                      <span className="text-sm text-muted-foreground line-clamp-2">{regra.resposta}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Switch
+                      checked={regra.ativo}
+                      onCheckedChange={() => handleToggleRegra(regra)}
+                    />
+                    <Button variant="ghost" size="icon" onClick={() => openEditRegra(regra)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteRegra(regra.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dialog para criar/editar regra */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5" />
+              {editingRegra ? 'Editar Regra' : 'Ensinar IA'}
+            </DialogTitle>
+            <DialogDescription>
+              Defina um gatilho e a resposta que a IA deve dar quando o cliente disser algo parecido.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Quando o cliente disser:</Label>
+              <Input
+                placeholder='Ex: "quero boleto", "como pago", "segunda via"'
+                value={novoGatilho}
+                onChange={(e) => setNovoGatilho(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                A IA verificará se a mensagem do cliente contém este texto (busca parcial, sem diferenciar maiúsculas).
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Responda com:</Label>
+              <Textarea
+                placeholder='Ex: "Vou gerar o boleto para você! Aguarde um momento..."'
+                value={novaResposta}
+                onChange={(e) => setNovaResposta(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveRegra} disabled={savingRegra}>
+              {savingRegra ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+              {editingRegra ? 'Salvar' : 'Criar Regra'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Legenda de variáveis */}
       <Card>
         <CardHeader className="pb-3">
