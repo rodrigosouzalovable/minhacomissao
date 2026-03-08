@@ -150,6 +150,25 @@ export default function ImportarDevedores() {
     }).filter(r => r.cpf.length >= 11);
   };
 
+  const parsePesquisa = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
+    return dataRows.map((row) => {
+      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      const nome = String(row['B'] ?? '').trim();
+      const telefone = String(row['C'] ?? '').replace(/\D/g, '');
+      return {
+        cpf,
+        nascimento: '',
+        nome,
+        credor: '',
+        contrato: '',
+        atraso: '',
+        valor_original: 0,
+        valor_atualizado: 0,
+        telefone: telefone || undefined,
+      };
+    }).filter(r => r.cpf.length >= 11 && r.nome.length > 0);
+  };
+
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     // Aba 1 - Dados principais
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
