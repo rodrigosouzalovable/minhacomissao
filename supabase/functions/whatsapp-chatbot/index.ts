@@ -830,10 +830,15 @@ serve(async (req) => {
           }
         }
 
+        // Detect greetings and interest expressions as positive signals
+        const isSaudacao = /^(ol[aá]|oi|bom dia|boa tarde|boa noite|e a[ií]|tudo bem|boa noite)/i.test(textoLower);
+        const isInteresse = /(como fica|qual.?valor|quanto|me fala|explica|fala mais|me interessa|tenho interesse|quero saber|quero ver|quero negociar|pode me explicar|como funciona|como que|qual proposta|qual a proposta)/i.test(textoLower);
+
         // Client responds to "consegue voltar a pagar com 50% de desconto?"
         const intencao = await interpretarIntencao(texto, ['sim', 'nao']);
         const isSim = intencao?.includes('sim') ||
-          ['sim', 'consigo', 'sim consigo', 'quero', 'pode ser', 'sim como fica', 'aceito', 'quero sim', 'como fica', 'tô querendo', 'to querendo'].includes(textoLower);
+          ['sim', 'consigo', 'sim consigo', 'quero', 'pode ser', 'sim como fica', 'aceito', 'quero sim', 'como fica', 'tô querendo', 'to querendo'].includes(textoLower) ||
+          isSaudacao || isInteresse;
 
         if (isSim) {
           // Robust fallback: recalculate if values are missing/NaN
