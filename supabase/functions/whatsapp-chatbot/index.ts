@@ -805,7 +805,7 @@ serve(async (req) => {
               const fallbackSucesso = `Boleto gerado! Acesse: ${result.resultado.boleto_url}\nValor: ${formatCurrency(valorFinal)}\nApós o pagamento, sua situação será regularizada. Dúvidas: (62) 98218-3144`;
               resposta = await gerarRespostaHumana(
                 `CONTEXTO: Boleto gerado com SUCESSO para ${dados.nome}! Link do boleto: ${result.resultado.boleto_url}. Valor: ${formatCurrency(valorFinal)} à vista. Informe o link, parabenize pela decisão, diga que após pagamento a situação será regularizada. Ofereça (62) 98218-3144 para dúvidas. Diga que pode digitar "menu" para nova consulta.`,
-                historico, fallbackSucesso
+                historico, fallbackSucesso, regrasTexto
               );
             } else {
               const fallbackErro = `Não consegui gerar o boleto automaticamente. Por favor, ligue para (62) 98218-3144 — seu acordo de ${formatCurrency(valorFinal)} à vista já está pré-aprovado!`;
