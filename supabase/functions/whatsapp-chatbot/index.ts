@@ -473,13 +473,8 @@ serve(async (req) => {
 
         const cpf = extractCpf(texto);
         if (!cpf) {
-          const fallback = `Não consegui identificar um CPF válido. Por favor, envie seu CPF com 11 dígitos. Exemplo: 123.456.789-00`;
-          
-          resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente enviou "${texto}" mas não é um CPF válido. Peça gentilmente o CPF novamente, explicando o formato esperado (11 dígitos). Não seja robótico.`,
-            historico,
-            fallback
-          );
+          const fallbackCpfInv = `Não consegui identificar um CPF válido. Por favor, envie seu CPF com 11 dígitos. Exemplo: 123.456.789-00`;
+          resposta = applyTemplate(templates, 'cpf_invalido', {}, fallbackCpfInv);
           dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
             telefone, etapa: 'aguardando_cpf', dados,
