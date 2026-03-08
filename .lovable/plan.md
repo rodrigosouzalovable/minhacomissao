@@ -1,31 +1,64 @@
 
 
-## Diagnóstico
+# Aba "IA" no Acionamento — Configurar respostas do chatbot
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Objetivo
+Criar uma aba "IA" na página de Acionamento onde o admin pode configurar os templates de resposta que o chatbot WhatsApp usa em cada etapa da conversa. O chatbot deixará de usar textos fixos no código e passará a ler os templates do banco de dados.
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+## Nova tabela: `chatbot_templates`
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+```sql
+CREATE TABLE public.chatbot_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  etapa TEXT NOT NULL UNIQUE,
+  descricao TEXT NOT NULL,
+  template TEXT NOT NULL,
+  ativo BOOLEAN DEFAULT true,
+  atualizado_em TIMESTAMPTZ DEFAULT now()
+);
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+ALTER TABLE public.chatbot_templates ENABLE ROW LEVEL SECURITY;
 
-## Correção
-
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
-
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+CREATE POLICY "Admins podem gerenciar templates"
+ON public.chatbot_templates FOR ALL TO authenticated
+USING (public.has_role(auth.uid(), 'admin'))
+WITH CHECK (public.has_role(auth.uid(), 'admin'));
 ```
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+Templates pré-cadastrados por etapa:
+- **`confirmacao_cpf`** — "Só pra confirmar, seu CPF é {cpf_formatado}?"
+- **`proposta`** — "Perfeito, {primeiro_nome}! A proposta disponível para *pagamento à vista é {valor_avista}*, pagando esse valor, você quita todas as parcelas em aberto com {credor}. Ou podemos parcelar para você da seguinte forma: *{max_parcelas}x de {valor_parcela}*. Como fica melhor para você?"
+- **`saudacao`** — "Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação, me informe seu CPF."
+- **`sem_debitos`** — "Ótima notícia, {primeiro_nome}! Não encontramos pendências no seu CPF."
+- **`negacao_identidade`** — "Desculpe pelo engano! Me informe seu CPF para que eu possa consultar."
+
+## Aba "IA" no Acionamento (`src/pages/Acionamento.tsx`)
+
+- Adicionar terceiro botão de tab: **A ENVIAR | ENVIADOS | IA**
+- Conteúdo da aba IA:
+  - Lista de cards, um por template/etapa
+  - Cada card mostra: nome da etapa, descrição, campo de texto editável com o template
+  - Legenda de variáveis disponíveis: `{primeiro_nome}`, `{cpf_formatado}`, `{valor_avista}`, `{valor_parcela}`, `{max_parcelas}`, `{credor}`
+  - Botão "Salvar" por template
+  - Visível apenas para admins
+
+## Edge Function `whatsapp-chatbot/index.ts`
+
+- Ao iniciar o processamento, buscar todos os templates ativos de `chatbot_templates`
+- Usar o template da etapa correspondente em vez do texto fixo no código
+- Substituir as variáveis `{primeiro_nome}`, `{cpf_formatado}`, `{valor_avista}`, etc. com os valores reais
+- Fallback: se não existir template no banco, usar o texto fixo atual
+
+## Variáveis suportadas nos templates
+
+| Variável | Descrição |
+|---|---|
+| `{primeiro_nome}` | Primeiro nome capitalizado |
+| `{nome_completo}` | Nome completo |
+| `{cpf_formatado}` | CPF com máscara |
+| `{valor_avista}` | 50% do saldo |
+| `{valor_parcela}` | Valor de cada parcela |
+| `{max_parcelas}` | Qtd máxima de parcelas |
+| `{credor}` | Nome do credor |
+| `{telefone_contato}` | (62) 98218-3144 |
 
