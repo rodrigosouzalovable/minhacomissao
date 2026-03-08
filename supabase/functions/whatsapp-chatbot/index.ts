@@ -9,6 +9,24 @@ const corsHeaders = {
 
 const VALOR_MINIMO_PARCELA = 90;
 
+const SYSTEM_PROMPT = `Você é um negociador humano da empresa "Souza e Ribeiro Negociações". Seu nome é Ana.
+
+REGRAS ABSOLUTAS:
+- Você NUNCA inventa valores, nomes, CPFs ou qualquer dado. Use APENAS os dados fornecidos no contexto.
+- Mantenha respostas CURTAS (máximo 3-4 parágrafos). Isso é WhatsApp, não email.
+- Use no máximo 2-3 emojis por mensagem. Nada de exagero.
+- Tom: empático, acolhedor, profissional. Como uma pessoa real que entende a situação financeira do cliente.
+- Sempre que relevante, ofereça o contato humano: (62) 98218-3144
+- Use *negrito* para valores e informações importantes (formatação WhatsApp).
+- NUNCA diga que é uma IA, chatbot ou assistente virtual.
+- Interprete variações de linguagem: "quero pagar", "aceito", "pode ser", "tô querendo" = aceitação.
+- "à vista", "de uma vez", "pagar tudo" = opção à vista.
+- "parcelar", "dividir", "em vezes" = opção parcelada.
+- Quando o cliente disser algo fora do contexto, redirecione gentilmente para a negociação.
+- Adapte a saudação ao horário: bom dia (6-12h), boa tarde (12-18h), boa noite (18-6h) no fuso de Brasília.
+- Se o cliente demonstrar dificuldade financeira, seja ainda mais empático e destaque os descontos.
+- NUNCA pressione o cliente. Seja sempre gentil e paciente.`;
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
@@ -26,6 +44,55 @@ function extractCpf(text: string): string | null {
 function formatCpf(cpf: string): string {
   const c = cpf.replace(/\D/g, '');
   return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
+}
+
+async function gerarRespostaHumana(contexto: string, historico: Array<{role: string, content: string}>, fallback: string): Promise<string> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      console.warn('[IA] LOVABLE_API_KEY não configurada, usando fallback');
+      return fallback;
+    }
+
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...historico.slice(-10),
+      { role: 'user', content: contexto },
+    ];
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages,
+        max_tokens: 500,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[IA] Erro gateway:', response.status, await response.text());
+      return fallback;
+    }
+
+    const data = await response.json();
+    const resposta = data.choices?.[0]?.message?.content?.trim();
+    
+    if (!resposta) {
+      console.warn('[IA] Resposta vazia, usando fallback');
+      return fallback;
+    }
+
+    console.log('[IA] Resposta gerada com sucesso');
+    return resposta;
+  } catch (err) {
+    console.error('[IA] Erro ao gerar resposta:', err);
+    return fallback;
+  }
 }
 
 async function sendMessage(serverUrl: string, instanceToken: string, telefone: string, mensagem: string) {
@@ -57,7 +124,6 @@ async function triggerCobMaisRobot(supabase: any, cpf: string, valorFinal: numbe
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  // Call automacao-cobmais edge function internally
   const res = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
     method: 'POST',
     headers: {
@@ -73,15 +139,55 @@ async function triggerCobMaisRobot(supabase: any, cpf: string, valorFinal: numbe
   });
 
   const result = await res.json();
-  console.log('[triggerCobMaisRobot] Status HTTP:', res.status);
-  console.log('[triggerCobMaisRobot] Resultado completo:', JSON.stringify(result));
-  
-  if (result.success && !result.resultado?.boleto_url) {
-    console.warn('[triggerCobMaisRobot] ALERTA: sucesso=true mas boleto_url ausente!');
-    console.warn('[triggerCobMaisRobot] Campos no resultado:', result.resultado ? Object.keys(result.resultado).join(', ') : 'resultado vazio');
-  }
-  
+  console.log('[triggerCobMaisRobot] Status:', res.status, 'Resultado:', JSON.stringify(result));
   return result;
+}
+
+function addToHistorico(dados: any, role: string, content: string): any {
+  const historico = dados?.mensagens_historico || [];
+  historico.push({ role, content, ts: new Date().toISOString() });
+  // Keep last 20 messages
+  const trimmed = historico.slice(-20);
+  return { ...dados, mensagens_historico: trimmed };
+}
+
+function getHistorico(dados: any): Array<{role: string, content: string}> {
+  return (dados?.mensagens_historico || []).map((m: any) => ({
+    role: m.role === 'cliente' ? 'user' : 'assistant',
+    content: m.content,
+  }));
+}
+
+// Tool-calling to interpret user intent
+async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) return null;
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          { role: 'system', content: 'Você interpreta a intenção do cliente em uma negociação de dívida.' },
+          { role: 'user', content: `O cliente disse: "${texto}"\n\nQual dessas opções melhor corresponde à intenção?\nOpções: ${opcoes.join(', ')}\n\nResponda APENAS com uma das opções listadas, ou "nenhuma" se não corresponder.` },
+        ],
+        max_tokens: 50,
+        temperature: 0,
+      }),
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    const result = data.choices?.[0]?.message?.content?.trim()?.toLowerCase();
+    return result || null;
+  } catch {
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -138,7 +244,7 @@ serve(async (req) => {
       .single();
 
     if (!chatbotConfig?.ativo) {
-      console.log('Chatbot desativado globalmente. Ignorando mensagem.');
+      console.log('Chatbot desativado globalmente.');
       return new Response(JSON.stringify({ success: true, ignored: true, reason: 'chatbot_disabled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -147,7 +253,7 @@ serve(async (req) => {
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-    // Check if the admin who owns this UAZAPI instance has WhatsApp enabled
+    // Check instance owner's WhatsApp setting
     if (instanceToken) {
       const { data: instanceOwner } = await supabase
         .from('user_whatsapp_instances')
@@ -165,7 +271,7 @@ serve(async (req) => {
           .single();
 
         if (ownerProfile && !ownerProfile.whatsapp_lembretes_habilitado) {
-          console.log(`WhatsApp desabilitado para o dono da instância (${instanceOwner.user_id}). Ignorando mensagem.`);
+          console.log(`WhatsApp desabilitado para o dono da instância (${instanceOwner.user_id}).`);
           return new Response(JSON.stringify({ success: true, ignored: true, reason: 'owner_whatsapp_disabled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -190,40 +296,60 @@ serve(async (req) => {
     let etapaAtual = conversa?.etapa || 'novo';
     let dados = conversa?.dados || {};
 
+    // Save incoming message to history
+    dados = addToHistorico(dados, 'cliente', texto);
+
     // Check if user wants to restart
     const textoLower = texto.toLowerCase().trim();
-    if (['menu', 'inicio', 'início', 'voltar', 'reiniciar', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'].includes(textoLower) && etapaAtual !== 'novo') {
+    if (['menu', 'inicio', 'início', 'voltar', 'reiniciar'].includes(textoLower) && etapaAtual !== 'novo') {
       etapaAtual = 'novo';
-      dados = {};
+      dados = { mensagens_historico: dados.mensagens_historico || [] };
+    }
+
+    // For greetings, only reset if not in middle of negotiation
+    if (['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'].includes(textoLower) && etapaAtual !== 'novo' && !['proposta_enviada', 'aguardando_parcelas'].includes(etapaAtual)) {
+      etapaAtual = 'novo';
+      dados = { mensagens_historico: dados.mensagens_historico || [] };
     }
 
     let resposta = '';
+    const historico = getHistorico(dados);
 
     switch (etapaAtual) {
       case 'novo':
       case 'aguardando_cpf': {
         if (etapaAtual === 'novo') {
-          resposta = `Olá! 👋 Sou o assistente virtual da *Souza e Ribeiro Negociações*.
+          const fallback = `Olá! 👋 Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, por favor me informe seu CPF.`;
+          
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: Primeiro contato com o cliente. Cumprimente de forma calorosa e peça o CPF para consultar a situação financeira. Seja breve e acolhedora.`,
+            historico,
+            fallback
+          );
 
-Para consultar sua situação financeira, por favor informe seu *CPF* (apenas números ou formatado).`;
-
+          dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
-            telefone,
-            etapa: 'aguardando_cpf',
-            dados: {},
-            server_url: serverUrl,
-            instance_token: instanceToken,
+            telefone, etapa: 'aguardando_cpf', dados,
+            server_url: serverUrl, instance_token: instanceToken,
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
-
           break;
         }
 
         const cpf = extractCpf(texto);
         if (!cpf) {
-          resposta = `⚠️ Não consegui identificar um CPF válido na sua mensagem.
-
-Por favor, envie seu CPF com *11 dígitos*. Exemplo: 123.456.789-00`;
+          const fallback = `Não consegui identificar um CPF válido. Por favor, envie seu CPF com 11 dígitos. Exemplo: 123.456.789-00`;
+          
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: O cliente enviou "${texto}" mas não é um CPF válido. Peça gentilmente o CPF novamente, explicando o formato esperado (11 dígitos). Não seja robótico.`,
+            historico,
+            fallback
+          );
+          dados = addToHistorico(dados, 'assistente', resposta);
+          await supabase.from('chatbot_conversas').upsert({
+            telefone, etapa: 'aguardando_cpf', dados,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
           break;
         }
 
@@ -234,34 +360,36 @@ Por favor, envie seu CPF com *11 dígitos*. Exemplo: 123.456.789-00`;
 
         if (debitosError) {
           console.error('Erro ao consultar débitos:', debitosError);
-          resposta = `❌ Ocorreu um erro ao consultar seus dados. Por favor, tente novamente mais tarde ou entre em contato pelo telefone (62) 98218-3144.`;
+          const fallback = `Desculpe, tive um problema ao consultar seus dados. Tente novamente mais tarde ou ligue para (62) 98218-3144.`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: Houve um erro técnico ao consultar os dados do CPF. Peça desculpas e ofereça o telefone (62) 98218-3144 como alternativa.`,
+            historico, fallback
+          );
+          dados = addToHistorico(dados, 'assistente', resposta);
           break;
         }
 
         if (!debitos || debitos.length === 0) {
-          resposta = `✅ *Parabéns!* Não encontramos pendências para o CPF ${formatCpf(cpf)}.
+          const fallback = `Ótima notícia! Não encontramos pendências para o CPF ${formatCpf(cpf)}. Se acredita que há algum erro, entre em contato: (62) 98218-3144.`;
+          
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: Consultei o CPF ${formatCpf(cpf)} e NÃO há pendências. Dê a boa notícia de forma genuína. Ofereça o telefone (62) 98218-3144 caso o cliente acredite que há erro. Diga que pode digitar "menu" para nova consulta.`,
+            historico, fallback
+          );
 
-Se você acredita que há algum erro, entre em contato pelo telefone *(62) 98218-3144*.
-
-Digite *menu* para reiniciar.`;
-
+          dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
-            telefone,
-            etapa: 'sem_debitos',
-            dados: { cpf },
+            telefone, etapa: 'sem_debitos', dados: { ...dados, cpf },
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
           break;
         }
 
-        // Calculate totals
         const nomeDevedor = debitos[0].nome;
         const totalContratos = debitos.length;
         const valorTotal = debitos.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
-
         const valorAvista = valorTotal * 0.5;
         const valorParcelado = valorTotal * 0.7;
-        
         let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
         if (maxParcelas > 24) maxParcelas = 24;
         if (maxParcelas < 2) maxParcelas = 2;
@@ -273,70 +401,79 @@ Digite *menu* para reiniciar.`;
         let avisoAcordo = '';
         if (acordoExistente && acordoExistente.length > 0) {
           const acordo = acordoExistente[0];
-          avisoAcordo = `\n\n⚠️ *Atenção:* Já existe um acordo ${acordo.acordo_status} em seu nome, registrado por ${acordo.funcionario_nome}.`;
+          avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} em nome deste cliente, registrado por ${acordo.funcionario_nome}. Mencione isso.`;
         }
 
-        resposta = `Olá, *${nomeDevedor}*! 📋
+        const fallbackProposta = `Olá, ${nomeDevedor}! Encontrei ${totalContratos} contrato(s), totalizando ${formatCurrency(valorTotal)}.
 
-Encontrei *${totalContratos} contrato(s)* em seu nome (CPF: ${formatCpf(cpf)}), totalizando *${formatCurrency(valorTotal)}*.
+💰 *OPÇÃO 1 — À VISTA (50% OFF)*: ${formatCurrency(valorAvista)}
+📋 *OPÇÃO 2 — PARCELADO (30% OFF)*: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
 
-━━━━━━━━━━━━━━━━━━━━
-💰 *OPÇÃO 1 — QUITAÇÃO À VISTA (50% OFF)*
-Valor: *${formatCurrency(valorAvista)}* em parcela única
-Economia de ${formatCurrency(valorTotal - valorAvista)}!
-━━━━━━━━━━━━━━━━━━━━
+Responda *1* para à vista ou *2* para parcelar.
+📞 Ou fale com um negociador: (62) 98218-3144`;
 
-📋 *OPÇÃO 2 — PARCELADO (30% OFF)*
-Valor: *${formatCurrency(valorParcelado)}*
-Em até *${maxParcelas}x* de *${formatCurrency(valorParcelaMin)}*
-(mínimo de 2x, parcela mínima R$ 90,00)
-━━━━━━━━━━━━━━━━━━━━${avisoAcordo}
+        resposta = await gerarRespostaHumana(
+          `CONTEXTO: Encontrei os débitos do cliente. Apresente as opções de negociação de forma empática.
 
-Para prosseguir, responda:
-*1* — Quero pagar *à vista*
-*2* — Quero *parcelar*
+DADOS DO CLIENTE:
+- Nome: ${nomeDevedor}
+- CPF: ${formatCpf(cpf)}
+- Total de contratos: ${totalContratos}
+- Valor total da dívida: ${formatCurrency(valorTotal)}
 
-📞 Ou fale com um negociador: *(62) 98218-3144*
-Digite *menu* para reiniciar.`;
+OPÇÕES DE PAGAMENTO:
+- Opção 1 - À vista com 50% de desconto: ${formatCurrency(valorAvista)} (economia de ${formatCurrency(valorTotal - valorAvista)})
+- Opção 2 - Parcelado com 30% de desconto: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)} (parcela mínima R$ 90,00)
+
+${avisoAcordo}
+
+INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cliente responda com 1 ou 2, mas deixe claro que também aceita respostas em texto livre. Ofereça o telefone (62) 98218-3144. Use *negrito* nos valores.`,
+          historico,
+          fallbackProposta
+        );
+
+        dados = { 
+          ...dados, cpf, nome: nomeDevedor, valor_total: valorTotal,
+          valor_avista: valorAvista, valor_parcelado: valorParcelado,
+          max_parcelas: maxParcelas, total_contratos: totalContratos,
+        };
+        dados = addToHistorico(dados, 'assistente', resposta);
 
         await supabase.from('chatbot_conversas').upsert({
-          telefone,
-          etapa: 'proposta_enviada',
-          dados: { 
-            cpf, 
-            nome: nomeDevedor,
-            valor_total: valorTotal,
-            valor_avista: valorAvista,
-            valor_parcelado: valorParcelado,
-            max_parcelas: maxParcelas,
-            total_contratos: totalContratos,
-          },
-          server_url: serverUrl,
-          instance_token: instanceToken,
+          telefone, etapa: 'proposta_enviada', dados,
+          server_url: serverUrl, instance_token: instanceToken,
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'telefone' });
-
         break;
       }
 
       case 'proposta_enviada': {
-        if (textoLower === '1') {
-          // À vista — trigger robot
+        // Use AI to interpret intent instead of strict "1" or "2"
+        let escolha = textoLower === '1' ? 'avista' : textoLower === '2' ? 'parcelado' : null;
+        
+        if (!escolha) {
+          const intencao = await interpretarIntencao(texto, ['avista', 'parcelado', 'nenhuma']);
+          if (intencao?.includes('avista')) escolha = 'avista';
+          else if (intencao?.includes('parcelado')) escolha = 'parcelado';
+        }
+
+        if (escolha === 'avista') {
           const cpf = dados.cpf;
           const valorFinal = dados.valor_avista;
 
-          resposta = `✅ Ótima escolha! Você optou pela *quitação à vista* no valor de *${formatCurrency(valorFinal)}*.
+          const fallbackEspera = `Ótima escolha! Vou preparar seu boleto de ${formatCurrency(valorFinal)} à vista. Um momento, por favor...`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: O cliente ${dados.nome} escolheu pagar À VISTA. Valor: ${formatCurrency(valorFinal)}. Confirme a escolha com entusiasmo e diga que está preparando o boleto. Peça para aguardar.`,
+            historico, fallbackEspera
+          );
 
-⏳ Estou gerando seu boleto agora... Aguarde um momento, por favor.`;
-
+          dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
-            telefone,
-            etapa: 'gerando_boleto',
+            telefone, etapa: 'gerando_boleto',
             dados: { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: valorFinal },
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
 
-          // Send waiting message first
           await sendMessage(serverUrl, instanceToken, telefone, resposta);
 
           // Trigger robot
@@ -344,75 +481,64 @@ Digite *menu* para reiniciar.`;
             const result = await triggerCobMaisRobot(supabase, cpf, valorFinal, 'avista', 1);
 
             if (result.success && result.resultado?.boleto_url) {
-              resposta = `🎉 *Boleto gerado com sucesso!*
-
-📄 Acesse seu boleto:
-${result.resultado.boleto_url}
-
-💰 Valor: *${formatCurrency(valorFinal)}*
-
-Após o pagamento, sua situação será regularizada automaticamente.
-
-📞 Dúvidas? *(62) 98218-3144*
-Digite *menu* para nova consulta.`;
+              const fallbackSucesso = `Boleto gerado! Acesse: ${result.resultado.boleto_url}\nValor: ${formatCurrency(valorFinal)}\nApós o pagamento, sua situação será regularizada. Dúvidas: (62) 98218-3144`;
+              resposta = await gerarRespostaHumana(
+                `CONTEXTO: Boleto gerado com SUCESSO para ${dados.nome}! Link do boleto: ${result.resultado.boleto_url}. Valor: ${formatCurrency(valorFinal)} à vista. Informe o link, parabenize pela decisão, diga que após pagamento a situação será regularizada. Ofereça (62) 98218-3144 para dúvidas. Diga que pode digitar "menu" para nova consulta.`,
+                historico, fallbackSucesso
+              );
             } else {
-              resposta = `⚠️ Não foi possível gerar o boleto automaticamente.
-
-Por favor, entre em contato com nosso negociador para finalizar:
-📞 *(62) 98218-3144*
-
-Seu acordo de *${formatCurrency(valorFinal)}* à vista já está pré-aprovado!
-
-Digite *menu* para nova consulta.`;
+              const fallbackErro = `Não consegui gerar o boleto automaticamente. Por favor, ligue para (62) 98218-3144 — seu acordo de ${formatCurrency(valorFinal)} à vista já está pré-aprovado!`;
+              resposta = await gerarRespostaHumana(
+                `CONTEXTO: Não foi possível gerar o boleto automaticamente para ${dados.nome}. Valor: ${formatCurrency(valorFinal)} à vista. Oriente o cliente a ligar para (62) 98218-3144 para finalizar. Tranquilize que o acordo já está pré-aprovado. Diga que pode digitar "menu" para nova consulta.`,
+                historico, fallbackErro
+              );
             }
           } catch (err) {
             console.error('Erro ao gerar boleto:', err);
-            resposta = `⚠️ Não foi possível gerar o boleto automaticamente.
-
-Por favor, entre em contato com nosso negociador:
-📞 *(62) 98218-3144*
-
-Digite *menu* para nova consulta.`;
+            resposta = `Tive um probleminha técnico para gerar o boleto. Mas não se preocupe! Ligue para (62) 98218-3144 que nosso time finaliza rapidinho pra você. 😊`;
           }
 
+          dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
-            telefone,
-            etapa: 'acordo_finalizado',
+            telefone, etapa: 'acordo_finalizado',
             dados: { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: valorFinal },
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
-
           break;
 
-        } else if (textoLower === '2') {
-          // Parcelado — ask number of installments
+        } else if (escolha === 'parcelado') {
           const maxParcelas = dados.max_parcelas || 12;
           const valorParcelado = dados.valor_parcelado;
 
-          resposta = `📋 Você escolheu *parcelar*.
+          const fallbackParcelas = `Você escolheu parcelar! Total: ${formatCurrency(valorParcelado)}. Em quantas vezes quer pagar? De 2 a ${maxParcelas}x (parcela mínima R$ 90,00).`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: O cliente ${dados.nome} escolheu PARCELAR. Valor total parcelado: ${formatCurrency(valorParcelado)}. Pergunte em quantas parcelas deseja (de 2 a ${maxParcelas}). Parcela mínima: R$ 90,00. Seja conversacional.`,
+            historico, fallbackParcelas
+          );
 
-Valor total: *${formatCurrency(valorParcelado)}*
-
-Em quantas parcelas deseja pagar? (de *2* a *${maxParcelas}*)
-Parcela mínima: R$ 90,00
-
-Responda com o *número de parcelas* desejado.`;
-
+          dados = addToHistorico(dados, 'assistente', resposta);
           await supabase.from('chatbot_conversas').upsert({
-            telefone,
-            etapa: 'aguardando_parcelas',
+            telefone, etapa: 'aguardando_parcelas',
             dados: { ...dados, tipo_pagamento: 'parcelado' },
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
-
           break;
 
         } else {
-          resposta = `Por favor, responda com:
-*1* — Pagar *à vista*
-*2* — *Parcelar*
-
-Ou digite *menu* para reiniciar.`;
+          // AI couldn't determine intent — ask again naturally
+          const fallbackDuvida = `Desculpe, não entendi. Responda com 1 para pagar à vista ou 2 para parcelar. Ou digite "menu" para reiniciar.`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: O cliente ${dados.nome} respondeu "${texto}" mas não ficou claro se quer pagar à vista ou parcelar. As opções são:
+- Opção 1 - À vista: ${formatCurrency(dados.valor_avista)}
+- Opção 2 - Parcelado: ${formatCurrency(dados.valor_parcelado)} em até ${dados.max_parcelas}x
+Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar "menu" para reiniciar.`,
+            historico, fallbackDuvida
+          );
+          dados = addToHistorico(dados, 'assistente', resposta);
+          await supabase.from('chatbot_conversas').upsert({
+            telefone, etapa: 'proposta_enviada', dados,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
           break;
         }
       }
@@ -423,121 +549,126 @@ Ou digite *menu* para reiniciar.`;
         const valorParcelado = dados.valor_parcelado;
 
         if (isNaN(numParcelas) || numParcelas < 2 || numParcelas > maxParcelas) {
-          resposta = `⚠️ Número de parcelas inválido.
-
-Escolha entre *2* e *${maxParcelas}* parcelas.
-Parcela mínima: R$ 90,00
-
-Responda com o *número de parcelas*.`;
+          const fallbackInvalido = `Número de parcelas inválido. Escolha entre 2 e ${maxParcelas}x (parcela mínima R$ 90,00).`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: O cliente respondeu "${texto}" mas não é um número válido de parcelas. Aceito entre 2 e ${maxParcelas}. Valor total: ${formatCurrency(valorParcelado)}. Parcela mínima R$ 90,00. Oriente gentilmente.`,
+            historico, fallbackInvalido
+          );
+          dados = addToHistorico(dados, 'assistente', resposta);
+          await supabase.from('chatbot_conversas').upsert({
+            telefone, etapa: 'aguardando_parcelas', dados,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
           break;
         }
 
         const valorParcela = valorParcelado / numParcelas;
         if (valorParcela < VALOR_MINIMO_PARCELA) {
           const maxPossivel = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
-          resposta = `⚠️ Com ${numParcelas}x a parcela ficaria *${formatCurrency(valorParcela)}*, abaixo do mínimo de R$ 90,00.
-
-O máximo de parcelas é *${maxPossivel}x* de *${formatCurrency(valorParcelado / maxPossivel)}*.
-
-Responda com o *número de parcelas*.`;
+          const fallbackMin = `Com ${numParcelas}x a parcela ficaria ${formatCurrency(valorParcela)}, abaixo do mínimo. O máximo é ${maxPossivel}x de ${formatCurrency(valorParcelado / maxPossivel)}.`;
+          resposta = await gerarRespostaHumana(
+            `CONTEXTO: O cliente pediu ${numParcelas}x mas a parcela ficaria ${formatCurrency(valorParcela)}, abaixo do mínimo de R$ 90,00. O máximo possível é ${maxPossivel}x de ${formatCurrency(valorParcelado / maxPossivel)}. Explique de forma gentil e sugira o máximo.`,
+            historico, fallbackMin
+          );
+          dados = addToHistorico(dados, 'assistente', resposta);
+          await supabase.from('chatbot_conversas').upsert({
+            telefone, etapa: 'aguardando_parcelas', dados,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
           break;
         }
 
         const valorFinal = valorParcelado;
         const cpf = dados.cpf;
 
-        resposta = `✅ Perfeito! Acordo em *${numParcelas}x* de *${formatCurrency(valorParcela)}*.
+        const fallbackConfirma = `Perfeito! Acordo em ${numParcelas}x de ${formatCurrency(valorParcela)}. Estou gerando seu boleto, aguarde...`;
+        resposta = await gerarRespostaHumana(
+          `CONTEXTO: O cliente ${dados.nome} confirmou ${numParcelas}x de ${formatCurrency(valorParcela)} (total ${formatCurrency(valorFinal)}). Confirme com entusiasmo e diga que está preparando o boleto. Peça para aguardar.`,
+          historico, fallbackConfirma
+        );
 
-⏳ Estou gerando seu boleto agora... Aguarde um momento.`;
-
+        dados = { ...dados, parcelas: numParcelas, valor_final: valorFinal, valor_parcela: valorParcela };
+        dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
-          telefone,
-          etapa: 'gerando_boleto',
-          dados: { ...dados, parcelas: numParcelas, valor_final: valorFinal, valor_parcela: valorParcela },
+          telefone, etapa: 'gerando_boleto', dados,
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'telefone' });
 
-        // Send waiting message
         await sendMessage(serverUrl, instanceToken, telefone, resposta);
 
-        // Trigger robot
         try {
           const result = await triggerCobMaisRobot(supabase, cpf, valorFinal, 'parcelado', numParcelas);
 
           if (result.success && result.resultado?.boleto_url) {
-            resposta = `🎉 *Acordo gerado com sucesso!*
-
-📄 Boleto da 1ª parcela:
-${result.resultado.boleto_url}
-
-💰 *${numParcelas}x* de *${formatCurrency(valorParcela)}*
-Total: *${formatCurrency(valorFinal)}*
-
-Os próximos boletos serão enviados mensalmente.
-
-📞 Dúvidas? *(62) 98218-3144*
-Digite *menu* para nova consulta.`;
+            const fallbackBoleto = `Acordo gerado! Boleto da 1ª parcela: ${result.resultado.boleto_url}\n${numParcelas}x de ${formatCurrency(valorParcela)}. Próximos boletos serão enviados mensalmente. Dúvidas: (62) 98218-3144`;
+            resposta = await gerarRespostaHumana(
+              `CONTEXTO: Boleto da 1ª parcela gerado com sucesso para ${dados.nome}! Link: ${result.resultado.boleto_url}. Acordo: ${numParcelas}x de ${formatCurrency(valorParcela)}, total ${formatCurrency(valorFinal)}. Informe o link, diga que os próximos boletos virão mensalmente. Parabenize e ofereça (62) 98218-3144. Diga que pode digitar "menu" para nova consulta.`,
+              historico, fallbackBoleto
+            );
           } else {
-            resposta = `⚠️ Não foi possível gerar o boleto automaticamente.
-
-Por favor, entre em contato com nosso negociador:
-📞 *(62) 98218-3144*
-
-Seu acordo de *${numParcelas}x de ${formatCurrency(valorParcela)}* já está pré-aprovado!
-
-Digite *menu* para nova consulta.`;
+            const fallbackErro = `Não consegui gerar o boleto automaticamente. Ligue para (62) 98218-3144 — seu acordo de ${numParcelas}x de ${formatCurrency(valorParcela)} já está pré-aprovado!`;
+            resposta = await gerarRespostaHumana(
+              `CONTEXTO: Não foi possível gerar o boleto automaticamente para ${dados.nome}. Acordo: ${numParcelas}x de ${formatCurrency(valorParcela)}. Oriente a ligar para (62) 98218-3144. O acordo já está pré-aprovado. Diga que pode digitar "menu" para nova consulta.`,
+              historico, fallbackErro
+            );
           }
         } catch (err) {
           console.error('Erro ao gerar boleto parcelado:', err);
-          resposta = `⚠️ Não foi possível gerar o boleto automaticamente.
-
-Por favor, entre em contato com nosso negociador:
-📞 *(62) 98218-3144*
-
-Digite *menu* para nova consulta.`;
+          resposta = `Tive um probleminha técnico, mas seu acordo está garantido! Ligue para (62) 98218-3144 que finalizamos rapidinho. 😊`;
         }
 
+        dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
-          telefone,
-          etapa: 'acordo_finalizado',
-          dados: { ...dados, parcelas: numParcelas, valor_final: valorFinal, valor_parcela: valorParcela },
+          telefone, etapa: 'acordo_finalizado', dados,
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'telefone' });
-
         break;
       }
 
       case 'gerando_boleto': {
-        resposta = `⏳ Seu boleto ainda está sendo gerado. Por favor, aguarde...
-
-Se já faz mais de 3 minutos, entre em contato:
-📞 *(62) 98218-3144*`;
+        const fallback = `Seu boleto ainda está sendo gerado, por favor aguarde mais um pouquinho. Se demorar muito, ligue para (62) 98218-3144.`;
+        resposta = await gerarRespostaHumana(
+          `CONTEXTO: O cliente mandou mensagem enquanto o boleto ainda está sendo gerado. Peça paciência gentilmente. Se já faz mais de 3 minutos, sugira ligar para (62) 98218-3144.`,
+          historico, fallback
+        );
+        dados = addToHistorico(dados, 'assistente', resposta);
+        await supabase.from('chatbot_conversas').upsert({
+          telefone, etapa: 'gerando_boleto', dados,
+          atualizado_em: new Date().toISOString(),
+        }, { onConflict: 'telefone' });
         break;
       }
 
       case 'acordo_finalizado':
       case 'sem_debitos': {
-        resposta = `Para fazer uma nova consulta, digite *menu*.
-
-📞 Para falar com um negociador: *(62) 98218-3144*`;
+        const fallback = `Para uma nova consulta, digite "menu". Para falar com um negociador: (62) 98218-3144.`;
+        resposta = await gerarRespostaHumana(
+          `CONTEXTO: O cliente já finalizou a negociação ou não tinha débitos, e está mandando uma nova mensagem ("${texto}"). Responda de forma amigável. Se quiser recomeçar, pode digitar "menu". Para falar com humano: (62) 98218-3144.`,
+          historico, fallback
+        );
+        dados = addToHistorico(dados, 'assistente', resposta);
+        await supabase.from('chatbot_conversas').upsert({
+          telefone, etapa: etapaAtual, dados,
+          atualizado_em: new Date().toISOString(),
+        }, { onConflict: 'telefone' });
         break;
       }
 
       default: {
-        resposta = `Olá! 👋 Sou o assistente virtual da *Souza e Ribeiro Negociações*.
-
-Para consultar sua situação financeira, por favor informe seu *CPF*.`;
-
+        const fallback = `Olá! Sou a Ana, da Souza e Ribeiro Negociações. Para consultar sua situação financeira, me informe seu CPF.`;
+        resposta = await gerarRespostaHumana(
+          `CONTEXTO: Nova conversa ou estado desconhecido. Cumprimente e peça o CPF para consulta.`,
+          historico, fallback
+        );
+        dados = addToHistorico(dados, 'assistente', resposta);
         await supabase.from('chatbot_conversas').upsert({
-          telefone,
-          etapa: 'aguardando_cpf',
-          dados: {},
+          telefone, etapa: 'aguardando_cpf', dados: {},
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'telefone' });
       }
     }
 
-    // Send response via UAZAPI
+    // Send response
     if (resposta) {
       console.log(`Enviando resposta para ${telefone}...`);
       await sendMessage(serverUrl, instanceToken, telefone, resposta);
