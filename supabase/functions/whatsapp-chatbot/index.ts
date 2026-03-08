@@ -783,6 +783,53 @@ serve(async (req) => {
 
       // -------- PROPOSTA ENVIADA (50% desconto?) --------
       case 'proposta_enviada': {
+        // Check if client is asking about specific installments (e.g. "como fica em 12x?")
+        const matchParcelasProposta = texto.match(/(\d+)\s*(?:x|vezes|parcelas?)/i) || texto.match(/em\s+(\d+)\b/i);
+        
+        if (matchParcelasProposta) {
+          const parcelasPedidas = parseInt(matchParcelasProposta[1]);
+          
+          // Recalculate values if needed
+          let vaP = Number(dados.valor_avista);
+          let vpP = Number(dados.valor_parcelado);
+          let mpP = Number(dados.max_parcelas);
+          if (!vaP || isNaN(vaP)) {
+            let vt = Number(dados.valor_total);
+            if (!vt || isNaN(vt)) {
+              const cpfF = dados.cpf;
+              if (cpfF) {
+                const { data: df } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpfF });
+                if (df && df.length > 0) vt = df.reduce((s: number, d: any) => s + Number(d.valor_atualizado), 0);
+              }
+            }
+            if (vt && !isNaN(vt)) {
+              vaP = vt * 0.5;
+              vpP = vt * 0.7;
+              mpP = Math.min(24, Math.floor(vpP / VALOR_MINIMO_PARCELA));
+              if (mpP < 2) mpP = 2;
+              dados = { ...dados, valor_total: vt, valor_avista: vaP, valor_parcelado: vpP, max_parcelas: mpP };
+            }
+          }
+
+          if (parcelasPedidas === 1) {
+            dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: vaP };
+            resposta = `À vista fica *${formatCurrency(vaP)}*. Você consegue fazer o pagamento hoje?`;
+            await salvarEResponder('aguardando_pagamento_hoje');
+            break;
+          } else if (parcelasPedidas >= 2 && parcelasPedidas <= 24 && vpP / parcelasPedidas >= VALOR_MINIMO_PARCELA) {
+            const valorParcCalc = vpP / parcelasPedidas;
+            dados = { ...dados, tipo_pagamento: 'parcelado', parcelas: parcelasPedidas, valor_final: vpP };
+            resposta = `Em ${parcelasPedidas}x fica *${formatCurrency(valorParcCalc)}* cada parcela. Você consegue fazer o pagamento hoje?`;
+            await salvarEResponder('aguardando_pagamento_hoje');
+            break;
+          } else {
+            const maxParc = mpP || 24;
+            resposta = `O parcelamento pode ser de 2x a ${maxParc}x com parcela mínima de R$ 100,00. Como prefere?`;
+            await salvarEResponder('oferta_valores');
+            break;
+          }
+        }
+
         // Client responds to "consegue voltar a pagar com 50% de desconto?"
         const intencao = await interpretarIntencao(texto, ['sim', 'nao']);
         const isSim = intencao?.includes('sim') ||
@@ -833,15 +880,7 @@ serve(async (req) => {
 
       // -------- OFERTA DE VALORES (avista ou parcelado?) --------
       case 'oferta_valores': {
-        let escolha = textoLower === '1' ? 'avista' : textoLower === '2' ? 'parcelado' : null;
-
-        if (!escolha) {
-          const intencao = await interpretarIntencao(texto, ['avista', 'parcelado', 'nenhuma']);
-          if (intencao?.includes('avista')) escolha = 'avista';
-          else if (intencao?.includes('parcelado')) escolha = 'parcelado';
-        }
-
-        // Ensure values are valid numbers with fallback
+        // Ensure values are valid numbers with fallback (moved up for reuse)
         let vaOfertas = Number(dados.valor_avista);
         let vpOfertas = Number(dados.valor_parcelado);
         let mpOfertas = Number(dados.max_parcelas);
@@ -861,6 +900,39 @@ serve(async (req) => {
             if (mpOfertas < 2) mpOfertas = 2;
             dados = { ...dados, valor_total: vt, valor_avista: vaOfertas, valor_parcelado: vpOfertas, max_parcelas: mpOfertas };
           }
+        }
+
+        // Check if client is asking about specific installments (e.g. "como fica em 12x?")
+        const matchParcelasOferta = texto.match(/(\d+)\s*(?:x|vezes|parcelas?)/i) || texto.match(/em\s+(\d+)\b/i);
+        
+        if (matchParcelasOferta) {
+          const parcelasPedidas = parseInt(matchParcelasOferta[1]);
+          
+          if (parcelasPedidas === 1) {
+            dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: vaOfertas };
+            resposta = `À vista fica *${formatCurrency(vaOfertas)}*. Você consegue fazer o pagamento hoje?`;
+            await salvarEResponder('aguardando_pagamento_hoje');
+            break;
+          } else if (parcelasPedidas >= 2 && parcelasPedidas <= 24 && vpOfertas / parcelasPedidas >= VALOR_MINIMO_PARCELA) {
+            const valorParcCalc = vpOfertas / parcelasPedidas;
+            dados = { ...dados, tipo_pagamento: 'parcelado', parcelas: parcelasPedidas, valor_final: vpOfertas };
+            resposta = `Em ${parcelasPedidas}x fica *${formatCurrency(valorParcCalc)}* cada parcela. Você consegue fazer o pagamento hoje?`;
+            await salvarEResponder('aguardando_pagamento_hoje');
+            break;
+          } else {
+            resposta = `O parcelamento pode ser de 2x a ${mpOfertas}x com parcela mínima de R$ 100,00. Como prefere?`;
+            await salvarEResponder('oferta_valores');
+            break;
+          }
+        }
+
+        // Original flow: classify intent
+        let escolha = textoLower === '1' ? 'avista' : textoLower === '2' ? 'parcelado' : null;
+
+        if (!escolha) {
+          const intencaoOferta = await interpretarIntencao(texto, ['avista', 'parcelado', 'nenhuma']);
+          if (intencaoOferta?.includes('avista')) escolha = 'avista';
+          else if (intencaoOferta?.includes('parcelado')) escolha = 'parcelado';
         }
 
         if (escolha === 'avista') {
