@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.chat-cobmais-knowledge]
 verify_jwt = false
+
+[functions.teach-chatbot]
+verify_jwt = false
