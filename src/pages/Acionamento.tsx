@@ -128,7 +128,7 @@ export default function Acionamento() {
   const [sendTimestamps, setSendTimestamps] = useState<Record<number, string>>({});
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [activeHistoricoId, setActiveHistoricoId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados'>('pendentes');
+  const [activeTab, setActiveTab] = useState<'pendentes' | 'enviados' | 'ia'>('pendentes');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
