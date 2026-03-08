@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 
-type CredorLayout = 'padrao' | 'montreal' | 'cobmais';
+type CredorLayout = 'padrao' | 'montreal' | 'cobmais' | 'pesquisa';
 
 interface DevedorRow {
   cpf: string;
@@ -47,6 +47,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Tipo Título, H = Atraso (dias), I = Nro Nota, J = Desdob., K = Valor, L = Dt. Venc. Inicial',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total | Aba 2: Telefones (opcional)',
+  pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
 };
 
 export default function ImportarDevedores() {
@@ -149,6 +150,25 @@ export default function ImportarDevedores() {
     }).filter(r => r.cpf.length >= 11);
   };
 
+  const parsePesquisa = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
+    return dataRows.map((row) => {
+      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      const nome = String(row['B'] ?? '').trim();
+      const telefone = String(row['C'] ?? '').replace(/\D/g, '');
+      return {
+        cpf,
+        nascimento: '',
+        nome,
+        credor: '',
+        contrato: '',
+        atraso: '',
+        valor_original: 0,
+        valor_atualizado: 0,
+        telefone: telefone || undefined,
+      };
+    }).filter(r => r.cpf.length >= 11 && r.nome.length > 0);
+  };
+
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     // Aba 1 - Dados principais
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
@@ -245,7 +265,7 @@ export default function ImportarDevedores() {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           const dataRows = json.slice(1);
-          parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : parsePadrao(dataRows);
+          parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : credorSelecionado === 'pesquisa' ? parsePesquisa(dataRows) : parsePadrao(dataRows);
         }
         setRows(parsed);
         if (parsed.length === 0) {
@@ -318,7 +338,7 @@ export default function ImportarDevedores() {
       credor: credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
@@ -379,6 +399,7 @@ export default function ImportarDevedores() {
 
   const isMontreal = credorSelecionado === 'montreal';
   const isCobmais = credorSelecionado === 'cobmais';
+  const isPesquisa = credorSelecionado === 'pesquisa';
 
   return (
     <AppLayout>
@@ -405,7 +426,8 @@ export default function ImportarDevedores() {
                 <SelectContent>
                   <SelectItem value="padrao">Padrão</SelectItem>
                   <SelectItem value="montreal">MONTREAL</SelectItem>
-                  <SelectItem value="cobmais">COBMAIS</SelectItem>
+                   <SelectItem value="cobmais">COBMAIS</SelectItem>
+                   <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -571,7 +593,12 @@ export default function ImportarDevedores() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>CPF/CNPJ</TableHead>
-                        {isMontreal ? (
+                        {isPesquisa ? (
+                          <>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Telefone</TableHead>
+                          </>
+                        ) : isMontreal ? (
                           <>
                             <TableHead>Nome</TableHead>
                             <TableHead>Nro Nota</TableHead>
@@ -604,7 +631,12 @@ export default function ImportarDevedores() {
                       {rows.slice(0, 50).map((row, i) => (
                         <TableRow key={i}>
                           <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
-                          {isMontreal ? (
+                          {isPesquisa ? (
+                            <>
+                              <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                              <TableCell>{row.telefone || '-'}</TableCell>
+                            </>
+                          ) : isMontreal ? (
                             <>
                               <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
                               <TableCell>{row.contrato || '-'}</TableCell>
