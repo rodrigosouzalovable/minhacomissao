@@ -1,31 +1,28 @@
 
 
-## Diagnóstico
+# Fix: Chatbot enviando múltiplas mensagens
 
-Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
+## Problema identificado
 
-**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
+Analisando o código, há **dois problemas** causando a enxurrada de mensagens:
 
-O payload do webhook contém os dados da instância correta:
-- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
-- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
+### 1. Envio duplicado (double send)
+Nos casos `avista` (linha 756) e `parcelado` (linha 873), o código chama `sendMessage()` diretamente dentro do branch. Porém, no final da função (linhas 948-954), há um bloco genérico que envia `resposta` novamente para **todos** os casos. Resultado: cada mensagem é enviada 2x ou mais.
 
-A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
+### 2. Sem deduplicação de webhooks
+O WhatsApp/UAZAPI pode disparar o webhook múltiplas vezes para a mesma mensagem. Sem controle de dedup, cada disparo gera uma resposta completa.
 
-## Correção
+## Solução
 
-Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+### A. Flag `jaEnviou` para evitar double send
+Adicionar uma variável `let jaEnviou = false` no início do fluxo. Nos branches que já chamam `sendMessage` internamente (`avista`, `parcelado`), setar `jaEnviou = true`. No bloco final (linha 948), só enviar se `!jaEnviou`.
 
-```typescript
-// ANTES: usa credenciais globais fixas
-const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+### B. Deduplicação por message ID
+Extrair um ID único da mensagem do webhook (ex: `payload.message?.id` ou `payload.key?.id`). Antes de processar, verificar se esse ID já foi processado recentemente (salvar na tabela `chatbot_conversas.dados` ou checar com uma query rápida). Se já foi, ignorar.
 
-// DEPOIS: prioriza credenciais do payload, fallback para globais
-const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
-const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
-```
+### C. Injetar regras ensinadas no system prompt
+Para que a IA use o conhecimento ensinado em TODAS as respostas (não só match exato), injetar as regras ativas como contexto adicional no `SYSTEM_PROMPT` passado para `gerarRespostaHumana`.
 
-### Arquivo a modificar
-- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
+## Arquivos alterados
+- `supabase/functions/whatsapp-chatbot/index.ts` — flag `jaEnviou`, dedup de mensagens, injeção de regras no prompt
 
