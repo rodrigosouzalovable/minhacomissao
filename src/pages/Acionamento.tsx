@@ -621,6 +621,61 @@ export default function Acionamento() {
     [enviados, sendTimestamps]
   );
 
+  // Fetch conversation states for enviados phones (polling every 30s)
+  const fetchConversas = useCallback(async () => {
+    if (enviados.length === 0) return;
+    const phones = enviados.map(c => normalizePhoneForWhatsApp(c.telefone));
+    const uniquePhones = [...new Set(phones)];
+    if (uniquePhones.length === 0) return;
+
+    const { data, error } = await supabase
+      .from('chatbot_conversas')
+      .select('telefone, etapa, dados')
+      .in('telefone', uniquePhones);
+
+    if (error || !data) return;
+
+    const map: Record<string, ConversaInfo> = {};
+    for (const row of data) {
+      const dados = row.dados as any;
+      const historico = Array.isArray(dados?.mensagens_historico) ? dados.mensagens_historico : [];
+      map[row.telefone] = { etapa: row.etapa, historico };
+    }
+    setConversasMap(map);
+  }, [enviados]);
+
+  useEffect(() => {
+    if (activeTab !== 'enviados' || enviados.length === 0) return;
+    fetchConversas();
+    const interval = setInterval(fetchConversas, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab, fetchConversas, enviados.length]);
+
+  const getConversaStatus = (telefone: string) => {
+    const normalized = normalizePhoneForWhatsApp(telefone);
+    const conversa = conversasMap[normalized];
+    if (!conversa) return null;
+    
+    const hasClientMsg = conversa.historico.some(m => m.role === 'cliente' || m.role === 'user');
+    if (conversa.etapa === 'acordo_finalizado') return 'acordo';
+    if (conversa.etapa === 'aguardando_humano') return 'aguardando';
+    if (hasClientMsg) return 'negociando';
+    return null;
+  };
+
+  const handleOpenChat = (cliente: { nome: string; telefone: string }) => {
+    const normalized = normalizePhoneForWhatsApp(cliente.telefone);
+    const conversa = conversasMap[normalized];
+    if (!conversa) return;
+    setSelectedConversa({
+      etapa: conversa.etapa,
+      historico: conversa.historico,
+      telefone: cliente.telefone,
+      clienteNome: cliente.nome,
+    });
+    setChatDialogOpen(true);
+  };
+
   // Instance management
   const handleSaveInstance = async () => {
     if (!user || !editingInstance) return;
