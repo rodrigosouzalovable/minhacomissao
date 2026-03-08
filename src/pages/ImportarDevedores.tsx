@@ -593,7 +593,12 @@ export default function ImportarDevedores() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>CPF/CNPJ</TableHead>
-                        {isMontreal ? (
+                        {isPesquisa ? (
+                          <>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Telefone</TableHead>
+                          </>
+                        ) : isMontreal ? (
                           <>
                             <TableHead>Nome</TableHead>
                             <TableHead>Nro Nota</TableHead>
