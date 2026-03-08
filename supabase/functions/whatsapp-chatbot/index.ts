@@ -854,6 +854,9 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
 
     // Send response
     if (resposta) {
+      const delayMs = (Math.floor(Math.random() * 16) + 15) * 1000; // 15-30 seg
+      console.log(`Simulando digitação por ${delayMs / 1000}s antes de responder ${telefone}...`);
+      await simulateTyping(serverUrl, instanceToken, telefone, delayMs);
       console.log(`Enviando resposta para ${telefone}...`);
       await sendMessage(serverUrl, instanceToken, telefone, resposta);
       console.log('Resposta enviada com sucesso!');
