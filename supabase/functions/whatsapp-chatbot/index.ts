@@ -527,7 +527,8 @@ serve(async (req) => {
               resposta = await gerarRespostaHumana(
                 `CONTEXTO: Pelo telefone encontrei múltiplas pessoas. Perguntando se é ${devedor.nome}, CPF final ${cpfFinal}. Seja breve.`,
                 historico,
-                fallbackConfirma
+                fallbackConfirma,
+                regrasTexto
               );
 
               dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: devedor.nome };
