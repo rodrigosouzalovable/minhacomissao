@@ -381,84 +381,19 @@ serve(async (req) => {
             const cpfsUnicos = [...new Set(devedoresEncontrados.map((d: any) => d.cpf.replace(/\D/g, '')))];
             
             if (cpfsUnicos.length === 1) {
-              // Single person — go DIRECTLY to proposal
+              // Single person — ask CPF confirmation before proposal
               const cpfLimpo = cpfsUnicos[0];
               const nomeDevedor = devedoresEncontrados[0].nome;
-              console.log(`[AUTO-ID] Devedor único: ${nomeDevedor}, CPF: ${cpfLimpo} — proposta direta`);
+              console.log(`[AUTO-ID] Devedor único: ${nomeDevedor}, CPF: ${cpfLimpo} — pedindo confirmação de CPF`);
 
-              const { data: debitos, error: debitosError } = await supabase
-                .rpc('consultar_debitos_por_cpf', { p_cpf: cpfLimpo });
+              const cpfFormatado = formatCpf(cpfLimpo);
+              const fallbackConfirma = `Só pra confirmar, seu CPF é ${cpfFormatado}?`;
+              resposta = fallbackConfirma;
 
-              if (debitosError || !debitos || debitos.length === 0) {
-                const fallback = `Olá, ${nomeDevedor}! 👋 Sou a Ana, da Souza e Ribeiro. ${!debitos || debitos.length === 0 ? 'Não encontrei pendências no seu CPF.' : 'Tive um problema ao consultar.'} Ligue para (62) 98218-3144 se precisar.`;
-                resposta = await gerarRespostaHumana(
-                  debitosError
-                    ? `CONTEXTO: Erro ao consultar débitos de ${nomeDevedor}. Peça desculpas e ofereça (62) 98218-3144.`
-                    : `CONTEXTO: ${nomeDevedor} identificado pelo telefone mas sem débitos. Dê a boa notícia.`,
-                  historico, fallback
-                );
-                dados = addToHistorico(dados, 'assistente', resposta);
-                await supabase.from('chatbot_conversas').upsert({
-                  telefone, etapa: 'sem_debitos', dados: { ...dados, cpf: cpfLimpo },
-                  server_url: serverUrl, instance_token: instanceToken,
-                  atualizado_em: new Date().toISOString(),
-                }, { onConflict: 'telefone' });
-                break;
-              }
-
-              const totalContratos = debitos.length;
-              const valorTotal = debitos.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
-              const valorAvista = valorTotal * 0.5;
-              const valorParcelado = valorTotal * 0.7;
-              let maxParcelas = Math.floor(valorParcelado / VALOR_MINIMO_PARCELA);
-              if (maxParcelas > 24) maxParcelas = 24;
-              if (maxParcelas < 2) maxParcelas = 2;
-              const valorParcelaMin = valorParcelado / maxParcelas;
-
-              const { data: acordoExistente } = await supabase
-                .rpc('consultar_acordo_ativo_por_cpf', { p_cpf: cpfLimpo });
-
-              let avisoAcordo = '';
-              if (acordoExistente && acordoExistente.length > 0) {
-                const acordo = acordoExistente[0];
-                avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione isso.`;
-              }
-
-              const fallbackProposta = `Olá, ${nomeDevedor}! 👋 Sou a Ana, da Souza e Ribeiro. Encontrei ${totalContratos} contrato(s) totalizando ${formatCurrency(valorTotal)}.
-
-💰 *À VISTA (50% OFF)*: ${formatCurrency(valorAvista)}
-📋 *PARCELADO (30% OFF)*: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-
-Responda *1* para à vista ou *2* para parcelar.
-📞 Fale com negociador: (62) 98218-3144`;
-
-              resposta = await gerarRespostaHumana(
-                `CONTEXTO: O cliente ${nomeDevedor} foi identificado pelo telefone. Apresente as opções diretamente.
-
-DADOS:
-- Nome: ${nomeDevedor}
-- Contratos: ${totalContratos}
-- Dívida total: ${formatCurrency(valorTotal)}
-
-OPÇÕES:
-- À vista 50% desconto: ${formatCurrency(valorAvista)}
-- Parcelado 30% desconto: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-${avisoAcordo}
-
-INSTRUÇÕES: Cumprimente, apresente as opções com *negrito* nos valores. Ofereça (62) 98218-3144.`,
-                historico,
-                fallbackProposta
-              );
-
-              dados = {
-                ...dados, cpf: cpfLimpo, nome: nomeDevedor, valor_total: valorTotal,
-                valor_avista: valorAvista, valor_parcelado: valorParcelado,
-                max_parcelas: maxParcelas, total_contratos: totalContratos,
-              };
+              dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: nomeDevedor };
               dados = addToHistorico(dados, 'assistente', resposta);
-
               await supabase.from('chatbot_conversas').upsert({
-                telefone, etapa: 'proposta_enviada', dados,
+                telefone, etapa: 'aguardando_confirmacao_identidade', dados,
                 server_url: serverUrl, instance_token: instanceToken,
                 atualizado_em: new Date().toISOString(),
               }, { onConflict: 'telefone' });
@@ -652,6 +587,8 @@ INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cl
           }
 
           const nomeDevedor = debitos[0].nome;
+          const primeiroNome = nomeDevedor.split(' ')[0];
+          const primeiroNomeCapitalizado = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
           const totalContratos = debitos.length;
           const valorTotal = debitos.reduce((sum: number, d: any) => sum + Number(d.valor_atualizado), 0);
           const valorAvista = valorTotal * 0.5;
@@ -661,39 +598,52 @@ INSTRUÇÕES: Apresente as duas opções destacando os descontos. Peça que o cl
           if (maxParcelas < 2) maxParcelas = 2;
           const valorParcelaMin = valorParcelado / maxParcelas;
 
+          // Fetch credor name from devedores table
+          const { data: devedorInfo } = await supabase
+            .from('devedores')
+            .select('credor')
+            .eq('cpf', cpf)
+            .eq('ativo', true)
+            .limit(1)
+            .single();
+          
+          // Map credor slug to display name
+          let credorNome = 'a empresa credora';
+          const credorSlug = devedorInfo?.credor || '';
+          if (credorSlug.includes('novo_mundo') || credorSlug.includes('ume')) {
+            credorNome = 'as Lojas Novo Mundo';
+          } else if (credorSlug) {
+            credorNome = credorSlug.replace(/_/g, ' ');
+          }
+
           const { data: acordoExistente } = await supabase
             .rpc('consultar_acordo_ativo_por_cpf', { p_cpf: cpf });
 
           let avisoAcordo = '';
           if (acordoExistente && acordoExistente.length > 0) {
             const acordo = acordoExistente[0];
-            avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione isso.`;
+            avisoAcordo = ` ATENÇÃO: Já existe um acordo ${acordo.acordo_status} registrado por ${acordo.funcionario_nome}. Mencione brevemente.`;
           }
 
-          const fallbackProposta = `${nomeDevedor}, encontrei ${totalContratos} contrato(s) totalizando ${formatCurrency(valorTotal)}.
-
-💰 *À VISTA (50% OFF)*: ${formatCurrency(valorAvista)}
-📋 *PARCELADO (30% OFF)*: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-
-Responda *1* para à vista ou *2* para parcelar.
-📞 Fale com negociador: (62) 98218-3144`;
+          const fallbackProposta = `Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você da seguinte forma: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?`;
 
           resposta = await gerarRespostaHumana(
-            `CONTEXTO: O cliente ${nomeDevedor} confirmou sua identidade. Apresente as opções de negociação com empatia.
+            `CONTEXTO: O cliente ${primeiroNomeCapitalizado} confirmou o CPF. Agora apresente a proposta de forma CURTA e DIRETA como no WhatsApp.
 
 DADOS:
-- Nome: ${nomeDevedor}
-- CPF: ${formatCpf(cpf)}
-- Contratos: ${totalContratos}
+- Primeiro nome: ${primeiroNomeCapitalizado}
+- Credor: ${credorNome}
 - Dívida total: ${formatCurrency(valorTotal)}
-
-OPÇÕES:
-- À vista 50% desconto: ${formatCurrency(valorAvista)}
-- Parcelado 30% desconto: ${formatCurrency(valorParcelado)} em até ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
-
+- À vista (50% desc): ${formatCurrency(valorAvista)}
+- Parcelado (30% desc): ${maxParcelas}x de ${formatCurrency(valorParcelaMin)}
 ${avisoAcordo}
 
-INSTRUÇÕES: Agradeça a confirmação, apresente as opções com *negrito* nos valores. Ofereça (62) 98218-3144.`,
+INSTRUÇÕES RÍGIDAS:
+- Máximo 2-3 frases. SEM numeração (1, 2). SEM emojis excessivos.
+- Use o primeiro nome "${primeiroNomeCapitalizado}" (não o nome completo).
+- Mencione "${credorNome}" na mensagem.
+- Tom conversacional como se fosse uma pessoa digitando no WhatsApp.
+- Exemplo de formato ideal: "Perfeito, ${primeiroNomeCapitalizado}! A proposta disponível para *pagamento à vista é ${formatCurrency(valorAvista)}*, pagando esse valor, você quita todas as parcelas em aberto com ${credorNome}. Ou podemos parcelar para você: *${maxParcelas}x de ${formatCurrency(valorParcelaMin)}*. Como fica melhor para você?"`,
             historico,
             fallbackProposta
           );
