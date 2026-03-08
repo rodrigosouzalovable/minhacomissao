@@ -738,8 +738,9 @@ serve(async (req) => {
           break;
 
         } else {
-          resposta = `Desculpe, não entendi. Você prefere pagar *à vista* (${formatCurrency(vaOfertas)}) ou *parcelado* (${mpOfertas}x de ${formatCurrency(vpOfertas / mpOfertas)})?`;
-          await salvarEResponder('oferta_valores');
+          // AI não entendeu — notificar admin e silenciar
+          console.log(`[SILÊNCIO] oferta_valores: não entendeu escolha: "${texto}"`);
+          await salvarSilenciosoENotificar('oferta_valores', texto);
           break;
         }
       }
