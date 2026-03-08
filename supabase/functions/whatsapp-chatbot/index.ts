@@ -922,7 +922,7 @@ Peça gentilmente que escolha uma opção, reforçando os valores. Pode digitar 
             const fallbackBoleto = `Acordo gerado! Boleto da 1ª parcela: ${result.resultado.boleto_url}\n${numParcelas}x de ${formatCurrency(valorParcela)}. Próximos boletos serão enviados mensalmente. Dúvidas: (62) 98218-3144`;
             resposta = await gerarRespostaHumana(
               `CONTEXTO: Boleto da 1ª parcela gerado com sucesso para ${dados.nome}! Link: ${result.resultado.boleto_url}. Acordo: ${numParcelas}x de ${formatCurrency(valorParcela)}, total ${formatCurrency(valorFinal)}. Informe o link, diga que os próximos boletos virão mensalmente. Parabenize e ofereça (62) 98218-3144. Diga que pode digitar "menu" para nova consulta.`,
-              historico, fallbackBoleto
+              historico, fallbackBoleto, regrasTexto
             );
           } else {
             const fallbackErro = `Não consegui gerar o boleto automaticamente. Ligue para (62) 98218-3144 — seu acordo de ${numParcelas}x de ${formatCurrency(valorParcela)} já está pré-aprovado!`;
