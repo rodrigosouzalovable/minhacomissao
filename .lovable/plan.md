@@ -1,47 +1,31 @@
 
 
-# Chatbot com respostas EXATAS baseadas no saldo do cliente
+## Diagnóstico
 
-## Problema atual
-O chatbot usa `gerarRespostaHumana()` (IA generativa) para criar respostas livres em quase todas as etapas. Isso faz com que a IA "invente" textos que não seguem exatamente o que você ensinou. Além disso, o fluxo não contempla as etapas de "consegue pagar hoje?" e "que dia pode pagar?" (limite 7 dias).
+Os logs confirmam que o **parsing está funcionando corretamente** agora. O chatbot extraiu o telefone `556282184790` e o texto `"Olá"` com sucesso. O problema é na **resposta**: o erro é `"WhatsApp disconnected"`.
 
-## O que o saldo já faz
-A tabela `devedores` tem a coluna `valor_atualizado` — esse é o saldo importado pela planilha. O chatbot já usa esse valor para calcular 50% (à vista) e 30% de desconto (parcelado). Isso já funciona.
+**Causa raiz**: O chatbot usa as credenciais globais (secret `UAZAPI_INSTANCE_TOKEN = e4438332-...`) para enviar a resposta. Essas credenciais são de uma instância **diferente** da que recebeu a mensagem (62991672674 / "IPHONE RODRIGO 2674").
 
-## Mudança principal
-Substituir as chamadas de IA generativa por **respostas fixas/template** em cada etapa, seguindo EXATAMENTE o script que você ensinou. A IA só será usada para interpretar intenção (sim/não, à vista/parcelado), nunca para redigir a resposta.
+O payload do webhook contém os dados da instância correta:
+- `payload.BaseUrl` = `"https://certificadoracnpj.uazapi.com"`  
+- `payload.token` = `"3085f4de-ac57-4b90-b7a3-6c12fa4348b2"`
 
-## Novo fluxo de etapas
+A instância global (token `e4438332-...`) está com WhatsApp desconectado, por isso todas as tentativas de envio falham.
 
-```text
-novo → identifica cliente pelo telefone
-  ↓
-confirmacao_identidade → "Seu CPF é XXX?"
-  ↓ (sim)
-proposta_enviada → "Olá {nome}, você consegue voltar a pagar suas 
-                    parcelas em aberto com {credor} com 50% de desconto?"
-  ↓ (sim)
-oferta_valores → "Que ótimo! ...R$ {avista} à vista OU {parcelas}x de 
-                  R$ {parcela}. Como fica melhor?"
-  ↓ (escolhe forma)
-aguardando_data → "Ok! Você consegue fazer o pagamento hoje?"
-  ↓ (sim) → "Ok! Iremos te enviar o boleto para pagamento hoje."
-  ↓ (não) → "Que dia você pode fazer o pagamento?"
-    ↓
-validar_data → Se ≤7 dias: "OK, irei te enviar o boleto para essa data!"
-             → Se >7 dias: "Infelizmente o prazo máximo é 7 dias..."
+## Correção
+
+Modificar o `whatsapp-chatbot/index.ts` para usar o **token e URL que vêm no próprio webhook** ao invés das credenciais globais. Assim, a resposta é enviada pela mesma instância que recebeu a mensagem.
+
+```typescript
+// ANTES: usa credenciais globais fixas
+const serverUrl = Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+
+// DEPOIS: prioriza credenciais do payload, fallback para globais
+const serverUrl = payload?.BaseUrl || Deno.env.get('UAZAPI_SERVER_URL');
+const instanceToken = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 ```
 
-## Arquivo alterado
-**`supabase/functions/whatsapp-chatbot/index.ts`**
-
-1. **Novas etapas** no switch: `oferta_valores`, `aguardando_data`, `validar_data`
-2. **Respostas fixas** (sem `gerarRespostaHumana`): cada etapa retorna texto exato com variáveis substituídas ({nome}, {valor_avista}, {parcelas}, {credor})
-3. **IA só para intenção**: manter `interpretarIntencao()` apenas para classificar (sim/não, avista/parcelado, hoje/outra data)
-4. **Etapa "proposta_enviada"** reformulada: em vez de já mostrar valores, primeiro pergunta se o cliente "consegue voltar a pagar com 50% de desconto"
-5. **Validação de data**: quando cliente informa data, verificar se está dentro de 7 dias corridos
-6. **Mensagens exatas** conforme suas instruções — sem variação, sem emojis extras, sem reformulação
-
-## Resultado esperado
-O chatbot seguirá o script exato que você ensinou, usando o saldo real do cliente (da planilha importada) para calcular os valores, sem inventar nada.
+### Arquivo a modificar
+- `supabase/functions/whatsapp-chatbot/index.ts` — usar `payload.BaseUrl` e `payload.token` para enviar a resposta pela instância correta
 
