@@ -1392,6 +1392,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      chatbot_append_buffer: {
+        Args: { p_telefone: string; p_texto: string; p_timestamp: string }
+        Returns: undefined
+      }
       consultar_acordo_ativo_por_cpf: {
         Args: { p_cpf: string }
         Returns: {
