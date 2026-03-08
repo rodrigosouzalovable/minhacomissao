@@ -1020,18 +1020,31 @@ serve(async (req) => {
         if (matchParcelasHoje) {
           const parcelasPedidas = parseInt(matchParcelasHoje[1]);
           const vpCalc = dados.valor_parcelado || dados.valor_final || 0;
+          const tambemConfirmou = /(sim|consigo|quero|pode ser|ok|fechado|fecha|vamos|bora|isso|esse|essa|aceito)/i.test(textoLower);
           
           if (parcelasPedidas === 1) {
             const vaCalc = dados.valor_avista || vpCalc * 0.5 / 0.7;
-            resposta = `À vista fica *${formatCurrency(vaCalc)}*. Você consegue fazer o pagamento hoje?`;
             dados = { ...dados, tipo_pagamento: 'avista', parcelas: 1, valor_final: vaCalc };
-            await salvarEResponder('aguardando_pagamento_hoje');
+            if (tambemConfirmou) {
+              resposta = `Ok! Iremos te enviar o boleto à vista no valor de *${formatCurrency(vaCalc)}*.`;
+              await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
+              await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
+            } else {
+              resposta = `À vista fica *${formatCurrency(vaCalc)}*. Você consegue fazer o pagamento hoje?`;
+              await salvarEResponder('aguardando_pagamento_hoje');
+            }
             break;
           } else if (parcelasPedidas >= 2 && parcelasPedidas <= 24 && vpCalc / parcelasPedidas >= 100) {
             const valorParcCalc = vpCalc / parcelasPedidas;
-            resposta = `Em ${parcelasPedidas}x fica *${formatCurrency(valorParcCalc)}* cada parcela. Você consegue fazer o pagamento hoje?`;
             dados = { ...dados, tipo_pagamento: 'parcelado', parcelas: parcelasPedidas, valor_final: vpCalc };
-            await salvarEResponder('aguardando_pagamento_hoje');
+            if (tambemConfirmou) {
+              resposta = `Ok! Iremos te enviar o boleto em ${parcelasPedidas}x de *${formatCurrency(valorParcCalc)}*.`;
+              await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
+              await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
+            } else {
+              resposta = `Em ${parcelasPedidas}x fica *${formatCurrency(valorParcCalc)}* cada parcela. Você consegue fazer o pagamento hoje?`;
+              await salvarEResponder('aguardando_pagamento_hoje');
+            }
             break;
           } else {
             const maxP = Math.floor(vpCalc / 100);
