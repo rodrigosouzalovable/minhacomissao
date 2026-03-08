@@ -1,9 +1,10 @@
-## ✅ Concluído — Notificar admin quando a IA não entender o cliente
+## ✅ Concluído — Resposta do Admin via WhatsApp
 
 Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-1. **`notificarAdmin()`** — envia WhatsApp para 5562991672674 com detalhes do que o cliente falou
-2. **`salvarSilenciosoENotificar()`** — salva estado como `aguardando_humano` sem responder ao cliente
-3. **4 pontos de fallback substituídos**: `proposta_enviada`, `oferta_valores`, `aguardando_pagamento_hoje`, `aguardando_data`
-4. **Etapa `aguardando_humano`** — ignora mensagens do cliente, re-notifica admin se insistir
-5. **Desbloqueio via `fromMe`** — quando admin envia mensagem para o cliente, conversa volta à etapa anterior
+1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
+2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
+3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
+4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
+5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
+6. **Cleanup** — remove registro `admin_pending` após processamento
