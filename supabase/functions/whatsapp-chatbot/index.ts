@@ -767,7 +767,10 @@ serve(async (req) => {
           }
 
           // No match — ask CPF
-          resposta = `Olá! Para consultar sua situação, por favor me informe seu CPF.`;
+          const tmplSaudacao = templateMap.get('saudacao');
+          resposta = tmplSaudacao
+            ? aplicarVariaveisTemplate(tmplSaudacao, dados)
+            : `Olá! Para consultar sua situação, por favor me informe seu CPF.`;
           await salvarEResponder('aguardando_cpf');
           break;
         }
