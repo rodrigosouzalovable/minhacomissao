@@ -804,7 +804,11 @@ serve(async (req) => {
         const { data: devedorInfo } = await supabase.from('devedores').select('credor').eq('cpf', cpf).eq('ativo', true).limit(1).single();
         const credorNome = getCredorNome(devedorInfo?.credor || '');
 
-        resposta = `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
+        const dadosParaTemplate = { ...dados, cpf, nome: nomeDevedor, valor_avista: valorTotal * 0.5, valor_parcelado: valorTotal * 0.7, credor: credorNome };
+        const tmplProposta = templateMap.get('proposta');
+        resposta = tmplProposta
+          ? aplicarVariaveisTemplate(tmplProposta, dadosParaTemplate)
+          : `Olá ${primeiroNomeCap}, você consegue voltar a pagar suas parcelas em aberto com ${credorNome} com 50% de desconto?`;
 
         const valorAvista = valorTotal * 0.5;
         const valorParcelado = valorTotal * 0.7;
