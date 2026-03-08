@@ -49,6 +49,7 @@ REGRAS:
 - Quando o admin só fizer uma pergunta genérica ou saudação, responda normalmente sem tentar criar regra
 - NUNCA invente gatilhos ou respostas. Use EXATAMENTE o que o admin definiu
 - O JSON deve ser a resposta COMPLETA quando for salvar (não misture texto + JSON)`;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
