@@ -328,7 +328,7 @@ serve(async (req) => {
     }
 
     // For greetings, only reset if not in middle of negotiation
-    if (['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'].includes(textoLower) && etapaAtual !== 'novo' && !['proposta_enviada', 'aguardando_parcelas'].includes(etapaAtual)) {
+    if (['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'sim'].includes(textoLower) && etapaAtual !== 'novo' && !['proposta_enviada', 'aguardando_parcelas', 'aguardando_confirmacao_identidade'].includes(etapaAtual)) {
       etapaAtual = 'novo';
       dados = { mensagens_historico: dados.mensagens_historico || [] };
     }
