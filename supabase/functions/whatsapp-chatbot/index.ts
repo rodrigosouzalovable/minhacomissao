@@ -423,7 +423,7 @@ serve(async (req) => {
 
               const cpfFormatado = formatCpf(cpfLimpo);
               const fallbackConfirma = `Só pra confirmar, seu CPF é ${cpfFormatado}?`;
-              resposta = fallbackConfirma;
+              resposta = applyTemplate(templates, 'confirmacao_cpf', { cpf_formatado: cpfFormatado }, fallbackConfirma);
 
               dados = { ...dados, cpf_candidato: cpfLimpo, nome_candidato: nomeDevedor };
               dados = addToHistorico(dados, 'assistente', resposta);
