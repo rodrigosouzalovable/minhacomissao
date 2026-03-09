@@ -11,11 +11,12 @@ Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
 ## ✅ Concluído — Admin responde por número de telefone direto
 
-1. **`parseAdminInstructionWithTarget()`** — regex extrai telefone alvo de instruções como "Responda ao numero 556493097974 com a proposta"
-2. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
-3. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
-4. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
-5. **Compatibilidade** — fallback para `admin_pending` se nenhum número for especificado
+1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
+2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
+3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
+4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
+5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
+6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
 
 ## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
 
@@ -29,3 +30,11 @@ Implementado em `supabase/functions/teach-chatbot/index.ts`:
 3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
 4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
 5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
+
+## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
+
+1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
+2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
+3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
+4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
+5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
