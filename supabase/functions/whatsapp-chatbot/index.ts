@@ -232,6 +232,92 @@ async function notificarAcordoFechado(serverUrl: string, instanceToken: string, 
 }
 
 // AI only for INTENT interpretation — never for composing responses
+async function extrairGatilho(mensagemCliente: string): Promise<string> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) return mensagemCliente.toLowerCase().slice(0, 50);
+    
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          { 
+            role: 'system', 
+            content: `Você extrai palavras-chave (gatilho) de mensagens de clientes. Responda APENAS com 1-4 palavras-chave em minúsculas, sem pontuação.
+Exemplos:
+"Vou ver aqui" -> "vou ver"
+"Não sei se consigo" -> "não sei se consigo"
+"Preciso pensar melhor" -> "preciso pensar"`
+          },
+          { role: 'user', content: `Extraia o gatilho: "${mensagemCliente}"` },
+        ],
+        max_tokens: 30,
+        temperature: 0,
+      }),
+    });
+    
+    if (!response.ok) return mensagemCliente.toLowerCase().slice(0, 50);
+    const data = await response.json();
+    return (data.choices?.[0]?.message?.content?.trim()?.toLowerCase() || mensagemCliente.toLowerCase()).slice(0, 50);
+  } catch {
+    return mensagemCliente.toLowerCase().slice(0, 50);
+  }
+}
+
+async function registrarAprendizado(
+  supabase: any,
+  mensagemCliente: string,
+  respostaConfirmada: string,
+  contexto: any
+): Promise<string> {
+  try {
+    // Extrair gatilho usando IA
+    const gatilho = await extrairGatilho(mensagemCliente);
+    
+    // Criar template com variáveis
+    let respostaTemplate = respostaConfirmada;
+    
+    // Substituir nome do cliente por variável
+    if (contexto?.nome) {
+      const primeiroNome = contexto.nome.split(' ')[0];
+      const regex = new RegExp(`\\b${primeiroNome}\\b`, 'gi');
+      respostaTemplate = respostaTemplate.replace(regex, '{primeiro_nome}');
+    }
+    
+    // Substituir valores monetários por variáveis se existirem no contexto
+    if (contexto?.valor_avista) {
+      const valorFormatado = formatCurrency(contexto.valor_avista);
+      respostaTemplate = respostaTemplate.replace(valorFormatado, '{valor_avista}');
+    }
+    if (contexto?.valor_parcelado) {
+      const valorFormatado = formatCurrency(contexto.valor_parcelado);
+      respostaTemplate = respostaTemplate.replace(valorFormatado, '{valor_parcelado}');
+    }
+    
+    // Inserir regra no banco de dados
+    const { error } = await supabase
+      .from('chatbot_regras')
+      .insert({
+        gatilho: gatilho,
+        resposta: respostaTemplate,
+        ativo: true
+      });
+    
+    if (error) {
+      console.error('[APRENDIZADO] Erro ao criar regra:', error);
+      return gatilho;
+    }
+    
+    console.log(`[APRENDIZADO] Nova regra criada: gatilho="${gatilho}" -> resposta="${respostaTemplate}"`);
+    return gatilho;
+  } catch (e) {
+    console.error('[APRENDIZADO] Erro:', e);
+    return mensagemCliente.slice(0, 30);
+  }
+}
+
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
   try {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
