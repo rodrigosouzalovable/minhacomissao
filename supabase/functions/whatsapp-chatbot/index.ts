@@ -840,15 +840,91 @@ serve(async (req) => {
         }
       }
 
-      // Se não há cliente pendente, ignorar mensagem do admin
-      console.log(`[ADMIN] Mensagem do admin sem cliente pendente, ignorando.`);
+      // --- CASO 3: Admin especifica número de telefone direto na mensagem ---
+      const targeted = parseAdminInstructionWithTarget(texto);
+      if (targeted.telefoneAlvo) {
+        console.log(`[ADMIN-TARGET] Telefone alvo: ${targeted.telefoneAlvo}, instrução: "${targeted.instrucao}"`);
+        
+        // Buscar conversa do cliente alvo
+        const { data: clienteConv } = await supabase
+          .from('chatbot_conversas')
+          .select('telefone, etapa, dados, server_url, instance_token')
+          .eq('telefone', targeted.telefoneAlvo)
+          .maybeSingle();
+        
+        if (clienteConv) {
+          const dadosCliente = (clienteConv.dados || {}) as any;
+          const clienteServerUrl = clienteConv.server_url || serverUrlAdmin;
+          const clienteInstanceToken = clienteConv.instance_token || instanceTokenAdmin;
+          const instrucaoTexto = targeted.instrucao;
+          
+          let respostaProposta: string;
+          
+          // Se a instrução menciona "proposta", gerar proposta financeira com valores
+          if (/propost|valor|ofert/i.test(instrucaoTexto)) {
+            const valorAvista = dadosCliente.valor_avista;
+            const valorParcelado = dadosCliente.valor_parcelado;
+            if (valorAvista && valorParcelado) {
+              respostaProposta = gerarMensagemProposta(Number(valorAvista), Number(valorParcelado));
+              console.log(`[ADMIN-TARGET] Proposta financeira gerada com valores: avista=${valorAvista}, parcelado=${valorParcelado}`);
+            } else {
+              respostaProposta = await gerarRespostaComInstrucaoAdmin(instrucaoTexto, dadosCliente);
+              console.log(`[ADMIN-TARGET] Sem valores financeiros, usando IA para gerar resposta`);
+            }
+          } else {
+            // Instrução livre → IA gera resposta
+            const instrucaoParsed = parseAdminInstruction(instrucaoTexto);
+            if (instrucaoParsed.literal) {
+              respostaProposta = instrucaoParsed.conteudo;
+            } else {
+              respostaProposta = await gerarRespostaComInstrucaoAdmin(instrucaoParsed.conteudo, dadosCliente);
+            }
+          }
+          
+          // Obter mensagem original do cliente do histórico
+          const mensagemOriginalCliente = dadosCliente?.mensagens_historico?.slice(-1)?.[0]?.content || '';
+          
+          // Criar registro admin_pending para confirmação
+          const pendingKeyTarget = `admin_pending_${instanceTokenAdmin}`;
+          await supabase.from('chatbot_conversas').upsert({
+            telefone: pendingKeyTarget,
+            etapa: 'admin_pending',
+            dados: {
+              cliente_telefone: targeted.telefoneAlvo,
+              server_url: clienteServerUrl,
+              instance_token: clienteInstanceToken,
+              contexto: dadosCliente,
+              instrucao_admin: texto,
+              resposta_proposta: respostaProposta,
+              mensagem_original_cliente: mensagemOriginalCliente,
+              aguardando_confirmacao: true
+            },
+            atualizado_em: new Date().toISOString()
+          }, { onConflict: 'telefone' });
+          
+          // Enviar proposta ao admin para confirmação
+          const msgConfirmacao = `Ok entendido, irei responder ao ${targeted.telefoneAlvo.replace(/^55/, '')}:\n\n"${respostaProposta}"\n\nVocê confirma?`;
+          await sendMessage(serverUrlAdmin!, instanceTokenAdmin!, ADMIN_NUMERO, msgConfirmacao);
+          
+          console.log(`[ADMIN-TARGET] Proposta enviada ao admin para confirmação`);
+          return new Response(JSON.stringify({ success: true, admin_target_proposal: true, cliente: targeted.telefoneAlvo }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } else {
+          console.log(`[ADMIN-TARGET] Conversa não encontrada para ${targeted.telefoneAlvo}`);
+          await sendMessage(serverUrlAdmin!, instanceTokenAdmin!, ADMIN_NUMERO, `❌ Não encontrei conversa ativa com o número ${targeted.telefoneAlvo.replace(/^55/, '')}. Verifique o número e tente novamente.`);
+          return new Response(JSON.stringify({ success: true, admin_target_not_found: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      // Se não há cliente pendente nem número alvo, ignorar mensagem do admin
+      console.log(`[ADMIN] Mensagem do admin sem cliente pendente e sem número alvo, ignorando.`);
       return new Response(JSON.stringify({ success: true, ignored: true, reason: 'admin_no_pending' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    // --- DEBOUNCE: buffer de mensagens para evitar respostas duplicadas ---
-    const debounceTimestamp = new Date().toISOString();
 
     // Append mensagem ao buffer e registrar timestamp
     await supabase.rpc('chatbot_append_buffer', {
