@@ -469,7 +469,7 @@ serve(async (req) => {
       const textoFromMeLower = textoFromMe.toLowerCase();
       const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
-      // --- DESBLOQUEIO: admin respondeu manualmente a um cliente aguardando_humano ---
+      // --- DESBLOQUEIO + ATENDIMENTO HUMANO ---
       if (destinoTelefone) {
         const supabaseUrlFm = Deno.env.get('SUPABASE_URL')!;
         const supabaseKeyFm = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -490,6 +490,31 @@ serve(async (req) => {
             telefone: destinoTelefone,
             etapa: etapaAnterior,
             dados: dadosDesbloq,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+        }
+
+        // --- ATENDIMENTO HUMANO: Qualquer mensagem manual pausa o bot por 30 min ---
+        const etapaAtualConv = convAguardando?.etapa || 'novo';
+        const dadosAtuais = convAguardando?.dados || {};
+        // Só marca atendimento_humano se NÃO for proposta (proposta tem lógica própria abaixo)
+        if (!textoFromMeLower.includes('50% de desconto') && !textoFromMeLower.includes('parcelas em aberto')) {
+          console.log(`[HUMAN] Mensagem manual detectada para ${destinoTelefone}, pausando bot por 30min`);
+          const etapaParaSalvar = etapaAtualConv === 'atendimento_humano' 
+            ? 'atendimento_humano' 
+            : 'atendimento_humano';
+          const etapaAnteriorParaSalvar = etapaAtualConv === 'atendimento_humano'
+            ? (dadosAtuais.etapa_antes_humano || 'novo')
+            : etapaAtualConv;
+          
+          await supabaseFm.from('chatbot_conversas').upsert({
+            telefone: destinoTelefone,
+            etapa: 'atendimento_humano',
+            dados: {
+              ...dadosAtuais,
+              atendimento_humano_em: new Date().toISOString(),
+              etapa_antes_humano: etapaAnteriorParaSalvar,
+            },
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
         }
