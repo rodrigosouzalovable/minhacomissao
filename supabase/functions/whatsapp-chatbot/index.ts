@@ -143,6 +143,11 @@ async function transcreverAudio(audioUrl: string): Promise<string> {
 
 const ADMIN_NUMERO = '5562991672674';
 
+function isAdminNumber(tel: string): boolean {
+  const normalized = tel.replace(/\D/g, '');
+  return normalized === '5562991672674' || normalized === '62991672674';
+}
+
 function parseAdminInstruction(texto: string): { literal: boolean; conteudo: string } {
   // Check for text wrapped in quotes (both regular and smart quotes)
   const match = texto.match(/^[""\u201C](.+)[""\u201D]$/s);
