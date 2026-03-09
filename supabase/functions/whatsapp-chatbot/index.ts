@@ -649,12 +649,11 @@ serve(async (req) => {
     console.log(`Mensagem de ${telefone}: "${texto}"`);
 
     // --- INTERCEPTAÇÃO: Admin respondendo instrução para cliente pendente ---
-    if (telefone === ADMIN_NUMERO) {
+    if (isAdminNumber(telefone)) {
       const instanceTokenAdmin = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
       const serverUrlAdmin = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
 
       if (instanceTokenAdmin) {
-        // Look for pending client for this instance
         const pendingKey = `admin_pending_${instanceTokenAdmin}`;
         const { data: pendingRecord } = await supabase
           .from('chatbot_conversas')
@@ -664,73 +663,146 @@ serve(async (req) => {
           .maybeSingle();
 
         if (pendingRecord?.dados) {
-          const clienteTelefone = (pendingRecord.dados as any).cliente_telefone;
-          const clienteServerUrl = (pendingRecord.dados as any).server_url || serverUrlAdmin;
-          const clienteInstanceToken = (pendingRecord.dados as any).instance_token || instanceTokenAdmin;
-          const contextoCliente = (pendingRecord.dados as any).contexto || {};
+          const dados = pendingRecord.dados as any;
+          
+          // CASO 1: Aguardando confirmação
+          if (dados.aguardando_confirmacao) {
+            const confirmacoes = ['sim', 'ok', 'confirmo', 'confirmar', 'pode enviar', 'tudo certo', 'perfeito', 'pode'];
+            const negacoes = ['não', 'nao', 'cancela', 'cancelar', 'espera', 'aguarda', 'refaz', 'muda'];
+            const textoLower = texto.toLowerCase();
+            
+            // Confirmação positiva
+            if (confirmacoes.some(c => textoLower.includes(c))) {
+              const clienteTelefone = dados.cliente_telefone;
+              const clienteServerUrl = dados.server_url || serverUrlAdmin;
+              const clienteInstanceToken = dados.instance_token || instanceTokenAdmin;
+              const respostaProposta = dados.resposta_proposta;
+              
+              console.log(`[ADMIN-CONFIRM] Admin confirmou envio para ${clienteTelefone}: "${respostaProposta}"`);
+              
+              // Enviar mensagem ao cliente com simulação de digitação
+              const delay = Math.floor(Math.random() * 10000) + 5000;
+              await simulateTyping(clienteServerUrl, clienteInstanceToken, clienteTelefone, delay);
+              await sendMessage(clienteServerUrl, clienteInstanceToken, clienteTelefone, respostaProposta);
+              
+              // Registrar aprendizado
+              const mensagemOriginalCliente = dados.mensagem_original_cliente || '';
+              const gatilhoAprendido = await registrarAprendizado(
+                supabase,
+                mensagemOriginalCliente,
+                respostaProposta,
+                dados.contexto || {}
+              );
+              
+              // Desbloquear conversa do cliente
+              const { data: clienteConv } = await supabase
+                .from('chatbot_conversas')
+                .select('etapa, dados')
+                .eq('telefone', clienteTelefone)
+                .maybeSingle();
 
-          if (clienteTelefone) {
-            console.log(`[ADMIN-REPLY] Admin respondendo para cliente ${clienteTelefone}: "${texto}"`);
+              if (clienteConv?.etapa === 'aguardando_humano') {
+                const etapaAnterior = (clienteConv.dados as any)?.etapa_antes_humano || 'proposta_enviada';
+                const dadosCliente = clienteConv.dados || {};
+                const dadosDesbloq = { ...(dadosCliente as any) };
+                delete dadosDesbloq.etapa_antes_humano;
+                const historico = dadosDesbloq.mensagens_historico || [];
+                historico.push({ role: 'assistente', content: respostaProposta, ts: new Date().toISOString() });
+                dadosDesbloq.mensagens_historico = historico.slice(-20);
 
-            // Parse instruction
-            const instrucao = parseAdminInstruction(texto);
-            let mensagemParaCliente: string;
-
-            if (instrucao.literal) {
-              // Literal: send exactly what admin wrote between quotes
-              mensagemParaCliente = instrucao.conteudo;
-              console.log(`[ADMIN-REPLY] Modo literal: "${mensagemParaCliente}"`);
-            } else {
-              // Guided: AI generates response based on admin instruction + context
-              mensagemParaCliente = await gerarRespostaComInstrucaoAdmin(instrucao.conteudo, contextoCliente);
-              console.log(`[ADMIN-REPLY] Modo IA: instrução="${instrucao.conteudo}" -> resposta="${mensagemParaCliente}"`);
+                await supabase.from('chatbot_conversas').upsert({
+                  telefone: clienteTelefone,
+                  etapa: etapaAnterior,
+                  dados: dadosDesbloq,
+                  atualizado_em: new Date().toISOString(),
+                }, { onConflict: 'telefone' });
+                console.log(`[ADMIN-CONFIRM] Cliente ${clienteTelefone} desbloqueado: aguardando_humano -> ${etapaAnterior}`);
+              }
+              
+              // Limpar registro pendente
+              await supabase.from('chatbot_conversas').delete().eq('telefone', pendingKey);
+              
+              // Confirmar ao admin com informação do aprendizado
+              const telefoneFormatado = clienteTelefone.replace(/^55/, '');
+              const msgConfirmacao = `✅ Mensagem enviada para ${telefoneFormatado}.\n\n` +
+                `📚 Ensinamento registrado! Quando alguém disser algo similar a "${mensagemOriginalCliente}", responderei automaticamente com base no gatilho "${gatilhoAprendido}".`;
+              await sendMessage(serverUrlAdmin!, instanceTokenAdmin, ADMIN_NUMERO, msgConfirmacao);
+              
+              return new Response(JSON.stringify({ success: true, admin_confirmed: true, cliente: clienteTelefone }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
             }
-
-            // Send to client with typing simulation
-            const delay = Math.floor(Math.random() * 10000) + 5000;
-            await simulateTyping(clienteServerUrl, clienteInstanceToken, clienteTelefone, delay);
-            await sendMessage(clienteServerUrl, clienteInstanceToken, clienteTelefone, mensagemParaCliente);
-
-            // Unlock client conversation
-            const { data: clienteConv } = await supabase
-              .from('chatbot_conversas')
-              .select('etapa, dados')
-              .eq('telefone', clienteTelefone)
-              .maybeSingle();
-
-            if (clienteConv?.etapa === 'aguardando_humano') {
-              const etapaAnterior = (clienteConv.dados as any)?.etapa_antes_humano || 'proposta_enviada';
-              const dadosCliente = clienteConv.dados || {};
-              const dadosDesbloq = { ...(dadosCliente as any) };
-              delete dadosDesbloq.etapa_antes_humano;
-              // Add admin response to history
-              const historico = dadosDesbloq.mensagens_historico || [];
-              historico.push({ role: 'assistente', content: mensagemParaCliente, ts: new Date().toISOString() });
-              dadosDesbloq.mensagens_historico = historico.slice(-20);
-
-              await supabase.from('chatbot_conversas').upsert({
-                telefone: clienteTelefone,
-                etapa: etapaAnterior,
-                dados: dadosDesbloq,
-                atualizado_em: new Date().toISOString(),
-              }, { onConflict: 'telefone' });
-              console.log(`[ADMIN-REPLY] Cliente ${clienteTelefone} desbloqueado: aguardando_humano -> ${etapaAnterior}`);
+            
+            // Negação
+            if (negacoes.some(n => textoLower.includes(n))) {
+              console.log(`[ADMIN-CANCEL] Admin cancelou envio`);
+              await supabase.from('chatbot_conversas').delete().eq('telefone', pendingKey);
+              await sendMessage(serverUrlAdmin!, instanceTokenAdmin, ADMIN_NUMERO, '❌ Cancelado. Envie nova instrução quando quiser.');
+              
+              return new Response(JSON.stringify({ success: true, admin_cancelled: true }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
             }
-
-            // Remove pending record
-            await supabase.from('chatbot_conversas').delete().eq('telefone', pendingKey);
-
-            // Confirm to admin
-            await sendMessage(serverUrlAdmin!, instanceTokenAdmin, ADMIN_NUMERO, `✅ Mensagem enviada para ${clienteTelefone}.`);
-
-            return new Response(JSON.stringify({ success: true, admin_reply: true, cliente: clienteTelefone }), {
+            
+            // Resposta ambígua
+            console.log(`[ADMIN-AMBIGUOUS] Resposta ambígua do admin: "${texto}"`);
+            await sendMessage(serverUrlAdmin!, instanceTokenAdmin, ADMIN_NUMERO, 'Por favor responda "sim" para confirmar ou "não" para cancelar.');
+            
+            return new Response(JSON.stringify({ success: true, admin_ambiguous: true }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
+          
+          // CASO 2: Primeira instrução do admin (gerar proposta)
+          const clienteTelefone = dados.cliente_telefone;
+          const clienteServerUrl = dados.server_url || serverUrlAdmin;
+          const clienteInstanceToken = dados.instance_token || instanceTokenAdmin;
+          const contextoCliente = dados.contexto || {};
+          
+          console.log(`[ADMIN-INSTRUCTION] Admin enviou instrução para ${clienteTelefone}: "${texto}"`);
+          
+          // Parse instrução
+          const instrucao = parseAdminInstruction(texto);
+          let respostaProposta: string;
+          
+          if (instrucao.literal) {
+            respostaProposta = instrucao.conteudo;
+            console.log(`[ADMIN-INSTRUCTION] Modo literal: "${respostaProposta}"`);
+          } else {
+            respostaProposta = await gerarRespostaComInstrucaoAdmin(instrucao.conteudo, contextoCliente);
+            console.log(`[ADMIN-INSTRUCTION] Modo IA: instrução="${instrucao.conteudo}" -> resposta="${respostaProposta}"`);
+          }
+          
+          // Obter mensagem original do cliente do histórico
+          const mensagemOriginalCliente = contextoCliente?.mensagens_historico?.slice(-1)[0]?.content || texto;
+          
+          // Enviar proposta ao admin para confirmação
+          const msgConfirmacao = `Ok entendido, irei responder o seguinte:\n\n"${respostaProposta}"\n\nVocê confirma?`;
+          await sendMessage(serverUrlAdmin!, instanceTokenAdmin, ADMIN_NUMERO, msgConfirmacao);
+          
+          // Atualizar registro pendente com proposta e flag de aguardando confirmação
+          await supabase.from('chatbot_conversas').upsert({
+            telefone: pendingKey,
+            etapa: 'admin_pending',
+            dados: {
+              ...dados,
+              instrucao_admin: texto,
+              resposta_proposta: respostaProposta,
+              mensagem_original_cliente: mensagemOriginalCliente,
+              aguardando_confirmacao: true
+            },
+            atualizado_em: new Date().toISOString()
+          }, { onConflict: 'telefone' });
+          
+          console.log(`[ADMIN-INSTRUCTION] Proposta enviada ao admin, aguardando confirmação`);
+          
+          return new Response(JSON.stringify({ success: true, admin_proposal_sent: true, cliente: clienteTelefone }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         }
       }
 
-      // If no pending client found, ignore admin message
+      // Se não há cliente pendente, ignorar mensagem do admin
       console.log(`[ADMIN] Mensagem do admin sem cliente pendente, ignorando.`);
       return new Response(JSON.stringify({ success: true, ignored: true, reason: 'admin_no_pending' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
