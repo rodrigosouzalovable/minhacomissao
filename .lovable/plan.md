@@ -1,31 +1,55 @@
-## ✅ Concluído — Resposta do Admin via WhatsApp
 
-Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
-2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
-3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
-4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
-5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
-6. **Cleanup** — remove registro `admin_pending` após processamento
+# Plano: Admin comanda a IA também via WhatsApp
 
-## ✅ Concluído — Admin responde por número de telefone direto
+## Problema
+Quando o admin envia mensagens pelo WhatsApp que não correspondem a um cliente pendente (`admin_pending`) e não casam com o regex de `parseAdminInstructionWithTarget`, a mensagem é simplesmente ignorada (linha 922). Exemplos que falham:
+- "Volta na conversa com +556493097974 e passe a proposta" — "Volta" não está no regex
+- Perguntas genéricas ou instruções de ensino
 
-1. **`parseAdminInstructionWithTarget()`** — regex extrai telefone alvo de instruções como "Responda ao numero 556493097974 com a proposta"
-2. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
-3. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
-4. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
-5. **Compatibilidade** — fallback para `admin_pending` se nenhum número for especificado
+## Solução
 
-## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
+**Arquivo**: `supabase/functions/whatsapp-chatbot/index.ts`
 
-Implementado em `supabase/functions/teach-chatbot/index.ts`:
+### 1. Expandir o regex de `parseAdminInstructionWithTarget`
+Adicionar mais verbos e preposições para capturar padrões naturais:
+- Verbos: `volta|retorne|responda|envie?|mande?|fale?|passe|vá|vai`
+- Preposições: `numero|número|para|ao|com|do|da|de`
+- Suporte a `+55` no número
 
-1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
-2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
-   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
-   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
-   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
-3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
-4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
-5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
+### 2. Rota fallback: encaminhar para `teach-chatbot`
+Quando a mensagem do admin não casa com nenhum padrão (nem pending, nem targeted), em vez de ignorar, invocar a edge function `teach-chatbot` com o contexto da conversa do admin. Isso permite:
+- Ensinar regras via WhatsApp
+- Fazer perguntas à IA
+- Executar ações (a IA retorna `action: "send"` que já funciona no teach-chatbot)
+
+O fluxo:
+1. Admin envia mensagem genérica via WhatsApp
+2. Sistema carrega histórico recente do admin do `chat_ia_mensagens`
+3. Chama `teach-chatbot` com as mensagens
+4. Se a resposta contiver `action: "send"` com confirmação pendente, responde pedindo confirmação
+5. Se for texto normal, envia a resposta de volta ao admin via WhatsApp
+6. Persiste as mensagens em `chat_ia_mensagens` (mesma tabela do chat web, com tag `teach-chatbot-whatsapp` para separar)
+
+### 3. Fluxo resultante
+```text
+Admin (WhatsApp): "Volta na conversa com +556493097974 e passe a proposta"
+         ↓
+parseAdminInstructionWithTarget → match! telefone=556493097974
+         ↓
+(fluxo existente de proposta + confirmação)
+
+--- OU ---
+
+Admin (WhatsApp): "Me explica como funciona o desconto"
+         ↓
+Sem pending, sem target → fallback teach-chatbot
+         ↓
+IA responde → envio da resposta ao admin via WhatsApp
+```
+
+### 4. Compatibilidade
+- Fluxo existente de `admin_pending` permanece prioritário
+- `parseAdminInstructionWithTarget` expandido cobre mais padrões
+- Fallback para `teach-chatbot` garante que nenhuma mensagem do admin é ignorada
+
