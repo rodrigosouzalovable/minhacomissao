@@ -305,7 +305,10 @@ export default function Acionamento() {
     [instances, connectionStatus]
   );
 
-  const activeInstances = useMemo(() => instances.filter(i => i.ativo), [instances]);
+  const activeInstances = useMemo(() => 
+    instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected'), 
+    [instances, connectionStatus]
+  );
 
   const saveManualChecked = (checked: Set<number>) => {
     setManualChecked(checked);

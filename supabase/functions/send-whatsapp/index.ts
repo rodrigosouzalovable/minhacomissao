@@ -39,7 +39,8 @@ serve(async (req) => {
   try {
     const { telefone, mensagem, uazapi_server_url, uazapi_instance_token } = await req.json();
     
-    console.log('Recebendo requisição para enviar WhatsApp:', { telefone });
+    const tokenSuffix = uazapi_instance_token ? uazapi_instance_token.slice(-8) : 'global';
+    console.log('Recebendo requisição para enviar WhatsApp:', { telefone, instance: tokenSuffix });
 
     if (!telefone) throw new Error('Telefone não informado');
 

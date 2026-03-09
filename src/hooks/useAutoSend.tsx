@@ -251,9 +251,17 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
     consecutiveErrorsRef.current = {};
     disabledInstancesRef.current = new Set();
 
+    // Deduplicate by phone number - keep first occurrence only
+    const seenPhones = new Set<string>();
     const pendentesSnapshot = clientes
       .map((c, i) => ({ ...c, originalIndex: i }))
-      .filter(c => existingStatus[c.originalIndex] !== 'success' && existingStatus[c.originalIndex] !== 'error' && !existingChecked.has(c.originalIndex));
+      .filter(c => existingStatus[c.originalIndex] !== 'success' && existingStatus[c.originalIndex] !== 'error' && !existingChecked.has(c.originalIndex))
+      .filter(c => {
+        const phone = c.telefone.replace(/\D/g, '');
+        if (seenPhones.has(phone)) return false;
+        seenPhones.add(phone);
+        return true;
+      });
 
     if (pendentesSnapshot.length === 0) {
       toast.error('Não há clientes pendentes para enviar');
@@ -283,6 +291,8 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
           : null;
         roundRobinCounterRef.current++;
 
+        const configLabel = currentConfig?.nome || currentConfig?.server_url?.split('/').pop() || 'global';
+        console.log(`[AutoSend] Enviando para ${cliente.telefone} via instância "${configLabel}" (RR #${roundRobinCounterRef.current})`);
         await sendSingle(cliente, cliente.originalIndex, mensagensSalvas, currentConfig, historicoId, userId);
 
         if (i < pendentesSnapshot.length - 1 && autoSendingRef.current) {
