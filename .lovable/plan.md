@@ -1,48 +1,31 @@
+## ✅ Concluído — Resposta do Admin via WhatsApp
 
+Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-# Plano: Chat IA executa ações reais (enviar mensagens WhatsApp)
+1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
+2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
+3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
+4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
+5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
+6. **Cleanup** — remove registro `admin_pending` após processamento
 
-## Problema
-O chat "Ensinar IA" hoje **apenas simula** — ele entende sua instrução mas não tem conexão com o WhatsApp. Quando você diz "volta na conversa com +556493097974 e mande a proposta", a IA finge que fez, mas nada acontece de verdade.
+## ✅ Concluído — Admin responde por número de telefone direto
 
-## Solução
-Dar ao chat a capacidade de **executar ações reais**: buscar conversas no banco, gerar propostas com valores reais e enviar via WhatsApp.
+1. **`parseAdminInstructionWithTarget()`** — regex extrai telefone alvo de instruções como "Responda ao numero 556493097974 com a proposta"
+2. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
+3. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
+4. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
+5. **Compatibilidade** — fallback para `admin_pending` se nenhum número for especificado
 
-## Alterações
+## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
 
-### 1. `supabase/functions/teach-chatbot/index.ts`
-- Atualizar o system prompt para incluir uma nova ação `send`:
-  ```
-  {"action":"send","telefone":"556493097974","mensagem":"texto a enviar","message":"Mensagem enviada para Valeria!"}
-  ```
-- Quando detectar `action: "send"`:
-  1. Buscar `chatbot_conversas` pelo telefone para obter `instance_token`, `server_url` e `dados` (valores financeiros)
-  2. Se a instrução mencionar "proposta", usar os dados reais (`valor_avista`, `valor_parcelado`) para montar a mensagem
-  3. Enviar via UAZAPI usando `server_url` e `instance_token` da conversa
-  4. Atualizar o histórico da conversa no `chatbot_conversas`
-  5. Retornar confirmação ao admin
+Implementado em `supabase/functions/teach-chatbot/index.ts`:
 
-### 2. System prompt enriquecido
-- Informar a IA que ela pode **buscar dados reais** e **enviar mensagens**
-- Incluir o fluxo: admin pede → IA monta proposta com valores reais → confirma com admin → admin diz "sim" → IA executa o envio
-- Manter compatibilidade com o fluxo existente de ensinar regras (`action: "save"`)
-
-### 3. Fluxo resultante
-```text
-Admin: "Volta na conversa com +556493097974 e passe a proposta"
-                    ↓
-IA busca chatbot_conversas → encontra Valeria, débito R$ 312
-                    ↓
-IA: "Encontrei a conversa da Valeria. Vou enviar:
-'Que ótimo! Valor à vista: R$ 156,00 ou 2x de R$ 109,20.'
-Posso enviar?"
-                    ↓
-Admin: "Sim"
-                    ↓
-IA envia via UAZAPI + responde "✅ Mensagem enviada!"
-```
-
-### 4. Segurança
-- Apenas o fluxo de confirmação (admin diz "sim") dispara o envio real
-- A IA sempre mostra a mensagem antes de enviar
-
+1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
+2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
+   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
+   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
+   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
+3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
+4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
+5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
