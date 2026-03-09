@@ -155,6 +155,19 @@ function parseAdminInstruction(texto: string): { literal: boolean; conteudo: str
   return { literal: false, conteudo: texto.trim() };
 }
 
+function parseAdminInstructionWithTarget(texto: string): { telefoneAlvo: string | null; instrucao: string } {
+  // Detecta padrões como "Responda ao numero 556493097974 com a proposta"
+  // ou "Envie para 62993097974: ..." ou "Mande para o 556493097974 a proposta"
+  const match = texto.match(/(?:responda|envie?|mande?|fale?).*?(?:numero|número|n[uú]m|para|ao)\s*(\d{10,13})\s*(?:com|:|\s)?\s*(.*)/i);
+  if (match) {
+    let tel = match[1].replace(/\D/g, '');
+    if (tel.length === 11) tel = '55' + tel;
+    if (tel.length === 10) tel = '55' + tel; // fixo sem 9
+    return { telefoneAlvo: tel, instrucao: match[2].trim() };
+  }
+  return { telefoneAlvo: null, instrucao: texto };
+}
+
 async function gerarRespostaComInstrucaoAdmin(instrucao: string, contextoConversa: any): Promise<string> {
   try {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
