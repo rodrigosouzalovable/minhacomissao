@@ -972,6 +972,35 @@ serve(async (req) => {
     const { data: conversa } = await supabase.from('chatbot_conversas').select('*').eq('telefone', telefone).single();
     let etapaAtual = conversa?.etapa || 'novo';
     let dados = conversa?.dados || {};
+
+    // --- ATENDIMENTO HUMANO: Se operador está atendendo, ignorar mensagem ---
+    if (etapaAtual === 'atendimento_humano' && dados.atendimento_humano_em) {
+      const inicioAtendimento = new Date(dados.atendimento_humano_em);
+      const minutosDecorridos = (Date.now() - inicioAtendimento.getTime()) / 60000;
+      
+      if (minutosDecorridos < 30) {
+        console.log(`[SILENCED] Bot pausado para ${telefone} (atendimento humano há ${Math.round(minutosDecorridos)}min)`);
+        // Apenas bufferar no histórico sem responder
+        dados = addToHistorico(dados, 'cliente', texto);
+        await supabase.from('chatbot_conversas').upsert({
+          telefone,
+          etapa: 'atendimento_humano',
+          dados,
+          atualizado_em: new Date().toISOString(),
+        }, { onConflict: 'telefone' });
+        return new Response(JSON.stringify({ success: true, silenced: true, reason: 'atendimento_humano' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Expirou → restaurar etapa anterior
+      const etapaAnterior = dados.etapa_antes_humano || 'novo';
+      console.log(`[HUMAN-EXPIRED] Atendimento humano expirou para ${telefone} (${Math.round(minutosDecorridos)}min), restaurando etapa: ${etapaAnterior}`);
+      etapaAtual = etapaAnterior;
+      delete dados.atendimento_humano_em;
+      delete dados.etapa_antes_humano;
+    }
+
     dados = addToHistorico(dados, 'cliente', texto);
 
     const textoLower = texto.toLowerCase().trim();
