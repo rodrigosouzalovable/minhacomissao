@@ -156,13 +156,16 @@ function parseAdminInstruction(texto: string): { literal: boolean; conteudo: str
 }
 
 function parseAdminInstructionWithTarget(texto: string): { telefoneAlvo: string | null; instrucao: string } {
-  // Detecta padrões como "Responda ao numero 556493097974 com a proposta"
-  // ou "Envie para 62993097974: ..." ou "Mande para o 556493097974 a proposta"
-  const match = texto.match(/(?:responda|envie?|mande?|fale?).*?(?:numero|número|n[uú]m|para|ao)\s*(\d{10,13})\s*(?:com|:|\s)?\s*(.*)/i);
+  // Detecta padrões naturais como:
+  // "Volta na conversa com +556493097974 e passe a proposta"
+  // "Responda ao numero 556493097974 com a proposta"
+  // "Envie para 62993097974: ..." / "Mande para o 556493097974 a proposta"
+  // "Passe a negociação para 556493097974"
+  const match = texto.match(/(?:volt[ae]|retorn[ea]|responda|envie?|mande?|fale?|passe|vá|vai).*?(?:numero|número|n[uú]m|para|ao|com|do|da|de)\s*\+?(\d{10,13})\s*(?:com|e|:|\s)?\s*(.*)/i);
   if (match) {
     let tel = match[1].replace(/\D/g, '');
     if (tel.length === 11) tel = '55' + tel;
-    if (tel.length === 10) tel = '55' + tel; // fixo sem 9
+    if (tel.length === 10) tel = '55' + tel;
     return { telefoneAlvo: tel, instrucao: match[2].trim() };
   }
   return { telefoneAlvo: null, instrucao: texto };
