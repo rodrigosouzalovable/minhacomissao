@@ -469,7 +469,7 @@ serve(async (req) => {
       const textoFromMeLower = textoFromMe.toLowerCase();
       const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
-      // --- DESBLOQUEIO: admin respondeu manualmente a um cliente aguardando_humano ---
+      // --- DESBLOQUEIO + ATENDIMENTO HUMANO ---
       if (destinoTelefone) {
         const supabaseUrlFm = Deno.env.get('SUPABASE_URL')!;
         const supabaseKeyFm = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -490,6 +490,31 @@ serve(async (req) => {
             telefone: destinoTelefone,
             etapa: etapaAnterior,
             dados: dadosDesbloq,
+            atualizado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone' });
+        }
+
+        // --- ATENDIMENTO HUMANO: Qualquer mensagem manual pausa o bot por 30 min ---
+        const etapaAtualConv = convAguardando?.etapa || 'novo';
+        const dadosAtuais = convAguardando?.dados || {};
+        // Só marca atendimento_humano se NÃO for proposta (proposta tem lógica própria abaixo)
+        if (!textoFromMeLower.includes('50% de desconto') && !textoFromMeLower.includes('parcelas em aberto')) {
+          console.log(`[HUMAN] Mensagem manual detectada para ${destinoTelefone}, pausando bot por 30min`);
+          const etapaParaSalvar = etapaAtualConv === 'atendimento_humano' 
+            ? 'atendimento_humano' 
+            : 'atendimento_humano';
+          const etapaAnteriorParaSalvar = etapaAtualConv === 'atendimento_humano'
+            ? (dadosAtuais.etapa_antes_humano || 'novo')
+            : etapaAtualConv;
+          
+          await supabaseFm.from('chatbot_conversas').upsert({
+            telefone: destinoTelefone,
+            etapa: 'atendimento_humano',
+            dados: {
+              ...dadosAtuais,
+              atendimento_humano_em: new Date().toISOString(),
+              etapa_antes_humano: etapaAnteriorParaSalvar,
+            },
             atualizado_em: new Date().toISOString(),
           }, { onConflict: 'telefone' });
         }
@@ -947,6 +972,35 @@ serve(async (req) => {
     const { data: conversa } = await supabase.from('chatbot_conversas').select('*').eq('telefone', telefone).single();
     let etapaAtual = conversa?.etapa || 'novo';
     let dados = conversa?.dados || {};
+
+    // --- ATENDIMENTO HUMANO: Se operador está atendendo, ignorar mensagem ---
+    if (etapaAtual === 'atendimento_humano' && dados.atendimento_humano_em) {
+      const inicioAtendimento = new Date(dados.atendimento_humano_em);
+      const minutosDecorridos = (Date.now() - inicioAtendimento.getTime()) / 60000;
+      
+      if (minutosDecorridos < 30) {
+        console.log(`[SILENCED] Bot pausado para ${telefone} (atendimento humano há ${Math.round(minutosDecorridos)}min)`);
+        // Apenas bufferar no histórico sem responder
+        dados = addToHistorico(dados, 'cliente', texto);
+        await supabase.from('chatbot_conversas').upsert({
+          telefone,
+          etapa: 'atendimento_humano',
+          dados,
+          atualizado_em: new Date().toISOString(),
+        }, { onConflict: 'telefone' });
+        return new Response(JSON.stringify({ success: true, silenced: true, reason: 'atendimento_humano' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Expirou → restaurar etapa anterior
+      const etapaAnterior = dados.etapa_antes_humano || 'novo';
+      console.log(`[HUMAN-EXPIRED] Atendimento humano expirou para ${telefone} (${Math.round(minutosDecorridos)}min), restaurando etapa: ${etapaAnterior}`);
+      etapaAtual = etapaAnterior;
+      delete dados.atendimento_humano_em;
+      delete dados.etapa_antes_humano;
+    }
+
     dados = addToHistorico(dados, 'cliente', texto);
 
     const textoLower = texto.toLowerCase().trim();
@@ -958,7 +1012,7 @@ serve(async (req) => {
     }
 
     // Greetings reset only if not in active negotiation
-    const etapasAtivas = ['proposta_enviada', 'oferta_valores', 'aguardando_parcelas', 'aguardando_confirmacao_identidade', 'aguardando_pagamento_hoje', 'aguardando_data', 'aguardando_humano'];
+    const etapasAtivas = ['proposta_enviada', 'oferta_valores', 'aguardando_parcelas', 'aguardando_confirmacao_identidade', 'aguardando_pagamento_hoje', 'aguardando_data', 'aguardando_humano', 'atendimento_humano'];
     if (['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'].includes(textoLower) && etapaAtual !== 'novo' && !etapasAtivas.includes(etapaAtual)) {
       etapaAtual = 'novo';
       dados = { mensagens_historico: dados.mensagens_historico || [] };
