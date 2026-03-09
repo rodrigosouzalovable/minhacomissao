@@ -251,9 +251,17 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
     consecutiveErrorsRef.current = {};
     disabledInstancesRef.current = new Set();
 
+    // Deduplicate by phone number - keep first occurrence only
+    const seenPhones = new Set<string>();
     const pendentesSnapshot = clientes
       .map((c, i) => ({ ...c, originalIndex: i }))
-      .filter(c => existingStatus[c.originalIndex] !== 'success' && existingStatus[c.originalIndex] !== 'error' && !existingChecked.has(c.originalIndex));
+      .filter(c => existingStatus[c.originalIndex] !== 'success' && existingStatus[c.originalIndex] !== 'error' && !existingChecked.has(c.originalIndex))
+      .filter(c => {
+        const phone = c.telefone.replace(/\D/g, '');
+        if (seenPhones.has(phone)) return false;
+        seenPhones.add(phone);
+        return true;
+      });
 
     if (pendentesSnapshot.length === 0) {
       toast.error('Não há clientes pendentes para enviar');
