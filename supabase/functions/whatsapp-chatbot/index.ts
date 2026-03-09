@@ -926,6 +926,9 @@ serve(async (req) => {
       });
     }
 
+    // --- DEBOUNCE: buffer de mensagens para evitar respostas duplicadas ---
+    const debounceTimestamp = new Date().toISOString();
+
     // Append mensagem ao buffer e registrar timestamp
     await supabase.rpc('chatbot_append_buffer', {
       p_telefone: telefone,
