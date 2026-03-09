@@ -922,9 +922,68 @@ serve(async (req) => {
         }
       }
 
-      // Se não há cliente pendente nem número alvo, ignorar mensagem do admin
-      console.log(`[ADMIN] Mensagem do admin sem cliente pendente e sem número alvo, ignorando.`);
-      return new Response(JSON.stringify({ success: true, ignored: true, reason: 'admin_no_pending' }), {
+      // FALLBACK: encaminhar para teach-chatbot (ensino, perguntas, ações)
+      console.log(`[ADMIN-FALLBACK] Encaminhando mensagem do admin para teach-chatbot: "${texto}"`);
+      try {
+        // Carregar histórico recente do admin via chat_ia_mensagens
+        const { data: adminUser } = await supabase.from('profiles').select('id').eq('email', 'rodrigo@grupoaltum.com.br').maybeSingle();
+        const adminUserId = adminUser?.id;
+        
+        let historicoMessages: any[] = [];
+        if (adminUserId) {
+          const { data: historico } = await supabase
+            .from('chat_ia_mensagens')
+            .select('role, content')
+            .eq('user_id', adminUserId)
+            .order('criado_em', { ascending: false })
+            .limit(10);
+          if (historico) {
+            historicoMessages = historico.reverse().map((m: any) => ({ role: m.role, content: m.content }));
+          }
+        }
+
+        // Adicionar mensagem atual do admin
+        historicoMessages.push({ role: 'user', content: texto });
+
+        // Chamar teach-chatbot
+        const teachResponse = await fetch(`${supabaseUrl}/functions/v1/teach-chatbot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ messages: historicoMessages }),
+        });
+
+        if (teachResponse.ok) {
+          const teachData = await teachResponse.json();
+          const reply = teachData.reply || 'Desculpe, não consegui processar.';
+
+          // Persistir mensagens no histórico (admin msg + resposta)
+          if (adminUserId) {
+            await supabase.from('chat_ia_mensagens').insert([
+              { user_id: adminUserId, role: 'user', content: texto },
+              { user_id: adminUserId, role: 'assistant', content: reply },
+            ]);
+          }
+
+          // Enviar resposta ao admin via WhatsApp
+          await sendMessage(serverUrlAdmin!, instanceTokenAdmin!, ADMIN_NUMERO, reply);
+
+          console.log(`[ADMIN-FALLBACK] Resposta enviada ao admin: "${reply.slice(0, 100)}..."`);
+          return new Response(JSON.stringify({ success: true, admin_fallback: true, regra_criada: teachData.regra_criada, mensagem_enviada: teachData.mensagem_enviada }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } else {
+          console.error(`[ADMIN-FALLBACK] Erro ao chamar teach-chatbot: ${teachResponse.status}`);
+          await sendMessage(serverUrlAdmin!, instanceTokenAdmin!, ADMIN_NUMERO, '⚠️ Não consegui processar sua mensagem. Tente novamente.');
+        }
+      } catch (fallbackErr) {
+        console.error('[ADMIN-FALLBACK] Erro:', fallbackErr);
+        await sendMessage(serverUrlAdmin!, instanceTokenAdmin!, ADMIN_NUMERO, '⚠️ Erro ao processar. Tente novamente.');
+      }
+
+      return new Response(JSON.stringify({ success: true, admin_fallback_attempted: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
