@@ -1,33 +1,10 @@
+## ✅ Concluído — Resposta do Admin via WhatsApp
 
+Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-# Plano: Incluir Telefones do Cliente na Notificação de Consulta
-
-## O que muda
-
-**Arquivo**: `supabase/functions/notify-cpf-consulta/index.ts`
-
-Na edge function, após receber o CPF, buscar os telefones cadastrados na tabela `devedor_telefones` e incluí-los na mensagem de notificação.
-
-### Alterações:
-
-1. Após criar o cliente Supabase, consultar `devedor_telefones` filtrando por `devedor_cpf` (normalizado)
-2. Também buscar o telefone da tabela `devedores` como fallback
-3. Formatar e adicionar uma linha `📞 *Telefone(s):*` na mensagem
-
-**Resultado esperado:**
-
-```
-📋 *CONSULTA NO PORTAL*
-
-📌 *CPF:* 022.961.612-78
-👤 *Nome:* GEILSON LIMA DOS SANTOS
-🏢 *Credor:* Novo Mundo
-📊 *Débitos encontrados:* 19
-📞 *Telefone(s):* (62) 99999-1234, (62) 98888-5678
-🕐 *Data/Hora:* 09/03/2026, 10:21:43
-
-_Portal de Acordos - Souza e Ribeiro_
-```
-
-Se não houver telefone cadastrado, exibe "Não cadastrado".
-
+1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
+2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
+3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
+4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
+5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
+6. **Cleanup** — remove registro `admin_pending` após processamento
