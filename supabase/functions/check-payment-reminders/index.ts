@@ -103,7 +103,7 @@ serve(async (req) => {
       // Buscar perfil do usuário com credenciais UAZAPI
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
+        .select('nome, whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
         .eq('id', acordo.user_id)
         .single();
 
