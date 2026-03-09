@@ -103,7 +103,7 @@ serve(async (req) => {
       // Buscar perfil do usuário com credenciais UAZAPI
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
+        .select('nome, whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
         .eq('id', acordo.user_id)
         .single();
 
@@ -163,11 +163,13 @@ serve(async (req) => {
       const dataVencimento = new Date(parcela.data_prevista + 'T12:00:00');
       const dataFormatada = dataVencimento.toLocaleDateString('pt-BR');
 
+      const primeiroNome = (profile.nome || 'Rodrigo').split(' ')[0];
+
       let mensagem: string;
       if (tipoLembrete === 'dia_vencimento') {
-        mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é Rodrigo, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence *HOJE*. Gostaria que enviasse o boleto para pagamento?`;
+        mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} vence *HOJE*. Gostaria que enviasse o boleto para pagamento?`;
       } else {
-        mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é Rodrigo, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} vence dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
+        mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} vence dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       }
 
       const telefoneFormatado = acordo.cliente_telefone.replace(/\D/g, '');
