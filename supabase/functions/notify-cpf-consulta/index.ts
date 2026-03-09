@@ -42,6 +42,29 @@ serve(async (req) => {
       ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
       : cpf;
 
+    // Buscar telefones cadastrados
+    const { data: fonesTab } = await supabase
+      .from('devedor_telefones')
+      .select('numero, tipo')
+      .eq('devedor_cpf', cpfLimpo)
+      .eq('ativo', true);
+
+    let telefonesFormatados = 'Não cadastrado';
+    if (fonesTab && fonesTab.length > 0) {
+      telefonesFormatados = fonesTab.map(f => f.numero).join(', ');
+    } else {
+      // Fallback: telefone da tabela devedores
+      const { data: devs } = await supabase
+        .from('devedores')
+        .select('telefone')
+        .eq('cpf', cpfLimpo)
+        .not('telefone', 'is', null)
+        .limit(1);
+      if (devs?.[0]?.telefone) {
+        telefonesFormatados = devs[0].telefone;
+      }
+    }
+
     const agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
     const mensagem = `📋 *CONSULTA NO PORTAL*
@@ -50,6 +73,7 @@ serve(async (req) => {
 👤 *Nome:* ${nome || 'Não identificado'}
 🏢 *Credor:* ${credor || 'N/A'}
 📊 *Débitos encontrados:* ${totalDebitos ?? 0}
+📞 *Telefone(s):* ${telefonesFormatados}
 🕐 *Data/Hora:* ${agora}
 
 _Portal de Acordos - Souza e Ribeiro_`;
