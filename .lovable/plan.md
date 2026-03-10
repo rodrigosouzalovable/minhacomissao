@@ -1,21 +1,40 @@
+## ✅ Concluído — Resposta do Admin via WhatsApp
 
+Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-# Fix: Dialog WhatsApp config overflow
+1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
+2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
+3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
+4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
+5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
+6. **Cleanup** — remove registro `admin_pending` após processamento
 
-## Problem
-The "Configurações WhatsApp" dialog uses `max-w-lg` which is too narrow for the content (instances list with badges, checkboxes, etc.), causing horizontal overflow.
+## ✅ Concluído — Admin responde por número de telefone direto
 
-## Change
+1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
+2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
+3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
+4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
+5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
+6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
 
-### `src/pages/Acionamento.tsx` (line 1308)
-Change the DialogContent className from `max-w-lg` to `max-w-2xl` (or `max-w-xl`) to give enough horizontal space for the instance cards with their badges ("Ativo", "Conectado", "Só Lembretes"), toggle switches, and "Apenas Lembretes" checkboxes.
+## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
 
-```tsx
-// From:
-<DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-// To:
-<DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-```
+Implementado em `supabase/functions/teach-chatbot/index.ts`:
 
-This single change widens the dialog to accommodate all content without horizontal scrolling while keeping vertical scroll intact.
+1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
+2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
+   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
+   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
+   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
+3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
+4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
+5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
 
+## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
+
+1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
+2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
+3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
+4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
+5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
