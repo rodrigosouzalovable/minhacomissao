@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, MessageCircle, Play, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, MessageCircle, Play, CheckCircle2, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -22,7 +22,7 @@ interface LembreteStats {
   erros: number;
 }
 
-type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done';
+type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done' | 'done_with_errors';
 
 interface LembretesSectionProps {
   instances: WhatsAppInstance[];
@@ -42,6 +42,7 @@ export default function LembretesSection({
   const [lembreteStatus, setLembreteStatus] = useState<LembreteStatus>('loading');
   const [stats, setStats] = useState<LembreteStats>({ total: 0, pendentes: 0, enviados: 0, erros: 0 });
   const [starting, setStarting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const fetchStats = useCallback(async () => {
     const hoje = new Date();
@@ -74,6 +75,8 @@ export default function LembretesSection({
 
     if (pendentes > 0) {
       setLembreteStatus('sending');
+    } else if (erros > 0) {
+      setLembreteStatus('done_with_errors');
     } else {
       setLembreteStatus('done');
     }
@@ -111,6 +114,31 @@ export default function LembretesSection({
       toast.error('Erro ao iniciar envios: ' + (err.message || 'Erro desconhecido'));
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleRetryErros = async () => {
+    setRetrying(true);
+    try {
+      const hoje = new Date();
+      const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+
+      const { error } = await supabase
+        .from('whatsapp_fila')
+        .update({ status: 'pendente', erro_mensagem: null } as any)
+        .eq('status', 'erro')
+        .gte('criado_em', `${hojeStr}T00:00:00`)
+        .lte('criado_em', `${hojeStr}T23:59:59`);
+
+      if (error) throw error;
+
+      toast.success('Mensagens com erro foram reagendadas para reenvio!');
+      await fetchStats();
+    } catch (err: any) {
+      console.error('Erro ao reagendar:', err);
+      toast.error('Erro ao reagendar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -172,9 +200,14 @@ export default function LembretesSection({
               <CheckCircle2 className="h-3 w-3" /> Concluído
             </Badge>
           )}
+          {lembreteStatus === 'done_with_errors' && (
+            <Badge variant="destructive" className="gap-1">
+              <AlertTriangle className="h-3 w-3" /> Concluído com erros
+            </Badge>
+          )}
         </div>
 
-        {(lembreteStatus === 'sending' || lembreteStatus === 'done') && stats.total > 0 && (
+        {(lembreteStatus === 'sending' || lembreteStatus === 'done' || lembreteStatus === 'done_with_errors') && stats.total > 0 && (
           <div className="space-y-2">
             <Progress value={progressPercent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -203,6 +236,21 @@ export default function LembretesSection({
           <p className="text-xs text-muted-foreground text-center">
             Atualizando a cada 30 segundos...
           </p>
+        )}
+
+        {lembreteStatus === 'done_with_errors' && (
+          <Button
+            onClick={handleRetryErros}
+            disabled={retrying}
+            variant="destructive"
+            className="w-full"
+          >
+            {retrying ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Reagendando...</>
+            ) : (
+              <><RefreshCw className="h-4 w-4 mr-2" /> Reenviar {stats.erros} com Erro</>
+            )}
+          </Button>
         )}
       </div>
     </div>
