@@ -22,7 +22,7 @@ interface LembreteStats {
   erros: number;
 }
 
-type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done';
+type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done' | 'done_with_errors';
 
 interface LembretesSectionProps {
   instances: WhatsAppInstance[];
