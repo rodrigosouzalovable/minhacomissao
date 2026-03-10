@@ -815,6 +815,19 @@ export default function Acionamento() {
     setInstances(prev => prev.map(i => i.id === id ? { ...i, ativo } : i));
   };
 
+  const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update({ apenas_lembretes } as any)
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+      return;
+    }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes } : i));
+    toast.success(apenas_lembretes ? 'Instância restrita a apenas lembretes' : 'Chatbot reativado nesta instância');
+  };
+
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
     setTestingInstanceId(instance.id);
     try {
