@@ -1271,6 +1271,7 @@ export type Database = {
       }
       user_whatsapp_instances: {
         Row: {
+          apenas_lembretes: boolean
           ativo: boolean
           criado_em: string
           id: string
@@ -1280,6 +1281,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          apenas_lembretes?: boolean
           ativo?: boolean
           criado_em?: string
           id?: string
@@ -1289,6 +1291,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          apenas_lembretes?: boolean
           ativo?: boolean
           criado_em?: string
           id?: string
