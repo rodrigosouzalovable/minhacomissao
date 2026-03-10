@@ -207,7 +207,7 @@ export default function LembretesSection({
           )}
         </div>
 
-        {(lembreteStatus === 'sending' || lembreteStatus === 'done') && stats.total > 0 && (
+        {(lembreteStatus === 'sending' || lembreteStatus === 'done' || lembreteStatus === 'done_with_errors') && stats.total > 0 && (
           <div className="space-y-2">
             <Progress value={progressPercent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
