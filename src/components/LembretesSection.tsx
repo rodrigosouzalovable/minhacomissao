@@ -6,7 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, MessageCircle, Play, CheckCircle2, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { UazapiInstance } from '@/hooks/useAutoSend';
+
+interface WhatsAppInstance {
+  id: string;
+  nome: string;
+  server_url: string;
+  instance_token: string;
+  ativo: boolean;
+}
 
 interface LembreteStats {
   total: number;
