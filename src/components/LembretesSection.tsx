@@ -43,7 +43,6 @@ export default function LembretesSection({
   const [stats, setStats] = useState<LembreteStats>({ total: 0, pendentes: 0, enviados: 0, erros: 0 });
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const [starting, setStarting] = useState(false);
 
   const fetchStats = useCallback(async () => {
     const hoje = new Date();
