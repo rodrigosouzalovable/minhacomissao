@@ -117,6 +117,31 @@ export default function LembretesSection({
     }
   };
 
+  const handleRetryErros = async () => {
+    setRetrying(true);
+    try {
+      const hoje = new Date();
+      const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+
+      const { error } = await supabase
+        .from('whatsapp_fila')
+        .update({ status: 'pendente', erro_mensagem: null } as any)
+        .eq('status', 'erro')
+        .gte('criado_em', `${hojeStr}T00:00:00`)
+        .lte('criado_em', `${hojeStr}T23:59:59`);
+
+      if (error) throw error;
+
+      toast.success('Mensagens com erro foram reagendadas para reenvio!');
+      await fetchStats();
+    } catch (err: any) {
+      console.error('Erro ao reagendar:', err);
+      toast.error('Erro ao reagendar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const progressPercent = stats.total > 0 ? Math.round(((stats.enviados + stats.erros) / stats.total) * 100) : 0;
 
   return (
