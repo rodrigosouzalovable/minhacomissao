@@ -25,7 +25,7 @@ interface LembreteStats {
 type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done';
 
 interface LembretesSectionProps {
-  instances: UazapiInstance[];
+  instances: WhatsAppInstance[];
   selectedLembreteInstanceId: string;
   handleSaveLembreteInstance: (value: string) => void;
   savingLembrete: boolean;
