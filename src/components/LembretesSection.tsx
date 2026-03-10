@@ -75,6 +75,8 @@ export default function LembretesSection({
 
     if (pendentes > 0) {
       setLembreteStatus('sending');
+    } else if (erros > 0) {
+      setLembreteStatus('done_with_errors');
     } else {
       setLembreteStatus('done');
     }
