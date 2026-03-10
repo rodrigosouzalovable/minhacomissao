@@ -22,6 +22,7 @@ import type { UazapiInstance } from '@/hooks/useAutoSend';
 import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy } from 'lucide-react';
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
+import LembretesSection from '@/components/LembretesSection';
 import { Progress } from '@/components/ui/progress';
 import * as XLSX from 'xlsx';
 
@@ -1438,37 +1439,13 @@ export default function Acionamento() {
 
               <Separator />
 
-              <div className="space-y-3">
-                <h3 className="text-base font-semibold flex items-center gap-2">
-                  <MessageCircle className="h-4 w-4" />
-                  WhatsApp Principal para Lembretes
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Selecione qual instância será responsável pelo envio de lembretes de pagamento.
-                </p>
-                <Select
-                  value={selectedLembreteInstanceId.includes('|||') ? 'none' : selectedLembreteInstanceId}
-                  onValueChange={handleSaveLembreteInstance}
-                  disabled={savingLembrete}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma instância" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhuma (usar global)</SelectItem>
-                    {instances.filter(i => i.ativo).map((inst) => (
-                      <SelectItem key={inst.id} value={inst.id}>
-                        {inst.nome || inst.server_url} {connectionStatus[inst.id] === 'connected' ? '✅' : connectionStatus[inst.id] === 'disconnected' ? '❌' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {savingLembrete && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
-                  </p>
-                )}
-              </div>
+              <LembretesSection
+                instances={instances}
+                selectedLembreteInstanceId={selectedLembreteInstanceId}
+                handleSaveLembreteInstance={handleSaveLembreteInstance}
+                savingLembrete={savingLembrete}
+                connectionStatus={connectionStatus}
+              />
 
               {isAdmin && (
                 <>
