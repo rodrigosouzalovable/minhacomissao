@@ -1305,7 +1305,7 @@ export default function Acionamento() {
 
         {/* Config Dialog */}
         <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Configurações WhatsApp</DialogTitle>
             </DialogHeader>
