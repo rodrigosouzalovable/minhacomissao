@@ -237,6 +237,21 @@ export default function LembretesSection({
             Atualizando a cada 30 segundos...
           </p>
         )}
+
+        {lembreteStatus === 'done_with_errors' && (
+          <Button
+            onClick={handleRetryErros}
+            disabled={retrying}
+            variant="destructive"
+            className="w-full"
+          >
+            {retrying ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Reagendando...</>
+            ) : (
+              <><RefreshCw className="h-4 w-4 mr-2" /> Reenviar {stats.erros} com Erro</>
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );
