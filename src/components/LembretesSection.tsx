@@ -200,6 +200,11 @@ export default function LembretesSection({
               <CheckCircle2 className="h-3 w-3" /> Concluído
             </Badge>
           )}
+          {lembreteStatus === 'done_with_errors' && (
+            <Badge variant="destructive" className="gap-1">
+              <AlertTriangle className="h-3 w-3" /> Concluído com erros
+            </Badge>
+          )}
         </div>
 
         {(lembreteStatus === 'sending' || lembreteStatus === 'done') && stats.total > 0 && (
