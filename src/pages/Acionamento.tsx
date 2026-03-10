@@ -172,7 +172,7 @@ export default function Acionamento() {
   const [recebidoMensal, setRecebidoMensal] = useState<number>(0);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -263,7 +263,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo')
+        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes')
         .eq('user_id', user.id)
         .order('criado_em', { ascending: true });
       if (data) {
@@ -813,6 +813,19 @@ export default function Acionamento() {
       return;
     }
     setInstances(prev => prev.map(i => i.id === id ? { ...i, ativo } : i));
+  };
+
+  const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update({ apenas_lembretes } as any)
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+      return;
+    }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes } : i));
+    toast.success(apenas_lembretes ? 'Instância restrita a apenas lembretes' : 'Chatbot reativado nesta instância');
   };
 
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
@@ -1392,45 +1405,66 @@ export default function Acionamento() {
                             )}
                             {inst.ativo && status === 'checking' && (
                               <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                             )}
+                            {inst.apenas_lembretes && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-amber-500 text-amber-600">
+                                Só Lembretes
+                              </Badge>
                             )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Switch
-                          checked={inst.ativo}
-                          onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
-                          className="scale-90"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleTestInstance(inst)}
-                          disabled={testingInstanceId === inst.id}
-                          title="Testar conexão"
-                        >
-                          {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
-                          title="Editar"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteInstance(inst.id)}
-                          title="Remover"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={inst.ativo}
+                            onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
+                            className="scale-90"
+                            title="Ativar/Desativar"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => handleTestInstance(inst)}
+                            disabled={testingInstanceId === inst.id}
+                            title="Testar conexão"
+                          >
+                            {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
+                            title="Editar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteInstance(inst.id)}
+                            title="Remover"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        {inst.ativo && (
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
+                              Apenas Lembretes
+                            </Label>
+                            <Checkbox
+                              id={`lembretes-only-${inst.id}`}
+                              checked={inst.apenas_lembretes}
+                              onCheckedChange={(checked) => handleToggleApenasLembretes(inst.id, !!checked)}
+                              className="h-3.5 w-3.5"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                     );

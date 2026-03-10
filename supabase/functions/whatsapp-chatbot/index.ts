@@ -1074,7 +1074,7 @@ serve(async (req) => {
     if (instanceToken) {
       const { data: instanceRecord } = await supabase
         .from('user_whatsapp_instances')
-        .select('user_id, ativo')
+        .select('user_id, ativo, apenas_lembretes')
         .eq('instance_token', instanceToken)
         .limit(1)
         .maybeSingle();
@@ -1083,6 +1083,14 @@ serve(async (req) => {
       if (instanceRecord && !instanceRecord.ativo) {
         console.log(`[CHATBOT] Instance ${instanceToken} is deactivated, ignoring.`);
         return new Response(JSON.stringify({ success: true, ignored: true, reason: 'instance_deactivated' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // If instance is marked as reminder-only, skip chatbot processing
+      if (instanceRecord?.apenas_lembretes) {
+        console.log(`[CHATBOT] Instance ${instanceToken} is reminder-only, ignoring.`);
+        return new Response(JSON.stringify({ success: true, ignored: true, reason: 'reminder_only' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
