@@ -218,7 +218,7 @@ serve(async (req) => {
         continue;
       }
 
-      console.log(`Mensagem agendada para ${proximoHorario.toISOString()} - Parcela ${parcela.id} (instância: ${profile.whatsapp_lembrete_server_url ? 'per-user' : 'global'})`);
+      console.log(`Mensagem agendada para ${proximoHorario.toISOString()} - Parcela ${parcela.id} (instância: ${lembretesInstance ? 'apenas_lembretes' : finalServerUrl ? 'per-user' : 'global'})`);
       agendados++;
 
       const intervaloMs = (Math.floor(Math.random() * 3) + 5) * 60 * 1000; // 5, 6 ou 7 min
