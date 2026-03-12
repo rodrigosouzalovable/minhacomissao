@@ -75,6 +75,8 @@ export default function DevedorDetalhe() {
   const [loading, setLoading] = useState(true);
   const [openContratos, setOpenContratos] = useState<Record<string, boolean>>({});
   const [cpfNorm, setCpfNorm] = useState('');
+  const [editingVencId, setEditingVencId] = useState<string | null>(null);
+  const [editingVencDate, setEditingVencDate] = useState('');
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
