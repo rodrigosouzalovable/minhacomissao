@@ -100,7 +100,7 @@ serve(async (req) => {
         continue;
       }
 
-      // Buscar perfil do usuário com credenciais UAZAPI
+      // Buscar perfil do usuário
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('nome, whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
@@ -112,6 +112,19 @@ serve(async (req) => {
         pulados++;
         continue;
       }
+
+      // Priorizar instância marcada como "apenas_lembretes" na tabela user_whatsapp_instances
+      const { data: lembretesInstance } = await supabase
+        .from('user_whatsapp_instances')
+        .select('server_url, instance_token')
+        .eq('user_id', acordo.user_id)
+        .eq('apenas_lembretes', true)
+        .eq('ativo', true)
+        .limit(1)
+        .single();
+
+      const finalServerUrl = lembretesInstance?.server_url || profile.whatsapp_lembrete_server_url || null;
+      const finalInstanceToken = lembretesInstance?.instance_token || profile.whatsapp_lembrete_instance_token || null;
 
       // Verificar se o acordo tem pelo menos uma parcela paga
       const { data: parcelasPagas } = await supabase
