@@ -1428,6 +1428,11 @@ export default function Acionamento() {
                                 Só Lembretes
                               </Badge>
                             )}
+                            {inst.robo && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500 text-blue-600">
+                                Robô
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                         </div>
