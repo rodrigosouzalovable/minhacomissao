@@ -1475,16 +1475,29 @@ export default function Acionamento() {
                           </Button>
                         </div>
                         {inst.ativo && (
-                          <div className="flex items-center gap-1.5 justify-end">
-                            <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
-                              Apenas Lembretes
-                            </Label>
-                            <Checkbox
-                              id={`lembretes-only-${inst.id}`}
-                              checked={inst.apenas_lembretes}
-                              onCheckedChange={(checked) => handleToggleApenasLembretes(inst.id, !!checked)}
-                              className="h-3.5 w-3.5"
-                            />
+                          <div className="flex flex-col gap-1 items-end">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
+                                Apenas Lembretes
+                              </Label>
+                              <Checkbox
+                                id={`lembretes-only-${inst.id}`}
+                                checked={inst.apenas_lembretes}
+                                onCheckedChange={(checked) => handleToggleApenasLembretes(inst.id, !!checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`robo-${inst.id}`}>
+                                Robô
+                              </Label>
+                              <Checkbox
+                                id={`robo-${inst.id}`}
+                                checked={inst.robo}
+                                onCheckedChange={(checked) => handleToggleRobo(inst.id, !!checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
