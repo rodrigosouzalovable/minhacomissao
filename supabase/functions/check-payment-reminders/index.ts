@@ -209,8 +209,8 @@ serve(async (req) => {
           mensagem: mensagem,
           agendado_para: proximoHorario.toISOString(),
           status: 'pendente',
-          server_url: profile.whatsapp_lembrete_server_url || null,
-          instance_token: profile.whatsapp_lembrete_instance_token || null,
+          server_url: finalServerUrl,
+          instance_token: finalInstanceToken,
         });
 
       if (insertError) {
