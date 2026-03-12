@@ -816,16 +816,33 @@ export default function Acionamento() {
   };
 
   const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
+    const updateData: any = { apenas_lembretes };
+    if (apenas_lembretes) updateData.robo = false;
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
-      .update({ apenas_lembretes } as any)
+      .update(updateData)
       .eq('id', id);
     if (error) {
       toast.error(`Erro: ${error.message}`);
       return;
     }
-    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes } : i));
-    toast.success(apenas_lembretes ? 'Instância restrita a apenas lembretes' : 'Chatbot reativado nesta instância');
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes, ...(apenas_lembretes ? { robo: false } : {}) } : i));
+    toast.success(apenas_lembretes ? 'Instância restrita a apenas lembretes' : 'Restrição removida');
+  };
+
+  const handleToggleRobo = async (id: string, robo: boolean) => {
+    const updateData: any = { robo };
+    if (robo) updateData.apenas_lembretes = false;
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update(updateData)
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+      return;
+    }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, robo, ...(robo ? { apenas_lembretes: false } : {}) } : i));
+    toast.success(robo ? 'Instância habilitada para o robô de acionamento' : 'Robô desativado nesta instância');
   };
 
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
