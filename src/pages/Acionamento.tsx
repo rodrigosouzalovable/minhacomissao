@@ -172,7 +172,7 @@ export default function Acionamento() {
   const [recebidoMensal, setRecebidoMensal] = useState<number>(0);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -263,7 +263,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes')
+        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo')
         .eq('user_id', user.id)
         .order('criado_em', { ascending: true });
       if (data) {
@@ -371,7 +371,7 @@ export default function Acionamento() {
   );
 
   const activeInstances = useMemo(() => 
-    instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected'), 
+    instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected' && !i.apenas_lembretes), 
     [instances, connectionStatus]
   );
 
@@ -816,16 +816,33 @@ export default function Acionamento() {
   };
 
   const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
+    const updateData: any = { apenas_lembretes };
+    if (apenas_lembretes) updateData.robo = false;
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
-      .update({ apenas_lembretes } as any)
+      .update(updateData)
       .eq('id', id);
     if (error) {
       toast.error(`Erro: ${error.message}`);
       return;
     }
-    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes } : i));
-    toast.success(apenas_lembretes ? 'Instância restrita a apenas lembretes' : 'Chatbot reativado nesta instância');
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes, ...(apenas_lembretes ? { robo: false } : {}) } : i));
+    toast.success(apenas_lembretes ? 'Instância restrita a apenas lembretes' : 'Restrição removida');
+  };
+
+  const handleToggleRobo = async (id: string, robo: boolean) => {
+    const updateData: any = { robo };
+    if (robo) updateData.apenas_lembretes = false;
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update(updateData)
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+      return;
+    }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, robo, ...(robo ? { apenas_lembretes: false } : {}) } : i));
+    toast.success(robo ? 'Instância habilitada para o robô de acionamento' : 'Robô desativado nesta instância');
   };
 
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
@@ -1411,6 +1428,11 @@ export default function Acionamento() {
                                 Só Lembretes
                               </Badge>
                             )}
+                            {inst.robo && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500 text-blue-600">
+                                Robô
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                         </div>
@@ -1453,16 +1475,29 @@ export default function Acionamento() {
                           </Button>
                         </div>
                         {inst.ativo && (
-                          <div className="flex items-center gap-1.5 justify-end">
-                            <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
-                              Apenas Lembretes
-                            </Label>
-                            <Checkbox
-                              id={`lembretes-only-${inst.id}`}
-                              checked={inst.apenas_lembretes}
-                              onCheckedChange={(checked) => handleToggleApenasLembretes(inst.id, !!checked)}
-                              className="h-3.5 w-3.5"
-                            />
+                          <div className="flex flex-col gap-1 items-end">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
+                                Apenas Lembretes
+                              </Label>
+                              <Checkbox
+                                id={`lembretes-only-${inst.id}`}
+                                checked={inst.apenas_lembretes}
+                                onCheckedChange={(checked) => handleToggleApenasLembretes(inst.id, !!checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`robo-${inst.id}`}>
+                                Robô
+                              </Label>
+                              <Checkbox
+                                id={`robo-${inst.id}`}
+                                checked={inst.robo}
+                                onCheckedChange={(checked) => handleToggleRobo(inst.id, !!checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
