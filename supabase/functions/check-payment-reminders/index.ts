@@ -27,42 +27,61 @@ serve(async (req) => {
     tresDias.setDate(tresDias.getDate() + 3);
     const tresDiasStr = tresDias.toISOString().split('T')[0];
 
-    console.log(`Verificando parcelas para hoje (${hojeStr}) e 3 dias (${tresDiasStr})`);
+    // Limite de 30 dias atrás para vencidas
+    const trintaDiasAtras = new Date(hoje);
+    trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+    const trintaDiasAtrasStr = trintaDiasAtras.toISOString().split('T')[0];
 
-    const { data: parcelas, error: parcelasError } = await supabase
+    console.log(`Verificando parcelas: hoje (${hojeStr}), 3 dias (${tresDiasStr}), vencidas desde (${trintaDiasAtrasStr})`);
+
+    // Query 1: Parcelas de hoje e 3 dias (existente)
+    const { data: parcelasProximas, error: proximasError } = await supabase
       .from('pagamentos')
       .select(`
-        id,
-        numero_parcela,
-        data_prevista,
-        valor_parcela,
-        acordo_id,
-        acordos!inner (
-          id,
-          user_id,
-          cliente_nome,
-          cliente_telefone,
-          status
-        )
+        id, numero_parcela, data_prevista, valor_parcela, acordo_id,
+        acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )
       `)
       .eq('status', 'pendente')
       .in('data_prevista', [hojeStr, tresDiasStr]);
 
-    if (parcelasError) {
-      console.error('Erro ao buscar parcelas:', parcelasError);
-      throw parcelasError;
+    if (proximasError) {
+      console.error('Erro ao buscar parcelas próximas:', proximasError);
+      throw proximasError;
     }
 
-    console.log(`Encontradas ${parcelas?.length || 0} parcelas para verificar`);
+    // Query 2: Parcelas vencidas (data_prevista < hoje, últimos 30 dias)
+    const { data: parcelasVencidas, error: vencidasError } = await supabase
+      .from('pagamentos')
+      .select(`
+        id, numero_parcela, data_prevista, valor_parcela, acordo_id,
+        acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )
+      `)
+      .eq('status', 'pendente')
+      .lt('data_prevista', hojeStr)
+      .gte('data_prevista', trintaDiasAtrasStr);
 
-    if (!parcelas || parcelas.length === 0) {
+    if (vencidasError) {
+      console.error('Erro ao buscar parcelas vencidas:', vencidasError);
+      throw vencidasError;
+    }
+
+    // Combinar todas as parcelas com seus tipos
+    const todasParcelas: Array<{ parcela: any; tipoLembrete: string }> = [];
+
+    for (const p of (parcelasProximas || [])) {
+      const tipo = p.data_prevista === hojeStr ? 'dia_vencimento' : '3_dias';
+      todasParcelas.push({ parcela: p, tipoLembrete: tipo });
+    }
+    for (const p of (parcelasVencidas || [])) {
+      todasParcelas.push({ parcela: p, tipoLembrete: 'vencido' });
+    }
+
+    console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas?.length || 0} próximas + ${parcelasVencidas?.length || 0} vencidas)`);
+
+    if (todasParcelas.length === 0) {
       return new Response(JSON.stringify({ 
-        success: true, 
-        message: 'Nenhuma parcela para notificar',
-        agendados: 0
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+        success: true, message: 'Nenhuma parcela para notificar', agendados: 0
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Calcular horário base para agendamento (8h de Brasília = 11h UTC)
@@ -71,7 +90,6 @@ serve(async (req) => {
     const horaAtualBrasilia = (horaAtualUTC - 3 + 24) % 24;
     
     let proximoHorario: Date;
-    
     if (horaAtualBrasilia >= 18 || horaAtualBrasilia < 8) {
       proximoHorario = new Date(agora);
       if (horaAtualBrasilia >= 18) {
@@ -85,20 +103,11 @@ serve(async (req) => {
     let agendados = 0;
     let pulados = 0;
 
-    for (const parcela of parcelas) {
+    for (const { parcela, tipoLembrete } of todasParcelas) {
       const acordo = parcela.acordos as any;
       
-      if (acordo.status !== 'ativo') {
-        console.log(`Acordo ${acordo.id} não está ativo, pulando...`);
-        pulados++;
-        continue;
-      }
-
-      if (!acordo.cliente_telefone) {
-        console.log(`Acordo ${acordo.id} sem telefone, pulando...`);
-        pulados++;
-        continue;
-      }
+      if (acordo.status !== 'ativo') { pulados++; continue; }
+      if (!acordo.cliente_telefone) { pulados++; continue; }
 
       // Buscar perfil do usuário
       const { data: profile, error: profileError } = await supabase
@@ -107,13 +116,9 @@ serve(async (req) => {
         .eq('id', acordo.user_id)
         .single();
 
-      if (profileError || !profile?.whatsapp_lembretes_habilitado) {
-        console.log(`Usuário ${acordo.user_id} não tem WhatsApp habilitado, pulando...`);
-        pulados++;
-        continue;
-      }
+      if (profileError || !profile?.whatsapp_lembretes_habilitado) { pulados++; continue; }
 
-      // Priorizar instância marcada como "apenas_lembretes" na tabela user_whatsapp_instances
+      // Priorizar instância "apenas_lembretes"
       const { data: lembretesInstance } = await supabase
         .from('user_whatsapp_instances')
         .select('server_url, instance_token')
@@ -134,13 +139,7 @@ serve(async (req) => {
         .eq('status', 'pago')
         .limit(1);
 
-      if (!parcelasPagas || parcelasPagas.length === 0) {
-        console.log(`Acordo ${acordo.id} sem parcelas pagas, pulando...`);
-        pulados++;
-        continue;
-      }
-
-      const tipoLembrete = parcela.data_prevista === hojeStr ? 'dia_vencimento' : '3_dias';
+      if (!parcelasPagas || parcelasPagas.length === 0) { pulados++; continue; }
 
       // Verificar duplicidade na fila
       const { data: filaExistente } = await supabase
@@ -150,10 +149,7 @@ serve(async (req) => {
         .eq('tipo_lembrete', tipoLembrete)
         .single();
 
-      if (filaExistente) {
-        pulados++;
-        continue;
-      }
+      if (filaExistente) { pulados++; continue; }
 
       // Verificar duplicidade no log
       const { data: logExistente } = await supabase
@@ -163,50 +159,43 @@ serve(async (req) => {
         .eq('tipo_lembrete', tipoLembrete)
         .single();
 
-      if (logExistente) {
-        pulados++;
-        continue;
-      }
+      if (logExistente) { pulados++; continue; }
 
       const valorFormatado = new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
+        style: 'currency', currency: 'BRL'
       }).format(parcela.valor_parcela);
 
       const dataVencimento = new Date(parcela.data_prevista + 'T12:00:00');
       const dataFormatada = dataVencimento.toLocaleDateString('pt-BR');
-
       const primeiroNome = (profile.nome || 'Rodrigo').split(' ')[0];
 
       let mensagem: string;
-      if (tipoLembrete === 'dia_vencimento') {
+      if (tipoLembrete === 'vencido') {
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Você possui uma parcela no valor de ${valorFormatado} que venceu no dia ${dataFormatada}. Caso já tenha pago, pode nos enviar o comprovante por gentileza? Caso ainda não tenha pago, consegue realizar o pagamento hoje?`;
+      } else if (tipoLembrete === 'dia_vencimento') {
         mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence HOJE. Gostaria que enviasse o boleto para pagamento?`;
       } else {
         mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       }
 
       const telefoneFormatado = acordo.cliente_telefone.replace(/\D/g, '');
-      const telefoneCompleto = telefoneFormatado.startsWith('55') 
-        ? telefoneFormatado 
-        : `55${telefoneFormatado}`;
+      const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
 
       // Verificar horário agendado
       const horaAgendadaUTC = proximoHorario.getUTCHours();
       const horaAgendadaBrasilia = (horaAgendadaUTC - 3 + 24) % 24;
-      
       if (horaAgendadaBrasilia >= 18) {
         proximoHorario.setUTCDate(proximoHorario.getUTCDate() + 1);
         proximoHorario.setUTCHours(11, 0, 0, 0);
       }
 
-      // Inserir na fila com credenciais do usuário (ou null para fallback global)
       const { error: insertError } = await supabase
         .from('whatsapp_fila')
         .insert({
           pagamento_id: parcela.id,
           tipo_lembrete: tipoLembrete,
           telefone: telefoneCompleto,
-          mensagem: mensagem,
+          mensagem,
           agendado_para: proximoHorario.toISOString(),
           status: 'pendente',
           server_url: finalServerUrl,
@@ -214,34 +203,28 @@ serve(async (req) => {
         });
 
       if (insertError) {
-        console.error(`Erro ao inserir na fila parcela ${parcela.id}:`, insertError);
+        console.error(`Erro ao inserir parcela ${parcela.id}:`, insertError);
         continue;
       }
 
-      console.log(`Mensagem agendada para ${proximoHorario.toISOString()} - Parcela ${parcela.id} (instância: ${lembretesInstance ? 'apenas_lembretes' : finalServerUrl ? 'per-user' : 'global'})`);
+      console.log(`Agendado [${tipoLembrete}] para ${proximoHorario.toISOString()} - ${acordo.cliente_nome}`);
       agendados++;
 
-      const intervaloMs = (Math.floor(Math.random() * 3) + 5) * 60 * 1000; // 5, 6 ou 7 min
+      const intervaloMs = (Math.floor(Math.random() * 3) + 5) * 60 * 1000;
       proximoHorario = new Date(proximoHorario.getTime() + intervaloMs);
     }
 
-    console.log(`Processamento concluído: ${agendados} agendados, ${pulados} pulados`);
+    console.log(`Concluído: ${agendados} agendados, ${pulados} pulados`);
 
     return new Response(JSON.stringify({ 
-      success: true, 
-      agendados,
-      pulados,
-      total: parcelas.length
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+      success: true, agendados, pulados, total: todasParcelas.length
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error('Erro na função check-payment-reminders:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
