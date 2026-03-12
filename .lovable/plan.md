@@ -1,40 +1,27 @@
-## ✅ Concluído — Resposta do Admin via WhatsApp
 
-Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
-2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
-3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
-4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
-5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
-6. **Cleanup** — remove registro `admin_pending` após processamento
+# Plano: Adicionar envio de lembretes para parcelas vencidas
 
-## ✅ Concluído — Admin responde por número de telefone direto
+## Situação atual
+A função `check-payment-reminders` busca apenas parcelas com `data_prevista` igual a hoje ou daqui a 3 dias. Parcelas vencidas (data_prevista < hoje) são ignoradas.
 
-1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
-2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
-3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
-4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
-5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
-6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
+O hook `usePaymentReminders` já busca parcelas vencidas no frontend (tipo `'vencido'`), mas a edge function não gera mensagens para elas.
 
-## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
+## Alterações
 
-Implementado em `supabase/functions/teach-chatbot/index.ts`:
+### 1. Edge Function `check-payment-reminders/index.ts`
+- Adicionar uma segunda query para buscar parcelas pendentes com `data_prevista < hoje` (vencidas)
+- Para cada parcela vencida, usar o tipo_lembrete `'vencido'`
+- Mensagem específica para vencidas:
+  > "Olá [cliente_nome], aqui é [operador], do departamento de acordos das Lojas Novo Mundo. Você possui uma parcela no valor de [valor] que venceu no dia [data]. Caso já tenha pago, pode nos enviar o comprovante por gentileza? Caso ainda não tenha pago, consegue realizar o pagamento hoje?"
+- Aplicar as mesmas validações: acordo ativo, telefone presente, instância `apenas_lembretes`, verificação de duplicidade, horário comercial
+- Limitar vencidas a no máximo 30 dias de atraso para não enviar mensagens muito antigas
+- Cada parcela vencida recebe apenas 1 lembrete (deduplicação por `tipo_lembrete = 'vencido'`)
 
-1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
-2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
-   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
-   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
-   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
-3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
-4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
-5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
+### 2. Disponível para todos os usuários
+- A query de vencidas buscará parcelas de TODOS os usuários (não filtrada por user_id), assim como já funciona para as parcelas de hoje/3 dias
+- Cada usuário terá suas credenciais WhatsApp resolvidas individualmente (instância `apenas_lembretes` ou profile)
 
-## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
+### Sem alterações no banco
+- A tabela `whatsapp_fila` já suporta o novo tipo_lembrete ('vencido') pois é campo texto livre
 
-1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
-2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
-3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
-4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
-5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
