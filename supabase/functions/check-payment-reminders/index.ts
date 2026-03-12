@@ -100,7 +100,7 @@ serve(async (req) => {
         continue;
       }
 
-      // Buscar perfil do usuário com credenciais UAZAPI
+      // Buscar perfil do usuário
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('nome, whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
@@ -112,6 +112,19 @@ serve(async (req) => {
         pulados++;
         continue;
       }
+
+      // Priorizar instância marcada como "apenas_lembretes" na tabela user_whatsapp_instances
+      const { data: lembretesInstance } = await supabase
+        .from('user_whatsapp_instances')
+        .select('server_url, instance_token')
+        .eq('user_id', acordo.user_id)
+        .eq('apenas_lembretes', true)
+        .eq('ativo', true)
+        .limit(1)
+        .single();
+
+      const finalServerUrl = lembretesInstance?.server_url || profile.whatsapp_lembrete_server_url || null;
+      const finalInstanceToken = lembretesInstance?.instance_token || profile.whatsapp_lembrete_instance_token || null;
 
       // Verificar se o acordo tem pelo menos uma parcela paga
       const { data: parcelasPagas } = await supabase
@@ -196,8 +209,8 @@ serve(async (req) => {
           mensagem: mensagem,
           agendado_para: proximoHorario.toISOString(),
           status: 'pendente',
-          server_url: profile.whatsapp_lembrete_server_url || null,
-          instance_token: profile.whatsapp_lembrete_instance_token || null,
+          server_url: finalServerUrl,
+          instance_token: finalInstanceToken,
         });
 
       if (insertError) {
@@ -205,7 +218,7 @@ serve(async (req) => {
         continue;
       }
 
-      console.log(`Mensagem agendada para ${proximoHorario.toISOString()} - Parcela ${parcela.id} (instância: ${profile.whatsapp_lembrete_server_url ? 'per-user' : 'global'})`);
+      console.log(`Mensagem agendada para ${proximoHorario.toISOString()} - Parcela ${parcela.id} (instância: ${lembretesInstance ? 'apenas_lembretes' : finalServerUrl ? 'per-user' : 'global'})`);
       agendados++;
 
       const intervaloMs = (Math.floor(Math.random() * 3) + 5) * 60 * 1000; // 5, 6 ou 7 min
