@@ -1015,9 +1015,121 @@ ${bodyContent}
                                 <span className="text-xs text-muted-foreground">- Atraso: {dias}</span>
                               )}
                               {contrato.data_vencimento && (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
                                   Venc: {new Date(contrato.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                  <Popover open={editingVencId === contrato.id} onOpenChange={(open) => {
+                                    if (open) {
+                                      setEditingVencId(contrato.id);
+                                      setEditingVencDate(contrato.data_vencimento || '');
+                                    } else {
+                                      setEditingVencId(null);
+                                    }
+                                  }}>
+                                    <PopoverTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className="p-0.5 rounded hover:bg-muted"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-3" align="start" onClick={(e) => e.stopPropagation()}>
+                                      <div className="flex flex-col gap-2">
+                                        <Label className="text-xs">Nova data de vencimento</Label>
+                                        <Input
+                                          type="date"
+                                          value={editingVencDate}
+                                          onChange={(e) => setEditingVencDate(e.target.value)}
+                                          className="text-xs h-8"
+                                        />
+                                        <Button
+                                          size="sm"
+                                          className="h-7 text-xs"
+                                          disabled={!editingVencDate}
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const { error } = await supabase
+                                              .from('devedores')
+                                              .update({ data_vencimento: editingVencDate })
+                                              .eq('id', contrato.id);
+                                            if (error) {
+                                              toast.error('Erro ao atualizar data');
+                                            } else {
+                                              toast.success('Data de vencimento atualizada');
+                                              setContratos(prev => prev.map(c =>
+                                                c.id === contrato.id ? { ...c, data_vencimento: editingVencDate } : c
+                                              ));
+                                              if (devedor?.id === contrato.id) {
+                                                setDevedor(prev => prev ? { ...prev, data_vencimento: editingVencDate } : prev);
+                                              }
+                                              setEditingVencId(null);
+                                            }
+                                          }}
+                                        >
+                                          Salvar
+                                        </Button>
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
                                 </span>
+                              )}
+                              {!contrato.data_vencimento && (
+                                <Popover open={editingVencId === contrato.id} onOpenChange={(open) => {
+                                  if (open) {
+                                    setEditingVencId(contrato.id);
+                                    setEditingVencDate('');
+                                  } else {
+                                    setEditingVencId(null);
+                                  }
+                                }}>
+                                  <PopoverTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-3" align="start" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex flex-col gap-2">
+                                      <Label className="text-xs">Data de vencimento</Label>
+                                      <Input
+                                        type="date"
+                                        value={editingVencDate}
+                                        onChange={(e) => setEditingVencDate(e.target.value)}
+                                        className="text-xs h-8"
+                                      />
+                                      <Button
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        disabled={!editingVencDate}
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          const { error } = await supabase
+                                            .from('devedores')
+                                            .update({ data_vencimento: editingVencDate })
+                                            .eq('id', contrato.id);
+                                          if (error) {
+                                            toast.error('Erro ao atualizar data');
+                                          } else {
+                                            toast.success('Data de vencimento adicionada');
+                                            setContratos(prev => prev.map(c =>
+                                              c.id === contrato.id ? { ...c, data_vencimento: editingVencDate } : c
+                                            ));
+                                            if (devedor?.id === contrato.id) {
+                                              setDevedor(prev => prev ? { ...prev, data_vencimento: editingVencDate } : prev);
+                                            }
+                                            setEditingVencId(null);
+                                          }
+                                        }}
+                                      >
+                                        Salvar
+                                      </Button>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
                               )}
                               <span className="text-xs font-semibold text-destructive">
                                 {contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
