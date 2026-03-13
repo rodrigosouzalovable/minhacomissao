@@ -54,10 +54,6 @@ const SEND_STATUS_BASE = 'acionamento_send_status';
 const MANUAL_CHECKED_BASE = 'acionamento_manual_checked';
 const SEND_TIMESTAMPS_BASE = 'acionamento_send_timestamps';
 const AUTO_SENDING_BASE = 'acionamento_auto_sending_state';
-const META_DIARIA_BASE = 'acionamento_meta_diaria';
-const META_MENSAL_BASE = 'acionamento_meta_mensal';
-const RECEBIDO_DIARIO_BASE = 'meta_recebido_diario';
-const RECEBIDO_MENSAL_BASE = 'meta_recebido_mensal';
 
 const normalizePhoneForWhatsApp = (phone: string): string => {
   const clean = phone.replace(/\D/g, '');
