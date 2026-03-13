@@ -276,7 +276,8 @@ export default function ImportarDevedores() {
       const statusRaw = String(row['K'] ?? '').trim().toUpperCase();
       if (statusRaw !== 'PAGA') continue;
 
-      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      let cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      if (cpf.length >= 10 && cpf.length < 11) cpf = cpf.padStart(11, '0');
       if (cpf.length < 11) continue;
 
       let vencimentoStr = '';
