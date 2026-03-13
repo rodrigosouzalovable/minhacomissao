@@ -15,11 +15,20 @@ interface WhatsAppInstance {
   ativo: boolean;
 }
 
+interface InstanceStats {
+  instanceToken: string;
+  nome: string;
+  pendentes: number;
+  enviados: number;
+  erros: number;
+}
+
 interface LembreteStats {
   total: number;
   pendentes: number;
   enviados: number;
   erros: number;
+  byInstance: InstanceStats[];
 }
 
 type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done' | 'done_with_errors';
@@ -40,7 +49,7 @@ export default function LembretesSection({
   connectionStatus,
 }: LembretesSectionProps) {
   const [lembreteStatus, setLembreteStatus] = useState<LembreteStatus>('loading');
-  const [stats, setStats] = useState<LembreteStats>({ total: 0, pendentes: 0, enviados: 0, erros: 0 });
+  const [stats, setStats] = useState<LembreteStats>({ total: 0, pendentes: 0, enviados: 0, erros: 0, byInstance: [] });
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -50,7 +59,7 @@ export default function LembretesSection({
 
     const { data, error } = await supabase
       .from('whatsapp_fila')
-      .select('id, status')
+      .select('id, status, instance_token')
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
 
@@ -61,7 +70,7 @@ export default function LembretesSection({
     }
 
     if (!data || data.length === 0) {
-      setStats({ total: 0, pendentes: 0, enviados: 0, erros: 0 });
+      setStats({ total: 0, pendentes: 0, enviados: 0, erros: 0, byInstance: [] });
       setLembreteStatus('idle');
       return;
     }
@@ -71,7 +80,27 @@ export default function LembretesSection({
     const enviados = data.filter(d => d.status === 'enviado').length;
     const erros = data.filter(d => d.status === 'erro').length;
 
-    setStats({ total, pendentes, enviados, erros });
+    // Group by instance_token
+    const tokenMap: Record<string, { pendentes: number; enviados: number; erros: number }> = {};
+    for (const item of data) {
+      const token = item.instance_token || 'global';
+      if (!tokenMap[token]) tokenMap[token] = { pendentes: 0, enviados: 0, erros: 0 };
+      if (item.status === 'pendente') tokenMap[token].pendentes++;
+      else if (item.status === 'enviado') tokenMap[token].enviados++;
+      else if (item.status === 'erro') tokenMap[token].erros++;
+    }
+
+    // Map tokens to instance names
+    const byInstance: InstanceStats[] = Object.entries(tokenMap).map(([token, counts]) => {
+      const inst = instances.find(i => i.instance_token === token);
+      return {
+        instanceToken: token,
+        nome: inst?.nome || (token === 'global' ? 'Global' : token.substring(0, 8) + '...'),
+        ...counts,
+      };
+    });
+
+    setStats({ total, pendentes, enviados, erros, byInstance });
 
     if (pendentes > 0) {
       setLembreteStatus('sending');
@@ -80,7 +109,7 @@ export default function LembretesSection({
     } else {
       setLembreteStatus('done');
     }
-  }, []);
+  }, [instances]);
 
   useEffect(() => {
     fetchStats();
@@ -208,13 +237,35 @@ export default function LembretesSection({
         </div>
 
         {(lembreteStatus === 'sending' || lembreteStatus === 'done' || lembreteStatus === 'done_with_errors') && stats.total > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Progress value={progressPercent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{stats.enviados} de {stats.total} enviados</span>
               {stats.erros > 0 && <span className="text-destructive">{stats.erros} erro(s)</span>}
               {stats.pendentes > 0 && <span>{stats.pendentes} pendente(s)</span>}
             </div>
+
+            {/* Breakdown por instância */}
+            {stats.byInstance.length > 0 && (
+              <div className="border-t pt-2 space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">Detalhamento por telefone:</span>
+                {stats.byInstance.map((inst) => {
+                  const instTotal = inst.pendentes + inst.enviados + inst.erros;
+                  return (
+                    <div key={inst.instanceToken} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground truncate max-w-[140px]" title={inst.nome}>
+                        📱 {inst.nome}
+                      </span>
+                      <div className="flex gap-2">
+                        <span className="text-emerald-600">{inst.enviados}/{instTotal}</span>
+                        {inst.pendentes > 0 && <span className="text-amber-500">{inst.pendentes} pend.</span>}
+                        {inst.erros > 0 && <span className="text-destructive">{inst.erros} erro</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
