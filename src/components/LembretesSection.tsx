@@ -28,6 +28,7 @@ interface LembreteStats {
 
 interface FilaItem {
   id: string;
+  pagamento_id: string;
   telefone: string;
   status: string | null;
   cliente_nome: string | null;
