@@ -200,11 +200,8 @@ export default function LembretesSection({
   const unifiedItems: UnifiedItem[] = allReminders.map((r) => {
     const rPhone = normalizePhone(r.cliente_telefone || '');
     const filaMatch = filaItems.find(f => {
-      // First try matching by pagamento_id if available
-      if (f.id && r.id) {
-        const fPagId = (f as any).pagamento_id;
-        if (fPagId === r.id) return true;
-      }
+      // Match by pagamento_id (most reliable)
+      if (f.pagamento_id === r.id) return true;
       // Fallback to phone matching with 55 prefix handling
       const fPhone = normalizePhone(f.telefone);
       return rPhone.length > 0 && (rPhone === fPhone || `55${rPhone}` === fPhone || rPhone === `55${fPhone}`);
