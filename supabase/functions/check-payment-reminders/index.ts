@@ -176,8 +176,8 @@ serve(async (req) => {
     console.log(`Templates customizados: ${userTemplatesMap.size} usuários`);
 
     const filaSet = new Set<string>();
-    for (let i = 0; i < pagamentoIds.length; i += 500) {
-      const chunk = pagamentoIds.slice(i, i + 500);
+    for (let i = 0; i < pagamentoIds.length; i += 100) {
+      const chunk = pagamentoIds.slice(i, i + 100);
       const { data: filaRows, error } = await supabase
         .from('whatsapp_fila')
         .select('pagamento_id, tipo_lembrete')
@@ -188,8 +188,8 @@ serve(async (req) => {
 
     // --- BATCH: Fetch existing log entries for dedup ---
     const logSet = new Set<string>();
-    for (let i = 0; i < pagamentoIds.length; i += 500) {
-      const chunk = pagamentoIds.slice(i, i + 500);
+    for (let i = 0; i < pagamentoIds.length; i += 100) {
+      const chunk = pagamentoIds.slice(i, i + 100);
       const { data: logRows, error } = await supabase
         .from('whatsapp_lembretes_log')
         .select('pagamento_id, tipo_lembrete')
