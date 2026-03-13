@@ -15,6 +15,16 @@ serve(async (req) => {
   try {
     console.log('Iniciando verificação de lembretes de pagamento...');
 
+    // Parse optional override from request body
+    let overrideToken: string | null = null;
+    let overrideServerUrl: string | null = null;
+    try {
+      const body = await req.json();
+      if (body?.instance_token) overrideToken = body.instance_token;
+      if (body?.server_url) overrideServerUrl = body.server_url;
+      console.log(`Override recebido: token=${overrideToken ? 'sim' : 'não'}, server_url=${overrideServerUrl ? 'sim' : 'não'}`);
+    } catch { /* no body */ }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -125,18 +135,27 @@ serve(async (req) => {
 
       if (profileError || !profile?.whatsapp_lembretes_habilitado) { pulados++; continue; }
 
-      // Priorizar instância "apenas_lembretes"
-      const { data: lembretesInstance } = await supabase
-        .from('user_whatsapp_instances')
-        .select('server_url, instance_token')
-        .eq('user_id', acordo.user_id)
-        .eq('apenas_lembretes', true)
-        .eq('ativo', true)
-        .limit(1)
-        .single();
+      // Se override foi fornecido (disparo manual do painel), usar diretamente
+      let finalServerUrl: string | null;
+      let finalInstanceToken: string | null;
 
-      const finalServerUrl = lembretesInstance?.server_url || profile.whatsapp_lembrete_server_url || null;
-      const finalInstanceToken = lembretesInstance?.instance_token || profile.whatsapp_lembrete_instance_token || null;
+      if (overrideToken && overrideServerUrl) {
+        finalServerUrl = overrideServerUrl;
+        finalInstanceToken = overrideToken;
+      } else {
+        // Priorizar instância "apenas_lembretes"
+        const { data: lembretesInstance } = await supabase
+          .from('user_whatsapp_instances')
+          .select('server_url, instance_token')
+          .eq('user_id', acordo.user_id)
+          .eq('apenas_lembretes', true)
+          .eq('ativo', true)
+          .limit(1)
+          .single();
+
+        finalServerUrl = lembretesInstance?.server_url || profile.whatsapp_lembrete_server_url || null;
+        finalInstanceToken = lembretesInstance?.instance_token || profile.whatsapp_lembrete_instance_token || null;
+      }
 
       // Verificar se o acordo tem pelo menos uma parcela paga
       const { data: parcelasPagas } = await supabase

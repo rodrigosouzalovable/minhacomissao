@@ -1,32 +1,66 @@
+## ✅ Concluído — Resposta do Admin via WhatsApp
 
-Diagnóstico confirmado do problema:
+Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-1) O painel “Envios do dia” está somando a fila inteira do dia, não só o número selecionado em “WhatsApp Principal para Lembretes”.
-- Em `src/components/LembretesSection.tsx`, a consulta atual busca `whatsapp_fila` apenas por data (`criado_em`) e sem filtro por instância/token.
-- Por isso aparece “15 de 26”, misturando mensagens de outros tokens/telefones.
+1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
+2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
+3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
+4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
+5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
+6. **Cleanup** — remove registro `admin_pending` após processamento
 
-2) O número exibido no card representa quantidade de mensagens, não quantidade de contatos únicos.
-- Ex.: 3 telefones podem receber 5 mensagens (parcelas diferentes, mais de uma mensagem para o mesmo contato).
+## ✅ Concluído — Admin responde por número de telefone direto
 
-Plano de correção (implementação):
+1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
+2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
+3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
+4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
+5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
+6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
 
-1. Corrigir o escopo do card “WhatsApp Principal para Lembretes”
-- Arquivo: `src/components/LembretesSection.tsx`
-- Alterar `fetchStats` para filtrar por `instance_token` (e `server_url`) da instância selecionada no campo “WhatsApp Principal para Lembretes”.
-- Se nada estiver selecionado (`none`), mostrar estado neutro com instrução para selecionar uma instância (em vez de mostrar total global).
-- Ajustar também `handleRetryErros` para reprocessar erros somente da instância selecionada (hoje ele reprocessa todos).
+## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
 
-2. Deixar explícito no UI o que está sendo contado
-- Arquivo: `src/components/LembretesSection.tsx`
-- Trocar o texto para “X mensagens enviadas” e adicionar “Y contatos únicos” para evitar confusão entre mensagens vs números.
-- Exibir o nome/número da instância que está sendo monitorada no topo do card.
+Implementado em `supabase/functions/teach-chatbot/index.ts`:
 
-3. Alinhar disparo manual com a instância principal selecionada
-- Arquivos: `src/components/LembretesSection.tsx` e `supabase/functions/check-payment-reminders/index.ts`
-- No botão “Iniciar Envios”, enviar para a função os dados da instância principal selecionada.
-- Na função `check-payment-reminders`, quando chamada manualmente com esse parâmetro, gravar a fila com esse token/servidor (evitando mistura com outras instâncias no disparo manual daquele painel).
+1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
+2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
+   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
+   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
+   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
+3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
+4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
+5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
 
-Resultado esperado após correção:
-- O card não mostrará mais “15 de 26” misturando outros telefones.
-- O número exibido baterá com o WhatsApp 62982198675 (considerando mensagens, com contatos únicos apresentados separadamente).
-- O reenvio de erros e o monitoramento ficarão restritos ao telefone principal de lembretes escolhido no seu usuário.
+## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
+
+1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
+2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
+3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
+4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
+5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
+
+## ✅ Concluído — Cadência de lembretes para parcelas vencidas
+
+Implementado em `supabase/functions/check-payment-reminders/index.ts`:
+
+1. **Substituição da query genérica** — removida busca por range (últimos 30 dias), substituída por busca em 6 datas exatas
+2. **Datas-alvo calculadas**: D+1, D+2, D+10, D+11, D+20, D+30 a partir de hoje
+3. **Tipos distintos**: `vencido_d1`, `vencido_d2`, `vencido_d10`, `vencido_d11`, `vencido_d20`, `vencido_d30` — deduplicação automática por `pagamento_id` + `tipo_lembrete`
+4. **Mensagens escalonadas**:
+   - D+1: Tom amigável — "venceu ontem, envie comprovante"
+   - D+2: Reforço amigável — "ainda consta em aberto"
+   - D+10: Tom firme — "continua em aberto há 10 dias"
+   - D+11: Reforço firme — "segue pendente há 11 dias"
+   - D+20: Alerta — "regularize para evitar descumprimento"
+   - D+30: Último aviso — "acordo poderá ser considerado descumprido"
+5. **D-3 e D+0 inalterados** — lembretes pré-vencimento continuam funcionando como antes
+
+## ✅ Concluído — QR Code para conectar WhatsApp no Acionamento
+
+1. **Edge Function `whatsapp-qr`** — adaptada do ZAP BOOOT, usa `user_whatsapp_instances` em vez de `whatsapp_instances`
+2. **Actions**: `create-instance` (cria via UAZAPI admin API), `qr` (busca QR Code), `status` (polling conexão), `setup-webhook` (configura webhook do chatbot), `disconnect` (desconecta e remove)
+3. **Secrets**: `UAZAPI_ADMIN_TOKEN` configurado, reutiliza `UAZAPI_SERVER_URL` existente como base URL
+4. **UI Acionamento** — botão "Conectar via QR Code" + fallback "Manual" para entrada manual de server_url/token
+5. **Polling 3s** — detecta conexão automaticamente e configura webhook
+6. **Countdown 60s** — com opção de atualizar QR Code
+7. **Auto-cleanup** — se cancelar antes de conectar, instância criada é removida
