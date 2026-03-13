@@ -120,6 +120,7 @@ export default function LembretesSection({
   const [sequentialSending, setSequentialSending] = useState(false);
   const cancelSendRef = useRef(false);
 
+  const { user } = useAuth();
   const { reminders, lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, isLoading: isLoadingReminders } = usePaymentReminders();
 
   const selectedInstance = instances.find(i => i.id === selectedLembreteInstanceId);
