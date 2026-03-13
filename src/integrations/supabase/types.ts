@@ -1311,6 +1311,7 @@ export type Database = {
       whatsapp_fila: {
         Row: {
           agendado_para: string
+          cliente_nome: string | null
           criado_em: string | null
           enviado_em: string | null
           erro_mensagem: string | null
@@ -1325,6 +1326,7 @@ export type Database = {
         }
         Insert: {
           agendado_para: string
+          cliente_nome?: string | null
           criado_em?: string | null
           enviado_em?: string | null
           erro_mensagem?: string | null
@@ -1339,6 +1341,7 @@ export type Database = {
         }
         Update: {
           agendado_para?: string
+          cliente_nome?: string | null
           criado_em?: string | null
           enviado_em?: string | null
           erro_mensagem?: string | null
