@@ -202,7 +202,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
         <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-3 space-y-1">
           <p className="font-medium">Variáveis disponíveis:</p>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="text-xs">{'{nome_cliente}'}</Badge>
+            <Badge variant="outline" className="text-xs">{'{nome_cliente}'} — Nome completo</Badge>
+            <Badge variant="outline" className="text-xs">{'{primeiro_nome}'} — Ex: Rodrigo</Badge>
             <Badge variant="outline" className="text-xs">{'{nome_operador}'}</Badge>
             <Badge variant="outline" className="text-xs">{'{valor}'}</Badge>
             <Badge variant="outline" className="text-xs">{'{data_vencimento}'}</Badge>
