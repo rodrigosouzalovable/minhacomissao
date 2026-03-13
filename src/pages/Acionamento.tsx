@@ -207,12 +207,6 @@ export default function Acionamento() {
   const MANUAL_CHECKED_KEY = getKey(MANUAL_CHECKED_BASE, uid);
   const SEND_TIMESTAMPS_KEY = getKey(SEND_TIMESTAMPS_BASE, uid);
   const AUTO_SENDING_KEY = getKey(AUTO_SENDING_BASE, uid);
-  const META_DIARIA_KEY = getKey(META_DIARIA_BASE, uid);
-  const META_MENSAL_KEY = getKey(META_MENSAL_BASE, uid);
-  const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const currentDayKey = new Date().toISOString().slice(0, 10);
-  const RECEBIDO_DIARIO_KEY = getKey(RECEBIDO_DIARIO_BASE, uid) + '_' + currentDayKey;
-  const RECEBIDO_MENSAL_KEY = getKey(RECEBIDO_MENSAL_BASE, uid) + '_' + currentMonthKey;
 
   useEffect(() => {
     activeHistoricoIdRef.current = activeHistoricoId;
