@@ -1693,6 +1693,11 @@ export default function Acionamento() {
                                 Robô
                               </Badge>
                             )}
+                            {inst.ia_responde && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
+                                IA Responde
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                         </div>
