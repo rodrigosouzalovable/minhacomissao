@@ -310,6 +310,21 @@ export default function ImportarDevedores() {
 
     if (rawRows.length === 0) return [];
 
+    // Detect 0-based parcela numbering per CPF and shift to 1-based
+    const cpfGroups = new Map<string, PagamentoRow[]>();
+    for (const row of rawRows) {
+      if (!cpfGroups.has(row.cpf)) cpfGroups.set(row.cpf, []);
+      cpfGroups.get(row.cpf)!.push(row);
+    }
+    for (const [, rows] of cpfGroups) {
+      const hasZero = rows.some(r => r.numero_parcela === 0);
+      if (hasZero) {
+        for (const r of rows) {
+          r.numero_parcela += 1;
+        }
+      }
+    }
+
     // Get unique CPFs
     const uniqueCpfs = [...new Set(rawRows.map(r => r.cpf))];
     console.log(`[PAGAMENTOS] ${rawRows.length} linhas PAGA, ${uniqueCpfs.length} CPFs únicos`);
