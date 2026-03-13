@@ -876,6 +876,36 @@ export type Database = {
         }
         Relationships: []
       }
+      lembrete_mensagens_templates: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          mensagem: string
+          ordem: number | null
+          tipo_lembrete: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          mensagem: string
+          ordem?: number | null
+          tipo_lembrete: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          mensagem?: string
+          ordem?: number | null
+          tipo_lembrete?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lembretes_lidos: {
         Row: {
           criado_em: string
