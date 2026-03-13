@@ -7,6 +7,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper: capitalize first letter, lowercase rest
+function capitalizeName(name: string): string {
+  if (!name) return '';
+  return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+}
+
 // Helper: paginated fetch to bypass 1000-row limit
 async function fetchAll(supabase: any, table: string, query: (q: any) => any) {
   const allData: any[] = [];
