@@ -38,6 +38,8 @@ interface UnifiedItem {
   cliente_nome: string;
   cliente_telefone: string | null;
   valor_parcela?: number;
+  data_prevista?: string;
+  tipo_lembrete_label: string;
   tipo: 'vencido' | 'hoje' | 'tres_dias';
   whatsapp_status: 'enviado' | 'pendente' | 'erro' | 'nao_enviado';
 }
