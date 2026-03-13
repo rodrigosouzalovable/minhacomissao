@@ -803,7 +803,161 @@ export default function Acionamento() {
     }
   };
 
-  const handleDeleteInstance = async (id: string) => {
+  // QR Code connection handlers
+  const stopQrPolling = useCallback(() => {
+    if (qrPollingRef.current) clearInterval(qrPollingRef.current);
+    if (qrCountdownRef.current) clearInterval(qrCountdownRef.current);
+    setQrPolling(false);
+    qrPollingRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (qrPollingRef.current) clearInterval(qrPollingRef.current);
+      if (qrCountdownRef.current) clearInterval(qrCountdownRef.current);
+    };
+  }, []);
+
+  const startQrCountdown = () => {
+    if (qrCountdownRef.current) clearInterval(qrCountdownRef.current);
+    setQrCountdown(60);
+    qrCountdownRef.current = setInterval(() => {
+      setQrCountdown((prev) => {
+        if (prev <= 1) {
+          if (qrCountdownRef.current) clearInterval(qrCountdownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const startQrPolling = useCallback((instanceId: string) => {
+    if (qrPollingRef.current) clearInterval(qrPollingRef.current);
+    setQrPolling(true);
+
+    qrPollingRef.current = setInterval(async () => {
+      try {
+        const { data } = await supabase.functions.invoke('whatsapp-qr', {
+          body: { action: 'status', userId: user?.id, instanceId },
+        });
+
+        if (data?.connected) {
+          stopQrPolling();
+          // Auto-configure webhook
+          await supabase.functions.invoke('whatsapp-qr', {
+            body: { action: 'setup-webhook', userId: user?.id, instanceId },
+          });
+          // Refresh instances list
+          const { data: refreshed } = await supabase
+            .from('user_whatsapp_instances' as any)
+            .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo')
+            .eq('user_id', user?.id)
+            .order('criado_em', { ascending: true });
+          if (refreshed) setInstances(refreshed as any);
+          setQrStep('idle');
+          setQrImage(null);
+          setPairingCode(null);
+          setCreatedInstanceId(null);
+          setEditingInstance(null);
+          toast.success('WhatsApp conectado com sucesso! Webhook configurado automaticamente.');
+          checkInstanceConnections(refreshed as any || []);
+        }
+      } catch (_) {}
+    }, 3000);
+  }, [user?.id, stopQrPolling, checkInstanceConnections]);
+
+  const handleConnectQr = async () => {
+    if (!user) return;
+    setQrLoading(true);
+    setQrImage(null);
+    setPairingCode(null);
+
+    try {
+      // Step 1: Create instance
+      const { data: createData, error: createError } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'create-instance', userId: user.id },
+      });
+
+      if (createError) throw createError;
+      if (!createData?.ok) throw new Error(createData?.error || 'Falha ao criar instância');
+
+      const instanceId = createData.instanceId;
+      setCreatedInstanceId(instanceId);
+
+      // Step 2: Fetch QR code
+      const { data: qrData, error: qrError } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'qr', userId: user.id, instanceId },
+      });
+
+      if (qrError) throw qrError;
+
+      if (qrData?.alreadyConnected) {
+        const { data: refreshed } = await supabase
+          .from('user_whatsapp_instances' as any)
+          .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo')
+          .eq('user_id', user.id)
+          .order('criado_em', { ascending: true });
+        if (refreshed) setInstances(refreshed as any);
+        setQrStep('idle');
+        toast.success('WhatsApp já está conectado!');
+      } else if (qrData?.ok && qrData.qr) {
+        const qr = qrData.qr.startsWith('data:') ? qrData.qr : `data:image/png;base64,${qrData.qr}`;
+        setQrImage(qr);
+        setPairingCode(qrData.pairingCode || null);
+        setQrStep('qr');
+        startQrPolling(instanceId);
+        startQrCountdown();
+      } else {
+        toast.error(qrData?.error || 'Não foi possível obter o QR Code');
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setQrLoading(false);
+  };
+
+  const handleRefreshQr = async () => {
+    if (!createdInstanceId || !user) return;
+    stopQrPolling();
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'qr', userId: user.id, instanceId: createdInstanceId },
+      });
+      if (error) throw error;
+      if (data?.ok && data.qr) {
+        const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
+        setQrImage(qr);
+        setPairingCode(data.pairingCode || null);
+        startQrPolling(createdInstanceId);
+        startQrCountdown();
+      } else {
+        toast.error(data?.error || 'Não foi possível obter o QR Code');
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setQrLoading(false);
+  };
+
+  const handleCancelQr = () => {
+    stopQrPolling();
+    setQrStep('idle');
+    setQrImage(null);
+    setPairingCode(null);
+    setCreatedInstanceId(null);
+    // If instance was created but not connected, delete it
+    if (createdInstanceId) {
+      supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'disconnect', userId: user?.id, instanceId: createdInstanceId },
+      }).then(() => {
+        setInstances(prev => prev.filter(i => i.id !== createdInstanceId));
+      });
+    }
+  };
+
+
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .delete()
