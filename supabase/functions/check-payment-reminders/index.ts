@@ -15,6 +15,16 @@ serve(async (req) => {
   try {
     console.log('Iniciando verificação de lembretes de pagamento...');
 
+    // Parse optional override from request body
+    let overrideToken: string | null = null;
+    let overrideServerUrl: string | null = null;
+    try {
+      const body = await req.json();
+      if (body?.instance_token) overrideToken = body.instance_token;
+      if (body?.server_url) overrideServerUrl = body.server_url;
+      console.log(`Override recebido: token=${overrideToken ? 'sim' : 'não'}, server_url=${overrideServerUrl ? 'sim' : 'não'}`);
+    } catch { /* no body */ }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
