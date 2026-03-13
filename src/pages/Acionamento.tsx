@@ -174,7 +174,7 @@ export default function Acionamento() {
   const [recebidoMensal, setRecebidoMensal] = useState<number>(0);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -276,7 +276,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo')
+        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
         .eq('user_id', user.id)
         .order('criado_em', { ascending: true });
       if (data) {
@@ -851,7 +851,7 @@ export default function Acionamento() {
           // Refresh instances list
           const { data: refreshed } = await supabase
             .from('user_whatsapp_instances' as any)
-            .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo')
+            .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
             .eq('user_id', user?.id)
             .order('criado_em', { ascending: true });
           if (refreshed) setInstances(refreshed as any);
@@ -895,7 +895,7 @@ export default function Acionamento() {
       if (qrData?.alreadyConnected) {
         const { data: refreshed } = await supabase
           .from('user_whatsapp_instances' as any)
-          .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo')
+          .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
           .eq('user_id', user.id)
           .order('criado_em', { ascending: true });
         if (refreshed) setInstances(refreshed as any);
@@ -984,7 +984,7 @@ export default function Acionamento() {
 
   const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
     const updateData: any = { apenas_lembretes };
-    if (apenas_lembretes) updateData.robo = false;
+    if (apenas_lembretes) { updateData.robo = false; updateData.ia_responde = false; }
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .update(updateData)
@@ -998,23 +998,18 @@ export default function Acionamento() {
     if (apenas_lembretes && user) {
       const inst = instances.find(i => i.id === id);
       if (inst) {
-        const { error: profileError } = await supabase
+        await supabase
           .from('profiles')
           .update({
-            whatsapp_lembretes_habilitado: true,
             whatsapp_lembrete_server_url: inst.server_url,
             whatsapp_lembrete_instance_token: inst.instance_token,
           })
           .eq('id', user.id);
-        if (profileError) {
-          console.error('Erro ao atualizar perfil para lembretes:', profileError);
-        } else {
-          toast.success('Instância definida como principal para lembretes');
-        }
+        toast.success('Instância marcada como dedicada para lembretes e sincronizada com seu perfil');
       }
     }
 
-    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes, ...(apenas_lembretes ? { robo: false } : {}) } : i));
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes, ...(apenas_lembretes ? { robo: false, ia_responde: false } : {}) } : i));
     if (!apenas_lembretes) toast.success('Restrição removida');
   };
 
@@ -1031,6 +1026,21 @@ export default function Acionamento() {
     }
     setInstances(prev => prev.map(i => i.id === id ? { ...i, robo, ...(robo ? { apenas_lembretes: false } : {}) } : i));
     toast.success(robo ? 'Instância habilitada para o robô de acionamento' : 'Robô desativado nesta instância');
+  };
+
+  const handleToggleIaResponde = async (id: string, ia_responde: boolean) => {
+    const updateData: any = { ia_responde };
+    if (ia_responde) updateData.apenas_lembretes = false;
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update(updateData)
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+      return;
+    }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, ia_responde, ...(ia_responde ? { apenas_lembretes: false } : {}) } : i));
+    toast.success(ia_responde ? 'IA habilitada para responder nesta instância' : 'IA desativada nesta instância');
   };
 
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
@@ -1683,6 +1693,11 @@ export default function Acionamento() {
                                 Robô
                               </Badge>
                             )}
+                            {inst.ia_responde && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
+                                IA Responde
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                         </div>
@@ -1745,6 +1760,17 @@ export default function Acionamento() {
                                 id={`robo-${inst.id}`}
                                 checked={inst.robo}
                                 onCheckedChange={(checked) => handleToggleRobo(inst.id, !!checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`ia-responde-${inst.id}`}>
+                                IA Responde
+                              </Label>
+                              <Checkbox
+                                id={`ia-responde-${inst.id}`}
+                                checked={inst.ia_responde}
+                                onCheckedChange={(checked) => handleToggleIaResponde(inst.id, !!checked)}
                                 className="h-3.5 w-3.5"
                               />
                             </div>

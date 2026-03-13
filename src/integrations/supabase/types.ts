@@ -1274,6 +1274,7 @@ export type Database = {
           apenas_lembretes: boolean
           ativo: boolean
           criado_em: string
+          ia_responde: boolean
           id: string
           instance_token: string
           nome: string | null
@@ -1285,6 +1286,7 @@ export type Database = {
           apenas_lembretes?: boolean
           ativo?: boolean
           criado_em?: string
+          ia_responde?: boolean
           id?: string
           instance_token: string
           nome?: string | null
@@ -1296,6 +1298,7 @@ export type Database = {
           apenas_lembretes?: boolean
           ativo?: boolean
           criado_em?: string
+          ia_responde?: boolean
           id?: string
           instance_token?: string
           nome?: string | null
