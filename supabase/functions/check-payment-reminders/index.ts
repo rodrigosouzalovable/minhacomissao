@@ -153,7 +153,28 @@ serve(async (req) => {
       }
     }
 
-    // --- BATCH: Fetch existing fila entries for dedup ---
+    // --- BATCH: Fetch custom message templates per user ---
+    const userTemplatesMap = new Map<string, Map<string, string[]>>();
+    if (userIds.length > 0) {
+      for (let i = 0; i < userIds.length; i += 500) {
+        const chunk = userIds.slice(i, i + 500);
+        const { data: tplRows, error } = await supabase
+          .from('lembrete_mensagens_templates')
+          .select('user_id, tipo_lembrete, mensagem, ativo, ordem')
+          .in('user_id', chunk)
+          .eq('ativo', true)
+          .order('ordem', { ascending: true });
+        if (error) { console.error('Erro templates batch:', error); }
+        for (const r of (tplRows || [])) {
+          if (!userTemplatesMap.has(r.user_id)) userTemplatesMap.set(r.user_id, new Map());
+          const userMap = userTemplatesMap.get(r.user_id)!;
+          if (!userMap.has(r.tipo_lembrete)) userMap.set(r.tipo_lembrete, []);
+          userMap.get(r.tipo_lembrete)!.push(r.mensagem);
+        }
+      }
+    }
+    console.log(`Templates customizados: ${userTemplatesMap.size} usuários`);
+
     const filaSet = new Set<string>();
     for (let i = 0; i < pagamentoIds.length; i += 500) {
       const chunk = pagamentoIds.slice(i, i + 500);
@@ -235,8 +256,24 @@ serve(async (req) => {
       const primeiroNome = capitalizeName((profile.nome || 'Rodrigo').split(' ')[0]);
       const nomeCliente = capitalizeName(acordo.cliente_nome.split(' ')[0]);
 
+      // Calculate dias_atraso for variable substitution
+      const diasAtrasoNum = tipoLembrete.startsWith('vencido_d') ? tipoLembrete.replace('vencido_d', '') : '0';
+
+      // Check for custom template
+      const userTpls = userTemplatesMap.get(acordo.user_id);
+      const customMsgs = userTpls?.get(tipoLembrete);
+
       let mensagem: string;
-      if (tipoLembrete === 'vencido_d1') {
+      if (customMsgs && customMsgs.length > 0) {
+        // Pick random from available custom templates
+        const tpl = customMsgs[Math.floor(Math.random() * customMsgs.length)];
+        mensagem = tpl
+          .replace(/\{nome_cliente\}/g, nomeCliente)
+          .replace(/\{nome_operador\}/g, primeiroNome)
+          .replace(/\{valor\}/g, valorFormatado)
+          .replace(/\{data_vencimento\}/g, dataFormatada)
+          .replace(/\{dias_atraso\}/g, diasAtrasoNum);
+      } else if (tipoLembrete === 'vencido_d1') {
         mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} venceu ontem (${dataFormatada}). Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else if (tipoLembrete === 'vencido_d2') {
         mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Notamos que a parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} ainda consta em aberto. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza. Caso contrário, consegue regularizar hoje?`;
@@ -253,8 +290,7 @@ serve(async (req) => {
       } else if (tipoLembrete === '3_dias') {
         mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       } else if (tipoLembrete.startsWith('vencido_d')) {
-        const diasNum = tipoLembrete.replace('vencido_d', '');
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} encontra-se em atraso há ${diasNum} dias. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} encontra-se em atraso há ${diasAtrasoNum} dias. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else {
         mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       }

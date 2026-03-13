@@ -25,7 +25,7 @@ import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square,
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
 import LembretesSection from '@/components/LembretesSection';
-import { Progress } from '@/components/ui/progress';
+import LembreteMensagensDialog from '@/components/LembreteMensagensDialog';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -54,10 +54,6 @@ const SEND_STATUS_BASE = 'acionamento_send_status';
 const MANUAL_CHECKED_BASE = 'acionamento_manual_checked';
 const SEND_TIMESTAMPS_BASE = 'acionamento_send_timestamps';
 const AUTO_SENDING_BASE = 'acionamento_auto_sending_state';
-const META_DIARIA_BASE = 'acionamento_meta_diaria';
-const META_MENSAL_BASE = 'acionamento_meta_mensal';
-const RECEBIDO_DIARIO_BASE = 'meta_recebido_diario';
-const RECEBIDO_MENSAL_BASE = 'meta_recebido_mensal';
 
 const normalizePhoneForWhatsApp = (phone: string): string => {
   const clean = phone.replace(/\D/g, '');
@@ -167,11 +163,7 @@ export default function Acionamento() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
-  const [metaDialogOpen, setMetaDialogOpen] = useState(false);
-  const [metaDiaria, setMetaDiaria] = useState<number>(0);
-  const [metaMensal, setMetaMensal] = useState<number>(0);
-  const [recebidoDiario, setRecebidoDiario] = useState<number>(0);
-  const [recebidoMensal, setRecebidoMensal] = useState<number>(0);
+  const [lembreteMensagensOpen, setLembreteMensagensOpen] = useState(false);
   
   // Multi-instance UAZAPI state
   const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean }>>([]);
@@ -215,12 +207,6 @@ export default function Acionamento() {
   const MANUAL_CHECKED_KEY = getKey(MANUAL_CHECKED_BASE, uid);
   const SEND_TIMESTAMPS_KEY = getKey(SEND_TIMESTAMPS_BASE, uid);
   const AUTO_SENDING_KEY = getKey(AUTO_SENDING_BASE, uid);
-  const META_DIARIA_KEY = getKey(META_DIARIA_BASE, uid);
-  const META_MENSAL_KEY = getKey(META_MENSAL_BASE, uid);
-  const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const currentDayKey = new Date().toISOString().slice(0, 10);
-  const RECEBIDO_DIARIO_KEY = getKey(RECEBIDO_DIARIO_BASE, uid) + '_' + currentDayKey;
-  const RECEBIDO_MENSAL_KEY = getKey(RECEBIDO_MENSAL_BASE, uid) + '_' + currentMonthKey;
 
   useEffect(() => {
     activeHistoricoIdRef.current = activeHistoricoId;
@@ -259,15 +245,6 @@ export default function Acionamento() {
       }
     }
     localStorage.removeItem(AUTO_SENDING_KEY);
-    // Load meta values
-    const savedMetaDiaria = localStorage.getItem(META_DIARIA_KEY);
-    if (savedMetaDiaria) setMetaDiaria(Number(savedMetaDiaria) || 0);
-    const savedMetaMensal = localStorage.getItem(META_MENSAL_KEY);
-    if (savedMetaMensal) setMetaMensal(Number(savedMetaMensal) || 0);
-    const savedRecDiario = localStorage.getItem(RECEBIDO_DIARIO_KEY);
-    if (savedRecDiario) setRecebidoDiario(Number(savedRecDiario) || 0);
-    const savedRecMensal = localStorage.getItem(RECEBIDO_MENSAL_KEY);
-    if (savedRecMensal) setRecebidoMensal(Number(savedRecMensal) || 0);
   }, [user]);
 
   // Fetch UAZAPI instances from database
@@ -1134,11 +1111,11 @@ export default function Acionamento() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setMetaDialogOpen(true)}
+                onClick={() => setLembreteMensagensOpen(true)}
                 className="text-muted-foreground gap-1"
               >
-                <Target className="h-4 w-4" />
-                <span className="text-xs">Meta</span>
+                <MessageCircle className="h-4 w-4" />
+                <span className="text-xs">Mensagens de Lembrete</span>
               </Button>
               <Button
                 variant="ghost"
@@ -1857,97 +1834,11 @@ export default function Acionamento() {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog Meta Pessoal */}
-        <Dialog open={metaDialogOpen} onOpenChange={setMetaDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Minha Meta
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-5 py-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="meta-diaria">Meta Diária (R$)</Label>
-                  <Input
-                    id="meta-diaria"
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={metaDiaria || ''}
-                    onChange={(e) => {
-                      const v = Number(e.target.value) || 0;
-                      setMetaDiaria(v);
-                      localStorage.setItem(META_DIARIA_KEY, String(v));
-                    }}
-                    placeholder="Ex: 5000"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="meta-mensal">Meta Mensal (R$)</Label>
-                  <Input
-                    id="meta-mensal"
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={metaMensal || ''}
-                    onChange={(e) => {
-                      const v = Number(e.target.value) || 0;
-                      setMetaMensal(v);
-                      localStorage.setItem(META_MENSAL_KEY, String(v));
-                    }}
-                    placeholder="Ex: 100000"
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Progresso Diário */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">Progresso Diário</span>
-                  <span className="text-muted-foreground">
-                    {formatCurrency(recebidoDiario)} / {metaDiaria ? formatCurrency(metaDiaria) : '—'}
-                  </span>
-                </div>
-                <Progress value={metaDiaria > 0 ? Math.min((recebidoDiario / metaDiaria) * 100, 100) : 0} className="h-3" />
-                {metaDiaria > 0 && recebidoDiario >= metaDiaria && (
-                  <p className="text-xs text-primary font-medium flex items-center gap-1">
-                    <Check className="h-3 w-3" /> Meta diária atingida! 🎉
-                  </p>
-                )}
-                {metaDiaria > 0 && recebidoDiario < metaDiaria && (
-                  <p className="text-xs text-muted-foreground">
-                    Faltam {formatCurrency(metaDiaria - recebidoDiario)} hoje
-                  </p>
-                )}
-              </div>
-
-              {/* Progresso Mensal */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">Progresso Mensal</span>
-                  <span className="text-muted-foreground">
-                    {formatCurrency(recebidoMensal)} / {metaMensal ? formatCurrency(metaMensal) : '—'}
-                  </span>
-                </div>
-                <Progress value={metaMensal > 0 ? Math.min((recebidoMensal / metaMensal) * 100, 100) : 0} className="h-3" />
-                {metaMensal > 0 && recebidoMensal >= metaMensal && (
-                  <p className="text-xs text-primary font-medium flex items-center gap-1">
-                    <Check className="h-3 w-3" /> Meta mensal atingida! 🎉
-                  </p>
-                )}
-                {metaMensal > 0 && recebidoMensal < metaMensal && (
-                  <p className="text-xs text-muted-foreground">
-                    Faltam {formatCurrency(metaMensal - recebidoMensal)} este mês
-                  </p>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Dialog Mensagens de Lembrete */}
+        <LembreteMensagensDialog
+          open={lembreteMensagensOpen}
+          onOpenChange={setLembreteMensagensOpen}
+        />
 
         {/* Chat History Dialog */}
         <ChatHistoryDialog
