@@ -209,6 +209,7 @@ export default function LembretesSection({
   const hoje = unifiedItems.filter(i => i.tipo === 'hoje');
   const tresDias = unifiedItems.filter(i => i.tipo === 'tres_dias');
   const totalPendencias = unifiedItems.length;
+  const naoEnviados = unifiedItems.filter(i => i.whatsapp_status === 'nao_enviado').length;
 
   const handleStartEnvios = async () => {
     setStarting(true);
