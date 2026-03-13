@@ -514,13 +514,13 @@ export default function LembretesSection({
           )}
         </div>
 
-        {stats.total > 0 && (
+        {unifiedTotal > 0 && (
           <div className="space-y-2">
             <Progress value={progressPercent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{stats.enviados} de {stats.total} mensagens enviadas</span>
-              {stats.erros > 0 && <span className="text-destructive">{stats.erros} erro(s)</span>}
-              {stats.pendentes > 0 && <span>{stats.pendentes} pendente(s)</span>}
+              <span>{unifiedEnviados} de {unifiedTotal} mensagens enviadas</span>
+              {unifiedErros > 0 && <span className="text-destructive">{unifiedErros} erro(s)</span>}
+              {unifiedPendentes > 0 && <span>{unifiedPendentes} pendente(s)</span>}
             </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Users className="h-3 w-3" />
