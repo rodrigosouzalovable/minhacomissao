@@ -209,6 +209,7 @@ export default function LembretesSection({
   const hoje = unifiedItems.filter(i => i.tipo === 'hoje');
   const tresDias = unifiedItems.filter(i => i.tipo === 'tres_dias');
   const totalPendencias = unifiedItems.length;
+  const naoEnviados = unifiedItems.filter(i => i.whatsapp_status === 'nao_enviado').length;
 
   const handleStartEnvios = async () => {
     setStarting(true);
@@ -383,8 +384,8 @@ export default function LembretesSection({
             <Loader2 className="h-3 w-3 animate-spin" /> Carregando pendências...
           </div>
         ) : totalPendencias > 0 ? (
-          <ScrollArea className="max-h-80">
-            <div className="space-y-3">
+          <ScrollArea className="h-[400px]">
+            <div className="space-y-3 pr-3">
               {renderSection('🔴 Parcelas Vencidas', vencidos, 'destructive')}
               {renderSection('🟡 Vence Hoje', hoje, 'warning')}
               {renderSection('🔵 Vence em 3 dias', tresDias, 'info')}
@@ -394,12 +395,13 @@ export default function LembretesSection({
           <p className="text-xs text-muted-foreground text-center py-2">Nenhuma pendência encontrada.</p>
         )}
 
-        {(lembreteStatus === 'idle' || lembreteStatus === 'no_instance') && (
+        {/* Botão de iniciar envios - sempre visível quando há itens não enviados */}
+        {naoEnviados > 0 && (
           <Button onClick={handleStartEnvios} disabled={starting || lembreteStatus === 'no_instance'} className="w-full">
             {starting ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Iniciando...</>
             ) : (
-              <><Play className="h-4 w-4 mr-2" /> Iniciar Envios de Lembretes</>
+              <><Play className="h-4 w-4 mr-2" /> Iniciar Envio ({naoEnviados} não enviado{naoEnviados > 1 ? 's' : ''})</>
             )}
           </Button>
         )}
