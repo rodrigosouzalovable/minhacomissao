@@ -146,15 +146,7 @@ serve(async (req) => {
         finalInstanceToken = lembretesInstance?.instance_token || profile.whatsapp_lembrete_instance_token || null;
       }
 
-      // Verificar se o acordo tem pelo menos uma parcela paga
-      const { data: parcelasPagas } = await supabase
-        .from('pagamentos')
-        .select('id')
-        .eq('acordo_id', acordo.id)
-        .eq('status', 'pago')
-        .limit(1);
-
-      if (!parcelasPagas || parcelasPagas.length === 0) { pulados++; continue; }
+      // (filtro de parcela paga removido - enviar para todas as parcelas pendentes)
 
       // Verificar duplicidade na fila
       const { data: filaExistente } = await supabase
