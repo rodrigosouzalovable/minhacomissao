@@ -284,10 +284,15 @@ export default function LembretesSection({
           if (fetchErr || !nextItems || nextItems.length === 0) break;
 
           const item = nextItems[0];
-          // Find matching unified item by phone
-          const matchPhone = normalizePhone(item.telefone);
-          const matchedReminder = allReminders.find(r => normalizePhone(r.cliente_telefone || '') === matchPhone);
-          const reminderId = matchedReminder?.id || item.id;
+          // Find matching unified item by pagamento_id (most reliable) or by phone
+          const matchedReminder = allReminders.find(r => r.id === item.pagamento_id) 
+            || allReminders.find(r => {
+              const rPhone = normalizePhone(r.cliente_telefone || '');
+              const fPhone = normalizePhone(item.telefone);
+              // Handle 55 prefix difference
+              return rPhone.length > 0 && (rPhone === fPhone || `55${rPhone}` === fPhone || rPhone === `55${fPhone}`);
+            });
+          const reminderId = matchedReminder?.id || item.pagamento_id || item.id;
 
           // Set "enviando" status
           setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'enviando' }));
