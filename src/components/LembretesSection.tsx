@@ -117,8 +117,9 @@ export default function LembretesSection({
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviando' | 'enviado' | 'erro'>>({});
+  const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const [sequentialSending, setSequentialSending] = useState(false);
+  const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
   const cancelSendRef = useRef(false);
 
   const { user } = useAuth();
