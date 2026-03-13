@@ -38,3 +38,19 @@ Implementado em `supabase/functions/teach-chatbot/index.ts`:
 3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
 4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
 5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
+
+## ✅ Concluído — Cadência de lembretes para parcelas vencidas
+
+Implementado em `supabase/functions/check-payment-reminders/index.ts`:
+
+1. **Substituição da query genérica** — removida busca por range (últimos 30 dias), substituída por busca em 6 datas exatas
+2. **Datas-alvo calculadas**: D+1, D+2, D+10, D+11, D+20, D+30 a partir de hoje
+3. **Tipos distintos**: `vencido_d1`, `vencido_d2`, `vencido_d10`, `vencido_d11`, `vencido_d20`, `vencido_d30` — deduplicação automática por `pagamento_id` + `tipo_lembrete`
+4. **Mensagens escalonadas**:
+   - D+1: Tom amigável — "venceu ontem, envie comprovante"
+   - D+2: Reforço amigável — "ainda consta em aberto"
+   - D+10: Tom firme — "continua em aberto há 10 dias"
+   - D+11: Reforço firme — "segue pendente há 11 dias"
+   - D+20: Alerta — "regularize para evitar descumprimento"
+   - D+30: Último aviso — "acordo poderá ser considerado descumprido"
+5. **D-3 e D+0 inalterados** — lembretes pré-vencimento continuam funcionando como antes
