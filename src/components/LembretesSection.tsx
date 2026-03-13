@@ -45,13 +45,14 @@ interface LembretesSectionProps {
 const tipoLembreteLabel: Record<string, string> = {
   '3_dias': '3 dias',
   'dia_vencimento': 'Vence hoje',
-  'vencido_d1': 'D+1',
-  'vencido_d2': 'D+2',
-  'vencido_d10': 'D+10',
-  'vencido_d11': 'D+11',
-  'vencido_d20': 'D+20',
-  'vencido_d30': 'D+30',
 };
+
+function getTipoLabel(tipo: string): string {
+  if (tipoLembreteLabel[tipo]) return tipoLembreteLabel[tipo];
+  const match = tipo.match(/^vencido_d(\d+)$/);
+  if (match) return `D+${match[1]}`;
+  return tipo;
+}
 
 function formatPhone(phone: string) {
   const digits = phone.replace(/\D/g, '');
