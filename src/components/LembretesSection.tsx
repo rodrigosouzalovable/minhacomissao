@@ -197,7 +197,11 @@ export default function LembretesSection({
     const rPhone = normalizePhone(r.cliente_telefone || '');
     const filaMatch = filaItems.find(f => normalizePhone(f.telefone) === rPhone && rPhone.length > 0);
     let whatsapp_status: UnifiedItem['whatsapp_status'] = 'nao_enviado';
-    if (filaMatch) {
+
+    // Local override takes priority
+    if (localStatusOverride[r.id]) {
+      whatsapp_status = localStatusOverride[r.id];
+    } else if (filaMatch) {
       if (filaMatch.status === 'enviado') whatsapp_status = 'enviado';
       else if (filaMatch.status === 'erro') whatsapp_status = 'erro';
       else whatsapp_status = 'pendente';
@@ -235,7 +239,9 @@ export default function LembretesSection({
 
   const handleStartEnvios = async () => {
     setStarting(true);
+    cancelSendRef.current = false;
     try {
+      // Step 1: Schedule all reminders via edge function
       const body: Record<string, string> = {};
       if (selectedToken && selectedServerUrl) {
         body.instance_token = selectedToken;
@@ -248,14 +254,77 @@ export default function LembretesSection({
       if (result.agendados === 0) {
         toast.info('Nenhuma parcela para notificar hoje.');
         setLembreteStatus('idle');
-      } else {
-        toast.success(`${result.agendados} lembretes agendados com sucesso!`);
-        await fetchStats();
+        setStarting(false);
+        return;
       }
+
+      toast.success(`${result.agendados} lembretes agendados! Iniciando envio sequencial...`);
+      await fetchStats();
+      setStarting(false);
+      setSequentialSending(true);
+      setLembreteStatus('sending');
+
+      // Step 2: Process queue sequentially - one by one
+      const processNext = async () => {
+        while (!cancelSendRef.current) {
+          // Fetch next pending message from whatsapp_fila
+          const { data: nextItems, error: fetchErr } = await supabase
+            .from('whatsapp_fila')
+            .select('id, telefone, cliente_nome, pagamento_id')
+            .eq('status', 'pendente')
+            .eq('instance_token', selectedToken!)
+            .order('agendado_para', { ascending: true })
+            .limit(1);
+
+          if (fetchErr || !nextItems || nextItems.length === 0) break;
+
+          const item = nextItems[0];
+          // Find matching unified item by phone
+          const matchPhone = normalizePhone(item.telefone);
+          const matchedReminder = allReminders.find(r => normalizePhone(r.cliente_telefone || '') === matchPhone);
+          const reminderId = matchedReminder?.id || item.id;
+
+          // Set "enviando" status
+          setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'enviando' }));
+
+          try {
+            // Invoke process-whatsapp-queue to send this specific message
+            const { data: sendResult, error: sendErr } = await supabase.functions.invoke('process-whatsapp-queue', {});
+            
+            if (sendErr || !sendResult?.success) {
+              setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
+            } else if (sendResult?.enviado) {
+              setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'enviado' }));
+            } else {
+              // No message was sent (maybe already processed)
+              break;
+            }
+          } catch {
+            setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
+          }
+
+          // Small delay between sends (5-7 seconds)
+          const delay = 5000 + Math.random() * 2000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+
+          // Refresh stats
+          await fetchStats();
+        }
+
+        setSequentialSending(false);
+        if (cancelSendRef.current) {
+          toast.info('Envio cancelado');
+        } else {
+          toast.success('Envio sequencial finalizado!');
+        }
+        setLembreteStatus('idle');
+        await fetchStats();
+      };
+
+      processNext();
     } catch (err: any) {
       console.error('Erro ao iniciar envios:', err);
       toast.error('Erro ao iniciar envios: ' + (err.message || 'Erro desconhecido'));
-    } finally {
       setStarting(false);
     }
   };
