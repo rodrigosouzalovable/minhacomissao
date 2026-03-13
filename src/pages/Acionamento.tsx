@@ -1028,6 +1028,21 @@ export default function Acionamento() {
     toast.success(robo ? 'Instância habilitada para o robô de acionamento' : 'Robô desativado nesta instância');
   };
 
+  const handleToggleIaResponde = async (id: string, ia_responde: boolean) => {
+    const updateData: any = { ia_responde };
+    if (ia_responde) updateData.apenas_lembretes = false;
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update(updateData)
+      .eq('id', id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+      return;
+    }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, ia_responde, ...(ia_responde ? { apenas_lembretes: false } : {}) } : i));
+    toast.success(ia_responde ? 'IA habilitada para responder nesta instância' : 'IA desativada nesta instância');
+  };
+
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
     setTestingInstanceId(instance.id);
     try {
