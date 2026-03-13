@@ -117,8 +117,9 @@ export default function LembretesSection({
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviando' | 'enviado' | 'erro'>>({});
+  const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const [sequentialSending, setSequentialSending] = useState(false);
+  const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
   const cancelSendRef = useRef(false);
 
   const { user } = useAuth();
@@ -208,8 +209,10 @@ export default function LembretesSection({
     });
     let whatsapp_status: UnifiedItem['whatsapp_status'] = 'nao_enviado';
 
-    // Local override takes priority
-    if (localStatusOverride[r.id]) {
+    // currentSendingId takes highest priority (real-time "enviando" indicator)
+    if (r.id === currentSendingId) {
+      whatsapp_status = 'enviando';
+    } else if (localStatusOverride[r.id]) {
       whatsapp_status = localStatusOverride[r.id];
     } else if (filaMatch) {
       if (filaMatch.status === 'enviado') whatsapp_status = 'enviado';
@@ -305,13 +308,14 @@ export default function LembretesSection({
             });
           const reminderId = matchedReminder?.id || item.pagamento_id || item.id;
 
-          // Set "enviando" status
-          setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'enviando' }));
+          // Set "enviando" status via dedicated state
+          setCurrentSendingId(reminderId);
 
           try {
             // Invoke process-whatsapp-queue to send this specific message
             const { data: sendResult, error: sendErr } = await supabase.functions.invoke('process-whatsapp-queue', {});
             
+            setCurrentSendingId(null);
             if (sendErr || !sendResult?.success) {
               setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
             } else if (sendResult?.enviado) {
@@ -321,6 +325,7 @@ export default function LembretesSection({
               break;
             }
           } catch {
+            setCurrentSendingId(null);
             setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
           }
 
