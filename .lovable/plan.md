@@ -54,3 +54,13 @@ Implementado em `supabase/functions/check-payment-reminders/index.ts`:
    - D+20: Alerta — "regularize para evitar descumprimento"
    - D+30: Último aviso — "acordo poderá ser considerado descumprido"
 5. **D-3 e D+0 inalterados** — lembretes pré-vencimento continuam funcionando como antes
+
+## ✅ Concluído — QR Code para conectar WhatsApp no Acionamento
+
+1. **Edge Function `whatsapp-qr`** — adaptada do ZAP BOOOT, usa `user_whatsapp_instances` em vez de `whatsapp_instances`
+2. **Actions**: `create-instance` (cria via UAZAPI admin API), `qr` (busca QR Code), `status` (polling conexão), `setup-webhook` (configura webhook do chatbot), `disconnect` (desconecta e remove)
+3. **Secrets**: `UAZAPI_ADMIN_TOKEN` configurado, reutiliza `UAZAPI_SERVER_URL` existente como base URL
+4. **UI Acionamento** — botão "Conectar via QR Code" + fallback "Manual" para entrada manual de server_url/token
+5. **Polling 3s** — detecta conexão automaticamente e configura webhook
+6. **Countdown 60s** — com opção de atualizar QR Code
+7. **Auto-cleanup** — se cancelar antes de conectar, instância criada é removida
