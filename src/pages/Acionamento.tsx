@@ -1600,7 +1600,7 @@ export default function Acionamento() {
 
                   {/* Manual instance form (add/edit) */}
                   {(qrStep === 'manual' || (editingInstance && editingInstance.id)) && editingInstance && (
-                    <div className="rounded-md border p-4 space-y-3 bg-muted/20">
+                    <div className="rounded-md border p-4 space-y-3 bg-muted/20" ref={(el) => { if (el && editingInstance.id) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>
                       <h4 className="text-sm font-semibold">{editingInstance.id ? 'Editar instância' : 'Nova instância (manual)'}</h4>
                       <div className="space-y-2">
                         <Label>Nome (opcional)</Label>
