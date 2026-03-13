@@ -384,7 +384,7 @@ export default function Acionamento() {
   );
 
   const activeInstances = useMemo(() => 
-    instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected' && !i.apenas_lembretes), 
+    instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected' && !i.apenas_lembretes && i.robo), 
     [instances, connectionStatus]
   );
 
