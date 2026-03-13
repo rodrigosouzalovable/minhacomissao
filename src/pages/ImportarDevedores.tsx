@@ -393,9 +393,10 @@ export default function ImportarDevedores() {
         const workbook = XLSX.read(data, { type: 'array' });
 
         if (credorSelecionado === 'pagamentos') {
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          console.log('[PAGAMENTOS] SheetNames:', workbook.SheetNames);
-          console.log('[PAGAMENTOS] Sheet ref:', sheet['!ref']);
+          // Try to find "Pagamentos" sheet, fallback to first sheet
+          const pagSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('pagamento')) || workbook.SheetNames[0];
+          const sheet = workbook.Sheets[pagSheetName];
+          console.log('[PAGAMENTOS] Using sheet:', pagSheetName, 'ref:', sheet['!ref']);
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           console.log('[PAGAMENTOS] json.length:', json.length);
           if (json.length > 0) {
