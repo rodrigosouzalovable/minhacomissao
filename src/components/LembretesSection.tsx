@@ -209,8 +209,10 @@ export default function LembretesSection({
     });
     let whatsapp_status: UnifiedItem['whatsapp_status'] = 'nao_enviado';
 
-    // Local override takes priority
-    if (localStatusOverride[r.id]) {
+    // currentSendingId takes highest priority (real-time "enviando" indicator)
+    if (r.id === currentSendingId) {
+      whatsapp_status = 'enviando';
+    } else if (localStatusOverride[r.id]) {
       whatsapp_status = localStatusOverride[r.id];
     } else if (filaMatch) {
       if (filaMatch.status === 'enviado') whatsapp_status = 'enviado';
