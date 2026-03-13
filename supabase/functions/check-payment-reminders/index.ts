@@ -37,17 +37,6 @@ serve(async (req) => {
     tresDias.setDate(tresDias.getDate() + 3);
     const tresDiasStr = tresDias.toISOString().split('T')[0];
 
-    // Cadência de vencidas: D+1, D+2, D+10, D+11, D+20, D+30
-    const vencidosDias = [1, 2, 10, 11, 20, 30];
-    const vencidosDatas: { dias: number; dataStr: string; tipo: string }[] = vencidosDias.map(d => {
-      const dt = new Date(hoje);
-      dt.setDate(dt.getDate() - d);
-      return { dias: d, dataStr: dt.toISOString().split('T')[0], tipo: `vencido_d${d}` };
-    });
-
-    const todasDatasVencidas = vencidosDatas.map(v => v.dataStr);
-    console.log(`Verificando parcelas: hoje (${hojeStr}), 3 dias (${tresDiasStr}), vencidas em [${todasDatasVencidas.join(', ')}]`);
-
     // Query 1: Parcelas de hoje e 3 dias
     const { data: parcelasProximas, error: proximasError } = await supabase
       .from('pagamentos')
@@ -63,7 +52,7 @@ serve(async (req) => {
       throw proximasError;
     }
 
-    // Query 2: Parcelas vencidas nas datas específicas da cadência
+    // Query 2: TODAS as parcelas vencidas (antes de hoje)
     const { data: parcelasVencidas, error: vencidasError } = await supabase
       .from('pagamentos')
       .select(`
@@ -71,15 +60,12 @@ serve(async (req) => {
         acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )
       `)
       .eq('status', 'pendente')
-      .in('data_prevista', todasDatasVencidas);
+      .lt('data_prevista', hojeStr);
 
     if (vencidasError) {
       console.error('Erro ao buscar parcelas vencidas:', vencidasError);
       throw vencidasError;
     }
-
-    // Mapa data → tipo de lembrete
-    const dataToTipo = new Map(vencidosDatas.map(v => [v.dataStr, v.tipo]));
 
     // Combinar todas as parcelas com seus tipos
     const todasParcelas: Array<{ parcela: any; tipoLembrete: string }> = [];
@@ -89,7 +75,10 @@ serve(async (req) => {
       todasParcelas.push({ parcela: p, tipoLembrete: tipo });
     }
     for (const p of (parcelasVencidas || [])) {
-      const tipo = dataToTipo.get(p.data_prevista) || 'vencido';
+      const dtVenc = new Date(p.data_prevista + 'T12:00:00');
+      const diffMs = hoje.getTime() - dtVenc.getTime();
+      const diasAtraso = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const tipo = `vencido_d${diasAtraso}`;
       todasParcelas.push({ parcela: p, tipoLembrete: tipo });
     }
 
