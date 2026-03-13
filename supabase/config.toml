@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.teach-chatbot]
 verify_jwt = false
+
+[functions.whatsapp-qr]
+verify_jwt = false
