@@ -27,14 +27,18 @@ serve(async (req) => {
     tresDias.setDate(tresDias.getDate() + 3);
     const tresDiasStr = tresDias.toISOString().split('T')[0];
 
-    // Limite de 30 dias atrás para vencidas
-    const trintaDiasAtras = new Date(hoje);
-    trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
-    const trintaDiasAtrasStr = trintaDiasAtras.toISOString().split('T')[0];
+    // Cadência de vencidas: D+1, D+2, D+10, D+11, D+20, D+30
+    const vencidosDias = [1, 2, 10, 11, 20, 30];
+    const vencidosDatas: { dias: number; dataStr: string; tipo: string }[] = vencidosDias.map(d => {
+      const dt = new Date(hoje);
+      dt.setDate(dt.getDate() - d);
+      return { dias: d, dataStr: dt.toISOString().split('T')[0], tipo: `vencido_d${d}` };
+    });
 
-    console.log(`Verificando parcelas: hoje (${hojeStr}), 3 dias (${tresDiasStr}), vencidas desde (${trintaDiasAtrasStr})`);
+    const todasDatasVencidas = vencidosDatas.map(v => v.dataStr);
+    console.log(`Verificando parcelas: hoje (${hojeStr}), 3 dias (${tresDiasStr}), vencidas em [${todasDatasVencidas.join(', ')}]`);
 
-    // Query 1: Parcelas de hoje e 3 dias (existente)
+    // Query 1: Parcelas de hoje e 3 dias
     const { data: parcelasProximas, error: proximasError } = await supabase
       .from('pagamentos')
       .select(`
@@ -49,7 +53,7 @@ serve(async (req) => {
       throw proximasError;
     }
 
-    // Query 2: Parcelas vencidas (data_prevista < hoje, últimos 30 dias)
+    // Query 2: Parcelas vencidas nas datas específicas da cadência
     const { data: parcelasVencidas, error: vencidasError } = await supabase
       .from('pagamentos')
       .select(`
@@ -57,13 +61,15 @@ serve(async (req) => {
         acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )
       `)
       .eq('status', 'pendente')
-      .lt('data_prevista', hojeStr)
-      .gte('data_prevista', trintaDiasAtrasStr);
+      .in('data_prevista', todasDatasVencidas);
 
     if (vencidasError) {
       console.error('Erro ao buscar parcelas vencidas:', vencidasError);
       throw vencidasError;
     }
+
+    // Mapa data → tipo de lembrete
+    const dataToTipo = new Map(vencidosDatas.map(v => [v.dataStr, v.tipo]));
 
     // Combinar todas as parcelas com seus tipos
     const todasParcelas: Array<{ parcela: any; tipoLembrete: string }> = [];
@@ -73,7 +79,8 @@ serve(async (req) => {
       todasParcelas.push({ parcela: p, tipoLembrete: tipo });
     }
     for (const p of (parcelasVencidas || [])) {
-      todasParcelas.push({ parcela: p, tipoLembrete: 'vencido' });
+      const tipo = dataToTipo.get(p.data_prevista) || 'vencido';
+      todasParcelas.push({ parcela: p, tipoLembrete: tipo });
     }
 
     console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas?.length || 0} próximas + ${parcelasVencidas?.length || 0} vencidas)`);
