@@ -216,6 +216,13 @@ serve(async (req) => {
       proximoHorario = new Date(agora);
     }
 
+    // --- Build set of configured days per user (from templates) ---
+    // For users with custom templates, only send for days they have configured
+    const userConfiguredDaysMap = new Map<string, Set<string>>();
+    for (const [userId, tplMap] of userTemplatesMap.entries()) {
+      userConfiguredDaysMap.set(userId, new Set(tplMap.keys()));
+    }
+
     // --- Build batch insert array in memory ---
     let agendados = 0;
     let pulados = 0;
