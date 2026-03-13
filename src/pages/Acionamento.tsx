@@ -245,15 +245,6 @@ export default function Acionamento() {
       }
     }
     localStorage.removeItem(AUTO_SENDING_KEY);
-    // Load meta values
-    const savedMetaDiaria = localStorage.getItem(META_DIARIA_KEY);
-    if (savedMetaDiaria) setMetaDiaria(Number(savedMetaDiaria) || 0);
-    const savedMetaMensal = localStorage.getItem(META_MENSAL_KEY);
-    if (savedMetaMensal) setMetaMensal(Number(savedMetaMensal) || 0);
-    const savedRecDiario = localStorage.getItem(RECEBIDO_DIARIO_KEY);
-    if (savedRecDiario) setRecebidoDiario(Number(savedRecDiario) || 0);
-    const savedRecMensal = localStorage.getItem(RECEBIDO_MENSAL_KEY);
-    if (savedRecMensal) setRecebidoMensal(Number(savedRecMensal) || 0);
   }, [user]);
 
   // Fetch UAZAPI instances from database
