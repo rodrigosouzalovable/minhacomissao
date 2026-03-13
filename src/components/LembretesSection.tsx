@@ -4,9 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, MessageCircle, Play, CheckCircle2, Clock, AlertTriangle, RefreshCw, Users, Phone } from 'lucide-react';
+import { Loader2, MessageCircle, Play, CheckCircle2, Clock, AlertTriangle, RefreshCw, Users, Phone, Ban } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 
 interface WhatsAppInstance {
   id: string;
@@ -30,6 +31,15 @@ interface FilaItem {
   status: string | null;
   cliente_nome: string | null;
   tipo_lembrete: string;
+}
+
+interface UnifiedItem {
+  id: string;
+  cliente_nome: string;
+  cliente_telefone: string | null;
+  valor_parcela?: number;
+  tipo: 'vencido' | 'hoje' | 'tres_dias';
+  whatsapp_status: 'enviado' | 'pendente' | 'erro' | 'nao_enviado';
 }
 
 type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done' | 'done_with_errors' | 'no_instance';
@@ -65,14 +75,27 @@ function formatPhone(phone: string) {
   return phone;
 }
 
-function StatusBadge({ status }: { status: string | null }) {
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+function WhatsAppStatusBadge({ status }: { status: UnifiedItem['whatsapp_status'] }) {
   if (status === 'enviado') {
     return <Badge className="bg-emerald-600 hover:bg-emerald-600 text-xs px-1.5 py-0">Enviado</Badge>;
   }
   if (status === 'erro') {
     return <Badge variant="destructive" className="text-xs px-1.5 py-0">Erro</Badge>;
   }
-  return <Badge variant="secondary" className="text-xs px-1.5 py-0">Pendente</Badge>;
+  if (status === 'pendente') {
+    return <Badge className="bg-amber-500 hover:bg-amber-500 text-xs px-1.5 py-0">Pendente</Badge>;
+  }
+  return <Badge variant="outline" className="text-xs px-1.5 py-0 gap-1"><Ban className="h-2.5 w-2.5" />Não enviado</Badge>;
+}
+
+function tipoLabel(tipo: 'vencido' | 'hoje' | 'tres_dias'): string {
+  if (tipo === 'vencido') return 'Vencida';
+  if (tipo === 'hoje') return 'Vence hoje';
+  return 'Vence em 3 dias';
 }
 
 export default function LembretesSection({
@@ -87,6 +110,8 @@ export default function LembretesSection({
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
+
+  const { reminders, lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, isLoading: isLoadingReminders } = usePaymentReminders();
 
   const selectedInstance = instances.find(i => i.id === selectedLembreteInstanceId);
   const selectedToken = selectedInstance?.instance_token || null;
@@ -157,6 +182,34 @@ export default function LembretesSection({
     return () => clearInterval(interval);
   }, [lembreteStatus, fetchStats]);
 
+  // Build unified list from all reminders (sino) + whatsapp_fila status
+  const allReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias, ...lembretesJaLidos];
+
+  const unifiedItems: UnifiedItem[] = allReminders.map((r) => {
+    const rPhone = normalizePhone(r.cliente_telefone || '');
+    // Find matching fila item by phone
+    const filaMatch = filaItems.find(f => normalizePhone(f.telefone) === rPhone && rPhone.length > 0);
+    let whatsapp_status: UnifiedItem['whatsapp_status'] = 'nao_enviado';
+    if (filaMatch) {
+      if (filaMatch.status === 'enviado') whatsapp_status = 'enviado';
+      else if (filaMatch.status === 'erro') whatsapp_status = 'erro';
+      else whatsapp_status = 'pendente';
+    }
+    return {
+      id: r.id,
+      cliente_nome: r.cliente_nome,
+      cliente_telefone: r.cliente_telefone || null,
+      valor_parcela: r.valor_parcela,
+      tipo: r.tipo,
+      whatsapp_status,
+    };
+  });
+
+  const vencidos = unifiedItems.filter(i => i.tipo === 'vencido');
+  const hoje = unifiedItems.filter(i => i.tipo === 'hoje');
+  const tresDias = unifiedItems.filter(i => i.tipo === 'tres_dias');
+  const totalPendencias = unifiedItems.length;
+
   const handleStartEnvios = async () => {
     setStarting(true);
     try {
@@ -188,8 +241,8 @@ export default function LembretesSection({
     if (!selectedToken) return;
     setRetrying(true);
     try {
-      const hoje = new Date();
-      const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+      const hojeDate = new Date();
+      const hojeStr = `${hojeDate.getFullYear()}-${String(hojeDate.getMonth() + 1).padStart(2, '0')}-${String(hojeDate.getDate()).padStart(2, '0')}`;
       const { error } = await supabase
         .from('whatsapp_fila')
         .update({ status: 'pendente', erro_mensagem: null } as any)
@@ -210,11 +263,49 @@ export default function LembretesSection({
 
   const progressPercent = stats.total > 0 ? Math.round(((stats.enviados + stats.erros) / stats.total) * 100) : 0;
 
+  const renderSection = (title: string, items: UnifiedItem[], badgeColor: string) => {
+    if (items.length === 0) return null;
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold">{title}</span>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{items.length}</Badge>
+        </div>
+        <div className="divide-y border rounded-md">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{item.cliente_nome || 'Sem nome'}</p>
+                {item.cliente_telefone && (
+                  <p className="text-muted-foreground flex items-center gap-1">
+                    <Phone className="h-3 w-3 shrink-0" />
+                    {formatPhone(item.cliente_telefone)}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {item.valor_parcela != null && (
+                  <span className="text-[10px] text-muted-foreground">
+                    R$ {item.valor_parcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+                <WhatsAppStatusBadge status={item.whatsapp_status} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3">
       <h3 className="text-base font-semibold flex items-center gap-2">
         <MessageCircle className="h-4 w-4" />
         WhatsApp Principal para Lembretes
+        {totalPendencias > 0 && (
+          <Badge variant="secondary" className="text-xs">{totalPendencias} pendência(s)</Badge>
+        )}
       </h3>
       <p className="text-sm text-muted-foreground">
         Selecione qual instância será responsável pelo envio de lembretes de pagamento.
@@ -271,8 +362,8 @@ export default function LembretesSection({
           )}
         </div>
 
-        {(lembreteStatus === 'sending' || lembreteStatus === 'done' || lembreteStatus === 'done_with_errors') && stats.total > 0 && (
-          <div className="space-y-3">
+        {stats.total > 0 && (
+          <div className="space-y-2">
             <Progress value={progressPercent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{stats.enviados} de {stats.total} mensagens enviadas</span>
@@ -283,30 +374,24 @@ export default function LembretesSection({
               <Users className="h-3 w-3" />
               <span>{stats.contatosUnicos} contato(s) único(s)</span>
             </div>
-
-            {/* Lista de destinatários */}
-            <ScrollArea className="max-h-60 rounded-md border">
-              <div className="divide-y">
-                {filaItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{item.cliente_nome || 'Sem nome'}</p>
-                      <p className="text-muted-foreground flex items-center gap-1">
-                        <Phone className="h-3 w-3 shrink-0" />
-                        {formatPhone(item.telefone)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {getTipoLabel(item.tipo_lembrete)}
-                      </Badge>
-                      <StatusBadge status={item.status} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
           </div>
+        )}
+
+        {/* Lista unificada de pendências */}
+        {isLoadingReminders ? (
+          <div className="flex items-center justify-center py-4 text-xs text-muted-foreground gap-2">
+            <Loader2 className="h-3 w-3 animate-spin" /> Carregando pendências...
+          </div>
+        ) : totalPendencias > 0 ? (
+          <ScrollArea className="max-h-80">
+            <div className="space-y-3">
+              {renderSection('🔴 Parcelas Vencidas', vencidos, 'destructive')}
+              {renderSection('🟡 Vence Hoje', hoje, 'warning')}
+              {renderSection('🔵 Vence em 3 dias', tresDias, 'info')}
+            </div>
+          </ScrollArea>
+        ) : (
+          <p className="text-xs text-muted-foreground text-center py-2">Nenhuma pendência encontrada.</p>
         )}
 
         {(lembreteStatus === 'idle' || lembreteStatus === 'no_instance') && (
