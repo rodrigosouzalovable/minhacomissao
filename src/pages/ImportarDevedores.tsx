@@ -119,13 +119,13 @@ export default function ImportarDevedores() {
 
   const parseMontreal = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
     return dataRows.map((row) => {
-      const valor = parseNum(row['K']);
+      const valor = parseNum(row['J']);
       const tel1 = String(row['D'] ?? '').replace(/\D/g, '');
       const tel2 = String(row['E'] ?? '').replace(/\D/g, '');
 
       // Converter vencimento Excel serial number para string dd/mm/yyyy
       let vencimentoStr = '';
-      const vencRaw = row['L'];
+      const vencRaw = row['K'];
       if (typeof vencRaw === 'number') {
         const dt = XLSX.SSF.parse_date_code(vencRaw);
         if (dt) {
@@ -140,8 +140,8 @@ export default function ImportarDevedores() {
         nascimento: '',
         nome: String(row['B'] ?? ''),
         credor: 'MONTREAL',
-        contrato: String(row['I'] ?? ''),
-        descricao: String(row['G'] ?? ''),
+        contrato: String(row['H'] ?? ''),
+        descricao: String(row['I'] ?? ''),
         atraso: vencimentoStr,
         valor_original: valor,
         valor_atualizado: valor,
