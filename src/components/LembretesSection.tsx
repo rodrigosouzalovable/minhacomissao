@@ -523,9 +523,9 @@ export default function LembretesSection({
           <p className="text-xs text-muted-foreground text-center py-2">Nenhuma pendência encontrada.</p>
         )}
 
-        {/* Botão de iniciar envios - sempre visível quando há itens não enviados */}
-        {naoEnviados > 0 && (
-          <Button onClick={handleStartEnvios} disabled={starting || lembreteStatus === 'no_instance'} className="w-full">
+        {/* Botão de iniciar envios - visível quando há itens não enviados e não está enviando */}
+        {naoEnviados > 0 && !sequentialSending && (
+          <Button onClick={handleStartEnvios} disabled={starting || sequentialSending || lembreteStatus === 'no_instance'} className="w-full">
             {starting ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Iniciando...</>
             ) : (
@@ -534,14 +534,16 @@ export default function LembretesSection({
           </Button>
         )}
 
-        {lembreteStatus === 'sending' && (
+        {(sequentialSending || lembreteStatus === 'sending') && (
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground text-center">Atualizando a cada 30 segundos...</p>
+            <p className="text-xs text-muted-foreground text-center">
+              {sequentialSending ? 'Enviando sequencialmente...' : 'Atualizando a cada 30 segundos...'}
+            </p>
             <Button onClick={handleCancelEnvios} disabled={cancelling} variant="destructive" className="w-full">
               {cancelling ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelando...</>
               ) : (
-                <><Ban className="h-4 w-4 mr-2" /> Cancelar Envio ({stats.pendentes} pendente{stats.pendentes !== 1 ? 's' : ''})</>
+                <><Ban className="h-4 w-4 mr-2" /> Cancelar Envio</>
               )}
             </Button>
           </div>
