@@ -269,11 +269,12 @@ serve(async (req) => {
         // Pick random from available custom templates
         const tpl = customMsgs[Math.floor(Math.random() * customMsgs.length)];
         mensagem = tpl
-          .replace(/\{nome_cliente\}/g, nomeCliente)
-          .replace(/\{nome_operador\}/g, primeiroNome)
-          .replace(/\{valor\}/g, valorFormatado)
-          .replace(/\{data_vencimento\}/g, dataFormatada)
-          .replace(/\{dias_atraso\}/g, diasAtrasoNum);
+           .replace(/\{nome_cliente\}/g, nomeCliente)
+           .replace(/\{primeiro_nome\}/g, primeiroNomeCliente)
+           .replace(/\{nome_operador\}/g, primeiroNome)
+           .replace(/\{valor\}/g, valorFormatado)
+           .replace(/\{data_vencimento\}/g, dataFormatada)
+           .replace(/\{dias_atraso\}/g, diasAtrasoNum);
       } else if (tipoLembrete === 'vencido_d1') {
         mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} venceu ontem (${dataFormatada}). Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else if (tipoLembrete === 'vencido_d2') {
