@@ -400,7 +400,12 @@ export default function LembretesSection({
     }
   };
 
-  const progressPercent = stats.total > 0 ? Math.round(((stats.enviados + stats.erros) / stats.total) * 100) : 0;
+  // Compute counts from the unified list for consistent display
+  const unifiedEnviados = unifiedItems.filter(i => i.whatsapp_status === 'enviado').length;
+  const unifiedErros = unifiedItems.filter(i => i.whatsapp_status === 'erro').length;
+  const unifiedPendentes = unifiedItems.filter(i => i.whatsapp_status === 'pendente' || i.whatsapp_status === 'enviando').length;
+  const unifiedTotal = unifiedItems.length;
+  const progressPercent = unifiedTotal > 0 ? Math.round(((unifiedEnviados + unifiedErros) / unifiedTotal) * 100) : 0;
 
   const renderSection = (title: string, items: UnifiedItem[], badgeColor: string) => {
     if (items.length === 0) return null;
