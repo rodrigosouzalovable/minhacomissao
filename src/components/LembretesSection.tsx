@@ -238,6 +238,34 @@ export default function LembretesSection({
     }
   };
 
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancelEnvios = async () => {
+    if (!selectedToken) return;
+    setCancelling(true);
+    try {
+      const hojeDate = new Date();
+      const hojeStr = `${hojeDate.getFullYear()}-${String(hojeDate.getMonth() + 1).padStart(2, '0')}-${String(hojeDate.getDate()).padStart(2, '0')}`;
+      const { data, error } = await supabase
+        .from('whatsapp_fila')
+        .update({ status: 'cancelado' } as any)
+        .eq('status', 'pendente')
+        .eq('instance_token', selectedToken)
+        .gte('criado_em', `${hojeStr}T00:00:00`)
+        .lte('criado_em', `${hojeStr}T23:59:59`)
+        .select('id');
+      if (error) throw error;
+      const count = data?.length || 0;
+      toast.success(`${count} envio${count !== 1 ? 's' : ''} cancelado${count !== 1 ? 's' : ''}`);
+      await fetchStats();
+    } catch (err: any) {
+      console.error('Erro ao cancelar envios:', err);
+      toast.error('Erro ao cancelar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const handleRetryErros = async () => {
     if (!selectedToken) return;
     setRetrying(true);
