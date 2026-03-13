@@ -241,9 +241,12 @@ export default function LembretesSection({
     };
   });
 
-  const vencidos = unifiedItems.filter(i => i.tipo === 'vencido');
-  const hoje = unifiedItems.filter(i => i.tipo === 'hoje');
-  const tresDias = unifiedItems.filter(i => i.tipo === 'tres_dias');
+  const statusPriority: Record<string, number> = { enviado: 0, enviando: 1, pendente: 2, nao_enviado: 3, erro: 4 };
+  const sortByStatus = (a: UnifiedItem, b: UnifiedItem) => (statusPriority[a.whatsapp_status] ?? 5) - (statusPriority[b.whatsapp_status] ?? 5);
+
+  const vencidos = unifiedItems.filter(i => i.tipo === 'vencido').sort(sortByStatus);
+  const hoje = unifiedItems.filter(i => i.tipo === 'hoje').sort(sortByStatus);
+  const tresDias = unifiedItems.filter(i => i.tipo === 'tres_dias').sort(sortByStatus);
   const totalPendencias = unifiedItems.length;
   const naoEnviados = unifiedItems.filter(i => i.whatsapp_status === 'nao_enviado').length;
 
