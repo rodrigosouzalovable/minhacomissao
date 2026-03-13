@@ -435,7 +435,16 @@ export default function LembretesSection({
         )}
 
         {lembreteStatus === 'sending' && (
-          <p className="text-xs text-muted-foreground text-center">Atualizando a cada 30 segundos...</p>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground text-center">Atualizando a cada 30 segundos...</p>
+            <Button onClick={handleCancelEnvios} disabled={cancelling} variant="destructive" className="w-full">
+              {cancelling ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelando...</>
+              ) : (
+                <><Ban className="h-4 w-4 mr-2" /> Cancelar Envio ({stats.pendentes} pendente{stats.pendentes !== 1 ? 's' : ''})</>
+              )}
+            </Button>
+          </div>
         )}
 
         {lembreteStatus === 'done_with_errors' && (
