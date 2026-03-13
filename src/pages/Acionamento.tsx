@@ -163,11 +163,7 @@ export default function Acionamento() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
-  const [metaDialogOpen, setMetaDialogOpen] = useState(false);
-  const [metaDiaria, setMetaDiaria] = useState<number>(0);
-  const [metaMensal, setMetaMensal] = useState<number>(0);
-  const [recebidoDiario, setRecebidoDiario] = useState<number>(0);
-  const [recebidoMensal, setRecebidoMensal] = useState<number>(0);
+  const [lembreteMensagensOpen, setLembreteMensagensOpen] = useState(false);
   
   // Multi-instance UAZAPI state
   const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean }>>([]);
