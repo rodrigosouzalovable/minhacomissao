@@ -28,6 +28,7 @@ interface LembreteStats {
 
 interface FilaItem {
   id: string;
+  pagamento_id: string;
   telefone: string;
   status: string | null;
   cliente_nome: string | null;
@@ -140,7 +141,7 @@ export default function LembretesSection({
 
     const { data, error } = await supabase
       .from('whatsapp_fila')
-      .select('id, status, telefone, cliente_nome, tipo_lembrete, instance_token')
+      .select('id, status, telefone, cliente_nome, tipo_lembrete, instance_token, pagamento_id')
       .eq('instance_token', selectedToken)
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
@@ -167,6 +168,7 @@ export default function LembretesSection({
     setStats({ total, pendentes, enviados, erros, contatosUnicos });
     setFilaItems(data.map(d => ({
       id: d.id,
+      pagamento_id: d.pagamento_id,
       telefone: d.telefone,
       status: d.status,
       cliente_nome: d.cliente_nome,
@@ -197,7 +199,13 @@ export default function LembretesSection({
 
   const unifiedItems: UnifiedItem[] = allReminders.map((r) => {
     const rPhone = normalizePhone(r.cliente_telefone || '');
-    const filaMatch = filaItems.find(f => normalizePhone(f.telefone) === rPhone && rPhone.length > 0);
+    const filaMatch = filaItems.find(f => {
+      // Match by pagamento_id (most reliable)
+      if (f.pagamento_id === r.id) return true;
+      // Fallback to phone matching with 55 prefix handling
+      const fPhone = normalizePhone(f.telefone);
+      return rPhone.length > 0 && (rPhone === fPhone || `55${rPhone}` === fPhone || rPhone === `55${fPhone}`);
+    });
     let whatsapp_status: UnifiedItem['whatsapp_status'] = 'nao_enviado';
 
     // Local override takes priority
@@ -284,10 +292,15 @@ export default function LembretesSection({
           if (fetchErr || !nextItems || nextItems.length === 0) break;
 
           const item = nextItems[0];
-          // Find matching unified item by phone
-          const matchPhone = normalizePhone(item.telefone);
-          const matchedReminder = allReminders.find(r => normalizePhone(r.cliente_telefone || '') === matchPhone);
-          const reminderId = matchedReminder?.id || item.id;
+          // Find matching unified item by pagamento_id (most reliable) or by phone
+          const matchedReminder = allReminders.find(r => r.id === item.pagamento_id) 
+            || allReminders.find(r => {
+              const rPhone = normalizePhone(r.cliente_telefone || '');
+              const fPhone = normalizePhone(item.telefone);
+              // Handle 55 prefix difference
+              return rPhone.length > 0 && (rPhone === fPhone || `55${rPhone}` === fPhone || rPhone === `55${fPhone}`);
+            });
+          const reminderId = matchedReminder?.id || item.pagamento_id || item.id;
 
           // Set "enviando" status
           setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'enviando' }));
