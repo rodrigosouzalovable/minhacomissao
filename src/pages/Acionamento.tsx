@@ -1532,18 +1532,76 @@ export default function Acionamento() {
                       Cadastre múltiplos WhatsApps para rotação automática dos envios.
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => setEditingInstance({ nome: '', server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' })}
-                  >
-                    <Plus className="h-4 w-4 mr-1" /> Adicionar
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleConnectQr}
+                      disabled={qrLoading || qrStep === 'qr'}
+                    >
+                      {qrLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
+                      Conectar via QR Code
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setQrStep('manual');
+                        setEditingInstance({ nome: '', server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Manual
+                    </Button>
+                  </div>
                 </div>
 
-                  {/* Instance form (add/edit) */}
-                  {editingInstance && (
+                  {/* QR Code connection flow */}
+                  {qrStep === 'qr' && (
+                    <div className="rounded-md border p-6 space-y-4 bg-muted/20">
+                      <div className="flex flex-col items-center gap-4">
+                        <Smartphone className="h-8 w-8 text-primary" />
+                        <p className="text-sm font-medium text-center">
+                          Escaneie o QR Code com o WhatsApp
+                        </p>
+
+                        {qrImage && (
+                          <div className="bg-background p-3 rounded-lg border shadow-sm">
+                            <img src={qrImage} alt="QR Code WhatsApp" className="w-64 h-64 object-contain" />
+                          </div>
+                        )}
+
+                        {pairingCode && (
+                          <div className="text-center space-y-1">
+                            <p className="text-xs text-muted-foreground">Ou use o código de pareamento:</p>
+                            <p className="text-2xl font-mono font-bold tracking-widest text-primary">
+                              {pairingCode.slice(0, 4)}-{pairingCode.slice(4)}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          {qrPolling && <Loader2 className="h-4 w-4 animate-spin" />}
+                          <span>
+                            {qrCountdown > 0 ? `Aguardando conexão... (${qrCountdown}s)` : 'QR Code expirado'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 justify-center">
+                        <Button variant="outline" size="sm" onClick={handleRefreshQr} disabled={qrLoading}>
+                          {qrLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                          Atualizar QR Code
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={handleCancelQr}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Manual instance form (add/edit) */}
+                  {(qrStep === 'manual' || (editingInstance && editingInstance.id)) && editingInstance && (
                     <div className="rounded-md border p-4 space-y-3 bg-muted/20">
-                      <h4 className="text-sm font-semibold">{editingInstance.id ? 'Editar instância' : 'Nova instância'}</h4>
+                      <h4 className="text-sm font-semibold">{editingInstance.id ? 'Editar instância' : 'Nova instância (manual)'}</h4>
                       <div className="space-y-2">
                         <Label>Nome (opcional)</Label>
                         <Input
@@ -1573,7 +1631,7 @@ export default function Acionamento() {
                           {savingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                           Salvar
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setEditingInstance(null)}>
+                        <Button variant="outline" size="sm" onClick={() => { setEditingInstance(null); setQrStep('idle'); }}>
                           Cancelar
                         </Button>
                       </div>
