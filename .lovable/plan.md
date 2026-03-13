@@ -1,66 +1,66 @@
-## ✅ Concluído — Resposta do Admin via WhatsApp
 
-Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
-2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
-3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
-4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
-5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
-6. **Cleanup** — remove registro `admin_pending` após processamento
+## Plano: Novo layout "Pagamentos" na importação de devedores
 
-## ✅ Concluído — Admin responde por número de telefone direto
+### O que será feito
 
-1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
-2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
-3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
-4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
-5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
-6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
+Adicionar uma nova opção de layout chamada **"Pagamentos"** no seletor de credor/layout da página Importar Devedores. Ao selecionar esse layout:
 
-## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
+1. O credor é automaticamente definido como **UME | NOVO MUNDO** (seletor desabilitado)
+2. A planilha é parseada com o layout: A=CPF, B=Cliente, C=Credor, D=Contrato, E=Inclusão, F=Arquivo, G=Número, H=Vencimento, I=Valor, J=Observação, K=Status
+3. O sistema filtra apenas linhas com **STATUS = "PAGA"** na coluna K
+4. Para cada linha PAGA, busca no banco o acordo ativo do CPF (coluna A normalizada) na tabela `acordos`
+5. Cruza o `numero_parcela` (coluna G) com a tabela `pagamentos` daquele acordo
+6. Se a parcela está com status `pendente`, atualiza para `pago` com `data_paga` extraída da coluna H (vencimento)
+7. O preview mostra as parcelas que serão marcadas como pagas, com indicador de quais já estavam pagas no sistema
 
-Implementado em `supabase/functions/teach-chatbot/index.ts`:
+### Mudanças em `src/pages/ImportarDevedores.tsx`
 
-1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
-2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
-   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
-   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
-   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
-3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
-4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
-5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
+**1. Tipo e constantes**
+- Adicionar `'pagamentos'` ao tipo `CredorLayout`
+- Adicionar descrição do layout no `DESCRICOES`
+- Adicionar `<SelectItem value="pagamentos">Pagamentos</SelectItem>` no seletor
 
-## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
+**2. Nova interface `PagamentoRow`**
+```typescript
+interface PagamentoRow {
+  cpf: string;
+  cliente: string;
+  numero_parcela: number;
+  vencimento: string;
+  valor: number;
+  observacao: string;
+  status_planilha: string; // "PAGA"
+  // Campos preenchidos após matching:
+  acordo_id?: string;
+  pagamento_id?: string;
+  ja_pago?: boolean; // true se já estava pago no sistema
+}
+```
 
-1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
-2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
-3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
-4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
-5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
+**3. Novo state e parser**
+- `pagamentoRows` state para armazenar as linhas de pagamento parseadas
+- Função `parsePagamentos()` que lê a planilha e filtra apenas STATUS = "PAGA"
 
-## ✅ Concluído — Cadência de lembretes para parcelas vencidas
+**4. Lógica de matching (ao parsear)**
+- Após parsear, buscar todos os acordos ativos por CPFs únicos encontrados
+- Para cada acordo, buscar os pagamentos
+- Cruzar `numero_parcela` da planilha com `numero_parcela` do banco
+- Marcar quais já estão pagas (`ja_pago = true`) e quais precisam ser atualizadas
 
-Implementado em `supabase/functions/check-payment-reminders/index.ts`:
+**5. Importação especial para pagamentos**
+- O botão "Confirmar Importação" executa UPDATE em lote na tabela `pagamentos`:
+  - `status = 'pago'`
+  - `data_paga` = data do vencimento da planilha (coluna H)
+- Apenas parcelas com `ja_pago = false` são atualizadas
+- Progresso em tempo real com contadores
 
-1. **Substituição da query genérica** — removida busca por range (últimos 30 dias), substituída por busca em 6 datas exatas
-2. **Datas-alvo calculadas**: D+1, D+2, D+10, D+11, D+20, D+30 a partir de hoje
-3. **Tipos distintos**: `vencido_d1`, `vencido_d2`, `vencido_d10`, `vencido_d11`, `vencido_d20`, `vencido_d30` — deduplicação automática por `pagamento_id` + `tipo_lembrete`
-4. **Mensagens escalonadas**:
-   - D+1: Tom amigável — "venceu ontem, envie comprovante"
-   - D+2: Reforço amigável — "ainda consta em aberto"
-   - D+10: Tom firme — "continua em aberto há 10 dias"
-   - D+11: Reforço firme — "segue pendente há 11 dias"
-   - D+20: Alerta — "regularize para evitar descumprimento"
-   - D+30: Último aviso — "acordo poderá ser considerado descumprido"
-5. **D-3 e D+0 inalterados** — lembretes pré-vencimento continuam funcionando como antes
+**6. Preview especial**
+- Tabela mostrando: CPF, Cliente, Parcela, Valor, Vencimento, Status no Sistema
+- Parcelas já pagas em verde com badge "Já pago"
+- Parcelas a serem atualizadas em amarelo com badge "Será marcado como pago"
+- Parcelas sem match em vermelho com badge "Acordo não encontrado"
 
-## ✅ Concluído — QR Code para conectar WhatsApp no Acionamento
+**7. Auto-seleção de credor**
+- Quando `credorSelecionado === 'pagamentos'`, setar automaticamente `credorDestino = 'UME | NOVO MUNDO'` e esconder o seletor de credor
 
-1. **Edge Function `whatsapp-qr`** — adaptada do ZAP BOOOT, usa `user_whatsapp_instances` em vez de `whatsapp_instances`
-2. **Actions**: `create-instance` (cria via UAZAPI admin API), `qr` (busca QR Code), `status` (polling conexão), `setup-webhook` (configura webhook do chatbot), `disconnect` (desconecta e remove)
-3. **Secrets**: `UAZAPI_ADMIN_TOKEN` configurado, reutiliza `UAZAPI_SERVER_URL` existente como base URL
-4. **UI Acionamento** — botão "Conectar via QR Code" + fallback "Manual" para entrada manual de server_url/token
-5. **Polling 3s** — detecta conexão automaticamente e configura webhook
-6. **Countdown 60s** — com opção de atualizar QR Code
-7. **Auto-cleanup** — se cancelar antes de conectar, instância criada é removida
