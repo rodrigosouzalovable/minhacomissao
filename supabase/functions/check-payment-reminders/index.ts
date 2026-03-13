@@ -7,22 +7,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper: paginated fetch to bypass 1000-row limit
+async function fetchAll(supabase: any, table: string, query: (q: any) => any) {
+  const allData: any[] = [];
+  let from = 0;
+  const pageSize = 1000;
+  while (true) {
+    const q = supabase.from(table).select;
+    let built = query(supabase.from(table));
+    built = built.range(from, from + pageSize - 1);
+    const { data, error } = await built;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allData.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return allData;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Iniciando verificação de lembretes de pagamento...');
+    console.log('Iniciando verificação de lembretes de pagamento (batch)...');
 
-    // Parse optional override from request body
     let overrideToken: string | null = null;
     let overrideServerUrl: string | null = null;
     try {
       const body = await req.json();
       if (body?.instance_token) overrideToken = body.instance_token;
       if (body?.server_url) overrideServerUrl = body.server_url;
-      console.log(`Override recebido: token=${overrideToken ? 'sim' : 'não'}, server_url=${overrideServerUrl ? 'sim' : 'não'}`);
     } catch { /* no body */ }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -38,51 +55,36 @@ serve(async (req) => {
     const tresDiasStr = tresDias.toISOString().split('T')[0];
 
     // Query 1: Parcelas de hoje e 3 dias
-    const { data: parcelasProximas, error: proximasError } = await supabase
-      .from('pagamentos')
-      .select(`
-        id, numero_parcela, data_prevista, valor_parcela, acordo_id,
-        acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )
-      `)
-      .eq('status', 'pendente')
-      .in('data_prevista', [hojeStr, tresDiasStr]);
-
-    if (proximasError) {
-      console.error('Erro ao buscar parcelas próximas:', proximasError);
-      throw proximasError;
-    }
+    const parcelasProximas = await fetchAll(supabase, 'pagamentos', (q: any) =>
+      q.select(`id, numero_parcela, data_prevista, valor_parcela, acordo_id,
+        acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )`)
+        .eq('status', 'pendente')
+        .in('data_prevista', [hojeStr, tresDiasStr])
+    );
 
     // Query 2: TODAS as parcelas vencidas (antes de hoje)
-    const { data: parcelasVencidas, error: vencidasError } = await supabase
-      .from('pagamentos')
-      .select(`
-        id, numero_parcela, data_prevista, valor_parcela, acordo_id,
-        acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )
-      `)
-      .eq('status', 'pendente')
-      .lt('data_prevista', hojeStr);
-
-    if (vencidasError) {
-      console.error('Erro ao buscar parcelas vencidas:', vencidasError);
-      throw vencidasError;
-    }
+    const parcelasVencidas = await fetchAll(supabase, 'pagamentos', (q: any) =>
+      q.select(`id, numero_parcela, data_prevista, valor_parcela, acordo_id,
+        acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )`)
+        .eq('status', 'pendente')
+        .lt('data_prevista', hojeStr)
+    );
 
     // Combinar todas as parcelas com seus tipos
     const todasParcelas: Array<{ parcela: any; tipoLembrete: string }> = [];
 
-    for (const p of (parcelasProximas || [])) {
+    for (const p of parcelasProximas) {
       const tipo = p.data_prevista === hojeStr ? 'dia_vencimento' : '3_dias';
       todasParcelas.push({ parcela: p, tipoLembrete: tipo });
     }
-    for (const p of (parcelasVencidas || [])) {
+    for (const p of parcelasVencidas) {
       const dtVenc = new Date(p.data_prevista + 'T12:00:00');
       const diffMs = hoje.getTime() - dtVenc.getTime();
       const diasAtraso = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const tipo = `vencido_d${diasAtraso}`;
-      todasParcelas.push({ parcela: p, tipoLembrete: tipo });
+      todasParcelas.push({ parcela: p, tipoLembrete: `vencido_d${diasAtraso}` });
     }
 
-    console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas?.length || 0} próximas + ${parcelasVencidas?.length || 0} vencidas)`);
+    console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas.length} próximas + ${parcelasVencidas.length} vencidas)`);
 
     if (todasParcelas.length === 0) {
       return new Response(JSON.stringify({ 
@@ -90,7 +92,88 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Calcular horário base para agendamento (8h de Brasília = 11h UTC)
+    // --- BATCH: Collect unique user_ids and pagamento_ids ---
+    const userIdSet = new Set<string>();
+    const pagamentoIdSet = new Set<string>();
+    for (const { parcela } of todasParcelas) {
+      const acordo = parcela.acordos as any;
+      if (acordo.status === 'ativo' && acordo.cliente_telefone) {
+        userIdSet.add(acordo.user_id);
+        pagamentoIdSet.add(parcela.id);
+      }
+    }
+    const userIds = [...userIdSet];
+    const pagamentoIds = [...pagamentoIdSet];
+
+    console.log(`Usuários únicos: ${userIds.length}, Pagamentos elegíveis: ${pagamentoIds.length}`);
+
+    if (pagamentoIds.length === 0) {
+      return new Response(JSON.stringify({ 
+        success: true, message: 'Nenhuma parcela elegível', agendados: 0
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // --- BATCH: Fetch all profiles at once ---
+    const profilesMap = new Map<string, any>();
+    if (userIds.length > 0) {
+      // Paginate in chunks of 500 for .in()
+      for (let i = 0; i < userIds.length; i += 500) {
+        const chunk = userIds.slice(i, i + 500);
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('id, nome, whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
+          .in('id', chunk);
+        if (error) { console.error('Erro profiles batch:', error); throw error; }
+        for (const p of (profiles || [])) profilesMap.set(p.id, p);
+      }
+    }
+
+    // --- BATCH: Fetch all whatsapp instances (apenas_lembretes) at once ---
+    const instancesMap = new Map<string, any>();
+    if (!overrideToken && userIds.length > 0) {
+      for (let i = 0; i < userIds.length; i += 500) {
+        const chunk = userIds.slice(i, i + 500);
+        const { data: instances, error } = await supabase
+          .from('user_whatsapp_instances')
+          .select('user_id, server_url, instance_token')
+          .in('user_id', chunk)
+          .eq('apenas_lembretes', true)
+          .eq('ativo', true);
+        if (error) { console.error('Erro instances batch:', error); throw error; }
+        for (const inst of (instances || [])) {
+          // Keep first match per user
+          if (!instancesMap.has(inst.user_id)) instancesMap.set(inst.user_id, inst);
+        }
+      }
+    }
+
+    // --- BATCH: Fetch existing fila entries for dedup ---
+    const filaSet = new Set<string>();
+    for (let i = 0; i < pagamentoIds.length; i += 500) {
+      const chunk = pagamentoIds.slice(i, i + 500);
+      const { data: filaRows, error } = await supabase
+        .from('whatsapp_fila')
+        .select('pagamento_id, tipo_lembrete')
+        .in('pagamento_id', chunk);
+      if (error) { console.error('Erro fila batch:', error); throw error; }
+      for (const r of (filaRows || [])) filaSet.add(`${r.pagamento_id}_${r.tipo_lembrete}`);
+    }
+
+    // --- BATCH: Fetch existing log entries for dedup ---
+    const logSet = new Set<string>();
+    for (let i = 0; i < pagamentoIds.length; i += 500) {
+      const chunk = pagamentoIds.slice(i, i + 500);
+      const { data: logRows, error } = await supabase
+        .from('whatsapp_lembretes_log')
+        .select('pagamento_id, tipo_lembrete')
+        .in('pagamento_id', chunk);
+      if (error) { console.error('Erro log batch:', error); throw error; }
+      for (const r of (logRows || [])) logSet.add(`${r.pagamento_id}_${r.tipo_lembrete}`);
+    }
+
+    console.log(`Dedup: ${filaSet.size} na fila, ${logSet.size} no log`);
+
+    // --- Calcular horário base para agendamento ---
     const agora = new Date();
     const horaAtualUTC = agora.getUTCHours();
     const horaAtualBrasilia = (horaAtualUTC - 3 + 24) % 24;
@@ -106,8 +189,10 @@ serve(async (req) => {
       proximoHorario = new Date(agora);
     }
 
+    // --- Build batch insert array in memory ---
     let agendados = 0;
     let pulados = 0;
+    const insertBatch: any[] = [];
 
     for (const { parcela, tipoLembrete } of todasParcelas) {
       const acordo = parcela.acordos as any;
@@ -115,16 +200,14 @@ serve(async (req) => {
       if (acordo.status !== 'ativo') { pulados++; continue; }
       if (!acordo.cliente_telefone) { pulados++; continue; }
 
-      // Buscar perfil do usuário
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('nome, whatsapp_lembretes_habilitado, whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
-        .eq('id', acordo.user_id)
-        .single();
+      const profile = profilesMap.get(acordo.user_id);
+      if (!profile || !profile.whatsapp_lembretes_habilitado) { pulados++; continue; }
 
-      if (profileError || !profile?.whatsapp_lembretes_habilitado) { pulados++; continue; }
+      // Dedup check in memory
+      const dedupKey = `${parcela.id}_${tipoLembrete}`;
+      if (filaSet.has(dedupKey) || logSet.has(dedupKey)) { pulados++; continue; }
 
-      // Se override foi fornecido (disparo manual do painel), usar diretamente
+      // Resolve credentials
       let finalServerUrl: string | null;
       let finalInstanceToken: string | null;
 
@@ -132,41 +215,10 @@ serve(async (req) => {
         finalServerUrl = overrideServerUrl;
         finalInstanceToken = overrideToken;
       } else {
-        // Priorizar instância "apenas_lembretes"
-        const { data: lembretesInstance } = await supabase
-          .from('user_whatsapp_instances')
-          .select('server_url, instance_token')
-          .eq('user_id', acordo.user_id)
-          .eq('apenas_lembretes', true)
-          .eq('ativo', true)
-          .limit(1)
-          .single();
-
-        finalServerUrl = lembretesInstance?.server_url || profile.whatsapp_lembrete_server_url || null;
-        finalInstanceToken = lembretesInstance?.instance_token || profile.whatsapp_lembrete_instance_token || null;
+        const inst = instancesMap.get(acordo.user_id);
+        finalServerUrl = inst?.server_url || profile.whatsapp_lembrete_server_url || null;
+        finalInstanceToken = inst?.instance_token || profile.whatsapp_lembrete_instance_token || null;
       }
-
-      // (filtro de parcela paga removido - enviar para todas as parcelas pendentes)
-
-      // Verificar duplicidade na fila
-      const { data: filaExistente } = await supabase
-        .from('whatsapp_fila')
-        .select('id')
-        .eq('pagamento_id', parcela.id)
-        .eq('tipo_lembrete', tipoLembrete)
-        .single();
-
-      if (filaExistente) { pulados++; continue; }
-
-      // Verificar duplicidade no log
-      const { data: logExistente } = await supabase
-        .from('whatsapp_lembretes_log')
-        .select('id')
-        .eq('pagamento_id', parcela.id)
-        .eq('tipo_lembrete', tipoLembrete)
-        .single();
-
-      if (logExistente) { pulados++; continue; }
 
       const valorFormatado = new Intl.NumberFormat('pt-BR', {
         style: 'currency', currency: 'BRL'
@@ -194,7 +246,6 @@ serve(async (req) => {
       } else if (tipoLembrete === '3_dias') {
         mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       } else if (tipoLembrete.startsWith('vencido_d')) {
-        // Template genérico para todos os outros dias de atraso
         const diasNum = tipoLembrete.replace('vencido_d', '');
         mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} encontra-se em atraso há ${diasNum} dias. Por favor, regularize o pagamento ou entre em contato.`;
       } else {
@@ -204,7 +255,7 @@ serve(async (req) => {
       const telefoneFormatado = acordo.cliente_telefone.replace(/\D/g, '');
       const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
 
-      // Verificar horário agendado
+      // Check scheduling hour
       const horaAgendadaUTC = proximoHorario.getUTCHours();
       const horaAgendadaBrasilia = (horaAgendadaUTC - 3 + 24) % 24;
       if (horaAgendadaBrasilia >= 18) {
@@ -212,30 +263,39 @@ serve(async (req) => {
         proximoHorario.setUTCHours(11, 0, 0, 0);
       }
 
-      const { error: insertError } = await supabase
-        .from('whatsapp_fila')
-        .insert({
-          pagamento_id: parcela.id,
-          tipo_lembrete: tipoLembrete,
-          telefone: telefoneCompleto,
-          mensagem,
-          agendado_para: proximoHorario.toISOString(),
-          status: 'pendente',
-          server_url: finalServerUrl,
-          instance_token: finalInstanceToken,
-          cliente_nome: acordo.cliente_nome,
-        });
+      insertBatch.push({
+        pagamento_id: parcela.id,
+        tipo_lembrete: tipoLembrete,
+        telefone: telefoneCompleto,
+        mensagem,
+        agendado_para: proximoHorario.toISOString(),
+        status: 'pendente',
+        server_url: finalServerUrl,
+        instance_token: finalInstanceToken,
+        cliente_nome: acordo.cliente_nome,
+      });
 
-      if (insertError) {
-        console.error(`Erro ao inserir parcela ${parcela.id}:`, insertError);
-        continue;
-      }
+      // Add to dedup set to avoid duplicates within this run
+      filaSet.add(dedupKey);
 
-      console.log(`Agendado [${tipoLembrete}] para ${proximoHorario.toISOString()} - ${acordo.cliente_nome}`);
       agendados++;
 
       const intervaloMs = (Math.floor(Math.random() * 3) + 5) * 60 * 1000;
       proximoHorario = new Date(proximoHorario.getTime() + intervaloMs);
+    }
+
+    // --- BATCH INSERT ---
+    if (insertBatch.length > 0) {
+      // Insert in chunks of 500
+      for (let i = 0; i < insertBatch.length; i += 500) {
+        const chunk = insertBatch.slice(i, i + 500);
+        const { error: insertError } = await supabase.from('whatsapp_fila').insert(chunk);
+        if (insertError) {
+          console.error(`Erro ao inserir batch ${i}-${i + chunk.length}:`, insertError);
+        } else {
+          console.log(`Batch ${i}-${i + chunk.length} inserido com sucesso`);
+        }
+      }
     }
 
     console.log(`Concluído: ${agendados} agendados, ${pulados} pulados`);
