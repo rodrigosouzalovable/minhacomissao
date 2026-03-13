@@ -400,7 +400,12 @@ export default function LembretesSection({
     }
   };
 
-  const progressPercent = stats.total > 0 ? Math.round(((stats.enviados + stats.erros) / stats.total) * 100) : 0;
+  // Compute counts from the unified list for consistent display
+  const unifiedEnviados = unifiedItems.filter(i => i.whatsapp_status === 'enviado').length;
+  const unifiedErros = unifiedItems.filter(i => i.whatsapp_status === 'erro').length;
+  const unifiedPendentes = unifiedItems.filter(i => i.whatsapp_status === 'pendente' || i.whatsapp_status === 'enviando').length;
+  const unifiedTotal = unifiedItems.length;
+  const progressPercent = unifiedTotal > 0 ? Math.round(((unifiedEnviados + unifiedErros) / unifiedTotal) * 100) : 0;
 
   const renderSection = (title: string, items: UnifiedItem[], badgeColor: string) => {
     if (items.length === 0) return null;
@@ -509,13 +514,13 @@ export default function LembretesSection({
           )}
         </div>
 
-        {stats.total > 0 && (
+        {unifiedTotal > 0 && (
           <div className="space-y-2">
             <Progress value={progressPercent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{stats.enviados} de {stats.total} mensagens enviadas</span>
-              {stats.erros > 0 && <span className="text-destructive">{stats.erros} erro(s)</span>}
-              {stats.pendentes > 0 && <span>{stats.pendentes} pendente(s)</span>}
+              <span>{unifiedEnviados} de {unifiedTotal} mensagens enviadas</span>
+              {unifiedErros > 0 && <span className="text-destructive">{unifiedErros} erro(s)</span>}
+              {unifiedPendentes > 0 && <span>{unifiedPendentes} pendente(s)</span>}
             </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Users className="h-3 w-3" />
