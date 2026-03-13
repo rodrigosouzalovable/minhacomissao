@@ -199,6 +199,12 @@ serve(async (req) => {
         mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Este é o último aviso referente à parcela de ${valorFormatado} vencida em ${dataFormatada}, em atraso há 30 dias. Caso o pagamento não seja regularizado, o acordo poderá ser considerado descumprido. Por favor, entre em contato.`;
       } else if (tipoLembrete === 'dia_vencimento') {
         mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence HOJE. Gostaria que enviasse o boleto para pagamento?`;
+      } else if (tipoLembrete === '3_dias') {
+        mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
+      } else if (tipoLembrete.startsWith('vencido_d')) {
+        // Template genérico para todos os outros dias de atraso
+        const diasNum = tipoLembrete.replace('vencido_d', '');
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} encontra-se em atraso há ${diasNum} dias. Por favor, regularize o pagamento ou entre em contato.`;
       } else {
         mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       }
