@@ -41,7 +41,7 @@ interface UnifiedItem {
   data_prevista?: string;
   tipo_lembrete_label: string;
   tipo: 'vencido' | 'hoje' | 'tres_dias';
-  whatsapp_status: 'enviado' | 'pendente' | 'erro' | 'nao_enviado';
+  whatsapp_status: 'enviado' | 'pendente' | 'erro' | 'nao_enviado' | 'enviando';
 }
 
 type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done' | 'done_with_errors' | 'no_instance';
