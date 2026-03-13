@@ -1605,7 +1605,7 @@ export default function Acionamento() {
                       <div className="space-y-2">
                         <Label>Nome (opcional)</Label>
                         <Input
-                          placeholder="Ex: WhatsApp X"
+                          placeholder="Ex: 62981810202"
                           value={editingInstance.nome}
                           onChange={(e) => setEditingInstance({ ...editingInstance, nome: e.target.value })}
                         />
@@ -1615,7 +1615,9 @@ export default function Acionamento() {
                         <Input
                           placeholder="https://certificadoracnpj.uazapi.com"
                           value={editingInstance.server_url}
-                          onChange={(e) => setEditingInstance({ ...editingInstance, server_url: e.target.value })}
+                          onChange={(e) => !editingInstance.id && setEditingInstance({ ...editingInstance, server_url: e.target.value })}
+                          readOnly={!!editingInstance.id}
+                          className={editingInstance.id ? 'bg-muted cursor-not-allowed opacity-60' : ''}
                         />
                       </div>
                       <div className="space-y-2">
@@ -1623,7 +1625,9 @@ export default function Acionamento() {
                         <Input
                           placeholder="c01095d6-64d4-4b33-9c1f-86a09948dc7c"
                           value={editingInstance.instance_token}
-                          onChange={(e) => setEditingInstance({ ...editingInstance, instance_token: e.target.value })}
+                          onChange={(e) => !editingInstance.id && setEditingInstance({ ...editingInstance, instance_token: e.target.value })}
+                          readOnly={!!editingInstance.id}
+                          className={editingInstance.id ? 'bg-muted cursor-not-allowed opacity-60' : ''}
                         />
                       </div>
                       <div className="flex gap-2">
