@@ -13,13 +13,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 
-type CredorLayout = 'padrao' | 'montreal' | 'cobmais' | 'pesquisa';
+type CredorLayout = 'padrao' | 'montreal' | 'cobmais' | 'pesquisa' | 'pagamentos';
 
 interface DevedorRow {
   cpf: string;
@@ -32,6 +33,20 @@ interface DevedorRow {
   valor_atualizado: number;
   telefone?: string;
   descricao?: string;
+}
+
+interface PagamentoRow {
+  cpf: string;
+  cliente: string;
+  numero_parcela: number;
+  vencimento: string;
+  valor: number;
+  observacao: string;
+  status_planilha: string;
+  acordo_id?: string;
+  pagamento_id?: string;
+  ja_pago?: boolean;
+  sem_acordo?: boolean;
 }
 
 interface Importacao {
@@ -48,6 +63,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total | Aba 2: Telefones (opcional)',
   pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
+  pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
 };
 
 export default function ImportarDevedores() {
@@ -69,8 +85,17 @@ export default function ImportarDevedores() {
   const [importProgress, setImportProgress] = useState(0);
   const [insertedCount, setInsertedCount] = useState(0);
 
+  // Pagamentos-specific state
+  const [pagamentoRows, setPagamentoRows] = useState<PagamentoRow[]>([]);
+  const [pagamentoImporting, setPagamentoImporting] = useState(false);
+  const [pagamentoImported, setPagamentoImported] = useState(false);
+  const [pagamentoProgress, setPagamentoProgress] = useState(0);
+  const [pagamentoUpdated, setPagamentoUpdated] = useState(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const CREDORES_OPCOES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
+
+  const isPagamentos = credorSelecionado === 'pagamentos';
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -92,7 +117,12 @@ export default function ImportarDevedores() {
     setCredorSelecionado(value);
     setFile(null);
     setRows([]);
+    setPagamentoRows([]);
     setImported(false);
+    setPagamentoImported(false);
+    if (value === 'pagamentos') {
+      setCredorDestino('UME | NOVO MUNDO');
+    }
   };
 
   const parseNum = (val: unknown) => {
@@ -123,7 +153,6 @@ export default function ImportarDevedores() {
       const tel1 = String(row['D'] ?? '').replace(/\D/g, '');
       const tel2 = String(row['E'] ?? '').replace(/\D/g, '');
 
-      // Converter vencimento Excel serial number para string dd/mm/yyyy
       let vencimentoStr = '';
       const vencRaw = row['K'];
       if (typeof vencRaw === 'number') {
@@ -170,16 +199,13 @@ export default function ImportarDevedores() {
   };
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
-    // Aba 1 - Dados principais
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
     console.log('[COBMAIS] Total de abas:', workbook.SheetNames.length, '| Linhas aba 1:', rows1.length);
 
-    // Aba 2 - Telefones (opcional)
     const sheet2 = workbook.SheetNames.length >= 2 ? workbook.Sheets[workbook.SheetNames[1]] : null;
     const rows2 = sheet2 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet2, { header: 'A' }).slice(1) : [];
 
-    // Construir mapa de CPF real (zeros à esquerda) e telefones a partir da Aba 2
     const cpfRealMap = new Map<string, string>();
     const phoneMap = new Map<string, string>();
     for (const row of rows2) {
@@ -207,16 +233,14 @@ export default function ImportarDevedores() {
       return digits;
     };
 
-    // Cada linha da planilha = 1 registro individual (cada parcela)
     const devedores: DevedorRow[] = [];
     for (const row of rows1) {
       const cpf = resolverCpf(row['A']);
       if (cpf.length < 11) continue;
 
       const contrato = String(row['C'] ?? '').trim();
-      const valor = parseNum(row['F']); // Valor da parcela individual
+      const valor = parseNum(row['F']);
 
-      // Converter vencimento Excel serial number para string dd/mm/yyyy
       let vencimentoStr = '';
       const vencRaw = row['E'];
       if (typeof vencRaw === 'number') {
@@ -245,31 +269,147 @@ export default function ImportarDevedores() {
     return devedores;
   };
 
+  const parsePagamentos = async (dataRows: Record<string, unknown>[]): Promise<PagamentoRow[]> => {
+    // Parse rows and filter only STATUS = "PAGA"
+    const rawRows: PagamentoRow[] = [];
+    for (const row of dataRows) {
+      const statusRaw = String(row['K'] ?? '').trim().toUpperCase();
+      if (statusRaw !== 'PAGA') continue;
+
+      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      if (cpf.length < 11) continue;
+
+      let vencimentoStr = '';
+      const vencRaw = row['H'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+        }
+      } else if (vencRaw) {
+        vencimentoStr = String(vencRaw);
+      }
+
+      rawRows.push({
+        cpf,
+        cliente: String(row['B'] ?? ''),
+        numero_parcela: parseInt(String(row['G'] ?? '0')) || 0,
+        vencimento: vencimentoStr,
+        valor: parseNum(row['I']),
+        observacao: String(row['J'] ?? ''),
+        status_planilha: 'PAGA',
+      });
+    }
+
+    if (rawRows.length === 0) return [];
+
+    // Get unique CPFs
+    const uniqueCpfs = [...new Set(rawRows.map(r => r.cpf))];
+    console.log(`[PAGAMENTOS] ${rawRows.length} linhas PAGA, ${uniqueCpfs.length} CPFs únicos`);
+
+    // Fetch all active acordos for these CPFs
+    const { data: acordos } = await supabase
+      .from('acordos')
+      .select('id, cliente_cpf, status')
+      .in('status', ['ativo', 'concluido']);
+
+    // Build CPF -> acordo map (normalized)
+    const cpfAcordoMap = new Map<string, string>();
+    if (acordos) {
+      for (const a of acordos) {
+        const cpfNorm = (a.cliente_cpf || '').replace(/\D/g, '');
+        if (cpfNorm && !cpfAcordoMap.has(cpfNorm)) {
+          cpfAcordoMap.set(cpfNorm, a.id);
+        }
+      }
+    }
+
+    // Get acordo IDs that we found
+    const acordoIds = [...new Set(
+      rawRows
+        .map(r => cpfAcordoMap.get(r.cpf))
+        .filter(Boolean)
+    )] as string[];
+
+    // Fetch all pagamentos for these acordos
+    const pagamentosMap = new Map<string, { id: string; numero_parcela: number; status: string }[]>();
+    if (acordoIds.length > 0) {
+      // Fetch in batches to avoid URI too long
+      for (let i = 0; i < acordoIds.length; i += 50) {
+        const batch = acordoIds.slice(i, i + 50);
+        const { data: pags } = await supabase
+          .from('pagamentos')
+          .select('id, acordo_id, numero_parcela, status')
+          .in('acordo_id', batch);
+        if (pags) {
+          for (const p of pags) {
+            if (!pagamentosMap.has(p.acordo_id)) pagamentosMap.set(p.acordo_id, []);
+            pagamentosMap.get(p.acordo_id)!.push({ id: p.id, numero_parcela: p.numero_parcela, status: p.status });
+          }
+        }
+      }
+    }
+
+    // Match each row
+    for (const row of rawRows) {
+      const acordoId = cpfAcordoMap.get(row.cpf);
+      if (!acordoId) {
+        row.sem_acordo = true;
+        continue;
+      }
+      row.acordo_id = acordoId;
+      const parcelas = pagamentosMap.get(acordoId) || [];
+      const match = parcelas.find(p => p.numero_parcela === row.numero_parcela);
+      if (match) {
+        row.pagamento_id = match.id;
+        row.ja_pago = match.status === 'pago';
+      } else {
+        row.sem_acordo = true; // parcela not found
+      }
+    }
+
+    return rawRows;
+  };
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
     setImported(false);
+    setPagamentoImported(false);
     setParsing(true);
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const data = evt.target?.result;
         const workbook = XLSX.read(data, { type: 'array' });
 
-        let parsed: DevedorRow[];
-        if (credorSelecionado === 'cobmais') {
-          parsed = parseCobmais(workbook);
-        } else {
+        if (credorSelecionado === 'pagamentos') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           const dataRows = json.slice(1);
-          parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : credorSelecionado === 'pesquisa' ? parsePesquisa(dataRows) : parsePadrao(dataRows);
-        }
-        setRows(parsed);
-        if (parsed.length === 0) {
-          toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos para importar.', variant: 'destructive' });
+          const parsed = await parsePagamentos(dataRows);
+          setPagamentoRows(parsed);
+          setRows([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhuma parcela PAGA encontrada', description: 'A planilha não contém linhas com status PAGA.', variant: 'destructive' });
+          }
+        } else {
+          let parsed: DevedorRow[];
+          if (credorSelecionado === 'cobmais') {
+            parsed = parseCobmais(workbook);
+          } else {
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+            const dataRows = json.slice(1);
+            parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : credorSelecionado === 'pesquisa' ? parsePesquisa(dataRows) : parsePadrao(dataRows);
+          }
+          setRows(parsed);
+          setPagamentoRows([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos para importar.', variant: 'destructive' });
+          }
         }
       } catch {
         toast({ title: 'Erro ao processar planilha', variant: 'destructive' });
@@ -296,6 +436,39 @@ export default function ImportarDevedores() {
     return null;
   };
 
+  const handleImportPagamentos = async () => {
+    const toUpdate = pagamentoRows.filter(r => r.pagamento_id && !r.ja_pago);
+    if (toUpdate.length === 0) {
+      toast({ title: 'Nada para atualizar', description: 'Todas as parcelas já estão marcadas como pagas.', variant: 'destructive' });
+      return;
+    }
+
+    setPagamentoImporting(true);
+    setPagamentoProgress(0);
+    setPagamentoUpdated(0);
+
+    let updated = 0;
+    for (let i = 0; i < toUpdate.length; i++) {
+      const row = toUpdate[i];
+      const dataPaga = parseDate(row.vencimento);
+      const { error } = await supabase
+        .from('pagamentos')
+        .update({ status: 'pago', data_paga: dataPaga } as any)
+        .eq('id', row.pagamento_id!);
+      
+      if (!error) {
+        updated++;
+        row.ja_pago = true;
+      }
+      setPagamentoUpdated(updated);
+      setPagamentoProgress(Math.round(((i + 1) / toUpdate.length) * 100));
+    }
+
+    setPagamentoImported(true);
+    setPagamentoImporting(false);
+    toast({ title: 'Importação concluída', description: `${updated} parcelas marcadas como pagas.` });
+  };
+
   const handleImport = async () => {
     if (!user || rows.length === 0) return;
 
@@ -309,7 +482,6 @@ export default function ImportarDevedores() {
     setImportProgress(0);
     setInsertedCount(0);
 
-    // 1. Create importacao record
     const { data: importacao, error: importError } = await supabase
       .from('importacoes' as any)
       .insert({
@@ -329,7 +501,6 @@ export default function ImportarDevedores() {
 
     const importacaoId = (importacao as any).id;
 
-    // 2. Insert devedores with importacao_id
     const records = rows.map(r => ({
       nome: r.nome,
       cpf: r.cpf,
@@ -345,7 +516,6 @@ export default function ImportarDevedores() {
       importacao_id: importacaoId,
     }));
 
-    // Inserção em lotes de 500 registros
     const BATCH_SIZE = 500;
     let inserted = 0;
     let batchError: any = null;
@@ -391,7 +561,9 @@ export default function ImportarDevedores() {
   const handleClear = () => {
     setFile(null);
     setRows([]);
+    setPagamentoRows([]);
     setImported(false);
+    setPagamentoImported(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -400,6 +572,11 @@ export default function ImportarDevedores() {
   const isMontreal = credorSelecionado === 'montreal';
   const isCobmais = credorSelecionado === 'cobmais';
   const isPesquisa = credorSelecionado === 'pesquisa';
+
+  // Pagamentos summary
+  const pagToUpdate = pagamentoRows.filter(r => r.pagamento_id && !r.ja_pago);
+  const pagJaPago = pagamentoRows.filter(r => r.ja_pago);
+  const pagSemAcordo = pagamentoRows.filter(r => r.sem_acordo);
 
   return (
     <AppLayout>
@@ -428,29 +605,37 @@ export default function ImportarDevedores() {
                   <SelectItem value="montreal">MONTREAL</SelectItem>
                    <SelectItem value="cobmais">COBMAIS</SelectItem>
                    <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
+                   <SelectItem value="pagamentos">Pagamentos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Credor de Destino</Label>
-              <Select value={credorDestino} onValueChange={setCredorDestino}>
-                <SelectTrigger className="max-w-xs">
-                  <SelectValue placeholder="Selecione o credor..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {CREDORES_OPCOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  <SelectItem value="outro">Outro (digitar)</SelectItem>
-                </SelectContent>
-              </Select>
-              {credorDestino === 'outro' && (
-                <Input
-                  placeholder="Digite o nome do credor"
-                  value={credorOutro}
-                  onChange={(e) => setCredorOutro(e.target.value)}
-                  className="max-w-xs"
-                />
-              )}
-            </div>
+            {!isPagamentos && (
+              <div className="space-y-2">
+                <Label>Credor de Destino</Label>
+                <Select value={credorDestino} onValueChange={setCredorDestino}>
+                  <SelectTrigger className="max-w-xs">
+                    <SelectValue placeholder="Selecione o credor..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CREDORES_OPCOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    <SelectItem value="outro">Outro (digitar)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {credorDestino === 'outro' && (
+                  <Input
+                    placeholder="Digite o nome do credor"
+                    value={credorOutro}
+                    onChange={(e) => setCredorOutro(e.target.value)}
+                    className="max-w-xs"
+                  />
+                )}
+              </div>
+            )}
+            {isPagamentos && (
+              <div className="text-sm text-muted-foreground">
+                Credor: <strong>UME | NOVO MUNDO</strong> (automático)
+              </div>
+            )}
             <div className="flex items-center gap-4">
               <Input
                 ref={fileInputRef}
@@ -474,7 +659,9 @@ export default function ImportarDevedores() {
                   <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   <div>
                     <p className="font-semibold text-sm">Processando planilha...</p>
-                    <p className="text-xs text-muted-foreground">Lendo abas e cruzando dados, aguarde...</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isPagamentos ? 'Lendo parcelas e cruzando com acordos no sistema...' : 'Lendo abas e cruzando dados, aguarde...'}
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -482,7 +669,98 @@ export default function ImportarDevedores() {
           </CardContent>
         </Card>
 
-        {rows.length > 0 && (
+        {/* Pagamentos Preview */}
+        {isPagamentos && pagamentoRows.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileSpreadsheet className="h-5 w-5" />
+                    Preview Pagamentos ({pagamentoRows.length} parcelas PAGAS)
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    {file?.name} — 
+                    <span className="text-yellow-600 font-medium"> {pagToUpdate.length} a atualizar</span>,
+                    <span className="text-green-600 font-medium"> {pagJaPago.length} já pagas</span>
+                    {pagSemAcordo.length > 0 && <span className="text-red-600 font-medium">, {pagSemAcordo.length} sem acordo</span>}
+                  </CardDescription>
+                </div>
+                {!pagamentoImported ? (
+                  <Button
+                    onClick={handleImportPagamentos}
+                    disabled={pagamentoImporting || pagToUpdate.length === 0}
+                    style={{ background: '#00a86b', color: '#fff' }}
+                  >
+                    {pagamentoImporting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Atualizando...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-1" />
+                        Marcar {pagToUpdate.length} como Pagas
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
+                    <Check className="h-4 w-4" />
+                    {pagamentoUpdated} parcelas atualizadas
+                  </div>
+                )}
+              </div>
+              {pagamentoImporting && (
+                <div className="mt-4 space-y-2">
+                  <Progress value={pagamentoProgress} className="h-3" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Atualizando {pagamentoUpdated} de {pagToUpdate.length} parcelas... ({pagamentoProgress}%)
+                  </p>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto max-h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>CPF</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Parcela</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Status no Sistema</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagamentoRows.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
+                        <TableCell>{row.cliente}</TableCell>
+                        <TableCell className="text-center">{row.numero_parcela}</TableCell>
+                        <TableCell>{row.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                        <TableCell>{row.vencimento}</TableCell>
+                        <TableCell>
+                          {row.sem_acordo ? (
+                            <Badge variant="destructive">Acordo não encontrado</Badge>
+                          ) : row.ja_pago ? (
+                            <Badge className="bg-green-600 hover:bg-green-700 text-white">Já pago</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Será marcado como pago</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Standard Devedores Preview */}
+        {!isPagamentos && rows.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -568,9 +846,8 @@ export default function ImportarDevedores() {
                                 .eq('ativo', true)
                                 .limit(1);
                               const match = data?.find((d: any) => {
-                                return true; // navigate with CPF search
+                                return true;
                               });
-                              // Navigate to first matching devedor by CPF
                               const { data: devs } = await supabase
                                 .from('devedores')
                                 .select('id, cpf')
