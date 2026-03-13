@@ -272,6 +272,12 @@ export default function ImportarDevedores() {
   const parsePagamentos = async (dataRows: Record<string, unknown>[]): Promise<PagamentoRow[]> => {
     // Parse rows and filter only STATUS = "PAGA"
     const rawRows: PagamentoRow[] = [];
+    // Debug: log first 3 rows to see actual column mapping
+    console.log('[PAGAMENTOS] Primeiras 3 linhas:', dataRows.slice(0, 3).map(r => {
+      const keys = Object.keys(r);
+      return { keys, K: r['K'], J: r['J'], allValues: keys.map(k => `${k}=${r[k]}`) };
+    }));
+    console.log('[PAGAMENTOS] Total dataRows:', dataRows.length);
     for (const row of dataRows) {
       const statusRaw = String(row['K'] ?? '').trim().toUpperCase();
       if (statusRaw !== 'PAGA') continue;
