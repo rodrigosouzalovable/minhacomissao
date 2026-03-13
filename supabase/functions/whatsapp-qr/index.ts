@@ -1,0 +1,371 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+function getSupabaseAdmin() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+}
+
+async function getInstanceById(instanceId: string) {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("user_whatsapp_instances")
+    .select("*")
+    .eq("id", instanceId)
+    .maybeSingle();
+  if (error) throw new Error("DB error: " + error.message);
+  return data;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const body = await req.json();
+    const { action, userId, instanceId } = body;
+
+    if (!userId) return json({ error: "userId is required" }, 400);
+
+    if (action === "create-instance") return await createInstance(userId);
+    if (action === "qr") return await fetchQr(instanceId || await getLatestInstanceId(userId));
+    if (action === "status") return await checkStatus(instanceId || await getLatestInstanceId(userId));
+    if (action === "setup-webhook") return await setupWebhook(instanceId || await getLatestInstanceId(userId));
+    if (action === "disconnect") return await disconnectInstance(instanceId);
+
+    return json({ error: "Unknown action" }, 400);
+  } catch (err) {
+    return json({ error: err.message }, 500);
+  }
+});
+
+function json(data: any, status = 200) {
+  const safeStatus = Math.max(200, Math.min(599, status || 500));
+  return new Response(JSON.stringify(data), {
+    status: safeStatus,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function uazUrl(base: string, path: string, params: Record<string, string> = {}) {
+  const url = new URL(`${base}${path}`);
+  for (const [k, v] of Object.entries(params)) {
+    if (v) url.searchParams.set(k, v);
+  }
+  return url.toString();
+}
+
+async function getLatestInstanceId(userId: string): Promise<string> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("user_whatsapp_instances")
+    .select("id")
+    .eq("user_id", userId)
+    .order("criado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) throw new Error("No instance found for user");
+  return data.id;
+}
+
+// ── CREATE INSTANCE ──
+async function createInstance(userId: string) {
+  const baseUrl = Deno.env.get("UAZAPI_SERVER_URL") || Deno.env.get("UAZAPI_BASE_URL");
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN");
+  if (!baseUrl || !adminToken) {
+    return json({ ok: false, error: "UAZAPI_SERVER_URL or UAZAPI_ADMIN_TOKEN not configured" }, 500);
+  }
+
+  const instanceName = `user-${userId.slice(0, 8)}-${Date.now()}`;
+  const base = baseUrl.replace(/\/+$/, "");
+
+  console.log(`[CREATE] Creating instance ${instanceName}`);
+
+  const res = await fetch(`${base}/instance/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", admintoken: adminToken },
+    body: JSON.stringify({ name: instanceName }),
+  });
+
+  const text = await res.text();
+  console.log(`[CREATE] Response ${res.status}: ${text.substring(0, 500)}`);
+
+  let data: any = null;
+  try { data = JSON.parse(text); } catch (_) {}
+
+  if (!res.ok) {
+    return json({ ok: false, error: `UAZAPI returned ${res.status}`, detail: data || text }, res.status);
+  }
+
+  const token = data?.token || data?.instance?.token || data?.apitoken || null;
+  const instanceUrl = data?.instance?.url || data?.url || base;
+
+  if (!token) {
+    return json({ ok: false, error: "Could not extract token from UAZAPI response", detail: data || text }, 500);
+  }
+
+  const sb = getSupabaseAdmin();
+  const { data: inserted, error: dbError } = await sb
+    .from("user_whatsapp_instances")
+    .insert({
+      user_id: userId,
+      server_url: instanceUrl,
+      instance_token: token,
+      nome: instanceName,
+      ativo: true,
+    })
+    .select()
+    .single();
+
+  if (dbError) {
+    return json({ ok: false, error: "Failed to save instance: " + dbError.message }, 500);
+  }
+
+  return json({ ok: true, instanceId: inserted.id, instanceUrl, instanceToken: token });
+}
+
+// ── FETCH QR ──
+async function fetchQr(instanceId: string) {
+  const instance = await getInstanceById(instanceId);
+  if (!instance) {
+    return json({ ok: false, error: "No instance found. Create one first." }, 404);
+  }
+  const base = instance.server_url.replace(/\/+$/, "");
+  const token = instance.instance_token;
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+
+  const attempts = [
+    { url: uazUrl(base, "/instance/connect", { token, admintoken: adminToken }), method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    { url: `${base}/instance/connect`, method: "POST", headers: { "Content-Type": "application/json", token, admintoken: adminToken }, body: "{}" },
+    { url: `${base}/instance/connect`, method: "POST", headers: { "Content-Type": "application/json", token }, body: "{}" },
+    { url: uazUrl(base, "/instance/connect", { token, admintoken: adminToken }), method: "GET", headers: {}, body: undefined },
+    { url: `${base}/instance/connect`, method: "GET", headers: { token, admintoken: adminToken }, body: undefined },
+  ];
+
+  const debugLogs: string[] = [];
+
+  for (const attempt of attempts) {
+    try {
+      console.log(`[QR] Trying: ${attempt.method} ${attempt.url}`);
+      const fetchOpts: any = { method: attempt.method, headers: attempt.headers };
+      if (attempt.body) fetchOpts.body = attempt.body;
+      const res = await fetch(attempt.url, fetchOpts);
+      const contentType = res.headers.get("content-type") || "";
+
+      if (!res.ok) {
+        const body = await res.text();
+        console.log(`[QR] ${attempt.url} => ${res.status}: ${body.substring(0, 300)}`);
+        debugLogs.push(`${res.status}: ${body.substring(0, 150)}`);
+        continue;
+      }
+
+      if (contentType.includes("image")) {
+        const buf = await res.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        return json({ ok: true, qr: `data:${contentType};base64,${base64}`, pairingCode: null });
+      }
+
+      const body = await res.text();
+      console.log(`[QR] ${attempt.url} => ${res.status}: ${body.substring(0, 500)}`);
+
+      let data: any = null;
+      try { data = JSON.parse(body); } catch (_) { continue; }
+
+      const qr = data.qrcode || data.qr || data.base64 || data.qrCode || data.code ||
+                 data.instance?.qrcode || null;
+      const pairingCode = data.pairingCode || data.pairing_code || data.instance?.paircode || null;
+
+      if (qr) return json({ ok: true, qr, pairingCode });
+
+      if (data.connected || data.status === "CONNECTED" || data.status === "open" ||
+          data.instance?.status === "connected") {
+        const phone = data.phoneNumber || data.phone || data.wid || data.instance?.phone || null;
+        return json({ ok: true, alreadyConnected: true, connected: true, phone });
+      }
+
+      debugLogs.push(`200 no QR: ${JSON.stringify(data).substring(0, 150)}`);
+    } catch (e) {
+      console.log(`[QR] Error: ${e.message}`);
+      debugLogs.push(`ERROR: ${e.message}`);
+    }
+  }
+
+  return json({ ok: false, error: "Não foi possível obter o QR Code.", debug: debugLogs }, 400);
+}
+
+// ── CHECK STATUS ──
+function parseConnectionState(data: any) {
+  const statusCandidates = [
+    data?.status, data?.state, data?.connectionStatus,
+    data?.instance?.status, data?.instance?.state,
+    data?.result?.status, data?.result?.state,
+    data?.data?.status, data?.data?.state,
+    data?.status?.status, data?.status?.state,
+    data?.status?.connectionStatus, data?.status?.instance?.status,
+  ];
+
+  const rawStatusCandidate = statusCandidates.find((value) =>
+    typeof value === "string" && value.trim().length > 0
+  ) as string | undefined;
+
+  const rawStatus = (rawStatusCandidate || "unknown").toLowerCase();
+  const connectedByStatus = ["connected", "open", "online", "ready"].includes(rawStatus);
+  const disconnectedByStatus = ["disconnected", "close", "closed", "offline", "logout", "not_connected"].includes(rawStatus);
+
+  const connectedFlags = [
+    data?.connected, data?.isConnected, data?.instance?.connected,
+    data?.status?.connected, data?.status?.isConnected,
+    data?.result?.connected, data?.data?.connected,
+  ];
+
+  const connectedByFlag = connectedFlags.includes(true);
+  const disconnectedByFlag = connectedFlags.includes(false);
+
+  const connected = connectedByFlag || connectedByStatus;
+  const explicitDisconnected = !connected && (disconnectedByFlag || disconnectedByStatus);
+
+  const phone = data?.phoneNumber || data?.phone || data?.wid ||
+    data?.instance?.phone || data?.status?.phoneNumber || data?.status?.phone ||
+    data?.result?.phone || data?.data?.phone || null;
+
+  return { connected, explicitDisconnected, status: rawStatus, phone };
+}
+
+async function checkStatus(instanceId: string) {
+  const instance = await getInstanceById(instanceId);
+  if (!instance) {
+    return json({ ok: false, connected: false, status: "no_instance" });
+  }
+
+  const base = instance.server_url.replace(/\/+$/, "");
+  const token = instance.instance_token;
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+
+  const attempts = [
+    { url: uazUrl(base, "/instance/status", { token }), headers: {} },
+    { url: `${base}/instance/status`, headers: { token } },
+    { url: `${base}/instance/status`, headers: { token, admintoken: adminToken } },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const res = await fetch(attempt.url, { headers: attempt.headers });
+      if (!res.ok) continue;
+
+      const text = await res.text();
+      let data: any = null;
+      try { data = JSON.parse(text); } catch { continue; }
+
+      const parsed = parseConnectionState(data);
+
+      if (parsed.connected) {
+        return json({ ok: true, connected: true, status: parsed.status, phone: parsed.phone });
+      }
+
+      if (parsed.explicitDisconnected) {
+        return json({ ok: true, connected: false, status: parsed.status, phone: parsed.phone });
+      }
+
+      return json({ ok: true, connected: false, status: parsed.status || "unknown", phone: parsed.phone, stale: true });
+    } catch (_) {}
+  }
+
+  return json({ ok: false, connected: false, status: "unknown", stale: true });
+}
+
+// ── SETUP WEBHOOK ──
+async function setupWebhook(instanceId: string) {
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+  const instance = await getInstanceById(instanceId);
+  if (!instance) return json({ ok: false, error: "No instance found" }, 404);
+
+  const base = instance.server_url.replace(/\/+$/, "");
+  const token = instance.instance_token;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
+  const payload = JSON.stringify({ url: webhookUrl, events: ["messages"], excludeMessages: ["wasSentByApi"] });
+
+  const attempts = [
+    { url: `${base}/webhook/${token}`, headers: { "Content-Type": "application/json" } },
+    { url: `${base}/webhook`, headers: { "Content-Type": "application/json", token } },
+    { url: `${base}/globalwebhook`, headers: { "Content-Type": "application/json", admintoken: adminToken } },
+  ];
+
+  const debugLogs: string[] = [];
+
+  for (const attempt of attempts) {
+    try {
+      console.log(`[WEBHOOK] Trying POST ${attempt.url}`);
+      const res = await fetch(attempt.url, {
+        method: "POST",
+        headers: attempt.headers,
+        body: payload,
+      });
+
+      const text = await res.text();
+      console.log(`[WEBHOOK] ${attempt.url} => ${res.status}: ${text.substring(0, 300)}`);
+
+      if (res.ok) {
+        let data: any = null;
+        try { data = JSON.parse(text); } catch (_) {}
+        return json({ ok: true, webhookUrl, response: data || text });
+      }
+
+      debugLogs.push(`${res.status}: ${text.substring(0, 150)}`);
+    } catch (err) {
+      debugLogs.push(`ERROR: ${err.message}`);
+    }
+  }
+
+  return json({ ok: false, error: "Não foi possível configurar o webhook.", debug: debugLogs }, 400);
+}
+
+// ── DISCONNECT INSTANCE ──
+async function disconnectInstance(instanceId: string) {
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+  const instance = await getInstanceById(instanceId);
+  if (!instance) {
+    return json({ ok: true, message: "No instance to disconnect" });
+  }
+
+  const base = instance.server_url.replace(/\/+$/, "");
+  const token = instance.instance_token;
+
+  // Try to logout (best-effort)
+  try {
+    const logoutAttempts = [
+      { url: `${base}/instance/logout`, headers: { token, admintoken: adminToken } },
+      { url: uazUrl(base, "/instance/logout", { token, admintoken: adminToken }), headers: {} },
+    ];
+    for (const attempt of logoutAttempts) {
+      try {
+        const res = await fetch(attempt.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...attempt.headers },
+          body: "{}",
+        });
+        console.log(`[DISCONNECT] ${attempt.url} => ${res.status}`);
+        if (res.ok) break;
+      } catch (_) {}
+    }
+  } catch (e) {
+    console.log(`[DISCONNECT] Logout error (non-blocking): ${e.message}`);
+  }
+
+  // Delete from DB
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.from("user_whatsapp_instances").delete().eq("id", instanceId);
+  if (error) {
+    return json({ ok: false, error: "Failed to delete instance: " + error.message }, 500);
+  }
+
+  return json({ ok: true, message: "WhatsApp desconectado com sucesso" });
+}
