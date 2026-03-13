@@ -1111,11 +1111,11 @@ export default function Acionamento() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setMetaDialogOpen(true)}
+                onClick={() => setLembreteMensagensOpen(true)}
                 className="text-muted-foreground gap-1"
               >
-                <Target className="h-4 w-4" />
-                <span className="text-xs">Meta</span>
+                <MessageCircle className="h-4 w-4" />
+                <span className="text-xs">Mensagens de Lembrete</span>
               </Button>
               <Button
                 variant="ghost"
