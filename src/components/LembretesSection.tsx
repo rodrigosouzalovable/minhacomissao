@@ -298,7 +298,7 @@ export default function LembretesSection({
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {tipoLembreteLabel[item.tipo_lembrete] || item.tipo_lembrete}
+                        {getTipoLabel(item.tipo_lembrete)}
                       </Badge>
                       <StatusBadge status={item.status} />
                     </div>
