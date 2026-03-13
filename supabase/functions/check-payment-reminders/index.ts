@@ -42,15 +42,21 @@ serve(async (req) => {
 
     let overrideToken: string | null = null;
     let overrideServerUrl: string | null = null;
+    let filterUserId: string | null = null;
     try {
       const body = await req.json();
       if (body?.instance_token) overrideToken = body.instance_token;
       if (body?.server_url) overrideServerUrl = body.server_url;
+      if (body?.user_id) filterUserId = body.user_id;
     } catch { /* no body */ }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    if (filterUserId) {
+      console.log(`Filtrando por user_id: ${filterUserId}`);
+    }
 
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -61,20 +67,24 @@ serve(async (req) => {
     const tresDiasStr = tresDias.toISOString().split('T')[0];
 
     // Query 1: Parcelas de hoje e 3 dias
-    const parcelasProximas = await fetchAll(supabase, 'pagamentos', (q: any) =>
-      q.select(`id, numero_parcela, data_prevista, valor_parcela, acordo_id,
+    const parcelasProximas = await fetchAll(supabase, 'pagamentos', (q: any) => {
+      let query = q.select(`id, numero_parcela, data_prevista, valor_parcela, acordo_id,
         acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )`)
         .eq('status', 'pendente')
-        .in('data_prevista', [hojeStr, tresDiasStr])
-    );
+        .in('data_prevista', [hojeStr, tresDiasStr]);
+      if (filterUserId) query = query.eq('acordos.user_id', filterUserId);
+      return query;
+    });
 
     // Query 2: TODAS as parcelas vencidas (antes de hoje)
-    const parcelasVencidas = await fetchAll(supabase, 'pagamentos', (q: any) =>
-      q.select(`id, numero_parcela, data_prevista, valor_parcela, acordo_id,
+    const parcelasVencidas = await fetchAll(supabase, 'pagamentos', (q: any) => {
+      let query = q.select(`id, numero_parcela, data_prevista, valor_parcela, acordo_id,
         acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )`)
         .eq('status', 'pendente')
-        .lt('data_prevista', hojeStr)
-    );
+        .lt('data_prevista', hojeStr);
+      if (filterUserId) query = query.eq('acordos.user_id', filterUserId);
+      return query;
+    });
 
     // Combinar todas as parcelas com seus tipos
     const todasParcelas: Array<{ parcela: any; tipoLembrete: string }> = [];

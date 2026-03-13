@@ -8,6 +8,7 @@ import { Loader2, MessageCircle, Play, CheckCircle2, Clock, AlertTriangle, Refre
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
+import { useAuth } from '@/hooks/useAuth';
 
 interface WhatsAppInstance {
   id: string;
@@ -119,6 +120,7 @@ export default function LembretesSection({
   const [sequentialSending, setSequentialSending] = useState(false);
   const cancelSendRef = useRef(false);
 
+  const { user } = useAuth();
   const { reminders, lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, isLoading: isLoadingReminders } = usePaymentReminders();
 
   const selectedInstance = instances.find(i => i.id === selectedLembreteInstanceId);
@@ -243,6 +245,9 @@ export default function LembretesSection({
     try {
       // Step 1: Schedule all reminders via edge function
       const body: Record<string, string> = {};
+      if (user?.id) {
+        body.user_id = user.id;
+      }
       if (selectedToken && selectedServerUrl) {
         body.instance_token = selectedToken;
         body.server_url = selectedServerUrl;
