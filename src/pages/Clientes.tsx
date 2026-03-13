@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { exportarParaExcel } from '@/lib/exportExcel';
 
 interface ClienteRow {
   id: string;
