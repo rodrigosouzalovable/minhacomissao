@@ -141,7 +141,7 @@ export default function LembretesSection({
 
     const { data, error } = await supabase
       .from('whatsapp_fila')
-      .select('id, status, telefone, cliente_nome, tipo_lembrete, instance_token')
+      .select('id, status, telefone, cliente_nome, tipo_lembrete, instance_token, pagamento_id')
       .eq('instance_token', selectedToken)
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
