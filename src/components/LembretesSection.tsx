@@ -115,6 +115,9 @@ export default function LembretesSection({
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviando' | 'enviado' | 'erro'>>({});
+  const [sequentialSending, setSequentialSending] = useState(false);
+  const cancelSendRef = useRef(false);
 
   const { reminders, lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, isLoading: isLoadingReminders } = usePaymentReminders();
 
