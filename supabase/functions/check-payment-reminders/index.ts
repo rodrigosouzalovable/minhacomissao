@@ -254,7 +254,8 @@ serve(async (req) => {
       const dataVencimento = new Date(parcela.data_prevista + 'T12:00:00');
       const dataFormatada = dataVencimento.toLocaleDateString('pt-BR');
       const primeiroNome = capitalizeName((profile.nome || 'Rodrigo').split(' ')[0]);
-      const nomeCliente = capitalizeName(acordo.cliente_nome.split(' ')[0]);
+      const nomeCliente = acordo.cliente_nome.split(' ').map((w: string) => capitalizeName(w)).join(' ');
+      const primeiroNomeCliente = capitalizeName(acordo.cliente_nome.split(' ')[0]);
 
       // Calculate dias_atraso for variable substitution
       const diasAtrasoNum = tipoLembrete.startsWith('vencido_d') ? tipoLembrete.replace('vencido_d', '') : '0';
@@ -268,31 +269,32 @@ serve(async (req) => {
         // Pick random from available custom templates
         const tpl = customMsgs[Math.floor(Math.random() * customMsgs.length)];
         mensagem = tpl
-          .replace(/\{nome_cliente\}/g, nomeCliente)
-          .replace(/\{nome_operador\}/g, primeiroNome)
-          .replace(/\{valor\}/g, valorFormatado)
-          .replace(/\{data_vencimento\}/g, dataFormatada)
-          .replace(/\{dias_atraso\}/g, diasAtrasoNum);
+           .replace(/\{nome_cliente\}/g, nomeCliente)
+           .replace(/\{primeiro_nome\}/g, primeiroNomeCliente)
+           .replace(/\{nome_operador\}/g, primeiroNome)
+           .replace(/\{valor\}/g, valorFormatado)
+           .replace(/\{data_vencimento\}/g, dataFormatada)
+           .replace(/\{dias_atraso\}/g, diasAtrasoNum);
       } else if (tipoLembrete === 'vencido_d1') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} venceu ontem (${dataFormatada}). Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} venceu ontem (${dataFormatada}). Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else if (tipoLembrete === 'vencido_d2') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Notamos que a parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} ainda consta em aberto. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza. Caso contrário, consegue regularizar hoje?`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Notamos que a parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} ainda consta em aberto. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza. Caso contrário, consegue regularizar hoje?`;
       } else if (tipoLembrete === 'vencido_d10') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Identificamos que sua parcela no valor de ${valorFormatado}, vencida em ${dataFormatada}, continua em aberto há 10 dias. É muito importante manter o acordo em dia. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Identificamos que sua parcela no valor de ${valorFormatado}, vencida em ${dataFormatada}, continua em aberto há 10 dias. É muito importante manter o acordo em dia. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else if (tipoLembrete === 'vencido_d11') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Reforçamos que sua parcela de ${valorFormatado} (vencimento ${dataFormatada}) segue pendente há 11 dias. Por favor, regularize o quanto antes para evitar problemas com seu acordo. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Reforçamos que sua parcela de ${valorFormatado} (vencimento ${dataFormatada}) segue pendente há 11 dias. Por favor, regularize o quanto antes para evitar problemas com seu acordo. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else if (tipoLembrete === 'vencido_d20') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela de ${valorFormatado} está em atraso há 20 dias (vencimento ${dataFormatada}). Pedimos que regularize a situação o mais breve possível para evitar o descumprimento do acordo. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela de ${valorFormatado} está em atraso há 20 dias (vencimento ${dataFormatada}). Pedimos que regularize a situação o mais breve possível para evitar o descumprimento do acordo. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else if (tipoLembrete === 'vencido_d30') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Este é o último aviso referente à parcela de ${valorFormatado} vencida em ${dataFormatada}, em atraso há 30 dias. Caso o pagamento não seja regularizado, o acordo poderá ser considerado descumprido. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Este é o último aviso referente à parcela de ${valorFormatado} vencida em ${dataFormatada}, em atraso há 30 dias. Caso o pagamento não seja regularizado, o acordo poderá ser considerado descumprido. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else if (tipoLembrete === 'dia_vencimento') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} vence HOJE. Gostaria que enviasse o boleto para pagamento?`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} vence HOJE. Gostaria que enviasse o boleto para pagamento?`;
       } else if (tipoLembrete === '3_dias') {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       } else if (tipoLembrete.startsWith('vencido_d')) {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} encontra-se em atraso há ${diasAtrasoNum} dias. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} encontra-se em atraso há ${diasAtrasoNum} dias. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
       } else {
-        mensagem = `Olá ${nomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
+        mensagem = `Olá ${primeiroNomeCliente}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de ${valorFormatado} é dia ${dataFormatada}. Gostaria que enviasse o boleto para pagamento?`;
       }
 
       const telefoneFormatado = acordo.cliente_telefone.replace(/\D/g, '');
