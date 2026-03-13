@@ -984,7 +984,7 @@ export default function Acionamento() {
 
   const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
     const updateData: any = { apenas_lembretes };
-    if (apenas_lembretes) updateData.robo = false;
+    if (apenas_lembretes) { updateData.robo = false; updateData.ia_responde = false; }
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .update(updateData)
@@ -998,23 +998,18 @@ export default function Acionamento() {
     if (apenas_lembretes && user) {
       const inst = instances.find(i => i.id === id);
       if (inst) {
-        const { error: profileError } = await supabase
+        await supabase
           .from('profiles')
           .update({
-            whatsapp_lembretes_habilitado: true,
             whatsapp_lembrete_server_url: inst.server_url,
             whatsapp_lembrete_instance_token: inst.instance_token,
           })
           .eq('id', user.id);
-        if (profileError) {
-          console.error('Erro ao atualizar perfil para lembretes:', profileError);
-        } else {
-          toast.success('Instância definida como principal para lembretes');
-        }
+        toast.success('Instância marcada como dedicada para lembretes e sincronizada com seu perfil');
       }
     }
 
-    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes, ...(apenas_lembretes ? { robo: false } : {}) } : i));
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, apenas_lembretes, ...(apenas_lembretes ? { robo: false, ia_responde: false } : {}) } : i));
     if (!apenas_lembretes) toast.success('Restrição removida');
   };
 
