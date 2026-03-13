@@ -315,6 +315,7 @@ export default function LembretesSection({
             // Invoke process-whatsapp-queue to send this specific message
             const { data: sendResult, error: sendErr } = await supabase.functions.invoke('process-whatsapp-queue', {});
             
+            setCurrentSendingId(null);
             if (sendErr || !sendResult?.success) {
               setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
             } else if (sendResult?.enviado) {
@@ -324,6 +325,7 @@ export default function LembretesSection({
               break;
             }
           } catch {
+            setCurrentSendingId(null);
             setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
           }
 
