@@ -88,6 +88,9 @@ function WhatsAppStatusBadge({ status }: { status: UnifiedItem['whatsapp_status'
   if (status === 'erro') {
     return <Badge variant="destructive" className="text-xs px-1.5 py-0">Erro</Badge>;
   }
+  if (status === 'enviando') {
+    return <Badge className="bg-amber-500 hover:bg-amber-500 text-xs px-1.5 py-0 gap-1"><RefreshCw className="h-2.5 w-2.5 animate-spin" />Enviando</Badge>;
+  }
   if (status === 'pendente') {
     return <Badge className="bg-amber-500 hover:bg-amber-500 text-xs px-1.5 py-0">Pendente</Badge>;
   }
