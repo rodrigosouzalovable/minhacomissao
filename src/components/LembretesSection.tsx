@@ -333,6 +333,7 @@ export default function LembretesSection({
 
   const handleCancelEnvios = async () => {
     if (!selectedToken) return;
+    cancelSendRef.current = true;
     setCancelling(true);
     try {
       const hojeDate = new Date();
