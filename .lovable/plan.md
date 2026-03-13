@@ -1,66 +1,36 @@
-## ✅ Concluído — Resposta do Admin via WhatsApp
 
-Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
-2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
-3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
-4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
-5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
-6. **Cleanup** — remove registro `admin_pending` após processamento
+# Plano: Lista detalhada de destinatários nos "Envios do dia"
 
-## ✅ Concluído — Admin responde por número de telefone direto
+## Resumo
+Expandir o card "Envios do dia" no LembretesSection para mostrar a lista completa de clientes que receberão/receberam lembretes no dia, com nome, telefone e status de envio. Disponivel para todos os usuarios.
 
-1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
-2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
-3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
-4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
-5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
-6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
+## Problema atual
+O card mostra apenas contadores (ex: "15 de 26 mensagens enviadas"). O usuário não consegue ver **quem** vai receber mensagem, nem o status individual.
 
-## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
+## Alterações
 
-Implementado em `supabase/functions/teach-chatbot/index.ts`:
+### 1. Migration: Adicionar coluna `cliente_nome` na tabela `whatsapp_fila`
+A tabela `whatsapp_fila` não armazena o nome do cliente. Para evitar joins complexos no frontend, salvar o nome diretamente.
 
-1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
-2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
-   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
-   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
-   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
-3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
-4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
-5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
+```sql
+ALTER TABLE whatsapp_fila ADD COLUMN cliente_nome text;
+```
 
-## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
+### 2. Edge Function: `check-payment-reminders/index.ts`
+No insert na `whatsapp_fila` (linha ~230), adicionar `cliente_nome: acordo.cliente_nome` ao objeto inserido.
 
-1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
-2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
-3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
-4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
-5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
+### 3. Frontend: `src/components/LembretesSection.tsx`
+- Alterar `fetchStats` para trazer também `cliente_nome` e `tipo_lembrete` no select da `whatsapp_fila`
+- Armazenar a lista completa de itens da fila em novo state `filaItems`
+- Abaixo do progress bar, renderizar uma lista scrollable com:
+  - Nome do cliente (truncado)
+  - Telefone formatado
+  - Badge de status: "Enviado" (verde), "Pendente" (amarelo), "Erro" (vermelho)
+  - Tipo de lembrete (ex: "Vence hoje", "D+1", "3 dias")
+- Lista com `max-h-60 overflow-y-auto` para não explodir o popover/card
+- Exibir para todos os usuários (sem filtro de role)
 
-## ✅ Concluído — Cadência de lembretes para parcelas vencidas
+### 4. Disponibilidade
+O LembretesSection já é renderizado dentro da página Acionamento que é acessível conforme permissões do usuário. Cada usuário verá os envios filtrados pela instância que ele selecionou como "WhatsApp Principal para Lembretes" - sem alteração de acesso necessária.
 
-Implementado em `supabase/functions/check-payment-reminders/index.ts`:
-
-1. **Substituição da query genérica** — removida busca por range (últimos 30 dias), substituída por busca em 6 datas exatas
-2. **Datas-alvo calculadas**: D+1, D+2, D+10, D+11, D+20, D+30 a partir de hoje
-3. **Tipos distintos**: `vencido_d1`, `vencido_d2`, `vencido_d10`, `vencido_d11`, `vencido_d20`, `vencido_d30` — deduplicação automática por `pagamento_id` + `tipo_lembrete`
-4. **Mensagens escalonadas**:
-   - D+1: Tom amigável — "venceu ontem, envie comprovante"
-   - D+2: Reforço amigável — "ainda consta em aberto"
-   - D+10: Tom firme — "continua em aberto há 10 dias"
-   - D+11: Reforço firme — "segue pendente há 11 dias"
-   - D+20: Alerta — "regularize para evitar descumprimento"
-   - D+30: Último aviso — "acordo poderá ser considerado descumprido"
-5. **D-3 e D+0 inalterados** — lembretes pré-vencimento continuam funcionando como antes
-
-## ✅ Concluído — QR Code para conectar WhatsApp no Acionamento
-
-1. **Edge Function `whatsapp-qr`** — adaptada do ZAP BOOOT, usa `user_whatsapp_instances` em vez de `whatsapp_instances`
-2. **Actions**: `create-instance` (cria via UAZAPI admin API), `qr` (busca QR Code), `status` (polling conexão), `setup-webhook` (configura webhook do chatbot), `disconnect` (desconecta e remove)
-3. **Secrets**: `UAZAPI_ADMIN_TOKEN` configurado, reutiliza `UAZAPI_SERVER_URL` existente como base URL
-4. **UI Acionamento** — botão "Conectar via QR Code" + fallback "Manual" para entrada manual de server_url/token
-5. **Polling 3s** — detecta conexão automaticamente e configura webhook
-6. **Countdown 60s** — com opção de atualizar QR Code
-7. **Auto-cleanup** — se cancelar antes de conectar, instância criada é removida
