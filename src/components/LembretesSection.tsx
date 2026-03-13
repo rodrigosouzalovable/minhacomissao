@@ -308,8 +308,8 @@ export default function LembretesSection({
             });
           const reminderId = matchedReminder?.id || item.pagamento_id || item.id;
 
-          // Set "enviando" status
-          setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'enviando' }));
+          // Set "enviando" status via dedicated state
+          setCurrentSendingId(reminderId);
 
           try {
             // Invoke process-whatsapp-queue to send this specific message
