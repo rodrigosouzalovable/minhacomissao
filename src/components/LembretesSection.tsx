@@ -248,7 +248,7 @@ export default function LembretesSection({
       const hojeStr = `${hojeDate.getFullYear()}-${String(hojeDate.getMonth() + 1).padStart(2, '0')}-${String(hojeDate.getDate()).padStart(2, '0')}`;
       const { data, error } = await supabase
         .from('whatsapp_fila')
-        .update({ status: 'cancelado' } as any)
+        .delete()
         .eq('status', 'pendente')
         .eq('instance_token', selectedToken)
         .gte('criado_em', `${hojeStr}T00:00:00`)
