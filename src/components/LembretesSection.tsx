@@ -168,6 +168,7 @@ export default function LembretesSection({
     setStats({ total, pendentes, enviados, erros, contatosUnicos });
     setFilaItems(data.map(d => ({
       id: d.id,
+      pagamento_id: d.pagamento_id,
       telefone: d.telefone,
       status: d.status,
       cliente_nome: d.cliente_nome,
