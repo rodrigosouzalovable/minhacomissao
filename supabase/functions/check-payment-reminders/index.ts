@@ -153,7 +153,28 @@ serve(async (req) => {
       }
     }
 
-    // --- BATCH: Fetch existing fila entries for dedup ---
+    // --- BATCH: Fetch custom message templates per user ---
+    const userTemplatesMap = new Map<string, Map<string, string[]>>();
+    if (userIds.length > 0) {
+      for (let i = 0; i < userIds.length; i += 500) {
+        const chunk = userIds.slice(i, i + 500);
+        const { data: tplRows, error } = await supabase
+          .from('lembrete_mensagens_templates')
+          .select('user_id, tipo_lembrete, mensagem, ativo, ordem')
+          .in('user_id', chunk)
+          .eq('ativo', true)
+          .order('ordem', { ascending: true });
+        if (error) { console.error('Erro templates batch:', error); }
+        for (const r of (tplRows || [])) {
+          if (!userTemplatesMap.has(r.user_id)) userTemplatesMap.set(r.user_id, new Map());
+          const userMap = userTemplatesMap.get(r.user_id)!;
+          if (!userMap.has(r.tipo_lembrete)) userMap.set(r.tipo_lembrete, []);
+          userMap.get(r.tipo_lembrete)!.push(r.mensagem);
+        }
+      }
+    }
+    console.log(`Templates customizados: ${userTemplatesMap.size} usuários`);
+
     const filaSet = new Set<string>();
     for (let i = 0; i < pagamentoIds.length; i += 500) {
       const chunk = pagamentoIds.slice(i, i + 500);
