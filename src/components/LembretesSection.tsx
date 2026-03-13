@@ -38,6 +38,8 @@ interface UnifiedItem {
   cliente_nome: string;
   cliente_telefone: string | null;
   valor_parcela?: number;
+  data_prevista?: string;
+  tipo_lembrete_label: string;
   tipo: 'vencido' | 'hoje' | 'tres_dias';
   whatsapp_status: 'enviado' | 'pendente' | 'erro' | 'nao_enviado';
 }
@@ -187,7 +189,6 @@ export default function LembretesSection({
 
   const unifiedItems: UnifiedItem[] = allReminders.map((r) => {
     const rPhone = normalizePhone(r.cliente_telefone || '');
-    // Find matching fila item by phone
     const filaMatch = filaItems.find(f => normalizePhone(f.telefone) === rPhone && rPhone.length > 0);
     let whatsapp_status: UnifiedItem['whatsapp_status'] = 'nao_enviado';
     if (filaMatch) {
@@ -195,11 +196,26 @@ export default function LembretesSection({
       else if (filaMatch.status === 'erro') whatsapp_status = 'erro';
       else whatsapp_status = 'pendente';
     }
+
+    // Compute tipo_lembrete_label based on data_prevista vs today
+    let tipo_lembrete_label = '';
+    if (r.data_prevista) {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const venc = new Date(r.data_prevista + 'T00:00:00');
+      const diffDays = Math.round((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) tipo_lembrete_label = 'D-0';
+      else if (diffDays < 0) tipo_lembrete_label = `D${diffDays}`;
+      else tipo_lembrete_label = `D+${diffDays}`;
+    }
+
     return {
       id: r.id,
       cliente_nome: r.cliente_nome,
       cliente_telefone: r.cliente_telefone || null,
       valor_parcela: r.valor_parcela,
+      data_prevista: r.data_prevista,
+      tipo_lembrete_label,
       tipo: r.tipo,
       whatsapp_status,
     };
@@ -313,6 +329,14 @@ export default function LembretesSection({
                 )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
+                {item.data_prevista && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(item.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </span>
+                )}
+                {item.tipo_lembrete_label && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{item.tipo_lembrete_label}</Badge>
+                )}
                 {item.valor_parcela != null && (
                   <span className="text-[10px] text-muted-foreground">
                     R$ {item.valor_parcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
