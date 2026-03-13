@@ -27,14 +27,18 @@ serve(async (req) => {
     tresDias.setDate(tresDias.getDate() + 3);
     const tresDiasStr = tresDias.toISOString().split('T')[0];
 
-    // Limite de 30 dias atrás para vencidas
-    const trintaDiasAtras = new Date(hoje);
-    trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
-    const trintaDiasAtrasStr = trintaDiasAtras.toISOString().split('T')[0];
+    // Cadência de vencidas: D+1, D+2, D+10, D+11, D+20, D+30
+    const vencidosDias = [1, 2, 10, 11, 20, 30];
+    const vencidosDatas: { dias: number; dataStr: string; tipo: string }[] = vencidosDias.map(d => {
+      const dt = new Date(hoje);
+      dt.setDate(dt.getDate() - d);
+      return { dias: d, dataStr: dt.toISOString().split('T')[0], tipo: `vencido_d${d}` };
+    });
 
-    console.log(`Verificando parcelas: hoje (${hojeStr}), 3 dias (${tresDiasStr}), vencidas desde (${trintaDiasAtrasStr})`);
+    const todasDatasVencidas = vencidosDatas.map(v => v.dataStr);
+    console.log(`Verificando parcelas: hoje (${hojeStr}), 3 dias (${tresDiasStr}), vencidas em [${todasDatasVencidas.join(', ')}]`);
 
-    // Query 1: Parcelas de hoje e 3 dias (existente)
+    // Query 1: Parcelas de hoje e 3 dias
     const { data: parcelasProximas, error: proximasError } = await supabase
       .from('pagamentos')
       .select(`
@@ -49,7 +53,7 @@ serve(async (req) => {
       throw proximasError;
     }
 
-    // Query 2: Parcelas vencidas (data_prevista < hoje, últimos 30 dias)
+    // Query 2: Parcelas vencidas nas datas específicas da cadência
     const { data: parcelasVencidas, error: vencidasError } = await supabase
       .from('pagamentos')
       .select(`
@@ -57,13 +61,15 @@ serve(async (req) => {
         acordos!inner ( id, user_id, cliente_nome, cliente_telefone, status )
       `)
       .eq('status', 'pendente')
-      .lt('data_prevista', hojeStr)
-      .gte('data_prevista', trintaDiasAtrasStr);
+      .in('data_prevista', todasDatasVencidas);
 
     if (vencidasError) {
       console.error('Erro ao buscar parcelas vencidas:', vencidasError);
       throw vencidasError;
     }
+
+    // Mapa data → tipo de lembrete
+    const dataToTipo = new Map(vencidosDatas.map(v => [v.dataStr, v.tipo]));
 
     // Combinar todas as parcelas com seus tipos
     const todasParcelas: Array<{ parcela: any; tipoLembrete: string }> = [];
@@ -73,7 +79,8 @@ serve(async (req) => {
       todasParcelas.push({ parcela: p, tipoLembrete: tipo });
     }
     for (const p of (parcelasVencidas || [])) {
-      todasParcelas.push({ parcela: p, tipoLembrete: 'vencido' });
+      const tipo = dataToTipo.get(p.data_prevista) || 'vencido';
+      todasParcelas.push({ parcela: p, tipoLembrete: tipo });
     }
 
     console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas?.length || 0} próximas + ${parcelasVencidas?.length || 0} vencidas)`);
@@ -170,8 +177,18 @@ serve(async (req) => {
       const primeiroNome = (profile.nome || 'Rodrigo').split(' ')[0];
 
       let mensagem: string;
-      if (tipoLembrete === 'vencido') {
-        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Você possui uma parcela no valor de ${valorFormatado} que venceu no dia ${dataFormatada}. Caso já tenha pago, pode nos enviar o comprovante por gentileza? Caso ainda não tenha pago, consegue realizar o pagamento hoje?`;
+      if (tipoLembrete === 'vencido_d1') {
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de ${valorFormatado} venceu ontem (${dataFormatada}). Caso já tenha realizado o pagamento, poderia nos enviar o comprovante por gentileza?`;
+      } else if (tipoLembrete === 'vencido_d2') {
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Notamos que a parcela no valor de ${valorFormatado} com vencimento em ${dataFormatada} ainda consta em aberto. Caso já tenha pago, pode nos enviar o comprovante? Caso contrário, consegue regularizar hoje?`;
+      } else if (tipoLembrete === 'vencido_d10') {
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Identificamos que sua parcela no valor de ${valorFormatado}, vencida em ${dataFormatada}, continua em aberto há 10 dias. É muito importante manter o acordo em dia. Consegue efetuar o pagamento?`;
+      } else if (tipoLembrete === 'vencido_d11') {
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Reforçamos que sua parcela de ${valorFormatado} (vencimento ${dataFormatada}) segue pendente há 11 dias. Por favor, regularize o quanto antes para evitar problemas com seu acordo.`;
+      } else if (tipoLembrete === 'vencido_d20') {
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Sua parcela de ${valorFormatado} está em atraso há 20 dias (vencimento ${dataFormatada}). Pedimos que regularize a situação o mais breve possível para evitar o descumprimento do acordo.`;
+      } else if (tipoLembrete === 'vencido_d30') {
+        mensagem = `Olá ${acordo.cliente_nome}, aqui é ${primeiroNome}, do departamento de acordos das Lojas Novo Mundo. Este é o último aviso referente à parcela de ${valorFormatado} vencida em ${dataFormatada}, em atraso há 30 dias. Caso o pagamento não seja regularizado, o acordo poderá ser considerado descumprido. Por favor, entre em contato.`;
       } else if (tipoLembrete === 'dia_vencimento') {
         mensagem = `Olá ${acordo.cliente_nome} tudo bem? Meu nome é ${primeiroNome}, sou do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no de valor ${valorFormatado} vence HOJE. Gostaria que enviasse o boleto para pagamento?`;
       } else {
