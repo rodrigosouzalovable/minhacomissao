@@ -1074,7 +1074,7 @@ serve(async (req) => {
     if (instanceToken) {
       const { data: instanceRecord } = await supabase
         .from('user_whatsapp_instances')
-        .select('user_id, ativo, apenas_lembretes')
+        .select('user_id, ativo, apenas_lembretes, ia_responde')
         .eq('instance_token', instanceToken)
         .limit(1)
         .maybeSingle();
@@ -1096,19 +1096,24 @@ serve(async (req) => {
       }
 
       if (instanceRecord?.user_id) {
-        // Check if owner is admin - chatbot only works for admin instances
-        const { data: ownerRole } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', instanceRecord.user_id)
-          .eq('role', 'admin')
-          .maybeSingle();
+        // If ia_responde is enabled, allow chatbot processing regardless of owner role
+        if (instanceRecord.ia_responde) {
+          console.log(`[CHATBOT] Instance has ia_responde enabled, proceeding with AI chatbot.`);
+        } else {
+          // Check if owner is admin - chatbot only works for admin instances when ia_responde is off
+          const { data: ownerRole } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', instanceRecord.user_id)
+            .eq('role', 'admin')
+            .maybeSingle();
 
-        if (!ownerRole) {
-          console.log(`[CHATBOT] Instance owner ${instanceRecord.user_id} is not admin, ignoring.`);
-          return new Response(JSON.stringify({ success: true, ignored: true, reason: 'owner_not_admin' }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          if (!ownerRole) {
+            console.log(`[CHATBOT] Instance owner ${instanceRecord.user_id} is not admin and ia_responde is off, ignoring.`);
+            return new Response(JSON.stringify({ success: true, ignored: true, reason: 'owner_not_admin' }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
         }
 
         const { data: ownerProfile } = await supabase

@@ -1758,6 +1758,17 @@ export default function Acionamento() {
                                 className="h-3.5 w-3.5"
                               />
                             </div>
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`ia-responde-${inst.id}`}>
+                                IA Responde
+                              </Label>
+                              <Checkbox
+                                id={`ia-responde-${inst.id}`}
+                                checked={inst.ia_responde}
+                                onCheckedChange={(checked) => handleToggleIaResponde(inst.id, !!checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
