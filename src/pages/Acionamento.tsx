@@ -851,7 +851,7 @@ export default function Acionamento() {
           // Refresh instances list
           const { data: refreshed } = await supabase
             .from('user_whatsapp_instances' as any)
-            .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo')
+            .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
             .eq('user_id', user?.id)
             .order('criado_em', { ascending: true });
           if (refreshed) setInstances(refreshed as any);
