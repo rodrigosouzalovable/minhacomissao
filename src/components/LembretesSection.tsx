@@ -329,6 +329,14 @@ export default function LembretesSection({
                 )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
+                {item.data_prevista && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(item.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </span>
+                )}
+                {item.tipo_lembrete_label && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{item.tipo_lembrete_label}</Badge>
+                )}
                 {item.valor_parcela != null && (
                   <span className="text-[10px] text-muted-foreground">
                     R$ {item.valor_parcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
