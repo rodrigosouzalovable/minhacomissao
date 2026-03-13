@@ -42,10 +42,12 @@ serve(async (req) => {
 
     let overrideToken: string | null = null;
     let overrideServerUrl: string | null = null;
+    let filterUserId: string | null = null;
     try {
       const body = await req.json();
       if (body?.instance_token) overrideToken = body.instance_token;
       if (body?.server_url) overrideServerUrl = body.server_url;
+      if (body?.user_id) filterUserId = body.user_id;
     } catch { /* no body */ }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

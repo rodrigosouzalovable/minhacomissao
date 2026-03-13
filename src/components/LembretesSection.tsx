@@ -245,6 +245,9 @@ export default function LembretesSection({
     try {
       // Step 1: Schedule all reminders via edge function
       const body: Record<string, string> = {};
+      if (user?.id) {
+        body.user_id = user.id;
+      }
       if (selectedToken && selectedServerUrl) {
         body.instance_token = selectedToken;
         body.server_url = selectedServerUrl;
