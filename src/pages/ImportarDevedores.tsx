@@ -390,17 +390,30 @@ export default function ImportarDevedores() {
     reader.onload = async (evt) => {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const workbook = XLSX.read(data, { type: 'buffer' });
 
         if (credorSelecionado === 'pagamentos') {
-          // Try to find "Pagamentos" sheet, fallback to first sheet
-          const pagSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('pagamento')) || workbook.SheetNames[0];
-          const sheet = workbook.Sheets[pagSheetName];
-          console.log('[PAGAMENTOS] Using sheet:', pagSheetName, 'ref:', sheet['!ref']);
+          // Find the sheet with the most data — try all sheets and pick the one with most rows
+          let bestSheet = workbook.Sheets[workbook.SheetNames[0]];
+          let bestSheetName = workbook.SheetNames[0];
+          let bestRowCount = 0;
+          for (const sName of workbook.SheetNames) {
+            const s = workbook.Sheets[sName];
+            const ref = s['!ref'] || '';
+            const match = ref.match(/:.*?(\d+)$/);
+            const rowCount = match ? parseInt(match[1], 10) : 0;
+            if (rowCount > bestRowCount) {
+              bestRowCount = rowCount;
+              bestSheet = s;
+              bestSheetName = sName;
+            }
+          }
+          const sheet = bestSheet;
+          console.log('[PAGAMENTOS] Using sheet:', bestSheetName, 'ref:', sheet['!ref'], 'rows:', bestRowCount);
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           console.log('[PAGAMENTOS] json.length:', json.length);
-          if (json.length > 0) {
-            console.log('[PAGAMENTOS] First row keys:', Object.keys(json[0]));
+          if (json.length > 1) {
+            console.log('[PAGAMENTOS] Row 2 sample:', Object.keys(json[1]).map(k => `${k}=${json[1][k]}`).join(', '));
           }
           const dataRows = json.slice(1);
           const parsed = await parsePagamentos(dataRows);
