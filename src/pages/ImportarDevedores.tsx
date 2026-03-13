@@ -389,12 +389,18 @@ export default function ImportarDevedores() {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const data = evt.target?.result;
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
 
         if (credorSelecionado === 'pagamentos') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          console.log('[PAGAMENTOS] SheetNames:', workbook.SheetNames);
+          console.log('[PAGAMENTOS] Sheet ref:', sheet['!ref']);
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          console.log('[PAGAMENTOS] json.length:', json.length);
+          if (json.length > 0) {
+            console.log('[PAGAMENTOS] First row keys:', Object.keys(json[0]));
+          }
           const dataRows = json.slice(1);
           const parsed = await parsePagamentos(dataRows);
           setPagamentoRows(parsed);
