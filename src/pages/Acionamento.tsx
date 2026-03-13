@@ -957,7 +957,7 @@ export default function Acionamento() {
     }
   };
 
-
+  const handleDeleteInstance = async (id: string) => {
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .delete()
