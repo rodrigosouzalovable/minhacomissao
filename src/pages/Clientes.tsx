@@ -370,7 +370,7 @@ export default function Clientes() {
     while (keepFetching) {
       let q = supabase
         .from('devedores')
-        .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio')
+        .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio, telefone')
         .eq('ativo', true)
         .order('criado_em', { ascending: false })
         .range(from, from + PAGE_FETCH - 1);
