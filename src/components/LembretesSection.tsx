@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, MessageCircle, Play, CheckCircle2, Clock, AlertTriangle, RefreshCw, Users } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Loader2, MessageCircle, Play, CheckCircle2, Clock, AlertTriangle, RefreshCw, Users, Phone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -23,6 +24,14 @@ interface LembreteStats {
   contatosUnicos: number;
 }
 
+interface FilaItem {
+  id: string;
+  telefone: string;
+  status: string | null;
+  cliente_nome: string | null;
+  tipo_lembrete: string;
+}
+
 type LembreteStatus = 'idle' | 'loading' | 'sending' | 'done' | 'done_with_errors' | 'no_instance';
 
 interface LembretesSectionProps {
@@ -31,6 +40,38 @@ interface LembretesSectionProps {
   handleSaveLembreteInstance: (value: string) => void;
   savingLembrete: boolean;
   connectionStatus: Record<string, string>;
+}
+
+const tipoLembreteLabel: Record<string, string> = {
+  '3_dias': '3 dias',
+  'dia_vencimento': 'Vence hoje',
+  'vencido_d1': 'D+1',
+  'vencido_d2': 'D+2',
+  'vencido_d10': 'D+10',
+  'vencido_d11': 'D+11',
+  'vencido_d20': 'D+20',
+  'vencido_d30': 'D+30',
+};
+
+function formatPhone(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 13) {
+    return `(${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.length === 12) {
+    return `(${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  }
+  return phone;
+}
+
+function StatusBadge({ status }: { status: string | null }) {
+  if (status === 'enviado') {
+    return <Badge className="bg-emerald-600 hover:bg-emerald-600 text-xs px-1.5 py-0">Enviado</Badge>;
+  }
+  if (status === 'erro') {
+    return <Badge variant="destructive" className="text-xs px-1.5 py-0">Erro</Badge>;
+  }
+  return <Badge variant="secondary" className="text-xs px-1.5 py-0">Pendente</Badge>;
 }
 
 export default function LembretesSection({
@@ -42,10 +83,10 @@ export default function LembretesSection({
 }: LembretesSectionProps) {
   const [lembreteStatus, setLembreteStatus] = useState<LembreteStatus>('loading');
   const [stats, setStats] = useState<LembreteStats>({ total: 0, pendentes: 0, enviados: 0, erros: 0, contatosUnicos: 0 });
+  const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
-  // Resolve the selected instance's token and server_url
   const selectedInstance = instances.find(i => i.id === selectedLembreteInstanceId);
   const selectedToken = selectedInstance?.instance_token || null;
   const selectedServerUrl = selectedInstance?.server_url || null;
@@ -53,6 +94,7 @@ export default function LembretesSection({
   const fetchStats = useCallback(async () => {
     if (!selectedToken) {
       setStats({ total: 0, pendentes: 0, enviados: 0, erros: 0, contatosUnicos: 0 });
+      setFilaItems([]);
       setLembreteStatus('no_instance');
       return;
     }
@@ -62,7 +104,7 @@ export default function LembretesSection({
 
     const { data, error } = await supabase
       .from('whatsapp_fila')
-      .select('id, status, telefone, instance_token')
+      .select('id, status, telefone, cliente_nome, tipo_lembrete, instance_token')
       .eq('instance_token', selectedToken)
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
@@ -75,6 +117,7 @@ export default function LembretesSection({
 
     if (!data || data.length === 0) {
       setStats({ total: 0, pendentes: 0, enviados: 0, erros: 0, contatosUnicos: 0 });
+      setFilaItems([]);
       setLembreteStatus('idle');
       return;
     }
@@ -86,6 +129,13 @@ export default function LembretesSection({
     const contatosUnicos = new Set(data.map(d => d.telefone)).size;
 
     setStats({ total, pendentes, enviados, erros, contatosUnicos });
+    setFilaItems(data.map(d => ({
+      id: d.id,
+      telefone: d.telefone,
+      status: d.status,
+      cliente_nome: d.cliente_nome,
+      tipo_lembrete: d.tipo_lembrete,
+    })));
 
     if (pendentes > 0) {
       setLembreteStatus('sending');
@@ -98,11 +148,8 @@ export default function LembretesSection({
     }
   }, [selectedToken]);
 
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+  useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  // Polling every 30s while sending
   useEffect(() => {
     if (lembreteStatus !== 'sending') return;
     const interval = setInterval(fetchStats, 30000);
@@ -117,13 +164,10 @@ export default function LembretesSection({
         body.instance_token = selectedToken;
         body.server_url = selectedServerUrl;
       }
-
       const { data, error } = await supabase.functions.invoke('check-payment-reminders', { body });
       if (error) throw error;
-      
       const result = data as { success: boolean; agendados?: number; error?: string };
       if (!result.success) throw new Error(result.error || 'Erro desconhecido');
-
       if (result.agendados === 0) {
         toast.info('Nenhuma parcela para notificar hoje.');
         setLembreteStatus('idle');
@@ -145,7 +189,6 @@ export default function LembretesSection({
     try {
       const hoje = new Date();
       const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
-
       const { error } = await supabase
         .from('whatsapp_fila')
         .update({ status: 'pendente', erro_mensagem: null } as any)
@@ -153,9 +196,7 @@ export default function LembretesSection({
         .eq('instance_token', selectedToken)
         .gte('criado_em', `${hojeStr}T00:00:00`)
         .lte('criado_em', `${hojeStr}T23:59:59`);
-
       if (error) throw error;
-
       toast.success('Mensagens com erro foram reagendadas para reenvio!');
       await fetchStats();
     } catch (err: any) {
@@ -200,7 +241,6 @@ export default function LembretesSection({
         </p>
       )}
 
-      {/* Status e Botão de Envio */}
       <div className="rounded-md border p-3 space-y-3">
         {selectedInstance && (
           <p className="text-xs text-muted-foreground">
@@ -211,34 +251,22 @@ export default function LembretesSection({
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Envios do dia</span>
           {lembreteStatus === 'loading' && (
-            <Badge variant="secondary" className="gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> Verificando...
-            </Badge>
+            <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</Badge>
           )}
           {lembreteStatus === 'no_instance' && (
-            <Badge variant="outline" className="gap-1">
-              <Clock className="h-3 w-3" /> Selecione uma instância
-            </Badge>
+            <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Selecione uma instância</Badge>
           )}
           {lembreteStatus === 'idle' && (
-            <Badge variant="outline" className="gap-1">
-              <Clock className="h-3 w-3" /> Não iniciado
-            </Badge>
+            <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Não iniciado</Badge>
           )}
           {lembreteStatus === 'sending' && (
-            <Badge className="gap-1 bg-amber-500 hover:bg-amber-500">
-              <Loader2 className="h-3 w-3 animate-spin" /> Enviando...
-            </Badge>
+            <Badge className="gap-1 bg-amber-500 hover:bg-amber-500"><Loader2 className="h-3 w-3 animate-spin" /> Enviando...</Badge>
           )}
           {lembreteStatus === 'done' && (
-            <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-600">
-              <CheckCircle2 className="h-3 w-3" /> Concluído
-            </Badge>
+            <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-600"><CheckCircle2 className="h-3 w-3" /> Concluído</Badge>
           )}
           {lembreteStatus === 'done_with_errors' && (
-            <Badge variant="destructive" className="gap-1">
-              <AlertTriangle className="h-3 w-3" /> Concluído com erros
-            </Badge>
+            <Badge variant="destructive" className="gap-1"><AlertTriangle className="h-3 w-3" /> Concluído com erros</Badge>
           )}
         </div>
 
@@ -254,15 +282,34 @@ export default function LembretesSection({
               <Users className="h-3 w-3" />
               <span>{stats.contatosUnicos} contato(s) único(s)</span>
             </div>
+
+            {/* Lista de destinatários */}
+            <ScrollArea className="max-h-60 rounded-md border">
+              <div className="divide-y">
+                {filaItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{item.cliente_nome || 'Sem nome'}</p>
+                      <p className="text-muted-foreground flex items-center gap-1">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        {formatPhone(item.telefone)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {tipoLembreteLabel[item.tipo_lembrete] || item.tipo_lembrete}
+                      </Badge>
+                      <StatusBadge status={item.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </div>
         )}
 
         {(lembreteStatus === 'idle' || lembreteStatus === 'no_instance') && (
-          <Button
-            onClick={handleStartEnvios}
-            disabled={starting || lembreteStatus === 'no_instance'}
-            className="w-full"
-          >
+          <Button onClick={handleStartEnvios} disabled={starting || lembreteStatus === 'no_instance'} className="w-full">
             {starting ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Iniciando...</>
             ) : (
@@ -272,18 +319,11 @@ export default function LembretesSection({
         )}
 
         {lembreteStatus === 'sending' && (
-          <p className="text-xs text-muted-foreground text-center">
-            Atualizando a cada 30 segundos...
-          </p>
+          <p className="text-xs text-muted-foreground text-center">Atualizando a cada 30 segundos...</p>
         )}
 
         {lembreteStatus === 'done_with_errors' && (
-          <Button
-            onClick={handleRetryErros}
-            disabled={retrying}
-            variant="destructive"
-            className="w-full"
-          >
+          <Button onClick={handleRetryErros} disabled={retrying} variant="destructive" className="w-full">
             {retrying ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Reagendando...</>
             ) : (

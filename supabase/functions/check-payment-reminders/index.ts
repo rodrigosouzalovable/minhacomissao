@@ -236,6 +236,7 @@ serve(async (req) => {
           status: 'pendente',
           server_url: finalServerUrl,
           instance_token: finalInstanceToken,
+          cliente_nome: acordo.cliente_nome,
         });
 
       if (insertError) {
