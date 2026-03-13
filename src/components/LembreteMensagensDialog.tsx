@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,7 +26,14 @@ interface TemplateRow {
   ordem: number;
 }
 
-const TIPOS_LEMBRETE = [
+interface TipoLembrete {
+  key: string;
+  label: string;
+  desc: string;
+  custom?: boolean;
+}
+
+const BASE_TIPOS: TipoLembrete[] = [
   { key: '3_dias', label: 'D-3 (3 dias antes)', desc: 'Enviada 3 dias antes do vencimento' },
   { key: 'dia_vencimento', label: 'D-0 (Dia do vencimento)', desc: 'Enviada no dia do vencimento' },
   { key: 'vencido_d1', label: 'D+1 (1 dia após)', desc: 'Enviada 1 dia após o vencimento' },
@@ -35,6 +43,8 @@ const TIPOS_LEMBRETE = [
   { key: 'vencido_d20', label: 'D+20 (20 dias após)', desc: 'Enviada 20 dias após o vencimento' },
   { key: 'vencido_d30', label: 'D+30 (30 dias após)', desc: 'Enviada 30 dias após o vencimento' },
 ];
+
+const BASE_KEYS = new Set(BASE_TIPOS.map(t => t.key));
 
 const DEFAULT_MESSAGES: Record<string, string> = {
   '3_dias': 'Olá {nome_cliente}, aqui é {nome_operador}, do departamento de acordos das Lojas Novo Mundo e estou passando para lembrar que o vencimento da sua parcela no valor de {valor} é dia {data_vencimento}. Gostaria que enviasse o boleto para pagamento?',
@@ -47,12 +57,19 @@ const DEFAULT_MESSAGES: Record<string, string> = {
   'vencido_d30': 'Olá {nome_cliente}, aqui é {nome_operador}, do departamento de acordos das Lojas Novo Mundo. Este é o último aviso referente à parcela de {valor} vencida em {data_vencimento}, em atraso há 30 dias. Caso o pagamento não seja regularizado, o acordo poderá ser considerado descumprido. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.',
 };
 
+function getGenericMessage(dias: number): string {
+  return `Olá {primeiro_nome}, aqui é {nome_operador}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de {valor} com vencimento em {data_vencimento} encontra-se em atraso há ${dias} dias. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.`;
+}
+
 export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
   const { user } = useAuth();
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
+  const [tipos, setTipos] = useState<TipoLembrete[]>([...BASE_TIPOS]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeTipo, setActiveTipo] = useState(TIPOS_LEMBRETE[0].key);
+  const [activeTipo, setActiveTipo] = useState(BASE_TIPOS[0].key);
+  const [showAddDay, setShowAddDay] = useState(false);
+  const [newDayInput, setNewDayInput] = useState('');
 
   useEffect(() => {
     if (open && user) loadTemplates();
@@ -69,22 +86,52 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
         .order('ordem', { ascending: true });
       if (error) throw error;
 
-      // Merge with defaults - if no template exists for a type, use default
+      // Discover custom types from DB
+      const customTiposFromDb: TipoLembrete[] = [];
+      for (const row of (data || [])) {
+        if (!BASE_KEYS.has(row.tipo_lembrete) && !customTiposFromDb.find(t => t.key === row.tipo_lembrete)) {
+          const match = row.tipo_lembrete.match(/^vencido_d(\d+)$/);
+          if (match) {
+            const dias = parseInt(match[1]);
+            customTiposFromDb.push({
+              key: row.tipo_lembrete,
+              label: `D+${dias} (${dias} dias após)`,
+              desc: `Enviada ${dias} dias após o vencimento`,
+              custom: true,
+            });
+          }
+        }
+      }
+
+      const allTipos = [...BASE_TIPOS, ...customTiposFromDb].sort((a, b) => {
+        const getOrder = (t: TipoLembrete) => {
+          if (t.key === '3_dias') return -3;
+          if (t.key === 'dia_vencimento') return 0;
+          const m = t.key.match(/^vencido_d(\d+)$/);
+          return m ? parseInt(m[1]) : 999;
+        };
+        return getOrder(a) - getOrder(b);
+      });
+      setTipos(allTipos);
+
+      // Build templates - one per type
       const loaded: TemplateRow[] = [];
-      for (const tipo of TIPOS_LEMBRETE) {
-        const existing = (data || []).filter((d: any) => d.tipo_lembrete === tipo.key);
-        if (existing.length > 0) {
-          loaded.push(...existing.map((e: any) => ({
-            id: e.id,
-            tipo_lembrete: e.tipo_lembrete,
-            mensagem: e.mensagem,
-            ativo: e.ativo ?? true,
-            ordem: e.ordem ?? 0,
-          })));
+      for (const tipo of allTipos) {
+        const existing = (data || []).find((d: any) => d.tipo_lembrete === tipo.key);
+        if (existing) {
+          loaded.push({
+            id: existing.id,
+            tipo_lembrete: existing.tipo_lembrete,
+            mensagem: existing.mensagem,
+            ativo: existing.ativo ?? true,
+            ordem: existing.ordem ?? 0,
+          });
         } else {
+          const match = tipo.key.match(/^vencido_d(\d+)$/);
+          const dias = match ? parseInt(match[1]) : 0;
           loaded.push({
             tipo_lembrete: tipo.key,
-            mensagem: DEFAULT_MESSAGES[tipo.key] || '',
+            mensagem: DEFAULT_MESSAGES[tipo.key] || getGenericMessage(dias),
             ativo: true,
             ordem: 0,
           });
@@ -103,13 +150,12 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
     if (!user) return;
     setSaving(true);
     try {
-      // Delete all existing then re-insert
       await supabase
         .from('lembrete_mensagens_templates')
         .delete()
         .eq('user_id', user.id);
 
-      const rows = templates.map((t, idx) => ({
+      const rows = templates.map((t) => ({
         user_id: user.id,
         tipo_lembrete: t.tipo_lembrete,
         mensagem: t.mensagem,
@@ -134,59 +180,68 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
     }
   };
 
-  const tipoTemplates = templates.filter(t => t.tipo_lembrete === activeTipo);
-  const tipoInfo = TIPOS_LEMBRETE.find(t => t.key === activeTipo)!;
+  const currentTemplate = templates.find(t => t.tipo_lembrete === activeTipo);
+  const tipoInfo = tipos.find(t => t.key === activeTipo);
 
-  const updateTemplate = (index: number, field: keyof TemplateRow, value: any) => {
-    setTemplates(prev => {
-      const globalIndex = prev.findIndex(
-        (t, i) => t.tipo_lembrete === activeTipo && prev.filter((x, j) => x.tipo_lembrete === activeTipo && j <= i).length === index + 1
-      );
-      // Simpler: find all of activeTipo, get the nth one
-      let count = 0;
-      const newArr = [...prev];
-      for (let i = 0; i < newArr.length; i++) {
-        if (newArr[i].tipo_lembrete === activeTipo) {
-          if (count === index) {
-            newArr[i] = { ...newArr[i], [field]: value };
-            break;
-          }
-          count++;
-        }
-      }
-      return newArr;
-    });
+  const updateCurrentTemplate = (field: keyof TemplateRow, value: any) => {
+    setTemplates(prev => prev.map(t =>
+      t.tipo_lembrete === activeTipo ? { ...t, [field]: value } : t
+    ));
   };
 
-  const addTemplate = () => {
-    const maxOrdem = Math.max(0, ...tipoTemplates.map(t => t.ordem));
-    setTemplates(prev => [...prev, {
-      tipo_lembrete: activeTipo,
-      mensagem: DEFAULT_MESSAGES[activeTipo] || '',
-      ativo: true,
-      ordem: maxOrdem + 1,
-    }]);
+  const resetToDefault = () => {
+    const match = activeTipo.match(/^vencido_d(\d+)$/);
+    const dias = match ? parseInt(match[1]) : 0;
+    const defaultMsg = DEFAULT_MESSAGES[activeTipo] || getGenericMessage(dias);
+    updateCurrentTemplate('mensagem', defaultMsg);
   };
 
-  const removeTemplate = (index: number) => {
-    if (tipoTemplates.length <= 1) {
-      toast.error('É necessário manter pelo menos uma mensagem por tipo');
+  const addCustomDay = () => {
+    const dias = parseInt(newDayInput);
+    if (isNaN(dias) || dias < 1 || dias > 365) {
+      toast.error('Digite um número de dias válido (1 a 365)');
       return;
     }
-    setTemplates(prev => {
-      let count = 0;
-      return prev.filter((t, i) => {
-        if (t.tipo_lembrete === activeTipo) {
-          if (count === index) { count++; return false; }
-          count++;
-        }
-        return true;
-      });
+    const key = `vencido_d${dias}`;
+    if (tipos.find(t => t.key === key)) {
+      toast.error(`D+${dias} já existe`);
+      return;
+    }
+
+    const newTipo: TipoLembrete = {
+      key,
+      label: `D+${dias} (${dias} dias após)`,
+      desc: `Enviada ${dias} dias após o vencimento`,
+      custom: true,
+    };
+
+    const newTipos = [...tipos, newTipo].sort((a, b) => {
+      const getOrder = (t: TipoLembrete) => {
+        if (t.key === '3_dias') return -3;
+        if (t.key === 'dia_vencimento') return 0;
+        const m = t.key.match(/^vencido_d(\d+)$/);
+        return m ? parseInt(m[1]) : 999;
+      };
+      return getOrder(a) - getOrder(b);
     });
+    setTipos(newTipos);
+
+    setTemplates(prev => [...prev, {
+      tipo_lembrete: key,
+      mensagem: getGenericMessage(dias),
+      ativo: true,
+      ordem: 0,
+    }]);
+
+    setActiveTipo(key);
+    setNewDayInput('');
+    setShowAddDay(false);
   };
 
-  const resetToDefault = (index: number) => {
-    updateTemplate(index, 'mensagem', DEFAULT_MESSAGES[activeTipo] || '');
+  const removeCustomDay = (key: string) => {
+    setTipos(prev => prev.filter(t => t.key !== key));
+    setTemplates(prev => prev.filter(t => t.tipo_lembrete !== key));
+    if (activeTipo === key) setActiveTipo(BASE_TIPOS[0].key);
   };
 
   return (
@@ -217,23 +272,64 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
           </div>
         ) : (
           <div className="flex gap-4 flex-1 min-h-0">
-            {/* Sidebar - tipo list */}
+            {/* Sidebar */}
             <div className="w-48 shrink-0">
               <ScrollArea className="h-[400px]">
                 <div className="space-y-1 pr-2">
-                  {TIPOS_LEMBRETE.map(tipo => (
-                    <button
-                      key={tipo.key}
-                      onClick={() => setActiveTipo(tipo.key)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                        activeTipo === tipo.key
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {tipo.label}
-                    </button>
+                  {tipos.map(tipo => (
+                    <div key={tipo.key} className="flex items-center gap-1">
+                      <button
+                        onClick={() => setActiveTipo(tipo.key)}
+                        className={`flex-1 text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                          activeTipo === tipo.key
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {tipo.label}
+                      </button>
+                      {tipo.custom && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-destructive"
+                          onClick={() => removeCustomDay(tipo.key)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   ))}
+
+                  {/* Add custom day */}
+                  {showAddDay ? (
+                    <div className="flex items-center gap-1 mt-2">
+                      <span className="text-xs text-muted-foreground pl-1">D+</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={newDayInput}
+                        onChange={e => setNewDayInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addCustomDay()}
+                        className="h-8 w-16 text-sm"
+                        autoFocus
+                        placeholder="dias"
+                      />
+                      <Button size="sm" className="h-8 px-2" onClick={addCustomDay}>OK</Button>
+                      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => { setShowAddDay(false); setNewDayInput(''); }}>✕</Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddDay(true)}
+                      className="w-full mt-2"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Adicionar dia
+                    </Button>
+                  )}
                 </div>
               </ScrollArea>
             </div>
@@ -244,66 +340,46 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
             <div className="flex-1 min-w-0">
               <ScrollArea className="h-[400px]">
                 <div className="space-y-4 pr-2">
-                  <div>
-                    <p className="text-sm font-medium">{tipoInfo.label}</p>
-                    <p className="text-xs text-muted-foreground">{tipoInfo.desc}</p>
-                  </div>
+                  {tipoInfo && (
+                    <div>
+                      <p className="text-sm font-medium">{tipoInfo.label}</p>
+                      <p className="text-xs text-muted-foreground">{tipoInfo.desc}</p>
+                    </div>
+                  )}
 
-                  {tipoTemplates.map((tmpl, idx) => (
-                    <div key={`${tmpl.tipo_lembrete}-${tmpl.ordem}-${idx}`} className="space-y-2 border rounded-md p-3">
+                  {currentTemplate && (
+                    <div className="space-y-2 border rounded-md p-3">
                       <div className="flex items-center justify-between">
-                        <Label className="text-xs text-muted-foreground">
-                          Mensagem {tipoTemplates.length > 1 ? `#${idx + 1}` : ''}
-                        </Label>
+                        <Label className="text-xs text-muted-foreground">Mensagem</Label>
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1">
                             <Switch
-                              checked={tmpl.ativo}
-                              onCheckedChange={(v) => updateTemplate(idx, 'ativo', v)}
+                              checked={currentTemplate.ativo}
+                              onCheckedChange={(v) => updateCurrentTemplate('ativo', v)}
                             />
                             <span className="text-xs text-muted-foreground">
-                              {tmpl.ativo ? 'Ativo' : 'Inativo'}
+                              {currentTemplate.ativo ? 'Ativo' : 'Inativo'}
                             </span>
                           </div>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            onClick={() => resetToDefault(idx)}
+                            onClick={resetToDefault}
                             title="Restaurar padrão"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                           </Button>
-                          {tipoTemplates.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => removeTemplate(idx)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
                         </div>
                       </div>
                       <Textarea
-                        value={tmpl.mensagem}
-                        onChange={(e) => updateTemplate(idx, 'mensagem', e.target.value)}
+                        value={currentTemplate.mensagem}
+                        onChange={(e) => updateCurrentTemplate('mensagem', e.target.value)}
                         rows={5}
                         className="text-sm"
                       />
                     </div>
-                  ))}
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={addTemplate}
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Adicionar mensagem alternativa
-                  </Button>
+                  )}
                 </div>
               </ScrollArea>
             </div>
