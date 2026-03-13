@@ -648,6 +648,10 @@ export default function Clientes() {
                       </>
                     ) : (
                       <>
+                        <Button variant="outline" size="sm" onClick={handleExportTelefones} disabled={exportingPhones}>
+                          <Download className="h-4 w-4 mr-1" />
+                          {exportingPhones ? 'Exportando...' : 'Exportar Telefones'}
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => setDeleteMode(true)}>
                           <Trash2 className="h-4 w-4 mr-1" />
                           Excluir Contratos
