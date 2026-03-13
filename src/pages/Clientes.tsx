@@ -12,12 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Search, X, Users, SearchX, Eye, Link2, Unlink, Trash2, Loader2 } from 'lucide-react';
+import { Search, X, Users, SearchX, Eye, Link2, Unlink, Trash2, Loader2, Download } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { exportarParaExcel } from '@/lib/exportExcel';
 
 interface ClienteRow {
   id: string;
@@ -93,8 +94,111 @@ export default function Clientes() {
   const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exportingPhones, setExportingPhones] = useState(false);
 
   const [credores, setCredores] = useState<string[]>(CREDORES_FIXOS);
+
+  const handleExportTelefones = async () => {
+    if (filteredGrouped.length === 0) {
+      toast.error('Nenhum cliente para exportar.');
+      return;
+    }
+    setExportingPhones(true);
+    try {
+      // Collect all unique CPFs
+      const allCpfs: string[] = [];
+      for (const row of filteredGrouped) {
+        if (row.cpfsGrupo) {
+          for (const c of row.cpfsGrupo) allCpfs.push(c.replace(/\D/g, ''));
+        } else {
+          allCpfs.push(row.cpf.replace(/\D/g, ''));
+        }
+      }
+      const uniqueCpfs = Array.from(new Set(allCpfs));
+
+      // Build name map from rawResults
+      const cpfToName: Record<string, string> = {};
+      for (const r of rawResults) {
+        const norm = r.cpf.replace(/\D/g, '');
+        if (!cpfToName[norm]) cpfToName[norm] = r.nome;
+      }
+      // Also from grouped (grupo names)
+      for (const row of filteredGrouped) {
+        if (row.cpfsGrupo) {
+          for (const c of row.cpfsGrupo) {
+            const norm = c.replace(/\D/g, '');
+            if (!cpfToName[norm]) cpfToName[norm] = row.nome;
+          }
+        }
+      }
+
+      // Fetch devedor_telefones for these CPFs
+      const allTelefones: { devedor_cpf: string; numero: string }[] = [];
+      const batchSize = 50;
+      for (let i = 0; i < uniqueCpfs.length; i += batchSize) {
+        const batch = uniqueCpfs.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from('devedor_telefones')
+          .select('devedor_cpf, numero')
+          .in('devedor_cpf', batch)
+          .eq('ativo', true);
+        if (data) allTelefones.push(...data);
+      }
+
+      // Also get telefone from devedores table
+      const devedorTelMap: Record<string, string[]> = {};
+      for (const r of rawResults) {
+        const norm = r.cpf.replace(/\D/g, '');
+        if ((r as any).telefone) {
+          if (!devedorTelMap[norm]) devedorTelMap[norm] = [];
+          const tel = (r as any).telefone;
+          if (!devedorTelMap[norm].includes(tel)) devedorTelMap[norm].push(tel);
+        }
+      }
+
+      // Build cpf -> telefones map
+      const cpfTelMap: Record<string, Set<string>> = {};
+      for (const t of allTelefones) {
+        const norm = t.devedor_cpf.replace(/\D/g, '');
+        if (!cpfTelMap[norm]) cpfTelMap[norm] = new Set();
+        cpfTelMap[norm].add(t.numero.replace(/\D/g, ''));
+      }
+      // Merge devedores.telefone
+      for (const [cpf, tels] of Object.entries(devedorTelMap)) {
+        if (!cpfTelMap[cpf]) cpfTelMap[cpf] = new Set();
+        for (const t of tels) cpfTelMap[cpf].add(t.replace(/\D/g, ''));
+      }
+
+      // Build export rows: one row per phone
+      const exportRows: { Nome: string; Telefone: string }[] = [];
+      for (const cpf of uniqueCpfs) {
+        const nome = cpfToName[cpf] || cpf;
+        const phones = cpfTelMap[cpf];
+        if (phones && phones.size > 0) {
+          for (const phone of phones) {
+            exportRows.push({ Nome: nome, Telefone: phone });
+          }
+        } else {
+          exportRows.push({ Nome: nome, Telefone: '' });
+        }
+      }
+
+      if (exportRows.length === 0) {
+        toast.error('Nenhum telefone encontrado.');
+        return;
+      }
+
+      exportarParaExcel(exportRows, [
+        { chave: 'Nome', titulo: 'Nome' },
+        { chave: 'Telefone', titulo: 'Telefone' },
+      ], `telefones-clientes`);
+      toast.success(`${exportRows.length} registros exportados.`);
+    } catch (err: any) {
+      toast.error('Erro ao exportar: ' + err.message);
+    } finally {
+      setExportingPhones(false);
+    }
+  };
 
   // Fetch dynamic creditors from database
   useEffect(() => {
@@ -266,7 +370,7 @@ export default function Clientes() {
     while (keepFetching) {
       let q = supabase
         .from('devedores')
-        .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio')
+        .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio, telefone')
         .eq('ativo', true)
         .order('criado_em', { ascending: false })
         .range(from, from + PAGE_FETCH - 1);
@@ -544,6 +648,10 @@ export default function Clientes() {
                       </>
                     ) : (
                       <>
+                        <Button variant="outline" size="sm" onClick={handleExportTelefones} disabled={exportingPhones}>
+                          <Download className="h-4 w-4 mr-1" />
+                          {exportingPhones ? 'Exportando...' : 'Exportar Telefones'}
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => setDeleteMode(true)}>
                           <Trash2 className="h-4 w-4 mr-1" />
                           Excluir Contratos
