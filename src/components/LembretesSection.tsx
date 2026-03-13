@@ -8,6 +8,7 @@ import { Loader2, MessageCircle, Play, CheckCircle2, Clock, AlertTriangle, Refre
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
+import { useAuth } from '@/hooks/useAuth';
 
 interface WhatsAppInstance {
   id: string;
