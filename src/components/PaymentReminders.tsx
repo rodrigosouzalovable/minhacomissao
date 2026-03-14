@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const [activeTab, setActiveTab] = useState('pendentes');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
 
