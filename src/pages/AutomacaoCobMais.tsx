@@ -71,6 +71,13 @@ export default function AutomacaoCobMais() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoProgressLabel, setVideoProgressLabel] = useState('');
 
+  // Pós Atendimento state
+  type ClientePosAtendimento = { nome: string; primeiro_nome: string; telefone: string; cpf: string; hora: string; mensagem: string; selecionado: boolean; enviando: boolean; enviado: boolean; erro: string | null };
+  const [posAtendimentoClientes, setPosAtendimentoClientes] = useState<ClientePosAtendimento[]>([]);
+  const [posAtendimentoTemplate, setPosAtendimentoTemplate] = useState('Olá {nome}, tudo bem? Você tem 50% de desconto aprovado na loja Novo Mundo para renegociar todas as parcelas. Posso te passar o valor?');
+  const [posAtendimentoLoading, setPosAtendimentoLoading] = useState(false);
+  const [posAtendimentoEnviando, setPosAtendimentoEnviando] = useState(false);
+
   // Chat with AI state
   type ChatMsg = { role: 'user' | 'assistant'; content: string | any[]; image?: string };
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
