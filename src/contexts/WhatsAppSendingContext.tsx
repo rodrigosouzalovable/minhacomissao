@@ -264,6 +264,28 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
     cancelRef.current = true;
   }, []);
 
+  const markAsEnviado = useCallback(async (pagamentoId: string, clienteNome: string, clienteTelefone: string) => {
+    if (!user) return;
+    setStatusMap(prev => ({ ...prev, [pagamentoId]: 'enviado' }));
+
+    await supabase.from('lembrete_envio_progresso').insert({
+      user_id: user.id,
+      pagamento_id: pagamentoId,
+      cliente_nome: clienteNome,
+      cliente_telefone: clienteTelefone,
+      status: 'enviado',
+      enviado_em: new Date().toISOString(),
+    });
+
+    setEnvioProgresso(prev => [...prev, {
+      pagamento_id: pagamentoId,
+      cliente_nome: clienteNome,
+      cliente_telefone: clienteTelefone,
+      status: 'enviado',
+      enviado_em: new Date().toISOString(),
+    }]);
+  }, [user]);
+
   return (
     <WhatsAppSendingContext.Provider value={{
       isSending,
@@ -273,6 +295,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
       startSending,
       cancelSending,
       loadSavedProgress,
+      markAsEnviado,
     }}>
       {children}
     </WhatsAppSendingContext.Provider>
