@@ -57,7 +57,7 @@ export function PaymentReminders() {
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [sending, setSending] = useState(false);
-  const [starting, setStarting] = useState(false);
+  const [starting] = useState(false);
   const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
   const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const cancelSendRef = useRef(false);
@@ -130,109 +130,94 @@ export function PaymentReminders() {
   const naoEnviadosCount = allPendingReminders.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'nao_enviado').length;
   const progressPercent = allPendingReminders.length > 0 ? Math.round(((enviadosCount + errosCount) / allPendingReminders.length) * 100) : 0;
 
+  const gerarMensagem = (lembrete: any): string => {
+    const nome = lembrete.cliente_nome?.split(' ')[0] || 'Cliente';
+    const valor = lembrete.valor_parcela ? formatCurrency(lembrete.valor_parcela) : '';
+    const dataStr = lembrete.data_prevista
+      ? new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')
+      : '';
+
+    if (lembrete.tipo === 'vencido') {
+      const hoje = new Date();
+      const venc = new Date(lembrete.data_prevista + 'T00:00:00');
+      const diasAtraso = Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+      return `Olá ${nome}, tudo bem? Identificamos que a parcela${valor ? ` de ${valor}` : ''} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante. Caso já tenha efetuado o pagamento, desconsidere esta mensagem.`;
+    }
+    if (lembrete.tipo === 'hoje') {
+      return `Olá ${nome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela${valor ? ` de ${valor}` : ''}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
+    }
+    return `Olá ${nome}, tudo bem? Informamos que sua parcela${valor ? ` de ${valor}` : ''} vence em ${dataStr}. Fique atento para não perder o prazo!`;
+  };
+
   const handleStartEnvios = async () => {
     if (selectedInstances.length === 0 || !user) return;
-    setStarting(true);
+
+    const pendentes = allPendingReminders.filter(r => {
+      if (!r.cliente_telefone) return false;
+      const status = getWhatsAppStatus(r.id, r.cliente_telefone);
+      return status === 'nao_enviado';
+    });
+
+    if (pendentes.length === 0) {
+      toast.info('Nenhum lembrete pendente para enviar.');
+      return;
+    }
+
+    setSending(true);
     cancelSendRef.current = false;
-    try {
-      // Schedule reminders for each selected instance
-      let totalAgendados = 0;
-      for (const inst of selectedInstances) {
-        const { data, error } = await supabase.functions.invoke('check-payment-reminders', {
+    toast.success(`Iniciando envio de ${pendentes.length} lembrete${pendentes.length > 1 ? 's' : ''}...`);
+
+    for (let i = 0; i < pendentes.length; i++) {
+      if (cancelSendRef.current) break;
+
+      const lembrete = pendentes[i];
+      const instance = selectedInstances[i % selectedInstances.length];
+      const mensagem = gerarMensagem(lembrete);
+
+      setCurrentSendingId(lembrete.id);
+
+      try {
+        const { data, error } = await supabase.functions.invoke('send-whatsapp', {
           body: {
-            user_id: user.id,
-            instance_token: inst.instance_token,
-            server_url: inst.server_url,
+            telefone: lembrete.cliente_telefone,
+            mensagem,
+            uazapi_server_url: instance.server_url,
+            uazapi_instance_token: instance.instance_token,
           },
         });
-        if (error) throw error;
-        if (!data?.success) throw new Error(data?.error || 'Erro desconhecido');
-        totalAgendados += (data.agendados || 0);
-      }
-      if (totalAgendados === 0) {
-        toast.info('Nenhuma parcela para notificar hoje.');
-        setStarting(false);
-        return;
-      }
-      toast.success(`${totalAgendados} lembretes agendados! Iniciando envio...`);
-      await fetchFila();
-      setStarting(false);
-      setSending(true);
 
-      const tokens = selectedInstances.map(i => i.instance_token);
-
-      // Sequential send across all selected instances
-      const processNext = async () => {
-        while (!cancelSendRef.current) {
-          const { data: nextItems } = await supabase
-            .from('whatsapp_fila')
-            .select('id, telefone, pagamento_id')
-            .eq('status', 'pendente')
-            .in('instance_token', tokens)
-            .order('agendado_para', { ascending: true })
-            .limit(1);
-          if (!nextItems || nextItems.length === 0) break;
-
-          const item = nextItems[0];
-          const matchedReminder = allPendingReminders.find(r => r.id === item.pagamento_id) 
-            || allPendingReminders.find(r => {
-              const rPhone = normalizePhone(r.cliente_telefone || '');
-              const fPhone = normalizePhone(item.telefone);
-              return rPhone.length > 0 && (rPhone === fPhone || `55${rPhone}` === fPhone || rPhone === `55${fPhone}`);
-            });
-          const reminderId = matchedReminder?.id || item.pagamento_id;
-          setCurrentSendingId(reminderId);
-
-          try {
-            const { data: sendResult, error: sendErr } = await supabase.functions.invoke('process-whatsapp-queue', {});
-            setCurrentSendingId(null);
-            if (sendErr || !sendResult?.success) {
-              setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
-            } else if (sendResult?.enviado) {
-              setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'enviado' }));
-            } else {
-              break;
-            }
-          } catch {
-            setCurrentSendingId(null);
-            setLocalStatusOverride(prev => ({ ...prev, [reminderId]: 'erro' }));
-          }
-
-          const delay = 5000 + Math.random() * 2000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          await fetchFila();
-        }
-        setSending(false);
         setCurrentSendingId(null);
-        if (cancelSendRef.current) {
-          toast.info('Envio cancelado');
+
+        if (error || !data?.success) {
+          setLocalStatusOverride(prev => ({ ...prev, [lembrete.id]: 'erro' }));
         } else {
-          toast.success('Envio finalizado!');
+          setLocalStatusOverride(prev => ({ ...prev, [lembrete.id]: 'enviado' }));
         }
-        await fetchFila();
-      };
-      processNext();
-    } catch (err: any) {
-      toast.error('Erro ao iniciar envios: ' + (err.message || 'Erro desconhecido'));
-      setStarting(false);
+      } catch {
+        setCurrentSendingId(null);
+        setLocalStatusOverride(prev => ({ ...prev, [lembrete.id]: 'erro' }));
+      }
+
+      // Wait 5-7 minutes before next send (skip on last item or cancel)
+      if (i < pendentes.length - 1 && !cancelSendRef.current) {
+        const delay = (5 + Math.random() * 2) * 60 * 1000;
+        const delayMinutes = Math.round(delay / 60000);
+        toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    setSending(false);
+    setCurrentSendingId(null);
+    if (cancelSendRef.current) {
+      toast.info('Envio cancelado');
+    } else {
+      toast.success('Envio finalizado!');
     }
   };
 
-  const handleCancelEnvios = async () => {
-    if (selectedInstances.length === 0) return;
+  const handleCancelEnvios = () => {
     cancelSendRef.current = true;
-    const hojeDate = new Date();
-    const hojeStr = `${hojeDate.getFullYear()}-${String(hojeDate.getMonth() + 1).padStart(2, '0')}-${String(hojeDate.getDate()).padStart(2, '0')}`;
-    const tokens = selectedInstances.map(i => i.instance_token);
-    await supabase
-      .from('whatsapp_fila')
-      .delete()
-      .eq('status', 'pendente')
-      .in('instance_token', tokens)
-      .gte('criado_em', `${hojeStr}T00:00:00`)
-      .lte('criado_em', `${hojeStr}T23:59:59`);
-    toast.success('Envio cancelado');
-    await fetchFila();
   };
 
   const formatCurrency = (value: number) => {
