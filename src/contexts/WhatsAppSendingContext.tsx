@@ -355,6 +355,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
       cancelSending,
       loadSavedProgress,
       markAsEnviado,
+      sendSingleMessage,
     }}>
       {children}
     </WhatsAppSendingContext.Provider>

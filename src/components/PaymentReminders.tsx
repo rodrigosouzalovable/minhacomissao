@@ -273,20 +273,64 @@ export function PaymentReminders() {
           </div>
         </Link>
         {inDialog && whatsappStatus !== 'enviado' && whatsappStatus !== 'enviando' && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 shrink-0 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              markAsEnviado(lembrete.id, lembrete.cliente_nome, lembrete.cliente_telefone || '');
-              toast.success('Marcado como enviado');
-            }}
-            title="Marcar como enviado"
-          >
-            <Send className="h-3 w-3" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                title="Opções de envio"
+              >
+                <Send className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!lembrete.cliente_telefone) {
+                    toast.error('Cliente sem telefone cadastrado');
+                    return;
+                  }
+                  if (selectedInstances.length === 0) {
+                    toast.error('Selecione uma instância WhatsApp primeiro');
+                    return;
+                  }
+                  const instance = selectedInstances[0];
+                  sendSingleMessage(
+                    {
+                      id: lembrete.id,
+                      cliente_nome: lembrete.cliente_nome,
+                      cliente_telefone: lembrete.cliente_telefone!,
+                      valor_parcela: lembrete.valor_parcela,
+                      data_prevista: lembrete.data_prevista,
+                      tipo: lembrete.tipo,
+                      acordo_id: lembrete.acordo_id,
+                    },
+                    instance,
+                    templates,
+                    operadorNome
+                  );
+                }}
+              >
+                <MessageSquare className="h-4 w-4" />
+                Enviar mensagem
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  markAsEnviado(lembrete.id, lembrete.cliente_nome, lembrete.cliente_telefone || '');
+                  toast.success('Marcado como enviado');
+                }}
+              >
+                <CheckCircle className="h-4 w-4" />
+                Marcar como enviado
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         <Button
           variant="ghost"
