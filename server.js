@@ -1306,6 +1306,77 @@ app.post('/automacao/parar-gravacao', async (req, res) => {
   res.json({ success: true, total_passos: totalSteps, nome_fluxo: flowName });
 });
 
+// ===== ENDPOINT: EXTRAIR PÓS ATENDIMENTO =====
+app.post('/automacao/extrair-pos-atendimento', async (req, res) => {
+  try {
+    const pg = await initBrowser();
+    updateStatus('executando', 'Extraindo dados do Pós Atendimento...');
+
+    const texto = await pg.evaluate(() => {
+      // Try multiple selectors for the pos-atendimento panel
+      const selectors = [
+        '#pos-atendimento-content',
+        '.pos-atendimento-content',
+        '#divPosAtendimento',
+        '.discagem-log',
+        '#pos_atendimento',
+        '#divDiscagem',
+        '[id*="posAtendimento"]',
+        '[id*="pos-atendimento"]',
+        '[class*="pos-atendimento"]',
+        '[class*="posAtendimento"]',
+      ];
+      
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el && el.textContent && el.textContent.trim().length > 10) {
+          return el.textContent.trim();
+        }
+      }
+
+      // Fallback: look for text patterns matching call logs
+      const allElements = document.querySelectorAll('div, pre, textarea, span');
+      for (const el of allElements) {
+        const text = el.textContent || '';
+        if (text.includes('Chamada Desligada') || text.includes('Cliente:') || text.includes('CPF/CNPJ:') || text.includes('Número discado:')) {
+          return text.trim();
+        }
+      }
+
+      // Last fallback: try iframes
+      const iframes = document.querySelectorAll('iframe');
+      for (const iframe of iframes) {
+        try {
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (iframeDoc) {
+            const iframeText = iframeDoc.body?.textContent || '';
+            if (iframeText.includes('Chamada Desligada') || iframeText.includes('Cliente:')) {
+              return iframeText.trim();
+            }
+          }
+        } catch (e) {
+          // Cross-origin iframe, skip
+        }
+      }
+
+      return null;
+    });
+
+    if (!texto) {
+      updateStatus('idle', 'Painel Pós Atendimento não encontrado');
+      return res.json({ success: false, error: 'Painel "Pós Atendimento" não encontrado. Verifique se a aba está aberta no CobMais.' });
+    }
+
+    updateStatus('idle', 'Dados do Pós Atendimento extraídos');
+    console.log(`✅ Texto extraído do Pós Atendimento (${texto.length} chars)`);
+    res.json({ success: true, texto });
+  } catch (err) {
+    console.error('❌ Erro ao extrair Pós Atendimento:', err.message);
+    updateStatus('idle', 'Erro ao extrair Pós Atendimento');
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // ===== INICIAR SERVIDOR =====
 app.listen(PORT, async () => {
   console.log(`\n🤖 Servidor Playwright rodando na porta ${PORT}`);
