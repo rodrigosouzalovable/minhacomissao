@@ -114,6 +114,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <AutoSendProvider>
+          <WhatsAppSendingProvider>
           <Routes>
             <Route path="/" element={<PortalHome />} />
             <Route path="/:creditor" element={<PortalConsulta />} />
@@ -145,6 +146,7 @@ const App = () => (
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </WhatsAppSendingProvider>
           </AutoSendProvider>
         </AuthProvider>
       </BrowserRouter>
