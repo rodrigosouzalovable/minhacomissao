@@ -171,8 +171,6 @@ export default function Acionamento() {
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
   const [checkingConnections, setCheckingConnections] = useState(false);
-  const [selectedLembreteInstanceId, setSelectedLembreteInstanceId] = useState<string>('none');
-  const [savingLembrete, setSavingLembrete] = useState(false);
 
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
