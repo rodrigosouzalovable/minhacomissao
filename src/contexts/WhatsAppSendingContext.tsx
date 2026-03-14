@@ -42,6 +42,7 @@ interface WhatsAppSendingContextType {
   cancelSending: () => void;
   loadSavedProgress: () => Promise<void>;
   markAsEnviado: (pagamentoId: string, clienteNome: string, clienteTelefone: string) => Promise<void>;
+  sendSingleMessage: (item: SendQueueItem, instance: WhatsAppInstance, templates: LembreteTemplate[], operadorNome: string) => Promise<void>;
 }
 
 const WhatsAppSendingContext = createContext<WhatsAppSendingContextType | null>(null);
@@ -286,6 +287,64 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
     }]);
   }, [user]);
 
+  const sendSingleMessage = useCallback(async (
+    item: SendQueueItem,
+    instance: WhatsAppInstance,
+    tpls: LembreteTemplate[],
+    opNome: string
+  ) => {
+    if (!user) return;
+    setStatusMap(prev => ({ ...prev, [item.id]: 'enviando' }));
+
+    let status: 'enviado' | 'erro' = 'erro';
+    let erroMsg: string | null = null;
+
+    try {
+      const mensagem = gerarMensagem(item, tpls, opNome);
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          telefone: item.cliente_telefone,
+          mensagem,
+          uazapi_server_url: instance.server_url,
+          uazapi_instance_token: instance.instance_token,
+        },
+      });
+      if (error || !data?.success) {
+        erroMsg = error?.message || data?.error || 'Erro desconhecido';
+      } else {
+        status = 'enviado';
+      }
+    } catch (err: any) {
+      erroMsg = err?.message || 'Erro de rede';
+    }
+
+    setStatusMap(prev => ({ ...prev, [item.id]: status }));
+
+    await supabase.from('lembrete_envio_progresso').insert({
+      user_id: user.id,
+      pagamento_id: item.id,
+      cliente_nome: item.cliente_nome,
+      cliente_telefone: item.cliente_telefone,
+      status,
+      erro_mensagem: erroMsg,
+      enviado_em: status === 'enviado' ? new Date().toISOString() : null,
+    });
+
+    setEnvioProgresso(prev => [...prev, {
+      pagamento_id: item.id,
+      cliente_nome: item.cliente_nome,
+      cliente_telefone: item.cliente_telefone,
+      status,
+      enviado_em: status === 'enviado' ? new Date().toISOString() : null,
+    }]);
+
+    if (status === 'enviado') {
+      toast.success(`Mensagem enviada para ${item.cliente_nome}`);
+    } else {
+      toast.error(`Erro ao enviar para ${item.cliente_nome}: ${erroMsg}`);
+    }
+  }, [user]);
+
   return (
     <WhatsAppSendingContext.Provider value={{
       isSending,
@@ -296,6 +355,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
       cancelSending,
       loadSavedProgress,
       markAsEnviado,
+      sendSingleMessage,
     }}>
       {children}
     </WhatsAppSendingContext.Provider>
