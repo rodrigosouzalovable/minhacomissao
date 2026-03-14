@@ -54,7 +54,7 @@ export function PaymentReminders() {
 
   // WhatsApp sending state
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
-  const [selectedInstanceId, setSelectedInstanceId] = useState('');
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [sending, setSending] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -62,7 +62,13 @@ export function PaymentReminders() {
   const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const cancelSendRef = useRef(false);
 
-  const selectedInstance = instances.find(i => i.id === selectedInstanceId);
+  const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
+
+  const toggleInstance = (id: string) => {
+    setSelectedInstanceIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
   const allPendingReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias];
