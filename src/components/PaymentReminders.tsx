@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2 } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
