@@ -249,9 +249,11 @@ serve(async (req) => {
       if (acordo.status !== 'ativo') { pulados++; continue; }
       if (!acordo.cliente_telefone) { pulados++; continue; }
 
-      // If user has configured templates, only send for those specific days
-      const configuredDays = userConfiguredDaysMap.get(acordo.user_id);
-      if (configuredDays && !configuredDays.has(tipoLembrete)) { pulados++; continue; }
+      // If user has configured templates, only send for those specific days (skip for manual override)
+      if (!overrideToken) {
+        const configuredDays = userConfiguredDaysMap.get(acordo.user_id);
+        if (configuredDays && !configuredDays.has(tipoLembrete)) { pulados++; continue; }
+      }
 
       const profile = profilesMap.get(acordo.user_id);
       // Skip whatsapp_lembretes_habilitado check when using override token (manual send from dialog)
