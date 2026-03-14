@@ -272,6 +272,12 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
 
   const cancelSending = useCallback(() => {
     cancelRef.current = true;
+    // Immediately resolve the pending delay so the loop exits now
+    if (delayResolveRef.current) {
+      clearTimeout((delayResolveRef as any)._timer);
+      delayResolveRef.current();
+      delayResolveRef.current = null;
+    }
   }, []);
 
   const markAsEnviado = useCallback(async (pagamentoId: string, clienteNome: string, clienteTelefone: string) => {
