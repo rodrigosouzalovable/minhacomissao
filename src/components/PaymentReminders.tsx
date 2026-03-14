@@ -42,7 +42,7 @@ function WhatsAppStatusBadge({ status }: { status: string }) {
   if (status === 'erro') return <Badge variant="destructive" className="text-xs px-1.5 py-0">Erro</Badge>;
   if (status === 'enviando') return <Badge className="bg-amber-500 hover:bg-amber-500 text-xs px-1.5 py-0 gap-1"><RefreshCw className="h-2.5 w-2.5 animate-spin" />Enviando</Badge>;
   if (status === 'pendente') return <Badge className="bg-amber-500 hover:bg-amber-500 text-xs px-1.5 py-0">Pendente</Badge>;
-  return null;
+  return <Badge variant="outline" className="text-xs px-1.5 py-0 gap-1 text-muted-foreground"><Ban className="h-2.5 w-2.5" />Aguardando</Badge>;
 }
 
 export function PaymentReminders() {
@@ -286,15 +286,25 @@ export function PaymentReminders() {
                 <Phone className="h-3 w-3 shrink-0" />
                 {lembrete.cliente_telefone}
                 <CopyButton value={lembrete.cliente_telefone} label="Telefone" />
+                {lembrete.data_prevista && (
+                  <span className="ml-1 text-muted-foreground">
+                    • {new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </span>
+                )}
               </span>
             ) : (
-              <span className="text-muted-foreground text-xs">
+              <span className="text-muted-foreground text-xs flex items-center gap-1">
                 {isPagamento ? 'Sem telefone' : 'Retorno agendado'}
+                {lembrete.data_prevista && (
+                  <span className="ml-1">
+                    • {new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </span>
+                )}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {inDialog && whatsappStatus !== 'nao_enviado' && (
+            {inDialog && (
               <WhatsAppStatusBadge status={whatsappStatus} />
             )}
             {isPagamento && lembrete.valor_parcela && (
