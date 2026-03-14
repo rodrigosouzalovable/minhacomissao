@@ -523,22 +523,44 @@ export function PaymentReminders() {
                 {sending ? (
                   <Button variant="destructive" size="sm" onClick={handleCancelEnvios}>
                     Cancelar
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="gap-1.5"
-                disabled={!selectedInstanceId || totalLembretes === 0 || starting}
-                onClick={handleStartEnvios}
-              >
-                {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                Enviar
-              </Button>
-            )}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={selectedInstanceIds.length === 0 || totalLembretes === 0 || starting}
+                    onClick={handleStartEnvios}
+                  >
+                    {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    Enviar
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {instances.map((inst) => (
+                <button
+                  key={inst.id}
+                  type="button"
+                  onClick={() => toggleInstance(inst.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${
+                    selectedInstanceIds.includes(inst.id)
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-foreground border-border hover:bg-accent'
+                  }`}
+                >
+                  <div className={`h-2 w-2 rounded-full ${selectedInstanceIds.includes(inst.id) ? 'bg-primary-foreground' : 'bg-muted-foreground/40'}`} />
+                  {inst.nome || inst.instance_token.slice(0, 12) + '...'}
+                </button>
+              ))}
+              {instances.length === 0 && (
+                <span className="text-xs text-muted-foreground">Nenhuma instância conectada</span>
+              )}
+            </div>
           </div>
 
           {/* Progress bar during sending */}
-          {(sending || enviadosCount > 0 || errosCount > 0) && selectedInstanceId && (
+          {(sending || enviadosCount > 0 || errosCount > 0) && selectedInstanceIds.length > 0 && (
             <div className="space-y-1">
               <Progress value={progressPercent} className="h-2" />
               <div className="flex justify-between text-xs text-muted-foreground">
