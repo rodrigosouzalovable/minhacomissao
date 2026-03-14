@@ -230,30 +230,115 @@ ${knowledgeContext}
       let toolResultContent = "";
 
       if (toolName === "executar_acao_direta") {
-        // DIRECT ACTION: execute synchronously for instant feedback
+        // VISION-GUIDED DIRECT ACTION
         const { action: directAction, selector, value, url: directUrl } = args;
-        console.log(`[chat-cobmais-knowledge] Direct action: ${directAction}, selector: ${selector}, value: ${value}`);
+        console.log(`[chat-cobmais-knowledge] Vision-guided action: ${directAction}, description: ${selector}, value: ${value}`);
 
         try {
-          const directRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
-            body: JSON.stringify({
-              action: "acao_direta",
-              direct_action: directAction,
-              direct_selector: selector,
-              direct_value: value,
-              direct_url: directUrl,
-              _internal: true,
-            }),
-          });
-          const directResult = await directRes.json();
-          const tempo = directResult.tempo_ms || 0;
-          toolResultContent = directResult.success
-            ? `Ação direta executada com sucesso em ${tempo}ms! Ação: ${directAction}${selector ? ` no elemento "${selector}"` : ""}${value ? ` com valor "${value}"` : ""}. Confirme ao usuário e pergunte o próximo passo.`
-            : `Erro na ação direta: ${directResult.error || "desconhecido"}. Informe o usuário.`;
+          // For navigate/keypress, no vision needed
+          if (directAction === "navigate" || directAction === "keypress") {
+            const directRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+              body: JSON.stringify({
+                action: "acao_direta",
+                direct_action: directAction,
+                direct_selector: selector,
+                direct_value: value,
+                direct_url: directUrl,
+                _internal: true,
+              }),
+            });
+            const directResult = await directRes.json();
+            toolResultContent = directResult.success
+              ? `Ação executada com sucesso! Ação: ${directAction}${value ? ` (${value})` : ""}${directUrl ? ` → ${directUrl}` : ""}. Confirme ao usuário.`
+              : `❌ Erro: ${directResult.error || "desconhecido"}. Informe o erro REAL ao usuário e peça orientação.`;
+          } else {
+            // STEP 1: Capture screenshot from server
+            const screenshotRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+              body: JSON.stringify({ action: "screenshot", _internal: true }),
+            });
+            const screenshotData = await screenshotRes.json();
+            
+            if (!screenshotData.screenshot) {
+              toolResultContent = "❌ Não consegui capturar a tela do navegador. O servidor local está conectado? Informe o erro ao usuário.";
+            } else {
+              // STEP 2: Use vision AI to find the correct selector
+              const visionInstruction = directAction === "click" 
+                ? `Encontre o elemento para clicar: "${selector}". Retorne a ação click com o seletor CSS correto ou coordenadas x,y.`
+                : directAction === "fill"
+                ? `Encontre o campo para preencher: "${selector}". Retorne a ação fill com o seletor CSS correto. O valor a preencher é: "${value}"`
+                : `Execute: ${directAction} no elemento "${selector}"`;
+              
+              const visionRes = await fetch(`${supabaseUrl}/functions/v1/analyze-cobmais-screen`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+                body: JSON.stringify({
+                  screenshot: screenshotData.screenshot,
+                  objective: visionInstruction,
+                  current_url: screenshotData.current_url || "",
+                  mode: "single_action",
+                }),
+              });
+              const visionResult = await visionRes.json();
+              
+              if (!visionResult.success || !visionResult.action) {
+                toolResultContent = `❌ A IA de visão não conseguiu encontrar o elemento "${selector}" na tela. Erro: ${visionResult.error || "elemento não identificado"}. Peça ao usuário para enviar um screenshot ou descrever melhor o elemento.`;
+              } else {
+                const visionAction = visionResult.action;
+                console.log(`[chat-cobmais-knowledge] Vision found: action=${visionAction.action}, selector=${visionAction.selector}, confidence=${visionAction.confidence}`);
+
+                if (visionAction.confidence < 0.5) {
+                  toolResultContent = `⚠️ A IA de visão encontrou o elemento mas com baixa confiança (${Math.round(visionAction.confidence * 100)}%). Descrição: "${visionAction.description}". Peça ao usuário para confirmar ou enviar um screenshot.`;
+                } else {
+                  // STEP 3: Execute with the vision-found selector
+                  const execBody: any = {
+                    action: "acao_direta",
+                    direct_action: directAction,
+                    direct_selector: visionAction.selector,
+                    direct_value: value,
+                    _internal: true,
+                  };
+                  // If vision returned coordinates and no CSS selector, use click_at_position
+                  if (!visionAction.selector && visionAction.result_data?.x && visionAction.result_data?.y) {
+                    execBody.direct_action = "click_at_position";
+                    execBody.x = visionAction.result_data.x;
+                    execBody.y = visionAction.result_data.y;
+                    delete execBody.direct_selector;
+                  }
+
+                  const execRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+                    body: JSON.stringify(execBody),
+                  });
+                  const execResult = await execRes.json();
+
+                  if (!execResult.success) {
+                    toolResultContent = `❌ A IA de visão encontrou o elemento (seletor: "${visionAction.selector}") mas a execução falhou: ${execResult.error}. Informe o erro REAL ao usuário.`;
+                  } else {
+                    // STEP 4: Verify - capture post-action screenshot
+                    await new Promise(r => setTimeout(r, 1000));
+                    const verifyRes = await fetch(`${supabaseUrl}/functions/v1/automacao-cobmais`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+                      body: JSON.stringify({ action: "screenshot", _internal: true }),
+                    });
+                    const verifyData = await verifyRes.json();
+                    const newUrl = verifyData.current_url || "";
+                    const oldUrl = screenshotData.current_url || "";
+                    const urlChanged = newUrl !== oldUrl;
+
+                    toolResultContent = `✅ Ação executada! ${visionAction.description}. Seletor usado: "${visionAction.selector || "coordenadas"}". Confiança: ${Math.round(visionAction.confidence * 100)}%.${urlChanged ? ` A URL mudou de ${oldUrl} para ${newUrl}.` : ""} Confirme ao usuário e pergunte o próximo passo.`;
+                  }
+                }
+              }
+            }
+          }
         } catch (err) {
-          toolResultContent = `Erro de conexão ao executar ação direta: ${err instanceof Error ? err.message : "desconhecido"}`;
+          toolResultContent = `❌ Erro de conexão: ${err instanceof Error ? err.message : "desconhecido"}. Informe ao usuário.`;
         }
       } else {
         // AGENT MODE: fire-and-forget for complex flows
