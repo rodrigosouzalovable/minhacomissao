@@ -14,9 +14,10 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye, Upload, Video, FileVideo, ImagePlus, X } from 'lucide-react';
+import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye, Upload, Video, FileVideo, ImagePlus, X, Phone, CheckSquare, MessageSquare } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { RoboStreamViewer } from '@/components/RoboStreamViewer';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RoboCodeViewer } from '@/components/RoboCodeViewer';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -69,6 +70,13 @@ export default function AutomacaoCobMais() {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoProgressLabel, setVideoProgressLabel] = useState('');
+
+  // Pós Atendimento state
+  type ClientePosAtendimento = { nome: string; primeiro_nome: string; telefone: string; cpf: string; hora: string; mensagem: string; selecionado: boolean; enviando: boolean; enviado: boolean; erro: string | null };
+  const [posAtendimentoClientes, setPosAtendimentoClientes] = useState<ClientePosAtendimento[]>([]);
+  const [posAtendimentoTemplate, setPosAtendimentoTemplate] = useState('Olá {nome}, tudo bem? Você tem 50% de desconto aprovado na loja Novo Mundo para renegociar todas as parcelas. Posso te passar o valor?');
+  const [posAtendimentoLoading, setPosAtendimentoLoading] = useState(false);
+  const [posAtendimentoEnviando, setPosAtendimentoEnviando] = useState(false);
 
   // Chat with AI state
   type ChatMsg = { role: 'user' | 'assistant'; content: string | any[]; image?: string };
@@ -434,6 +442,116 @@ export default function AutomacaoCobMais() {
         setSelectedSessaoKnowledge([]);
       }
     }
+  };
+
+  // Pós Atendimento handlers
+  const handleCapturarPosAtendimento = async () => {
+    if (!serverUrl || roboStatus !== 'online') return toast.error('Robô precisa estar online');
+    setPosAtendimentoLoading(true);
+    setPosAtendimentoClientes([]);
+    try {
+      // Step 1: Extract text from CobMais via Playwright
+      const extractRes = await fetch(`${serverUrl}/automacao/extrair-pos-atendimento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const extractData = await extractRes.json();
+      if (!extractData.success || !extractData.texto) {
+        throw new Error(extractData.error || 'Não foi possível extrair o painel Pós Atendimento');
+      }
+
+      // Step 2: Process with AI
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const processRes = await fetch(`${supabaseUrl}/functions/v1/process-pos-atendimento`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ texto: extractData.texto, template: posAtendimentoTemplate }),
+      });
+      const processData = await processRes.json();
+      if (!processRes.ok || !processData.success) {
+        throw new Error(processData.error || 'Erro ao processar dados');
+      }
+
+      const clientes = (processData.clientes || []).map((c: any) => ({
+        ...c,
+        selecionado: true,
+        enviando: false,
+        enviado: false,
+        erro: null,
+      }));
+      setPosAtendimentoClientes(clientes);
+      if (clientes.length === 0) {
+        toast.info('Nenhum cliente encontrado no painel Pós Atendimento');
+      } else {
+        toast.success(`${clientes.length} cliente(s) extraído(s) do Pós Atendimento`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao capturar Pós Atendimento');
+    } finally {
+      setPosAtendimentoLoading(false);
+    }
+  };
+
+  const handleEnviarPosAtendimento = async () => {
+    const selecionados = posAtendimentoClientes.filter(c => c.selecionado && !c.enviado);
+    if (selecionados.length === 0) return toast.error('Nenhum cliente selecionado para envio');
+
+    setPosAtendimentoEnviando(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { toast.error('Não autenticado'); setPosAtendimentoEnviando(false); return; }
+
+    // Get user's WhatsApp config
+    const { data: whatsappConfig } = await supabase
+      .from('user_whatsapp_instances')
+      .select('server_url, instance_token')
+      .eq('user_id', session.user.id)
+      .eq('ativo', true)
+      .limit(1)
+      .maybeSingle();
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+    for (let i = 0; i < posAtendimentoClientes.length; i++) {
+      const c = posAtendimentoClientes[i];
+      if (!c.selecionado || c.enviado || !c.telefone) continue;
+
+      setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, enviando: true } : cl));
+
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            telefone: c.telefone,
+            mensagem: c.mensagem,
+            uazapi_server_url: whatsappConfig?.server_url,
+            uazapi_instance_token: whatsappConfig?.instance_token,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, enviando: false, enviado: true } : cl));
+        } else {
+          throw new Error(data.error || 'Erro ao enviar');
+        }
+      } catch (err: any) {
+        setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, enviando: false, erro: err.message } : cl));
+      }
+
+      // Small delay between sends
+      if (i < posAtendimentoClientes.length - 1) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+
+    const enviados = posAtendimentoClientes.filter(c => c.enviado).length;
+    toast.success(`${enviados + selecionados.length} mensagem(ns) enviada(s)`);
+    setPosAtendimentoEnviando(false);
   };
 
   // Chat with AI about knowledge
@@ -852,6 +970,137 @@ export default function AutomacaoCobMais() {
             <RoboStreamViewer serverUrl={serverUrl} roboOnline={roboStatus === 'online'} />
           </div>
         )}
+
+        {/* Pós Atendimento */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5" />
+              📞 Pós Atendimento → WhatsApp
+            </CardTitle>
+            <CardDescription>
+              Capture os clientes do painel "Pós Atendimento" do CobMais e envie mensagens automáticas via WhatsApp.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Template de mensagem */}
+            <div>
+              <Label>Template da Mensagem</Label>
+              <Textarea
+                value={posAtendimentoTemplate}
+                onChange={e => setPosAtendimentoTemplate(e.target.value)}
+                placeholder="Olá {nome}, tudo bem?..."
+                className="min-h-[80px]"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Variáveis disponíveis: <code>{'{nome}'}</code> (primeiro nome), <code>{'{nome_completo}'}</code>, <code>{'{telefone}'}</code>, <code>{'{cpf}'}</code>
+              </p>
+            </div>
+
+            {/* Botão capturar */}
+            <Button
+              onClick={handleCapturarPosAtendimento}
+              disabled={posAtendimentoLoading || roboStatus !== 'online'}
+              className="w-full"
+            >
+              {posAtendimentoLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Capturando...</>
+              ) : (
+                <><Monitor className="h-4 w-4 mr-2" />Capturar Pós Atendimento</>
+              )}
+            </Button>
+
+            {roboStatus !== 'online' && (
+              <p className="text-sm text-destructive">O robô precisa estar online para capturar o Pós Atendimento.</p>
+            )}
+
+            {/* Lista de clientes extraídos */}
+            {posAtendimentoClientes.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>{posAtendimentoClientes.length} cliente(s) encontrado(s)</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPosAtendimentoClientes(prev => prev.map(c => ({ ...c, selecionado: !prev.every(p => p.selecionado) })))}
+                    >
+                      <CheckSquare className="h-4 w-4 mr-1" />
+                      {posAtendimentoClientes.every(c => c.selecionado) ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                    </Button>
+                  </div>
+                </div>
+
+                <ScrollArea className="max-h-[300px] rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Hora</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Telefone</TableHead>
+                        <TableHead>CPF</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {posAtendimentoClientes.map((c, i) => (
+                        <TableRow key={i} className={c.enviado ? 'opacity-60' : ''}>
+                          <TableCell>
+                            <Checkbox
+                              checked={c.selecionado}
+                              disabled={c.enviado || c.enviando}
+                              onCheckedChange={(checked) => {
+                                setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, selecionado: !!checked } : cl));
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm font-mono">{c.hora || '-'}</TableCell>
+                          <TableCell className="font-medium">{c.nome}</TableCell>
+                          <TableCell className="font-mono text-sm">{c.telefone}</TableCell>
+                          <TableCell className="font-mono text-sm">{c.cpf}</TableCell>
+                          <TableCell>
+                            {c.enviando ? (
+                              <Badge variant="secondary"><Loader2 className="h-3 w-3 animate-spin mr-1" />Enviando</Badge>
+                            ) : c.enviado ? (
+                              <Badge variant="default">✅ Enviado</Badge>
+                            ) : c.erro ? (
+                              <Badge variant="destructive" title={c.erro}>❌ Erro</Badge>
+                            ) : (
+                              <Badge variant="outline">Pendente</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+
+                {/* Preview da mensagem */}
+                {posAtendimentoClientes.length > 0 && (
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <Label className="text-xs text-muted-foreground">Preview da mensagem (primeiro cliente):</Label>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{posAtendimentoClientes[0]?.mensagem}</p>
+                  </div>
+                )}
+
+                {/* Botão enviar */}
+                <Button
+                  onClick={handleEnviarPosAtendimento}
+                  disabled={posAtendimentoEnviando || !posAtendimentoClientes.some(c => c.selecionado && !c.enviado)}
+                  className="w-full"
+                  size="lg"
+                >
+                  {posAtendimentoEnviando ? (
+                    <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enviando mensagens...</>
+                  ) : (
+                    <><MessageSquare className="h-4 w-4 mr-2" />Enviar WhatsApp ({posAtendimentoClientes.filter(c => c.selecionado && !c.enviado).length})</>
+                  )}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Chat com IA sobre o conhecimento */}
         <Card>

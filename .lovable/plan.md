@@ -1,89 +1,66 @@
+## ✅ Concluído — Resposta do Admin via WhatsApp
 
+Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
-# Automação: Pós Atendimento → WhatsApp
+1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
+2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
+3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
+4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
+5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
+6. **Cleanup** — remove registro `admin_pending` após processamento
 
-## Contexto
-O painel "Pós Atendimento" no CobMais exibe logs de chamadas com dados do cliente (nome, CPF, telefone). O objetivo é extrair esses dados automaticamente e enviar uma mensagem personalizada via WhatsApp.
+## ✅ Concluído — Admin responde por número de telefone direto
 
-## Abordagem
+1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
+2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
+3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
+4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
+5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
+6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
 
-Criar um novo endpoint no `server.js` que:
-1. Usa Playwright para ler o texto do painel "Pós Atendimento" (via `page.evaluate` extraindo o `textContent` do container)
-2. Retorna o texto bruto para o frontend
+## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
 
-Criar uma nova Edge Function `process-pos-atendimento` que:
-1. Recebe o texto bruto do painel
-2. Usa IA (Gemini Flash) para extrair estruturadamente: nome, telefone, CPF de cada cliente listado
-3. Gera a mensagem personalizada com o primeiro nome do cliente
-4. Chama a função `send-whatsapp` para enviar a mensagem
+Implementado em `supabase/functions/teach-chatbot/index.ts`:
 
-Na página `AutomacaoCobMais.tsx`:
-1. Adicionar um botão/aba "Pós Atendimento" que aciona a automação
-2. Permite configurar o template da mensagem (com variáveis como `{nome}`, `{telefone}`)
-3. Exibe os clientes extraídos em uma lista antes do envio
-4. Permite enviar individualmente ou em lote
+1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
+2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
+   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
+   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
+   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
+3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
+4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
+5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
 
-## Arquitetura
+## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
 
-```text
-[CobMais Browser]
-       │
-  server.js (Playwright)
-  POST /automacao/extrair-pos-atendimento
-  → page.evaluate() extrai texto do painel
-       │
-  Edge Function: process-pos-atendimento
-  → Gemini Flash parseia nome/telefone/CPF
-  → Retorna lista estruturada
-       │
-  Frontend: lista clientes extraídos
-  → Usuário confirma envio
-       │
-  Edge Function: send-whatsapp (já existente)
-  → Envia mensagem via UAZAPI
-```
+1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
+2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
+3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
+4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
+5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
 
-## Detalhes Técnicos
+## ✅ Concluído — Cadência de lembretes para parcelas vencidas
 
-### 1. Novo endpoint no `server.js`
+Implementado em `supabase/functions/check-payment-reminders/index.ts`:
 
-```javascript
-app.post('/automacao/extrair-pos-atendimento', async (req, res) => {
-  const pg = await initBrowser();
-  // Extrair texto do painel Pós Atendimento (iframe ou div no canto inferior direito)
-  const texto = await pg.evaluate(() => {
-    // Tentar múltiplos seletores do painel pós-atendimento
-    const selectors = [
-      '.pos-atendimento-content',
-      '#pos-atendimento',
-      '.discagem-log',
-      // fallback: pegar todo texto visível do painel
-    ];
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el) return el.textContent;
-    }
-    return null;
-  });
-  res.json({ success: true, texto });
-});
-```
+1. **Substituição da query genérica** — removida busca por range (últimos 30 dias), substituída por busca em 6 datas exatas
+2. **Datas-alvo calculadas**: D+1, D+2, D+10, D+11, D+20, D+30 a partir de hoje
+3. **Tipos distintos**: `vencido_d1`, `vencido_d2`, `vencido_d10`, `vencido_d11`, `vencido_d20`, `vencido_d30` — deduplicação automática por `pagamento_id` + `tipo_lembrete`
+4. **Mensagens escalonadas**:
+   - D+1: Tom amigável — "venceu ontem, envie comprovante"
+   - D+2: Reforço amigável — "ainda consta em aberto"
+   - D+10: Tom firme — "continua em aberto há 10 dias"
+   - D+11: Reforço firme — "segue pendente há 11 dias"
+   - D+20: Alerta — "regularize para evitar descumprimento"
+   - D+30: Último aviso — "acordo poderá ser considerado descumprido"
+5. **D-3 e D+0 inalterados** — lembretes pré-vencimento continuam funcionando como antes
 
-### 2. Nova Edge Function `process-pos-atendimento`
+## ✅ Concluído — QR Code para conectar WhatsApp no Acionamento
 
-- Recebe o texto bruto
-- Usa Gemini Flash via Lovable AI para extrair registros com regex + IA
-- Retorna array de `{ nome, telefone, cpf }`
-
-### 3. Frontend - Nova seção na página AutomacaoCobMais
-
-- Botão "Capturar Pós Atendimento"
-- Textarea editável com template de mensagem (padrão: "Olá {nome}, tudo bem?...")
-- Tabela de clientes extraídos com checkbox para selecionar quais enviar
-- Botão "Enviar WhatsApp" para disparar as mensagens
-
-### Arquivos a criar/editar:
-- `server.js` — novo endpoint `/automacao/extrair-pos-atendimento`
-- `supabase/functions/process-pos-atendimento/index.ts` — nova Edge Function
-- `src/pages/AutomacaoCobMais.tsx` — nova aba/seção no painel
-
+1. **Edge Function `whatsapp-qr`** — adaptada do ZAP BOOOT, usa `user_whatsapp_instances` em vez de `whatsapp_instances`
+2. **Actions**: `create-instance` (cria via UAZAPI admin API), `qr` (busca QR Code), `status` (polling conexão), `setup-webhook` (configura webhook do chatbot), `disconnect` (desconecta e remove)
+3. **Secrets**: `UAZAPI_ADMIN_TOKEN` configurado, reutiliza `UAZAPI_SERVER_URL` existente como base URL
+4. **UI Acionamento** — botão "Conectar via QR Code" + fallback "Manual" para entrada manual de server_url/token
+5. **Polling 3s** — detecta conexão automaticamente e configura webhook
+6. **Countdown 60s** — com opção de atualizar QR Code
+7. **Auto-cleanup** — se cancelar antes de conectar, instância criada é removida
