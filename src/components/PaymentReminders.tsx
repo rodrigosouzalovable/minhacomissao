@@ -89,19 +89,20 @@ export function PaymentReminders() {
     })();
   }, [dialogOpen, user]);
 
-  // Fetch fila items for selected instance
+  // Fetch fila items for all selected instances
   const fetchFila = useCallback(async () => {
-    if (!selectedInstance) { setFilaItems([]); return; }
+    if (selectedInstances.length === 0) { setFilaItems([]); return; }
     const hoje = new Date();
     const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+    const tokens = selectedInstances.map(i => i.instance_token);
     const { data } = await supabase
       .from('whatsapp_fila')
       .select('id, pagamento_id, telefone, status')
-      .eq('instance_token', selectedInstance.instance_token)
+      .in('instance_token', tokens)
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
     setFilaItems(data || []);
-  }, [selectedInstance]);
+  }, [selectedInstances.map(i => i.id).join(',')]);
 
   useEffect(() => { if (dialogOpen) fetchFila(); }, [dialogOpen, fetchFila]);
 
