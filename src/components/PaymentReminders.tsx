@@ -45,6 +45,32 @@ function WhatsAppStatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className="text-xs px-1.5 py-0 gap-1 text-muted-foreground"><Ban className="h-2.5 w-2.5" />Aguardando</Badge>;
 }
 
+interface LembreteTemplate {
+  tipo_lembrete: string;
+  mensagem: string;
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
+}
+
+function substituirVariaveis(template: string, vars: {
+  nome_cliente: string;
+  primeiro_nome: string;
+  nome_operador: string;
+  valor: string;
+  data_vencimento: string;
+  dias_atraso: number;
+}): string {
+  return template
+    .replace(/\{nome_cliente\}/g, vars.nome_cliente)
+    .replace(/\{primeiro_nome\}/g, vars.primeiro_nome)
+    .replace(/\{nome_operador\}/g, vars.nome_operador)
+    .replace(/\{valor\}/g, vars.valor)
+    .replace(/\{data_vencimento\}/g, vars.data_vencimento)
+    .replace(/\{dias_atraso\}/g, String(vars.dias_atraso));
+}
+
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const { user } = useAuth();
@@ -62,6 +88,10 @@ export function PaymentReminders() {
   const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const cancelSendRef = useRef(false);
 
+  // Templates state
+  const [templates, setTemplates] = useState<LembreteTemplate[]>([]);
+  const [operadorNome, setOperadorNome] = useState('');
+
   const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
 
   const toggleInstance = (id: string) => {
@@ -73,18 +103,35 @@ export function PaymentReminders() {
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
   const allPendingReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias];
 
-  // Fetch WhatsApp instances when dialog opens
+  // Fetch WhatsApp instances, templates, and operator name when dialog opens
   useEffect(() => {
     if (!dialogOpen || !user) return;
     (async () => {
-      const { data } = await supabase
-        .from('user_whatsapp_instances')
-        .select('id, nome, server_url, instance_token, ativo')
-        .eq('user_id', user.id)
-        .eq('ativo', true);
-      if (data) {
-        setInstances(data);
-        if (data.length === 1) setSelectedInstanceIds([data[0].id]);
+      const [instRes, tplRes, profileRes] = await Promise.all([
+        supabase
+          .from('user_whatsapp_instances')
+          .select('id, nome, server_url, instance_token, ativo')
+          .eq('user_id', user.id)
+          .eq('ativo', true),
+        supabase
+          .from('lembrete_mensagens_templates')
+          .select('tipo_lembrete, mensagem')
+          .eq('user_id', user.id)
+          .eq('ativo', true),
+        supabase
+          .from('profiles')
+          .select('nome')
+          .eq('id', user.id)
+          .single(),
+      ]);
+      if (instRes.data) {
+        setInstances(instRes.data);
+        if (instRes.data.length === 1) setSelectedInstanceIds([instRes.data[0].id]);
+      }
+      if (tplRes.data) setTemplates(tplRes.data);
+      if (profileRes.data) {
+        const primeiro = profileRes.data.nome?.split(' ')[0] || '';
+        setOperadorNome(toTitleCase(primeiro));
       }
     })();
   }, [dialogOpen, user]);
@@ -131,22 +178,63 @@ export function PaymentReminders() {
   const progressPercent = allPendingReminders.length > 0 ? Math.round(((enviadosCount + errosCount) / allPendingReminders.length) * 100) : 0;
 
   const gerarMensagem = (lembrete: any): string => {
-    const nome = lembrete.cliente_nome?.split(' ')[0] || 'Cliente';
+    const nomeCompleto = toTitleCase(lembrete.cliente_nome || 'Cliente');
+    const primeiroNome = nomeCompleto.split(' ')[0];
     const valor = lembrete.valor_parcela ? formatCurrency(lembrete.valor_parcela) : '';
     const dataStr = lembrete.data_prevista
       ? new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')
       : '';
 
+    const hoje = new Date();
+    const venc = new Date(lembrete.data_prevista + 'T00:00:00');
+    const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
+
+    // Determine the tipo_lembrete key to look up
+    let tipoKey = '';
     if (lembrete.tipo === 'vencido') {
-      const hoje = new Date();
-      const venc = new Date(lembrete.data_prevista + 'T00:00:00');
-      const diasAtraso = Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
-      return `Olá ${nome}, tudo bem? Identificamos que a parcela${valor ? ` de ${valor}` : ''} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante. Caso já tenha efetuado o pagamento, desconsidere esta mensagem.`;
+      tipoKey = `vencido_d${diasAtraso}`;
+    } else if (lembrete.tipo === 'hoje') {
+      tipoKey = 'dia_vencimento';
+    } else {
+      tipoKey = '3_dias';
+    }
+
+    // Find matching templates
+    let matched = templates.filter(t => t.tipo_lembrete === tipoKey);
+
+    // For vencido, if no exact match, try to find closest lower day
+    if (matched.length === 0 && lembrete.tipo === 'vencido') {
+      const vencidoTemplates = templates
+        .filter(t => t.tipo_lembrete.startsWith('vencido_d'))
+        .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', ''), 10) }))
+        .filter(t => !isNaN(t.dias))
+        .sort((a, b) => b.dias - a.dias);
+
+      const closest = vencidoTemplates.find(t => t.dias <= diasAtraso);
+      if (closest) matched = templates.filter(t => t.tipo_lembrete === `vencido_d${closest.dias}`);
+    }
+
+    // If templates found, pick random and substitute variables
+    if (matched.length > 0) {
+      const chosen = matched[Math.floor(Math.random() * matched.length)];
+      return substituirVariaveis(chosen.mensagem, {
+        nome_cliente: nomeCompleto,
+        primeiro_nome: primeiroNome,
+        nome_operador: operadorNome || 'Operador',
+        valor,
+        data_vencimento: dataStr,
+        dias_atraso: diasAtraso,
+      });
+    }
+
+    // Fallback hardcoded messages
+    if (lembrete.tipo === 'vencido') {
+      return `Olá ${primeiroNome}, tudo bem? Identificamos que a parcela${valor ? ` de ${valor}` : ''} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante. Caso já tenha efetuado o pagamento, desconsidere esta mensagem.`;
     }
     if (lembrete.tipo === 'hoje') {
-      return `Olá ${nome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela${valor ? ` de ${valor}` : ''}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
+      return `Olá ${primeiroNome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela${valor ? ` de ${valor}` : ''}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
     }
-    return `Olá ${nome}, tudo bem? Informamos que sua parcela${valor ? ` de ${valor}` : ''} vence em ${dataStr}. Fique atento para não perder o prazo!`;
+    return `Olá ${primeiroNome}, tudo bem? Informamos que sua parcela${valor ? ` de ${valor}` : ''} vence em ${dataStr}. Fique atento para não perder o prazo!`;
   };
 
   const handleStartEnvios = async () => {
