@@ -178,22 +178,63 @@ export function PaymentReminders() {
   const progressPercent = allPendingReminders.length > 0 ? Math.round(((enviadosCount + errosCount) / allPendingReminders.length) * 100) : 0;
 
   const gerarMensagem = (lembrete: any): string => {
-    const nome = lembrete.cliente_nome?.split(' ')[0] || 'Cliente';
+    const nomeCompleto = toTitleCase(lembrete.cliente_nome || 'Cliente');
+    const primeiroNome = nomeCompleto.split(' ')[0];
     const valor = lembrete.valor_parcela ? formatCurrency(lembrete.valor_parcela) : '';
     const dataStr = lembrete.data_prevista
       ? new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')
       : '';
 
+    const hoje = new Date();
+    const venc = new Date(lembrete.data_prevista + 'T00:00:00');
+    const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
+
+    // Determine the tipo_lembrete key to look up
+    let tipoKey = '';
     if (lembrete.tipo === 'vencido') {
-      const hoje = new Date();
-      const venc = new Date(lembrete.data_prevista + 'T00:00:00');
-      const diasAtraso = Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
-      return `Olá ${nome}, tudo bem? Identificamos que a parcela${valor ? ` de ${valor}` : ''} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante. Caso já tenha efetuado o pagamento, desconsidere esta mensagem.`;
+      tipoKey = `vencido_d${diasAtraso}`;
+    } else if (lembrete.tipo === 'hoje') {
+      tipoKey = 'dia_vencimento';
+    } else {
+      tipoKey = '3_dias';
+    }
+
+    // Find matching templates
+    let matched = templates.filter(t => t.tipo_lembrete === tipoKey);
+
+    // For vencido, if no exact match, try to find closest lower day
+    if (matched.length === 0 && lembrete.tipo === 'vencido') {
+      const vencidoTemplates = templates
+        .filter(t => t.tipo_lembrete.startsWith('vencido_d'))
+        .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', ''), 10) }))
+        .filter(t => !isNaN(t.dias))
+        .sort((a, b) => b.dias - a.dias);
+
+      const closest = vencidoTemplates.find(t => t.dias <= diasAtraso);
+      if (closest) matched = templates.filter(t => t.tipo_lembrete === `vencido_d${closest.dias}`);
+    }
+
+    // If templates found, pick random and substitute variables
+    if (matched.length > 0) {
+      const chosen = matched[Math.floor(Math.random() * matched.length)];
+      return substituirVariaveis(chosen.mensagem, {
+        nome_cliente: nomeCompleto,
+        primeiro_nome: primeiroNome,
+        nome_operador: operadorNome || 'Operador',
+        valor,
+        data_vencimento: dataStr,
+        dias_atraso: diasAtraso,
+      });
+    }
+
+    // Fallback hardcoded messages
+    if (lembrete.tipo === 'vencido') {
+      return `Olá ${primeiroNome}, tudo bem? Identificamos que a parcela${valor ? ` de ${valor}` : ''} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante. Caso já tenha efetuado o pagamento, desconsidere esta mensagem.`;
     }
     if (lembrete.tipo === 'hoje') {
-      return `Olá ${nome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela${valor ? ` de ${valor}` : ''}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
+      return `Olá ${primeiroNome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela${valor ? ` de ${valor}` : ''}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
     }
-    return `Olá ${nome}, tudo bem? Informamos que sua parcela${valor ? ` de ${valor}` : ''} vence em ${dataStr}. Fique atento para não perder o prazo!`;
+    return `Olá ${primeiroNome}, tudo bem? Informamos que sua parcela${valor ? ` de ${valor}` : ''} vence em ${dataStr}. Fique atento para não perder o prazo!`;
   };
 
   const handleStartEnvios = async () => {
