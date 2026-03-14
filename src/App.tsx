@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { AutoSendProvider } from "@/hooks/useAutoSend";
+import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
 
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -113,6 +114,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <AutoSendProvider>
+          <WhatsAppSendingProvider>
           <Routes>
             <Route path="/" element={<PortalHome />} />
             <Route path="/:creditor" element={<PortalConsulta />} />
@@ -144,6 +146,7 @@ const App = () => (
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </WhatsAppSendingProvider>
           </AutoSendProvider>
         </AuthProvider>
       </BrowserRouter>

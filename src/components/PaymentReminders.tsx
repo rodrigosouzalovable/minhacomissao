@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { useAuth } from '@/hooks/useAuth';
+import { useWhatsAppSending } from '@/contexts/WhatsAppSendingContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -26,13 +27,6 @@ interface WhatsAppInstance {
   ativo: boolean;
 }
 
-interface FilaItem {
-  id: string;
-  pagamento_id: string;
-  telefone: string;
-  status: string | null;
-}
-
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '');
 }
@@ -50,52 +44,29 @@ interface LembreteTemplate {
   mensagem: string;
 }
 
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
-}
-
-function substituirVariaveis(template: string, vars: {
-  nome_cliente: string;
-  primeiro_nome: string;
-  nome_operador: string;
-  valor: string;
-  data_vencimento: string;
-  dias_atraso: number;
-}): string {
-  return template
-    .replace(/\{nome_cliente\}/g, vars.nome_cliente)
-    .replace(/\{primeiro_nome\}/g, vars.primeiro_nome)
-    .replace(/\{nome_operador\}/g, vars.nome_operador)
-    .replace(/\{valor\}/g, vars.valor)
-    .replace(/\{data_vencimento\}/g, vars.data_vencimento)
-    .replace(/\{dias_atraso\}/g, String(vars.dias_atraso));
-}
-
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const { user } = useAuth();
+  const { isSending, currentSendingId, statusMap, envioProgresso, startSending, cancelSending, loadSavedProgress } = useWhatsAppSending();
   const [activeTab, setActiveTab] = useState('pendentes');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-  // WhatsApp sending state
+  // WhatsApp instances
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
-  const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
-  const [sending, setSending] = useState(false);
-  const [starting] = useState(false);
-  const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
-  const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
-  const cancelSendRef = useRef(false);
 
-  // Templates state
+  // Templates & operator
   const [templates, setTemplates] = useState<LembreteTemplate[]>([]);
   const [operadorNome, setOperadorNome] = useState('');
+
+  // Fila items for status checking from DB
+  const [filaItems, setFilaItems] = useState<{ id: string; pagamento_id: string; telefone: string; status: string | null }[]>([]);
 
   const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
 
   const toggleInstance = (id: string) => {
-    setSelectedInstanceIds(prev => 
+    setSelectedInstanceIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
@@ -103,7 +74,7 @@ export function PaymentReminders() {
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
   const allPendingReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias];
 
-  // Fetch WhatsApp instances, templates, and operator name when dialog opens
+  // Fetch instances, templates, operator name when dialog opens
   useEffect(() => {
     if (!dialogOpen || !user) return;
     (async () => {
@@ -131,12 +102,14 @@ export function PaymentReminders() {
       if (tplRes.data) setTemplates(tplRes.data);
       if (profileRes.data) {
         const primeiro = profileRes.data.nome?.split(' ')[0] || '';
-        setOperadorNome(toTitleCase(primeiro));
+        setOperadorNome(primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase());
       }
+      // Also reload saved progress
+      loadSavedProgress();
     })();
   }, [dialogOpen, user]);
 
-  // Fetch fila items for all selected instances
+  // Fetch fila items
   const fetchFila = useCallback(async () => {
     if (selectedInstances.length === 0) { setFilaItems([]); return; }
     const hoje = new Date();
@@ -153,10 +126,20 @@ export function PaymentReminders() {
 
   useEffect(() => { if (dialogOpen) fetchFila(); }, [dialogOpen, fetchFila]);
 
-  // Get WhatsApp status for a reminder
+  // Get WhatsApp status for a reminder - check context statusMap first, then DB fila, then saved progress
   const getWhatsAppStatus = (reminderId: string, telefone?: string): string => {
     if (reminderId === currentSendingId) return 'enviando';
-    if (localStatusOverride[reminderId]) return localStatusOverride[reminderId];
+    if (statusMap[reminderId]) return statusMap[reminderId];
+
+    // Check saved progress from DB
+    const savedItem = envioProgresso.find(p => p.pagamento_id === reminderId);
+    if (savedItem) {
+      if (savedItem.status === 'enviado') return 'enviado';
+      if (savedItem.status === 'erro') return 'erro';
+      return 'pendente';
+    }
+
+    // Check fila items
     const rPhone = normalizePhone(telefone || '');
     const match = filaItems.find(f => {
       if (f.pagamento_id === reminderId) return true;
@@ -177,65 +160,10 @@ export function PaymentReminders() {
   const naoEnviadosCount = allPendingReminders.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'nao_enviado').length;
   const progressPercent = allPendingReminders.length > 0 ? Math.round(((enviadosCount + errosCount) / allPendingReminders.length) * 100) : 0;
 
-  const gerarMensagem = (lembrete: any): string => {
-    const nomeCompleto = toTitleCase(lembrete.cliente_nome || 'Cliente');
-    const primeiroNome = nomeCompleto.split(' ')[0];
-    const valor = lembrete.valor_parcela ? formatCurrency(lembrete.valor_parcela) : '';
-    const dataStr = lembrete.data_prevista
-      ? new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')
-      : '';
-
-    const hoje = new Date();
-    const venc = new Date(lembrete.data_prevista + 'T00:00:00');
-    const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
-
-    // Determine the tipo_lembrete key to look up
-    let tipoKey = '';
-    if (lembrete.tipo === 'vencido') {
-      tipoKey = `vencido_d${diasAtraso}`;
-    } else if (lembrete.tipo === 'hoje') {
-      tipoKey = 'dia_vencimento';
-    } else {
-      tipoKey = '3_dias';
-    }
-
-    // Find matching templates
-    let matched = templates.filter(t => t.tipo_lembrete === tipoKey);
-
-    // For vencido, if no exact match, try to find closest lower day
-    if (matched.length === 0 && lembrete.tipo === 'vencido') {
-      const vencidoTemplates = templates
-        .filter(t => t.tipo_lembrete.startsWith('vencido_d'))
-        .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', ''), 10) }))
-        .filter(t => !isNaN(t.dias))
-        .sort((a, b) => b.dias - a.dias);
-
-      const closest = vencidoTemplates.find(t => t.dias <= diasAtraso);
-      if (closest) matched = templates.filter(t => t.tipo_lembrete === `vencido_d${closest.dias}`);
-    }
-
-    // If templates found, pick random and substitute variables
-    if (matched.length > 0) {
-      const chosen = matched[Math.floor(Math.random() * matched.length)];
-      return substituirVariaveis(chosen.mensagem, {
-        nome_cliente: nomeCompleto,
-        primeiro_nome: primeiroNome,
-        nome_operador: operadorNome || 'Operador',
-        valor,
-        data_vencimento: dataStr,
-        dias_atraso: diasAtraso,
-      });
-    }
-
-    // Fallback hardcoded messages
-    if (lembrete.tipo === 'vencido') {
-      return `Olá ${primeiroNome}, tudo bem? Identificamos que a parcela${valor ? ` de ${valor}` : ''} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante. Caso já tenha efetuado o pagamento, desconsidere esta mensagem.`;
-    }
-    if (lembrete.tipo === 'hoje') {
-      return `Olá ${primeiroNome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela${valor ? ` de ${valor}` : ''}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
-    }
-    return `Olá ${primeiroNome}, tudo bem? Informamos que sua parcela${valor ? ` de ${valor}` : ''} vence em ${dataStr}. Fique atento para não perder o prazo!`;
-  };
+  // Get last sent time from saved progress
+  const ultimoEnvio = envioProgresso
+    .filter(p => p.status === 'enviado' && p.enviado_em)
+    .sort((a, b) => new Date(b.enviado_em!).getTime() - new Date(a.enviado_em!).getTime())[0];
 
   const handleStartEnvios = async () => {
     if (selectedInstances.length === 0 || !user) return;
@@ -251,61 +179,17 @@ export function PaymentReminders() {
       return;
     }
 
-    setSending(true);
-    cancelSendRef.current = false;
-    toast.success(`Iniciando envio de ${pendentes.length} lembrete${pendentes.length > 1 ? 's' : ''}...`);
+    const queueItems = pendentes.map(r => ({
+      id: r.id,
+      cliente_nome: r.cliente_nome,
+      cliente_telefone: r.cliente_telefone!,
+      valor_parcela: r.valor_parcela,
+      data_prevista: r.data_prevista,
+      tipo: r.tipo,
+      acordo_id: r.acordo_id,
+    }));
 
-    for (let i = 0; i < pendentes.length; i++) {
-      if (cancelSendRef.current) break;
-
-      const lembrete = pendentes[i];
-      const instance = selectedInstances[i % selectedInstances.length];
-      const mensagem = gerarMensagem(lembrete);
-
-      setCurrentSendingId(lembrete.id);
-
-      try {
-        const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-          body: {
-            telefone: lembrete.cliente_telefone,
-            mensagem,
-            uazapi_server_url: instance.server_url,
-            uazapi_instance_token: instance.instance_token,
-          },
-        });
-
-        setCurrentSendingId(null);
-
-        if (error || !data?.success) {
-          setLocalStatusOverride(prev => ({ ...prev, [lembrete.id]: 'erro' }));
-        } else {
-          setLocalStatusOverride(prev => ({ ...prev, [lembrete.id]: 'enviado' }));
-        }
-      } catch {
-        setCurrentSendingId(null);
-        setLocalStatusOverride(prev => ({ ...prev, [lembrete.id]: 'erro' }));
-      }
-
-      // Wait 5-7 minutes before next send (skip on last item or cancel)
-      if (i < pendentes.length - 1 && !cancelSendRef.current) {
-        const delay = (5 + Math.random() * 2) * 60 * 1000;
-        const delayMinutes = Math.round(delay / 60000);
-        toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-
-    setSending(false);
-    setCurrentSendingId(null);
-    if (cancelSendRef.current) {
-      toast.info('Envio cancelado');
-    } else {
-      toast.success('Envio finalizado!');
-    }
-  };
-
-  const handleCancelEnvios = () => {
-    cancelSendRef.current = true;
+    startSending(queueItems, selectedInstances, templates, operadorNome);
   };
 
   const formatCurrency = (value: number) => {
@@ -429,7 +313,7 @@ export function PaymentReminders() {
               </span>
             ) : (
               <span className="text-muted-foreground text-xs">
-                {isPagamento 
+                {isPagamento
                   ? `${lembrete.tipo === 'vencido' ? 'Vencida' : lembrete.tipo === 'hoje' ? 'Vence hoje' : 'Vence em 3 dias'}`
                   : `Retorno • ${lembrete.tipo === 'hoje' ? 'Hoje' : 'Em 3 dias'}`
                 }
@@ -574,6 +458,9 @@ export function PaymentReminders() {
                 {totalLembretes > 9 ? '9+' : totalLembretes}
               </span>
             )}
+            {isSending && (
+              <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
+            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-0" align="end">
@@ -581,20 +468,18 @@ export function PaymentReminders() {
         </PopoverContent>
       </Popover>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => {
-        setDialogOpen(open);
-        if (!open) {
-          setSending(false);
-          cancelSendRef.current = true;
-          setLocalStatusOverride({});
-          setCurrentSendingId(null);
-        }
-      }}>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
               Lembretes
+              {isSending && (
+                <Badge className="bg-amber-500 hover:bg-amber-500 text-xs gap-1">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  Enviando...
+                </Badge>
+              )}
             </DialogTitle>
           </DialogHeader>
 
@@ -603,18 +488,18 @@ export function PaymentReminders() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">WhatsApp</span>
               <div className="flex gap-2">
-                {sending ? (
-                  <Button variant="destructive" size="sm" onClick={handleCancelEnvios}>
+                {isSending ? (
+                  <Button variant="destructive" size="sm" onClick={cancelSending}>
                     Cancelar
                   </Button>
                 ) : (
                   <Button
                     size="sm"
                     className="gap-1.5"
-                    disabled={selectedInstanceIds.length === 0 || totalLembretes === 0 || starting}
+                    disabled={selectedInstanceIds.length === 0 || totalLembretes === 0}
                     onClick={handleStartEnvios}
                   >
-                    {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    <Play className="h-3.5 w-3.5" />
                     Enviar
                   </Button>
                 )}
@@ -626,11 +511,12 @@ export function PaymentReminders() {
                   key={inst.id}
                   type="button"
                   onClick={() => toggleInstance(inst.id)}
+                  disabled={isSending}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${
                     selectedInstanceIds.includes(inst.id)
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'bg-background text-foreground border-border hover:bg-accent'
-                  }`}
+                  } ${isSending ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className={`h-2 w-2 rounded-full ${selectedInstanceIds.includes(inst.id) ? 'bg-primary-foreground' : 'bg-muted-foreground/40'}`} />
                   {inst.nome || inst.instance_token.slice(0, 12) + '...'}
@@ -642,8 +528,8 @@ export function PaymentReminders() {
             </div>
           </div>
 
-          {/* Progress bar during sending */}
-          {(sending || enviadosCount > 0 || errosCount > 0) && selectedInstanceIds.length > 0 && (
+          {/* Progress bar + last sent info */}
+          {(isSending || enviadosCount > 0 || errosCount > 0) && (
             <div className="space-y-1">
               <Progress value={progressPercent} className="h-2" />
               <div className="flex justify-between text-xs text-muted-foreground">
@@ -651,6 +537,13 @@ export function PaymentReminders() {
                 {errosCount > 0 && <span className="text-destructive">{errosCount} erro{errosCount !== 1 ? 's' : ''}</span>}
                 <span>{naoEnviadosCount} restante{naoEnviadosCount !== 1 ? 's' : ''}</span>
               </div>
+              {ultimoEnvio && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  Último envio: {new Date(ultimoEnvio.enviado_em!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  {ultimoEnvio.cliente_nome && <span>— {ultimoEnvio.cliente_nome}</span>}
+                </div>
+              )}
             </div>
           )}
 

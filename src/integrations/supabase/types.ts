@@ -876,6 +876,45 @@ export type Database = {
         }
         Relationships: []
       }
+      lembrete_envio_progresso: {
+        Row: {
+          cliente_nome: string | null
+          cliente_telefone: string | null
+          criado_em: string
+          data_envio: string
+          enviado_em: string | null
+          erro_mensagem: string | null
+          id: string
+          pagamento_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          criado_em?: string
+          data_envio?: string
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          pagamento_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          criado_em?: string
+          data_envio?: string
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          pagamento_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lembrete_mensagens_templates: {
         Row: {
           ativo: boolean | null
