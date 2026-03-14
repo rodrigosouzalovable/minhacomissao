@@ -139,13 +139,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { screenshot, objective, history, current_url } = await req.json()
+    const { screenshot, objective, history, current_url, mode } = await req.json()
 
     if (!screenshot || !objective) {
       return new Response(JSON.stringify({ error: 'screenshot e objective são obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
+
+    // Single-action mode: simplified prompt for finding a specific element
+    const isSingleAction = mode === 'single_action'
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
     if (!LOVABLE_API_KEY) {
