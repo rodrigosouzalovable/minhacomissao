@@ -188,10 +188,15 @@ serve(async (req) => {
     const filaSet = new Set<string>();
     for (let i = 0; i < pagamentoIds.length; i += 100) {
       const chunk = pagamentoIds.slice(i, i + 100);
-      const { data: filaRows, error } = await supabase
+      let filaQuery = supabase
         .from('whatsapp_fila')
         .select('pagamento_id, tipo_lembrete')
         .in('pagamento_id', chunk);
+      // When override token, only check for duplicates with the same instance
+      if (overrideToken) {
+        filaQuery = filaQuery.eq('instance_token', overrideToken);
+      }
+      const { data: filaRows, error } = await filaQuery;
       if (error) { console.error('Erro fila batch:', error); throw error; }
       for (const r of (filaRows || [])) filaSet.add(`${r.pagamento_id}_${r.tipo_lembrete}`);
     }
