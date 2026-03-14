@@ -444,6 +444,116 @@ export default function AutomacaoCobMais() {
     }
   };
 
+  // Pós Atendimento handlers
+  const handleCapturarPosAtendimento = async () => {
+    if (!serverUrl || roboStatus !== 'online') return toast.error('Robô precisa estar online');
+    setPosAtendimentoLoading(true);
+    setPosAtendimentoClientes([]);
+    try {
+      // Step 1: Extract text from CobMais via Playwright
+      const extractRes = await fetch(`${serverUrl}/automacao/extrair-pos-atendimento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const extractData = await extractRes.json();
+      if (!extractData.success || !extractData.texto) {
+        throw new Error(extractData.error || 'Não foi possível extrair o painel Pós Atendimento');
+      }
+
+      // Step 2: Process with AI
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const processRes = await fetch(`${supabaseUrl}/functions/v1/process-pos-atendimento`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ texto: extractData.texto, template: posAtendimentoTemplate }),
+      });
+      const processData = await processRes.json();
+      if (!processRes.ok || !processData.success) {
+        throw new Error(processData.error || 'Erro ao processar dados');
+      }
+
+      const clientes = (processData.clientes || []).map((c: any) => ({
+        ...c,
+        selecionado: true,
+        enviando: false,
+        enviado: false,
+        erro: null,
+      }));
+      setPosAtendimentoClientes(clientes);
+      if (clientes.length === 0) {
+        toast.info('Nenhum cliente encontrado no painel Pós Atendimento');
+      } else {
+        toast.success(`${clientes.length} cliente(s) extraído(s) do Pós Atendimento`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao capturar Pós Atendimento');
+    } finally {
+      setPosAtendimentoLoading(false);
+    }
+  };
+
+  const handleEnviarPosAtendimento = async () => {
+    const selecionados = posAtendimentoClientes.filter(c => c.selecionado && !c.enviado);
+    if (selecionados.length === 0) return toast.error('Nenhum cliente selecionado para envio');
+
+    setPosAtendimentoEnviando(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { toast.error('Não autenticado'); setPosAtendimentoEnviando(false); return; }
+
+    // Get user's WhatsApp config
+    const { data: whatsappConfig } = await supabase
+      .from('user_whatsapp_instances')
+      .select('server_url, instance_token')
+      .eq('user_id', session.user.id)
+      .eq('ativo', true)
+      .limit(1)
+      .maybeSingle();
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+    for (let i = 0; i < posAtendimentoClientes.length; i++) {
+      const c = posAtendimentoClientes[i];
+      if (!c.selecionado || c.enviado || !c.telefone) continue;
+
+      setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, enviando: true } : cl));
+
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            telefone: c.telefone,
+            mensagem: c.mensagem,
+            uazapi_server_url: whatsappConfig?.server_url,
+            uazapi_instance_token: whatsappConfig?.instance_token,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, enviando: false, enviado: true } : cl));
+        } else {
+          throw new Error(data.error || 'Erro ao enviar');
+        }
+      } catch (err: any) {
+        setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, enviando: false, erro: err.message } : cl));
+      }
+
+      // Small delay between sends
+      if (i < posAtendimentoClientes.length - 1) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+
+    const enviados = posAtendimentoClientes.filter(c => c.enviado).length;
+    toast.success(`${enviados + selecionados.length} mensagem(ns) enviada(s)`);
+    setPosAtendimentoEnviando(false);
+  };
+
   // Chat with AI about knowledge
   const handleChatSend = async () => {
     const text = chatInput.trim();
