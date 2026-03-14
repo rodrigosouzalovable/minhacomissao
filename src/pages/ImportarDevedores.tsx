@@ -198,6 +198,12 @@ export default function ImportarDevedores() {
     }).filter(r => r.cpf.length >= 11 && r.nome.length > 0);
   };
 
+  const isNDValue = (val: unknown): boolean => {
+    if (val === undefined || val === null) return true;
+    const s = String(val).trim().toUpperCase();
+    return s === '#N/D' || s === '#N/A' || s === '#REF!' || s === '#VALUE!' || s === '';
+  };
+
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
@@ -240,6 +246,16 @@ export default function ImportarDevedores() {
 
       const contrato = String(row['C'] ?? '').trim();
       const valor = parseNum(row['F']);
+      const total = isNDValue(row['G']) ? valor : parseNum(row['G']);
+
+      // Telefone from column H (direct), fallback to phone map from sheet 2
+      let telefone = '';
+      if (!isNDValue(row['H'])) {
+        telefone = String(row['H']).replace(/\D/g, '');
+      }
+      if (!telefone) {
+        telefone = phoneMap.get(cpf) || '';
+      }
 
       let vencimentoStr = '';
       const vencRaw = row['E'];
@@ -248,20 +264,20 @@ export default function ImportarDevedores() {
         if (dt) {
           vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
         }
-      } else if (vencRaw) {
+      } else if (vencRaw && !isNDValue(vencRaw)) {
         vencimentoStr = String(vencRaw);
       }
 
       devedores.push({
         cpf,
         nascimento: '',
-        nome: String(row['B'] ?? ''),
+        nome: isNDValue(row['B']) ? '' : String(row['B'] ?? ''),
         credor: '',
-        contrato,
+        contrato: isNDValue(contrato) ? '' : contrato,
         atraso: vencimentoStr,
         valor_original: valor,
-        valor_atualizado: valor,
-        telefone: phoneMap.get(cpf) || undefined,
+        valor_atualizado: total || valor,
+        telefone: telefone || undefined,
       });
     }
 
