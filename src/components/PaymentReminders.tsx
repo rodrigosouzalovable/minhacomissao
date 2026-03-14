@@ -45,6 +45,32 @@ function WhatsAppStatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className="text-xs px-1.5 py-0 gap-1 text-muted-foreground"><Ban className="h-2.5 w-2.5" />Aguardando</Badge>;
 }
 
+interface LembreteTemplate {
+  tipo_lembrete: string;
+  mensagem: string;
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
+}
+
+function substituirVariaveis(template: string, vars: {
+  nome_cliente: string;
+  primeiro_nome: string;
+  nome_operador: string;
+  valor: string;
+  data_vencimento: string;
+  dias_atraso: number;
+}): string {
+  return template
+    .replace(/\{nome_cliente\}/g, vars.nome_cliente)
+    .replace(/\{primeiro_nome\}/g, vars.primeiro_nome)
+    .replace(/\{nome_operador\}/g, vars.nome_operador)
+    .replace(/\{valor\}/g, vars.valor)
+    .replace(/\{data_vencimento\}/g, vars.data_vencimento)
+    .replace(/\{dias_atraso\}/g, String(vars.dias_atraso));
+}
+
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const { user } = useAuth();
@@ -61,6 +87,10 @@ export function PaymentReminders() {
   const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
   const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const cancelSendRef = useRef(false);
+
+  // Templates state
+  const [templates, setTemplates] = useState<LembreteTemplate[]>([]);
+  const [operadorNome, setOperadorNome] = useState('');
 
   const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
 
