@@ -61,7 +61,7 @@ interface Importacao {
 const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
-  cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total | Aba 2: Telefones (opcional)',
+  cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
   pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
   pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
 };
@@ -198,6 +198,12 @@ export default function ImportarDevedores() {
     }).filter(r => r.cpf.length >= 11 && r.nome.length > 0);
   };
 
+  const isNDValue = (val: unknown): boolean => {
+    if (val === undefined || val === null) return true;
+    const s = String(val).trim().toUpperCase();
+    return s === '#N/D' || s === '#N/A' || s === '#REF!' || s === '#VALUE!' || s === '';
+  };
+
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
@@ -240,6 +246,16 @@ export default function ImportarDevedores() {
 
       const contrato = String(row['C'] ?? '').trim();
       const valor = parseNum(row['F']);
+      const total = isNDValue(row['G']) ? valor : parseNum(row['G']);
+
+      // Telefone from column H (direct), fallback to phone map from sheet 2
+      let telefone = '';
+      if (!isNDValue(row['H'])) {
+        telefone = String(row['H']).replace(/\D/g, '');
+      }
+      if (!telefone) {
+        telefone = phoneMap.get(cpf) || '';
+      }
 
       let vencimentoStr = '';
       const vencRaw = row['E'];
@@ -248,20 +264,20 @@ export default function ImportarDevedores() {
         if (dt) {
           vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
         }
-      } else if (vencRaw) {
+      } else if (vencRaw && !isNDValue(vencRaw)) {
         vencimentoStr = String(vencRaw);
       }
 
       devedores.push({
         cpf,
         nascimento: '',
-        nome: String(row['B'] ?? ''),
+        nome: isNDValue(row['B']) ? '' : String(row['B'] ?? ''),
         credor: '',
-        contrato,
+        contrato: isNDValue(contrato) ? '' : contrato,
         atraso: vencimentoStr,
         valor_original: valor,
-        valor_atualizado: valor,
-        telefone: phoneMap.get(cpf) || undefined,
+        valor_atualizado: total || valor,
+        telefone: telefone || undefined,
       });
     }
 
