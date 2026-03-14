@@ -1,4 +1,12 @@
-## ✅ Concluído — Resposta do Admin via WhatsApp
+## ✅ Concluído — Smart Click: IA de Visão Guia Comandos do Chat
+
+1. **Vision-Guided Execution** — `executar_acao_direta` agora captura screenshot → envia para `analyze-cobmais-screen` (Gemini Pro Vision, modo `single_action`) → encontra seletor CSS correto → executa → verifica resultado
+2. **`click_at_position`** — novo action no `server.js` que aceita coordenadas x,y para cliques quando CSS selectors falham
+3. **`screenshot` action** — novo endpoint em `automacao-cobmais` que captura screenshot do servidor para uso interno
+4. **Prompt atualizado** — Modo Híbrido Inteligente, Falhar e Pedir Ajuste (nunca "✅ Feito!" sem verificar), Uma Etapa por Vez
+5. **Fluxo navigate/keypress** — execução direta sem visão (não precisam análise visual)
+6. **Verificação pós-ação** — captura screenshot após execução para confirmar que a tela mudou
+
 
 Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
 
