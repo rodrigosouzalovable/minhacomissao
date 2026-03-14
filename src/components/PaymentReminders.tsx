@@ -260,7 +260,7 @@ export function PaymentReminders() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {inDialog && (
               <WhatsAppStatusBadge status={whatsappStatus} />
             )}
@@ -271,6 +271,22 @@ export function PaymentReminders() {
             )}
           </div>
         </Link>
+        {inDialog && whatsappStatus !== 'enviado' && whatsappStatus !== 'enviando' && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              markAsEnviado(lembrete.id, lembrete.cliente_nome, lembrete.cliente_telefone || '');
+              toast.success('Marcado como enviado');
+            }}
+            title="Marcar como enviado"
+          >
+            <Send className="h-3 w-3" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
