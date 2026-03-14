@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import {
   Popover,
   PopoverContent,
@@ -54,7 +54,7 @@ export function PaymentReminders() {
 
   // WhatsApp sending state
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
-  const [selectedInstanceId, setSelectedInstanceId] = useState('');
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [sending, setSending] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -62,7 +62,13 @@ export function PaymentReminders() {
   const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const cancelSendRef = useRef(false);
 
-  const selectedInstance = instances.find(i => i.id === selectedInstanceId);
+  const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
+
+  const toggleInstance = (id: string) => {
+    setSelectedInstanceIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
   const allPendingReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias];
@@ -78,24 +84,25 @@ export function PaymentReminders() {
         .eq('ativo', true);
       if (data) {
         setInstances(data);
-        if (data.length === 1) setSelectedInstanceId(data[0].id);
+        if (data.length === 1) setSelectedInstanceIds([data[0].id]);
       }
     })();
   }, [dialogOpen, user]);
 
-  // Fetch fila items for selected instance
+  // Fetch fila items for all selected instances
   const fetchFila = useCallback(async () => {
-    if (!selectedInstance) { setFilaItems([]); return; }
+    if (selectedInstances.length === 0) { setFilaItems([]); return; }
     const hoje = new Date();
     const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+    const tokens = selectedInstances.map(i => i.instance_token);
     const { data } = await supabase
       .from('whatsapp_fila')
       .select('id, pagamento_id, telefone, status')
-      .eq('instance_token', selectedInstance.instance_token)
+      .in('instance_token', tokens)
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
     setFilaItems(data || []);
-  }, [selectedInstance]);
+  }, [selectedInstances.map(i => i.id).join(',')]);
 
   useEffect(() => { if (dialogOpen) fetchFila(); }, [dialogOpen, fetchFila]);
 
@@ -124,37 +131,44 @@ export function PaymentReminders() {
   const progressPercent = allPendingReminders.length > 0 ? Math.round(((enviadosCount + errosCount) / allPendingReminders.length) * 100) : 0;
 
   const handleStartEnvios = async () => {
-    if (!selectedInstance || !user) return;
+    if (selectedInstances.length === 0 || !user) return;
     setStarting(true);
     cancelSendRef.current = false;
     try {
-      const { data, error } = await supabase.functions.invoke('check-payment-reminders', {
-        body: {
-          user_id: user.id,
-          instance_token: selectedInstance.instance_token,
-          server_url: selectedInstance.server_url,
-        },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erro desconhecido');
-      if (data.agendados === 0) {
+      // Schedule reminders for each selected instance
+      let totalAgendados = 0;
+      for (const inst of selectedInstances) {
+        const { data, error } = await supabase.functions.invoke('check-payment-reminders', {
+          body: {
+            user_id: user.id,
+            instance_token: inst.instance_token,
+            server_url: inst.server_url,
+          },
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Erro desconhecido');
+        totalAgendados += (data.agendados || 0);
+      }
+      if (totalAgendados === 0) {
         toast.info('Nenhuma parcela para notificar hoje.');
         setStarting(false);
         return;
       }
-      toast.success(`${data.agendados} lembretes agendados! Iniciando envio...`);
+      toast.success(`${totalAgendados} lembretes agendados! Iniciando envio...`);
       await fetchFila();
       setStarting(false);
       setSending(true);
 
-      // Sequential send
+      const tokens = selectedInstances.map(i => i.instance_token);
+
+      // Sequential send across all selected instances
       const processNext = async () => {
         while (!cancelSendRef.current) {
           const { data: nextItems } = await supabase
             .from('whatsapp_fila')
             .select('id, telefone, pagamento_id')
             .eq('status', 'pendente')
-            .eq('instance_token', selectedInstance.instance_token)
+            .in('instance_token', tokens)
             .order('agendado_para', { ascending: true })
             .limit(1);
           if (!nextItems || nextItems.length === 0) break;
@@ -205,15 +219,16 @@ export function PaymentReminders() {
   };
 
   const handleCancelEnvios = async () => {
-    if (!selectedInstance) return;
+    if (selectedInstances.length === 0) return;
     cancelSendRef.current = true;
     const hojeDate = new Date();
     const hojeStr = `${hojeDate.getFullYear()}-${String(hojeDate.getMonth() + 1).padStart(2, '0')}-${String(hojeDate.getDate()).padStart(2, '0')}`;
+    const tokens = selectedInstances.map(i => i.instance_token);
     await supabase
       .from('whatsapp_fila')
       .delete()
       .eq('status', 'pendente')
-      .eq('instance_token', selectedInstance.instance_token)
+      .in('instance_token', tokens)
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
     toast.success('Envio cancelado');
@@ -501,39 +516,51 @@ export function PaymentReminders() {
           </DialogHeader>
 
           {/* WhatsApp instance selector + send button */}
-          <div className="flex items-center gap-2 border rounded-lg p-3 bg-muted/30">
-            <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-              <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Selecione um WhatsApp..." />
-              </SelectTrigger>
-              <SelectContent>
-                {instances.map((inst) => (
-                  <SelectItem key={inst.id} value={inst.id}>
-                    {inst.nome || inst.instance_token.slice(0, 12) + '...'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {sending ? (
-              <Button variant="destructive" size="sm" onClick={handleCancelEnvios}>
-                Cancelar
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="gap-1.5"
-                disabled={!selectedInstanceId || totalLembretes === 0 || starting}
-                onClick={handleStartEnvios}
-              >
-                {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                Enviar
-              </Button>
-            )}
+          <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">WhatsApp</span>
+              <div className="flex gap-2">
+                {sending ? (
+                  <Button variant="destructive" size="sm" onClick={handleCancelEnvios}>
+                    Cancelar
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={selectedInstanceIds.length === 0 || totalLembretes === 0 || starting}
+                    onClick={handleStartEnvios}
+                  >
+                    {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    Enviar
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {instances.map((inst) => (
+                <button
+                  key={inst.id}
+                  type="button"
+                  onClick={() => toggleInstance(inst.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${
+                    selectedInstanceIds.includes(inst.id)
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-foreground border-border hover:bg-accent'
+                  }`}
+                >
+                  <div className={`h-2 w-2 rounded-full ${selectedInstanceIds.includes(inst.id) ? 'bg-primary-foreground' : 'bg-muted-foreground/40'}`} />
+                  {inst.nome || inst.instance_token.slice(0, 12) + '...'}
+                </button>
+              ))}
+              {instances.length === 0 && (
+                <span className="text-xs text-muted-foreground">Nenhuma instância conectada</span>
+              )}
+            </div>
           </div>
 
           {/* Progress bar during sending */}
-          {(sending || enviadosCount > 0 || errosCount > 0) && selectedInstanceId && (
+          {(sending || enviadosCount > 0 || errosCount > 0) && selectedInstanceIds.length > 0 && (
             <div className="space-y-1">
               <Progress value={progressPercent} className="h-2" />
               <div className="flex justify-between text-xs text-muted-foreground">
