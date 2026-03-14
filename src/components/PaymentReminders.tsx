@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2 } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const [activeTab, setActiveTab] = useState('pendentes');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
 
@@ -151,110 +154,142 @@ export function PaymentReminders() {
     );
   };
 
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
+  const renderFullContent = (inDialog = false) => (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <TabsList className={`w-full grid grid-cols-2 ${inDialog ? '' : 'rounded-none border-b'}`}>
+        <TabsTrigger value="pendentes" className="gap-1.5">
+          <Bell className="h-3.5 w-3.5" />
+          Pendentes
           {totalLembretes > 0 && (
-            <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-              {totalLembretes > 9 ? '9+' : totalLembretes}
+            <span className="ml-1 text-xs bg-destructive text-destructive-foreground rounded-full px-1.5">
+              {totalLembretes}
             </span>
           )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-2 rounded-none border-b">
-            <TabsTrigger value="pendentes" className="gap-1.5">
-              <Bell className="h-3.5 w-3.5" />
-              Pendentes
-              {totalLembretes > 0 && (
-                <span className="ml-1 text-xs bg-destructive text-destructive-foreground rounded-full px-1.5">
-                  {totalLembretes}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="historico" className="gap-1.5">
-              <History className="h-3.5 w-3.5" />
-              Histórico
-              {lembretesJaLidos.length > 0 && (
-                <span className="ml-1 text-xs bg-muted-foreground/20 text-muted-foreground rounded-full px-1.5">
-                  {lembretesJaLidos.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+        </TabsTrigger>
+        <TabsTrigger value="historico" className="gap-1.5">
+          <History className="h-3.5 w-3.5" />
+          Histórico
+          {lembretesJaLidos.length > 0 && (
+            <span className="ml-1 text-xs bg-muted-foreground/20 text-muted-foreground rounded-full px-1.5">
+              {lembretesJaLidos.length}
+            </span>
+          )}
+        </TabsTrigger>
+      </TabsList>
 
-          <TabsContent value="pendentes" className="mt-0">
-            {!temLembretes ? (
-              <div className="p-4 text-center text-muted-foreground">
-                <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Nenhum lembrete pendente</p>
-              </div>
-            ) : (
-              <div className="max-h-80 overflow-y-auto">
-                {lembretesVencidos.length > 0 && (
-                  <div className="p-3 border-b border-border">
-                    <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-                      <XCircle className="h-4 w-4" />
-                      Parcelas Vencidas ({lembretesVencidos.length})
-                    </h4>
-                    <div className="space-y-2">
-                      {lembretesVencidos.map((lembrete) => 
-                        renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20')
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {lembretesHoje.length > 0 && (
-                  <div className="p-3 border-b border-border">
-                    <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      Vence hoje
-                    </h4>
-                    <div className="space-y-2">
-                      {lembretesHoje.map((lembrete) => 
-                        renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20')
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {lembretesTresDias.length > 0 && (
-                  <div className="p-3">
-                    <h4 className="text-sm font-semibold text-warning mb-2 flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4" />
-                      Vence em 3 dias
-                    </h4>
-                    <div className="space-y-2">
-                      {lembretesTresDias.map((lembrete) => 
-                        renderLembreteItem(lembrete, 'bg-warning/10', 'hover:bg-warning/20')
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="historico" className="mt-0">
-            {lembretesJaLidos.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground">
-                <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Nenhum lembrete no histórico</p>
-              </div>
-            ) : (
-              <div className="max-h-80 overflow-y-auto p-3">
+      <TabsContent value="pendentes" className="mt-0">
+        {!temLembretes ? (
+          <div className="p-4 text-center text-muted-foreground">
+            <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>Nenhum lembrete pendente</p>
+          </div>
+        ) : (
+          <div className={inDialog ? 'max-h-[70vh] overflow-y-auto' : 'max-h-80 overflow-y-auto'}>
+            {lembretesVencidos.length > 0 && (
+              <div className="p-3 border-b border-border">
+                <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
+                  <XCircle className="h-4 w-4" />
+                  Parcelas Vencidas ({lembretesVencidos.length})
+                </h4>
                 <div className="space-y-2">
-                  {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
+                  {lembretesVencidos.map((lembrete) =>
+                    renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20')
+                  )}
                 </div>
               </div>
             )}
-          </TabsContent>
-        </Tabs>
-      </PopoverContent>
-    </Popover>
+
+            {lembretesHoje.length > 0 && (
+              <div className="p-3 border-b border-border">
+                <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Vence hoje
+                </h4>
+                <div className="space-y-2">
+                  {lembretesHoje.map((lembrete) =>
+                    renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20')
+                  )}
+                </div>
+              </div>
+            )}
+
+            {lembretesTresDias.length > 0 && (
+              <div className="p-3">
+                <h4 className="text-sm font-semibold text-warning mb-2 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Vence em 3 dias
+                </h4>
+                <div className="space-y-2">
+                  {lembretesTresDias.map((lembrete) =>
+                    renderLembreteItem(lembrete, 'bg-warning/10', 'hover:bg-warning/20')
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </TabsContent>
+
+      <TabsContent value="historico" className="mt-0">
+        {lembretesJaLidos.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground">
+            <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>Nenhum lembrete no histórico</p>
+          </div>
+        ) : (
+          <div className={`${inDialog ? 'max-h-[70vh]' : 'max-h-80'} overflow-y-auto p-3`}>
+            <div className="space-y-2">
+              {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
+            </div>
+          </div>
+        )}
+      </TabsContent>
+    </Tabs>
+  );
+
+  return (
+    <>
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            {totalLembretes > 0 && (
+              <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                {totalLembretes > 9 ? '9+' : totalLembretes}
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-0" align="end">
+          <div className="flex items-center justify-end p-1 border-b border-border">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title="Expandir lembretes"
+              onClick={() => {
+                setPopoverOpen(false);
+                setDialogOpen(true);
+              }}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+          </div>
+          {renderFullContent(false)}
+        </PopoverContent>
+      </Popover>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Lembretes
+            </DialogTitle>
+          </DialogHeader>
+          {renderFullContent(true)}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
