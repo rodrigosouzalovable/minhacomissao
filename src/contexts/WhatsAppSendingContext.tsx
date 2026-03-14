@@ -246,7 +246,15 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
           const delay = (5 + Math.random() * 2) * 60 * 1000;
           const delayMinutes = Math.round(delay / 60000);
           toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise<void>(resolve => {
+            delayResolveRef.current = resolve;
+            const timer = setTimeout(() => {
+              delayResolveRef.current = null;
+              resolve();
+            }, delay);
+            // Store timer for cleanup if cancelled
+            (delayResolveRef as any)._timer = timer;
+          });
         }
       }
 
