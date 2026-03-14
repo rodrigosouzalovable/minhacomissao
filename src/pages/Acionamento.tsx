@@ -24,7 +24,6 @@ import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square,
 
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
-import LembretesSection from '@/components/LembretesSection';
 import LembreteMensagensDialog from '@/components/LembreteMensagensDialog';
 import * as XLSX from 'xlsx';
 
@@ -172,8 +171,6 @@ export default function Acionamento() {
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
   const [checkingConnections, setCheckingConnections] = useState(false);
-  const [selectedLembreteInstanceId, setSelectedLembreteInstanceId] = useState<string>('none');
-  const [savingLembrete, setSavingLembrete] = useState(false);
 
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
@@ -263,66 +260,6 @@ export default function Acionamento() {
     fetchInstances();
   }, [user]);
 
-  // Load current lembrete instance from profile
-  useEffect(() => {
-    if (!user) return;
-    const loadLembreteConfig = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('whatsapp_lembrete_server_url, whatsapp_lembrete_instance_token')
-        .eq('id', user.id)
-        .single();
-      if (data) {
-        const profileUrl = data.whatsapp_lembrete_server_url;
-        const profileToken = data.whatsapp_lembrete_instance_token;
-        if (profileUrl && profileToken) {
-          // Will match after instances load
-          setSelectedLembreteInstanceId(`${profileUrl}|||${profileToken}`);
-        } else {
-          setSelectedLembreteInstanceId('none');
-        }
-      }
-    };
-    loadLembreteConfig();
-  }, [user]);
-
-  // Match profile lembrete config to instance ID once instances load
-  useEffect(() => {
-    if (instances.length === 0 || selectedLembreteInstanceId === 'none') return;
-    if (selectedLembreteInstanceId.includes('|||')) {
-      const [url, token] = selectedLembreteInstanceId.split('|||');
-      const match = instances.find(i => i.server_url === url && i.instance_token === token);
-      if (match) {
-        setSelectedLembreteInstanceId(match.id);
-      }
-    }
-  }, [instances]);
-
-  const handleSaveLembreteInstance = async (value: string) => {
-    if (!user) return;
-    setSelectedLembreteInstanceId(value);
-    setSavingLembrete(true);
-    try {
-      let updateData: { whatsapp_lembrete_server_url: string | null; whatsapp_lembrete_instance_token: string | null };
-      if (value === 'none') {
-        updateData = { whatsapp_lembrete_server_url: null, whatsapp_lembrete_instance_token: null };
-      } else {
-        const inst = instances.find(i => i.id === value);
-        if (!inst) return;
-        updateData = { whatsapp_lembrete_server_url: inst.server_url, whatsapp_lembrete_instance_token: inst.instance_token };
-      }
-      const { error } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', user.id);
-      if (error) throw error;
-      toast.success(value === 'none' ? 'Instância de lembretes removida' : 'Instância principal de lembretes salva!');
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao salvar');
-    } finally {
-      setSavingLembrete(false);
-    }
-  };
 
   const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
     const activeOnes = instancesToCheck.filter(i => i.ativo);
@@ -1759,15 +1696,6 @@ export default function Acionamento() {
                   })}
                 </div>
 
-              <Separator />
-
-              <LembretesSection
-                instances={instances}
-                selectedLembreteInstanceId={selectedLembreteInstanceId}
-                handleSaveLembreteInstance={handleSaveLembreteInstance}
-                savingLembrete={savingLembrete}
-                connectionStatus={connectionStatus}
-              />
 
               {isAdmin && (
                 <>
