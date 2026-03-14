@@ -516,23 +516,13 @@ export function PaymentReminders() {
           </DialogHeader>
 
           {/* WhatsApp instance selector + send button */}
-          <div className="flex items-center gap-2 border rounded-lg p-3 bg-muted/30">
-            <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-              <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Selecione um WhatsApp..." />
-              </SelectTrigger>
-              <SelectContent>
-                {instances.map((inst) => (
-                  <SelectItem key={inst.id} value={inst.id}>
-                    {inst.nome || inst.instance_token.slice(0, 12) + '...'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {sending ? (
-              <Button variant="destructive" size="sm" onClick={handleCancelEnvios}>
-                Cancelar
+          <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">WhatsApp</span>
+              <div className="flex gap-2">
+                {sending ? (
+                  <Button variant="destructive" size="sm" onClick={handleCancelEnvios}>
+                    Cancelar
               </Button>
             ) : (
               <Button
