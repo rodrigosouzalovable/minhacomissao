@@ -144,7 +144,7 @@ ${knowledgeContext}
         type: "function",
         function: {
           name: "executar_acao_direta",
-          description: "Executa UMA ação INSTANTÂNEA no navegador sem análise de visão. Muito mais rápido (~1s vs ~10s). Use para cliques, preenchimentos, teclas e navegação quando souber o que fazer.",
+          description: "Executa UMA ação no navegador COM verificação por IA de visão. O sistema captura screenshot, usa visão computacional para encontrar o seletor correto, executa, e verifica o resultado.",
           parameters: {
             type: "object",
             properties: {
@@ -155,15 +155,15 @@ ${knowledgeContext}
               },
               selector: {
                 type: "string",
-                description: "Seletor CSS do elemento (ex: '#btnPesquisar', '.btn-success') OU texto visível do botão (ex: 'Entrar', 'NÃO, OBRIGADO'). Para keypress, nome da tecla."
+                description: "Descrição textual do elemento (ex: 'botão Cobrança no menu lateral', 'link Telecobrança'). A IA de visão encontrará o seletor CSS correto."
               },
               value: {
                 type: "string",
-                description: "Valor para fill (texto a digitar), keypress (nome da tecla: F5, Enter, Escape), ou select (opção a selecionar)"
+                description: "Valor para fill, keypress (F5, Enter, Escape), ou select"
               },
               url: {
                 type: "string",
-                description: "URL para navigate (ex: 'https://app.cobmais.com.br/cob/pesquisa')"
+                description: "URL para navigate"
               }
             },
             required: ["action"],
