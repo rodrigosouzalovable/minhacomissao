@@ -286,7 +286,7 @@ export function PaymentReminders() {
                 <Phone className="h-3 w-3 shrink-0" />
                 {lembrete.cliente_telefone}
                 <CopyButton value={lembrete.cliente_telefone} label="Telefone" />
-                {lembrete.data_prevista && (
+                {inDialog && lembrete.data_prevista && (
                   <span className="ml-1 text-muted-foreground">
                     • {new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </span>
@@ -295,7 +295,7 @@ export function PaymentReminders() {
             ) : (
               <span className="text-muted-foreground text-xs flex items-center gap-1">
                 {isPagamento ? 'Sem telefone' : 'Retorno agendado'}
-                {lembrete.data_prevista && (
+                {inDialog && lembrete.data_prevista && (
                   <span className="ml-1">
                     • {new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </span>
