@@ -249,7 +249,10 @@ serve(async (req) => {
       if (configuredDays && !configuredDays.has(tipoLembrete)) { pulados++; continue; }
 
       const profile = profilesMap.get(acordo.user_id);
-      if (!profile || !profile.whatsapp_lembretes_habilitado) { pulados++; continue; }
+      // Skip whatsapp_lembretes_habilitado check when using override token (manual send from dialog)
+      if (!overrideToken) {
+        if (!profile || !profile.whatsapp_lembretes_habilitado) { pulados++; continue; }
+      }
 
       // Dedup check in memory
       const dedupKey = `${parcela.id}_${tipoLembrete}`;
