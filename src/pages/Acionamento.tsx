@@ -24,7 +24,6 @@ import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square,
 
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
-import LembretesSection from '@/components/LembretesSection';
 import LembreteMensagensDialog from '@/components/LembreteMensagensDialog';
 import * as XLSX from 'xlsx';
 
