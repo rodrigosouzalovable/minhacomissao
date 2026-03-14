@@ -131,37 +131,44 @@ export function PaymentReminders() {
   const progressPercent = allPendingReminders.length > 0 ? Math.round(((enviadosCount + errosCount) / allPendingReminders.length) * 100) : 0;
 
   const handleStartEnvios = async () => {
-    if (!selectedInstance || !user) return;
+    if (selectedInstances.length === 0 || !user) return;
     setStarting(true);
     cancelSendRef.current = false;
     try {
-      const { data, error } = await supabase.functions.invoke('check-payment-reminders', {
-        body: {
-          user_id: user.id,
-          instance_token: selectedInstance.instance_token,
-          server_url: selectedInstance.server_url,
-        },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erro desconhecido');
-      if (data.agendados === 0) {
+      // Schedule reminders for each selected instance
+      let totalAgendados = 0;
+      for (const inst of selectedInstances) {
+        const { data, error } = await supabase.functions.invoke('check-payment-reminders', {
+          body: {
+            user_id: user.id,
+            instance_token: inst.instance_token,
+            server_url: inst.server_url,
+          },
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Erro desconhecido');
+        totalAgendados += (data.agendados || 0);
+      }
+      if (totalAgendados === 0) {
         toast.info('Nenhuma parcela para notificar hoje.');
         setStarting(false);
         return;
       }
-      toast.success(`${data.agendados} lembretes agendados! Iniciando envio...`);
+      toast.success(`${totalAgendados} lembretes agendados! Iniciando envio...`);
       await fetchFila();
       setStarting(false);
       setSending(true);
 
-      // Sequential send
+      const tokens = selectedInstances.map(i => i.instance_token);
+
+      // Sequential send across all selected instances
       const processNext = async () => {
         while (!cancelSendRef.current) {
           const { data: nextItems } = await supabase
             .from('whatsapp_fila')
             .select('id, telefone, pagamento_id')
             .eq('status', 'pendente')
-            .eq('instance_token', selectedInstance.instance_token)
+            .in('instance_token', tokens)
             .order('agendado_para', { ascending: true })
             .limit(1);
           if (!nextItems || nextItems.length === 0) break;
@@ -212,15 +219,16 @@ export function PaymentReminders() {
   };
 
   const handleCancelEnvios = async () => {
-    if (!selectedInstance) return;
+    if (selectedInstances.length === 0) return;
     cancelSendRef.current = true;
     const hojeDate = new Date();
     const hojeStr = `${hojeDate.getFullYear()}-${String(hojeDate.getMonth() + 1).padStart(2, '0')}-${String(hojeDate.getDate()).padStart(2, '0')}`;
+    const tokens = selectedInstances.map(i => i.instance_token);
     await supabase
       .from('whatsapp_fila')
       .delete()
       .eq('status', 'pendente')
-      .eq('instance_token', selectedInstance.instance_token)
+      .in('instance_token', tokens)
       .gte('criado_em', `${hojeStr}T00:00:00`)
       .lte('criado_em', `${hojeStr}T23:59:59`);
     toast.success('Envio cancelado');
