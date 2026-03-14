@@ -393,8 +393,30 @@ async function handleDeleteSession(adminClient: any, body: any) {
   return { success: true }
 }
 
+async function handleScreenshot(adminClient: any) {
+  const { data: config } = await adminClient
+    .from('automacao_config')
+    .select('server_url')
+    .order('criado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!config?.server_url) return { error: 'URL do servidor não configurada', _httpStatus: 400 }
+
+  try {
+    const res = await fetch(`${config.server_url}/screenshot`, {
+      headers: { 'ngrok-skip-browser-warning': 'true', 'User-Agent': 'MeusAcordos/1.0' },
+      signal: AbortSignal.timeout(10000),
+    })
+    const data = await res.json()
+    return { success: true, screenshot: data.image, current_url: data.url }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Erro ao capturar screenshot' }
+  }
+}
+
 async function handleAcaoDireta(adminClient: any, body: any, userId: string) {
-  const { direct_action, direct_selector, direct_value, direct_url } = body
+  const { direct_action, direct_selector, direct_value, direct_url, x, y } = body
   if (!direct_action) return { error: 'Campo direct_action é obrigatório', _httpStatus: 400 }
 
   const { data: config } = await adminClient
@@ -408,14 +430,21 @@ async function handleAcaoDireta(adminClient: any, body: any, userId: string) {
 
   const startTime = Date.now()
   try {
+    const payload: any = { action: direct_action, selector: direct_selector, value: direct_value, url: direct_url }
+    // Support click_at_position with coordinates
+    if (direct_action === 'click_at_position') {
+      payload.action = 'click_at_position'
+      payload.x = x
+      payload.y = y
+    }
     const res = await fetch(`${config.server_url}/automacao/acao-direta`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', 'User-Agent': 'MeusAcordos/1.0' },
-      body: JSON.stringify({ action: direct_action, selector: direct_selector, value: direct_value, url: direct_url }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15000),
     })
     const resultado = await res.json()
-    return { success: resultado.success, resultado, tempo_ms: Date.now() - startTime }
+    return { success: resultado.success, resultado, tempo_ms: Date.now() - startTime, error: resultado.error }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Erro de conexão', tempo_ms: Date.now() - startTime }
   }
@@ -483,6 +512,9 @@ Deno.serve(async (req) => {
         break
       case 'acao_direta':
         result = await handleAcaoDireta(adminClient, body, userId)
+        break
+      case 'screenshot':
+        result = await handleScreenshot(adminClient)
         break
       default:
         return new Response(JSON.stringify({ error: `Ação desconhecida: ${action}` }), { status: 400, headers: corsHeaders })

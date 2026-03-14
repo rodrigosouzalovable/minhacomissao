@@ -139,13 +139,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { screenshot, objective, history, current_url } = await req.json()
+    const { screenshot, objective, history, current_url, mode } = await req.json()
 
     if (!screenshot || !objective) {
       return new Response(JSON.stringify({ error: 'screenshot e objective são obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
+
+    // Single-action mode: simplified prompt for finding a specific element
+    const isSingleAction = mode === 'single_action'
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
     if (!LOVABLE_API_KEY) {
@@ -159,8 +162,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
-    const knowledgeText = await fetchKnowledge(adminClient, objective)
-    const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT + knowledgeText
+    
+    let SYSTEM_PROMPT: string
+    if (isSingleAction) {
+      SYSTEM_PROMPT = `Você é um assistente de automação web. Analise o screenshot e identifique o elemento exato que o usuário quer interagir.
+Retorne o seletor CSS mais preciso possível, ou coordenadas x,y do centro do elemento se não conseguir determinar o seletor.
+Priorize: IDs (#id) > classes únicas (.class) > atributos ([attr]) > coordenadas.
+Se o elemento estiver dentro de um iframe, indique isso.
+NUNCA invente seletores — só retorne o que você consegue identificar visualmente.`
+    } else {
+      const knowledgeText = await fetchKnowledge(adminClient, objective)
+      SYSTEM_PROMPT = BASE_SYSTEM_PROMPT + knowledgeText
+    }
 
     const historyText = (history || [])
       .map((h: any, i: number) => `${i + 1}. [${h.action}] ${h.description} → ${h.result || 'ok'}`)

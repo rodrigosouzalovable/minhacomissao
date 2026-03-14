@@ -836,6 +836,14 @@ app.post('/automacao/acao-direta', async (req, res) => {
         await delay(200);
         break;
       }
+      case 'click_at_position': {
+        const x = parseInt(req.body.x);
+        const y = parseInt(req.body.y);
+        if (isNaN(x) || isNaN(y)) return res.json({ success: false, error: 'Campos x e y são obrigatórios para click_at_position' });
+        await pg.mouse.click(x, y);
+        await delay(500);
+        break;
+      }
       default:
         return res.json({ success: false, error: `Ação desconhecida: ${action}` });
     }
