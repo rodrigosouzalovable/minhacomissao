@@ -289,7 +289,7 @@ serve(async (req) => {
 
       const dataVencimento = new Date(parcela.data_prevista + 'T12:00:00');
       const dataFormatada = dataVencimento.toLocaleDateString('pt-BR');
-      const primeiroNome = capitalizeName((profile.nome || 'Rodrigo').split(' ')[0]);
+      const primeiroNome = capitalizeName((profile?.nome || 'Operador').split(' ')[0]);
       const nomeCliente = acordo.cliente_nome.split(' ').map((w: string) => capitalizeName(w)).join(' ');
       const primeiroNomeCliente = capitalizeName(acordo.cliente_nome.split(' ')[0]);
 
