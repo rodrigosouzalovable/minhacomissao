@@ -971,6 +971,137 @@ export default function AutomacaoCobMais() {
           </div>
         )}
 
+        {/* Pós Atendimento */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5" />
+              📞 Pós Atendimento → WhatsApp
+            </CardTitle>
+            <CardDescription>
+              Capture os clientes do painel "Pós Atendimento" do CobMais e envie mensagens automáticas via WhatsApp.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Template de mensagem */}
+            <div>
+              <Label>Template da Mensagem</Label>
+              <Textarea
+                value={posAtendimentoTemplate}
+                onChange={e => setPosAtendimentoTemplate(e.target.value)}
+                placeholder="Olá {nome}, tudo bem?..."
+                className="min-h-[80px]"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Variáveis disponíveis: <code>{'{nome}'}</code> (primeiro nome), <code>{'{nome_completo}'}</code>, <code>{'{telefone}'}</code>, <code>{'{cpf}'}</code>
+              </p>
+            </div>
+
+            {/* Botão capturar */}
+            <Button
+              onClick={handleCapturarPosAtendimento}
+              disabled={posAtendimentoLoading || roboStatus !== 'online'}
+              className="w-full"
+            >
+              {posAtendimentoLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Capturando...</>
+              ) : (
+                <><Monitor className="h-4 w-4 mr-2" />Capturar Pós Atendimento</>
+              )}
+            </Button>
+
+            {roboStatus !== 'online' && (
+              <p className="text-sm text-destructive">O robô precisa estar online para capturar o Pós Atendimento.</p>
+            )}
+
+            {/* Lista de clientes extraídos */}
+            {posAtendimentoClientes.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>{posAtendimentoClientes.length} cliente(s) encontrado(s)</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPosAtendimentoClientes(prev => prev.map(c => ({ ...c, selecionado: !prev.every(p => p.selecionado) })))}
+                    >
+                      <CheckSquare className="h-4 w-4 mr-1" />
+                      {posAtendimentoClientes.every(c => c.selecionado) ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                    </Button>
+                  </div>
+                </div>
+
+                <ScrollArea className="max-h-[300px] rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Hora</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Telefone</TableHead>
+                        <TableHead>CPF</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {posAtendimentoClientes.map((c, i) => (
+                        <TableRow key={i} className={c.enviado ? 'opacity-60' : ''}>
+                          <TableCell>
+                            <Checkbox
+                              checked={c.selecionado}
+                              disabled={c.enviado || c.enviando}
+                              onCheckedChange={(checked) => {
+                                setPosAtendimentoClientes(prev => prev.map((cl, idx) => idx === i ? { ...cl, selecionado: !!checked } : cl));
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm font-mono">{c.hora || '-'}</TableCell>
+                          <TableCell className="font-medium">{c.nome}</TableCell>
+                          <TableCell className="font-mono text-sm">{c.telefone}</TableCell>
+                          <TableCell className="font-mono text-sm">{c.cpf}</TableCell>
+                          <TableCell>
+                            {c.enviando ? (
+                              <Badge variant="secondary"><Loader2 className="h-3 w-3 animate-spin mr-1" />Enviando</Badge>
+                            ) : c.enviado ? (
+                              <Badge variant="default">✅ Enviado</Badge>
+                            ) : c.erro ? (
+                              <Badge variant="destructive" title={c.erro}>❌ Erro</Badge>
+                            ) : (
+                              <Badge variant="outline">Pendente</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+
+                {/* Preview da mensagem */}
+                {posAtendimentoClientes.length > 0 && (
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <Label className="text-xs text-muted-foreground">Preview da mensagem (primeiro cliente):</Label>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{posAtendimentoClientes[0]?.mensagem}</p>
+                  </div>
+                )}
+
+                {/* Botão enviar */}
+                <Button
+                  onClick={handleEnviarPosAtendimento}
+                  disabled={posAtendimentoEnviando || !posAtendimentoClientes.some(c => c.selecionado && !c.enviado)}
+                  className="w-full"
+                  size="lg"
+                >
+                  {posAtendimentoEnviando ? (
+                    <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enviando mensagens...</>
+                  ) : (
+                    <><MessageSquare className="h-4 w-4 mr-2" />Enviar WhatsApp ({posAtendimentoClientes.filter(c => c.selecionado && !c.enviado).length})</>
+                  )}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Chat com IA sobre o conhecimento */}
         <Card>
           <CardHeader className="flex flex-row items-start justify-between">
