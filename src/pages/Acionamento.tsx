@@ -1696,15 +1696,6 @@ export default function Acionamento() {
                   })}
                 </div>
 
-              <Separator />
-
-              <LembretesSection
-                instances={instances}
-                selectedLembreteInstanceId={selectedLembreteInstanceId}
-                handleSaveLembreteInstance={handleSaveLembreteInstance}
-                savingLembrete={savingLembrete}
-                connectionStatus={connectionStatus}
-              />
 
               {isAdmin && (
                 <>
