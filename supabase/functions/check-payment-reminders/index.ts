@@ -254,9 +254,14 @@ serve(async (req) => {
         if (!profile || !profile.whatsapp_lembretes_habilitado) { pulados++; continue; }
       }
 
-      // Dedup check in memory
+      // Dedup check in memory (skip fila check for override token since we want fresh queue)
       const dedupKey = `${parcela.id}_${tipoLembrete}`;
-      if (filaSet.has(dedupKey) || logSet.has(dedupKey)) { pulados++; continue; }
+      if (overrideToken) {
+        // Only skip if already in fila with same token (avoid duplicates within same manual session)
+        if (filaSet.has(dedupKey)) { pulados++; continue; }
+      } else {
+        if (filaSet.has(dedupKey) || logSet.has(dedupKey)) { pulados++; continue; }
+      }
 
       // Resolve credentials
       let finalServerUrl: string | null;
