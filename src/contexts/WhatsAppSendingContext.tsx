@@ -41,6 +41,7 @@ interface WhatsAppSendingContextType {
   startSending: (items: SendQueueItem[], instances: WhatsAppInstance[], templates: LembreteTemplate[], operadorNome: string) => void;
   cancelSending: () => void;
   loadSavedProgress: () => Promise<void>;
+  markAsEnviado: (pagamentoId: string, clienteNome: string, clienteTelefone: string) => Promise<void>;
 }
 
 const WhatsAppSendingContext = createContext<WhatsAppSendingContextType | null>(null);
