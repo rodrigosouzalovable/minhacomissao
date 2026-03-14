@@ -57,7 +57,7 @@ export function PaymentReminders() {
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
   const [filaItems, setFilaItems] = useState<FilaItem[]>([]);
   const [sending, setSending] = useState(false);
-  const [starting, setStarting] = useState(false);
+  const [starting] = useState(false);
   const [currentSendingId, setCurrentSendingId] = useState<string | null>(null);
   const [localStatusOverride, setLocalStatusOverride] = useState<Record<string, 'enviado' | 'erro'>>({});
   const cancelSendRef = useRef(false);
