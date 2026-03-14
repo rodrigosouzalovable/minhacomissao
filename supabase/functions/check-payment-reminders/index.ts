@@ -188,10 +188,15 @@ serve(async (req) => {
     const filaSet = new Set<string>();
     for (let i = 0; i < pagamentoIds.length; i += 100) {
       const chunk = pagamentoIds.slice(i, i + 100);
-      const { data: filaRows, error } = await supabase
+      let filaQuery = supabase
         .from('whatsapp_fila')
         .select('pagamento_id, tipo_lembrete')
         .in('pagamento_id', chunk);
+      // When override token, only check for duplicates with the same instance
+      if (overrideToken) {
+        filaQuery = filaQuery.eq('instance_token', overrideToken);
+      }
+      const { data: filaRows, error } = await filaQuery;
       if (error) { console.error('Erro fila batch:', error); throw error; }
       for (const r of (filaRows || [])) filaSet.add(`${r.pagamento_id}_${r.tipo_lembrete}`);
     }
@@ -244,16 +249,26 @@ serve(async (req) => {
       if (acordo.status !== 'ativo') { pulados++; continue; }
       if (!acordo.cliente_telefone) { pulados++; continue; }
 
-      // If user has configured templates, only send for those specific days
-      const configuredDays = userConfiguredDaysMap.get(acordo.user_id);
-      if (configuredDays && !configuredDays.has(tipoLembrete)) { pulados++; continue; }
+      // If user has configured templates, only send for those specific days (skip for manual override)
+      if (!overrideToken) {
+        const configuredDays = userConfiguredDaysMap.get(acordo.user_id);
+        if (configuredDays && !configuredDays.has(tipoLembrete)) { pulados++; continue; }
+      }
 
       const profile = profilesMap.get(acordo.user_id);
-      if (!profile || !profile.whatsapp_lembretes_habilitado) { pulados++; continue; }
+      // Skip whatsapp_lembretes_habilitado check when using override token (manual send from dialog)
+      if (!overrideToken) {
+        if (!profile || !profile.whatsapp_lembretes_habilitado) { pulados++; continue; }
+      }
 
-      // Dedup check in memory
+      // Dedup check in memory (skip fila check for override token since we want fresh queue)
       const dedupKey = `${parcela.id}_${tipoLembrete}`;
-      if (filaSet.has(dedupKey) || logSet.has(dedupKey)) { pulados++; continue; }
+      if (overrideToken) {
+        // Only skip if already in fila with same token (avoid duplicates within same manual session)
+        if (filaSet.has(dedupKey)) { pulados++; continue; }
+      } else {
+        if (filaSet.has(dedupKey) || logSet.has(dedupKey)) { pulados++; continue; }
+      }
 
       // Resolve credentials
       let finalServerUrl: string | null;
@@ -274,7 +289,7 @@ serve(async (req) => {
 
       const dataVencimento = new Date(parcela.data_prevista + 'T12:00:00');
       const dataFormatada = dataVencimento.toLocaleDateString('pt-BR');
-      const primeiroNome = capitalizeName((profile.nome || 'Rodrigo').split(' ')[0]);
+      const primeiroNome = capitalizeName((profile?.nome || 'Operador').split(' ')[0]);
       const nomeCliente = acordo.cliente_nome.split(' ').map((w: string) => capitalizeName(w)).join(' ');
       const primeiroNomeCliente = capitalizeName(acordo.cliente_nome.split(' ')[0]);
 
