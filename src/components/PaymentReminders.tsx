@@ -103,18 +103,35 @@ export function PaymentReminders() {
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
   const allPendingReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias];
 
-  // Fetch WhatsApp instances when dialog opens
+  // Fetch WhatsApp instances, templates, and operator name when dialog opens
   useEffect(() => {
     if (!dialogOpen || !user) return;
     (async () => {
-      const { data } = await supabase
-        .from('user_whatsapp_instances')
-        .select('id, nome, server_url, instance_token, ativo')
-        .eq('user_id', user.id)
-        .eq('ativo', true);
-      if (data) {
-        setInstances(data);
-        if (data.length === 1) setSelectedInstanceIds([data[0].id]);
+      const [instRes, tplRes, profileRes] = await Promise.all([
+        supabase
+          .from('user_whatsapp_instances')
+          .select('id, nome, server_url, instance_token, ativo')
+          .eq('user_id', user.id)
+          .eq('ativo', true),
+        supabase
+          .from('lembrete_mensagens_templates')
+          .select('tipo_lembrete, mensagem')
+          .eq('user_id', user.id)
+          .eq('ativo', true),
+        supabase
+          .from('profiles')
+          .select('nome')
+          .eq('id', user.id)
+          .single(),
+      ]);
+      if (instRes.data) {
+        setInstances(instRes.data);
+        if (instRes.data.length === 1) setSelectedInstanceIds([instRes.data[0].id]);
+      }
+      if (tplRes.data) setTemplates(tplRes.data);
+      if (profileRes.data) {
+        const primeiro = profileRes.data.nome?.split(' ')[0] || '';
+        setOperadorNome(toTitleCase(primeiro));
       }
     })();
   }, [dialogOpen, user]);
