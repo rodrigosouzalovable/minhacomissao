@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Bot, Settings, Play, Square, RefreshCw, Send, Loader2, Wifi, WifiOff, Terminal, List, Clock, MessageCircle, Monitor, Brain, Zap, GraduationCap, Trash2, Eye, Upload, Video, FileVideo, ImagePlus, X, Phone, CheckSquare, MessageSquare } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { RoboStreamViewer } from '@/components/RoboStreamViewer';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RoboCodeViewer } from '@/components/RoboCodeViewer';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
