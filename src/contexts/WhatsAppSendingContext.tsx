@@ -139,6 +139,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
   const [envioProgresso, setEnvioProgresso] = useState<EnvioProgressItem[]>([]);
   const cancelRef = useRef(false);
   const sendingRef = useRef(false);
+  const delayResolveRef = useRef<(() => void) | null>(null);
 
   // Load saved progress from DB on mount
   const loadSavedProgress = useCallback(async () => {
