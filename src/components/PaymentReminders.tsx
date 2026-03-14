@@ -84,7 +84,7 @@ export function PaymentReminders() {
         .eq('ativo', true);
       if (data) {
         setInstances(data);
-        if (data.length === 1) setSelectedInstanceId(data[0].id);
+        if (data.length === 1) setSelectedInstanceIds([data[0].id]);
       }
     })();
   }, [dialogOpen, user]);
