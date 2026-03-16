@@ -191,6 +191,26 @@ export default function Acordos() {
   const [selectedUserId, setSelectedUserId] = useState<string>('todos');
   const [rankingAberto, setRankingAberto] = useState(false);
 
+  // Buscar perfil do operador para nome dinâmico
+  const { data: profile } = useQuery({
+    queryKey: ['my-profile', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('profiles').select('nome').eq('id', user!.id).single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Buscar instância WhatsApp do usuário
+  const { data: whatsappInstance } = useQuery({
+    queryKey: ['my-whatsapp-instance', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('user_whatsapp_instances').select('server_url, instance_token').eq('user_id', user!.id).eq('ativo', true).limit(1).single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
   const { data: funcionarios } = useQuery({
     queryKey: ['funcionarios-list'],
     queryFn: async () => {
