@@ -243,7 +243,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
 
         // Wait 5-7 min before next (skip on last or cancel)
         if (i < items.length - 1 && !cancelRef.current) {
-          const delay = (5 + Math.random() * 2) * 60 * 1000;
+          const delay = (5 + Math.random() * 10) * 60 * 1000;
           const delayMinutes = Math.round(delay / 60000);
           toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
           await new Promise<void>(resolve => {
