@@ -299,8 +299,9 @@ export function PaymentReminders() {
                     toast.error('Selecione uma instância WhatsApp primeiro');
                     return;
                   }
-                  const instance = selectedInstances[0];
-                  sendSingleMessage(
+                   const instance = selectedInstances[roundRobinRef.current % selectedInstances.length];
+                   roundRobinRef.current += 1;
+                   sendSingleMessage(
                     {
                       id: lembrete.id,
                       cliente_nome: lembrete.cliente_nome,
