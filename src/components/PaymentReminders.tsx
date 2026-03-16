@@ -401,7 +401,7 @@ export function PaymentReminders() {
   };
 
   const renderFullContent = (inDialog = false) => (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className={`w-full ${inDialog ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : ''}`}>
       <TabsList className={`w-full grid grid-cols-2 ${inDialog ? '' : 'rounded-none border-b'}`}>
         <TabsTrigger value="pendentes" className="gap-1.5">
           <Bell className="h-3.5 w-3.5" />
