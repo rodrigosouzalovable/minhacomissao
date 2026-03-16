@@ -279,8 +279,9 @@ serve(async (req) => {
         finalInstanceToken = overrideToken;
       } else {
         const inst = instancesMap.get(acordo.user_id);
-        finalServerUrl = inst?.server_url || profile.whatsapp_lembrete_server_url || null;
-        finalInstanceToken = inst?.instance_token || profile.whatsapp_lembrete_instance_token || null;
+        if (!inst) { pulados++; continue; }
+        finalServerUrl = inst.server_url;
+        finalInstanceToken = inst.instance_token;
       }
 
       const valorFormatado = new Intl.NumberFormat('pt-BR', {
@@ -336,10 +337,16 @@ serve(async (req) => {
       const telefoneFormatado = acordo.cliente_telefone.replace(/\D/g, '');
       const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
 
-      // Check scheduling hour
+      // Check scheduling hour and Sunday block
       const horaAgendadaUTC = proximoHorario.getUTCHours();
       const horaAgendadaBrasilia = (horaAgendadaUTC - 3 + 24) % 24;
       if (horaAgendadaBrasilia >= 18) {
+        proximoHorario.setUTCDate(proximoHorario.getUTCDate() + 1);
+        proximoHorario.setUTCHours(11, 0, 0, 0);
+      }
+      // If scheduled for Sunday (BRT), advance to Monday 08:00 BRT (11:00 UTC)
+      const diaBrasilia = new Date(proximoHorario.getTime() - 3 * 60 * 60 * 1000).getUTCDay();
+      if (diaBrasilia === 0) {
         proximoHorario.setUTCDate(proximoHorario.getUTCDate() + 1);
         proximoHorario.setUTCHours(11, 0, 0, 0);
       }
