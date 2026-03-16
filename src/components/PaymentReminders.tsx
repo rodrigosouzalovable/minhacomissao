@@ -433,6 +433,20 @@ export function PaymentReminders() {
           </div>
         ) : (
           <div className={inDialog ? 'space-y-3' : 'max-h-80 overflow-y-auto scrollbar-thin'}>
+            {lembretesHoje.length > 0 && (
+              <div className={inDialog ? '' : 'p-3 border-b border-border'}>
+                <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Vence hoje
+                </h4>
+                <div className="space-y-2">
+                  {lembretesHoje.map((lembrete) =>
+                    renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20', inDialog)
+                  )}
+                </div>
+              </div>
+            )}
+
             {lembretesVencidos.length > 0 && (
               <div className={inDialog ? '' : 'p-3 border-b border-border'}>
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
@@ -456,20 +470,6 @@ export function PaymentReminders() {
                 </h4>
                 <div className="space-y-2">
                   {lembretesVencidos.map((lembrete) =>
-                    renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20', inDialog)
-                  )}
-                </div>
-              </div>
-            )}
-
-            {lembretesHoje.length > 0 && (
-              <div className={inDialog ? '' : 'p-3 border-b border-border'}>
-                <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Vence hoje
-                </h4>
-                <div className="space-y-2">
-                  {lembretesHoje.map((lembrete) =>
                     renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20', inDialog)
                   )}
                 </div>
