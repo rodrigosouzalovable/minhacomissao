@@ -1,74 +1,109 @@
-## ✅ Concluído — Smart Click: IA de Visão Guia Comandos do Chat
-
-1. **Vision-Guided Execution** — `executar_acao_direta` agora captura screenshot → envia para `analyze-cobmais-screen` (Gemini Pro Vision, modo `single_action`) → encontra seletor CSS correto → executa → verifica resultado
-2. **`click_at_position`** — novo action no `server.js` que aceita coordenadas x,y para cliques quando CSS selectors falham
-3. **`screenshot` action** — novo endpoint em `automacao-cobmais` que captura screenshot do servidor para uso interno
-4. **Prompt atualizado** — Modo Híbrido Inteligente, Falhar e Pedir Ajuste (nunca "✅ Feito!" sem verificar), Uma Etapa por Vez
-5. **Fluxo navigate/keypress** — execução direta sem visão (não precisam análise visual)
-6. **Verificação pós-ação** — captura screenshot após execução para confirmar que a tela mudou
 
 
-Implementado em `supabase/functions/whatsapp-chatbot/index.ts`:
+## Sugestoes de Melhoria do Sistema
 
-1. **`parseAdminInstruction()`** — detecta se texto está entre aspas (literal) ou é instrução livre (IA gera resposta)
-2. **`gerarRespostaComInstrucaoAdmin()`** — usa Gemini Flash Lite para formular resposta natural baseada na instrução + contexto
-3. **Registro `admin_pending_{instanceToken}`** — salvo em `chatbot_conversas` quando `salvarSilenciosoENotificar` é chamado, mapeia qual cliente aguarda resposta
-4. **Interceptação de mensagens do admin** — quando `telefone === ADMIN_NUMERO`, busca cliente pendente, envia resposta (literal ou IA), desbloqueia conversa
-5. **Confirmação ao admin** — envia `✅ Mensagem enviada para {telefone}` após envio
-6. **Cleanup** — remove registro `admin_pending` após processamento
+Apos analise completa do codigo, identifiquei as seguintes sugestoes organizadas por prioridade:
 
-## ✅ Concluído — Admin responde por número de telefone direto
+---
 
-1. **`parseAdminInstructionWithTarget()`** — regex expandido extrai telefone alvo de instruções naturais como "Volta na conversa com +556493097974 e passe a proposta", "Responda ao numero X", "Envie para X", etc.
-2. **Verbos suportados**: volta, retorne, responda, envie, mande, fale, passe, vá, vai
-3. **Preposições suportadas**: numero, número, para, ao, com, do, da, de (com suporte a `+55`)
-4. **Busca conversa por telefone** — localiza `chatbot_conversas` pelo número especificado
-5. **Detecção de "proposta"** — se instrução contém "proposta/valor/oferta", gera mensagem financeira com `gerarMensagemProposta()`
-6. **Fluxo confirmação** — reutiliza o fluxo `admin_pending` existente para confirmação antes de enviar
+### 1. Mensagem WhatsApp hardcoded com nome "Rodrigo" (Impacto alto)
 
-## ✅ Concluído — Chat IA executa ações reais (enviar WhatsApp)
+**Arquivo:** `src/pages/Acordos.tsx` linha 24
 
-Implementado em `supabase/functions/teach-chatbot/index.ts`:
+A mensagem de confirmacao de acordo esta fixa com o nome "Rodrigo":
+```
+"Olá tudo bem {nome}? Meu nome é Rodrigo e sou do departamento de confirmação..."
+```
 
-1. **Contexto real** — `fetchConversasContext()` busca até 50 conversas ativas do `chatbot_conversas` e injeta no system prompt (nome, telefone, valores financeiros)
-2. **Action `send`** — quando a IA responde `{"action":"send","telefone":"X","mensagem":"Y"}`, o sistema:
-   - Busca a conversa pelo telefone para obter `instance_token` e `server_url`
-   - Envia a mensagem real via UAZAPI (com fallback de endpoints)
-   - Atualiza o estado da conversa (desbloqueia se estava em `aguardando_admin`)
-3. **Fluxo de confirmação** — a IA sempre mostra a mensagem antes de enviar e espera o admin confirmar ("sim")
-4. **Compatibilidade** — action `save` (ensinar regras) continua funcionando normalmente
-5. **Segurança** — dados financeiros vêm do banco, nunca inventados pela IA
+**Sugestao:** Substituir pelo nome do operador logado (do perfil) para que cada funcionario envie com seu proprio nome. Buscar `profile.nome` e injetar na mensagem.
 
-## ✅ Concluído — Admin comanda a IA via WhatsApp (fallback teach-chatbot)
+---
 
-1. **Fallback inteligente** — quando a mensagem do admin não casa com `admin_pending` nem `parseAdminInstructionWithTarget`, é encaminhada para `teach-chatbot`
-2. **Histórico compartilhado** — carrega últimas 10 mensagens de `chat_ia_mensagens` do admin para contexto
-3. **Persistência** — salva mensagem do admin e resposta da IA em `chat_ia_mensagens` (mesmo histórico do chat web)
-4. **Resposta via WhatsApp** — a IA responde diretamente ao admin no WhatsApp
-5. **Ações reais** — como o `teach-chatbot` suporta `action: "send"`, o admin pode instruir envios reais também pelo WhatsApp
+### 2. Dashboard usa useEffect + useState em vez de React Query (Consistencia)
 
-## ✅ Concluído — Cadência de lembretes para parcelas vencidas
+**Arquivo:** `src/pages/Dashboard.tsx`
 
-Implementado em `supabase/functions/check-payment-reminders/index.ts`:
+O Dashboard carrega dados com `useEffect` manual enquanto outras paginas usam `useQuery` do React Query. Isso significa:
+- Sem cache automatico
+- Sem refetch em foco de janela
+- Sem estados de loading/error padronizados
+- Dados nao sao compartilhados entre componentes
 
-1. **Substituição da query genérica** — removida busca por range (últimos 30 dias), substituída por busca em 6 datas exatas
-2. **Datas-alvo calculadas**: D+1, D+2, D+10, D+11, D+20, D+30 a partir de hoje
-3. **Tipos distintos**: `vencido_d1`, `vencido_d2`, `vencido_d10`, `vencido_d11`, `vencido_d20`, `vencido_d30` — deduplicação automática por `pagamento_id` + `tipo_lembrete`
-4. **Mensagens escalonadas**:
-   - D+1: Tom amigável — "venceu ontem, envie comprovante"
-   - D+2: Reforço amigável — "ainda consta em aberto"
-   - D+10: Tom firme — "continua em aberto há 10 dias"
-   - D+11: Reforço firme — "segue pendente há 11 dias"
-   - D+20: Alerta — "regularize para evitar descumprimento"
-   - D+30: Último aviso — "acordo poderá ser considerado descumprido"
-5. **D-3 e D+0 inalterados** — lembretes pré-vencimento continuam funcionando como antes
+**Sugestao:** Migrar para `useQuery` para consistencia e melhor UX.
 
-## ✅ Concluído — QR Code para conectar WhatsApp no Acionamento
+---
 
-1. **Edge Function `whatsapp-qr`** — adaptada do ZAP BOOOT, usa `user_whatsapp_instances` em vez de `whatsapp_instances`
-2. **Actions**: `create-instance` (cria via UAZAPI admin API), `qr` (busca QR Code), `status` (polling conexão), `setup-webhook` (configura webhook do chatbot), `disconnect` (desconecta e remove)
-3. **Secrets**: `UAZAPI_ADMIN_TOKEN` configurado, reutiliza `UAZAPI_SERVER_URL` existente como base URL
-4. **UI Acionamento** — botão "Conectar via QR Code" + fallback "Manual" para entrada manual de server_url/token
-5. **Polling 3s** — detecta conexão automaticamente e configura webhook
-6. **Countdown 60s** — com opção de atualizar QR Code
-7. **Auto-cleanup** — se cancelar antes de conectar, instância criada é removida
+### 3. Acordos.tsx usa useEffect manual em vez de React Query (Performance)
+
+**Arquivo:** `src/pages/Acordos.tsx` linhas 252-361
+
+A pagina principal de acordos faz 4 queries separadas no `useEffect` sem cache. Cada navegacao recarrega tudo do zero.
+
+**Sugestao:** Migrar para `useQuery` com `staleTime` adequado.
+
+---
+
+### 4. Envio WhatsApp em Acordos.tsx usa credenciais globais (Inconsistencia)
+
+**Arquivo:** `src/pages/Acordos.tsx` linhas 224-232
+
+O botao de WhatsApp na pagina de acordos chama `send-whatsapp` sem enviar `uazapi_server_url` / `uazapi_instance_token` do usuario. Isso significa que usa as credenciais globais do Deno.env em vez das instancias configuradas pelo usuario.
+
+**Sugestao:** Buscar a instancia WhatsApp do usuario e enviar as credenciais na requisicao, similar ao que o PaymentReminders faz.
+
+---
+
+### 5. Uso excessivo de `as any` (Manutenibilidade)
+
+**430 ocorrencias** espalhadas pelo codigo. Principais ofensores:
+- `MetaPessoal.tsx` — tabela `metas_funcionarios` nao esta no tipo gerado
+- `AcordoDevedorSection.tsx` — tabelas `acordos_devedor` e `parcelas_devedor`
+- `ConsultaResultado.tsx` — RPCs tipadas incorretamente
+
+**Sugestao:** Regenerar os tipos do banco (`supabase gen types`) para eliminar a necessidade de `as any` nas tabelas que ja existem.
+
+---
+
+### 6. Ausencia de paginacao na listagem de acordos
+
+**Arquivo:** `src/pages/Acordos.tsx` linha 260
+
+A query busca TODOS os acordos do usuario sem limite. Com o crescimento, isso causara lentidao.
+
+**Sugestao:** Implementar paginacao ou infinite scroll com `.range()`.
+
+---
+
+### 7. Falta de confirmacao visual ao deletar acordo
+
+**Arquivo:** `src/pages/Acordos.tsx` linhas 362-390
+
+O `handleDelete` exclui pagamentos e acordo em sequencia, mas se a exclusao dos pagamentos falhar, o acordo permanece intacto porem sem feedback especifico. Nao ha transacao atomica.
+
+**Sugestao:** Criar uma database function que delete pagamentos e acordo atomicamente.
+
+---
+
+### 8. Delay timer do WhatsAppSendingContext usa hack `as any`
+
+**Arquivo:** `src/contexts/WhatsAppSendingContext.tsx` linhas 256-278
+
+O timer e armazenado com `(delayResolveRef as any)._timer`, o que e fragil.
+
+**Sugestao:** Usar um `useRef<NodeJS.Timeout>` separado para o timer.
+
+---
+
+### Resumo de Prioridades
+
+| # | Sugestao | Esforco | Impacto |
+|---|----------|---------|---------|
+| 1 | Nome dinamico na mensagem WhatsApp | Baixo | Alto |
+| 4 | Credenciais WhatsApp do usuario nos acordos | Medio | Alto |
+| 6 | Paginacao de acordos | Medio | Alto |
+| 7 | Delete atomico de acordo+pagamentos | Baixo | Medio |
+| 2 | Dashboard com React Query | Medio | Medio |
+| 3 | Acordos com React Query | Medio | Medio |
+| 5 | Eliminar `as any` | Alto | Medio |
+| 8 | Fix timer ref hack | Baixo | Baixo |
+
