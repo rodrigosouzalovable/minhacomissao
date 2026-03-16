@@ -438,20 +438,6 @@ export function PaymentReminders() {
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4" />
                   Vence hoje
-                </h4>
-                <div className="space-y-2">
-                  {lembretesHoje.map((lembrete) =>
-                    renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20', inDialog)
-                  )}
-                </div>
-              </div>
-            )}
-
-            {lembretesVencidos.length > 0 && (
-              <div className={inDialog ? '' : 'p-3 border-b border-border'}>
-                <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-                  <XCircle className="h-4 w-4" />
-                  Parcelas Vencidas ({lembretesVencidos.length})
                   {!inDialog && (
                     <Button
                       variant="ghost"
@@ -467,6 +453,20 @@ export function PaymentReminders() {
                       <Maximize2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                </h4>
+                <div className="space-y-2">
+                  {lembretesHoje.map((lembrete) =>
+                    renderLembreteItem(lembrete, 'bg-destructive/10', 'hover:bg-destructive/20', inDialog)
+                  )}
+                </div>
+              </div>
+            )}
+
+            {lembretesVencidos.length > 0 && (
+              <div className={inDialog ? '' : 'p-3 border-b border-border'}>
+                <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
+                  <XCircle className="h-4 w-4" />
+                  Parcelas Vencidas ({lembretesVencidos.length})
                 </h4>
                 <div className="space-y-2">
                   {lembretesVencidos.map((lembrete) =>
