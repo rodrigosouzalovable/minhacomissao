@@ -562,15 +562,15 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64">
+            <div className="w-full overflow-hidden">
               <ChartContainer
                 config={{
                   acumulado: { label: 'Recebido', color: 'hsl(var(--primary))' },
                   metaIdeal: { label: 'Meta Ideal', color: 'hsl(var(--muted-foreground))' },
                 }}
+                className="h-64 w-full"
               >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={evolucaoDiaria}>
+                <LineChart data={evolucaoDiaria}>
                     <XAxis 
                       dataKey="dia" 
                       tick={{ fontSize: 10 }}
