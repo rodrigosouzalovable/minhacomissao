@@ -222,9 +222,12 @@ export function usePaymentReminders() {
     },
   });
 
-  const lembretesVencidos = lembretesNaoLidos.filter((r) => r.tipo === 'vencido');
-  const lembretesHoje = lembretesNaoLidos.filter((r) => r.tipo === 'hoje');
-  const lembretesTresDias = lembretesNaoLidos.filter((r) => r.tipo === 'tres_dias');
+  const sortByDateDesc = (a: PaymentReminder, b: PaymentReminder) =>
+    new Date(b.data_prevista).getTime() - new Date(a.data_prevista).getTime();
+
+  const lembretesVencidos = lembretesNaoLidos.filter((r) => r.tipo === 'vencido').sort(sortByDateDesc);
+  const lembretesHoje = lembretesNaoLidos.filter((r) => r.tipo === 'hoje').sort(sortByDateDesc);
+  const lembretesTresDias = lembretesNaoLidos.filter((r) => r.tipo === 'tres_dias').sort(sortByDateDesc);
 
   return {
     reminders: lembretesNaoLidos,
