@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
@@ -56,6 +56,7 @@ export function PaymentReminders() {
   // WhatsApp instances
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
+  const roundRobinRef = useRef(0);
 
   // Templates & operator
   const [templates, setTemplates] = useState<LembreteTemplate[]>([]);
@@ -298,8 +299,9 @@ export function PaymentReminders() {
                     toast.error('Selecione uma instância WhatsApp primeiro');
                     return;
                   }
-                  const instance = selectedInstances[0];
-                  sendSingleMessage(
+                   const instance = selectedInstances[roundRobinRef.current % selectedInstances.length];
+                   roundRobinRef.current += 1;
+                   sendSingleMessage(
                     {
                       id: lembrete.id,
                       cliente_nome: lembrete.cliente_nome,
