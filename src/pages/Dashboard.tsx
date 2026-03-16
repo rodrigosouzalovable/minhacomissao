@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,95 +13,51 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
 
-interface DashboardData {
-  totalAcordos: number;
-  acordosAtivos: number;
-  comissaoPendente: number;
-  comissaoRecebida: number;
-  ultimosAcordos: Array<{
-    id: string;
-    cliente_nome: string;
-    valor_total: number;
-    comissao_total: number;
-    status: string;
-    criado_em: string;
-  }>;
-  comissoesPorMes: Array<{ mes: string; valor: number }>;
-}
-
 export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadDashboard() {
-      if (!user) return;
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard', user?.id],
+    queryFn: async () => {
+      if (!user) throw new Error('No user');
 
-      try {
-        // Buscar acordos
-        const { data: acordos } = await supabase
-          .from('acordos')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('criado_em', { ascending: false });
+      const [acordosRes, pagamentosRes] = await Promise.all([
+        supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', { ascending: false }),
+        supabase.from('pagamentos').select('*, acordos!inner(user_id)').eq('acordos.user_id', user.id),
+      ]);
 
-        // Buscar pagamentos
-        const { data: pagamentos } = await supabase
-          .from('pagamentos')
-          .select('*, acordos!inner(user_id)')
-          .eq('acordos.user_id', user.id);
+      const acordos = acordosRes.data || [];
+      const pagamentos = pagamentosRes.data || [];
 
-        if (!acordos) {
-          setData({
-            totalAcordos: 0,
-            acordosAtivos: 0,
-            comissaoPendente: 0,
-            comissaoRecebida: 0,
-            ultimosAcordos: [],
-            comissoesPorMes: []
-          });
-          return;
+      const acordosAtivos = acordos.filter(a => a.status === 'ativo').length;
+      const pagamentosPagos = pagamentos.filter(p => p.status === 'pago');
+      const pagamentosPendentes = pagamentos.filter(p => p.status === 'pendente');
+      const comissaoRecebida = pagamentosPagos.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+      const comissaoPendente = pagamentosPendentes.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+
+      const comissoesPorMes: Record<string, number> = {};
+      pagamentosPagos.forEach(p => {
+        if (p.data_paga) {
+          const mes = new Date(p.data_paga).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+          comissoesPorMes[mes] = (comissoesPorMes[mes] || 0) + Number(p.comissao_parcela);
         }
+      });
 
-        const acordosAtivos = acordos.filter(a => a.status === 'ativo').length;
-        
-        // Calcular comissões baseado nos pagamentos
-        const pagamentosPagos = pagamentos?.filter(p => p.status === 'pago') || [];
-        const pagamentosPendentes = pagamentos?.filter(p => p.status === 'pendente') || [];
-        
-        const comissaoRecebida = pagamentosPagos.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
-        const comissaoPendente = pagamentosPendentes.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+      return {
+        totalAcordos: acordos.length,
+        acordosAtivos,
+        comissaoPendente,
+        comissaoRecebida,
+        ultimosAcordos: acordos.slice(0, 5),
+        comissoesPorMes: Object.entries(comissoesPorMes).map(([mes, valor]) => ({ mes, valor })),
+      };
+    },
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000,
+  });
 
-        // Agrupar comissões por mês
-        const comissoesPorMes: Record<string, number> = {};
-        pagamentosPagos.forEach(p => {
-          if (p.data_paga) {
-            const mes = new Date(p.data_paga).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-            comissoesPorMes[mes] = (comissoesPorMes[mes] || 0) + Number(p.comissao_parcela);
-          }
-        });
-
-        setData({
-          totalAcordos: acordos.length,
-          acordosAtivos,
-          comissaoPendente,
-          comissaoRecebida,
-          ultimosAcordos: acordos.slice(0, 5),
-          comissoesPorMes: Object.entries(comissoesPorMes).map(([mes, valor]) => ({ mes, valor }))
-        });
-      } catch (error) {
-        console.error('Erro ao carregar dashboard:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadDashboard();
-  }, [user]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-[400px]">
@@ -124,18 +80,14 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {/* Seção de Metas - Apenas para Admin */}
         {isAdmin && (
           <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />
         )}
 
-        {/* Cards de resumo */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total de Acordos
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total de Acordos</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -145,9 +97,7 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Acordos Ativos
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Acordos Ativos</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -157,9 +107,7 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Comissão Pendente
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Pendente</CardTitle>
               <DollarSign className="h-4 w-4 text-warning" />
             </CardHeader>
             <CardContent>
@@ -171,9 +119,7 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Comissão Recebida
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Recebida</CardTitle>
               <CheckCircle className="h-4 w-4 text-secondary" />
             </CardHeader>
             <CardContent>
@@ -185,7 +131,6 @@ export default function Dashboard() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Gráfico de comissões */}
           <Card>
             <CardHeader>
               <CardTitle>Comissões por Mês</CardTitle>
@@ -197,7 +142,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="mes" className="text-xs" />
                     <YAxis className="text-xs" />
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value: number) => formatarMoeda(value)}
                       contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                     />
@@ -212,7 +157,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Últimos acordos */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Últimos Acordos</CardTitle>
