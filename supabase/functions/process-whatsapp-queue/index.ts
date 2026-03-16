@@ -44,6 +44,15 @@ serve(async (req) => {
     const horaAtualUTC = agora.getUTCHours();
     const horaAtualBrasilia = (horaAtualUTC - 3 + 24) % 24;
 
+    // Block Sundays (day 0 in Brasilia timezone)
+    const diaBrasilia = new Date(agora.getTime() - 3 * 60 * 60 * 1000).getUTCDay();
+    if (diaBrasilia === 0) {
+      console.log('Domingo em Brasília, pulando envio...');
+      return new Response(JSON.stringify({ success: true, message: 'Domingo - sem envio', enviado: false }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     if (horaAtualBrasilia < 8 || horaAtualBrasilia >= 18) {
       console.log(`Fora do horário comercial (${horaAtualBrasilia}h Brasília), pulando...`);
       return new Response(JSON.stringify({ success: true, message: 'Fora do horário comercial', enviado: false }), {
