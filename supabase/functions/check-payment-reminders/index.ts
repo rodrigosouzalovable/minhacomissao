@@ -279,8 +279,9 @@ serve(async (req) => {
         finalInstanceToken = overrideToken;
       } else {
         const inst = instancesMap.get(acordo.user_id);
-        finalServerUrl = inst?.server_url || profile.whatsapp_lembrete_server_url || null;
-        finalInstanceToken = inst?.instance_token || profile.whatsapp_lembrete_instance_token || null;
+        if (!inst) { pulados++; continue; }
+        finalServerUrl = inst.server_url;
+        finalInstanceToken = inst.instance_token;
       }
 
       const valorFormatado = new Intl.NumberFormat('pt-BR', {
