@@ -599,8 +599,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
                       strokeWidth={2}
                       dot={false}
                     />
-                  </LineChart>
-                </ResponsiveContainer>
+                </LineChart>
               </ChartContainer>
             </div>
             <div className="flex justify-center gap-6 mt-2 text-sm">
