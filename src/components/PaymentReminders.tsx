@@ -467,21 +467,6 @@ export function PaymentReminders() {
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
                   <XCircle className="h-4 w-4" />
                   Parcelas Vencidas ({lembretesVencidos.length})
-                  {!inDialog && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 ml-auto"
-                      title="Expandir lembretes"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPopoverOpen(false);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <Maximize2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
                 </h4>
                 <div className="space-y-2">
                   {lembretesVencidos.map((lembrete) =>
