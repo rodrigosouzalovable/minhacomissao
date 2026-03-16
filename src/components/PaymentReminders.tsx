@@ -56,6 +56,7 @@ export function PaymentReminders() {
   // WhatsApp instances
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
+  const roundRobinRef = useRef(0);
 
   // Templates & operator
   const [templates, setTemplates] = useState<LembreteTemplate[]>([]);
