@@ -21,7 +21,7 @@ import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 type Acordo = Tables<'acordos'>;
-const gerarMensagemWhatsApp = (nomeCliente: string) => `Olá tudo bem ${nomeCliente}? Meu nome é Rodrigo e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
+const gerarMensagemWhatsApp = (nomeCliente: string, nomeOperador: string) => `Olá tudo bem ${nomeCliente}? Meu nome é ${nomeOperador} e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
 
 // Componente para exibir cada card de acordo
 function AcordoCard({
