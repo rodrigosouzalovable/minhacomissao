@@ -249,12 +249,11 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
           toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
           await new Promise<void>(resolve => {
             delayResolveRef.current = resolve;
-            const timer = setTimeout(() => {
+            delayTimerRef.current = setTimeout(() => {
               delayResolveRef.current = null;
+              delayTimerRef.current = null;
               resolve();
             }, delay);
-            // Store timer for cleanup if cancelled
-            (delayResolveRef as any)._timer = timer;
           });
         }
       }
