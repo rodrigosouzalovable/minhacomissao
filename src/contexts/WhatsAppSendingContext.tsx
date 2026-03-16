@@ -140,6 +140,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
   const cancelRef = useRef(false);
   const sendingRef = useRef(false);
   const delayResolveRef = useRef<(() => void) | null>(null);
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load saved progress from DB on mount
   const loadSavedProgress = useCallback(async () => {
@@ -241,19 +242,18 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
           enviado_em: status === 'enviado' ? new Date().toISOString() : null,
         }]);
 
-        // Wait 5-7 min before next (skip on last or cancel)
+        // Wait 5-15 min before next (skip on last or cancel)
         if (i < items.length - 1 && !cancelRef.current) {
           const delay = (5 + Math.random() * 10) * 60 * 1000;
           const delayMinutes = Math.round(delay / 60000);
           toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
           await new Promise<void>(resolve => {
             delayResolveRef.current = resolve;
-            const timer = setTimeout(() => {
+            delayTimerRef.current = setTimeout(() => {
               delayResolveRef.current = null;
+              delayTimerRef.current = null;
               resolve();
             }, delay);
-            // Store timer for cleanup if cancelled
-            (delayResolveRef as any)._timer = timer;
           });
         }
       }
@@ -272,9 +272,11 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
 
   const cancelSending = useCallback(() => {
     cancelRef.current = true;
-    // Immediately resolve the pending delay so the loop exits now
     if (delayResolveRef.current) {
-      clearTimeout((delayResolveRef as any)._timer);
+      if (delayTimerRef.current) {
+        clearTimeout(delayTimerRef.current);
+        delayTimerRef.current = null;
+      }
       delayResolveRef.current();
       delayResolveRef.current = null;
     }

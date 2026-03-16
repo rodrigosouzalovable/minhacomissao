@@ -21,7 +21,7 @@ import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 type Acordo = Tables<'acordos'>;
-const gerarMensagemWhatsApp = (nomeCliente: string) => `Olá tudo bem ${nomeCliente}? Meu nome é Rodrigo e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
+const gerarMensagemWhatsApp = (nomeCliente: string, nomeOperador: string) => `Olá tudo bem ${nomeCliente}? Meu nome é ${nomeOperador} e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
 
 // Componente para exibir cada card de acordo
 function AcordoCard({
@@ -191,6 +191,26 @@ export default function Acordos() {
   const [selectedUserId, setSelectedUserId] = useState<string>('todos');
   const [rankingAberto, setRankingAberto] = useState(false);
 
+  // Buscar perfil do operador para nome dinâmico
+  const { data: profile } = useQuery({
+    queryKey: ['my-profile', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('profiles').select('nome').eq('id', user!.id).single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Buscar instância WhatsApp do usuário
+  const { data: whatsappInstance } = useQuery({
+    queryKey: ['my-whatsapp-instance', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('user_whatsapp_instances').select('server_url, instance_token').eq('user_id', user!.id).eq('ativo', true).limit(1).single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
   const { data: funcionarios } = useQuery({
     queryKey: ['funcionarios-list'],
     queryFn: async () => {
@@ -221,15 +241,19 @@ export default function Acordos() {
     }
     setEnviandoWhatsApp(acordo.id);
     try {
+      const nomeOperador = profile?.nome || 'Operador';
+      const body: Record<string, string> = {
+        telefone: acordo.cliente_telefone,
+        mensagem: gerarMensagemWhatsApp(acordo.cliente_nome, nomeOperador),
+      };
+      if (whatsappInstance) {
+        body.uazapi_server_url = whatsappInstance.server_url;
+        body.uazapi_instance_token = whatsappInstance.instance_token;
+      }
       const {
         data,
         error
-      } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          telefone: acordo.cliente_telefone,
-          mensagem: gerarMensagemWhatsApp(acordo.cliente_nome)
-        }
-      });
+      } = await supabase.functions.invoke('send-whatsapp', { body });
       if (error) throw error;
       if (!data?.success) {
         throw new Error(data?.error || 'Erro ao enviar mensagem');
@@ -248,7 +272,7 @@ export default function Acordos() {
     } finally {
       setEnviandoWhatsApp(null);
     }
-  }, [toast]);
+  }, [toast, profile, whatsappInstance]);
   useEffect(() => {
     async function loadAcordos() {
       if (!user) return;
@@ -361,19 +385,9 @@ export default function Acordos() {
   }, [user]);
   const handleDelete = async (acordoId: string) => {
     try {
-      // Primeiro, deletar os pagamentos associados
-      const {
-        error: pagamentosError
-      } = await supabase.from('pagamentos').delete().eq('acordo_id', acordoId);
-      if (pagamentosError) throw pagamentosError;
+      const { error } = await supabase.rpc('delete_acordo_atomico' as any, { p_acordo_id: acordoId });
+      if (error) throw error;
 
-      // Depois, deletar o acordo
-      const {
-        error: acordoError
-      } = await supabase.from('acordos').delete().eq('id', acordoId);
-      if (acordoError) throw acordoError;
-
-      // Atualizar lista local
       setAcordos(prev => prev.filter(a => a.id !== acordoId));
       toast({
         title: 'Acordo excluído',
