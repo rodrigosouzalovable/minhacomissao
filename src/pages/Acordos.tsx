@@ -272,7 +272,7 @@ export default function Acordos() {
     } finally {
       setEnviandoWhatsApp(null);
     }
-  }, [toast]);
+  }, [toast, profile, whatsappInstance]);
   useEffect(() => {
     async function loadAcordos() {
       if (!user) return;
