@@ -385,19 +385,9 @@ export default function Acordos() {
   }, [user]);
   const handleDelete = async (acordoId: string) => {
     try {
-      // Primeiro, deletar os pagamentos associados
-      const {
-        error: pagamentosError
-      } = await supabase.from('pagamentos').delete().eq('acordo_id', acordoId);
-      if (pagamentosError) throw pagamentosError;
+      const { error } = await supabase.rpc('delete_acordo_atomico' as any, { p_acordo_id: acordoId });
+      if (error) throw error;
 
-      // Depois, deletar o acordo
-      const {
-        error: acordoError
-      } = await supabase.from('acordos').delete().eq('id', acordoId);
-      if (acordoError) throw acordoError;
-
-      // Atualizar lista local
       setAcordos(prev => prev.filter(a => a.id !== acordoId));
       toast({
         title: 'Acordo excluído',

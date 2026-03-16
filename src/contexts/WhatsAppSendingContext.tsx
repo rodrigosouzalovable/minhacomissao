@@ -242,7 +242,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
           enviado_em: status === 'enviado' ? new Date().toISOString() : null,
         }]);
 
-        // Wait 5-7 min before next (skip on last or cancel)
+        // Wait 5-15 min before next (skip on last or cancel)
         if (i < items.length - 1 && !cancelRef.current) {
           const delay = (5 + Math.random() * 10) * 60 * 1000;
           const delayMinutes = Math.round(delay / 60000);
