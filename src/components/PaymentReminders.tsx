@@ -423,7 +423,7 @@ export function PaymentReminders() {
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="pendentes" className="mt-0">
+      <TabsContent value="pendentes" className={`mt-0 ${inDialog ? 'flex-1 min-h-0 overflow-hidden' : ''}`}>
         {!temLembretes ? (
           <div className="p-4 text-center text-muted-foreground">
             <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
