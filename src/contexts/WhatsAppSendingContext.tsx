@@ -140,6 +140,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
   const cancelRef = useRef(false);
   const sendingRef = useRef(false);
   const delayResolveRef = useRef<(() => void) | null>(null);
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load saved progress from DB on mount
   const loadSavedProgress = useCallback(async () => {
