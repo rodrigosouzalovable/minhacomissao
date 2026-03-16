@@ -361,7 +361,7 @@ serve(async (req) => {
 
       agendados++;
 
-      const intervaloMs = (Math.floor(Math.random() * 3) + 5) * 60 * 1000;
+      const intervaloMs = (Math.floor(Math.random() * 11) + 5) * 60 * 1000;
       proximoHorario = new Date(proximoHorario.getTime() + intervaloMs);
     }
 
