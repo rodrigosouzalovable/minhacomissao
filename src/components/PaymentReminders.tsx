@@ -528,8 +528,8 @@ export function PaymentReminders() {
       </Popover>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden grid-rows-[auto_minmax(0,1fr)]">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
               Lembretes
@@ -542,71 +542,75 @@ export function PaymentReminders() {
             </DialogTitle>
           </DialogHeader>
 
-          {/* WhatsApp instance selector + send button */}
-          <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">WhatsApp</span>
-              <div className="flex gap-2">
-                {isSending ? (
-                  <Button variant="destructive" size="sm" onClick={cancelSending}>
-                    Cancelar
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    className="gap-1.5"
-                    disabled={selectedInstanceIds.length === 0 || totalLembretes === 0}
-                    onClick={handleStartEnvios}
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                    Enviar
-                  </Button>
-                )}
+          <div className="min-h-0 overflow-y-auto overflow-x-hidden scrollbar-thin pr-1">
+            <div className="space-y-4">
+              {/* WhatsApp instance selector + send button */}
+              <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">WhatsApp</span>
+                  <div className="flex gap-2">
+                    {isSending ? (
+                      <Button variant="destructive" size="sm" onClick={cancelSending}>
+                        Cancelar
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={selectedInstanceIds.length === 0 || totalLembretes === 0}
+                        onClick={handleStartEnvios}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        Enviar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {instances.map((inst) => (
+                    <button
+                      key={inst.id}
+                      type="button"
+                      onClick={() => toggleInstance(inst.id)}
+                      disabled={isSending}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${
+                        selectedInstanceIds.includes(inst.id)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-foreground border-border hover:bg-accent'
+                      } ${isSending ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className={`h-2 w-2 rounded-full ${selectedInstanceIds.includes(inst.id) ? 'bg-primary-foreground' : 'bg-muted-foreground/40'}`} />
+                      {inst.nome || inst.instance_token.slice(0, 12) + '...'}
+                    </button>
+                  ))}
+                  {instances.length === 0 && (
+                    <span className="text-xs text-muted-foreground">Nenhuma instância conectada</span>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {instances.map((inst) => (
-                <button
-                  key={inst.id}
-                  type="button"
-                  onClick={() => toggleInstance(inst.id)}
-                  disabled={isSending}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${
-                    selectedInstanceIds.includes(inst.id)
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-foreground border-border hover:bg-accent'
-                  } ${isSending ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <div className={`h-2 w-2 rounded-full ${selectedInstanceIds.includes(inst.id) ? 'bg-primary-foreground' : 'bg-muted-foreground/40'}`} />
-                  {inst.nome || inst.instance_token.slice(0, 12) + '...'}
-                </button>
-              ))}
-              {instances.length === 0 && (
-                <span className="text-xs text-muted-foreground">Nenhuma instância conectada</span>
-              )}
-            </div>
-          </div>
 
-          {/* Progress bar + last sent info */}
-          {(isSending || enviadosCount > 0 || errosCount > 0) && (
-            <div className="space-y-1">
-              <Progress value={progressPercent} className="h-2" />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{enviadosCount} enviado{enviadosCount !== 1 ? 's' : ''}</span>
-                {errosCount > 0 && <span className="text-destructive">{errosCount} erro{errosCount !== 1 ? 's' : ''}</span>}
-                <span>{naoEnviadosCount} restante{naoEnviadosCount !== 1 ? 's' : ''}</span>
-              </div>
-              {ultimoEnvio && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  Último envio: {new Date(ultimoEnvio.enviado_em!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  {ultimoEnvio.cliente_nome && <span>— {ultimoEnvio.cliente_nome}</span>}
+              {/* Progress bar + last sent info */}
+              {(isSending || enviadosCount > 0 || errosCount > 0) && (
+                <div className="space-y-1">
+                  <Progress value={progressPercent} className="h-2" />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{enviadosCount} enviado{enviadosCount !== 1 ? 's' : ''}</span>
+                    {errosCount > 0 && <span className="text-destructive">{errosCount} erro{errosCount !== 1 ? 's' : ''}</span>}
+                    <span>{naoEnviadosCount} restante{naoEnviadosCount !== 1 ? 's' : ''}</span>
+                  </div>
+                  {ultimoEnvio && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      Último envio: {new Date(ultimoEnvio.enviado_em!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {ultimoEnvio.cliente_nome && <span>— {ultimoEnvio.cliente_nome}</span>}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {renderFullContent(true)}
+              {renderFullContent(true)}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>
