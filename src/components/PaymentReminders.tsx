@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
