@@ -430,7 +430,7 @@ export function PaymentReminders() {
             <p>Nenhum lembrete pendente</p>
           </div>
         ) : (
-          <div className={inDialog ? 'max-h-[60vh] overflow-y-auto' : 'max-h-80 overflow-y-auto'}>
+          <div className={inDialog ? 'flex-1 min-h-0 overflow-y-auto scrollbar-thin' : 'max-h-80 overflow-y-auto'}>
             {lembretesVencidos.length > 0 && (
               <div className="p-3 border-b border-border">
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
@@ -498,7 +498,7 @@ export function PaymentReminders() {
             <p>Nenhum lembrete no histórico</p>
           </div>
         ) : (
-          <div className={`${inDialog ? 'max-h-[60vh]' : 'max-h-80'} overflow-y-auto p-3`}>
+          <div className={`${inDialog ? 'flex-1 min-h-0 scrollbar-thin' : 'max-h-80'} overflow-y-auto p-3`}>
             <div className="space-y-2">
               {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
             </div>
@@ -530,7 +530,7 @@ export function PaymentReminders() {
       </Popover>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
