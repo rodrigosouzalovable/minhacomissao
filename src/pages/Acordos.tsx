@@ -241,15 +241,19 @@ export default function Acordos() {
     }
     setEnviandoWhatsApp(acordo.id);
     try {
+      const nomeOperador = profile?.nome || 'Operador';
+      const body: Record<string, string> = {
+        telefone: acordo.cliente_telefone,
+        mensagem: gerarMensagemWhatsApp(acordo.cliente_nome, nomeOperador),
+      };
+      if (whatsappInstance) {
+        body.uazapi_server_url = whatsappInstance.server_url;
+        body.uazapi_instance_token = whatsappInstance.instance_token;
+      }
       const {
         data,
         error
-      } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          telefone: acordo.cliente_telefone,
-          mensagem: gerarMensagemWhatsApp(acordo.cliente_nome)
-        }
-      });
+      } = await supabase.functions.invoke('send-whatsapp', { body });
       if (error) throw error;
       if (!data?.success) {
         throw new Error(data?.error || 'Erro ao enviar mensagem');
