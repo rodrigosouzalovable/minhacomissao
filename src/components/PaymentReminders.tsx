@@ -498,7 +498,7 @@ export function PaymentReminders() {
             <p>Nenhum lembrete no histórico</p>
           </div>
         ) : (
-          <div className={`${inDialog ? 'max-h-[60vh]' : 'max-h-80'} overflow-y-auto p-3`}>
+          <div className={`${inDialog ? 'flex-1 min-h-0 scrollbar-thin' : 'max-h-80'} overflow-y-auto p-3`}>
             <div className="space-y-2">
               {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
             </div>
