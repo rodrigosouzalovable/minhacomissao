@@ -401,7 +401,7 @@ export function PaymentReminders() {
   };
 
   const renderFullContent = (inDialog = false) => (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className={`w-full ${inDialog ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : ''}`}>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
       <TabsList className={`w-full grid grid-cols-2 ${inDialog ? '' : 'rounded-none border-b'}`}>
         <TabsTrigger value="pendentes" className="gap-1.5">
           <Bell className="h-3.5 w-3.5" />
@@ -423,16 +423,16 @@ export function PaymentReminders() {
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="pendentes" className={`mt-0 ${inDialog ? 'flex-1 min-h-0 overflow-hidden' : ''}`}>
+      <TabsContent value="pendentes" className={inDialog ? 'mt-3' : 'mt-0'}>
         {!temLembretes ? (
           <div className="p-4 text-center text-muted-foreground">
             <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Nenhum lembrete pendente</p>
           </div>
         ) : (
-          <div className={inDialog ? 'h-full overflow-y-auto scrollbar-thin' : 'max-h-80 overflow-y-auto'}>
+          <div className={inDialog ? 'space-y-3' : 'max-h-80 overflow-y-auto scrollbar-thin'}>
             {lembretesVencidos.length > 0 && (
-              <div className="p-3 border-b border-border">
+              <div className={inDialog ? '' : 'p-3 border-b border-border'}>
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
                   <XCircle className="h-4 w-4" />
                   Parcelas Vencidas ({lembretesVencidos.length})
@@ -461,7 +461,7 @@ export function PaymentReminders() {
             )}
 
             {lembretesHoje.length > 0 && (
-              <div className="p-3 border-b border-border">
+              <div className={inDialog ? '' : 'p-3 border-b border-border'}>
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4" />
                   Vence hoje
@@ -475,7 +475,7 @@ export function PaymentReminders() {
             )}
 
             {lembretesTresDias.length > 0 && (
-              <div className="p-3">
+              <div className={inDialog ? '' : 'p-3'}>
                 <h4 className="text-sm font-semibold text-warning mb-2 flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
                   Vence em 3 dias
@@ -491,17 +491,15 @@ export function PaymentReminders() {
         )}
       </TabsContent>
 
-      <TabsContent value="historico" className={`mt-0 ${inDialog ? 'flex-1 min-h-0 overflow-hidden' : ''}`}>
+      <TabsContent value="historico" className={inDialog ? 'mt-3' : 'mt-0'}>
         {lembretesJaLidos.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
             <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Nenhum lembrete no histórico</p>
           </div>
         ) : (
-          <div className={`${inDialog ? 'h-full scrollbar-thin' : 'max-h-80'} overflow-y-auto p-3`}>
-            <div className="space-y-2">
-              {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
-            </div>
+          <div className={inDialog ? 'space-y-2 pt-1' : 'max-h-80 overflow-y-auto p-3 scrollbar-thin'}>
+            {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
           </div>
         )}
       </TabsContent>
