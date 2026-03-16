@@ -491,14 +491,14 @@ export function PaymentReminders() {
         )}
       </TabsContent>
 
-      <TabsContent value="historico" className="mt-0">
+      <TabsContent value="historico" className={`mt-0 ${inDialog ? 'flex-1 min-h-0 overflow-hidden' : ''}`}>
         {lembretesJaLidos.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
             <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Nenhum lembrete no histórico</p>
           </div>
         ) : (
-          <div className={`${inDialog ? 'flex-1 min-h-0 scrollbar-thin' : 'max-h-80'} overflow-y-auto p-3`}>
+          <div className={`${inDialog ? 'h-full scrollbar-thin' : 'max-h-80'} overflow-y-auto p-3`}>
             <div className="space-y-2">
               {lembretesJaLidos.map((lembrete) => renderHistoricoItem(lembrete))}
             </div>
