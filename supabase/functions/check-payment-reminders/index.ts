@@ -58,9 +58,10 @@ serve(async (req) => {
       console.log(`Filtrando por user_id: ${filterUserId}`);
     }
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const hojeStr = hoje.toISOString().split('T')[0];
+    // Use Brasilia timezone (UTC-3) for "today" calculation
+    const agoraBrasilia = new Date(new Date().getTime() - 3 * 60 * 60 * 1000);
+    const hojeStr = agoraBrasilia.toISOString().split('T')[0];
+    const hoje = new Date(hojeStr + 'T00:00:00Z');
     
     const tresDias = new Date(hoje);
     tresDias.setDate(tresDias.getDate() + 3);
