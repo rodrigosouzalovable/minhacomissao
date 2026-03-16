@@ -430,7 +430,7 @@ export function PaymentReminders() {
             <p>Nenhum lembrete pendente</p>
           </div>
         ) : (
-          <div className={inDialog ? 'max-h-[60vh] overflow-y-auto' : 'max-h-80 overflow-y-auto'}>
+          <div className={inDialog ? 'flex-1 min-h-0 overflow-y-auto scrollbar-thin' : 'max-h-80 overflow-y-auto'}>
             {lembretesVencidos.length > 0 && (
               <div className="p-3 border-b border-border">
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
