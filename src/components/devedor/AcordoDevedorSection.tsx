@@ -54,6 +54,12 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
 
+  // Inline editing for existing parcelas
+  const [editingParcelaId, setEditingParcelaId] = useState<string | null>(null);
+  const [editParcelaValor, setEditParcelaValor] = useState('');
+  const [editParcelaData, setEditParcelaData] = useState('');
+  const [savingParcela, setSavingParcela] = useState(false);
+
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [observacoes, setObservacoes] = useState('');
