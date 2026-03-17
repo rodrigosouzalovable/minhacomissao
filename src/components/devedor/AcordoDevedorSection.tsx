@@ -54,6 +54,12 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
 
+  // Inline editing for existing parcelas
+  const [editingParcelaId, setEditingParcelaId] = useState<string | null>(null);
+  const [editParcelaValor, setEditParcelaValor] = useState('');
+  const [editParcelaData, setEditParcelaData] = useState('');
+  const [savingParcela, setSavingParcela] = useState(false);
+
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [observacoes, setObservacoes] = useState('');
@@ -339,7 +345,6 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
   const handleExcluirAcordo = async (acordoId: string) => {
     try {
-      // Parcelas are deleted by CASCADE
       const { error } = await supabase
         .from('acordos_devedor' as any)
         .delete()
@@ -349,6 +354,61 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       fetchAcordos();
     } catch (err: any) {
       toast.error('Erro ao excluir acordo: ' + (err.message || 'Tente novamente.'));
+    }
+  };
+
+  const handleStartEditParcela = (parcela: ParcelaDevedor) => {
+    setEditingParcelaId(parcela.id);
+    setEditParcelaValor(String(parcela.valor));
+    setEditParcelaData(parcela.data_vencimento);
+  };
+
+  const handleCancelEditParcela = () => {
+    setEditingParcelaId(null);
+  };
+
+  const handleSaveEditParcela = async (parcela: ParcelaDevedor) => {
+    const novoValor = parseFloat(editParcelaValor);
+    if (isNaN(novoValor) || novoValor <= 0) {
+      toast.error('Informe um valor válido.');
+      return;
+    }
+    if (!editParcelaData) {
+      toast.error('Informe uma data válida.');
+      return;
+    }
+
+    setSavingParcela(true);
+    try {
+      const { error } = await supabase
+        .from('parcelas_devedor' as any)
+        .update({
+          valor: Math.round(novoValor * 100) / 100,
+          data_vencimento: editParcelaData,
+        } as any)
+        .eq('id', parcela.id);
+
+      if (error) throw error;
+
+      // Update valor_total do acordo
+      const acordoParcelas = parcelas[parcela.acordo_id] || [];
+      const novoTotal = acordoParcelas.reduce((s, p) => {
+        if (p.id === parcela.id) return s + novoValor;
+        return s + p.valor;
+      }, 0);
+
+      await supabase
+        .from('acordos_devedor' as any)
+        .update({ valor_total: Math.round(novoTotal * 100) / 100 } as any)
+        .eq('id', parcela.acordo_id);
+
+      toast.success('Parcela atualizada!');
+      setEditingParcelaId(null);
+      fetchAcordos();
+    } catch (err: any) {
+      toast.error('Erro ao atualizar parcela: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setSavingParcela(false);
     }
   };
 
@@ -499,27 +559,57 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                         <TableRow key={parcela.id} className={parcela.pago ? 'bg-green-50 dark:bg-green-950/20' : ''}>
                           <TableCell className="text-xs font-medium">{parcela.numero_parcela}</TableCell>
                           <TableCell className="text-xs">
-                            {new Date(parcela.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            {editingParcelaId === parcela.id ? (
+                              <Input type="date" value={editParcelaData} onChange={(e) => setEditParcelaData(e.target.value)} className="h-7 text-xs w-36" />
+                            ) : (
+                              new Date(parcela.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
+                            )}
                           </TableCell>
-                          <TableCell className="text-xs">{fmtBRL(parcela.valor)}</TableCell>
+                          <TableCell className="text-xs">
+                            {editingParcelaId === parcela.id ? (
+                              <Input type="number" step="0.01" value={editParcelaValor} onChange={(e) => setEditParcelaValor(e.target.value)} className="h-7 text-xs w-28" />
+                            ) : (
+                              fmtBRL(parcela.valor)
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={parcela.pago ? 'default' : 'secondary'} className="text-xs">
                               {parcela.pago ? 'Pago' : 'Pendente'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant={parcela.pago ? 'outline' : 'default'}
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => togglePago(parcela)}
-                            >
-                              {parcela.pago ? (
-                                <><X className="h-3 w-3 mr-1" /> Desmarcar</>
+                            <div className="flex items-center justify-end gap-1">
+                              {editingParcelaId === parcela.id ? (
+                                <>
+                                  <Button size="sm" className="h-7 text-xs" onClick={() => handleSaveEditParcela(parcela)} disabled={savingParcela}>
+                                    {savingParcela ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" /> Salvar</>}
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCancelEditParcela} disabled={savingParcela}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </>
                               ) : (
-                                <><Check className="h-3 w-3 mr-1" /> Marcar Pago</>
+                                <>
+                                  {!parcela.pago && (
+                                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartEditParcela(parcela)}>
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant={parcela.pago ? 'outline' : 'default'}
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => togglePago(parcela)}
+                                  >
+                                    {parcela.pago ? (
+                                      <><X className="h-3 w-3 mr-1" /> Desmarcar</>
+                                    ) : (
+                                      <><Check className="h-3 w-3 mr-1" /> Marcar Pago</>
+                                    )}
+                                  </Button>
+                                </>
                               )}
-                            </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
