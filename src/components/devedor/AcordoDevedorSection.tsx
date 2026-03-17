@@ -345,7 +345,6 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
   const handleExcluirAcordo = async (acordoId: string) => {
     try {
-      // Parcelas are deleted by CASCADE
       const { error } = await supabase
         .from('acordos_devedor' as any)
         .delete()
@@ -355,6 +354,61 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       fetchAcordos();
     } catch (err: any) {
       toast.error('Erro ao excluir acordo: ' + (err.message || 'Tente novamente.'));
+    }
+  };
+
+  const handleStartEditParcela = (parcela: ParcelaDevedor) => {
+    setEditingParcelaId(parcela.id);
+    setEditParcelaValor(String(parcela.valor));
+    setEditParcelaData(parcela.data_vencimento);
+  };
+
+  const handleCancelEditParcela = () => {
+    setEditingParcelaId(null);
+  };
+
+  const handleSaveEditParcela = async (parcela: ParcelaDevedor) => {
+    const novoValor = parseFloat(editParcelaValor);
+    if (isNaN(novoValor) || novoValor <= 0) {
+      toast.error('Informe um valor válido.');
+      return;
+    }
+    if (!editParcelaData) {
+      toast.error('Informe uma data válida.');
+      return;
+    }
+
+    setSavingParcela(true);
+    try {
+      const { error } = await supabase
+        .from('parcelas_devedor' as any)
+        .update({
+          valor: Math.round(novoValor * 100) / 100,
+          data_vencimento: editParcelaData,
+        } as any)
+        .eq('id', parcela.id);
+
+      if (error) throw error;
+
+      // Update valor_total do acordo
+      const acordoParcelas = parcelas[parcela.acordo_id] || [];
+      const novoTotal = acordoParcelas.reduce((s, p) => {
+        if (p.id === parcela.id) return s + novoValor;
+        return s + p.valor;
+      }, 0);
+
+      await supabase
+        .from('acordos_devedor' as any)
+        .update({ valor_total: Math.round(novoTotal * 100) / 100 } as any)
+        .eq('id', parcela.acordo_id);
+
+      toast.success('Parcela atualizada!');
+      setEditingParcelaId(null);
+      fetchAcordos();
+    } catch (err: any) {
+      toast.error('Erro ao atualizar parcela: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setSavingParcela(false);
     }
   };
 
