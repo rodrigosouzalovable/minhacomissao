@@ -811,18 +811,27 @@ export default function Acordos() {
   };
 
   const handleBulkSend = useCallback(async (acordosList: Acordo[], selectedInstances: WhatsAppInstance[]) => {
-    if (!user || selectedInstances.length === 0) return;
+    if (!user || selectedInstances.length === 0) {
+      console.log('handleBulkSend: no user or no instances selected');
+      return;
+    }
     const nomeOperador = profile?.nome ? toTitleCase(profile.nome) : 'Operador';
     const templates = lembreteTemplates || [];
 
     // Fetch pending parcelas for all acordos
     const acordoIds = acordosList.map(a => a.id);
-    const { data: parcelas } = await supabase
+    console.log('handleBulkSend: fetching parcelas for', acordoIds.length, 'acordos');
+    
+    const { data: parcelas, error: parcelasError } = await supabase
       .from('pagamentos')
       .select('acordo_id, valor_parcela, data_prevista')
       .in('acordo_id', acordoIds)
       .eq('status', 'pendente')
       .order('data_prevista', { ascending: true });
+
+    if (parcelasError) {
+      console.error('handleBulkSend: error fetching parcelas', parcelasError);
+    }
 
     // Build map: acordo_id -> first pending parcela
     const parcelaMap = new Map<string, { valor_parcela: number; data_prevista: string }>();
@@ -833,23 +842,36 @@ export default function Acordos() {
     });
 
     const hojeStr = new Date().toISOString().split('T')[0];
-    const queueItems = acordosList.map(acordo => {
-      const parcela = parcelaMap.get(acordo.id);
-      const dataPrevista = parcela?.data_prevista || acordo.data_primeiro_pagamento;
-      let tipo = '3_dias';
-      if (dataPrevista < hojeStr) tipo = 'vencido';
-      else if (dataPrevista === hojeStr) tipo = 'hoje';
+    const queueItems = acordosList
+      .filter(acordo => acordo.cliente_telefone) // Ensure phone exists
+      .map(acordo => {
+        const parcela = parcelaMap.get(acordo.id);
+        const dataPrevista = parcela?.data_prevista || acordo.data_primeiro_pagamento;
+        let tipo = '3_dias';
+        if (dataPrevista < hojeStr) tipo = 'vencido';
+        else if (dataPrevista === hojeStr) tipo = 'hoje';
 
-      return {
-        id: acordo.id,
-        cliente_nome: acordo.cliente_nome,
-        cliente_telefone: acordo.cliente_telefone || '',
-        valor_parcela: parcela?.valor_parcela || acordo.valor_parcela,
-        data_prevista: dataPrevista,
-        tipo,
-        acordo_id: acordo.id,
-      };
-    });
+        return {
+          id: acordo.id,
+          cliente_nome: acordo.cliente_nome,
+          cliente_telefone: acordo.cliente_telefone || '',
+          valor_parcela: parcela?.valor_parcela || acordo.valor_parcela,
+          data_prevista: dataPrevista,
+          tipo,
+          acordo_id: acordo.id,
+        };
+      });
+
+    console.log('handleBulkSend: starting send with', queueItems.length, 'items and', selectedInstances.length, 'instances');
+    
+    if (queueItems.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Nenhum acordo com telefone',
+        description: 'Nenhum acordo possui telefone cadastrado para envio.',
+      });
+      return;
+    }
 
     startSending(queueItems, selectedInstances, templates, nomeOperador);
     toast({
