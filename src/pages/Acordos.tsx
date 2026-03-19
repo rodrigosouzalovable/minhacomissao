@@ -805,6 +805,54 @@ export default function Acordos() {
         return status;
     }
   };
+
+  const handleBulkSend = useCallback(async (acordosList: Acordo[], selectedInstances: WhatsAppInstance[]) => {
+    if (!user || selectedInstances.length === 0) return;
+    const nomeOperador = profile?.nome ? toTitleCase(profile.nome) : 'Operador';
+    const templates = lembreteTemplates || [];
+
+    // Fetch pending parcelas for all acordos
+    const acordoIds = acordosList.map(a => a.id);
+    const { data: parcelas } = await supabase
+      .from('pagamentos')
+      .select('acordo_id, valor_parcela, data_prevista')
+      .in('acordo_id', acordoIds)
+      .eq('status', 'pendente')
+      .order('data_prevista', { ascending: true });
+
+    // Build map: acordo_id -> first pending parcela
+    const parcelaMap = new Map<string, { valor_parcela: number; data_prevista: string }>();
+    parcelas?.forEach(p => {
+      if (!parcelaMap.has(p.acordo_id)) {
+        parcelaMap.set(p.acordo_id, { valor_parcela: p.valor_parcela, data_prevista: p.data_prevista });
+      }
+    });
+
+    const hojeStr = new Date().toISOString().split('T')[0];
+    const queueItems = acordosList.map(acordo => {
+      const parcela = parcelaMap.get(acordo.id);
+      const dataPrevista = parcela?.data_prevista || acordo.data_primeiro_pagamento;
+      let tipo = '3_dias';
+      if (dataPrevista < hojeStr) tipo = 'vencido';
+      else if (dataPrevista === hojeStr) tipo = 'hoje';
+
+      return {
+        id: acordo.id,
+        cliente_nome: acordo.cliente_nome,
+        cliente_telefone: acordo.cliente_telefone || '',
+        valor_parcela: parcela?.valor_parcela || acordo.valor_parcela,
+        data_prevista: dataPrevista,
+        tipo,
+        acordo_id: acordo.id,
+      };
+    });
+
+    startSending(queueItems, selectedInstances, templates, nomeOperador);
+    toast({
+      title: 'Envio em lote iniciado',
+      description: `${queueItems.length} mensagens serão enviadas com intervalo de 5-15 minutos.`,
+    });
+  }, [user, profile, lembreteTemplates, startSending, toast]);
   if (loading) {
     return <AppLayout>
         <div className="flex items-center justify-center min-h-[400px]">
