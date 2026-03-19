@@ -302,12 +302,22 @@ export default function Acordos() {
     enabled: !!user,
   });
 
-  // Buscar instância WhatsApp do usuário
-  const { data: whatsappInstance } = useQuery({
-    queryKey: ['my-whatsapp-instance', user?.id],
+  // Buscar todas as instâncias WhatsApp ativas do usuário
+  const { data: whatsappInstances } = useQuery({
+    queryKey: ['my-whatsapp-instances', user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('user_whatsapp_instances').select('server_url, instance_token').eq('user_id', user!.id).eq('ativo', true).limit(1).single();
-      return data;
+      const { data } = await supabase.from('user_whatsapp_instances').select('id, nome, server_url, instance_token').eq('user_id', user!.id).eq('ativo', true);
+      return (data || []) as WhatsAppInstance[];
+    },
+    enabled: !!user,
+  });
+
+  // Buscar templates de lembretes do usuário
+  const { data: lembreteTemplates } = useQuery({
+    queryKey: ['my-lembrete-templates', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('lembrete_mensagens_templates').select('tipo_lembrete, mensagem').eq('user_id', user!.id).eq('ativo', true);
+      return (data || []) as LembreteTemplate[];
     },
     enabled: !!user,
   });
