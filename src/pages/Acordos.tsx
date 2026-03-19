@@ -974,7 +974,7 @@ export default function Acordos() {
 
           <TabsContent value="negociados">
             {acordosNegociados.length > 0 ? <div className="grid gap-4">
-                {acordosNegociados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isNegociado={true} isVencido={acordosComParcelasVencidas.has(acordo.id)} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
+                {acordosNegociados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isNegociado={true} isVencido={acordosComParcelasVencidas.has(acordo.id)} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} />}
           </TabsContent>
 
