@@ -13,6 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy } from 'lucide-react';
@@ -21,7 +24,105 @@ import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 type Acordo = Tables<'acordos'>;
-const gerarMensagemWhatsApp = (nomeCliente: string, nomeOperador: string) => `Olá tudo bem ${nomeCliente}? Meu nome é ${nomeOperador} e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
+
+interface WhatsAppInstance {
+  id: string;
+  nome: string | null;
+  server_url: string;
+  instance_token: string;
+}
+
+interface LembreteTemplate {
+  tipo_lembrete: string;
+  mensagem: string;
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
+function substituirVariaveis(template: string, vars: {
+  nome_cliente: string;
+  primeiro_nome: string;
+  nome_operador: string;
+  valor: string;
+  data_vencimento: string;
+  dias_atraso: number;
+}): string {
+  return template
+    .replace(/\{nome_cliente\}/g, vars.nome_cliente)
+    .replace(/\{primeiro_nome\}/g, vars.primeiro_nome)
+    .replace(/\{nome_operador\}/g, vars.nome_operador)
+    .replace(/\{valor\}/g, vars.valor)
+    .replace(/\{data_vencimento\}/g, vars.data_vencimento)
+    .replace(/\{dias_atraso\}/g, String(vars.dias_atraso));
+}
+
+function gerarMensagemComTemplate(
+  clienteNome: string,
+  operadorNome: string,
+  valorParcela: number,
+  dataPrevista: string,
+  templates: LembreteTemplate[],
+  tipo: 'vencido' | 'hoje' | '3_dias'
+): string {
+  const nomeCompleto = toTitleCase(clienteNome);
+  const primeiroNome = nomeCompleto.split(' ')[0];
+  const valor = formatCurrency(valorParcela);
+  const dataStr = dataPrevista
+    ? new Date(dataPrevista + 'T00:00:00').toLocaleDateString('pt-BR')
+    : '';
+
+  const hoje = new Date();
+  const venc = new Date(dataPrevista + 'T00:00:00');
+  const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
+
+  let tipoKey = '';
+  if (tipo === 'vencido') {
+    tipoKey = `vencido_d${diasAtraso}`;
+  } else if (tipo === 'hoje') {
+    tipoKey = 'dia_vencimento';
+  } else {
+    tipoKey = '3_dias';
+  }
+
+  let matched = templates.filter(t => t.tipo_lembrete === tipoKey);
+
+  if (matched.length === 0 && tipo === 'vencido') {
+    const vencidoTemplates = templates
+      .filter(t => t.tipo_lembrete.startsWith('vencido_d'))
+      .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', ''), 10) }))
+      .filter(t => !isNaN(t.dias))
+      .sort((a, b) => b.dias - a.dias);
+    const closest = vencidoTemplates.find(t => t.dias <= diasAtraso);
+    if (closest) matched = templates.filter(t => t.tipo_lembrete === `vencido_d${closest.dias}`);
+  }
+
+  if (matched.length > 0) {
+    const chosen = matched[Math.floor(Math.random() * matched.length)];
+    return substituirVariaveis(chosen.mensagem, {
+      nome_cliente: nomeCompleto,
+      primeiro_nome: primeiroNome,
+      nome_operador: operadorNome || 'Operador',
+      valor,
+      data_vencimento: dataStr,
+      dias_atraso: diasAtraso,
+    });
+  }
+
+  // Fallback
+  if (tipo === 'vencido') {
+    return `Olá ${primeiroNome}, tudo bem? Identificamos que a parcela de ${valor} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante.`;
+  }
+  if (tipo === 'hoje') {
+    return `Olá ${primeiroNome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela de ${valor}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
+  }
+  return `Olá ${primeiroNome}, tudo bem? Informamos que sua parcela de ${valor} vence em ${dataStr}. Fique atento para não perder o prazo!`;
+}
 
 // Componente para exibir cada card de acordo
 function AcordoCard({
