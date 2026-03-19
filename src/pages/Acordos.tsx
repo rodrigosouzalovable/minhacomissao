@@ -5,11 +5,13 @@ import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useWhatsAppSending } from '@/contexts/WhatsAppSendingContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -18,7 +20,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy, Square, XCircle } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
@@ -243,6 +245,89 @@ function AcordoCard({
     </Link>;
 }
 
+// Painel de envio em lote
+function BulkSendPanel({
+  acordos,
+  instances,
+  templates,
+  operadorNome,
+  isSending,
+  onStartSending,
+  onCancelSending,
+}: {
+  acordos: Acordo[];
+  instances: WhatsAppInstance[];
+  templates: LembreteTemplate[];
+  operadorNome: string;
+  isSending: boolean;
+  onStartSending: (acordos: Acordo[], selectedInstances: WhatsAppInstance[]) => void;
+  onCancelSending: () => void;
+}) {
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
+
+  const toggleInstance = (id: string) => {
+    setSelectedInstanceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const acordosComTelefone = acordos.filter(a => a.cliente_telefone);
+  const selectedInstances = instances.filter(i => selectedInstanceIds.has(i.id));
+
+  if (instances.length === 0) return null;
+
+  return (
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-medium mb-2 flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-green-600" />
+              Envio em lote — {acordosComTelefone.length} acordo(s) com telefone
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {instances.map((inst) => (
+                <label key={inst.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                  <Checkbox
+                    checked={selectedInstanceIds.has(inst.id)}
+                    onCheckedChange={() => toggleInstance(inst.id)}
+                    disabled={isSending}
+                  />
+                  {inst.nome || inst.server_url}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {isSending ? (
+              <Button
+                variant="destructive"
+                onClick={onCancelSending}
+                className="gap-2"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancelar Envios
+              </Button>
+            ) : (
+              <Button
+                onClick={() => onStartSending(acordosComTelefone, selectedInstances)}
+                disabled={selectedInstances.length === 0 || acordosComTelefone.length === 0}
+                className="bg-green-600 hover:bg-green-700 text-white gap-2"
+              >
+                <Send className="h-4 w-4" />
+                ENVIAR ({acordosComTelefone.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Componente para estado vazio
 function EmptyState({
   search,
@@ -276,6 +361,7 @@ export default function Acordos() {
   const {
     toast
   } = useToast();
+  const { isSending, startSending, cancelSending } = useWhatsAppSending();
   const [acordos, setAcordos] = useState<Acordo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -719,6 +805,54 @@ export default function Acordos() {
         return status;
     }
   };
+
+  const handleBulkSend = useCallback(async (acordosList: Acordo[], selectedInstances: WhatsAppInstance[]) => {
+    if (!user || selectedInstances.length === 0) return;
+    const nomeOperador = profile?.nome ? toTitleCase(profile.nome) : 'Operador';
+    const templates = lembreteTemplates || [];
+
+    // Fetch pending parcelas for all acordos
+    const acordoIds = acordosList.map(a => a.id);
+    const { data: parcelas } = await supabase
+      .from('pagamentos')
+      .select('acordo_id, valor_parcela, data_prevista')
+      .in('acordo_id', acordoIds)
+      .eq('status', 'pendente')
+      .order('data_prevista', { ascending: true });
+
+    // Build map: acordo_id -> first pending parcela
+    const parcelaMap = new Map<string, { valor_parcela: number; data_prevista: string }>();
+    parcelas?.forEach(p => {
+      if (!parcelaMap.has(p.acordo_id)) {
+        parcelaMap.set(p.acordo_id, { valor_parcela: p.valor_parcela, data_prevista: p.data_prevista });
+      }
+    });
+
+    const hojeStr = new Date().toISOString().split('T')[0];
+    const queueItems = acordosList.map(acordo => {
+      const parcela = parcelaMap.get(acordo.id);
+      const dataPrevista = parcela?.data_prevista || acordo.data_primeiro_pagamento;
+      let tipo = '3_dias';
+      if (dataPrevista < hojeStr) tipo = 'vencido';
+      else if (dataPrevista === hojeStr) tipo = 'hoje';
+
+      return {
+        id: acordo.id,
+        cliente_nome: acordo.cliente_nome,
+        cliente_telefone: acordo.cliente_telefone || '',
+        valor_parcela: parcela?.valor_parcela || acordo.valor_parcela,
+        data_prevista: dataPrevista,
+        tipo,
+        acordo_id: acordo.id,
+      };
+    });
+
+    startSending(queueItems, selectedInstances, templates, nomeOperador);
+    toast({
+      title: 'Envio em lote iniciado',
+      description: `${queueItems.length} mensagens serão enviadas com intervalo de 5-15 minutos.`,
+    });
+  }, [user, profile, lembreteTemplates, startSending, toast]);
   if (loading) {
     return <AppLayout>
         <div className="flex items-center justify-center min-h-[400px]">
@@ -825,18 +959,45 @@ export default function Acordos() {
           </TabsContent>
 
           <TabsContent value="proximas">
+            <BulkSendPanel
+              acordos={acordosProximos}
+              instances={whatsappInstances || []}
+              templates={lembreteTemplates || []}
+              operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
+              isSending={isSending}
+              onStartSending={handleBulkSend}
+              onCancelSending={cancelSending}
+            />
             {acordosProximos.length > 0 ? <div className="grid gap-4">
                 {acordosProximos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela próxima ao vencimento" />}
           </TabsContent>
 
           <TabsContent value="acordos_realizados">
+            <BulkSendPanel
+              acordos={acordosRealizados}
+              instances={whatsappInstances || []}
+              templates={lembreteTemplates || []}
+              operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
+              isSending={isSending}
+              onStartSending={handleBulkSend}
+              onCancelSending={cancelSending}
+            />
             {acordosRealizados.length > 0 ? <div className="grid gap-4">
                 {acordosRealizados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo realizado sem pagamentos" />}
           </TabsContent>
 
           <TabsContent value="vencidos">
+            <BulkSendPanel
+              acordos={acordosVencidos}
+              instances={whatsappInstances || []}
+              templates={lembreteTemplates || []}
+              operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
+              isSending={isSending}
+              onStartSending={handleBulkSend}
+              onCancelSending={cancelSending}
+            />
             {acordosVencidos.length > 0 ? <div className="grid gap-4">
                 {acordosVencidos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela vencida encontrada" />}
