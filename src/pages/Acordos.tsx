@@ -245,6 +245,89 @@ function AcordoCard({
     </Link>;
 }
 
+// Painel de envio em lote
+function BulkSendPanel({
+  acordos,
+  instances,
+  templates,
+  operadorNome,
+  isSending,
+  onStartSending,
+  onCancelSending,
+}: {
+  acordos: Acordo[];
+  instances: WhatsAppInstance[];
+  templates: LembreteTemplate[];
+  operadorNome: string;
+  isSending: boolean;
+  onStartSending: (acordos: Acordo[], selectedInstances: WhatsAppInstance[]) => void;
+  onCancelSending: () => void;
+}) {
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<Set<string>>(new Set());
+
+  const toggleInstance = (id: string) => {
+    setSelectedInstanceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const acordosComTelefone = acordos.filter(a => a.cliente_telefone);
+  const selectedInstances = instances.filter(i => selectedInstanceIds.has(i.id));
+
+  if (instances.length === 0) return null;
+
+  return (
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-medium mb-2 flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-green-600" />
+              Envio em lote — {acordosComTelefone.length} acordo(s) com telefone
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {instances.map((inst) => (
+                <label key={inst.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                  <Checkbox
+                    checked={selectedInstanceIds.has(inst.id)}
+                    onCheckedChange={() => toggleInstance(inst.id)}
+                    disabled={isSending}
+                  />
+                  {inst.nome || inst.server_url}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {isSending ? (
+              <Button
+                variant="destructive"
+                onClick={onCancelSending}
+                className="gap-2"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancelar Envios
+              </Button>
+            ) : (
+              <Button
+                onClick={() => onStartSending(acordosComTelefone, selectedInstances)}
+                disabled={selectedInstances.length === 0 || acordosComTelefone.length === 0}
+                className="bg-green-600 hover:bg-green-700 text-white gap-2"
+              >
+                <Send className="h-4 w-4" />
+                ENVIAR ({acordosComTelefone.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Componente para estado vazio
 function EmptyState({
   search,
