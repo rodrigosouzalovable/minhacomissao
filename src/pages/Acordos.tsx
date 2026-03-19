@@ -867,5 +867,57 @@ export default function Acordos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de seleção de instância WhatsApp */}
+      <Dialog open={!!whatsappDialogAcordo} onOpenChange={(open) => !open && setWhatsappDialogAcordo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-green-600" />
+              Enviar WhatsApp
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Enviar lembrete para <strong>{whatsappDialogAcordo?.cliente_nome}</strong>
+            </p>
+            {(whatsappInstances?.length || 0) > 1 ? (
+              <div className="space-y-2">
+                <Label>Selecione a instância WhatsApp:</Label>
+                <RadioGroup value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
+                  {whatsappInstances?.map((inst) => (
+                    <div key={inst.id} className="flex items-center space-x-2 p-2 rounded-md border hover:bg-accent/50 transition-colors">
+                      <RadioGroupItem value={inst.id} id={`inst-${inst.id}`} />
+                      <Label htmlFor={`inst-${inst.id}`} className="cursor-pointer flex-1">
+                        {inst.nome || inst.server_url}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            ) : (
+              <p className="text-sm">
+                Instância: <strong>{whatsappInstances?.[0]?.nome || whatsappInstances?.[0]?.server_url || '—'}</strong>
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWhatsappDialogAcordo(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarEnvioWhatsApp}
+              disabled={!selectedInstanceId || sendingWhatsappDialog}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {sendingWhatsappDialog ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</>
+              ) : (
+                <><Send className="h-4 w-4 mr-2" /> Enviar Mensagem</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>;
 }
