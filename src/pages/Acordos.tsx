@@ -13,6 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy } from 'lucide-react';
@@ -21,7 +24,105 @@ import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 type Acordo = Tables<'acordos'>;
-const gerarMensagemWhatsApp = (nomeCliente: string, nomeOperador: string) => `Olá tudo bem ${nomeCliente}? Meu nome é ${nomeOperador} e sou do departamento de confirmação de acordos das Lojas Novo Mundo. Caso tenha alguma dúvida, temos também este canal para comunicação, ok? Salve nosso contato, por gentileza.`;
+
+interface WhatsAppInstance {
+  id: string;
+  nome: string | null;
+  server_url: string;
+  instance_token: string;
+}
+
+interface LembreteTemplate {
+  tipo_lembrete: string;
+  mensagem: string;
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
+function substituirVariaveis(template: string, vars: {
+  nome_cliente: string;
+  primeiro_nome: string;
+  nome_operador: string;
+  valor: string;
+  data_vencimento: string;
+  dias_atraso: number;
+}): string {
+  return template
+    .replace(/\{nome_cliente\}/g, vars.nome_cliente)
+    .replace(/\{primeiro_nome\}/g, vars.primeiro_nome)
+    .replace(/\{nome_operador\}/g, vars.nome_operador)
+    .replace(/\{valor\}/g, vars.valor)
+    .replace(/\{data_vencimento\}/g, vars.data_vencimento)
+    .replace(/\{dias_atraso\}/g, String(vars.dias_atraso));
+}
+
+function gerarMensagemComTemplate(
+  clienteNome: string,
+  operadorNome: string,
+  valorParcela: number,
+  dataPrevista: string,
+  templates: LembreteTemplate[],
+  tipo: 'vencido' | 'hoje' | '3_dias'
+): string {
+  const nomeCompleto = toTitleCase(clienteNome);
+  const primeiroNome = nomeCompleto.split(' ')[0];
+  const valor = formatCurrency(valorParcela);
+  const dataStr = dataPrevista
+    ? new Date(dataPrevista + 'T00:00:00').toLocaleDateString('pt-BR')
+    : '';
+
+  const hoje = new Date();
+  const venc = new Date(dataPrevista + 'T00:00:00');
+  const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
+
+  let tipoKey = '';
+  if (tipo === 'vencido') {
+    tipoKey = `vencido_d${diasAtraso}`;
+  } else if (tipo === 'hoje') {
+    tipoKey = 'dia_vencimento';
+  } else {
+    tipoKey = '3_dias';
+  }
+
+  let matched = templates.filter(t => t.tipo_lembrete === tipoKey);
+
+  if (matched.length === 0 && tipo === 'vencido') {
+    const vencidoTemplates = templates
+      .filter(t => t.tipo_lembrete.startsWith('vencido_d'))
+      .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', ''), 10) }))
+      .filter(t => !isNaN(t.dias))
+      .sort((a, b) => b.dias - a.dias);
+    const closest = vencidoTemplates.find(t => t.dias <= diasAtraso);
+    if (closest) matched = templates.filter(t => t.tipo_lembrete === `vencido_d${closest.dias}`);
+  }
+
+  if (matched.length > 0) {
+    const chosen = matched[Math.floor(Math.random() * matched.length)];
+    return substituirVariaveis(chosen.mensagem, {
+      nome_cliente: nomeCompleto,
+      primeiro_nome: primeiroNome,
+      nome_operador: operadorNome || 'Operador',
+      valor,
+      data_vencimento: dataStr,
+      dias_atraso: diasAtraso,
+    });
+  }
+
+  // Fallback
+  if (tipo === 'vencido') {
+    return `Olá ${primeiroNome}, tudo bem? Identificamos que a parcela de ${valor} com vencimento em ${dataStr} encontra-se em aberto há ${diasAtraso} dia${diasAtraso > 1 ? 's' : ''}. Por favor, regularize o pagamento e envie o comprovante.`;
+  }
+  if (tipo === 'hoje') {
+    return `Olá ${primeiroNome}, tudo bem? Lembramos que hoje é o vencimento da sua parcela de ${valor}. Por favor, efetue o pagamento e nos envie o comprovante. Obrigado!`;
+  }
+  return `Olá ${primeiroNome}, tudo bem? Informamos que sua parcela de ${valor} vence em ${dataStr}. Fique atento para não perder o prazo!`;
+}
 
 // Componente para exibir cada card de acordo
 function AcordoCard({
@@ -201,12 +302,22 @@ export default function Acordos() {
     enabled: !!user,
   });
 
-  // Buscar instância WhatsApp do usuário
-  const { data: whatsappInstance } = useQuery({
-    queryKey: ['my-whatsapp-instance', user?.id],
+  // Buscar todas as instâncias WhatsApp ativas do usuário
+  const { data: whatsappInstances } = useQuery({
+    queryKey: ['my-whatsapp-instances', user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from('user_whatsapp_instances').select('server_url, instance_token').eq('user_id', user!.id).eq('ativo', true).limit(1).single();
-      return data;
+      const { data } = await supabase.from('user_whatsapp_instances').select('id, nome, server_url, instance_token').eq('user_id', user!.id).eq('ativo', true);
+      return (data || []) as WhatsAppInstance[];
+    },
+    enabled: !!user,
+  });
+
+  // Buscar templates de lembretes do usuário
+  const { data: lembreteTemplates } = useQuery({
+    queryKey: ['my-lembrete-templates', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('lembrete_mensagens_templates').select('tipo_lembrete, mensagem').eq('user_id', user!.id).eq('ativo', true);
+      return (data || []) as LembreteTemplate[];
     },
     enabled: !!user,
   });
@@ -230,6 +341,10 @@ export default function Acordos() {
     },
   });
 
+  const [whatsappDialogAcordo, setWhatsappDialogAcordo] = useState<Acordo | null>(null);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
+  const [sendingWhatsappDialog, setSendingWhatsappDialog] = useState(false);
+
   const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
     if (!acordo.cliente_telefone) {
       toast({
@@ -239,29 +354,84 @@ export default function Acordos() {
       });
       return;
     }
+    const instances = whatsappInstances || [];
+    if (instances.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'WhatsApp não configurado',
+        description: 'Configure uma instância WhatsApp no menu de Acionamento.'
+      });
+      return;
+    }
+    // If only 1 instance, use it directly
+    if (instances.length === 1) {
+      setSelectedInstanceId(instances[0].id);
+    } else {
+      setSelectedInstanceId('');
+    }
+    setWhatsappDialogAcordo(acordo);
+  }, [toast, whatsappInstances]);
+
+  const handleConfirmarEnvioWhatsApp = useCallback(async () => {
+    const acordo = whatsappDialogAcordo;
+    if (!acordo) return;
+    const instances = whatsappInstances || [];
+    const instance = instances.find(i => i.id === selectedInstanceId);
+    if (!instance) return;
+
+    setSendingWhatsappDialog(true);
     setEnviandoWhatsApp(acordo.id);
     try {
+      // Fetch next pending installment for this agreement
+      const { data: proximaParcela } = await supabase
+        .from('pagamentos')
+        .select('valor_parcela, data_prevista')
+        .eq('acordo_id', acordo.id)
+        .eq('status', 'pendente')
+        .order('data_prevista', { ascending: true })
+        .limit(1)
+        .single();
+
+      const valorParcela = proximaParcela?.valor_parcela || acordo.valor_parcela;
+      const dataPrevista = proximaParcela?.data_prevista || acordo.data_primeiro_pagamento;
+
+      // Determine tipo based on the tab / date
+      let tipo: 'vencido' | 'hoje' | '3_dias' = '3_dias';
+      const hoje = new Date();
+      const hojeStr = hoje.toISOString().split('T')[0];
+      if (dataPrevista < hojeStr) {
+        tipo = 'vencido';
+      } else if (dataPrevista === hojeStr) {
+        tipo = 'hoje';
+      }
+
       const nomeOperador = profile?.nome || 'Operador';
-      const body: Record<string, string> = {
-        telefone: acordo.cliente_telefone,
-        mensagem: gerarMensagemWhatsApp(acordo.cliente_nome, nomeOperador),
-      };
-      if (whatsappInstance) {
-        body.uazapi_server_url = whatsappInstance.server_url;
-        body.uazapi_instance_token = whatsappInstance.instance_token;
-      }
-      const {
-        data,
-        error
-      } = await supabase.functions.invoke('send-whatsapp', { body });
+      const templates = lembreteTemplates || [];
+      const mensagem = gerarMensagemComTemplate(
+        acordo.cliente_nome,
+        nomeOperador,
+        valorParcela,
+        dataPrevista,
+        templates,
+        tipo
+      );
+
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          telefone: acordo.cliente_telefone,
+          mensagem,
+          uazapi_server_url: instance.server_url,
+          uazapi_instance_token: instance.instance_token,
+        },
+      });
       if (error) throw error;
-      if (!data?.success) {
-        throw new Error(data?.error || 'Erro ao enviar mensagem');
-      }
+      if (!data?.success) throw new Error(data?.error || 'Erro ao enviar mensagem');
+
       toast({
         title: 'Mensagem enviada!',
         description: `WhatsApp enviado para ${acordo.cliente_nome}`
       });
+      setWhatsappDialogAcordo(null);
     } catch (error) {
       console.error('Erro ao enviar WhatsApp:', error);
       toast({
@@ -271,8 +441,9 @@ export default function Acordos() {
       });
     } finally {
       setEnviandoWhatsApp(null);
+      setSendingWhatsappDialog(false);
     }
-  }, [toast, profile, whatsappInstance]);
+  }, [whatsappDialogAcordo, whatsappInstances, selectedInstanceId, profile, lembreteTemplates, toast]);
   useEffect(() => {
     async function loadAcordos() {
       if (!user) return;
@@ -696,5 +867,57 @@ export default function Acordos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de seleção de instância WhatsApp */}
+      <Dialog open={!!whatsappDialogAcordo} onOpenChange={(open) => !open && setWhatsappDialogAcordo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-green-600" />
+              Enviar WhatsApp
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Enviar lembrete para <strong>{whatsappDialogAcordo?.cliente_nome}</strong>
+            </p>
+            {(whatsappInstances?.length || 0) > 1 ? (
+              <div className="space-y-2">
+                <Label>Selecione a instância WhatsApp:</Label>
+                <RadioGroup value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
+                  {whatsappInstances?.map((inst) => (
+                    <div key={inst.id} className="flex items-center space-x-2 p-2 rounded-md border hover:bg-accent/50 transition-colors">
+                      <RadioGroupItem value={inst.id} id={`inst-${inst.id}`} />
+                      <Label htmlFor={`inst-${inst.id}`} className="cursor-pointer flex-1">
+                        {inst.nome || inst.server_url}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            ) : (
+              <p className="text-sm">
+                Instância: <strong>{whatsappInstances?.[0]?.nome || whatsappInstances?.[0]?.server_url || '—'}</strong>
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWhatsappDialogAcordo(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarEnvioWhatsApp}
+              disabled={!selectedInstanceId || sendingWhatsappDialog}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {sendingWhatsappDialog ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</>
+              ) : (
+                <><Send className="h-4 w-4 mr-2" /> Enviar Mensagem</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>;
 }
