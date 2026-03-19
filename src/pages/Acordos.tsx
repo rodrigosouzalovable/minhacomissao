@@ -959,18 +959,45 @@ export default function Acordos() {
           </TabsContent>
 
           <TabsContent value="proximas">
+            <BulkSendPanel
+              acordos={acordosProximos}
+              instances={whatsappInstances || []}
+              templates={lembreteTemplates || []}
+              operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
+              isSending={isSending}
+              onStartSending={handleBulkSend}
+              onCancelSending={cancelSending}
+            />
             {acordosProximos.length > 0 ? <div className="grid gap-4">
                 {acordosProximos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela próxima ao vencimento" />}
           </TabsContent>
 
           <TabsContent value="acordos_realizados">
+            <BulkSendPanel
+              acordos={acordosRealizados}
+              instances={whatsappInstances || []}
+              templates={lembreteTemplates || []}
+              operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
+              isSending={isSending}
+              onStartSending={handleBulkSend}
+              onCancelSending={cancelSending}
+            />
             {acordosRealizados.length > 0 ? <div className="grid gap-4">
                 {acordosRealizados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo realizado sem pagamentos" />}
           </TabsContent>
 
           <TabsContent value="vencidos">
+            <BulkSendPanel
+              acordos={acordosVencidos}
+              instances={whatsappInstances || []}
+              templates={lembreteTemplates || []}
+              operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
+              isSending={isSending}
+              onStartSending={handleBulkSend}
+              onCancelSending={cancelSending}
+            />
             {acordosVencidos.length > 0 ? <div className="grid gap-4">
                 {acordosVencidos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela vencida encontrada" />}
