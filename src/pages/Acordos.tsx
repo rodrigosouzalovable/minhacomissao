@@ -341,6 +341,10 @@ export default function Acordos() {
     },
   });
 
+  const [whatsappDialogAcordo, setWhatsappDialogAcordo] = useState<Acordo | null>(null);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
+  const [sendingWhatsappDialog, setSendingWhatsappDialog] = useState(false);
+
   const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
     if (!acordo.cliente_telefone) {
       toast({
@@ -350,29 +354,84 @@ export default function Acordos() {
       });
       return;
     }
+    const instances = whatsappInstances || [];
+    if (instances.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'WhatsApp não configurado',
+        description: 'Configure uma instância WhatsApp no menu de Acionamento.'
+      });
+      return;
+    }
+    // If only 1 instance, use it directly
+    if (instances.length === 1) {
+      setSelectedInstanceId(instances[0].id);
+    } else {
+      setSelectedInstanceId('');
+    }
+    setWhatsappDialogAcordo(acordo);
+  }, [toast, whatsappInstances]);
+
+  const handleConfirmarEnvioWhatsApp = useCallback(async () => {
+    const acordo = whatsappDialogAcordo;
+    if (!acordo) return;
+    const instances = whatsappInstances || [];
+    const instance = instances.find(i => i.id === selectedInstanceId);
+    if (!instance) return;
+
+    setSendingWhatsappDialog(true);
     setEnviandoWhatsApp(acordo.id);
     try {
+      // Fetch next pending installment for this agreement
+      const { data: proximaParcela } = await supabase
+        .from('pagamentos')
+        .select('valor_parcela, data_prevista')
+        .eq('acordo_id', acordo.id)
+        .eq('status', 'pendente')
+        .order('data_prevista', { ascending: true })
+        .limit(1)
+        .single();
+
+      const valorParcela = proximaParcela?.valor_parcela || acordo.valor_parcela;
+      const dataPrevista = proximaParcela?.data_prevista || acordo.data_primeiro_pagamento;
+
+      // Determine tipo based on the tab / date
+      let tipo: 'vencido' | 'hoje' | '3_dias' = '3_dias';
+      const hoje = new Date();
+      const hojeStr = hoje.toISOString().split('T')[0];
+      if (dataPrevista < hojeStr) {
+        tipo = 'vencido';
+      } else if (dataPrevista === hojeStr) {
+        tipo = 'hoje';
+      }
+
       const nomeOperador = profile?.nome || 'Operador';
-      const body: Record<string, string> = {
-        telefone: acordo.cliente_telefone,
-        mensagem: gerarMensagemWhatsApp(acordo.cliente_nome, nomeOperador),
-      };
-      if (whatsappInstance) {
-        body.uazapi_server_url = whatsappInstance.server_url;
-        body.uazapi_instance_token = whatsappInstance.instance_token;
-      }
-      const {
-        data,
-        error
-      } = await supabase.functions.invoke('send-whatsapp', { body });
+      const templates = lembreteTemplates || [];
+      const mensagem = gerarMensagemComTemplate(
+        acordo.cliente_nome,
+        nomeOperador,
+        valorParcela,
+        dataPrevista,
+        templates,
+        tipo
+      );
+
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          telefone: acordo.cliente_telefone,
+          mensagem,
+          uazapi_server_url: instance.server_url,
+          uazapi_instance_token: instance.instance_token,
+        },
+      });
       if (error) throw error;
-      if (!data?.success) {
-        throw new Error(data?.error || 'Erro ao enviar mensagem');
-      }
+      if (!data?.success) throw new Error(data?.error || 'Erro ao enviar mensagem');
+
       toast({
         title: 'Mensagem enviada!',
         description: `WhatsApp enviado para ${acordo.cliente_nome}`
       });
+      setWhatsappDialogAcordo(null);
     } catch (error) {
       console.error('Erro ao enviar WhatsApp:', error);
       toast({
@@ -382,8 +441,9 @@ export default function Acordos() {
       });
     } finally {
       setEnviandoWhatsApp(null);
+      setSendingWhatsappDialog(false);
     }
-  }, [toast, profile, whatsappInstance]);
+  }, [whatsappDialogAcordo, whatsappInstances, selectedInstanceId, profile, lembreteTemplates, toast]);
   useEffect(() => {
     async function loadAcordos() {
       if (!user) return;
