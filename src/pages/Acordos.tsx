@@ -365,7 +365,7 @@ export default function Acordos() {
   const {
     toast
   } = useToast();
-  const { isSending, startSending, cancelSending } = useWhatsAppSending();
+  const { isSending, statusMap, startSending, cancelSending } = useWhatsAppSending();
   const [acordos, setAcordos] = useState<Acordo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
