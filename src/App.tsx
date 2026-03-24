@@ -145,6 +145,7 @@ const App = () => (
             <Route path="/admin/acionamento" element={<ProtectedRoute><Acionamento /></ProtectedRoute>} />
             <Route path="/admin/automacao-cobmais" element={<AdminRoute><AutomacaoCobMais /></AdminRoute>} />
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
+            <Route path="/campanhas-voz" element={<ProtectedRoute><CampanhasVoz /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </WhatsAppSendingProvider>
