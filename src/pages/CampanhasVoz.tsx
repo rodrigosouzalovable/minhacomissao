@@ -554,16 +554,30 @@ export default function CampanhasVoz() {
                 <div className="border rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium">Adicionar Contatos</h4>
-                    <Select value={contactSource} onValueChange={(v: 'acordos' | 'devedores') => setContactSource(v)}>
+                    <Select value={contactSource} onValueChange={(v: 'acordos' | 'devedores' | 'planilha') => { setContactSource(v); setSelectedContacts(new Set()); }}>
                       <SelectTrigger className="w-40">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="acordos">Acordos</SelectItem>
                         <SelectItem value="devedores">Devedores</SelectItem>
+                        <SelectItem value="planilha">Planilha</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
+                   </div>
+
+                  {contactSource === 'planilha' && (
+                    <div className="flex items-center gap-3">
+                      <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
+                      <Input
+                        type="file"
+                        accept=".xlsx,.xls"
+                        onChange={handleExcelImport}
+                        className="max-w-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">Coluna B = Nome, Coluna C = Telefone</span>
+                    </div>
+                  )}
 
                   <div className="max-h-60 overflow-y-auto border rounded">
                     <Table>
