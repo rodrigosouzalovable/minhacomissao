@@ -102,7 +102,7 @@ export default function CampanhasVoz() {
     enabled: !!user,
   });
 
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
 
   // Fetch contacts for selection
   const { data: dbContacts = [] } = useQuery({
