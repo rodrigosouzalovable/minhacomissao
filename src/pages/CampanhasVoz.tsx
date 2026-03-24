@@ -382,6 +382,19 @@ export default function CampanhasVoz() {
     });
   };
 
+  const deleteCampaign = async (campaignId: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta campanha?')) return;
+    try {
+      await supabase.from('voice_campaign_contacts').delete().eq('campaign_id', campaignId);
+      await supabase.from('voice_campaigns').delete().eq('id', campaignId);
+      if (selectedCampaignId === campaignId) setSelectedCampaignId(null);
+      queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
+      toast.success('Campanha excluída');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao excluir');
+    }
+  };
+
   const toggleAllContacts = () => {
     if (selectedContacts.size === availableContacts.length) {
       setSelectedContacts(new Set());
@@ -475,9 +488,19 @@ export default function CampanhasVoz() {
               <CardContent className="pt-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold truncate">{campaign.name}</h3>
-                  <Badge className={statusColors[campaign.status] || ''}>
-                    {campaign.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={statusColors[campaign.status] || ''}>
+                      {campaign.status}
+                    </Badge>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); deleteCampaign(campaign.id); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
                   <p>{campaign.total_contacts} contatos</p>
