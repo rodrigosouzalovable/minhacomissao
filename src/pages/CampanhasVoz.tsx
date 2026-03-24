@@ -295,6 +295,7 @@ export default function CampanhasVoz() {
     for (let i = 0; i < pendingContacts.length; i++) {
       if (cancelRef.current) break;
       const contact = pendingContacts[i];
+      const instance = activeInstances[i % activeInstances.length];
 
       try {
         const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
