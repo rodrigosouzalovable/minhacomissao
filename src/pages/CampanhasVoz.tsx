@@ -594,6 +594,9 @@ export default function CampanhasVoz() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold truncate">{campaign.name}</h3>
                   <div className="flex items-center gap-2">
+                    {campaign.campaign_type === 'voice_call' && (
+                      <Badge variant="outline" className="text-xs"><Phone className="h-3 w-3 mr-1" />Chamada</Badge>
+                    )}
                     <Badge className={statusColors[campaign.status] || ''}>
                       {campaign.status}
                     </Badge>
