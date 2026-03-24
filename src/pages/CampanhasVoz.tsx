@@ -261,15 +261,9 @@ export default function CampanhasVoz() {
 
   // Start sending campaign
   const startCampaign = async (campaign: Campaign) => {
-    if (instances.length === 0) {
-      toast.error('Nenhuma instância WhatsApp conectada');
-      return;
-    }
-    const instance = selectedInstanceId
-      ? instances.find(i => i.id === selectedInstanceId)
-      : instances[0];
-    if (!instance) {
-      toast.error('Selecione uma instância WhatsApp');
+    const activeInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
+    if (activeInstances.length === 0) {
+      toast.error('Selecione pelo menos um WhatsApp para envio');
       return;
     }
 
