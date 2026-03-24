@@ -475,9 +475,19 @@ export default function CampanhasVoz() {
               <CardContent className="pt-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold truncate">{campaign.name}</h3>
-                  <Badge className={statusColors[campaign.status] || ''}>
-                    {campaign.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={statusColors[campaign.status] || ''}>
+                      {campaign.status}
+                    </Badge>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); deleteCampaign(campaign.id); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
                   <p>{campaign.total_contacts} contatos</p>
