@@ -506,20 +506,18 @@ export default function CampanhasVoz() {
                 <div className="flex gap-2">
                   {selectedCampaign.status !== 'enviando' && campaignContacts.length > 0 && (
                     <>
-                      {instances.length > 1 && (
-                        <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Selecionar WhatsApp" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {instances.map(inst => (
-                              <SelectItem key={inst.id} value={inst.id}>
-                                {inst.nome || 'Instância'}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
+                      <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Selecionar WhatsApp" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {instances.map(inst => (
+                            <SelectItem key={inst.id} value={inst.id}>
+                              {inst.nome || 'Instância'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Button
                         onClick={() => startCampaign(selectedCampaign)}
                         disabled={sendingCampaignId !== null}
