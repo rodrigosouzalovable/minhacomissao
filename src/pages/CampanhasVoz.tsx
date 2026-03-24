@@ -563,27 +563,32 @@ export default function CampanhasVoz() {
                 <CardTitle className="text-lg">{selectedCampaign.name}</CardTitle>
                 <div className="flex gap-2">
                   {selectedCampaign.status !== 'enviando' && campaignContacts.length > 0 && (
-                    <>
-                      <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Selecionar WhatsApp" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {instances.map(inst => (
-                            <SelectItem key={inst.id} value={inst.id}>
-                              {inst.nome || 'Instância'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap gap-2 border rounded-md p-2 max-w-md">
+                        {instances.map(inst => (
+                          <label key={inst.id} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                            <Checkbox
+                              checked={selectedInstanceIds.includes(inst.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedInstanceIds(prev =>
+                                  checked
+                                    ? [...prev, inst.id]
+                                    : prev.filter(id => id !== inst.id)
+                                );
+                              }}
+                            />
+                            <span>{inst.nome || inst.server_url}</span>
+                          </label>
+                        ))}
+                      </div>
                       <Button
                         onClick={() => startCampaign(selectedCampaign)}
-                        disabled={sendingCampaignId !== null}
+                        disabled={sendingCampaignId !== null || selectedInstanceIds.length === 0}
                       >
                         <Send className="h-4 w-4 mr-2" />
                         Iniciar Envio
                       </Button>
-                    </>
+                    </div>
                   )}
                   {sendingCampaignId === selectedCampaign.id && (
                     <Button variant="destructive" onClick={cancelCampaign}>
