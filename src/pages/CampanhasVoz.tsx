@@ -482,6 +482,36 @@ export default function CampanhasVoz() {
                 />
               </div>
               <div>
+                <Label>Tipo de Campanha</Label>
+                <div className="flex gap-3 mt-2">
+                  <Button
+                    type="button"
+                    variant={campaignType === 'audio_message' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCampaignType('audio_message')}
+                    className="flex items-center gap-2"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Mensagem de Áudio
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={campaignType === 'voice_call' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCampaignType('voice_call')}
+                    className="flex items-center gap-2"
+                  >
+                    <Phone className="h-4 w-4" />
+                    Chamada de Voz
+                  </Button>
+                </div>
+                {campaignType === 'voice_call' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ⚠️ Os endpoints de chamada (/call/make, /call/play-audio) precisam ser verificados na documentação da UAZAPI.
+                  </p>
+                )}
+              </div>
+              <div>
                 <Label>WhatsApp para envio (selecione um ou mais)</Label>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
                   {instances.map(inst => (
