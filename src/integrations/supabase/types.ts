@@ -1379,8 +1379,12 @@ export type Database = {
       }
       voice_campaign_contacts: {
         Row: {
+          answered_at: string | null
+          call_id: string | null
+          call_type: string | null
           campaign_id: string
           created_at: string
+          duration: number | null
           enviado_em: string | null
           erro_mensagem: string | null
           id: string
@@ -1389,8 +1393,12 @@ export type Database = {
           telefone: string
         }
         Insert: {
+          answered_at?: string | null
+          call_id?: string | null
+          call_type?: string | null
           campaign_id: string
           created_at?: string
+          duration?: number | null
           enviado_em?: string | null
           erro_mensagem?: string | null
           id?: string
@@ -1399,8 +1407,12 @@ export type Database = {
           telefone: string
         }
         Update: {
+          answered_at?: string | null
+          call_id?: string | null
+          call_type?: string | null
           campaign_id?: string
           created_at?: string
+          duration?: number | null
           enviado_em?: string | null
           erro_mensagem?: string | null
           id?: string
@@ -1421,6 +1433,7 @@ export type Database = {
       voice_campaigns: {
         Row: {
           audio_url: string
+          campaign_type: string | null
           created_at: string
           finished_at: string | null
           id: string
@@ -1434,6 +1447,7 @@ export type Database = {
         }
         Insert: {
           audio_url: string
+          campaign_type?: string | null
           created_at?: string
           finished_at?: string | null
           id?: string
@@ -1447,6 +1461,7 @@ export type Database = {
         }
         Update: {
           audio_url?: string
+          campaign_type?: string | null
           created_at?: string
           finished_at?: string | null
           id?: string
