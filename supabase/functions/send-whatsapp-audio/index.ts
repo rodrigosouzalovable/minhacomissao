@@ -31,16 +31,16 @@ serve(async (req) => {
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
 
-    // Try multiple UAZAPI endpoints for sending audio
+    // UAZAPI uses /send/media with mediaType parameter for audio/ptt
     const endpoints = [
-      { url: `${cleanUrl}/message/sendAudio`, body: { number: telefoneCompleto, audioUrl: audio_url, ptt: true } },
-      { url: `${cleanUrl}/sendAudio`, body: { number: telefoneCompleto, audioUrl: audio_url, ptt: true } },
-      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, url: audio_url, ptt: true } },
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, url: audio_url, mediatype: 'ptt' } },
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, url: audio_url, mediatype: 'audio' } },
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, media: audio_url, mediatype: 'ptt' } },
     ];
 
     let lastError = null;
     for (const ep of endpoints) {
-      console.log(`Tentando endpoint: ${ep.url}`);
+      console.log(`Tentando endpoint: ${ep.url} com mediatype: ${ep.body.mediatype}`);
       try {
         const response = await fetch(ep.url, {
           method: 'POST',
@@ -49,7 +49,7 @@ serve(async (req) => {
         });
         const data = await response.json();
         console.log(`Resposta de ${ep.url}:`, JSON.stringify(data));
-        if (response.ok) {
+        if (response.ok && !data.error) {
           return new Response(JSON.stringify({ success: true, data }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
