@@ -105,7 +105,7 @@ export default function CampanhasVoz() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
 
   // Fetch contacts for selection
-  const { data: availableContacts = [] } = useQuery({
+  const { data: dbContacts = [] } = useQuery({
     queryKey: ['available-contacts', contactSource, user?.id],
     queryFn: async () => {
       if (contactSource === 'acordos') {
@@ -121,7 +121,7 @@ export default function CampanhasVoz() {
           nome: a.cliente_nome,
           telefone: a.cliente_telefone!,
         }));
-      } else {
+      } else if (contactSource === 'devedores') {
         const { data, error } = await supabase
           .from('devedores')
           .select('id, nome, telefone')
@@ -134,9 +134,36 @@ export default function CampanhasVoz() {
           telefone: d.telefone!,
         }));
       }
+      return [];
     },
-    enabled: !!user,
+    enabled: !!user && contactSource !== 'planilha',
   });
+
+  const availableContacts = contactSource === 'planilha' ? importedContacts : dbContacts;
+
+  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      const contacts = rows.slice(1)
+        .filter(row => row[2])
+        .map(row => ({
+          id: crypto.randomUUID(),
+          nome: String(row[1] || ''),
+          telefone: String(row[2] || '').replace(/\D/g, ''),
+        }))
+        .filter(c => c.telefone.length >= 8);
+      setImportedContacts(contacts);
+      setSelectedContacts(new Set());
+      toast.success(`${contacts.length} contatos importados da planilha`);
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   // Audio file handling
   const handleAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
