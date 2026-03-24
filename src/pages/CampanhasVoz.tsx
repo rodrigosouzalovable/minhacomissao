@@ -443,6 +443,10 @@ export default function CampanhasVoz() {
     enviando: 'bg-blue-100 text-blue-800',
     concluido: 'bg-green-100 text-green-800',
     cancelado: 'bg-red-100 text-red-800',
+    chamando: 'bg-blue-200 text-blue-900',
+    atendido: 'bg-green-200 text-green-900',
+    'não atendeu': 'bg-orange-100 text-orange-800',
+    rejeitado: 'bg-red-200 text-red-900',
   };
 
   return (
