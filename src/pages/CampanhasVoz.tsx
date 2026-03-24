@@ -102,7 +102,7 @@ export default function CampanhasVoz() {
     enabled: !!user,
   });
 
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
 
   // Fetch contacts for selection
   const { data: dbContacts = [] } = useQuery({
@@ -261,15 +261,9 @@ export default function CampanhasVoz() {
 
   // Start sending campaign
   const startCampaign = async (campaign: Campaign) => {
-    if (instances.length === 0) {
-      toast.error('Nenhuma instância WhatsApp conectada');
-      return;
-    }
-    const instance = selectedInstanceId
-      ? instances.find(i => i.id === selectedInstanceId)
-      : instances[0];
-    if (!instance) {
-      toast.error('Selecione uma instância WhatsApp');
+    const activeInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
+    if (activeInstances.length === 0) {
+      toast.error('Selecione pelo menos um WhatsApp para envio');
       return;
     }
 
@@ -301,6 +295,7 @@ export default function CampanhasVoz() {
     for (let i = 0; i < pendingContacts.length; i++) {
       if (cancelRef.current) break;
       const contact = pendingContacts[i];
+      const instance = activeInstances[i % activeInstances.length];
 
       try {
         const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
@@ -447,19 +442,27 @@ export default function CampanhasVoz() {
                 />
               </div>
               <div>
-                <Label>WhatsApp para envio</Label>
-                <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar WhatsApp" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {instances.map(inst => (
-                      <SelectItem key={inst.id} value={inst.id}>
-                        {inst.nome || 'Instância'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>WhatsApp para envio (selecione um ou mais)</Label>
+                <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                  {instances.map(inst => (
+                    <label key={inst.id} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={selectedInstanceIds.includes(inst.id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedInstanceIds(prev =>
+                            checked
+                              ? [...prev, inst.id]
+                              : prev.filter(id => id !== inst.id)
+                          );
+                        }}
+                      />
+                      <span className="text-sm">{inst.nome || inst.server_url}</span>
+                    </label>
+                  ))}
+                  {instances.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Nenhum WhatsApp conectado</p>
+                  )}
+                </div>
               </div>
               <div>
                 <Label>Áudio (MP3, M4A, AAC, OGG, WAV)</Label>
@@ -560,27 +563,32 @@ export default function CampanhasVoz() {
                 <CardTitle className="text-lg">{selectedCampaign.name}</CardTitle>
                 <div className="flex gap-2">
                   {selectedCampaign.status !== 'enviando' && campaignContacts.length > 0 && (
-                    <>
-                      <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Selecionar WhatsApp" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {instances.map(inst => (
-                            <SelectItem key={inst.id} value={inst.id}>
-                              {inst.nome || 'Instância'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap gap-2 border rounded-md p-2 max-w-md">
+                        {instances.map(inst => (
+                          <label key={inst.id} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                            <Checkbox
+                              checked={selectedInstanceIds.includes(inst.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedInstanceIds(prev =>
+                                  checked
+                                    ? [...prev, inst.id]
+                                    : prev.filter(id => id !== inst.id)
+                                );
+                              }}
+                            />
+                            <span>{inst.nome || inst.server_url}</span>
+                          </label>
+                        ))}
+                      </div>
                       <Button
                         onClick={() => startCampaign(selectedCampaign)}
-                        disabled={sendingCampaignId !== null}
+                        disabled={sendingCampaignId !== null || selectedInstanceIds.length === 0}
                       >
                         <Send className="h-4 w-4 mr-2" />
                         Iniciar Envio
                       </Button>
-                    </>
+                    </div>
                   )}
                   {sendingCampaignId === selectedCampaign.id && (
                     <Button variant="destructive" onClick={cancelCampaign}>
