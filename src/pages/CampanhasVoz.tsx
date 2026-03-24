@@ -502,7 +502,6 @@ export default function CampanhasVoz() {
               <Button onClick={createCampaign} disabled={uploading || !audioFile || !campaignName.trim()}>
                 {uploading ? 'Enviando...' : 'Criar Campanha'}
               </Button>
-              </Button>
             </CardContent>
           </Card>
         )}
