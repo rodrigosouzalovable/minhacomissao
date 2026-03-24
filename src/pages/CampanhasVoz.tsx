@@ -221,6 +221,7 @@ export default function CampanhasVoz() {
           user_id: user.id,
           name: campaignName.trim(),
           audio_url: publicUrl,
+          campaign_type: campaignType,
         } as any);
       if (error) throw error;
 
