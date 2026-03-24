@@ -442,19 +442,27 @@ export default function CampanhasVoz() {
                 />
               </div>
               <div>
-                <Label>WhatsApp para envio</Label>
-                <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar WhatsApp" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {instances.map(inst => (
-                      <SelectItem key={inst.id} value={inst.id}>
-                        {inst.nome || 'Instância'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>WhatsApp para envio (selecione um ou mais)</Label>
+                <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                  {instances.map(inst => (
+                    <label key={inst.id} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={selectedInstanceIds.includes(inst.id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedInstanceIds(prev =>
+                            checked
+                              ? [...prev, inst.id]
+                              : prev.filter(id => id !== inst.id)
+                          );
+                        }}
+                      />
+                      <span className="text-sm">{inst.nome || inst.server_url}</span>
+                    </label>
+                  ))}
+                  {instances.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Nenhum WhatsApp conectado</p>
+                  )}
+                </div>
               </div>
               <div>
                 <Label>Áudio (MP3, M4A, AAC, OGG, WAV)</Label>
