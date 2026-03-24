@@ -31,11 +31,14 @@ serve(async (req) => {
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
 
-    // UAZAPI uses /send/media with mediaType parameter for audio/ptt
+    // Try multiple UAZAPI endpoint/body combinations for audio sending
     const endpoints = [
+      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, url: audio_url } },
+      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, file: audio_url } },
+      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, audio: audio_url } },
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, file: audio_url, mediatype: 'audio' } },
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, file: audio_url, mediatype: 'ptt' } },
       { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, url: audio_url, mediatype: 'ptt' } },
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, url: audio_url, mediatype: 'audio' } },
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, media: audio_url, mediatype: 'ptt' } },
     ];
 
     let lastError = null;
