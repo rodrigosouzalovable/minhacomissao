@@ -447,6 +447,21 @@ export default function CampanhasVoz() {
                 />
               </div>
               <div>
+                <Label>WhatsApp para envio</Label>
+                <Select value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar WhatsApp" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {instances.map(inst => (
+                      <SelectItem key={inst.id} value={inst.id}>
+                        {inst.nome || 'Instância'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Áudio (MP3, M4A, AAC, OGG, WAV)</Label>
                 <Input
                   type="file"
@@ -467,6 +482,23 @@ export default function CampanhasVoz() {
                   <span className="text-sm text-muted-foreground">{audioFile?.name}</span>
                 </div>
               )}
+              <div>
+                <Label className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Importar contatos da planilha (Coluna B = Nome, Coluna C = Telefone)
+                </Label>
+                <Input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleExcelImport}
+                  className="mt-1"
+                />
+                {importedContacts.length > 0 && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {importedContacts.length} contatos importados
+                  </p>
+                )}
+              </div>
               <Button onClick={createCampaign} disabled={uploading || !audioFile || !campaignName.trim()}>
                 {uploading ? 'Enviando...' : 'Criar Campanha'}
               </Button>
