@@ -77,7 +77,7 @@ export default function CampanhasVoz() {
     enabled: !!user,
   });
 
-  // Fetch campaign contacts
+  // Fetch campaign contacts with polling for realtime updates
   const { data: campaignContacts = [] } = useQuery({
     queryKey: ['voice-campaign-contacts', selectedCampaignId],
     queryFn: async () => {
@@ -91,6 +91,7 @@ export default function CampanhasVoz() {
       return data as CampaignContact[];
     },
     enabled: !!selectedCampaignId,
+    refetchInterval: sendingCampaignId ? 5000 : false, // Poll every 5s during active campaign
   });
 
   // Fetch WhatsApp instances
