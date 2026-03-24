@@ -61,6 +61,7 @@ export default function CampanhasVoz() {
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const cancelRef = useRef(false);
+  const [campaignType, setCampaignType] = useState<'audio_message' | 'voice_call'>('audio_message');
 
   // Fetch campaigns
   const { data: campaigns = [], isLoading: loadingCampaigns } = useQuery({
