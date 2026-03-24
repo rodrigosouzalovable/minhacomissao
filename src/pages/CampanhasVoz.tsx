@@ -28,6 +28,7 @@ type Campaign = {
   total_contacts: number;
   total_sent: number;
   total_errors: number;
+  campaign_type?: string;
 };
 
 type CampaignContact = {
@@ -38,6 +39,10 @@ type CampaignContact = {
   status: string;
   enviado_em: string | null;
   erro_mensagem: string | null;
+  call_id: string | null;
+  answered_at: string | null;
+  duration: number | null;
+  call_type: string | null;
 };
 
 export default function CampanhasVoz() {
