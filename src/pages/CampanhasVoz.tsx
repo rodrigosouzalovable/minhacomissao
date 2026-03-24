@@ -382,6 +382,19 @@ export default function CampanhasVoz() {
     });
   };
 
+  const deleteCampaign = async (campaignId: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta campanha?')) return;
+    try {
+      await supabase.from('voice_campaign_contacts').delete().eq('campaign_id', campaignId);
+      await supabase.from('voice_campaigns').delete().eq('id', campaignId);
+      if (selectedCampaignId === campaignId) setSelectedCampaignId(null);
+      queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
+      toast.success('Campanha excluída');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao excluir');
+    }
+  };
+
   const toggleAllContacts = () => {
     if (selectedContacts.size === availableContacts.length) {
       setSelectedContacts(new Set());
