@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.send-whatsapp-audio]
 verify_jwt = false
+
+[functions.voice-campaign-call]
+verify_jwt = false
