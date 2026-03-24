@@ -6,6 +6,75 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+type AudioAsset = {
+  bytes: Uint8Array;
+  contentType: string;
+  fileName: string;
+};
+
+const inferFileName = (audioUrl: string, contentType: string) => {
+  try {
+    const pathname = new URL(audioUrl).pathname;
+    const nameFromUrl = pathname.split('/').pop();
+    if (nameFromUrl && nameFromUrl.includes('.')) return nameFromUrl;
+  } catch {
+    // ignore URL parsing errors and fall back below
+  }
+
+  const extensionMap: Record<string, string> = {
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/mp4': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/aac': 'aac',
+    'audio/ogg': 'ogg',
+    'audio/wav': 'wav',
+    'audio/webm': 'webm',
+  };
+
+  const extension = extensionMap[contentType] || 'ogg';
+  return `audio.${extension}`;
+};
+
+const parseResponseBody = async (response: Response) => {
+  const rawText = await response.text();
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return { message: rawText };
+  }
+};
+
+const downloadAudioFile = async (audioUrl: string): Promise<AudioAsset> => {
+  const response = await fetch(audioUrl);
+
+  if (!response.ok) {
+    throw new Error(`Não foi possível baixar o áudio (${response.status})`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get('content-type') || 'audio/ogg';
+  const fileName = inferFileName(audioUrl, contentType);
+
+  return {
+    bytes: new Uint8Array(arrayBuffer),
+    contentType,
+    fileName,
+  };
+};
+
+const buildFormData = (telefone: string, audio: AudioAsset, mediatype?: string) => {
+  const formData = new FormData();
+  formData.append('number', telefone);
+  formData.append('file', new Blob([audio.bytes], { type: audio.contentType }), audio.fileName);
+
+  if (mediatype) {
+    formData.append('mediatype', mediatype);
+  }
+
+  return formData;
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -30,37 +99,39 @@ serve(async (req) => {
       : `55${telefoneFormatado}`;
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
+    const audioFile = await downloadAudioFile(audio_url);
 
-    // Try multiple UAZAPI endpoint/body combinations for audio sending
     const endpoints = [
-      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, url: audio_url } },
-      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, file: audio_url } },
-      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, audio: audio_url } },
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, file: audio_url, mediatype: 'audio' } },
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, file: audio_url, mediatype: 'ptt' } },
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, url: audio_url, mediatype: 'ptt' } },
+      { url: `${cleanUrl}/send/media`, mediatype: 'ptt' },
+      { url: `${cleanUrl}/send/media`, mediatype: 'audio' },
+      { url: `${cleanUrl}/send/audio` },
     ];
 
-    let lastError = null;
-    for (const ep of endpoints) {
-      console.log(`Tentando endpoint: ${ep.url} com mediatype: ${ep.body.mediatype}`);
+    let lastError: any = null;
+
+    for (const endpoint of endpoints) {
+      console.log(`Tentando endpoint: ${endpoint.url}${endpoint.mediatype ? ` (${endpoint.mediatype})` : ''}`);
+
       try {
-        const response = await fetch(ep.url, {
+        const response = await fetch(endpoint.url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'token': instanceToken },
-          body: JSON.stringify(ep.body),
+          headers: { token: instanceToken },
+          body: buildFormData(telefoneCompleto, audioFile, endpoint.mediatype),
         });
-        const data = await response.json();
-        console.log(`Resposta de ${ep.url}:`, JSON.stringify(data));
-        if (response.ok && !data.error) {
+
+        const data = await parseResponseBody(response);
+        console.log(`Resposta de ${endpoint.url}:`, JSON.stringify(data));
+
+        if (response.ok && !data?.error) {
           return new Response(JSON.stringify({ success: true, data }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
+
         lastError = data;
       } catch (err) {
         lastError = err;
-        console.log(`Endpoint ${ep.url} falhou:`, err);
+        console.log(`Endpoint ${endpoint.url} falhou:`, err);
       }
     }
 
