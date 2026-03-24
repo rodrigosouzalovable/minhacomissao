@@ -21,7 +21,8 @@ import {
   Wallet,
   MessageSquare,
   Target,
-  Bot
+  Bot,
+  Volume2
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -59,6 +60,7 @@ const navItems: NavItem[] = [
   { href: '/admin/importar-devedores', label: 'Importar Devedores', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/acionamento', label: 'Acionamento', icon: MessageSquare, adminOnly: true },
   { href: '/admin/automacao-cobmais', label: 'Robô CobMais', icon: Bot, adminOnly: true },
+  { href: '/campanhas-voz', label: 'Campanhas de Voz', icon: Volume2 },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
