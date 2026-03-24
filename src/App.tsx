@@ -37,6 +37,7 @@ import CredorDashboard from "./pages/CredorDashboard";
 import Acionamento from "./pages/Acionamento";
 import MetaPessoal from "./pages/MetaPessoal";
 import AutomacaoCobMais from "./pages/AutomacaoCobMais";
+import CampanhasVoz from "./pages/CampanhasVoz";
 
 const queryClient = new QueryClient();
 
