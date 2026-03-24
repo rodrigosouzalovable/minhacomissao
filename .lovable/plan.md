@@ -1,38 +1,31 @@
 
 
-## Recommendation: Audio Message Campaign via WhatsApp
+## Plan: Add Excel import and WhatsApp instance selector to Campanhas de Voz
 
-Since automated voice calls are not possible through WhatsApp/UAZAPI, the closest achievable alternative is a **bulk audio message campaign** — sending pre-recorded audio files as WhatsApp voice messages to your contact list.
+### What changes
 
-### What this would include
+**File: `src/pages/CampanhasVoz.tsx`**
 
-1. **New page "Campanhas de Voz"** accessible from the sidebar
-2. **Audio upload** — user uploads MP3/M4A, stored in a new storage bucket
-3. **Contact selection** — pick from existing agreements (acordos) or devedores, with checkboxes
-4. **Bulk send** — sends the audio as a WhatsApp voice message to each contact with randomized 5-15 min delays (same pattern as text bulk sends)
-5. **Campaign tracking** — database tables to log which contacts received the audio, status, timestamps
-6. **Reports** — table showing sent/failed/pending with export to Excel
+1. **Add Excel spreadsheet import** in the "Adicionar Contatos" section (alongside the existing Acordos/Devedores selector):
+   - New option `'planilha'` in the contact source selector
+   - When selected, show a file input for `.xlsx/.xls` files
+   - Parse the file using the `xlsx` library (already used in the project for imports)
+   - Read column C (index 2) as TELEFONE and column B (index 1) as NOME
+   - Display parsed contacts in the same table with checkboxes for selection
+   - User can then select which contacts to add to the campaign
 
-### Database tables
-- `voice_campaigns` (id, user_id, name, audio_url, status, created_at)
-- `voice_campaign_contacts` (id, campaign_id, telefone, nome, status, enviado_em, erro)
+2. **Always show WhatsApp instance selector** in the campaign detail header:
+   - Currently the instance selector only shows when `instances.length > 1`
+   - Change to always show the selector (like in Acionamento page), so the user can pick any connected WhatsApp instance regardless of count
+   - Show instance selector prominently, not conditionally
 
-### Edge function
-- `send-whatsapp-audio` — new function using UAZAPI's audio sending endpoint
+### Technical details
 
-### Alternative: Twilio for real phone calls
-If you truly need automated phone calls with audio playback, I can integrate **Twilio** which supports:
-- Programmatic outbound calls
-- Playing pre-recorded audio when the person answers
-- Call status webhooks (answered, busy, no-answer)
-- Call duration tracking
+- Import `read` and `utils` from `xlsx` library (already a project dependency)
+- Add state: `importedContacts` array, `excelFile` for the uploaded file
+- Parse logic: `XLSX.read(buffer, { type: 'array' })` then `XLSX.utils.sheet_to_json` with `header: 1` to get raw rows, skip header row, extract column B (nome) and column C (telefone)
+- Generate unique IDs for imported contacts using `crypto.randomUUID()` so they work with the existing checkbox selection system
+- The imported contacts feed into the same `availableContacts` display and selection flow
 
-This would require a Twilio account and has per-minute costs.
-
----
-
-**Which approach would you like me to implement?**
-1. WhatsApp audio message campaigns (sends audio files as messages)
-2. Twilio phone call campaigns (actual voice calls with audio playback)
-3. Both
+### No database changes needed
 
