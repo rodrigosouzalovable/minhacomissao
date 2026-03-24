@@ -159,6 +159,7 @@ export default function CampanhasVoz() {
         }))
         .filter(c => c.telefone.length >= 8);
       setImportedContacts(contacts);
+      setContactSource('planilha');
       setSelectedContacts(new Set());
       toast.success(`${contacts.length} contatos importados da planilha`);
     };
