@@ -1377,6 +1377,89 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_campaign_contacts: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          enviado_em: string | null
+          erro_mensagem: string | null
+          id: string
+          nome: string | null
+          status: string
+          telefone: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          nome?: string | null
+          status?: string
+          telefone: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          nome?: string | null
+          status?: string
+          telefone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_campaign_contacts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "voice_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_campaigns: {
+        Row: {
+          audio_url: string
+          created_at: string
+          finished_at: string | null
+          id: string
+          name: string
+          started_at: string | null
+          status: string
+          total_contacts: number
+          total_errors: number
+          total_sent: number
+          user_id: string
+        }
+        Insert: {
+          audio_url: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          name: string
+          started_at?: string | null
+          status?: string
+          total_contacts?: number
+          total_errors?: number
+          total_sent?: number
+          user_id: string
+        }
+        Update: {
+          audio_url?: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          name?: string
+          started_at?: string | null
+          status?: string
+          total_contacts?: number
+          total_errors?: number
+          total_sent?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       whatsapp_fila: {
         Row: {
           agendado_para: string
