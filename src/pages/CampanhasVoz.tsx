@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet } from 'lucide-react';
+import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet, Phone, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import * as XLSX from 'xlsx';
@@ -28,6 +28,7 @@ type Campaign = {
   total_contacts: number;
   total_sent: number;
   total_errors: number;
+  campaign_type?: string;
 };
 
 type CampaignContact = {
@@ -38,6 +39,10 @@ type CampaignContact = {
   status: string;
   enviado_em: string | null;
   erro_mensagem: string | null;
+  call_id: string | null;
+  answered_at: string | null;
+  duration: number | null;
+  call_type: string | null;
 };
 
 export default function CampanhasVoz() {
@@ -56,6 +61,7 @@ export default function CampanhasVoz() {
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const cancelRef = useRef(false);
+  const [campaignType, setCampaignType] = useState<'audio_message' | 'voice_call'>('audio_message');
 
   // Fetch campaigns
   const { data: campaigns = [], isLoading: loadingCampaigns } = useQuery({
@@ -71,7 +77,7 @@ export default function CampanhasVoz() {
     enabled: !!user,
   });
 
-  // Fetch campaign contacts
+  // Fetch campaign contacts with polling for realtime updates
   const { data: campaignContacts = [] } = useQuery({
     queryKey: ['voice-campaign-contacts', selectedCampaignId],
     queryFn: async () => {
@@ -85,6 +91,7 @@ export default function CampanhasVoz() {
       return data as CampaignContact[];
     },
     enabled: !!selectedCampaignId,
+    refetchInterval: sendingCampaignId ? 5000 : false, // Poll every 5s during active campaign
   });
 
   // Fetch WhatsApp instances
@@ -214,6 +221,7 @@ export default function CampanhasVoz() {
           user_id: user.id,
           name: campaignName.trim(),
           audio_url: publicUrl,
+          campaign_type: campaignType,
         } as any);
       if (error) throw error;
 
@@ -268,6 +276,8 @@ export default function CampanhasVoz() {
       return;
     }
 
+    const isVoiceCall = campaign.campaign_type === 'voice_call';
+
     // Get pending contacts
     const { data: pendingContacts, error } = await supabase
       .from('voice_campaign_contacts')
@@ -288,7 +298,8 @@ export default function CampanhasVoz() {
       .eq('id', campaign.id);
     queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
 
-    toast.success(`Iniciando envio para ${pendingContacts.length} contatos...`);
+    const actionLabel = isVoiceCall ? 'chamadas' : 'envios';
+    toast.success(`Iniciando ${actionLabel} para ${pendingContacts.length} contatos...`);
 
     let sent = campaign.total_sent;
     let errors = campaign.total_errors;
@@ -299,22 +310,46 @@ export default function CampanhasVoz() {
       const instance = activeInstances[i % activeInstances.length];
 
       try {
-        const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
-          body: {
-            telefone: contact.telefone,
-            audio_url: campaign.audio_url,
-            uazapi_server_url: instance.server_url,
-            uazapi_instance_token: instance.instance_token,
-          },
-        });
+        if (isVoiceCall) {
+          // Voice call mode: initiate call via voice-campaign-call
+          const { data, error: fnError } = await supabase.functions.invoke('voice-campaign-call', {
+            body: {
+              campaign_id: campaign.id,
+              contact_id: contact.id,
+              phone_number: contact.telefone,
+              server_url: instance.server_url,
+              instance_token: instance.instance_token,
+            },
+          });
 
-        if (fnError || !data?.success) {
-          const errMsg = fnError?.message || data?.error || 'Erro';
-          await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
-          errors++;
+          if (fnError || !data?.success) {
+            const errMsg = fnError?.message || data?.error || 'Erro na chamada';
+            await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
+            errors++;
+          } else {
+            // Call initiated - status updated by edge function to 'chamando'
+            // Webhook will handle 'answered'/'missed'/'rejected'
+            sent++; // Count as "processed"
+          }
         } else {
-          await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
-          sent++;
+          // Audio message mode (existing behavior)
+          const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
+            body: {
+              telefone: contact.telefone,
+              audio_url: campaign.audio_url,
+              uazapi_server_url: instance.server_url,
+              uazapi_instance_token: instance.instance_token,
+            },
+          });
+
+          if (fnError || !data?.success) {
+            const errMsg = fnError?.message || data?.error || 'Erro';
+            await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
+            errors++;
+          } else {
+            await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
+            sent++;
+          }
         }
       } catch (err: any) {
         await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: err.message } as any).eq('id', contact.id);
@@ -328,7 +363,7 @@ export default function CampanhasVoz() {
       if (i < pendingContacts.length - 1 && !cancelRef.current) {
         const delay = (5 + Math.random() * 10) * 60 * 1000;
         const mins = Math.round(delay / 60000);
-        toast.info(`Próximo envio em ~${mins} minutos...`);
+        toast.info(`Próximo ${isVoiceCall ? 'chamada' : 'envio'} em ~${mins} minutos...`);
         await new Promise<void>(resolve => {
           const timer = setTimeout(resolve, delay);
           const check = setInterval(() => {
@@ -408,6 +443,10 @@ export default function CampanhasVoz() {
     enviando: 'bg-blue-100 text-blue-800',
     concluido: 'bg-green-100 text-green-800',
     cancelado: 'bg-red-100 text-red-800',
+    chamando: 'bg-blue-200 text-blue-900',
+    atendido: 'bg-green-200 text-green-900',
+    'não atendeu': 'bg-orange-100 text-orange-800',
+    rejeitado: 'bg-red-200 text-red-900',
   };
 
   return (
@@ -441,6 +480,36 @@ export default function CampanhasVoz() {
                   onChange={(e) => setCampaignName(e.target.value)}
                   placeholder="Ex: Lembrete de pagamento"
                 />
+              </div>
+              <div>
+                <Label>Tipo de Campanha</Label>
+                <div className="flex gap-3 mt-2">
+                  <Button
+                    type="button"
+                    variant={campaignType === 'audio_message' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCampaignType('audio_message')}
+                    className="flex items-center gap-2"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Mensagem de Áudio
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={campaignType === 'voice_call' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCampaignType('voice_call')}
+                    className="flex items-center gap-2"
+                  >
+                    <Phone className="h-4 w-4" />
+                    Chamada de Voz
+                  </Button>
+                </div>
+                {campaignType === 'voice_call' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ⚠️ Os endpoints de chamada (/call/make, /call/play-audio) precisam ser verificados na documentação da UAZAPI.
+                  </p>
+                )}
               </div>
               <div>
                 <Label>WhatsApp para envio (selecione um ou mais)</Label>
@@ -525,6 +594,9 @@ export default function CampanhasVoz() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold truncate">{campaign.name}</h3>
                   <div className="flex items-center gap-2">
+                    {campaign.campaign_type === 'voice_call' && (
+                      <Badge variant="outline" className="text-xs"><Phone className="h-3 w-3 mr-1" />Chamada</Badge>
+                    )}
                     <Badge className={statusColors[campaign.status] || ''}>
                       {campaign.status}
                     </Badge>

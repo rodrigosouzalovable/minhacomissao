@@ -443,6 +443,139 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Webhook recebido:', JSON.stringify(payload));
 
+    // --- VOICE CALL EVENT HANDLING ---
+    const eventType = payload?.event || payload?.type || payload?.action || '';
+    const callStatus = payload?.call?.status || payload?.status || payload?.call_status || '';
+    const isCallEvent = eventType === 'call' || callStatus === 'answered' || callStatus === 'missed' || callStatus === 'rejected' || callStatus === 'ringing';
+
+    if (isCallEvent && (callStatus === 'answered' || callStatus === 'missed' || callStatus === 'rejected')) {
+      console.log(`[VOICE-CALL] Call event detected: status=${callStatus}`);
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabaseCall = createClient(supabaseUrl, supabaseServiceKey);
+
+      const callPhone = (payload?.call?.from || payload?.call?.number || payload?.from || payload?.number || '').replace(/\D/g, '');
+      const callId = payload?.call?.id || payload?.call_id || payload?.callId || '';
+
+      // Try to find the contact in voice_campaign_contacts
+      let contact = null;
+      if (callId) {
+        const { data } = await supabaseCall
+          .from('voice_campaign_contacts')
+          .select('*, voice_campaigns:campaign_id(audio_url)')
+          .eq('call_id', callId)
+          .eq('status', 'chamando')
+          .maybeSingle();
+        contact = data;
+      }
+      if (!contact && callPhone) {
+        // Fallback: match by phone number
+        const phoneVariants = [callPhone, callPhone.replace(/^55/, ''), `55${callPhone.replace(/^55/, '')}`];
+        for (const phone of phoneVariants) {
+          const { data } = await supabaseCall
+            .from('voice_campaign_contacts')
+            .select('*, voice_campaigns:campaign_id(audio_url)')
+            .eq('status', 'chamando')
+            .or(`telefone.eq.${phone}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (data) { contact = data; break; }
+        }
+      }
+
+      if (contact) {
+        if (callStatus === 'answered') {
+          console.log(`[VOICE-CALL] Call answered for contact ${contact.id}, playing audio...`);
+          
+          // Get the audio URL from the campaign
+          const audioUrl = (contact as any).voice_campaigns?.audio_url;
+          const contactCallId = contact.call_id || callId;
+
+          if (audioUrl) {
+            // Get server_url and instance_token from the campaign contact's instance
+            // We need to find which instance was used - look up from the campaign
+            const { data: campaignData } = await supabaseCall
+              .from('voice_campaigns')
+              .select('user_id')
+              .eq('id', contact.campaign_id)
+              .single();
+
+            if (campaignData) {
+              const { data: instanceData } = await supabaseCall
+                .from('user_whatsapp_instances')
+                .select('server_url, instance_token')
+                .eq('user_id', campaignData.user_id)
+                .eq('ativo', true)
+                .limit(1)
+                .maybeSingle();
+
+              if (instanceData) {
+                const cleanUrl = instanceData.server_url.replace(/\/+$/, '');
+                // NOTE: /call/play-audio is an ASSUMED endpoint. Verify with UAZAPI docs.
+                const playEndpoints = [
+                  { url: `${cleanUrl}/call/play-audio`, body: { call_id: contactCallId, audio: audioUrl } },
+                  { url: `${cleanUrl}/call/play`, body: { call_id: contactCallId, url: audioUrl } },
+                  { url: `${cleanUrl}/call/audio`, body: { call_id: contactCallId, file: audioUrl } },
+                ];
+
+                for (const ep of playEndpoints) {
+                  try {
+                    console.log(`[VOICE-CALL] Trying to play audio via ${ep.url}`);
+                    const res = await fetch(ep.url, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'token': instanceData.instance_token },
+                      body: JSON.stringify(ep.body),
+                    });
+                    const resText = await res.text();
+                    console.log(`[VOICE-CALL] Play audio response: ${res.status} - ${resText}`);
+                    if (res.ok) break;
+                  } catch (e) {
+                    console.log(`[VOICE-CALL] Play endpoint failed: ${ep.url}`, e);
+                  }
+                }
+              }
+            }
+          }
+
+          await supabaseCall
+            .from('voice_campaign_contacts')
+            .update({ status: 'atendido', answered_at: new Date().toISOString() })
+            .eq('id', contact.id);
+        } else {
+          // missed or rejected
+          const newStatus = callStatus === 'missed' ? 'não atendeu' : 'rejeitado';
+          await supabaseCall
+            .from('voice_campaign_contacts')
+            .update({ status: newStatus })
+            .eq('id', contact.id);
+        }
+
+        // Update campaign counters
+        const { data: stats } = await supabaseCall
+          .from('voice_campaign_contacts')
+          .select('status')
+          .eq('campaign_id', contact.campaign_id);
+        if (stats) {
+          const sent = stats.filter(s => s.status === 'atendido' || s.status === 'enviado').length;
+          const errors = stats.filter(s => ['erro', 'não atendeu', 'rejeitado'].includes(s.status)).length;
+          await supabaseCall
+            .from('voice_campaigns')
+            .update({ total_sent: sent, total_errors: errors })
+            .eq('id', contact.campaign_id);
+        }
+
+        console.log(`[VOICE-CALL] Contact ${contact.id} updated to status: ${callStatus}`);
+      } else {
+        console.log(`[VOICE-CALL] No matching campaign contact found for call event (phone: ${callPhone}, callId: ${callId})`);
+      }
+
+      return new Response(JSON.stringify({ success: true, handled: 'call_event' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    // --- END VOICE CALL EVENT HANDLING ---
+
     // --- Deduplicação ---
     const messageId = payload?.message?.id || payload?.key?.id || payload?.messageId || '';
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
