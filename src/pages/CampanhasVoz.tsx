@@ -50,7 +50,8 @@ export default function CampanhasVoz() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
-  const [contactSource, setContactSource] = useState<'acordos' | 'devedores'>('acordos');
+  const [contactSource, setContactSource] = useState<'acordos' | 'devedores' | 'planilha'>('acordos');
+  const [importedContacts, setImportedContacts] = useState<{ id: string; nome: string; telefone: string }[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
