@@ -276,6 +276,8 @@ export default function CampanhasVoz() {
       return;
     }
 
+    const isVoiceCall = campaign.campaign_type === 'voice_call';
+
     // Get pending contacts
     const { data: pendingContacts, error } = await supabase
       .from('voice_campaign_contacts')
@@ -296,7 +298,8 @@ export default function CampanhasVoz() {
       .eq('id', campaign.id);
     queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
 
-    toast.success(`Iniciando envio para ${pendingContacts.length} contatos...`);
+    const actionLabel = isVoiceCall ? 'chamadas' : 'envios';
+    toast.success(`Iniciando ${actionLabel} para ${pendingContacts.length} contatos...`);
 
     let sent = campaign.total_sent;
     let errors = campaign.total_errors;
@@ -307,22 +310,46 @@ export default function CampanhasVoz() {
       const instance = activeInstances[i % activeInstances.length];
 
       try {
-        const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
-          body: {
-            telefone: contact.telefone,
-            audio_url: campaign.audio_url,
-            uazapi_server_url: instance.server_url,
-            uazapi_instance_token: instance.instance_token,
-          },
-        });
+        if (isVoiceCall) {
+          // Voice call mode: initiate call via voice-campaign-call
+          const { data, error: fnError } = await supabase.functions.invoke('voice-campaign-call', {
+            body: {
+              campaign_id: campaign.id,
+              contact_id: contact.id,
+              phone_number: contact.telefone,
+              server_url: instance.server_url,
+              instance_token: instance.instance_token,
+            },
+          });
 
-        if (fnError || !data?.success) {
-          const errMsg = fnError?.message || data?.error || 'Erro';
-          await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
-          errors++;
+          if (fnError || !data?.success) {
+            const errMsg = fnError?.message || data?.error || 'Erro na chamada';
+            await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
+            errors++;
+          } else {
+            // Call initiated - status updated by edge function to 'chamando'
+            // Webhook will handle 'answered'/'missed'/'rejected'
+            sent++; // Count as "processed"
+          }
         } else {
-          await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
-          sent++;
+          // Audio message mode (existing behavior)
+          const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
+            body: {
+              telefone: contact.telefone,
+              audio_url: campaign.audio_url,
+              uazapi_server_url: instance.server_url,
+              uazapi_instance_token: instance.instance_token,
+            },
+          });
+
+          if (fnError || !data?.success) {
+            const errMsg = fnError?.message || data?.error || 'Erro';
+            await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
+            errors++;
+          } else {
+            await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
+            sent++;
+          }
         }
       } catch (err: any) {
         await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: err.message } as any).eq('id', contact.id);
@@ -336,7 +363,7 @@ export default function CampanhasVoz() {
       if (i < pendingContacts.length - 1 && !cancelRef.current) {
         const delay = (5 + Math.random() * 10) * 60 * 1000;
         const mins = Math.round(delay / 60000);
-        toast.info(`Próximo envio em ~${mins} minutos...`);
+        toast.info(`Próximo ${isVoiceCall ? 'chamada' : 'envio'} em ~${mins} minutos...`);
         await new Promise<void>(resolve => {
           const timer = setTimeout(resolve, delay);
           const check = setInterval(() => {
