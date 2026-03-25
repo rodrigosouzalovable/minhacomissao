@@ -396,7 +396,7 @@ serve(async (req) => {
     console.log(`Concluído: ${agendados} agendados, ${pulados} pulados`);
 
     return new Response(JSON.stringify({ 
-      success: true, agendados, pulados, total: todasParcelas.length
+      success: true, agendados, pulados, total: parcelasFiltradas.length
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
