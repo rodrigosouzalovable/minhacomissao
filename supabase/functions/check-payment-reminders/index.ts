@@ -250,7 +250,7 @@ serve(async (req) => {
     let pulados = 0;
     const insertBatch: any[] = [];
 
-    for (const { parcela, tipoLembrete } of todasParcelas) {
+    for (const { parcela, tipoLembrete } of parcelasFiltradas) {
       const acordo = parcela.acordos as any;
       
       if (acordo.status !== 'ativo') { pulados++; continue; }
