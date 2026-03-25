@@ -433,6 +433,23 @@ export function PaymentReminders() {
           </div>
         ) : (
           <div className={inDialog ? 'space-y-3' : 'max-h-80 overflow-y-auto scrollbar-thin'}>
+            {!inDialog && (
+              <div className="flex justify-end px-3 pt-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  title="Expandir lembretes"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPopoverOpen(false);
+                    setDialogOpen(true);
+                  }}
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
             {lembretesHoje.length > 0 && (
               <div className={inDialog ? '' : 'p-3 border-b border-border'}>
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
