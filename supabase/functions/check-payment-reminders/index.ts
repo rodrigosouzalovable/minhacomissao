@@ -109,7 +109,7 @@ serve(async (req) => {
 
     console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas.length} próximas + ${parcelasVencidas.length} vencidas), Filtradas para envio: ${parcelasFiltradas.length}`);
 
-    if (todasParcelas.length === 0) {
+    if (parcelasFiltradas.length === 0) {
       return new Response(JSON.stringify({ 
         success: true, message: 'Nenhuma parcela para notificar', agendados: 0
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
