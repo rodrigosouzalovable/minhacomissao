@@ -101,9 +101,15 @@ serve(async (req) => {
       todasParcelas.push({ parcela: p, tipoLembrete: `vencido_d${diasAtraso}` });
     }
 
-    console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas.length} próximas + ${parcelasVencidas.length} vencidas)`);
+    // In automatic mode (no overrideToken), restrict to D-3, D0, D+1, D+2 only
+    const AUTOMATIC_ALLOWED_TYPES = ['3_dias', 'dia_vencimento', 'vencido_d1', 'vencido_d2'];
+    const parcelasFiltradas = overrideToken
+      ? todasParcelas
+      : todasParcelas.filter(p => AUTOMATIC_ALLOWED_TYPES.includes(p.tipoLembrete));
 
-    if (todasParcelas.length === 0) {
+    console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas.length} próximas + ${parcelasVencidas.length} vencidas), Filtradas para envio: ${parcelasFiltradas.length}`);
+
+    if (parcelasFiltradas.length === 0) {
       return new Response(JSON.stringify({ 
         success: true, message: 'Nenhuma parcela para notificar', agendados: 0
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -112,7 +118,7 @@ serve(async (req) => {
     // --- BATCH: Collect unique user_ids and pagamento_ids ---
     const userIdSet = new Set<string>();
     const pagamentoIdSet = new Set<string>();
-    for (const { parcela } of todasParcelas) {
+    for (const { parcela } of parcelasFiltradas) {
       const acordo = parcela.acordos as any;
       if (acordo.status === 'ativo' && acordo.cliente_telefone) {
         userIdSet.add(acordo.user_id);
@@ -244,7 +250,7 @@ serve(async (req) => {
     let pulados = 0;
     const insertBatch: any[] = [];
 
-    for (const { parcela, tipoLembrete } of todasParcelas) {
+    for (const { parcela, tipoLembrete } of parcelasFiltradas) {
       const acordo = parcela.acordos as any;
       
       if (acordo.status !== 'ativo') { pulados++; continue; }
@@ -390,7 +396,7 @@ serve(async (req) => {
     console.log(`Concluído: ${agendados} agendados, ${pulados} pulados`);
 
     return new Response(JSON.stringify({ 
-      success: true, agendados, pulados, total: todasParcelas.length
+      success: true, agendados, pulados, total: parcelasFiltradas.length
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
