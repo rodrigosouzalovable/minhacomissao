@@ -118,7 +118,7 @@ serve(async (req) => {
     // --- BATCH: Collect unique user_ids and pagamento_ids ---
     const userIdSet = new Set<string>();
     const pagamentoIdSet = new Set<string>();
-    for (const { parcela } of todasParcelas) {
+    for (const { parcela } of parcelasFiltradas) {
       const acordo = parcela.acordos as any;
       if (acordo.status === 'ativo' && acordo.cliente_telefone) {
         userIdSet.add(acordo.user_id);
