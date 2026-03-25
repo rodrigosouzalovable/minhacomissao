@@ -101,7 +101,13 @@ serve(async (req) => {
       todasParcelas.push({ parcela: p, tipoLembrete: `vencido_d${diasAtraso}` });
     }
 
-    console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas.length} próximas + ${parcelasVencidas.length} vencidas)`);
+    // In automatic mode (no overrideToken), restrict to D-3, D0, D+1, D+2 only
+    const AUTOMATIC_ALLOWED_TYPES = ['3_dias', 'dia_vencimento', 'vencido_d1', 'vencido_d2'];
+    const parcelasFiltradas = overrideToken
+      ? todasParcelas
+      : todasParcelas.filter(p => AUTOMATIC_ALLOWED_TYPES.includes(p.tipoLembrete));
+
+    console.log(`Total: ${todasParcelas.length} parcelas (${parcelasProximas.length} próximas + ${parcelasVencidas.length} vencidas), Filtradas para envio: ${parcelasFiltradas.length}`);
 
     if (todasParcelas.length === 0) {
       return new Response(JSON.stringify({ 
