@@ -1,86 +1,62 @@
 
 
-## Plan: Implement WhatsApp Voice Call Campaigns via UAZAPI
+## Plan: Enable Automatic WhatsApp Reminders for D-3, D0, D+1, D+2
 
 ### Summary
-Add real WhatsApp voice call functionality using UAZAPI's two-step flow: initiate call → webhook receives "answered" → play audio on active call. This builds on the existing Campanhas de Voz page and infrastructure.
-
-### Important caveat
-The UAZAPI endpoints `/call/make`, `/call/play-audio`, and `/call/hangup` are **assumed** based on your description. These endpoints need to be verified against UAZAPI's actual documentation. The implementation will include these as configurable placeholders.
+Enable automatic sending of payment reminders for all users, restricted to D-3, D0, D+1, and D+2 only. Uses instances marked "Apenas Lembretes". Starts today at 09:20 BRT.
 
 ---
 
-### Database changes (migration)
+### 1. Database Migration
 
-Add columns to `voice_campaign_contacts` to support call tracking:
+**Enable reminders for all users:**
+```sql
+UPDATE profiles SET whatsapp_lembretes_habilitado = true;
+```
+
+**Set up pg_cron jobs** to run the two-step automation:
+- `check-payment-reminders` at 09:20 BRT (12:20 UTC) daily — queues messages into `whatsapp_fila`
+- `process-whatsapp-queue` every 5 minutes — sends queued messages that are due
 
 ```sql
-ALTER TABLE voice_campaign_contacts 
-  ADD COLUMN IF NOT EXISTS call_id TEXT,
-  ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS duration INTEGER,
-  ADD COLUMN IF NOT EXISTS call_type TEXT DEFAULT 'audio_message';
+SELECT cron.schedule('check-reminders-daily', '20 12 * * *', 
+  $$SELECT net.http_post(
+    url := '<supabase_url>/functions/v1/check-payment-reminders',
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer <service_key>"}'::jsonb
+  )$$
+);
+
+SELECT cron.schedule('process-whatsapp-queue', '*/5 * * * *',
+  $$SELECT net.http_post(
+    url := '<supabase_url>/functions/v1/process-whatsapp-queue',
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer <service_key>"}'::jsonb
+  )$$
+);
 ```
 
-Add a column to `voice_campaigns` to track the campaign mode:
+### 2. Update Edge Function: `check-payment-reminders`
 
-```sql
-ALTER TABLE voice_campaigns
-  ADD COLUMN IF NOT EXISTS campaign_type TEXT DEFAULT 'audio_message';
-```
+Currently the function queries D-3, D0, and ALL overdue days. Changes needed:
+
+- **Add D+1 and D+2 queries**: Currently only D0 and D-3 are fetched for "próximas". Add queries for parcels due tomorrow (D+1 before due) and day after (D+2 before due). Wait — the user said D-3, D0, D+1, D+2. In the existing system convention: `3_dias` = 3 days before, `dia_vencimento` = day of. D+1 and D+2 mean 1 and 2 days **after** due date (overdue). These are already covered by the overdue query as `vencido_d1` and `vencido_d2`.
+
+- **Restrict automatic mode to only D-3, D0, D+1, D+2**: When running without `overrideToken`, filter `todasParcelas` to only include `tipo_lembrete` in `['3_dias', 'dia_vencimento', 'vencido_d1', 'vencido_d2']`. This prevents sending for D+10, D+20, D+30 etc. automatically (those remain available via manual sending).
+
+- The existing template-based filtering (`userConfiguredDaysMap`) will be secondary — the hard filter ensures only these 4 types go out automatically regardless of user template config.
+
+### 3. No Frontend Changes
+
+The automatic sending is purely backend-driven. The existing manual hub and admin toggle remain as-is. All users get `whatsapp_lembretes_habilitado = true` via the migration.
 
 ---
 
-### New Edge Function: `voice-campaign-call`
+### Technical Details
 
-Creates a new edge function `supabase/functions/voice-campaign-call/index.ts` that:
-- Receives: `campaign_id`, `contact_id`, `phone_number`, `server_url`, `instance_token`
-- Calls UAZAPI `POST {server_url}/call/make` with `{ number: phone_number }`
-- Stores the returned `call_id` in `voice_campaign_contacts`
-- Updates contact status to `'chamando'` (calling)
-
-### Update Edge Function: `whatsapp-chatbot`
-
-Add call event handling at the top of the webhook handler (before message processing):
-- Detect event type `call` in the webhook payload
-- When `status === 'answered'`:
-  1. Look up contact by phone number in `voice_campaign_contacts` where `status = 'chamando'`
-  2. Fetch the campaign's `audio_url`
-  3. Call UAZAPI `POST {server_url}/call/play-audio` with `{ call_id, audio: audio_url }`
-  4. Update contact: `status = 'atendido'`, `answered_at = now()`
-- When `status === 'missed'` or `'rejected'`:
-  - Update contact status accordingly
-- Return early (don't process as chatbot message)
-
-### Frontend changes: `src/pages/CampanhasVoz.tsx`
-
-1. **Campaign type toggle** — when creating a new campaign, add a selector:
-   - "Mensagem de Áudio" (current behavior, sends PTT)
-   - "Chamada de Voz" (new, initiates calls)
-
-2. **Modified `startCampaign`** — when campaign type is `'chamada'`:
-   - Instead of calling `send-whatsapp-audio`, call `voice-campaign-call`
-   - After initiating the call, don't wait for completion — the webhook handles the rest
-   - Still uses round-robin across selected WhatsApp instances
-   - Still uses 5-15 min random delay between calls
-
-3. **New status badges** — display `'chamando'`, `'atendido'`, `'não atendeu'`, `'rejeitado'` with appropriate colors
-
-4. **Auto-refresh** — enable realtime subscription or polling on `voice_campaign_contacts` to show live status updates as webhook events come in
-
-### Config.toml update
-
-```toml
-[functions.voice-campaign-call]
-verify_jwt = false
-```
-
----
-
-### Technical details
-
-- The webhook (`whatsapp-chatbot`) already receives all events. We add a check at the top for call-type events and return early before chatbot processing.
-- The `voice-campaign-call` edge function uses the same UAZAPI auth pattern (token header) as existing functions.
-- Contact matching in webhook uses phone number normalization (strip country code prefix variations).
-- If `/call/play-audio` doesn't exist in UAZAPI, the code will have a clear placeholder comment indicating where to adapt.
+- The cron uses `pg_net` (already enabled) to call the edge functions via HTTP
+- `check-payment-reminders` queues messages with random 5-15 min delays into `whatsapp_fila`
+- `process-whatsapp-queue` picks up messages where `agendado_para <= now()` and sends them
+- Messages use default templates or user-configured custom templates from `lembrete_mensagens_templates`
+- Instances with `apenas_lembretes = true` are used for credentials (already implemented)
+- Sundays are blocked (already implemented)
+- Dedup via `whatsapp_fila` and `whatsapp_lembretes_log` prevents duplicate sends (already implemented)
 
