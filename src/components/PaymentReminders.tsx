@@ -476,6 +476,11 @@ export function PaymentReminders() {
                 <h4 className="text-sm font-semibold text-warning mb-2 flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
                   Vence em 3 dias
+                  {!inDialog && lembretesHoje.length === 0 && lembretesVencidos.length === 0 && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" title="Expandir lembretes" onClick={(e) => { e.stopPropagation(); setPopoverOpen(false); setDialogOpen(true); }}>
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </h4>
                 <div className="space-y-2">
                   {lembretesTresDias.map((lembrete) =>
