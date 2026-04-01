@@ -180,6 +180,7 @@ export default function Acionamento() {
   const [qrStep, setQrStep] = useState<'idle' | 'qr' | 'manual'>('idle');
   const [qrCountdown, setQrCountdown] = useState(60);
   const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(null);
+  const [reconnectingInstanceId, setReconnectingInstanceId] = useState<string | null>(null);
   const qrPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qrCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -871,6 +872,72 @@ export default function Acionamento() {
     }
   };
 
+  const handleReconnectQr = async () => {
+    if (!user || !editingInstance?.id) return;
+    const instanceId = editingInstance.id;
+    setReconnectingInstanceId(instanceId);
+    setQrLoading(true);
+    setQrImage(null);
+    setPairingCode(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'qr', userId: user.id, instanceId },
+      });
+      if (error) throw error;
+
+      if (data?.alreadyConnected) {
+        setReconnectingInstanceId(null);
+        setConnectionStatus(prev => ({ ...prev, [instanceId]: 'connected' }));
+        toast.success('WhatsApp já está conectado!');
+      } else if (data?.ok && data.qr) {
+        const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
+        setQrImage(qr);
+        setPairingCode(data.pairingCode || null);
+        startQrPolling(instanceId);
+        startQrCountdown();
+      } else {
+        toast.error(data?.error || 'Não foi possível obter o QR Code');
+        setReconnectingInstanceId(null);
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+      setReconnectingInstanceId(null);
+    }
+    setQrLoading(false);
+  };
+
+  const handleReconnectRefreshQr = async () => {
+    if (!reconnectingInstanceId || !user) return;
+    stopQrPolling();
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'qr', userId: user.id, instanceId: reconnectingInstanceId },
+      });
+      if (error) throw error;
+      if (data?.ok && data.qr) {
+        const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
+        setQrImage(qr);
+        setPairingCode(data.pairingCode || null);
+        startQrPolling(reconnectingInstanceId);
+        startQrCountdown();
+      } else {
+        toast.error(data?.error || 'Não foi possível obter o QR Code');
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setQrLoading(false);
+  };
+
+  const handleCancelReconnect = () => {
+    stopQrPolling();
+    setQrImage(null);
+    setPairingCode(null);
+    setReconnectingInstanceId(null);
+  };
+
   const handleDeleteInstance = async (id: string) => {
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
@@ -1522,7 +1589,7 @@ export default function Acionamento() {
                     </div>
                   )}
 
-                  {/* Manual instance form (add/edit) */}
+                   {/* Manual instance form (add/edit) */}
                   {(qrStep === 'manual' || (editingInstance && editingInstance.id)) && editingInstance && (
                     <div className="rounded-md border p-4 space-y-3 bg-muted/20" ref={(el) => { if (el && editingInstance.id) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>
                       <h4 className="text-sm font-semibold">{editingInstance.id ? 'Editar instância' : 'Nova instância (manual)'}</h4>
@@ -1554,12 +1621,61 @@ export default function Acionamento() {
                           className={editingInstance.id ? 'bg-muted cursor-not-allowed opacity-60' : ''}
                         />
                       </div>
+
+                      {/* Reconnect via QR button - only for existing disconnected instances */}
+                      {editingInstance.id && connectionStatus[editingInstance.id] === 'disconnected' && !reconnectingInstanceId && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-orange-500/50 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                          onClick={handleReconnectQr}
+                          disabled={qrLoading}
+                        >
+                          {qrLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
+                          Reconectar via QR Code
+                        </Button>
+                      )}
+
+                      {/* Inline QR for reconnection */}
+                      {editingInstance.id && reconnectingInstanceId === editingInstance.id && qrImage && (
+                        <div className="flex flex-col items-center gap-3 p-3 rounded-md border bg-background">
+                          <p className="text-sm font-medium text-foreground">Escaneie o QR Code para reconectar</p>
+                          <img src={qrImage} alt="QR Code" className="w-48 h-48 rounded" />
+                          {pairingCode && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">Código:</span>
+                              <code className="text-sm font-mono font-bold tracking-widest bg-muted px-2 py-1 rounded">{pairingCode}</code>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Aguardando conexão... ({qrCountdown}s)
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={handleReconnectRefreshQr} disabled={qrLoading}>
+                              <RefreshCw className="h-3 w-3 mr-1" /> Atualizar QR
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={handleCancelReconnect}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reconnecting loading state */}
+                      {editingInstance.id && reconnectingInstanceId === editingInstance.id && !qrImage && qrLoading && (
+                        <div className="flex items-center justify-center gap-2 p-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Obtendo QR Code...</span>
+                        </div>
+                      )}
+
                       <div className="flex gap-2">
                         <Button onClick={handleSaveInstance} disabled={savingInstance} size="sm">
                           {savingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                           Salvar
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => { setEditingInstance(null); setQrStep('idle'); }}>
+                        <Button variant="outline" size="sm" onClick={() => { setEditingInstance(null); setQrStep('idle'); handleCancelReconnect(); }}>
                           Cancelar
                         </Button>
                       </div>
