@@ -142,7 +142,11 @@ const fetchContatos = useCallback(async () => {
         const newMsg = payload.new as Mensagem;
         if (newMsg.instancia_id === contatoAtivo.instancia_id &&
             newMsg.telefone_remoto === contatoAtivo.telefone) {
-          setMensagens(prev => [...prev, newMsg]);
+          setMensagens(prev => {
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            const filtered = prev.filter(m => !m.id.startsWith('temp-'));
+            return [...filtered, newMsg];
+          });
         }
       })
       .subscribe();
