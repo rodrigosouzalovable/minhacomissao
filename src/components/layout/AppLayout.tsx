@@ -22,7 +22,8 @@ import {
   MessageSquare,
   Target,
   Bot,
-  Volume2
+  Volume2,
+  Flame
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
