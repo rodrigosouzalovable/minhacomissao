@@ -219,7 +219,7 @@ export default function WhatsAppInbox() {
       <div className="flex h-[calc(100vh-5rem)] lg:h-[calc(100vh-2rem)] rounded-lg overflow-hidden border border-border bg-card">
         {/* Left Panel - Contact List */}
         <div className={cn(
-          "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",
+          "w-full md:w-80 lg:w-96 md:min-w-[20rem] lg:min-w-[24rem] md:max-w-[20rem] lg:max-w-[24rem] shrink-0 border-r border-border flex flex-col bg-card overflow-hidden",
           contatoAtivo ? "hidden md:flex" : "flex"
         )}>
           <div className="p-3 border-b border-border space-y-2">
