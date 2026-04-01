@@ -1,93 +1,37 @@
 
 
-## Aquecimento de WhatsApp — Plano de Implementação
+## Etapas Pendentes do Aquecimento de WhatsApp
 
-Este é um recurso grande que será dividido em etapas incrementais. A primeira entrega inclui as tabelas, a página com dashboard/lista/configurações/log, e a Edge Function principal de aquecimento.
+Comparando o plano original com o que já foi implementado:
 
----
-
-### 1. Criar tabelas no banco de dados
-
-Migration SQL com 5 tabelas:
-- `whatsapp_aquecimento_instancias` — controle de fase/status por instância
-- `whatsapp_aquecimento_interacoes` — log de cada interação enviada/respondida
-- `whatsapp_aquecimento_dialogos` — pool de textos/áudios/reações
-- `whatsapp_aquecimento_config` — configurações globais (limites, horários, delays)
-- `whatsapp_aquecimento_agendamentos` — fila de envios programados
-
-Inclui índices, RLS policies (admin-only para gerenciamento, select para usuários autenticados em suas instâncias), triggers de `updated_at`, e dados iniciais (configurações padrão + pool de ~20 diálogos).
-
-Foreign keys referenciam `user_whatsapp_instances(id)` com `ON DELETE CASCADE`.
+| Etapa | Status |
+|-------|--------|
+| 1. Tabelas no banco de dados | Concluído |
+| 2. Página `/aquecimento` com 4 abas | Concluído |
+| 3. Navegação + rota | Concluído |
+| 4. Edge Function `whatsapp-aquecimento` | Concluído |
+| 5. Detecção de respostas no webhook | **Pendente** |
+| 6. Cron job via pg_cron | Concluído |
 
 ---
 
-### 2. Criar página `/aquecimento`
+### O que falta implementar
 
-Novo arquivo `src/pages/Aquecimento.tsx` (rota protegida, admin-only) com 4 seções em abas:
+**Etapa 5 — Detectar respostas de aquecimento no webhook `whatsapp-chatbot`**
 
-**Aba Dashboard:**
-- Cards: total de números, em aquecimento, interações hoje/7 dias, taxa de sucesso, próximos agendamentos
-- Queries agregadas nas tabelas de aquecimento
+Quando uma mensagem chega via webhook, o sistema precisa verificar se ela é uma resposta a uma interação de aquecimento antes de processá-la normalmente.
 
-**Aba Números:**
-- Tabela com instâncias WhatsApp e seu status de aquecimento (fase, dias, interações hoje, taxa de resposta)
-- Botões: Iniciar, Pausar, Ver conversas
-- Permite iniciar aquecimento manual selecionando números
+**Alteração em `supabase/functions/whatsapp-chatbot/index.ts`:**
+- Após identificar a `instancia_id` e o telefone remetente, consultar `whatsapp_aquecimento_interacoes` procurando uma interação recente (últimas 2h) com `status = 'ENVIADO'` onde:
+  - `instancia_destino_id` = instância que recebeu a mensagem
+  - `instancia_origem_id` = instância do remetente (buscar pelo telefone nas `user_whatsapp_instances`)
+- Se encontrar, atualizar a interação: `status → 'RESPONDIDO'`, `respondido_em → now()`, `tempo_resposta_segundos → diferença`, `conteudo_resposta → texto recebido`
+- Incrementar `respostas_recebidas` na tabela `whatsapp_aquecimento_instancias` para a instância de origem
+- Pular o processamento normal do chatbot (não responder automaticamente a mensagens de aquecimento)
 
-**Aba Configurações:**
-- Formulário para editar configs da tabela `whatsapp_aquecimento_config`
-- Limite diário por fase, horário comercial, dias ativos, delay min/max, áudios e reações on/off
-
-**Aba Log de Interações:**
-- Tabela paginada com histórico: data, origem, destino, tipo, conteúdo, status, tempo de resposta
-- Filtros por data e status
-
----
-
-### 3. Atualizar navegação
-
-- Adicionar item `{ href: '/aquecimento', label: 'Aquecimento', icon: Flame, adminOnly: true }` em `AppLayout.tsx`
-- Adicionar rota `<Route path="/aquecimento" element={<AdminRoute><AquecimentoPage /></AdminRoute>} />` em `App.tsx`
-
----
-
-### 4. Edge Function `whatsapp-aquecimento`
-
-Lógica principal executada via pg_cron a cada 15 minutos:
-
-1. Busca instâncias com `status = 'EM_AQUECIMENTO'`
-2. Verifica horário comercial (8h-18h São Paulo) e dia da semana
-3. Para cada instância que não atingiu limite diário:
-   - Seleciona instância destino aleatória (diferente, que não interagiu nas últimas 24h)
-   - Busca diálogo compatível com a fase atual
-   - Envia via `send-whatsapp` (texto) ou `send-whatsapp-audio` (áudio)
-   - Registra na tabela de interações com status `ENVIADO`
-   - Incrementa `interacoes_hoje`
-4. Avalia progressão de fase (7 dias cumpridos com média adequada → avança)
-5. Se taxa de falha > 10% em 1h → pausa automaticamente
-
----
-
-### 5. Lógica de resposta no webhook existente
-
-Atualizar `whatsapp-chatbot` para detectar interações de aquecimento:
-- Quando receber mensagem, verificar se existe interação pendente na tabela `whatsapp_aquecimento_interacoes` com mesmo par origem/destino
-- Se sim, atualizar status para `RESPONDIDO`, calcular `tempo_resposta_segundos`, registrar `conteudo_resposta`
-- Atualizar métricas da instância (`respostas_recebidas`)
-
----
-
-### 6. Agendar via pg_cron
-
-Criar cron job que invoca `whatsapp-aquecimento` a cada 15 minutos usando `pg_cron` + `pg_net`.
-
----
-
-### Detalhes técnicos
-
-- As tabelas usam `VARCHAR` para status em vez de enums para flexibilidade
-- O pool de diálogos vem pré-populado com ~20 textos + 4 áudios + 4 reações
-- Progressão de fase: Fase 1→2→3→4→AQUECIDO, cada uma com 7 dias e limites crescentes (5→10→15→25→30/dia)
-- Reset de `interacoes_hoje` será feito pela Edge Function no primeiro run do dia (quando detecta que a última interação foi de outro dia)
-- RLS: admin full access; usuários autenticados podem ver instâncias/interações vinculadas às suas próprias `user_whatsapp_instances`
+### Melhorias opcionais (não no plano original)
+- Log de interações sem nomes de origem/destino (a tabela não faz join com `user_whatsapp_instances` para mostrar nomes)
+- Envio de áudios PTT na Edge Function (atualmente só envia texto, linha 123: `eq("tipo", "texto")`)
+- Incremento de `dias_na_fase` (a Edge Function verifica `dias_na_fase` mas nunca incrementa esse campo diariamente)
+- Filtros na aba de Log (data, status) ainda não implementados na UI
 
