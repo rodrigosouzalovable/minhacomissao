@@ -115,13 +115,14 @@ Deno.serve(async (req) => {
 
       if (!origemDetails || !destinoDetails) continue;
 
-      // Get dialogue for current phase
+      // Get dialogue for current phase (texto + audio for phase 2+)
+      const tiposPermitidos = inst.fase >= 2 ? ["texto", "audio"] : ["texto"];
       const { data: dialogos } = await supabase
         .from("whatsapp_aquecimento_dialogos")
         .select("*")
         .eq("ativo", true)
         .lte("fase_minima", inst.fase)
-        .eq("tipo", "texto"); // For now, only text
+        .in("tipo", tiposPermitidos);
 
       if (!dialogos || dialogos.length === 0) {
         console.log("[AQUECIMENTO] Sem diálogos disponíveis");
