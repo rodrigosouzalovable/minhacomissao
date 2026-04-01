@@ -11,7 +11,9 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List, MessageCircle } from 'lucide-react';
+import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
+import AquecimentoDialogosTab from '@/components/aquecimento/AquecimentoDialogosTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
