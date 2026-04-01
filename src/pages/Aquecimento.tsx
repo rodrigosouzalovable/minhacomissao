@@ -56,6 +56,8 @@ export default function Aquecimento() {
   const [configs, setConfigs] = useState<ConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
+  const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
+  const [logFilterDate, setLogFilterDate] = useState<string>('');
 
   useEffect(() => {
     loadAll();
