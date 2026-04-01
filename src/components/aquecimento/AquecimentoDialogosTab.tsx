@@ -50,6 +50,7 @@ export default function AquecimentoDialogosTab() {
     setEditingId(null);
     setForm({ ...EMPTY_FORM, tipo: tipo || 'texto' });
     setAudioFiles([]);
+    setImageFiles([]);
     setDialogOpen(true);
   }
 
