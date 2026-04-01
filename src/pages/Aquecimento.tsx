@@ -106,10 +106,8 @@ export default function Aquecimento() {
     }
   }
 
-  async function loadConfigs() {
-    const { data } = await supabase.from('whatsapp_aquecimento_config' as any).select('*');
-    if (data) setConfigs(data as any[]);
-  }
+
+
 
   async function loadMetrics() {
     const { count: total } = await supabase.from('user_whatsapp_instances').select('id', { count: 'exact', head: true }).eq('ativo', true);
