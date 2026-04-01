@@ -36,7 +36,11 @@ const AVAILABLE_TABS = [
   { path: '/admin/financeiro', label: 'Financeiro' },
   { path: '/admin/importar-devedores', label: 'Importar Devedores' },
   { path: '/admin/acionamento', label: 'Acionamento' },
+  { path: '/admin/automacao-cobmais', label: 'Automação CobMais' },
   { path: '/meta', label: 'Meta' },
+  { path: '/campanhas-voz', label: 'Campanhas de Voz' },
+  { path: '/inbox', label: 'WhatsApp Inbox' },
+  { path: '/aquecimento', label: 'Aquecimento' },
 ];
 
 const CREDORES = [
