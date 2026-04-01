@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
+import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
 
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
