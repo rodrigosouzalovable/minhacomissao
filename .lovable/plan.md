@@ -1,21 +1,40 @@
 
 
-## Fix: Duplicate Audio Sends
+## Make System-Sent Messages Appear in WhatsApp Inbox
 
-### Root Cause
-The `send-whatsapp-audio` edge function tries 3 JSON endpoints and 2 FormData endpoints in sequence. Multiple endpoints are succeeding in sending the audio, but the success detection (`response.ok && !data?.error`) is too strict -- it treats responses with any truthy `error` field as failures, even when the message was already delivered. This causes the loop to continue to the next endpoint, which sends again.
+### Problem
+When messages (text or audio) are sent by the system (campaigns, reminders, auto-send, queue processing), they don't appear in the WhatsApp Inbox because:
+1. **`send-whatsapp-audio`** doesn't save anything to `whatsapp_mensagens`/`whatsapp_contatos`
+2. **`send-whatsapp`** only saves to inbox when `instancia_id` is passed — most callers don't pass it
+3. **`process-whatsapp-queue`** sends via UAZAPI directly without saving to inbox
 
 ### Solution
-Since we now know `/send/media` with `{ number, type: 'ptt', file }` works, simplify the function to use only that single endpoint. Remove the fallback chain entirely. If that one endpoint fails, return the error directly instead of trying alternatives that could also deliver the message.
+Save outgoing messages to the inbox tables in the edge functions by looking up the `instancia_id` from `user_whatsapp_instances` using the `server_url` + `instance_token` credentials.
 
 ### Changes
 
-**`supabase/functions/send-whatsapp-audio/index.ts`**:
-- Remove the multi-endpoint loop and FormData fallback
-- Send a single request to `${cleanUrl}/send/media` with `{ number, type: 'ptt', file: audio_url }`
-- Treat any `response.ok` as success (don't check `data.error` since UAZAPI may include non-critical error fields)
-- Remove unused helper functions (`downloadAudioFile`, `buildFormData`, `inferFileName`)
-- Keep the clean phone formatting and CORS handling
+**1. `supabase/functions/send-whatsapp/index.ts`**
+- When `instancia_id` is NOT provided but `uazapi_server_url` + `uazapi_instance_token` ARE provided, look up the matching `instancia_id` from `user_whatsapp_instances` table
+- This makes all callers (reminders, auto-send, acionamento, etc.) automatically save to inbox without changing any frontend code
 
-This is a minimal, focused fix -- the frontend sending loop is correct and doesn't need changes.
+**2. `supabase/functions/send-whatsapp-audio/index.ts`**
+- Add Supabase client import
+- Accept optional `instancia_id` in the request body
+- If not provided, look up `instancia_id` from `user_whatsapp_instances` using `server_url` + `instance_token`
+- After successful send, insert a record into `whatsapp_mensagens` with `conteudo: '🎵 Áudio enviado'` (or similar descriptive text)
+- Upsert the `whatsapp_contatos` entry (same pattern as `send-whatsapp`)
+
+**3. `supabase/functions/process-whatsapp-queue/index.ts`**
+- After successful send, look up `instancia_id` from credentials and save the message to `whatsapp_mensagens` + upsert `whatsapp_contatos`
+
+**4. `src/contexts/VoiceCampaignSendingContext.tsx`**
+- Pass `instancia_id: instance.id` in the body when invoking `send-whatsapp-audio` (the instance object already has `.id`)
+
+**5. `src/contexts/WhatsAppSendingContext.tsx`**
+- Pass `instancia_id: instance.id` when invoking `send-whatsapp` (the instance object already has the id)
+
+**6. `src/hooks/useAutoSend.tsx`**
+- Pass `instancia_id` from the uazapi config if available
+
+This approach ensures every outgoing message from any flow appears in the inbox automatically.
 
