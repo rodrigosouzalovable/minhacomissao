@@ -131,10 +131,12 @@ export default function AquecimentoDashboard({ metrics }: Props) {
       const found = configs.find((c: any) => c.chave === key);
       return found ? found.valor : def;
     };
-    const horarioComercial = getConfigVal('horario_comercial', { inicio: 8, fim: 18 });
+    const horarioComercial = getConfigVal('horario_comercial', { inicio: '08:00', fim: '18:00' });
     const diasAtivos = getConfigVal('dias_ativos', [1, 2, 3, 4, 5, 6]);
 
-    setNextCron(getNextCronSlot(horarioComercial.inicio, horarioComercial.fim, diasAtivos));
+    // Parse hours from string format "HH:MM" or number
+    const parseHour = (val: any) => typeof val === 'string' ? parseInt(val.split(':')[0], 10) : Number(val);
+    setNextCron(getNextCronSlot(parseHour(horarioComercial.inicio), parseHour(horarioComercial.fim), diasAtivos));
 
     const instanceNameMap = new Map((allInstancesRes.data || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
     const activeData = (instancesRes.data as any[]) || [];
