@@ -635,10 +635,8 @@ serve(async (req) => {
         }
 
         if (instanciaId) {
-          const direcao = isFromMe ? 'saida' : 'entrada';
           const agora = new Date().toISOString();
 
-          const direcaoMsg = isFromMe ? 'saida' : 'entrada';
 
           if (isFromMe) {
             // For fromMe: check if send-whatsapp already saved this message (dedup within 30s)
