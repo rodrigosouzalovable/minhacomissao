@@ -872,7 +872,73 @@ export default function Acionamento() {
     }
   };
 
-  const handleDeleteInstance = async (id: string) => {
+  const handleReconnectQr = async () => {
+    if (!user || !editingInstance?.id) return;
+    const instanceId = editingInstance.id;
+    setReconnectingInstanceId(instanceId);
+    setQrLoading(true);
+    setQrImage(null);
+    setPairingCode(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'qr', userId: user.id, instanceId },
+      });
+      if (error) throw error;
+
+      if (data?.alreadyConnected) {
+        setReconnectingInstanceId(null);
+        setConnectionStatus(prev => ({ ...prev, [instanceId]: 'connected' }));
+        toast.success('WhatsApp já está conectado!');
+      } else if (data?.ok && data.qr) {
+        const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
+        setQrImage(qr);
+        setPairingCode(data.pairingCode || null);
+        startQrPolling(instanceId);
+        startQrCountdown();
+      } else {
+        toast.error(data?.error || 'Não foi possível obter o QR Code');
+        setReconnectingInstanceId(null);
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+      setReconnectingInstanceId(null);
+    }
+    setQrLoading(false);
+  };
+
+  const handleReconnectRefreshQr = async () => {
+    if (!reconnectingInstanceId || !user) return;
+    stopQrPolling();
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'qr', userId: user.id, instanceId: reconnectingInstanceId },
+      });
+      if (error) throw error;
+      if (data?.ok && data.qr) {
+        const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
+        setQrImage(qr);
+        setPairingCode(data.pairingCode || null);
+        startQrPolling(reconnectingInstanceId);
+        startQrCountdown();
+      } else {
+        toast.error(data?.error || 'Não foi possível obter o QR Code');
+      }
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    }
+    setQrLoading(false);
+  };
+
+  const handleCancelReconnect = () => {
+    stopQrPolling();
+    setQrImage(null);
+    setPairingCode(null);
+    setReconnectingInstanceId(null);
+  };
+
+
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .delete()
