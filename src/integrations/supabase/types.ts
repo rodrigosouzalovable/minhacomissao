@@ -1377,6 +1377,38 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_campaign_audios: {
+        Row: {
+          audio_url: string
+          campaign_id: string
+          created_at: string
+          file_name: string
+          id: string
+        }
+        Insert: {
+          audio_url: string
+          campaign_id: string
+          created_at?: string
+          file_name: string
+          id?: string
+        }
+        Update: {
+          audio_url?: string
+          campaign_id?: string
+          created_at?: string
+          file_name?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_campaign_audios_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "voice_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       voice_campaign_contacts: {
         Row: {
           answered_at: string | null
@@ -1432,7 +1464,7 @@ export type Database = {
       }
       voice_campaigns: {
         Row: {
-          audio_url: string
+          audio_url: string | null
           campaign_type: string | null
           created_at: string
           finished_at: string | null
@@ -1446,7 +1478,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          audio_url: string
+          audio_url?: string | null
           campaign_type?: string | null
           created_at?: string
           finished_at?: string | null
@@ -1460,7 +1492,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          audio_url?: string
+          audio_url?: string | null
           campaign_type?: string | null
           created_at?: string
           finished_at?: string | null
