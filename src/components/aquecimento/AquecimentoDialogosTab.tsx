@@ -73,6 +73,29 @@ export default function AquecimentoDialogosTab() {
     setAudioFiles(prev => prev.filter((_, i) => i !== index));
   }
 
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      setImageFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+    }
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  }
+
+  function removeImageFile(index: number) {
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+  }
+
+  async function uploadFile(file: File, folder: string): Promise<string | null> {
+    const ext = file.name.split('.').pop() || 'bin';
+    const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from('campaign-audio').upload(path, file);
+    if (error) {
+      console.error('Upload error:', error);
+      return null;
+    }
+    const { data: urlData } = supabase.storage.from('campaign-audio').getPublicUrl(path);
+    return urlData.publicUrl;
+  }
+
   async function uploadAudio(file: File): Promise<string | null> {
     const ext = file.name.split('.').pop() || 'mp3';
     const path = `aquecimento/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
