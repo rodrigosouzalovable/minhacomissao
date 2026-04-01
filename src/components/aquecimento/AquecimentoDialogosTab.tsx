@@ -267,13 +267,56 @@ export default function AquecimentoDialogosTab() {
                     </p>
                   )}
                 </div>
+              ) : form.tipo === 'imagem' ? (
+                <div className="space-y-2">
+                  <Label>Arquivos de Imagem</Label>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*,.jpg,.jpeg,.png,.gif,.webp"
+                    multiple={!editingId}
+                    className="hidden"
+                    onChange={handleImageSelect}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 border-dashed h-16"
+                    onClick={() => imageInputRef.current?.click()}
+                  >
+                    <Upload className="h-5 w-5" />
+                    {editingId ? 'Selecionar nova imagem (opcional)' : 'Clique para selecionar imagens'}
+                  </Button>
+                  {imageFiles.length > 0 && (
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {imageFiles.map((file, i) => (
+                        <div key={i} className="flex items-center justify-between bg-muted rounded px-3 py-1.5 text-sm">
+                          <span className="truncate mr-2">🖼️ {file.name}</span>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => removeImageFile(i)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!editingId && (
+                    <p className="text-xs text-muted-foreground">
+                      Cada arquivo será criado como um diálogo separado. Formatos aceitos: JPG, PNG, GIF, WEBP.
+                    </p>
+                  )}
+                  {editingId && form.conteudo && (
+                    <p className="text-xs text-muted-foreground">
+                      Imagem atual: <a href={form.conteudo} target="_blank" rel="noopener noreferrer" className="underline text-primary">ver</a>
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-1">
                   <Label>{form.tipo === 'texto' ? 'Mensagem de Texto' : 'Conteúdo / URL'}</Label>
                   <Textarea
                     value={form.conteudo}
                     onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))}
-                    placeholder={form.tipo === 'texto' ? 'Ex: Oi, tudo bem? Como vai?' : 'Ex: https://exemplo.com/imagem.jpg'}
+                    placeholder={form.tipo === 'texto' ? 'Ex: Oi, tudo bem? Como vai?' : 'Ex: https://exemplo.com/sticker.webp'}
                     rows={3}
                   />
                 </div>
