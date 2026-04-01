@@ -180,6 +180,7 @@ export default function Acionamento() {
   const [qrStep, setQrStep] = useState<'idle' | 'qr' | 'manual'>('idle');
   const [qrCountdown, setQrCountdown] = useState(60);
   const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(null);
+  const [reconnectingInstanceId, setReconnectingInstanceId] = useState<string | null>(null);
   const qrPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qrCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
