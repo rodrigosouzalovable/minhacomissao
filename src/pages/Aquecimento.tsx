@@ -298,28 +298,11 @@ export default function Aquecimento() {
           </TabsContent>
 
           <TabsContent value="config">
-            <Card>
-              <CardHeader><CardTitle>Configurações de Aquecimento</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                {configs.map(cfg => (
-                  <div key={cfg.id} className="space-y-2">
-                    <Label className="font-semibold">{cfg.chave.replace(/_/g, ' ').toUpperCase()}</Label>
-                    {cfg.descricao && <p className="text-sm text-muted-foreground">{cfg.descricao}</p>}
-                    <Input
-                      defaultValue={JSON.stringify(cfg.valor)}
-                      onBlur={(e) => {
-                        try {
-                          const parsed = JSON.parse(e.target.value);
-                          updateConfig(cfg.id, parsed);
-                        } catch {
-                          toast({ title: 'JSON inválido', variant: 'destructive' });
-                        }
-                      }}
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            <AquecimentoConfigTab />
+          </TabsContent>
+
+          <TabsContent value="dialogos">
+            <AquecimentoDialogosTab />
           </TabsContent>
 
           <TabsContent value="log">
