@@ -56,6 +56,8 @@ export default function Aquecimento() {
   const [configs, setConfigs] = useState<ConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
+  const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
+  const [logFilterDate, setLogFilterDate] = useState<string>('');
 
   useEffect(() => {
     loadAll();
@@ -82,13 +84,21 @@ export default function Aquecimento() {
   }
 
   async function loadInteracoes() {
+    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome');
+    const instanceNameMap = new Map((instances || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
+
     const { data } = await supabase
       .from('whatsapp_aquecimento_interacoes' as any)
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(200);
     if (data) {
-      setInteracoes(data as any[]);
+      const mapped = (data as any[]).map((d: any) => ({
+        ...d,
+        origem_nome: instanceNameMap.get(d.instancia_origem_id) || 'Desconhecido',
+        destino_nome: instanceNameMap.get(d.instancia_destino_id) || 'Desconhecido',
+      }));
+      setInteracoes(mapped);
     }
   }
 
@@ -268,12 +278,44 @@ export default function Aquecimento() {
 
           <TabsContent value="log">
             <Card>
-              <CardHeader><CardTitle>Log de Interações</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Log de Interações</CardTitle>
+                <div className="flex gap-3 mt-3">
+                  <div>
+                    <Label className="text-xs">Status</Label>
+                    <select
+                      value={logFilterStatus}
+                      onChange={(e) => setLogFilterStatus(e.target.value)}
+                      className="ml-2 rounded border border-input bg-background px-2 py-1 text-sm"
+                    >
+                      <option value="todos">Todos</option>
+                      <option value="ENVIADO">Enviado</option>
+                      <option value="RESPONDIDO">Respondido</option>
+                      <option value="ENTREGUE">Entregue</option>
+                      <option value="FALHOU">Falhou</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Data</Label>
+                    <Input
+                      type="date"
+                      value={logFilterDate}
+                      onChange={(e) => setLogFilterDate(e.target.value)}
+                      className="ml-2 w-40 h-8 text-sm inline-block"
+                    />
+                  </div>
+                  {(logFilterStatus !== 'todos' || logFilterDate) && (
+                    <Button variant="ghost" size="sm" onClick={() => { setLogFilterStatus('todos'); setLogFilterDate(''); }}>Limpar</Button>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Data/Hora</TableHead>
+                      <TableHead>Origem</TableHead>
+                      <TableHead>Destino</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Conteúdo</TableHead>
                       <TableHead>Status</TableHead>
@@ -282,20 +324,25 @@ export default function Aquecimento() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {interacoes.map(i => (
+                    {interacoes
+                      .filter(i => logFilterStatus === 'todos' || i.status === logFilterStatus)
+                      .filter(i => !logFilterDate || (i.enviado_em && i.enviado_em.startsWith(logFilterDate)))
+                      .map(i => (
                       <TableRow key={i.id}>
-                        <TableCell className="text-sm">{i.enviado_em ? format(new Date(i.enviado_em), 'dd/MM HH:mm') : '-'}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{i.enviado_em ? format(new Date(i.enviado_em), 'dd/MM HH:mm') : '-'}</TableCell>
+                        <TableCell className="text-sm">{i.origem_nome || '-'}</TableCell>
+                        <TableCell className="text-sm">{i.destino_nome || '-'}</TableCell>
                         <TableCell><Badge variant="outline">{i.tipo}</Badge></TableCell>
                         <TableCell className="max-w-[200px] truncate text-sm">{i.conteudo}</TableCell>
                         <TableCell>
-                          <Badge variant={i.status === 'RESPONDIDO' ? 'default' : 'secondary'}>{i.status}</Badge>
+                          <Badge variant={i.status === 'RESPONDIDO' ? 'default' : i.status === 'FALHOU' ? 'destructive' : 'secondary'}>{i.status}</Badge>
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate text-sm">{i.conteudo_resposta || '-'}</TableCell>
                         <TableCell>{i.tempo_resposta_segundos ? `${i.tempo_resposta_segundos}s` : '-'}</TableCell>
                       </TableRow>
                     ))}
-                    {interacoes.length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhuma interação registrada</TableCell></TableRow>
+                    {interacoes.filter(i => logFilterStatus === 'todos' || i.status === logFilterStatus).filter(i => !logFilterDate || (i.enviado_em && i.enviado_em.startsWith(logFilterDate))).length === 0 && (
+                      <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma interação registrada</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
