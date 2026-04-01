@@ -7,11 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List, MessageCircle } from 'lucide-react';
+import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
+import AquecimentoDialogosTab from '@/components/aquecimento/AquecimentoDialogosTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -43,18 +44,14 @@ interface Interacao {
   destino_nome?: string;
 }
 
-interface ConfigItem {
-  id: string;
-  chave: string;
-  valor: any;
-  descricao: string | null;
-}
+
+
 
 export default function Aquecimento() {
   const [instancias, setInstancias] = useState<AquecimentoInstancia[]>([]);
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
-  const [configs, setConfigs] = useState<ConfigItem[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
@@ -67,7 +64,7 @@ export default function Aquecimento() {
 
   async function loadAll() {
     setLoading(true);
-    await Promise.all([loadInstancias(), loadInteracoes(), loadConfigs(), loadMetrics()]);
+    await Promise.all([loadInstancias(), loadInteracoes(), loadMetrics()]);
     setLoading(false);
   }
 
@@ -104,10 +101,8 @@ export default function Aquecimento() {
     }
   }
 
-  async function loadConfigs() {
-    const { data } = await supabase.from('whatsapp_aquecimento_config' as any).select('*');
-    if (data) setConfigs(data as any[]);
-  }
+
+
 
   async function loadMetrics() {
     const { count: total } = await supabase.from('user_whatsapp_instances').select('id', { count: 'exact', head: true }).eq('ativo', true);
@@ -151,11 +146,8 @@ export default function Aquecimento() {
     loadAll();
   }
 
-  async function updateConfig(id: string, valor: any) {
-    await supabase.from('whatsapp_aquecimento_config' as any).update({ valor } as any).eq('id', id);
-    toast({ title: 'Configuração atualizada!' });
-    loadConfigs();
-  }
+
+
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -185,10 +177,11 @@ export default function Aquecimento() {
         </div>
 
         <Tabs defaultValue="dashboard">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="dashboard" className="gap-2"><BarChart3 className="h-4 w-4" />Dashboard</TabsTrigger>
             <TabsTrigger value="numeros" className="gap-2"><Phone className="h-4 w-4" />Números</TabsTrigger>
             <TabsTrigger value="config" className="gap-2"><Settings className="h-4 w-4" />Configurações</TabsTrigger>
+            <TabsTrigger value="dialogos" className="gap-2"><MessageCircle className="h-4 w-4" />Diálogos</TabsTrigger>
             <TabsTrigger value="log" className="gap-2"><List className="h-4 w-4" />Log</TabsTrigger>
           </TabsList>
 
@@ -305,28 +298,11 @@ export default function Aquecimento() {
           </TabsContent>
 
           <TabsContent value="config">
-            <Card>
-              <CardHeader><CardTitle>Configurações de Aquecimento</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                {configs.map(cfg => (
-                  <div key={cfg.id} className="space-y-2">
-                    <Label className="font-semibold">{cfg.chave.replace(/_/g, ' ').toUpperCase()}</Label>
-                    {cfg.descricao && <p className="text-sm text-muted-foreground">{cfg.descricao}</p>}
-                    <Input
-                      defaultValue={JSON.stringify(cfg.valor)}
-                      onBlur={(e) => {
-                        try {
-                          const parsed = JSON.parse(e.target.value);
-                          updateConfig(cfg.id, parsed);
-                        } catch {
-                          toast({ title: 'JSON inválido', variant: 'destructive' });
-                        }
-                      }}
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            <AquecimentoConfigTab />
+          </TabsContent>
+
+          <TabsContent value="dialogos">
+            <AquecimentoDialogosTab />
           </TabsContent>
 
           <TabsContent value="log">
