@@ -151,6 +151,7 @@ const App = () => (
             <Route path="/campanhas-voz" element={<ProtectedRoute><CampanhasVoz /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </VoiceCampaignSendingProvider>
           </WhatsAppSendingProvider>
           </AutoSendProvider>
         </AuthProvider>

@@ -655,7 +655,7 @@ export default function CampanhasVoz() {
                         <span className="text-xs text-muted-foreground">min</span>
                       </div>
                       <Button
-                        onClick={() => startCampaign(selectedCampaign)}
+                        onClick={() => handleStartCampaign(selectedCampaign)}
                         disabled={sendingCampaignId !== null || selectedInstanceIds.length === 0}
                       >
                         <Send className="h-4 w-4 mr-2" />
