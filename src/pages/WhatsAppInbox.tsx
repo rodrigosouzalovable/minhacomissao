@@ -29,6 +29,7 @@ interface Contato {
   ultima_mensagem: string | null;
   ultima_mensagem_em: string | null;
   nao_lido: number;
+  instancia_nome?: string | null;
 }
 
 interface Mensagem {
@@ -73,16 +74,33 @@ export default function WhatsAppInbox() {
   }, [user]);
 
   // Load contacts
-  const fetchContatos = useCallback(async () => {
+const fetchContatos = useCallback(async () => {
     let query = supabase
       .from('whatsapp_contatos')
-      .select('*')
+      .select(`
+        id,
+        instancia_id,
+        telefone,
+        nome,
+        ultima_mensagem,
+        ultima_mensagem_em,
+        nao_lido,
+        user_whatsapp_instances(nome)
+      `)
       .order('ultima_mensagem_em', { ascending: false });
+
     if (filtroInstancia !== 'todas') {
       query = query.eq('instancia_id', filtroInstancia);
     }
+
     const { data } = await query;
-    if (data) setContatos(data as Contato[]);
+    if (data) {
+      const contatosComNomeInstancia = (data as any[]).map((contato) => ({
+        ...contato,
+        instancia_nome: contato.user_whatsapp_instances?.nome ?? null,
+      }));
+      setContatos(contatosComNomeInstancia as Contato[]);
+    }
   }, [filtroInstancia]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
@@ -193,7 +211,8 @@ export default function WhatsAppInbox() {
       return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
     });
 
-  const getInstanciaNome = (instanciaId: string) => {
+const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | null) => {
+    if (instanciaNomeContato) return instanciaNomeContato;
     const inst = instancias.find(i => i.id === instanciaId);
     return inst?.nome || null;
   };
@@ -289,9 +308,9 @@ export default function WhatsAppInbox() {
                         </Badge>
                       )}
                     </div>
-{getInstanciaNome(contato.instancia_id) && (
+{getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
                       <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
-                        {getInstanciaNome(contato.instancia_id)}
+                        {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
                       </span>
                     )}
                   </div>
@@ -327,7 +346,7 @@ export default function WhatsAppInbox() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {formatTelefone(contatoAtivo.telefone)}
-                    {getInstanciaNome(contatoAtivo.instancia_id) && ` · ${getInstanciaNome(contatoAtivo.instancia_id)}`}
+                    {getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome) && ` · ${getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome)}`}
                   </p>
                 </div>
               </div>
