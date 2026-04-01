@@ -211,7 +211,8 @@ const fetchContatos = useCallback(async () => {
       return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
     });
 
-  const getInstanciaNome = (instanciaId: string) => {
+const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | null) => {
+    if (instanciaNomeContato) return instanciaNomeContato;
     const inst = instancias.find(i => i.id === instanciaId);
     return inst?.nome || null;
   };
