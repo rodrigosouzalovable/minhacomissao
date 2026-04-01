@@ -323,8 +323,7 @@ export default function CampanhasVoz() {
     queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
   };
 
-  // Start campaign with combined round-robin (audio + instance)
-  const startCampaign = async (campaign: Campaign) => {
+  const handleStartCampaign = async (campaign: Campaign) => {
     const activeInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
     if (activeInstances.length === 0) {
       toast.error('Selecione pelo menos um WhatsApp para envio');
@@ -338,8 +337,7 @@ export default function CampanhasVoz() {
       .eq('campaign_id', campaign.id)
       .order('created_at', { ascending: true });
 
-    // Fallback: if no audios in new table, use legacy audio_url
-    const audioList: { audio_url: string; file_name: string }[] = (audios && audios.length > 0)
+    const audioList = (audios && audios.length > 0)
       ? audios.map(a => ({ audio_url: a.audio_url, file_name: a.file_name }))
       : campaign.audio_url
         ? [{ audio_url: campaign.audio_url, file_name: 'audio' }]
@@ -361,87 +359,17 @@ export default function CampanhasVoz() {
       return;
     }
 
-    setSendingCampaignId(campaign.id);
-    cancelRef.current = false;
-
-    await supabase
-      .from('voice_campaigns')
-      .update({ status: 'enviando', started_at: new Date().toISOString() } as any)
-      .eq('id', campaign.id);
-    queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
-
-    toast.success(`Iniciando envio para ${pendingContacts.length} contatos com ${audioList.length} áudio(s) e ${activeInstances.length} WhatsApp(s)...`);
-
-    let sent = campaign.total_sent;
-    let errors = campaign.total_errors;
-
-    for (let i = 0; i < pendingContacts.length; i++) {
-      if (cancelRef.current) break;
-      const contact = pendingContacts[i];
-      const instance = activeInstances[i % activeInstances.length];
-      const audio = audioList[i % audioList.length];
-
-      try {
-        const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
-          body: {
-            telefone: contact.telefone,
-            audio_url: audio.audio_url,
-            uazapi_server_url: instance.server_url,
-            uazapi_instance_token: instance.instance_token,
-          },
-        });
-
-        if (fnError || !data?.success) {
-          const errMsg = fnError?.message || data?.error || 'Erro';
-          await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
-          errors++;
-        } else {
-          await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
-          sent++;
-        }
-      } catch (err: any) {
-        await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: err.message } as any).eq('id', contact.id);
-        errors++;
-      }
-
-      await supabase.from('voice_campaigns').update({ total_sent: sent, total_errors: errors } as any).eq('id', campaign.id);
-      queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaign.id] });
-
-      // Configurable random delay
-      if (i < pendingContacts.length - 1 && !cancelRef.current) {
-        const min = Math.max(0.1, delayMin);
-        const max = Math.max(min, delayMax);
-        const delay = (min + Math.random() * (max - min)) * 60 * 1000;
-        const mins = Math.round(delay / 60000);
-        toast.info(`Próximo envio em ~${mins} minuto(s)...`);
-        await new Promise<void>(resolve => {
-          const timer = setTimeout(resolve, delay);
-          const check = setInterval(() => {
-            if (cancelRef.current) {
-              clearTimeout(timer);
-              clearInterval(check);
-              resolve();
-            }
-          }, 1000);
-        });
-      }
-    }
-
-    const finalStatus = cancelRef.current ? 'cancelado' : 'concluido';
-    await supabase.from('voice_campaigns').update({
-      status: finalStatus,
-      finished_at: new Date().toISOString(),
-      total_sent: sent,
-      total_errors: errors,
-    } as any).eq('id', campaign.id);
-
-    setSendingCampaignId(null);
-    queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
-    queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaign.id] });
-    toast.success(cancelRef.current ? 'Campanha cancelada' : 'Campanha finalizada!');
+    startCampaignContext({
+      campaignId: campaign.id,
+      instances: activeInstances,
+      audioList,
+      pendingContacts: pendingContacts.map(c => ({ id: c.id, telefone: c.telefone, nome: c.nome })),
+      initialSent: campaign.total_sent,
+      initialErrors: campaign.total_errors,
+      delayMin,
+      delayMax,
+    });
   };
-
-  const cancelCampaign = () => { cancelRef.current = true; };
 
   const exportReport = (contacts: CampaignContact[]) => {
     exportarParaExcel(contacts, [
