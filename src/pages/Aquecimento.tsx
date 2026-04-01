@@ -142,9 +142,14 @@ export default function Aquecimento() {
   }
 
   async function pausarAquecimento(id: string) {
-    await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'PAUSADO' } as any).eq('id', id);
+    const { error } = await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'PAUSADO' } as any).eq('id', id);
+    if (error) {
+      console.error('Erro ao pausar:', error);
+      toast({ title: 'Erro ao pausar', description: error.message, variant: 'destructive' });
+      return;
+    }
     toast({ title: 'Aquecimento pausado' });
-    loadAll();
+    await loadAll();
   }
 
 
