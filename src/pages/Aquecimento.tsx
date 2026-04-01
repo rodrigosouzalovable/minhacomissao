@@ -84,13 +84,21 @@ export default function Aquecimento() {
   }
 
   async function loadInteracoes() {
+    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome');
+    const instanceNameMap = new Map((instances || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
+
     const { data } = await supabase
       .from('whatsapp_aquecimento_interacoes' as any)
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(200);
     if (data) {
-      setInteracoes(data as any[]);
+      const mapped = (data as any[]).map((d: any) => ({
+        ...d,
+        origem_nome: instanceNameMap.get(d.instancia_origem_id) || 'Desconhecido',
+        destino_nome: instanceNameMap.get(d.instancia_destino_id) || 'Desconhecido',
+      }));
+      setInteracoes(mapped);
     }
   }
 
