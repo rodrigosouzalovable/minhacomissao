@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -9,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { telefone, audio_url, uazapi_server_url, uazapi_instance_token } = await req.json();
+    const { telefone, audio_url, uazapi_server_url, uazapi_instance_token, instancia_id } = await req.json();
 
     if (!telefone) throw new Error('Telefone não informado');
     if (!audio_url) throw new Error('URL do áudio não informada');
@@ -46,6 +48,67 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
+    }
+
+    // --- INBOX: Save outgoing audio message ---
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      let resolvedInstanciaId = instancia_id;
+
+      // If no instancia_id provided, look it up
+      if (!resolvedInstanciaId && serverUrl && instanceToken) {
+        const { data: inst } = await supabase
+          .from('user_whatsapp_instances')
+          .select('id')
+          .eq('server_url', serverUrl)
+          .eq('instance_token', instanceToken)
+          .limit(1)
+          .maybeSingle();
+        if (inst) resolvedInstanciaId = inst.id;
+      }
+
+      if (resolvedInstanciaId) {
+        const agora = new Date().toISOString();
+
+        await supabase.from('whatsapp_mensagens').insert({
+          instancia_id: resolvedInstanciaId,
+          telefone_remoto: telefoneCompleto,
+          conteudo: '🎵 Áudio enviado',
+          direcao: 'saida',
+          timestamp_msg: agora,
+          lida: true,
+        });
+
+        // Upsert contact
+        const { data: existingContact } = await supabase
+          .from('whatsapp_contatos')
+          .select('id')
+          .eq('instancia_id', resolvedInstanciaId)
+          .eq('telefone', telefoneCompleto)
+          .maybeSingle();
+
+        if (existingContact) {
+          await supabase.from('whatsapp_contatos').update({
+            ultima_mensagem: '🎵 Áudio enviado',
+            ultima_mensagem_em: agora,
+          }).eq('id', existingContact.id);
+        } else {
+          await supabase.from('whatsapp_contatos').insert({
+            instancia_id: resolvedInstanciaId,
+            telefone: telefoneCompleto,
+            ultima_mensagem: '🎵 Áudio enviado',
+            ultima_mensagem_em: agora,
+            nao_lido: 0,
+          });
+        }
+
+        console.log(`[INBOX] Áudio de saída salvo para ${telefoneCompleto}`);
+      }
+    } catch (inboxErr) {
+      console.error('[INBOX] Erro ao salvar áudio no inbox:', inboxErr);
     }
 
     return new Response(JSON.stringify({ success: true, data }), {

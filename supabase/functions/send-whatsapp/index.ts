@@ -32,6 +32,21 @@ async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone:
   throw new Error(lastError?.message || lastError?.error || 'Nenhum endpoint UAZAPI funcionou');
 }
 
+async function resolveInstanciaId(supabase: any, instanciaId: string | null, serverUrl: string | null, instanceToken: string | null): Promise<string | null> {
+  if (instanciaId) return instanciaId;
+  if (!serverUrl || !instanceToken) return null;
+  
+  const { data: inst } = await supabase
+    .from('user_whatsapp_instances')
+    .select('id')
+    .eq('server_url', serverUrl)
+    .eq('instance_token', instanceToken)
+    .limit(1)
+    .maybeSingle();
+  
+  return inst?.id || null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -63,15 +78,17 @@ serve(async (req) => {
     const data = await sendViaUazapi(serverUrl, instanceToken, telefoneCompleto, mensagem);
 
     // --- INBOX: Salvar mensagem enviada no histórico ---
-    if (instancia_id) {
-      try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
-        const agora = new Date().toISOString();
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const agora = new Date().toISOString();
 
+      const resolvedId = await resolveInstanciaId(supabase, instancia_id, serverUrl, instanceToken);
+
+      if (resolvedId) {
         await supabase.from('whatsapp_mensagens').insert({
-          instancia_id,
+          instancia_id: resolvedId,
           telefone_remoto: telefoneCompleto,
           conteudo: mensagem,
           direcao: 'saida',
@@ -83,7 +100,7 @@ serve(async (req) => {
         const { data: existingContact } = await supabase
           .from('whatsapp_contatos')
           .select('id')
-          .eq('instancia_id', instancia_id)
+          .eq('instancia_id', resolvedId)
           .eq('telefone', telefoneCompleto)
           .maybeSingle();
 
@@ -94,7 +111,7 @@ serve(async (req) => {
           }).eq('id', existingContact.id);
         } else {
           await supabase.from('whatsapp_contatos').insert({
-            instancia_id,
+            instancia_id: resolvedId,
             telefone: telefoneCompleto,
             ultima_mensagem: mensagem.slice(0, 200),
             ultima_mensagem_em: agora,
@@ -103,9 +120,9 @@ serve(async (req) => {
         }
 
         console.log(`[INBOX] Mensagem de saída salva para ${telefoneCompleto}`);
-      } catch (inboxErr) {
-        console.error('[INBOX] Erro ao salvar msg de saída:', inboxErr);
       }
+    } catch (inboxErr) {
+      console.error('[INBOX] Erro ao salvar msg de saída:', inboxErr);
     }
 
     return new Response(JSON.stringify({ success: true, data }), {
