@@ -229,6 +229,30 @@ export default function Aquecimento() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={(() => {
+                            const eligible = allInstances.filter(i => {
+                              if (!i.ativo) return false;
+                              const aq = instancias.find(a => a.instancia_id === i.id);
+                              return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
+                            });
+                            return eligible.length > 0 && eligible.every(i => selectedInstances.has(i.id));
+                          })()}
+                          onCheckedChange={(checked) => {
+                            const eligible = allInstances.filter(i => {
+                              if (!i.ativo) return false;
+                              const aq = instancias.find(a => a.instancia_id === i.id);
+                              return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
+                            });
+                            if (checked) {
+                              setSelectedInstances(new Set(eligible.map(i => i.id)));
+                            } else {
+                              setSelectedInstances(new Set());
+                            }
+                          }}
+                        />
+                      </TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Fase</TableHead>
                       <TableHead>Dias na Fase</TableHead>
