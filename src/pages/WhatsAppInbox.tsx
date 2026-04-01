@@ -29,6 +29,7 @@ interface Contato {
   ultima_mensagem: string | null;
   ultima_mensagem_em: string | null;
   nao_lido: number;
+  instancia_nome?: string | null;
 }
 
 interface Mensagem {
