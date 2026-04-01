@@ -1475,6 +1475,47 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_contatos: {
+        Row: {
+          criado_em: string
+          id: string
+          instancia_id: string
+          nao_lido: number
+          nome: string | null
+          telefone: string
+          ultima_mensagem: string | null
+          ultima_mensagem_em: string | null
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          instancia_id: string
+          nao_lido?: number
+          nome?: string | null
+          telefone: string
+          ultima_mensagem?: string | null
+          ultima_mensagem_em?: string | null
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          instancia_id?: string
+          nao_lido?: number
+          nome?: string | null
+          telefone?: string
+          ultima_mensagem?: string | null
+          ultima_mensagem_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_contatos_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_fila: {
         Row: {
           agendado_para: string
@@ -1562,6 +1603,50 @@ export type Database = {
             columns: ["pagamento_id"]
             isOneToOne: false
             referencedRelation: "pagamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_mensagens: {
+        Row: {
+          conteudo: string
+          criado_em: string
+          direcao: string
+          id: string
+          instancia_id: string
+          lida: boolean
+          nome_contato: string | null
+          telefone_remoto: string
+          timestamp_msg: string
+        }
+        Insert: {
+          conteudo?: string
+          criado_em?: string
+          direcao?: string
+          id?: string
+          instancia_id: string
+          lida?: boolean
+          nome_contato?: string | null
+          telefone_remoto: string
+          timestamp_msg?: string
+        }
+        Update: {
+          conteudo?: string
+          criado_em?: string
+          direcao?: string
+          id?: string
+          instancia_id?: string
+          lida?: boolean
+          nome_contato?: string | null
+          telefone_remoto?: string
+          timestamp_msg?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_mensagens_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
             referencedColumns: ["id"]
           },
         ]
