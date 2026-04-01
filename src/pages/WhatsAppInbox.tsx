@@ -264,17 +264,17 @@ export default function WhatsAppInbox() {
                   <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                     <Phone className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="flex-1 min-w-0 overflow-hidden">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm text-foreground truncate min-w-0">
+                      <span className="font-medium text-sm text-foreground truncate block min-w-0 flex-1">
                         {contato.nome || formatTelefone(contato.telefone)}
                       </span>
-                      <span className="text-xs text-muted-foreground shrink-0">
+                      <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
                         {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="text-xs text-muted-foreground truncate min-w-0">
+                      <p className="text-xs text-muted-foreground truncate block min-w-0 flex-1">
                         {contato.ultima_mensagem || 'Sem mensagens'}
                       </p>
                       {contato.nao_lido > 0 && (
