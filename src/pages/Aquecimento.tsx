@@ -69,7 +69,7 @@ export default function Aquecimento() {
 
   async function loadAll() {
     setLoading(true);
-    await Promise.all([loadInstancias(), loadInteracoes(), loadConfigs(), loadMetrics()]);
+    await Promise.all([loadInstancias(), loadInteracoes(), loadMetrics()]);
     setLoading(false);
   }
 
