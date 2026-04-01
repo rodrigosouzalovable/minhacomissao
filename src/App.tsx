@@ -119,6 +119,7 @@ const App = () => (
           <AutoSendProvider>
           <WhatsAppSendingProvider>
           <VoiceCampaignSendingProvider>
+          <Routes>
             <Route path="/" element={<PortalHome />} />
             <Route path="/inbox" element={<AdminRoute><WhatsAppInbox /></AdminRoute>} />
             <Route path="/:creditor" element={<PortalConsulta />} />
