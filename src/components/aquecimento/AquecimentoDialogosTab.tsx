@@ -58,6 +58,7 @@ export default function AquecimentoDialogosTab() {
     setEditingId(d.id);
     setForm({ tipo: d.tipo, conteudo: d.conteudo, conteudo_resposta_esperada: d.conteudo_resposta_esperada || '', fase_minima: d.fase_minima, ativo: d.ativo });
     setAudioFiles([]);
+    setImageFiles([]);
     setDialogOpen(true);
   }
 
