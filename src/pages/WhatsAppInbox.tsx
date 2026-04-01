@@ -257,10 +257,9 @@ export default function WhatsAppInbox() {
                   key={contato.id}
                   onClick={() => handleSelectContato(contato)}
                   className={cn(
-                    "w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50",
+                    "w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden",
                     contatoAtivo?.id === contato.id && "bg-accent"
                   )}
-                  style={{ maxWidth: '100%' }}
                 >
                   <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                     <Phone className="h-4 w-4 text-primary" />
