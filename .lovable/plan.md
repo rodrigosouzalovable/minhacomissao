@@ -1,30 +1,25 @@
 
 
-## Priorizar conversas não lidas no topo
+## Exibir nome da instância em todas as conversas
+
+### Problema
+O nome da instância (ex: "62981033444 MEMU 99") só aparece quando há mais de uma instância (`instancias.length > 1`). O usuário quer que apareça sempre.
 
 ### Alteração
 
-**Arquivo**: `src/pages/WhatsAppInbox.tsx`
+**Arquivo**: `src/pages/WhatsAppInbox.tsx` (linha ~292)
 
-Na lista de contatos filtrados, antes de renderizar, ordenar para que conversas com `nao_lido > 0` apareçam primeiro, mantendo a ordenação por `ultima_mensagem_em` dentro de cada grupo (não lidas e lidas).
+Remover a condição `instancias.length > 1` para que o nome da instância seja exibido em todos os cards de conversa, independente da quantidade de instâncias conectadas.
 
-Alterar a lógica de `contatosFiltrados` para aplicar um sort após o filter:
-
-```typescript
-const contatosFiltrados = contatos
-  .filter(c => {
-    if (!busca) return true;
-    const term = busca.toLowerCase();
-    return (c.nome?.toLowerCase().includes(term) || c.telefone.includes(term));
-  })
-  .sort((a, b) => {
-    // Unread first
-    if (a.nao_lido > 0 && b.nao_lido === 0) return -1;
-    if (a.nao_lido === 0 && b.nao_lido > 0) return 1;
-    // Then by most recent message
-    return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
-  });
+De:
+```tsx
+{instancias.length > 1 && getInstanciaNome(contato.instancia_id) && (
 ```
 
-Uma única alteração em um único arquivo.
+Para:
+```tsx
+{getInstanciaNome(contato.instancia_id) && (
+```
+
+Mesma alteração no header do chat (linha ~333) se existir condição similar.
 
