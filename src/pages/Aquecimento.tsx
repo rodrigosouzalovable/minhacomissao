@@ -208,7 +208,24 @@ export default function Aquecimento() {
               <CardHeader>
                 <CardTitle>Instâncias WhatsApp</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {selectedInstances.size > 0 && (
+                  <div className="flex items-center gap-3">
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        for (const id of selectedInstances) {
+                          await iniciarAquecimento(id);
+                        }
+                        setSelectedInstances(new Set());
+                      }}
+                      className="gap-1"
+                    >
+                      <Play className="h-3 w-3" /> Iniciar Aquecimento ({selectedInstances.size} selecionados)
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedInstances(new Set())}>Limpar seleção</Button>
+                  </div>
+                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
