@@ -308,9 +308,9 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                         </Badge>
                       )}
                     </div>
-{getInstanciaNome(contato.instancia_id) && (
+{getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
                       <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
-                        {getInstanciaNome(contato.instancia_id)}
+                        {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
                       </span>
                     )}
                   </div>
