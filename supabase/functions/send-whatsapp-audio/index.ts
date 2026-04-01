@@ -98,7 +98,6 @@ Deno.serve(async (req) => {
       : `55${telefoneFormatado}`;
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
-    const audioFile = await downloadAudioFile(audio_url);
 
     // Try JSON-based endpoints first (send URL directly), then FormData fallback
     const jsonEndpoints = [
