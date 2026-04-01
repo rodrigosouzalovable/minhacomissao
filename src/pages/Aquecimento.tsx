@@ -45,12 +45,8 @@ interface Interacao {
   destino_nome?: string;
 }
 
-interface ConfigItem {
-  id: string;
-  chave: string;
-  valor: any;
-  descricao: string | null;
-}
+
+
 
 export default function Aquecimento() {
   const [instancias, setInstancias] = useState<AquecimentoInstancia[]>([]);
