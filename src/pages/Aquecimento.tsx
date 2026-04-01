@@ -13,6 +13,7 @@ import { toast } from '@/hooks/use-toast';
 import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List, MessageCircle } from 'lucide-react';
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
 import AquecimentoDialogosTab from '@/components/aquecimento/AquecimentoDialogosTab';
+import AquecimentoDashboard from '@/components/aquecimento/AquecimentoDashboard';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
