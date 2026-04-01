@@ -192,6 +192,22 @@ const fetchContatos = useCallback(async () => {
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
+
+      // Mensagem otimista - aparece imediatamente na UI
+      const msgOtimista: Mensagem = {
+        id: `temp-${Date.now()}`,
+        instancia_id: contatoAtivo.instancia_id,
+        telefone_remoto: contatoAtivo.telefone,
+        nome_contato: null,
+        conteudo: texto,
+        direcao: 'saida',
+        timestamp_msg: new Date().toISOString(),
+        lida: true,
+      };
+      setMensagens(prev => [...prev, msgOtimista]);
+
+      // Re-fetch para sincronizar com DB
+      setTimeout(() => fetchMensagens(), 1500);
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
     } finally {
