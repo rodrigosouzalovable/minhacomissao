@@ -682,6 +682,15 @@ serve(async (req) => {
       }
     }
 
+    // --- INBOX-ONLY MODE: Não responder automaticamente ---
+    // Mensagens de clientes (não-admin, não-fromMe) são apenas salvas no Inbox
+    if (!isFromMe && !isAdminNumber(telefone)) {
+      console.log(`[INBOX-ONLY] Mensagem de ${telefone} salva no Inbox. Chatbot desativado - sem resposta automática.`);
+      return new Response(JSON.stringify({ success: true, inbox_only: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // --- Track fromMe messages (outbound proposals) ---
     if (isFromMe) {
       const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
