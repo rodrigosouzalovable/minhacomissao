@@ -3,15 +3,16 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, Search, MessageSquare, Phone, ArrowDown } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ChatMessage } from '@/components/inbox/ChatMessage';
+import { ChatInputBar } from '@/components/inbox/ChatInputBar';
 
 interface Instancia {
   id: string;
@@ -39,6 +40,8 @@ interface Mensagem {
   direcao: string;
   timestamp_msg: string;
   lida: boolean;
+  tipo_conteudo?: string;
+  media_url?: string | null;
 }
 
 export default function WhatsAppInbox() {
@@ -50,13 +53,12 @@ export default function WhatsAppInbox() {
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [contatoAtivo, setContatoAtivo] = useState<Contato | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
-  const [textoMensagem, setTextoMensagem] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [carregandoMensagens, setCarregandoMensagens] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load instances (only for current user)
+  // Load instances
   useEffect(() => {
     if (!user) return;
     const fetchInstancias = async () => {
@@ -76,18 +78,14 @@ export default function WhatsAppInbox() {
       .from('whatsapp_contatos')
       .select('*')
       .order('ultima_mensagem_em', { ascending: false });
-
     if (filtroInstancia !== 'todas') {
       query = query.eq('instancia_id', filtroInstancia);
     }
-
     const { data } = await query;
     if (data) setContatos(data as Contato[]);
   }, [filtroInstancia]);
 
-  useEffect(() => {
-    fetchContatos();
-  }, [fetchContatos]);
+  useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
   // Realtime for contacts
   useEffect(() => {
@@ -100,7 +98,7 @@ export default function WhatsAppInbox() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchContatos]);
 
-  // Load messages for active contact
+  // Load messages
   const fetchMensagens = useCallback(async () => {
     if (!contatoAtivo) return;
     setCarregandoMensagens(true);
@@ -115,20 +113,14 @@ export default function WhatsAppInbox() {
     setCarregandoMensagens(false);
   }, [contatoAtivo]);
 
-  useEffect(() => {
-    fetchMensagens();
-  }, [fetchMensagens]);
+  useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
 
   // Realtime for messages
   useEffect(() => {
     if (!contatoAtivo) return;
     const channel = supabase
       .channel('whatsapp-mensagens-changes')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'whatsapp_mensagens',
-      }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
         const newMsg = payload.new as Mensagem;
         if (newMsg.instancia_id === contatoAtivo.instancia_id &&
             newMsg.telefone_remoto === contatoAtivo.telefone) {
@@ -139,22 +131,17 @@ export default function WhatsAppInbox() {
     return () => { supabase.removeChannel(channel); };
   }, [contatoAtivo]);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens]);
 
-  // Mark as read when opening a contact
+  // Mark as read
   useEffect(() => {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
     const markRead = async () => {
-      await supabase
-        .from('whatsapp_contatos')
-        .update({ nao_lido: 0 })
-        .eq('id', contatoAtivo.id);
-      await supabase
-        .from('whatsapp_mensagens')
-        .update({ lida: true })
+      await supabase.from('whatsapp_contatos').update({ nao_lido: 0 }).eq('id', contatoAtivo.id);
+      await supabase.from('whatsapp_mensagens').update({ lida: true })
         .eq('instancia_id', contatoAtivo.instancia_id)
         .eq('telefone_remoto', contatoAtivo.telefone)
         .eq('lida', false);
@@ -167,31 +154,26 @@ export default function WhatsAppInbox() {
     setMensagens([]);
   };
 
-  const handleEnviar = async () => {
-    if (!textoMensagem.trim() || !contatoAtivo || enviando) return;
-
+  const handleEnviarTexto = async (texto: string) => {
+    if (!contatoAtivo || enviando) return;
     const instancia = instancias.find(i => i.id === contatoAtivo.instancia_id);
     if (!instancia) {
       toast({ title: 'Erro', description: 'Instância não encontrada', variant: 'destructive' });
       return;
     }
-
     setEnviando(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
           telefone: contatoAtivo.telefone,
-          mensagem: textoMensagem.trim(),
+          mensagem: texto,
           uazapi_server_url: instancia.server_url,
           uazapi_instance_token: instancia.instance_token,
           instancia_id: instancia.id,
         },
       });
-
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
-
-      setTextoMensagem('');
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
     } finally {
@@ -228,6 +210,10 @@ export default function WhatsAppInbox() {
     } catch { return ''; }
   };
 
+  const activeInstancia = contatoAtivo
+    ? instancias.find(i => i.id === contatoAtivo.instancia_id)
+    : null;
+
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-5rem)] lg:h-[calc(100vh-2rem)] rounded-lg overflow-hidden border border-border bg-card">
@@ -236,7 +222,6 @@ export default function WhatsAppInbox() {
           "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",
           contatoAtivo ? "hidden md:flex" : "flex"
         )}>
-          {/* Header */}
           <div className="p-3 border-b border-border space-y-2">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
@@ -244,31 +229,21 @@ export default function WhatsAppInbox() {
             </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar contato..."
-                value={busca}
-                onChange={e => setBusca(e.target.value)}
-                className="pl-9 h-9 text-sm"
-              />
+              <Input placeholder="Buscar contato..." value={busca} onChange={e => setBusca(e.target.value)} className="pl-9 h-9 text-sm" />
             </div>
             {instancias.length > 1 && (
               <Select value={filtroInstancia} onValueChange={setFiltroInstancia}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Todas as instâncias" />
-                </SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas as instâncias" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todas">Todas as instâncias</SelectItem>
                   {instancias.map(inst => (
-                    <SelectItem key={inst.id} value={inst.id}>
-                      {inst.nome || 'Instância'}
-                    </SelectItem>
+                    <SelectItem key={inst.id} value={inst.id}>{inst.nome || 'Instância'}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             )}
           </div>
 
-          {/* Contact List */}
           <ScrollArea className="flex-1">
             {contatosFiltrados.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground text-sm">
@@ -321,10 +296,7 @@ export default function WhatsAppInbox() {
         </div>
 
         {/* Right Panel - Chat */}
-        <div className={cn(
-          "flex-1 flex flex-col",
-          !contatoAtivo ? "hidden md:flex" : "flex"
-        )}>
+        <div className={cn("flex-1 flex flex-col", !contatoAtivo ? "hidden md:flex" : "flex")}>
           {!contatoAtivo ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
@@ -337,10 +309,7 @@ export default function WhatsAppInbox() {
             <>
               {/* Chat Header */}
               <div className="p-3 border-b border-border flex items-center gap-3 bg-card">
-                <button
-                  className="md:hidden text-muted-foreground"
-                  onClick={() => setContatoAtivo(null)}
-                >
+                <button className="md:hidden text-muted-foreground" onClick={() => setContatoAtivo(null)}>
                   <ArrowDown className="h-5 w-5 rotate-90" />
                 </button>
                 <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
@@ -369,58 +338,24 @@ export default function WhatsAppInbox() {
                   <div className="text-center text-muted-foreground text-sm py-8">Nenhuma mensagem</div>
                 ) : (
                   mensagens.map(msg => (
-                    <div
-                      key={msg.id}
-                      className={cn(
-                        "flex",
-                        msg.direcao === 'saida' ? "justify-end" : "justify-start"
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm",
-                          msg.direcao === 'saida'
-                            ? "bg-primary text-primary-foreground rounded-br-none"
-                            : "bg-card text-card-foreground border border-border rounded-bl-none"
-                        )}
-                      >
-                        <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
-                        <p className={cn(
-                          "text-[10px] mt-1 text-right",
-                          msg.direcao === 'saida' ? "text-primary-foreground/70" : "text-muted-foreground"
-                        )}>
-                          {formatMsgTime(msg.timestamp_msg)}
-                        </p>
-                      </div>
-                    </div>
+                    <ChatMessage key={msg.id} msg={msg} formatMsgTime={formatMsgTime} />
                   ))
                 )}
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Input */}
-              <div className="p-3 border-t border-border bg-card flex gap-2">
-                <Input
-                  placeholder="Digite uma mensagem..."
-                  value={textoMensagem}
-                  onChange={e => setTextoMensagem(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleEnviar();
-                    }
-                  }}
-                  disabled={enviando}
-                  className="flex-1"
+              {/* Input */}
+              {activeInstancia && (
+                <ChatInputBar
+                  instanciaId={activeInstancia.id}
+                  telefone={contatoAtivo.telefone}
+                  serverUrl={activeInstancia.server_url}
+                  instanceToken={activeInstancia.instance_token}
+                  onTextSent={handleEnviarTexto}
+                  onMediaSent={fetchMensagens}
+                  enviando={enviando}
                 />
-                <Button
-                  onClick={handleEnviar}
-                  disabled={!textoMensagem.trim() || enviando}
-                  size="icon"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
+              )}
             </>
           )}
         </div>
