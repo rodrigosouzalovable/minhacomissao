@@ -1,62 +1,46 @@
 
 
-## Plan: Enable Automatic WhatsApp Reminders for D-3, D0, D+1, D+2
+## Plan: Otimizar Custos — Cron, Modelos IA e Funções
 
-### Summary
-Enable automatic sending of payment reminders for all users, restricted to D-3, D0, D+1, and D+2 only. Uses instances marked "Apenas Lembretes". Starts today at 09:20 BRT.
+### 1. Reduzir frequência do cron `process-whatsapp-queue`
 
----
-
-### 1. Database Migration
-
-**Enable reminders for all users:**
-```sql
-UPDATE profiles SET whatsapp_lembretes_habilitado = true;
-```
-
-**Set up pg_cron jobs** to run the two-step automation:
-- `check-payment-reminders` at 09:20 BRT (12:20 UTC) daily — queues messages into `whatsapp_fila`
-- `process-whatsapp-queue` every 5 minutes — sends queued messages that are due
+Change from every 5 minutes to every 10 minutes via SQL (drop old job, create new one). This cuts executions from ~8,640/month to ~4,320/month.
 
 ```sql
-SELECT cron.schedule('check-reminders-daily', '20 12 * * *', 
-  $$SELECT net.http_post(
-    url := '<supabase_url>/functions/v1/check-payment-reminders',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer <service_key>"}'::jsonb
-  )$$
-);
-
-SELECT cron.schedule('process-whatsapp-queue', '*/5 * * * *',
-  $$SELECT net.http_post(
-    url := '<supabase_url>/functions/v1/process-whatsapp-queue',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer <service_key>"}'::jsonb
-  )$$
-);
+SELECT cron.unschedule('process-whatsapp-queue-5min');
+SELECT cron.schedule('process-whatsapp-queue-10min', '*/10 * * * *', ...);
 ```
 
-### 2. Update Edge Function: `check-payment-reminders`
+### 2. Trocar modelos de IA mais caros por versões mais baratas
 
-Currently the function queries D-3, D0, and ALL overdue days. Changes needed:
+Current usage and proposed changes:
 
-- **Add D+1 and D+2 queries**: Currently only D0 and D-3 are fetched for "próximas". Add queries for parcels due tomorrow (D+1 before due) and day after (D+2 before due). Wait — the user said D-3, D0, D+1, D+2. In the existing system convention: `3_dias` = 3 days before, `dia_vencimento` = day of. D+1 and D+2 mean 1 and 2 days **after** due date (overdue). These are already covered by the overdue query as `vencido_d1` and `vencido_d2`.
+| Function | Current Model | Proposed | Rationale |
+|---|---|---|---|
+| `extract-acordo-data` | gemini-2.5-flash | gemini-2.5-flash-lite | Simple data extraction |
+| `extract-pdf-acordo` | gemini-2.5-flash | gemini-2.5-flash-lite | Structured extraction via tool call |
+| `extract-texto-acordo` | gemini-3-flash-preview | gemini-2.5-flash-lite | Text extraction from images |
+| `transcribe-audio` | gemini-2.5-flash | gemini-2.5-flash-lite | Audio transcription |
+| `teach-chatbot` | gemini-2.5-flash | gemini-2.5-flash-lite | Knowledge processing |
+| `gerar-termo-acordo` | gemini-3-flash-preview | gemini-2.5-flash | Document generation (needs quality) |
+| `process-cobmais-video` | gemini-2.5-pro | gemini-2.5-flash | Video analysis (downgrade from Pro) |
+| `analyze-cobmais-screen` | gemini-2.5-pro | gemini-2.5-flash | Screen analysis (downgrade from Pro) |
 
-- **Restrict automatic mode to only D-3, D0, D+1, D+2**: When running without `overrideToken`, filter `todasParcelas` to only include `tipo_lembrete` in `['3_dias', 'dia_vencimento', 'vencido_d1', 'vencido_d2']`. This prevents sending for D+10, D+20, D+30 etc. automatically (those remain available via manual sending).
+**Keep unchanged** (already optimal or need quality):
+- `whatsapp-chatbot` — already uses flash-lite for most calls
+- `gerar-estrategia-cobranca` — complex reasoning, keep gemini-3-flash-preview
+- `chat-cobmais-knowledge` — complex knowledge chat, keep gemini-3-flash-preview
+- `process-pos-atendimento` — already uses flash-lite
 
-- The existing template-based filtering (`userConfiguredDaysMap`) will be secondary — the hard filter ensures only these 4 types go out automatically regardless of user template config.
+### 3. No obsolete Edge Functions to remove
 
-### 3. No Frontend Changes
-
-The automatic sending is purely backend-driven. The existing manual hub and admin toggle remain as-is. All users get `whatsapp_lembretes_habilitado = true` via the migration.
+All 29 functions are actively referenced in the frontend code or called by other functions/cron jobs. None are candidates for removal.
 
 ---
 
 ### Technical Details
 
-- The cron uses `pg_net` (already enabled) to call the edge functions via HTTP
-- `check-payment-reminders` queues messages with random 5-15 min delays into `whatsapp_fila`
-- `process-whatsapp-queue` picks up messages where `agendado_para <= now()` and sends them
-- Messages use default templates or user-configured custom templates from `lembrete_mensagens_templates`
-- Instances with `apenas_lembretes = true` are used for credentials (already implemented)
-- Sundays are blocked (already implemented)
-- Dedup via `whatsapp_fila` and `whatsapp_lembretes_log` prevents duplicate sends (already implemented)
+- Cron change requires a database migration using `cron.unschedule` + `cron.schedule`
+- Model changes are simple string replacements in each edge function's `index.ts`
+- Estimated cost reduction: ~50% on cron executions + ~30-60% on AI token costs depending on usage patterns
 
