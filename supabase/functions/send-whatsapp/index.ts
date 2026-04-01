@@ -10,9 +10,9 @@ const corsHeaders = {
 async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone: string, mensagem: string) {
   const cleanUrl = serverUrl.replace(/\/+$/, '');
   const endpoints = [
+    `${cleanUrl}/send/text`,
     `${cleanUrl}/message/sendText`,
     `${cleanUrl}/sendText`,
-    `${cleanUrl}/send/text`,
   ];
 
   let lastError = null;
