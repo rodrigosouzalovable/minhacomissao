@@ -1,40 +1,34 @@
 
 
-## Make System-Sent Messages Appear in WhatsApp Inbox
+## Diagnóstico: Por que a mensagem não apareceu no Inbox
 
-### Problem
-When messages (text or audio) are sent by the system (campaigns, reminders, auto-send, queue processing), they don't appear in the WhatsApp Inbox because:
-1. **`send-whatsapp-audio`** doesn't save anything to `whatsapp_mensagens`/`whatsapp_contatos`
-2. **`send-whatsapp`** only saves to inbox when `instancia_id` is passed — most callers don't pass it
-3. **`process-whatsapp-queue`** sends via UAZAPI directly without saving to inbox
+### O que aconteceu
 
-### Solution
-Save outgoing messages to the inbox tables in the edge functions by looking up the `instancia_id` from `user_whatsapp_instances` using the `server_url` + `instance_token` credentials.
+Investiguei o banco de dados e os logs da função webhook. Encontrei dois problemas:
 
-### Changes
+**Problema 1 - Mensagens enviadas manualmente pelo WhatsApp são ignoradas:**
+Quando você envia uma mensagem diretamente pelo aplicativo WhatsApp (não pelo sistema), o webhook UAZAPI dispara com `fromMe=true`. Atualmente, o código do webhook ignora todas as mensagens `fromMe` (para evitar duplicação com as mensagens enviadas pelo próprio sistema). Isso significa que mensagens enviadas manualmente nunca aparecem no Inbox.
 
-**1. `supabase/functions/send-whatsapp/index.ts`**
-- When `instancia_id` is NOT provided but `uazapi_server_url` + `uazapi_instance_token` ARE provided, look up the matching `instancia_id` from `user_whatsapp_instances` table
-- This makes all callers (reminders, auto-send, acionamento, etc.) automatically save to inbox without changing any frontend code
+**Problema 2 - Webhook do número 62991672674 possivelmente não configurado:**
+A instância `62991672674` tem zero mensagens e zero contatos no banco. Nenhum log do webhook foi encontrado para essa instância. Isso indica que o webhook da UAZAPI para esse número pode não estar apontando para a URL da função `whatsapp-chatbot`.
 
-**2. `supabase/functions/send-whatsapp-audio/index.ts`**
-- Add Supabase client import
-- Accept optional `instancia_id` in the request body
-- If not provided, look up `instancia_id` from `user_whatsapp_instances` using `server_url` + `instance_token`
-- After successful send, insert a record into `whatsapp_mensagens` with `conteudo: '🎵 Áudio enviado'` (or similar descriptive text)
-- Upsert the `whatsapp_contatos` entry (same pattern as `send-whatsapp`)
+### Solução proposta
 
-**3. `supabase/functions/process-whatsapp-queue/index.ts`**
-- After successful send, look up `instancia_id` from credentials and save the message to `whatsapp_mensagens` + upsert `whatsapp_contatos`
+**`supabase/functions/whatsapp-chatbot/index.ts`:**
+- Em vez de ignorar completamente mensagens `fromMe`, salvar no inbox verificando antes se já existe uma mensagem similar recente (últimos 30 segundos, mesmo instancia_id + telefone_remoto + conteúdo). Isso evita duplicação com mensagens do `send-whatsapp` mas captura mensagens enviadas manualmente pelo app
+- Também atualizar o contato (upsert) para mensagens `fromMe`
 
-**4. `src/contexts/VoiceCampaignSendingContext.tsx`**
-- Pass `instancia_id: instance.id` in the body when invoking `send-whatsapp-audio` (the instance object already has `.id`)
+### Sobre o webhook do 62991672674
+Isso precisa ser verificado no painel da UAZAPI: o webhook desse número deve apontar para a URL da função `whatsapp-chatbot`. Sem isso, mensagens recebidas nesse número nunca chegarão ao sistema. Posso verificar a configuração via API se necessário.
 
-**5. `src/contexts/WhatsAppSendingContext.tsx`**
-- Pass `instancia_id: instance.id` when invoking `send-whatsapp` (the instance object already has the id)
+### Detalhes técnicos
 
-**6. `src/hooks/useAutoSend.tsx`**
-- Pass `instancia_id` from the uazapi config if available
+No trecho que atualmente faz (linhas ~642-644):
+```text
+if (isFromMe) {
+  console.log('[INBOX] Ignorando fromMe...');
+} else { ... salva mensagem ... }
+```
 
-This approach ensures every outgoing message from any flow appears in the inbox automatically.
+Mudar para: verificar se já existe mensagem recente com mesmo `instancia_id`, `telefone_remoto`, `conteudo` nos últimos 30s. Se não existir, salvar como `direcao: 'saida'`. Se já existir, pular (evita duplicação).
 
