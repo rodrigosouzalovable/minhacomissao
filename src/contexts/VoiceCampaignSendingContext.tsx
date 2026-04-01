@@ -85,6 +85,7 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
               audio_url: audio.audio_url,
               uazapi_server_url: instance.server_url,
               uazapi_instance_token: instance.instance_token,
+              instancia_id: instance.id,
             },
           });
 

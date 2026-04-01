@@ -93,6 +93,56 @@ serve(async (req) => {
       await supabase.from('whatsapp_fila').update({ status: 'enviado', enviado_em: new Date().toISOString() }).eq('id', mensagem.id);
       await supabase.from('whatsapp_lembretes_log').insert({ pagamento_id: mensagem.pagamento_id, tipo_lembrete: mensagem.tipo_lembrete, sucesso: true });
 
+      // --- INBOX: Save to inbox ---
+      try {
+        let instanciaId: string | null = null;
+        const { data: inst } = await supabase
+          .from('user_whatsapp_instances')
+          .select('id')
+          .eq('server_url', serverUrl)
+          .eq('instance_token', instanceToken)
+          .limit(1)
+          .maybeSingle();
+        if (inst) instanciaId = inst.id;
+
+        if (instanciaId) {
+          const agoraStr = new Date().toISOString();
+          await supabase.from('whatsapp_mensagens').insert({
+            instancia_id: instanciaId,
+            telefone_remoto: mensagem.telefone,
+            conteudo: mensagem.mensagem,
+            direcao: 'saida',
+            timestamp_msg: agoraStr,
+            lida: true,
+          });
+
+          const { data: existingContact } = await supabase
+            .from('whatsapp_contatos')
+            .select('id')
+            .eq('instancia_id', instanciaId)
+            .eq('telefone', mensagem.telefone)
+            .maybeSingle();
+
+          if (existingContact) {
+            await supabase.from('whatsapp_contatos').update({
+              ultima_mensagem: mensagem.mensagem.slice(0, 200),
+              ultima_mensagem_em: agoraStr,
+            }).eq('id', existingContact.id);
+          } else {
+            await supabase.from('whatsapp_contatos').insert({
+              instancia_id: instanciaId,
+              telefone: mensagem.telefone,
+              ultima_mensagem: mensagem.mensagem.slice(0, 200),
+              ultima_mensagem_em: agoraStr,
+              nao_lido: 0,
+            });
+          }
+          console.log(`[INBOX] Mensagem da fila salva para ${mensagem.telefone}`);
+        }
+      } catch (inboxErr) {
+        console.error('[INBOX] Erro ao salvar msg da fila no inbox:', inboxErr);
+      }
+
       console.log(`Mensagem ${mensagem.id} enviada com sucesso!`);
       return new Response(JSON.stringify({ success: true, enviado: true, mensagem_id: mensagem.id }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
