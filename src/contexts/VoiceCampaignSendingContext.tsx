@@ -1,0 +1,164 @@
+import { createContext, useContext, useState, useRef, useCallback, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+interface VoiceCampaignInstance {
+  id: string;
+  server_url: string;
+  instance_token: string;
+  nome?: string | null;
+}
+
+interface VoiceCampaignAudio {
+  audio_url: string;
+  file_name: string;
+}
+
+interface VoiceCampaignContact {
+  id: string;
+  telefone: string;
+  nome: string | null;
+}
+
+interface StartCampaignParams {
+  campaignId: string;
+  instances: VoiceCampaignInstance[];
+  audioList: VoiceCampaignAudio[];
+  pendingContacts: VoiceCampaignContact[];
+  initialSent: number;
+  initialErrors: number;
+  delayMin: number;
+  delayMax: number;
+}
+
+interface VoiceCampaignSendingContextType {
+  sendingCampaignId: string | null;
+  startCampaign: (params: StartCampaignParams) => void;
+  cancelCampaign: () => void;
+}
+
+const VoiceCampaignSendingContext = createContext<VoiceCampaignSendingContextType | null>(null);
+
+export function VoiceCampaignSendingProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
+  const cancelRef = useRef(false);
+  const sendingRef = useRef(false);
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const delayResolveRef = useRef<(() => void) | null>(null);
+
+  const startCampaign = useCallback((params: StartCampaignParams) => {
+    if (sendingRef.current) {
+      toast.error('Já existe uma campanha em andamento');
+      return;
+    }
+
+    const { campaignId, instances, audioList, pendingContacts, initialSent, initialErrors, delayMin, delayMax } = params;
+
+    sendingRef.current = true;
+    cancelRef.current = false;
+    setSendingCampaignId(campaignId);
+
+    (async () => {
+      await supabase
+        .from('voice_campaigns')
+        .update({ status: 'enviando', started_at: new Date().toISOString() } as any)
+        .eq('id', campaignId);
+      queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
+
+      toast.success(`Iniciando envio para ${pendingContacts.length} contatos com ${audioList.length} áudio(s) e ${instances.length} WhatsApp(s)...`);
+
+      let sent = initialSent;
+      let errors = initialErrors;
+
+      for (let i = 0; i < pendingContacts.length; i++) {
+        if (cancelRef.current) break;
+        const contact = pendingContacts[i];
+        const instance = instances[i % instances.length];
+        const audio = audioList[i % audioList.length];
+
+        try {
+          const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
+            body: {
+              telefone: contact.telefone,
+              audio_url: audio.audio_url,
+              uazapi_server_url: instance.server_url,
+              uazapi_instance_token: instance.instance_token,
+            },
+          });
+
+          if (fnError || !data?.success) {
+            const errMsg = fnError?.message || data?.error || 'Erro';
+            await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
+            errors++;
+          } else {
+            await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
+            sent++;
+          }
+        } catch (err: any) {
+          await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: err.message } as any).eq('id', contact.id);
+          errors++;
+        }
+
+        await supabase.from('voice_campaigns').update({ total_sent: sent, total_errors: errors } as any).eq('id', campaignId);
+        queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaignId] });
+
+        // Random delay between sends
+        if (i < pendingContacts.length - 1 && !cancelRef.current) {
+          const min = Math.max(0.1, delayMin);
+          const max = Math.max(min, delayMax);
+          const delay = (min + Math.random() * (max - min)) * 60 * 1000;
+          const mins = Math.round(delay / 60000);
+          toast.info(`Próximo envio em ~${mins} minuto(s)...`);
+          await new Promise<void>(resolve => {
+            delayResolveRef.current = resolve;
+            delayTimerRef.current = setTimeout(() => {
+              delayResolveRef.current = null;
+              delayTimerRef.current = null;
+              resolve();
+            }, delay);
+          });
+        }
+      }
+
+      const finalStatus = cancelRef.current ? 'cancelado' : 'concluido';
+      await supabase.from('voice_campaigns').update({
+        status: finalStatus,
+        finished_at: new Date().toISOString(),
+        total_sent: sent,
+        total_errors: errors,
+      } as any).eq('id', campaignId);
+
+      setSendingCampaignId(null);
+      sendingRef.current = false;
+      queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaignId] });
+      toast.success(cancelRef.current ? 'Campanha cancelada' : 'Campanha finalizada!');
+    })();
+  }, [queryClient]);
+
+  const cancelCampaign = useCallback(() => {
+    cancelRef.current = true;
+    if (delayResolveRef.current) {
+      if (delayTimerRef.current) {
+        clearTimeout(delayTimerRef.current);
+        delayTimerRef.current = null;
+      }
+      delayResolveRef.current();
+      delayResolveRef.current = null;
+    }
+  }, []);
+
+  return (
+    <VoiceCampaignSendingContext.Provider value={{ sendingCampaignId, startCampaign, cancelCampaign }}>
+      {children}
+    </VoiceCampaignSendingContext.Provider>
+  );
+}
+
+export function useVoiceCampaignSending() {
+  const ctx = useContext(VoiceCampaignSendingContext);
+  if (!ctx) throw new Error('useVoiceCampaignSending must be used within VoiceCampaignSendingProvider');
+  return ctx;
+}

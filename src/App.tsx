@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
+import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
 
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -117,6 +118,7 @@ const App = () => (
         <AuthProvider>
           <AutoSendProvider>
           <WhatsAppSendingProvider>
+          <VoiceCampaignSendingProvider>
           <Routes>
             <Route path="/" element={<PortalHome />} />
             <Route path="/inbox" element={<AdminRoute><WhatsAppInbox /></AdminRoute>} />
@@ -150,6 +152,7 @@ const App = () => (
             <Route path="/campanhas-voz" element={<ProtectedRoute><CampanhasVoz /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </VoiceCampaignSendingProvider>
           </WhatsAppSendingProvider>
           </AutoSendProvider>
         </AuthProvider>
