@@ -92,6 +92,35 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function PermissionRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { isAdmin, isGestor, loading: roleLoading } = useUserRole();
+  const { abasPermitidas, isLoading: permLoading } = useUserPermissions();
+  const location = useLocation();
+  
+  if (loading || roleLoading || permLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  }
+  
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  if (isAdmin) {
+    return <>{children}</>;
+  }
+  
+  if (abasPermitidas && abasPermitidas.includes(location.pathname)) {
+    return <>{children}</>;
+  }
+
+  if (!abasPermitidas && isGestor) {
+    return <>{children}</>;
+  }
+  
+  return <Navigate to="/dashboard" replace />;
+}
+
 function GestorRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { isGestor, isAdmin, loading: roleLoading } = useUserRole();
