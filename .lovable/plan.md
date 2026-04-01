@@ -1,33 +1,17 @@
 
 
-## Painel de Status do Aquecimento em Tempo Real
+## Reconectar WhatsApp via QR Code no botão Editar
 
-### O que será criado
-Um painel visual e intuitivo na aba **Dashboard** que mostra claramente:
-1. **Status ativo pulsante** — indicador animado verde mostrando "Sistema Ativo" quando há instâncias em aquecimento
-2. **Próxima execução** — horário calculado da próxima execução do cron (a cada 30 min)
-3. **Cards por número ativo** — para cada instância em aquecimento, mostrar: nome, fase, progresso do dia (barra visual X/Y mensagens), última mensagem enviada com horário, e estimativa da próxima
-4. **Timeline visual** — as últimas interações do dia com ícones de tipo (texto/áudio/imagem) e status (enviado/respondido/falhou)
+### O que será feito
+Adicionar um botão "Reconectar" dentro do formulário de edição de instância, visível apenas quando a instância está desconectada. Ao clicar, o sistema reutiliza a instância existente (sem criar uma nova) e exibe o QR Code para reconexão.
 
-### Alterações
+### Alterações em `src/pages/Acionamento.tsx`
 
-**`src/pages/Aquecimento.tsx`**
-1. Carregar dados adicionais no `loadAll`:
-   - Última interação de cada instância ativa (da tabela `whatsapp_aquecimento_interacoes`)
-   - Próximos agendamentos (da tabela `whatsapp_aquecimento_agendamentos` com status AGENDADO)
-   - Config de horário comercial (da tabela `whatsapp_aquecimento_config`)
-2. Adicionar na aba Dashboard, abaixo dos cards de métricas:
-   - **Banner de status**: fundo verde com ícone pulsante quando `emAquecimento > 0`, cinza quando 0. Texto: "Aquecimento ativo — próxima execução às HH:MM" (calculado: próximo slot de 30 min dentro do horário comercial)
-   - **Grid de cards por instância ativa**: cada card mostra:
-     - Nome do número e fase atual
-     - Barra de progresso `interacoes_hoje / limite_diario`
-     - Texto "Última msg: HH:MM — [conteúdo truncado]"
-     - Texto "Próxima msg estimada: ~HH:MM" (baseado no próximo ciclo do cron)
-   - **Mini-timeline**: últimas 5 interações do dia com ícones coloridos
+1. **Novo handler `handleReconnectQr`**: Similar ao `handleRefreshQr`, mas recebe o `instanceId` da instância sendo editada. Chama a action `qr` da edge function `whatsapp-qr` com o ID da instância existente, exibe o QR code inline no formulário de edição, e inicia o polling de status.
 
-### Detalhes técnicos
-- O cron roda a cada 30 min (`:00` e `:30`). A próxima execução é calculada arredondando para o próximo slot de 30 min dentro do horário comercial configurado.
-- Se fora do horário ou dia inativo, mostrar banner amarelo "Fora do horário — próxima execução amanhã às HH:00"
-- Componente `Progress` do shadcn para barra visual de progresso diário
-- Animação CSS `animate-pulse` no indicador verde de "ativo"
+2. **Botão "Reconectar via QR" no formulário de edição**: Quando `editingInstance.id` existe e o `connectionStatus[editingInstance.id]` é `'disconnected'`, mostrar um botão com ícone `QrCode` dentro do formulário de edição (entre os campos e o botão Salvar). Ao clicar, chama `handleReconnectQr`.
+
+3. **QR Code inline no formulário de edição**: Quando o QR é obtido para reconexão, exibir a imagem do QR e o pairing code diretamente dentro do formulário de edição (mesma UI do fluxo de conexão existente — imagem, countdown, polling).
+
+4. **Estado auxiliar**: Adicionar um state `reconnectingInstanceId` para diferenciar o fluxo de reconexão do fluxo de nova conexão. O polling de status reutiliza `startQrPolling` existente, e ao conectar com sucesso fecha o formulário de edição automaticamente.
 
