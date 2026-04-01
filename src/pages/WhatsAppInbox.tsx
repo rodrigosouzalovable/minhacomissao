@@ -346,7 +346,7 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {formatTelefone(contatoAtivo.telefone)}
-                    {getInstanciaNome(contatoAtivo.instancia_id) && ` · ${getInstanciaNome(contatoAtivo.instancia_id)}`}
+                    {getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome) && ` · ${getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome)}`}
                   </p>
                 </div>
               </div>
