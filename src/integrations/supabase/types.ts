@@ -1881,9 +1881,11 @@ export type Database = {
           id: string
           instancia_id: string
           lida: boolean
+          media_url: string | null
           nome_contato: string | null
           telefone_remoto: string
           timestamp_msg: string
+          tipo_conteudo: string
         }
         Insert: {
           conteudo?: string
@@ -1892,9 +1894,11 @@ export type Database = {
           id?: string
           instancia_id: string
           lida?: boolean
+          media_url?: string | null
           nome_contato?: string | null
           telefone_remoto: string
           timestamp_msg?: string
+          tipo_conteudo?: string
         }
         Update: {
           conteudo?: string
@@ -1903,9 +1907,11 @@ export type Database = {
           id?: string
           instancia_id?: string
           lida?: boolean
+          media_url?: string | null
           nome_contato?: string | null
           telefone_remoto?: string
           timestamp_msg?: string
+          tipo_conteudo?: string
         }
         Relationships: [
           {

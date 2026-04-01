@@ -83,3 +83,9 @@ verify_jwt = false
 
 [functions.whatsapp-aquecimento]
 verify_jwt = false
+
+[functions.send-whatsapp-media]
+verify_jwt = false
+
+[functions.cleanup-inbox-media]
+verify_jwt = false
