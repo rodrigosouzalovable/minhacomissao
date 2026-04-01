@@ -638,16 +638,21 @@ serve(async (req) => {
           const direcao = isFromMe ? 'saida' : 'entrada';
           const agora = new Date().toISOString();
 
-          // INSERT message
-          await supabase.from('whatsapp_mensagens').insert({
-            instancia_id: instanciaId,
-            telefone_remoto: inboxTelefone,
-            nome_contato: isFromMe ? null : inboxNomeContato,
-            conteudo: inboxTexto,
-            direcao,
-            timestamp_msg: agora,
-            lida: isFromMe,
-          });
+          // Skip saving fromMe messages — send-whatsapp already saves them
+          if (isFromMe) {
+            console.log(`[INBOX] Ignorando fromMe duplicado: ${inboxTelefone} (instancia: ${instanciaId})`);
+          } else {
+            // INSERT message (only incoming)
+            await supabase.from('whatsapp_mensagens').insert({
+              instancia_id: instanciaId,
+              telefone_remoto: inboxTelefone,
+              nome_contato: inboxNomeContato,
+              conteudo: inboxTexto,
+              direcao,
+              timestamp_msg: agora,
+              lida: false,
+            });
+          }
 
           // UPSERT contact
           const { data: existingContact } = await supabase
