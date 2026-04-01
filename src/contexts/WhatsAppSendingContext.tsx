@@ -205,6 +205,7 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
               mensagem,
               uazapi_server_url: instance.server_url,
               uazapi_instance_token: instance.instance_token,
+              instancia_id: instance.id,
             },
           });
 
