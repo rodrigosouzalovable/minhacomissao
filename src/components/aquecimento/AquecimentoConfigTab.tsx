@@ -141,7 +141,7 @@ export default function AquecimentoConfigTab() {
               ))}
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Aquecido ✅</Label>
-                <p className="text-[10px] text-muted-foreground leading-tight">Limite após concluir todas as fases</p>
+                <p className="text-[10px] text-muted-foreground leading-tight min-h-[24px]">Limite após concluir todas as fases</p>
                 <Input
                   type="number"
                   min={1}
