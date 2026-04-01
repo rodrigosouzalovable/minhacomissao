@@ -56,7 +56,7 @@ export default function Aquecimento() {
   const [instancias, setInstancias] = useState<AquecimentoInstancia[]>([]);
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
-  const [configs, setConfigs] = useState<ConfigItem[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
