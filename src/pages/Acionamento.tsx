@@ -495,6 +495,10 @@ export default function Acionamento() {
       toast.error('Salve pelo menos uma mensagem antes de enviar');
       return;
     }
+    if (activeInstances.length === 0) {
+      toast.error('Nenhuma instância WhatsApp do tipo Robô está conectada. Conecte uma instância antes de enviar.');
+      return;
+    }
 
     const cliente = clientes[index];
     setSendStatus((prev) => ({ ...prev, [index]: 'sending' }));
@@ -572,6 +576,10 @@ export default function Acionamento() {
     }
     if (autoMaxSec <= autoMinSec) {
       toast.error('O tempo máximo deve ser maior que o mínimo');
+      return;
+    }
+    if (activeInstances.length === 0) {
+      toast.error('Nenhuma instância WhatsApp do tipo Robô está conectada. Conecte uma instância antes de enviar.');
       return;
     }
 
