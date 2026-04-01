@@ -1,50 +1,33 @@
 
 
-## Reorganizar aba Configurações + Adicionar gestão de Diálogos
+## Preencher valores padrão + Arrumar AUTO START
 
-### Contexto
-Atualmente a aba Configurações renderiza todos os campos como JSON bruto em inputs de texto — confuso para iniciantes. Além disso, as **mensagens e áudios** que os WhatsApps usam para conversar ficam na tabela `whatsapp_aquecimento_dialogos` mas **não existe interface para gerenciá-los**. Vamos resolver ambos.
+### O que são as fases
+O aquecimento funciona em 4 fases progressivas — números novos começam enviando poucas mensagens por dia e vão aumentando gradualmente para parecerem naturais ao WhatsApp. Cada fase dura alguns dias antes de avançar.
 
-### Alterações no arquivo `src/pages/Aquecimento.tsx`
+### Alterações em `src/components/aquecimento/AquecimentoConfigTab.tsx`
 
-**1. Configurações com campos amigáveis (substituir o loop genérico de JSON)**
+**1. Valores padrão pré-preenchidos** — usar `placeholder` + fallback nos campos vazios:
 
-Em vez de mostrar JSON bruto, renderizar cada configuração com controles visuais específicos:
+| Config | Fase 1 | Fase 2 | Fase 3 | Fase 4 | Aquecido |
+|--------|--------|--------|--------|--------|----------|
+| Limite msgs/dia | 5 | 10 | 20 | 30 | 50 |
+| Dias na fase | 7 | 7 | 7 | 7 | — |
 
-- **Limites por Fase**: 4 campos numéricos lado a lado (Fase 1, Fase 2, Fase 3, Fase 4) + campo "Aquecido"
-- **Dias por Fase**: 4 campos numéricos (Fase 1 a 4)
-- **Horário Comercial**: 2 inputs de hora (Início / Fim) + campo de texto para timezone
-- **Dias Ativos**: 7 checkboxes (Dom, Seg, Ter, Qua, Qui, Sex, Sáb)
-- **Delay Config**: campos numéricos para min/max delay
-- **Demais configs**: manter input JSON como fallback
+| Config | Valor padrão |
+|--------|-------------|
+| Horário | 08:00 – 18:00, America/Sao_Paulo |
+| Dias ativos | Seg-Sáb (1-6) |
+| Delay | min 30s, max 180s |
 
-Cada seção terá um Card próprio com título e descrição explicativa em linguagem simples.
+Adicionar descrições mais claras em cada Card explicando o propósito para iniciantes.
 
-**2. Nova aba "Diálogos" (ou seção dentro de Configurações)**
+**2. AUTO START — campos dedicados em vez de JSON**
 
-Adicionar uma nova tab "Diálogos" (5ª aba) para gerenciar a tabela `whatsapp_aquecimento_dialogos`:
+Adicionar `auto_start` à lista de `knownKeys` e renderizar com:
+- Input de hora: "Horário de início automático"
+- Switch: "Iniciar novas instâncias automaticamente"
+- Descrição: "Se ativado, o sistema inicia o aquecimento de novas instâncias automaticamente no horário definido."
 
-- Tabela listando: Tipo (texto/áudio), Conteúdo, Resposta Esperada, Fase Mínima, Ativo (switch), Ações
-- Botão "Adicionar Diálogo" abre formulário inline ou dialog com:
-  - Select: Tipo (Texto / Áudio)
-  - Textarea: Conteúdo (mensagem de texto ou URL do áudio)
-  - Textarea: Resposta esperada (opcional)
-  - Input numérico: Fase mínima (1-4)
-  - Switch: Ativo
-- Botão de excluir/editar em cada linha
-- CRUD via Supabase na tabela `whatsapp_aquecimento_dialogos`
-
-### Layout das abas atualizado
-
-```text
-Dashboard | Números | Configurações | Diálogos | Log
-```
-
-### Resumo técnico
-
-| O quê | Como |
-|-------|------|
-| Configs amigáveis | Renderizar campos específicos por `chave` em vez de JSON genérico |
-| Aba Diálogos | CRUD na tabela `whatsapp_aquecimento_dialogos` existente |
-| Arquivo editado | `src/pages/Aquecimento.tsx` (único arquivo) |
+**3. Botão "Salvar Tudo"** no final da página para salvar todas as configs de uma vez.
 
