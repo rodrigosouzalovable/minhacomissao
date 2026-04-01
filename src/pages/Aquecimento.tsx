@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List } from 'lucide-react';
@@ -58,6 +59,7 @@ export default function Aquecimento() {
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
+  const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadAll();
@@ -206,10 +208,51 @@ export default function Aquecimento() {
               <CardHeader>
                 <CardTitle>Instâncias WhatsApp</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {selectedInstances.size > 0 && (
+                  <div className="flex items-center gap-3">
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        for (const id of selectedInstances) {
+                          await iniciarAquecimento(id);
+                        }
+                        setSelectedInstances(new Set());
+                      }}
+                      className="gap-1"
+                    >
+                      <Play className="h-3 w-3" /> Iniciar Aquecimento ({selectedInstances.size} selecionados)
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedInstances(new Set())}>Limpar seleção</Button>
+                  </div>
+                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={(() => {
+                            const eligible = allInstances.filter(i => {
+                              if (!i.ativo) return false;
+                              const aq = instancias.find(a => a.instancia_id === i.id);
+                              return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
+                            });
+                            return eligible.length > 0 && eligible.every(i => selectedInstances.has(i.id));
+                          })()}
+                          onCheckedChange={(checked) => {
+                            const eligible = allInstances.filter(i => {
+                              if (!i.ativo) return false;
+                              const aq = instancias.find(a => a.instancia_id === i.id);
+                              return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
+                            });
+                            if (checked) {
+                              setSelectedInstances(new Set(eligible.map(i => i.id)));
+                            } else {
+                              setSelectedInstances(new Set());
+                            }
+                          }}
+                        />
+                      </TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Fase</TableHead>
                       <TableHead>Dias na Fase</TableHead>
@@ -224,7 +267,17 @@ export default function Aquecimento() {
                       const aq = instancias.find(a => a.instancia_id === inst.id);
                       const taxaResp = aq && aq.interacoes_total > 0 ? Math.round((aq.respostas_recebidas / aq.interacoes_total) * 100) : 0;
                       return (
-                        <TableRow key={inst.id}>
+                         <TableRow key={inst.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedInstances.has(inst.id)}
+                              onCheckedChange={(checked) => {
+                                const next = new Set(selectedInstances);
+                                if (checked) next.add(inst.id); else next.delete(inst.id);
+                                setSelectedInstances(next);
+                              }}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">{inst.nome || 'Sem nome'}</TableCell>
                           <TableCell>{aq ? faseLabel(aq.fase, aq.status) : '-'}</TableCell>
                           <TableCell>{aq?.dias_na_fase ?? '-'}</TableCell>
