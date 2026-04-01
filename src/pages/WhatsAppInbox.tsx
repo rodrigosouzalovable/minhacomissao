@@ -195,7 +195,7 @@ export default function WhatsAppInbox() {
 
   const getInstanciaNome = (instanciaId: string) => {
     const inst = instancias.find(i => i.id === instanciaId);
-    return inst?.nome || inst?.server_url?.replace(/https?:\/\//, '').split('.')[0] || 'Instância';
+    return inst?.nome || null;
   };
 
   const formatTelefone = (tel: string) => {
@@ -289,7 +289,7 @@ export default function WhatsAppInbox() {
                         </Badge>
                       )}
                     </div>
-                    {instancias.length > 1 && (
+                    {instancias.length > 1 && getInstanciaNome(contato.instancia_id) && (
                       <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
                         {getInstanciaNome(contato.instancia_id)}
                       </span>
