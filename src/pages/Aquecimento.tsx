@@ -151,11 +151,8 @@ export default function Aquecimento() {
     loadAll();
   }
 
-  async function updateConfig(id: string, valor: any) {
-    await supabase.from('whatsapp_aquecimento_config' as any).update({ valor } as any).eq('id', id);
-    toast({ title: 'Configuração atualizada!' });
-    loadConfigs();
-  }
+
+
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
