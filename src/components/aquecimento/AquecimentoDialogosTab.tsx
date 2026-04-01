@@ -44,9 +44,9 @@ export default function AquecimentoDialogosTab() {
     setLoading(false);
   }
 
-  function openNew() {
+  function openNew(tipo?: string) {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, tipo: tipo || 'texto' });
     setAudioFiles([]);
     setDialogOpen(true);
   }
