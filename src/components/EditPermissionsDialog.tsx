@@ -190,6 +190,7 @@ export function EditPermissionsDialog({
             />
           </div>
         </div>
+        </ScrollArea>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
