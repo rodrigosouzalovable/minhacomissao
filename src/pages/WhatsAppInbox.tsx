@@ -282,34 +282,34 @@ export default function WhatsAppInbox() {
                   key={contato.id}
                   onClick={() => handleSelectContato(contato)}
                   className={cn(
-                    "w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50",
+                    "w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden",
                     contatoAtivo?.id === contato.id && "bg-accent"
                   )}
                 >
                   <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                     <Phone className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm text-foreground truncate">
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm text-foreground truncate min-w-0">
                         {contato.nome || formatTelefone(contato.telefone)}
                       </span>
-                      <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground shrink-0">
                         {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className="text-xs text-muted-foreground truncate">
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                      <p className="text-xs text-muted-foreground truncate min-w-0">
                         {contato.ultima_mensagem || 'Sem mensagens'}
                       </p>
                       {contato.nao_lido > 0 && (
-                        <Badge className="ml-2 h-5 min-w-[20px] text-xs bg-primary text-primary-foreground shrink-0">
+                        <Badge className="h-5 min-w-[20px] text-xs bg-primary text-primary-foreground shrink-0">
                           {contato.nao_lido}
                         </Badge>
                       )}
                     </div>
                     {instancias.length > 1 && (
-                      <span className="text-[10px] text-muted-foreground/60 mt-0.5 block">
+                      <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
                         {getInstanciaNome(contato.instancia_id)}
                       </span>
                     )}
