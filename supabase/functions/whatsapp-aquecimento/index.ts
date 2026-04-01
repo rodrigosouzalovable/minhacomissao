@@ -71,16 +71,17 @@ Deno.serve(async (req) => {
     let totalEnviados = 0;
 
     for (const inst of instancias) {
-      // Reset interacoes_hoje if last interaction was a different day
+      // Reset interacoes_hoje and increment dias_na_fase if last interaction was a different day
       if (inst.ultima_interacao) {
         const lastDate = new Date(inst.ultima_interacao).toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" });
         const todayDate = spTime.toLocaleDateString("en-US");
         if (lastDate !== todayDate) {
           await supabase
             .from("whatsapp_aquecimento_instancias")
-            .update({ interacoes_hoje: 0 })
+            .update({ interacoes_hoje: 0, dias_na_fase: inst.dias_na_fase + 1 })
             .eq("id", inst.id);
           inst.interacoes_hoje = 0;
+          inst.dias_na_fase = inst.dias_na_fase + 1;
         }
       }
 
