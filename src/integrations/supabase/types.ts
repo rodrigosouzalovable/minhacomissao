@@ -1507,6 +1507,240 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_aquecimento_agendamentos: {
+        Row: {
+          agendado_para: string
+          conteudo: string | null
+          created_at: string
+          id: string
+          instancia_destino_id: string
+          instancia_origem_id: string
+          interacao_id: string | null
+          status: string
+          tipo: string
+        }
+        Insert: {
+          agendado_para: string
+          conteudo?: string | null
+          created_at?: string
+          id?: string
+          instancia_destino_id: string
+          instancia_origem_id: string
+          interacao_id?: string | null
+          status?: string
+          tipo: string
+        }
+        Update: {
+          agendado_para?: string
+          conteudo?: string | null
+          created_at?: string
+          id?: string
+          instancia_destino_id?: string
+          instancia_origem_id?: string
+          interacao_id?: string | null
+          status?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_agendamentos_instancia_destino_id_fkey"
+            columns: ["instancia_destino_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_aquecimento_agendamentos_instancia_origem_id_fkey"
+            columns: ["instancia_origem_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_aquecimento_agendamentos_interacao_id_fkey"
+            columns: ["interacao_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_aquecimento_interacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_aquecimento_config: {
+        Row: {
+          chave: string
+          descricao: string | null
+          id: string
+          updated_at: string
+          valor: Json
+        }
+        Insert: {
+          chave: string
+          descricao?: string | null
+          id?: string
+          updated_at?: string
+          valor: Json
+        }
+        Update: {
+          chave?: string
+          descricao?: string | null
+          id?: string
+          updated_at?: string
+          valor?: Json
+        }
+        Relationships: []
+      }
+      whatsapp_aquecimento_dialogos: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          conteudo_resposta_esperada: string | null
+          created_at: string
+          fase_minima: number
+          id: string
+          tags: string[] | null
+          tipo: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          conteudo_resposta_esperada?: string | null
+          created_at?: string
+          fase_minima?: number
+          id?: string
+          tags?: string[] | null
+          tipo: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          conteudo_resposta_esperada?: string | null
+          created_at?: string
+          fase_minima?: number
+          id?: string
+          tags?: string[] | null
+          tipo?: string
+        }
+        Relationships: []
+      }
+      whatsapp_aquecimento_instancias: {
+        Row: {
+          created_at: string
+          dias_na_fase: number
+          fase: number
+          id: string
+          instancia_id: string
+          interacoes_hoje: number
+          interacoes_total: number
+          limite_diario: number
+          respostas_recebidas: number
+          status: string
+          ultima_interacao: string | null
+          ultimo_aviso_falha: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dias_na_fase?: number
+          fase?: number
+          id?: string
+          instancia_id: string
+          interacoes_hoje?: number
+          interacoes_total?: number
+          limite_diario?: number
+          respostas_recebidas?: number
+          status?: string
+          ultima_interacao?: string | null
+          ultimo_aviso_falha?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dias_na_fase?: number
+          fase?: number
+          id?: string
+          instancia_id?: string
+          interacoes_hoje?: number
+          interacoes_total?: number
+          limite_diario?: number
+          respostas_recebidas?: number
+          status?: string
+          ultima_interacao?: string | null
+          ultimo_aviso_falha?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_instancias_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: true
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_aquecimento_interacoes: {
+        Row: {
+          conteudo: string | null
+          conteudo_resposta: string | null
+          created_at: string
+          entregue_em: string | null
+          enviado_em: string | null
+          id: string
+          instancia_destino_id: string
+          instancia_origem_id: string
+          mensagem_id: string | null
+          respondido_em: string | null
+          status: string
+          tempo_resposta_segundos: number | null
+          tipo: string
+        }
+        Insert: {
+          conteudo?: string | null
+          conteudo_resposta?: string | null
+          created_at?: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          id?: string
+          instancia_destino_id: string
+          instancia_origem_id: string
+          mensagem_id?: string | null
+          respondido_em?: string | null
+          status?: string
+          tempo_resposta_segundos?: number | null
+          tipo: string
+        }
+        Update: {
+          conteudo?: string | null
+          conteudo_resposta?: string | null
+          created_at?: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          id?: string
+          instancia_destino_id?: string
+          instancia_origem_id?: string
+          mensagem_id?: string | null
+          respondido_em?: string | null
+          status?: string
+          tempo_resposta_segundos?: number | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_interacoes_instancia_destino_id_fkey"
+            columns: ["instancia_destino_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_aquecimento_interacoes_instancia_origem_id_fkey"
+            columns: ["instancia_origem_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_contatos: {
         Row: {
           criado_em: string

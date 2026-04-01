@@ -40,6 +40,7 @@ import MetaPessoal from "./pages/MetaPessoal";
 import AutomacaoCobMais from "./pages/AutomacaoCobMais";
 import CampanhasVoz from "./pages/CampanhasVoz";
 import WhatsAppInbox from "./pages/WhatsAppInbox";
+import Aquecimento from "./pages/Aquecimento";
 
 const queryClient = new QueryClient();
 
@@ -150,6 +151,7 @@ const App = () => (
             <Route path="/admin/automacao-cobmais" element={<AdminRoute><AutomacaoCobMais /></AdminRoute>} />
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
             <Route path="/campanhas-voz" element={<ProtectedRoute><CampanhasVoz /></ProtectedRoute>} />
+            <Route path="/aquecimento" element={<AdminRoute><Aquecimento /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </VoiceCampaignSendingProvider>

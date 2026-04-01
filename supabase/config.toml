@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.voice-campaign-call]
 verify_jwt = false
+
+[functions.whatsapp-aquecimento]
+verify_jwt = false
