@@ -1,77 +1,6 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
-
-type AudioAsset = {
-  bytes: Uint8Array;
-  contentType: string;
-  fileName: string;
-};
-
-const inferFileName = (audioUrl: string, contentType: string) => {
-  try {
-    const pathname = new URL(audioUrl).pathname;
-    const nameFromUrl = pathname.split('/').pop();
-    if (nameFromUrl && nameFromUrl.includes('.')) return nameFromUrl;
-  } catch {
-    // ignore URL parsing errors and fall back below
-  }
-
-  const extensionMap: Record<string, string> = {
-    'audio/mpeg': 'mp3',
-    'audio/mp3': 'mp3',
-    'audio/mp4': 'm4a',
-    'audio/x-m4a': 'm4a',
-    'audio/aac': 'aac',
-    'audio/ogg': 'ogg',
-    'audio/wav': 'wav',
-    'audio/webm': 'webm',
-  };
-
-  const extension = extensionMap[contentType] || 'ogg';
-  return `audio.${extension}`;
-};
-
-const parseResponseBody = async (response: Response) => {
-  const rawText = await response.text();
-  try {
-    return JSON.parse(rawText);
-  } catch {
-    return { message: rawText };
-  }
-};
-
-const downloadAudioFile = async (audioUrl: string): Promise<AudioAsset> => {
-  const response = await fetch(audioUrl);
-
-  if (!response.ok) {
-    throw new Error(`Não foi possível baixar o áudio (${response.status})`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const contentType = response.headers.get('content-type') || 'audio/ogg';
-  const fileName = inferFileName(audioUrl, contentType);
-
-  return {
-    bytes: new Uint8Array(arrayBuffer),
-    contentType,
-    fileName,
-  };
-};
-
-const buildFormData = (telefone: string, audio: AudioAsset, mediatype?: string) => {
-  const formData = new FormData();
-  formData.append('number', telefone);
-  formData.append('file', new Blob([audio.bytes], { type: audio.contentType }), audio.fileName);
-
-  if (mediatype) {
-    formData.append('mediatype', mediatype);
-  }
-
-  return formData;
 };
 
 Deno.serve(async (req) => {
@@ -98,79 +27,32 @@ Deno.serve(async (req) => {
       : `55${telefoneFormatado}`;
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
+    const endpoint = `${cleanUrl}/send/media`;
+    const body = { number: telefoneCompleto, type: 'ptt', file: audio_url };
 
-    const endpoints = [
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, type: 'ptt', file: audio_url } },
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, type: 'audio', file: audio_url } },
-      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, file: audio_url } },
-    ];
+    console.log(`Enviando áudio para ${telefoneCompleto} via ${endpoint}`);
 
-    let lastError: any = null;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', token: instanceToken },
+      body: JSON.stringify(body),
+    });
 
-    for (const endpoint of endpoints) {
-      console.log(`Tentando endpoint JSON: ${endpoint.url}`);
-      try {
-        const response = await fetch(endpoint.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            token: instanceToken,
-          },
-          body: JSON.stringify(endpoint.body),
-        });
+    const rawText = await response.text();
+    let data: any;
+    try { data = JSON.parse(rawText); } catch { data = { message: rawText }; }
 
-        const data = await parseResponseBody(response);
-        console.log(`Resposta de ${endpoint.url}:`, JSON.stringify(data));
+    console.log(`Resposta (${response.status}):`, JSON.stringify(data));
 
-        if (response.ok && !data?.error) {
-          return new Response(JSON.stringify({ success: true, data }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-
-        lastError = data;
-      } catch (err) {
-        lastError = err;
-        console.log(`Endpoint ${endpoint.url} falhou:`, err);
-      }
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
     }
 
-    // FormData fallback only if the server still expects multipart in this installation
-    console.log('Tentando fallback com FormData...');
-    const audioFile = await downloadAudioFile(audio_url);
-    const formEndpoints = [
-      { url: `${cleanUrl}/send/media`, mediatype: 'ptt' },
-      { url: `${cleanUrl}/send/media`, mediatype: 'audio' },
-    ];
-
-    for (const endpoint of formEndpoints) {
-      console.log(`Tentando endpoint FormData: ${endpoint.url} (${endpoint.mediatype})`);
-      try {
-        const response = await fetch(endpoint.url, {
-          method: 'POST',
-          headers: { token: instanceToken },
-          body: buildFormData(telefoneCompleto, audioFile, endpoint.mediatype),
-        });
-
-        const data = await parseResponseBody(response);
-        console.log(`Resposta de ${endpoint.url}:`, JSON.stringify(data));
-
-        if (response.ok && !data?.error) {
-          return new Response(JSON.stringify({ success: true, data }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-
-        lastError = data;
-      } catch (err) {
-        lastError = err;
-        console.log(`Endpoint ${endpoint.url} falhou:`, err);
-      }
-    }
-
-    throw new Error(lastError?.message || lastError?.error || 'Nenhum endpoint UAZAPI de áudio funcionou');
+    return new Response(JSON.stringify({ success: true, data }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error) {
-    console.error('Erro na função send-whatsapp-audio:', error);
+    console.error('Erro send-whatsapp-audio:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
