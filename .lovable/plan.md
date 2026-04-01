@@ -1,43 +1,21 @@
 
 
-## Plano: Múltiplos áudios com rotação combinada (áudio + instância)
+## Fix: Duplicate Audio Sends
 
-### Conceito
-Atualmente a campanha suporta apenas 1 áudio. A mudança permitirá importar N áudios, que serão distribuídos em round-robin combinado com as instâncias WhatsApp selecionadas.
+### Root Cause
+The `send-whatsapp-audio` edge function tries 3 JSON endpoints and 2 FormData endpoints in sequence. Multiple endpoints are succeeding in sending the audio, but the success detection (`response.ok && !data?.error`) is too strict -- it treats responses with any truthy `error` field as failures, even when the message was already delivered. This causes the loop to continue to the next endpoint, which sends again.
 
-**Exemplo com 3 áudios e 4 WhatsApps:**
-- Cliente 1 → WhatsApp 1 envia Áudio 1
-- Cliente 2 → WhatsApp 2 envia Áudio 2
-- Cliente 3 → WhatsApp 3 envia Áudio 3
-- Cliente 4 → WhatsApp 4 envia Áudio 1
-- Cliente 5 → WhatsApp 1 envia Áudio 2
-- ...e assim por diante
+### Solution
+Since we now know `/send/media` with `{ number, type: 'ptt', file }` works, simplify the function to use only that single endpoint. Remove the fallback chain entirely. If that one endpoint fails, return the error directly instead of trying alternatives that could also deliver the message.
 
-### Mudanças no banco de dados
+### Changes
 
-1. **Nova tabela `voice_campaign_audios`** para armazenar múltiplos áudios por campanha:
-   - `id`, `campaign_id` (FK), `audio_url`, `file_name`, `created_at`
-   - RLS: owner da campanha pode ler/inserir/deletar
+**`supabase/functions/send-whatsapp-audio/index.ts`**:
+- Remove the multi-endpoint loop and FormData fallback
+- Send a single request to `${cleanUrl}/send/media` with `{ number, type: 'ptt', file: audio_url }`
+- Treat any `response.ok` as success (don't check `data.error` since UAZAPI may include non-critical error fields)
+- Remove unused helper functions (`downloadAudioFile`, `buildFormData`, `inferFileName`)
+- Keep the clean phone formatting and CORS handling
 
-2. **Coluna `audio_url` na tabela `voice_campaigns`** passa a ser opcional (nullable) — campanhas novas usarão a tabela de áudios
-
-### Mudanças no frontend (`src/pages/CampanhasVoz.tsx`)
-
-1. **Upload de múltiplos áudios**: trocar o input de arquivo único para `multiple`, permitindo selecionar vários arquivos de uma vez
-2. **Lista de áudios**: exibir os áudios importados com preview (play) e opção de remover individualmente
-3. **Criação da campanha**: fazer upload de todos os áudios para o bucket `campaign-audio` e inserir cada URL na tabela `voice_campaign_audios`
-4. **Remover tipo "chamada de voz"**: simplificar a interface removendo a opção `voice_call`
-5. **Campos de delay configurável**: adicionar inputs para min/max minutos (padrão 1-5 min)
-
-### Lógica de envio (loop principal)
-
-No loop de envio, para cada contato `i`:
-- Instância = `activeInstances[i % activeInstances.length]`
-- Áudio = `audios[i % audios.length]`
-
-Isso cria a rotação combinada desejada automaticamente.
-
-### Resumo de arquivos
-- **Migração SQL**: criar tabela `voice_campaign_audios`, tornar `audio_url` nullable
-- **`src/pages/CampanhasVoz.tsx`**: upload múltiplo, lista de áudios, delay configurável, rotação de áudios no envio
+This is a minimal, focused fix -- the frontend sending loop is correct and doesn't need changes.
 
