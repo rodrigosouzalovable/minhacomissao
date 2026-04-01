@@ -267,7 +267,17 @@ export default function Aquecimento() {
                       const aq = instancias.find(a => a.instancia_id === inst.id);
                       const taxaResp = aq && aq.interacoes_total > 0 ? Math.round((aq.respostas_recebidas / aq.interacoes_total) * 100) : 0;
                       return (
-                        <TableRow key={inst.id}>
+                         <TableRow key={inst.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedInstances.has(inst.id)}
+                              onCheckedChange={(checked) => {
+                                const next = new Set(selectedInstances);
+                                if (checked) next.add(inst.id); else next.delete(inst.id);
+                                setSelectedInstances(next);
+                              }}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">{inst.nome || 'Sem nome'}</TableCell>
                           <TableCell>{aq ? faseLabel(aq.fase, aq.status) : '-'}</TableCell>
                           <TableCell>{aq?.dias_na_fase ?? '-'}</TableCell>
