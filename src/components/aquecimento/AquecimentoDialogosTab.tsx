@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, MessageSquare, Volume2, Upload, X, Loader2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Plus, Pencil, Trash2, MessageSquare, Volume2, Upload, X, Loader2, Image, Smile } from 'lucide-react';
 
 interface Dialogo {
   id: string;
@@ -43,9 +44,9 @@ export default function AquecimentoDialogosTab() {
     setLoading(false);
   }
 
-  function openNew() {
+  function openNew(tipo?: string) {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, tipo: tipo || 'texto' });
     setAudioFiles([]);
     setDialogOpen(true);
   }
@@ -157,13 +158,22 @@ export default function AquecimentoDialogosTab() {
     loadDialogos();
   }
 
+  const tipos = [
+    { value: 'texto', label: '📝 Texto', icon: MessageSquare },
+    { value: 'audio', label: '🎙️ Áudio', icon: Volume2 },
+    { value: 'imagem', label: '🖼️ Imagem', icon: Image },
+    { value: 'sticker', label: '😄 Sticker', icon: Smile },
+  ];
+
+  const countByType = (tipo: string) => dialogos.filter(d => d.tipo === tipo).length;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Mensagens e Áudios do Aquecimento</CardTitle>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" onClick={openNew} className="gap-1"><Plus className="h-4 w-4" /> Adicionar Diálogo</Button>
+            <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> Adicionar Diálogo</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
@@ -280,45 +290,59 @@ export default function AquecimentoDialogosTab() {
       <CardContent>
         {loading ? (
           <p className="text-center text-muted-foreground py-8">Carregando...</p>
-        ) : dialogos.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">Nenhum diálogo cadastrado. Clique em "Adicionar Diálogo" para começar.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Conteúdo</TableHead>
-                <TableHead>Resposta Esperada</TableHead>
-                <TableHead>Fase Mín.</TableHead>
-                <TableHead>Ativo</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {dialogos.map(d => (
-                <TableRow key={d.id}>
-                  <TableCell>
-                    <Badge variant="outline" className="gap-1">
-                      {d.tipo === 'texto' ? <MessageSquare className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-                      {d.tipo}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-[250px] truncate text-sm">{d.conteudo}</TableCell>
-                  <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">{d.conteudo_resposta_esperada || '-'}</TableCell>
-                  <TableCell>Fase {d.fase_minima}</TableCell>
-                  <TableCell>
-                    <Switch checked={d.ativo} onCheckedChange={v => toggleAtivo(d.id, v)} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(d)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDelete(d.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+          <Tabs defaultValue="texto" onValueChange={(v) => setForm(f => ({ ...f, tipo: v }))}>
+            <TabsList className="mb-4">
+              {tipos.map(t => (
+                <TabsTrigger key={t.value} value={t.value} className="gap-1.5">
+                  {t.label}
+                  <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">{countByType(t.value)}</Badge>
+                </TabsTrigger>
               ))}
-            </TableBody>
-          </Table>
+            </TabsList>
+            {tipos.map(t => {
+              const filtered = dialogos.filter(d => d.tipo === t.value);
+              return (
+                <TabsContent key={t.value} value={t.value}>
+                  {filtered.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      Nenhum diálogo de {t.label.split(' ')[1]?.toLowerCase()} cadastrado.
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Conteúdo</TableHead>
+                          <TableHead>Resposta Esperada</TableHead>
+                          <TableHead>Fase Mín.</TableHead>
+                          <TableHead>Ativo</TableHead>
+                          <TableHead>Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.map(d => (
+                          <TableRow key={d.id}>
+                            <TableCell className="max-w-[250px] truncate text-sm">{d.conteudo}</TableCell>
+                            <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">{d.conteudo_resposta_esperada || '-'}</TableCell>
+                            <TableCell>Fase {d.fase_minima}</TableCell>
+                            <TableCell>
+                              <Switch checked={d.ativo} onCheckedChange={v => toggleAtivo(d.id, v)} />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button size="icon" variant="ghost" onClick={() => openEdit(d)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                <Button size="icon" variant="ghost" onClick={() => handleDelete(d.id)} className="text-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </TabsContent>
+              );
+            })}
+          </Tabs>
         )}
       </CardContent>
     </Card>
