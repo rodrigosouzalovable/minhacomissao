@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, MessageSquare, Volume2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, MessageSquare, Volume2, Upload, X, Loader2 } from 'lucide-react';
 
 interface Dialogo {
   id: string;
@@ -31,6 +30,9 @@ export default function AquecimentoDialogosTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [audioFiles, setAudioFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadDialogos(); }, []);
 
@@ -44,35 +46,103 @@ export default function AquecimentoDialogosTab() {
   function openNew() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setAudioFiles([]);
     setDialogOpen(true);
   }
 
   function openEdit(d: Dialogo) {
     setEditingId(d.id);
     setForm({ tipo: d.tipo, conteudo: d.conteudo, conteudo_resposta_esperada: d.conteudo_resposta_esperada || '', fase_minima: d.fase_minima, ativo: d.ativo });
+    setAudioFiles([]);
     setDialogOpen(true);
   }
 
-  async function handleSave() {
-    if (!form.conteudo.trim()) {
-      toast({ title: 'Preencha o conteúdo', variant: 'destructive' });
-      return;
+  function handleAudioSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      setAudioFiles(prev => [...prev, ...Array.from(e.target.files!)]);
     }
-    const payload = {
-      tipo: form.tipo,
-      conteudo: form.conteudo,
-      conteudo_resposta_esperada: form.conteudo_resposta_esperada || null,
-      fase_minima: form.fase_minima,
-      ativo: form.ativo,
-    };
-    if (editingId) {
-      await supabase.from('whatsapp_aquecimento_dialogos' as any).update(payload as any).eq('id', editingId);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function removeAudioFile(index: number) {
+    setAudioFiles(prev => prev.filter((_, i) => i !== index));
+  }
+
+  async function uploadAudio(file: File): Promise<string | null> {
+    const ext = file.name.split('.').pop() || 'mp3';
+    const path = `aquecimento/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from('campaign-audio').upload(path, file);
+    if (error) {
+      console.error('Upload error:', error);
+      return null;
+    }
+    const { data: urlData } = supabase.storage.from('campaign-audio').getPublicUrl(path);
+    return urlData.publicUrl;
+  }
+
+  async function handleSave() {
+    if (form.tipo === 'audio' && !editingId) {
+      // Batch create: one dialog per audio file
+      if (audioFiles.length === 0) {
+        toast({ title: 'Selecione pelo menos um áudio', variant: 'destructive' });
+        return;
+      }
+      setUploading(true);
+      let created = 0;
+      for (const file of audioFiles) {
+        const url = await uploadAudio(file);
+        if (url) {
+          await supabase.from('whatsapp_aquecimento_dialogos' as any).insert({
+            tipo: 'audio',
+            conteudo: url,
+            conteudo_resposta_esperada: form.conteudo_resposta_esperada || null,
+            fase_minima: form.fase_minima,
+            ativo: form.ativo,
+          } as any);
+          created++;
+        }
+      }
+      setUploading(false);
+      toast({ title: `${created} áudio(s) adicionado(s)!` });
+    } else if (form.tipo === 'audio' && editingId) {
+      // Edit: if new file uploaded, replace; otherwise keep existing content
+      setUploading(true);
+      let conteudo = form.conteudo;
+      if (audioFiles.length > 0) {
+        const url = await uploadAudio(audioFiles[0]);
+        if (url) conteudo = url;
+      }
+      await supabase.from('whatsapp_aquecimento_dialogos' as any).update({
+        tipo: form.tipo,
+        conteudo,
+        conteudo_resposta_esperada: form.conteudo_resposta_esperada || null,
+        fase_minima: form.fase_minima,
+        ativo: form.ativo,
+      } as any).eq('id', editingId);
+      setUploading(false);
       toast({ title: 'Diálogo atualizado!' });
     } else {
-      await supabase.from('whatsapp_aquecimento_dialogos' as any).insert(payload as any);
-      toast({ title: 'Diálogo criado!' });
+      if (!form.conteudo.trim()) {
+        toast({ title: 'Preencha o conteúdo', variant: 'destructive' });
+        return;
+      }
+      const payload = {
+        tipo: form.tipo,
+        conteudo: form.conteudo,
+        conteudo_resposta_esperada: form.conteudo_resposta_esperada || null,
+        fase_minima: form.fase_minima,
+        ativo: form.ativo,
+      };
+      if (editingId) {
+        await supabase.from('whatsapp_aquecimento_dialogos' as any).update(payload as any).eq('id', editingId);
+        toast({ title: 'Diálogo atualizado!' });
+      } else {
+        await supabase.from('whatsapp_aquecimento_dialogos' as any).insert(payload as any);
+        toast({ title: 'Diálogo criado!' });
+      }
     }
     setDialogOpen(false);
+    setAudioFiles([]);
     loadDialogos();
   }
 
@@ -102,7 +172,7 @@ export default function AquecimentoDialogosTab() {
             <div className="space-y-4">
               <div className="space-y-1">
                 <Label>Tipo de Mensagem</Label>
-                <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
+                <Select value={form.tipo} onValueChange={v => { setForm(f => ({ ...f, tipo: v })); setAudioFiles([]); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="texto">📝 Texto</SelectItem>
@@ -112,15 +182,62 @@ export default function AquecimentoDialogosTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label>{form.tipo === 'texto' ? 'Mensagem de Texto' : form.tipo === 'audio' ? 'URL do Áudio' : 'Conteúdo / URL'}</Label>
-                <Textarea
-                  value={form.conteudo}
-                  onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))}
-                  placeholder={form.tipo === 'texto' ? 'Ex: Oi, tudo bem? Como vai?' : 'Ex: https://exemplo.com/audio.mp3'}
-                  rows={3}
-                />
-              </div>
+
+              {form.tipo === 'audio' ? (
+                <div className="space-y-2">
+                  <Label>Arquivos de Áudio</Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="audio/*,.mp3,.ogg,.wav,.m4a,.opus"
+                    multiple={!editingId}
+                    className="hidden"
+                    onChange={handleAudioSelect}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 border-dashed h-16"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-5 w-5" />
+                    {editingId ? 'Selecionar novo áudio (opcional)' : 'Clique para selecionar áudios'}
+                  </Button>
+                  {audioFiles.length > 0 && (
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {audioFiles.map((file, i) => (
+                        <div key={i} className="flex items-center justify-between bg-muted rounded px-3 py-1.5 text-sm">
+                          <span className="truncate mr-2">🎵 {file.name}</span>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => removeAudioFile(i)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!editingId && (
+                    <p className="text-xs text-muted-foreground">
+                      Cada arquivo será criado como um diálogo separado. Formatos aceitos: MP3, OGG, WAV, M4A, OPUS.
+                    </p>
+                  )}
+                  {editingId && form.conteudo && (
+                    <p className="text-xs text-muted-foreground">
+                      Áudio atual: <a href={form.conteudo} target="_blank" rel="noopener noreferrer" className="underline text-primary">ouvir</a>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>{form.tipo === 'texto' ? 'Mensagem de Texto' : 'Conteúdo / URL'}</Label>
+                  <Textarea
+                    value={form.conteudo}
+                    onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))}
+                    placeholder={form.tipo === 'texto' ? 'Ex: Oi, tudo bem? Como vai?' : 'Ex: https://exemplo.com/imagem.jpg'}
+                    rows={3}
+                  />
+                </div>
+              )}
+
               <div className="space-y-1">
                 <Label>Resposta Esperada <span className="text-muted-foreground text-xs">(opcional)</span></Label>
                 <Textarea
@@ -153,7 +270,9 @@ export default function AquecimentoDialogosTab() {
                   </div>
                 </div>
               </div>
-              <Button onClick={handleSave} className="w-full">{editingId ? 'Salvar Alterações' : 'Criar Diálogo'}</Button>
+              <Button onClick={handleSave} className="w-full" disabled={uploading}>
+                {uploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : editingId ? 'Salvar Alterações' : 'Criar Diálogo'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
