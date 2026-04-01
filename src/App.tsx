@@ -38,6 +38,7 @@ import Acionamento from "./pages/Acionamento";
 import MetaPessoal from "./pages/MetaPessoal";
 import AutomacaoCobMais from "./pages/AutomacaoCobMais";
 import CampanhasVoz from "./pages/CampanhasVoz";
+import WhatsAppInbox from "./pages/WhatsAppInbox";
 
 const queryClient = new QueryClient();
 
