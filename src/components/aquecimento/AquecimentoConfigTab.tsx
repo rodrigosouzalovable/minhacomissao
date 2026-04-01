@@ -125,11 +125,11 @@ export default function AquecimentoConfigTab() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
               {[1, 2, 3, 4].map(fase => (
                 <div key={fase} className="space-y-1">
                   <Label className="text-xs font-semibold">Fase {fase}</Label>
-                  <p className="text-[10px] text-muted-foreground leading-tight">{faseDescricoes[fase]}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight min-h-[24px]">{faseDescricoes[fase]}</p>
                   <Input
                     type="number"
                     min={1}
@@ -141,7 +141,7 @@ export default function AquecimentoConfigTab() {
               ))}
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Aquecido ✅</Label>
-                <p className="text-[10px] text-muted-foreground leading-tight">Limite após concluir todas as fases</p>
+                <p className="text-[10px] text-muted-foreground leading-tight min-h-[24px]">Limite após concluir todas as fases</p>
                 <Input
                   type="number"
                   min={1}
