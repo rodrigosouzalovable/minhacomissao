@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface EditPermissionsDialogProps {
   open: boolean;
@@ -144,52 +145,54 @@ export function EditPermissionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[70vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Editar Permissões - {userName}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Abas visíveis</Label>
-            {AVAILABLE_TABS.map((tab) => (
-              <div key={tab.path} className="flex items-center gap-2">
-                <Checkbox
-                  id={tab.path}
-                  checked={selectedTabs.includes(tab.path)}
-                  onCheckedChange={() => toggleTab(tab.path)}
-                />
-                <label htmlFor={tab.path} className="text-sm cursor-pointer">
-                  {tab.label}
-                </label>
-              </div>
-            ))}
-          </div>
+        <ScrollArea className="flex-1 overflow-hidden pr-3">
+          <div className="space-y-6 py-4">
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Abas visíveis</Label>
+              {AVAILABLE_TABS.map((tab) => (
+                <div key={tab.path} className="flex items-center gap-2">
+                  <Checkbox
+                    id={tab.path}
+                    checked={selectedTabs.includes(tab.path)}
+                    onCheckedChange={() => toggleTab(tab.path)}
+                  />
+                  <label htmlFor={tab.path} className="text-sm cursor-pointer">
+                    {tab.label}
+                  </label>
+                </div>
+              ))}
+            </div>
 
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Credores vinculados</Label>
-            {CREDORES.map((credor) => (
-              <div key={credor.value} className="flex items-center gap-2">
-                <Checkbox
-                  id={`credor-${credor.value}`}
-                  checked={credores.includes(credor.value)}
-                  onCheckedChange={() => toggleCredor(credor.value)}
-                />
-                <label htmlFor={`credor-${credor.value}`} className="text-sm cursor-pointer">
-                  {credor.label}
-                </label>
-              </div>
-            ))}
-          </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Credores vinculados</Label>
+              {CREDORES.map((credor) => (
+                <div key={credor.value} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`credor-${credor.value}`}
+                    checked={credores.includes(credor.value)}
+                    onCheckedChange={() => toggleCredor(credor.value)}
+                  />
+                  <label htmlFor={`credor-${credor.value}`} className="text-sm cursor-pointer">
+                    {credor.label}
+                  </label>
+                </div>
+              ))}
+            </div>
 
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">Visível no Ranking</Label>
-            <Switch
-              checked={visivelRanking}
-              onCheckedChange={setVisivelRanking}
-            />
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Visível no Ranking</Label>
+              <Switch
+                checked={visivelRanking}
+                onCheckedChange={setVisivelRanking}
+              />
+            </div>
           </div>
-        </div>
+        </ScrollArea>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
