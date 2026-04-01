@@ -146,24 +146,44 @@ Deno.serve(async (req) => {
       const token = origemDetails.instance_token;
 
       try {
-        const sendUrl = `${serverUrl}/send/text`;
-        const sendRes = await fetch(sendUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            number: `55${destinoPhone}@s.whatsapp.net`,
-            text: dialogo.conteudo,
-          }),
-        });
+        let sendRes: Response;
+        let sendData: any;
+        const cleanServerUrl = serverUrl.replace(/\/+$/, "");
+        const destinoNumero = `55${destinoPhone}@s.whatsapp.net`;
 
-        const sendData = await sendRes.json();
-        console.log(`[AQUECIMENTO] Mensagem enviada de ${origemDetails.nome} para ${destinoDetails.nome}: ${sendRes.ok}`);
+        if (dialogo.tipo === "audio") {
+          // Send audio PTT
+          const sendUrl = `${cleanServerUrl}/send/media`;
+          sendRes = await fetch(sendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token },
+            body: JSON.stringify({
+              number: destinoNumero,
+              type: "ptt",
+              file: dialogo.conteudo, // audio URL
+            }),
+          });
+        } else {
+          // Send text
+          const sendUrl = `${cleanServerUrl}/send/text`;
+          sendRes = await fetch(sendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token },
+            body: JSON.stringify({
+              number: destinoNumero,
+              text: dialogo.conteudo,
+            }),
+          });
+        }
+
+        sendData = await sendRes.json();
+        console.log(`[AQUECIMENTO] ${dialogo.tipo} enviado de ${origemDetails.nome} para ${destinoDetails.nome}: ${sendRes.ok}`);
 
         // Record interaction
         await supabase.from("whatsapp_aquecimento_interacoes").insert({
           instancia_origem_id: inst.instancia_id,
           instancia_destino_id: destino.instancia_id,
-          tipo: "texto",
+          tipo: dialogo.tipo,
           conteudo: dialogo.conteudo,
           status: sendRes.ok ? "ENVIADO" : "FALHOU",
           mensagem_id: sendData?.key?.id || null,
@@ -187,7 +207,7 @@ Deno.serve(async (req) => {
         await supabase.from("whatsapp_aquecimento_interacoes").insert({
           instancia_origem_id: inst.instancia_id,
           instancia_destino_id: destino.instancia_id,
-          tipo: "texto",
+          tipo: dialogo.tipo,
           conteudo: dialogo.conteudo,
           status: "FALHOU",
           enviado_em: new Date().toISOString(),
