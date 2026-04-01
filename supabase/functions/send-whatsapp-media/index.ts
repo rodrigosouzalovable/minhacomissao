@@ -11,10 +11,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { telefone, audio_url, uazapi_server_url, uazapi_instance_token, instancia_id } = await req.json();
+    const { telefone, media_url, type, uazapi_server_url, uazapi_instance_token, instancia_id, file_name } = await req.json();
 
     if (!telefone) throw new Error('Telefone não informado');
-    if (!audio_url) throw new Error('URL do áudio não informada');
+    if (!media_url) throw new Error('URL da mídia não informada');
+    if (!type || !['image', 'document'].includes(type)) throw new Error('Tipo inválido (use image ou document)');
 
     const serverUrl = uazapi_server_url || Deno.env.get('UAZAPI_SERVER_URL');
     const instanceToken = uazapi_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
@@ -30,9 +31,9 @@ Deno.serve(async (req) => {
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
     const endpoint = `${cleanUrl}/send/media`;
-    const body = { number: telefoneCompleto, type: 'ptt', file: audio_url };
+    const body = { number: telefoneCompleto, type, file: media_url };
 
-    console.log(`Enviando áudio para ${telefoneCompleto} via ${endpoint}`);
+    console.log(`Enviando ${type} para ${telefoneCompleto} via ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -50,15 +51,13 @@ Deno.serve(async (req) => {
       throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
     }
 
-    // --- INBOX: Save outgoing audio message ---
+    // Save to inbox
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
       let resolvedInstanciaId = instancia_id;
-
-      // If no instancia_id provided, look it up
       if (!resolvedInstanciaId && serverUrl && instanceToken) {
         const { data: inst } = await supabase
           .from('user_whatsapp_instances')
@@ -72,16 +71,19 @@ Deno.serve(async (req) => {
 
       if (resolvedInstanciaId) {
         const agora = new Date().toISOString();
+        const tipoConteudo = type === 'image' ? 'imagem' : 'documento';
+        const emoji = type === 'image' ? '📷' : '📄';
+        const descricao = `${emoji} ${type === 'image' ? 'Imagem enviada' : (file_name || 'Documento enviado')}`;
 
         await supabase.from('whatsapp_mensagens').insert({
           instancia_id: resolvedInstanciaId,
           telefone_remoto: telefoneCompleto,
-          conteudo: '🎵 Áudio enviado',
+          conteudo: descricao,
           direcao: 'saida',
           timestamp_msg: agora,
           lida: true,
-          tipo_conteudo: 'audio',
-          media_url: audio_url,
+          tipo_conteudo: tipoConteudo,
+          media_url: media_url,
         });
 
         // Upsert contact
@@ -94,30 +96,30 @@ Deno.serve(async (req) => {
 
         if (existingContact) {
           await supabase.from('whatsapp_contatos').update({
-            ultima_mensagem: '🎵 Áudio enviado',
+            ultima_mensagem: descricao,
             ultima_mensagem_em: agora,
           }).eq('id', existingContact.id);
         } else {
           await supabase.from('whatsapp_contatos').insert({
             instancia_id: resolvedInstanciaId,
             telefone: telefoneCompleto,
-            ultima_mensagem: '🎵 Áudio enviado',
+            ultima_mensagem: descricao,
             ultima_mensagem_em: agora,
             nao_lido: 0,
           });
         }
 
-        console.log(`[INBOX] Áudio de saída salvo para ${telefoneCompleto}`);
+        console.log(`[INBOX] ${tipoConteudo} de saída salvo para ${telefoneCompleto}`);
       }
     } catch (inboxErr) {
-      console.error('[INBOX] Erro ao salvar áudio no inbox:', inboxErr);
+      console.error('[INBOX] Erro ao salvar mídia no inbox:', inboxErr);
     }
 
     return new Response(JSON.stringify({ success: true, data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Erro send-whatsapp-audio:', error);
+    console.error('Erro send-whatsapp-media:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
