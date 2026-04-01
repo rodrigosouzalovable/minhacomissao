@@ -1,34 +1,93 @@
 
 
-## Diagnóstico: Por que a mensagem não apareceu no Inbox
+## Aquecimento de WhatsApp — Plano de Implementação
 
-### O que aconteceu
+Este é um recurso grande que será dividido em etapas incrementais. A primeira entrega inclui as tabelas, a página com dashboard/lista/configurações/log, e a Edge Function principal de aquecimento.
 
-Investiguei o banco de dados e os logs da função webhook. Encontrei dois problemas:
+---
 
-**Problema 1 - Mensagens enviadas manualmente pelo WhatsApp são ignoradas:**
-Quando você envia uma mensagem diretamente pelo aplicativo WhatsApp (não pelo sistema), o webhook UAZAPI dispara com `fromMe=true`. Atualmente, o código do webhook ignora todas as mensagens `fromMe` (para evitar duplicação com as mensagens enviadas pelo próprio sistema). Isso significa que mensagens enviadas manualmente nunca aparecem no Inbox.
+### 1. Criar tabelas no banco de dados
 
-**Problema 2 - Webhook do número 62991672674 possivelmente não configurado:**
-A instância `62991672674` tem zero mensagens e zero contatos no banco. Nenhum log do webhook foi encontrado para essa instância. Isso indica que o webhook da UAZAPI para esse número pode não estar apontando para a URL da função `whatsapp-chatbot`.
+Migration SQL com 5 tabelas:
+- `whatsapp_aquecimento_instancias` — controle de fase/status por instância
+- `whatsapp_aquecimento_interacoes` — log de cada interação enviada/respondida
+- `whatsapp_aquecimento_dialogos` — pool de textos/áudios/reações
+- `whatsapp_aquecimento_config` — configurações globais (limites, horários, delays)
+- `whatsapp_aquecimento_agendamentos` — fila de envios programados
 
-### Solução proposta
+Inclui índices, RLS policies (admin-only para gerenciamento, select para usuários autenticados em suas instâncias), triggers de `updated_at`, e dados iniciais (configurações padrão + pool de ~20 diálogos).
 
-**`supabase/functions/whatsapp-chatbot/index.ts`:**
-- Em vez de ignorar completamente mensagens `fromMe`, salvar no inbox verificando antes se já existe uma mensagem similar recente (últimos 30 segundos, mesmo instancia_id + telefone_remoto + conteúdo). Isso evita duplicação com mensagens do `send-whatsapp` mas captura mensagens enviadas manualmente pelo app
-- Também atualizar o contato (upsert) para mensagens `fromMe`
+Foreign keys referenciam `user_whatsapp_instances(id)` com `ON DELETE CASCADE`.
 
-### Sobre o webhook do 62991672674
-Isso precisa ser verificado no painel da UAZAPI: o webhook desse número deve apontar para a URL da função `whatsapp-chatbot`. Sem isso, mensagens recebidas nesse número nunca chegarão ao sistema. Posso verificar a configuração via API se necessário.
+---
+
+### 2. Criar página `/aquecimento`
+
+Novo arquivo `src/pages/Aquecimento.tsx` (rota protegida, admin-only) com 4 seções em abas:
+
+**Aba Dashboard:**
+- Cards: total de números, em aquecimento, interações hoje/7 dias, taxa de sucesso, próximos agendamentos
+- Queries agregadas nas tabelas de aquecimento
+
+**Aba Números:**
+- Tabela com instâncias WhatsApp e seu status de aquecimento (fase, dias, interações hoje, taxa de resposta)
+- Botões: Iniciar, Pausar, Ver conversas
+- Permite iniciar aquecimento manual selecionando números
+
+**Aba Configurações:**
+- Formulário para editar configs da tabela `whatsapp_aquecimento_config`
+- Limite diário por fase, horário comercial, dias ativos, delay min/max, áudios e reações on/off
+
+**Aba Log de Interações:**
+- Tabela paginada com histórico: data, origem, destino, tipo, conteúdo, status, tempo de resposta
+- Filtros por data e status
+
+---
+
+### 3. Atualizar navegação
+
+- Adicionar item `{ href: '/aquecimento', label: 'Aquecimento', icon: Flame, adminOnly: true }` em `AppLayout.tsx`
+- Adicionar rota `<Route path="/aquecimento" element={<AdminRoute><AquecimentoPage /></AdminRoute>} />` em `App.tsx`
+
+---
+
+### 4. Edge Function `whatsapp-aquecimento`
+
+Lógica principal executada via pg_cron a cada 15 minutos:
+
+1. Busca instâncias com `status = 'EM_AQUECIMENTO'`
+2. Verifica horário comercial (8h-18h São Paulo) e dia da semana
+3. Para cada instância que não atingiu limite diário:
+   - Seleciona instância destino aleatória (diferente, que não interagiu nas últimas 24h)
+   - Busca diálogo compatível com a fase atual
+   - Envia via `send-whatsapp` (texto) ou `send-whatsapp-audio` (áudio)
+   - Registra na tabela de interações com status `ENVIADO`
+   - Incrementa `interacoes_hoje`
+4. Avalia progressão de fase (7 dias cumpridos com média adequada → avança)
+5. Se taxa de falha > 10% em 1h → pausa automaticamente
+
+---
+
+### 5. Lógica de resposta no webhook existente
+
+Atualizar `whatsapp-chatbot` para detectar interações de aquecimento:
+- Quando receber mensagem, verificar se existe interação pendente na tabela `whatsapp_aquecimento_interacoes` com mesmo par origem/destino
+- Se sim, atualizar status para `RESPONDIDO`, calcular `tempo_resposta_segundos`, registrar `conteudo_resposta`
+- Atualizar métricas da instância (`respostas_recebidas`)
+
+---
+
+### 6. Agendar via pg_cron
+
+Criar cron job que invoca `whatsapp-aquecimento` a cada 15 minutos usando `pg_cron` + `pg_net`.
+
+---
 
 ### Detalhes técnicos
 
-No trecho que atualmente faz (linhas ~642-644):
-```text
-if (isFromMe) {
-  console.log('[INBOX] Ignorando fromMe...');
-} else { ... salva mensagem ... }
-```
-
-Mudar para: verificar se já existe mensagem recente com mesmo `instancia_id`, `telefone_remoto`, `conteudo` nos últimos 30s. Se não existir, salvar como `direcao: 'saida'`. Se já existir, pular (evita duplicação).
+- As tabelas usam `VARCHAR` para status em vez de enums para flexibilidade
+- O pool de diálogos vem pré-populado com ~20 textos + 4 áudios + 4 reações
+- Progressão de fase: Fase 1→2→3→4→AQUECIDO, cada uma com 7 dias e limites crescentes (5→10→15→25→30/dia)
+- Reset de `interacoes_hoje` será feito pela Edge Function no primeiro run do dia (quando detecta que a última interação foi de outro dia)
+- RLS: admin full access; usuários autenticados podem ver instâncias/interações vinculadas às suas próprias `user_whatsapp_instances`
 
