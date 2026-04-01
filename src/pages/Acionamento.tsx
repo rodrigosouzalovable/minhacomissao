@@ -578,6 +578,10 @@ export default function Acionamento() {
       toast.error('O tempo máximo deve ser maior que o mínimo');
       return;
     }
+    if (activeInstances.length === 0) {
+      toast.error('Nenhuma instância WhatsApp do tipo Robô está conectada. Conecte uma instância antes de enviar.');
+      return;
+    }
 
     // Build configs array from active instances
     const configs: UazapiInstance[] = activeInstances.map(i => ({
