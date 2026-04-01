@@ -654,33 +654,35 @@ serve(async (req) => {
             });
           }
 
-          // UPSERT contact
-          const { data: existingContact } = await supabase
-            .from('whatsapp_contatos')
-            .select('id, nao_lido')
-            .eq('instancia_id', instanciaId)
-            .eq('telefone', inboxTelefone)
-            .maybeSingle();
+          // UPSERT contact (only for incoming messages — send-whatsapp handles outgoing)
+          if (!isFromMe) {
+            const { data: existingContact } = await supabase
+              .from('whatsapp_contatos')
+              .select('id, nao_lido')
+              .eq('instancia_id', instanciaId)
+              .eq('telefone', inboxTelefone)
+              .maybeSingle();
 
-          if (existingContact) {
-            await supabase.from('whatsapp_contatos').update({
-              nome: isFromMe ? undefined : (inboxNomeContato || undefined),
-              ultima_mensagem: inboxTexto.slice(0, 200),
-              ultima_mensagem_em: agora,
-              nao_lido: isFromMe ? existingContact.nao_lido : existingContact.nao_lido + 1,
-            }).eq('id', existingContact.id);
-          } else {
-            await supabase.from('whatsapp_contatos').insert({
-              instancia_id: instanciaId,
-              telefone: inboxTelefone,
-              nome: isFromMe ? null : inboxNomeContato,
-              ultima_mensagem: inboxTexto.slice(0, 200),
-              ultima_mensagem_em: agora,
-              nao_lido: isFromMe ? 0 : 1,
-            });
+            if (existingContact) {
+              await supabase.from('whatsapp_contatos').update({
+                nome: inboxNomeContato || undefined,
+                ultima_mensagem: inboxTexto.slice(0, 200),
+                ultima_mensagem_em: agora,
+                nao_lido: existingContact.nao_lido + 1,
+              }).eq('id', existingContact.id);
+            } else {
+              await supabase.from('whatsapp_contatos').insert({
+                instancia_id: instanciaId,
+                telefone: inboxTelefone,
+                nome: inboxNomeContato,
+                ultima_mensagem: inboxTexto.slice(0, 200),
+                ultima_mensagem_em: agora,
+                nao_lido: 1,
+              });
+            }
+
+            console.log(`[INBOX] Mensagem entrada salva: ${inboxTelefone} (instancia: ${instanciaId})`);
           }
-
-          console.log(`[INBOX] Mensagem salva: ${direcao} ${inboxTelefone} (instancia: ${instanciaId})`);
         }
       } catch (inboxErr) {
         console.error('[INBOX] Erro ao salvar mensagem:', inboxErr);
