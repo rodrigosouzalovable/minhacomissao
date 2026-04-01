@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,7 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    const { telefone, mensagem, uazapi_server_url, uazapi_instance_token } = await req.json();
+    const { telefone, mensagem, uazapi_server_url, uazapi_instance_token, instancia_id } = await req.json();
     
     const tokenSuffix = uazapi_instance_token ? uazapi_instance_token.slice(-8) : 'global';
     console.log('Recebendo requisição para enviar WhatsApp:', { telefone, instance: tokenSuffix });
@@ -60,6 +61,52 @@ serve(async (req) => {
     }
 
     const data = await sendViaUazapi(serverUrl, instanceToken, telefoneCompleto, mensagem);
+
+    // --- INBOX: Salvar mensagem enviada no histórico ---
+    if (instancia_id) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const agora = new Date().toISOString();
+
+        await supabase.from('whatsapp_mensagens').insert({
+          instancia_id,
+          telefone_remoto: telefoneCompleto,
+          conteudo: mensagem,
+          direcao: 'saida',
+          timestamp_msg: agora,
+          lida: true,
+        });
+
+        // UPSERT contact
+        const { data: existingContact } = await supabase
+          .from('whatsapp_contatos')
+          .select('id')
+          .eq('instancia_id', instancia_id)
+          .eq('telefone', telefoneCompleto)
+          .maybeSingle();
+
+        if (existingContact) {
+          await supabase.from('whatsapp_contatos').update({
+            ultima_mensagem: mensagem.slice(0, 200),
+            ultima_mensagem_em: agora,
+          }).eq('id', existingContact.id);
+        } else {
+          await supabase.from('whatsapp_contatos').insert({
+            instancia_id,
+            telefone: telefoneCompleto,
+            ultima_mensagem: mensagem.slice(0, 200),
+            ultima_mensagem_em: agora,
+            nao_lido: 0,
+          });
+        }
+
+        console.log(`[INBOX] Mensagem de saída salva para ${telefoneCompleto}`);
+      } catch (inboxErr) {
+        console.error('[INBOX] Erro ao salvar msg de saída:', inboxErr);
+      }
+    }
 
     return new Response(JSON.stringify({ success: true, data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

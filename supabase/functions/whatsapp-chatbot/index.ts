@@ -612,6 +612,76 @@ serve(async (req) => {
       });
     }
 
+    // --- INBOX: Salvar mensagem no histórico ---
+    const inboxTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+    const inboxTexto = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+    const inboxNomeContato = payload?.message?.senderName || payload?.pushName || payload?.senderName || payload?.message?.pushName || null;
+    const inboxServerUrl = payload?.BaseUrl?.replace(/\/+$/, '') || '';
+    const inboxInstanceToken = payload?.token || '';
+
+    if (inboxTelefone && inboxTexto) {
+      try {
+        // Find the instance by matching token
+        let instanciaId: string | null = null;
+        if (inboxInstanceToken) {
+          const { data: instancia } = await supabase
+            .from('user_whatsapp_instances')
+            .select('id')
+            .eq('instance_token', inboxInstanceToken)
+            .eq('ativo', true)
+            .limit(1)
+            .maybeSingle();
+          instanciaId = instancia?.id || null;
+        }
+
+        if (instanciaId) {
+          const direcao = isFromMe ? 'saida' : 'entrada';
+          const agora = new Date().toISOString();
+
+          // INSERT message
+          await supabase.from('whatsapp_mensagens').insert({
+            instancia_id: instanciaId,
+            telefone_remoto: inboxTelefone,
+            nome_contato: isFromMe ? null : inboxNomeContato,
+            conteudo: inboxTexto,
+            direcao,
+            timestamp_msg: agora,
+            lida: isFromMe,
+          });
+
+          // UPSERT contact
+          const { data: existingContact } = await supabase
+            .from('whatsapp_contatos')
+            .select('id, nao_lido')
+            .eq('instancia_id', instanciaId)
+            .eq('telefone', inboxTelefone)
+            .maybeSingle();
+
+          if (existingContact) {
+            await supabase.from('whatsapp_contatos').update({
+              nome: isFromMe ? undefined : (inboxNomeContato || undefined),
+              ultima_mensagem: inboxTexto.slice(0, 200),
+              ultima_mensagem_em: agora,
+              nao_lido: isFromMe ? existingContact.nao_lido : existingContact.nao_lido + 1,
+            }).eq('id', existingContact.id);
+          } else {
+            await supabase.from('whatsapp_contatos').insert({
+              instancia_id: instanciaId,
+              telefone: inboxTelefone,
+              nome: isFromMe ? null : inboxNomeContato,
+              ultima_mensagem: inboxTexto.slice(0, 200),
+              ultima_mensagem_em: agora,
+              nao_lido: isFromMe ? 0 : 1,
+            });
+          }
+
+          console.log(`[INBOX] Mensagem salva: ${direcao} ${inboxTelefone} (instancia: ${instanciaId})`);
+        }
+      } catch (inboxErr) {
+        console.error('[INBOX] Erro ao salvar mensagem:', inboxErr);
+      }
+    }
+
     // --- Track fromMe messages (outbound proposals) ---
     if (isFromMe) {
       const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
