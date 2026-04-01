@@ -298,6 +298,11 @@ export default function Acionamento() {
     [instances, connectionStatus]
   );
 
+  const connectedCount = useMemo(() => 
+    instances.filter(i => connectionStatus[i.id] === 'connected').length,
+    [instances, connectionStatus]
+  );
+
   const activeInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected' && !i.apenas_lembretes && i.robo), 
     [instances, connectionStatus]
@@ -1518,7 +1523,14 @@ export default function Acionamento() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
+                      {instances.length > 0 && (
+                        <Badge variant={connectedCount > 0 ? 'default' : 'secondary'} className="text-xs">
+                          {connectedCount}/{instances.length} conectado{connectedCount !== 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       Cadastre múltiplos WhatsApps para rotação automática dos envios.
                     </p>
