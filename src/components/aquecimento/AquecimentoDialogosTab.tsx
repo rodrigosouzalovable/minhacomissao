@@ -109,19 +109,23 @@ export default function AquecimentoDialogosTab() {
   }
 
   async function handleSave() {
-    if (form.tipo === 'audio' && !editingId) {
-      // Batch create: one dialog per audio file
-      if (audioFiles.length === 0) {
-        toast({ title: 'Selecione pelo menos um áudio', variant: 'destructive' });
+    const isFileType = form.tipo === 'audio' || form.tipo === 'imagem';
+    const files = form.tipo === 'audio' ? audioFiles : imageFiles;
+    const folder = form.tipo === 'audio' ? 'aquecimento' : 'aquecimento-imagens';
+    const label = form.tipo === 'audio' ? 'áudio' : 'imagem';
+
+    if (isFileType && !editingId) {
+      if (files.length === 0) {
+        toast({ title: `Selecione pelo menos um ${label}`, variant: 'destructive' });
         return;
       }
       setUploading(true);
       let created = 0;
-      for (const file of audioFiles) {
-        const url = await uploadAudio(file);
+      for (const file of files) {
+        const url = await uploadFile(file, folder);
         if (url) {
           await supabase.from('whatsapp_aquecimento_dialogos' as any).insert({
-            tipo: 'audio',
+            tipo: form.tipo,
             conteudo: url,
             conteudo_resposta_esperada: form.conteudo_resposta_esperada || null,
             fase_minima: form.fase_minima,
@@ -131,13 +135,12 @@ export default function AquecimentoDialogosTab() {
         }
       }
       setUploading(false);
-      toast({ title: `${created} áudio(s) adicionado(s)!` });
-    } else if (form.tipo === 'audio' && editingId) {
-      // Edit: if new file uploaded, replace; otherwise keep existing content
+      toast({ title: `${created} ${label}(s) adicionado(s)!` });
+    } else if (isFileType && editingId) {
       setUploading(true);
       let conteudo = form.conteudo;
-      if (audioFiles.length > 0) {
-        const url = await uploadAudio(audioFiles[0]);
+      if (files.length > 0) {
+        const url = await uploadFile(files[0], folder);
         if (url) conteudo = url;
       }
       await supabase.from('whatsapp_aquecimento_dialogos' as any).update({
@@ -171,6 +174,7 @@ export default function AquecimentoDialogosTab() {
     }
     setDialogOpen(false);
     setAudioFiles([]);
+    setImageFiles([]);
     loadDialogos();
   }
 
