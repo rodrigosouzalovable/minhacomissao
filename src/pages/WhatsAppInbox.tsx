@@ -244,7 +244,7 @@ export default function WhatsAppInbox() {
             )}
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
             {contatosFiltrados.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground text-sm">
                 <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
