@@ -1,46 +1,16 @@
 
 
-## Plan: Otimizar Custos — Cron, Modelos IA e Funções
+## Plano: Central de WhatsApp (Inbox Unificado) — V1 ✅ IMPLEMENTADO
 
-### 1. Reduzir frequência do cron `process-whatsapp-queue`
+### O que foi feito:
 
-Change from every 5 minutes to every 10 minutes via SQL (drop old job, create new one). This cuts executions from ~8,640/month to ~4,320/month.
+1. **Tabelas criadas**: `whatsapp_mensagens` e `whatsapp_contatos` com RLS, índices e Realtime habilitado
+2. **whatsapp-chatbot** modificado para salvar todas as mensagens (entrada e saída) automaticamente
+3. **send-whatsapp** modificado para salvar mensagens enviadas pelo Inbox (quando `instancia_id` é passado)
+4. **Página `/inbox`** criada com layout estilo WhatsApp Web (dois painéis, balões de mensagem, realtime)
+5. **Rota e navegação** adicionadas (admin only)
 
-```sql
-SELECT cron.unschedule('process-whatsapp-queue-5min');
-SELECT cron.schedule('process-whatsapp-queue-10min', '*/10 * * * *', ...);
-```
-
-### 2. Trocar modelos de IA mais caros por versões mais baratas
-
-Current usage and proposed changes:
-
-| Function | Current Model | Proposed | Rationale |
-|---|---|---|---|
-| `extract-acordo-data` | gemini-2.5-flash | gemini-2.5-flash-lite | Simple data extraction |
-| `extract-pdf-acordo` | gemini-2.5-flash | gemini-2.5-flash-lite | Structured extraction via tool call |
-| `extract-texto-acordo` | gemini-3-flash-preview | gemini-2.5-flash-lite | Text extraction from images |
-| `transcribe-audio` | gemini-2.5-flash | gemini-2.5-flash-lite | Audio transcription |
-| `teach-chatbot` | gemini-2.5-flash | gemini-2.5-flash-lite | Knowledge processing |
-| `gerar-termo-acordo` | gemini-3-flash-preview | gemini-2.5-flash | Document generation (needs quality) |
-| `process-cobmais-video` | gemini-2.5-pro | gemini-2.5-flash | Video analysis (downgrade from Pro) |
-| `analyze-cobmais-screen` | gemini-2.5-pro | gemini-2.5-flash | Screen analysis (downgrade from Pro) |
-
-**Keep unchanged** (already optimal or need quality):
-- `whatsapp-chatbot` — already uses flash-lite for most calls
-- `gerar-estrategia-cobranca` — complex reasoning, keep gemini-3-flash-preview
-- `chat-cobmais-knowledge` — complex knowledge chat, keep gemini-3-flash-preview
-- `process-pos-atendimento` — already uses flash-lite
-
-### 3. No obsolete Edge Functions to remove
-
-All 29 functions are actively referenced in the frontend code or called by other functions/cron jobs. None are candidates for removal.
-
----
-
-### Technical Details
-
-- Cron change requires a database migration using `cron.unschedule` + `cron.schedule`
-- Model changes are simple string replacements in each edge function's `index.ts`
-- Estimated cost reduction: ~50% on cron executions + ~30-60% on AI token costs depending on usage patterns
-
+### Próximos passos (V2):
+- Suporte a mídia (imagens, áudio)
+- Scroll infinito / paginação
+- Envio de áudios pelo inbox
