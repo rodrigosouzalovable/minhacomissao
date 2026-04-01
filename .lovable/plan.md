@@ -1,17 +1,35 @@
 
 
-## Reconectar WhatsApp via QR Code no botão Editar
+## Diagnóstico e Correção do Erro de Envio no Acionamento
 
-### O que será feito
-Adicionar um botão "Reconectar" dentro do formulário de edição de instância, visível apenas quando a instância está desconectada. Ao clicar, o sistema reutiliza a instância existente (sem criar uma nova) e exibe o QR Code para reconexão.
+### Problema Identificado
 
-### Alterações em `src/pages/Acionamento.tsx`
+Os logs da edge function `send-whatsapp` mostram claramente:
 
-1. **Novo handler `handleReconnectQr`**: Similar ao `handleRefreshQr`, mas recebe o `instanceId` da instância sendo editada. Chama a action `qr` da edge function `whatsapp-qr` com o ID da instância existente, exibe o QR code inline no formulário de edição, e inicia o polling de status.
+```text
+instance: "global"           ← nenhuma instância UAZAPI foi passada
+Resposta: 401 Invalid token  ← o token global está expirado/inválido
+```
 
-2. **Botão "Reconectar via QR" no formulário de edição**: Quando `editingInstance.id` existe e o `connectionStatus[editingInstance.id]` é `'disconnected'`, mostrar um botão com ícone `QrCode` dentro do formulário de edição (entre os campos e o botão Salvar). Ao clicar, chama `handleReconnectQr`.
+**Causa raiz**: Nenhuma instância WhatsApp marcada como "Robô" e conectada foi encontrada. Quando isso acontece, a função cai no fallback usando os secrets globais (`UAZAPI_INSTANCE_TOKEN`), cujo token está inválido.
 
-3. **QR Code inline no formulário de edição**: Quando o QR é obtido para reconexão, exibir a imagem do QR e o pairing code diretamente dentro do formulário de edição (mesma UI do fluxo de conexão existente — imagem, countdown, polling).
+Dois problemas simultâneos:
+1. **Token global expirado** — o secret `UAZAPI_INSTANCE_TOKEN` armazenado não é mais aceito pela UAZAPI
+2. **Sem fallback claro para o usuário** — quando não há instância ativa do tipo "Robô", o sistema tenta silenciosamente com credenciais globais sem avisar
 
-4. **Estado auxiliar**: Adicionar um state `reconnectingInstanceId` para diferenciar o fluxo de reconexão do fluxo de nova conexão. O polling de status reutiliza `startQrPolling` existente, e ao conectar com sucesso fecha o formulário de edição automaticamente.
+### Correções Propostas
+
+#### 1. Melhorar feedback no Acionamento (`src/pages/Acionamento.tsx`)
+- No `handleSend` e no `handleStartAutoSend`, **antes de enviar**, verificar se `activeInstances.length === 0` e mostrar um `toast.error` claro: _"Nenhuma instância WhatsApp do tipo Robô está conectada. Conecte uma instância antes de enviar."_ e interromper o envio.
+- Isso evita envios silenciosos com credenciais globais inválidas.
+
+#### 2. Otimizar endpoints na edge function (`supabase/functions/send-whatsapp/index.ts`)
+- Reordenar os endpoints para tentar `/send/text` primeiro (o único que funciona), seguido dos outros como fallback.
+- Isso reduz latência e logs desnecessários.
+
+#### 3. Melhorar mensagem de erro na edge function
+- Quando todos os endpoints falham com "Invalid token", retornar uma mensagem mais clara: _"Token UAZAPI inválido. Verifique as credenciais da instância."_
+
+### Sobre o token global
+O secret `UAZAPI_INSTANCE_TOKEN` precisa ser atualizado com um token válido. Após a implementação, vou solicitar a atualização do secret se necessário. Porém, com a correção #1, o sistema não tentará mais usar credenciais globais no acionamento — exigirá uma instância Robô conectada.
 
