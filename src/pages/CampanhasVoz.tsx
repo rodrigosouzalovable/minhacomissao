@@ -1,8 +1,8 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet, Phone, MessageSquare } from 'lucide-react';
+import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import * as XLSX from 'xlsx';
@@ -20,7 +20,7 @@ import * as XLSX from 'xlsx';
 type Campaign = {
   id: string;
   name: string;
-  audio_url: string;
+  audio_url: string | null;
   status: string;
   created_at: string;
   started_at: string | null;
@@ -31,6 +31,14 @@ type Campaign = {
   campaign_type?: string;
 };
 
+type CampaignAudio = {
+  id: string;
+  campaign_id: string;
+  audio_url: string;
+  file_name: string;
+  created_at: string;
+};
+
 type CampaignContact = {
   id: string;
   campaign_id: string;
@@ -39,10 +47,12 @@ type CampaignContact = {
   status: string;
   enviado_em: string | null;
   erro_mensagem: string | null;
-  call_id: string | null;
-  answered_at: string | null;
-  duration: number | null;
-  call_type: string | null;
+};
+
+type AudioFileItem = {
+  file: File;
+  previewUrl: string;
+  name: string;
 };
 
 export default function CampanhasVoz() {
@@ -50,18 +60,19 @@ export default function CampanhasVoz() {
   const queryClient = useQueryClient();
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [campaignName, setCampaignName] = useState('');
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioFiles, setAudioFiles] = useState<AudioFileItem[]>([]);
+  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
-  const [contactSource, setContactSource] = useState<'acordos' | 'devedores' | 'planilha'>('acordos');
+  const [contactSource, setContactSource] = useState<'acordos' | 'devedores' | 'planilha'>('planilha');
   const [importedContacts, setImportedContacts] = useState<{ id: string; nome: string; telefone: string }[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
+  const [delayMin, setDelayMin] = useState(1);
+  const [delayMax, setDelayMax] = useState(5);
   const audioRef = useRef<HTMLAudioElement>(null);
   const cancelRef = useRef(false);
-  const [campaignType, setCampaignType] = useState<'audio_message' | 'voice_call'>('audio_message');
 
   // Fetch campaigns
   const { data: campaigns = [], isLoading: loadingCampaigns } = useQuery({
@@ -77,7 +88,7 @@ export default function CampanhasVoz() {
     enabled: !!user,
   });
 
-  // Fetch campaign contacts with polling for realtime updates
+  // Fetch campaign contacts
   const { data: campaignContacts = [] } = useQuery({
     queryKey: ['voice-campaign-contacts', selectedCampaignId],
     queryFn: async () => {
@@ -91,7 +102,23 @@ export default function CampanhasVoz() {
       return data as CampaignContact[];
     },
     enabled: !!selectedCampaignId,
-    refetchInterval: sendingCampaignId ? 5000 : false, // Poll every 5s during active campaign
+    refetchInterval: sendingCampaignId ? 5000 : false,
+  });
+
+  // Fetch campaign audios
+  const { data: campaignAudios = [] } = useQuery({
+    queryKey: ['voice-campaign-audios', selectedCampaignId],
+    queryFn: async () => {
+      if (!selectedCampaignId) return [];
+      const { data, error } = await supabase
+        .from('voice_campaign_audios')
+        .select('*')
+        .eq('campaign_id', selectedCampaignId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data as CampaignAudio[];
+    },
+    enabled: !!selectedCampaignId,
   });
 
   // Fetch WhatsApp instances
@@ -109,9 +136,7 @@ export default function CampanhasVoz() {
     enabled: !!user,
   });
 
-  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
-
-  // Fetch contacts for selection
+  // Fetch DB contacts
   const { data: dbContacts = [] } = useQuery({
     queryKey: ['available-contacts', contactSource, user?.id],
     queryFn: async () => {
@@ -123,11 +148,7 @@ export default function CampanhasVoz() {
           .eq('status', 'ativo')
           .not('cliente_telefone', 'is', null);
         if (error) throw error;
-        return (data || []).map(a => ({
-          id: a.id,
-          nome: a.cliente_nome,
-          telefone: a.cliente_telefone!,
-        }));
+        return (data || []).map(a => ({ id: a.id, nome: a.cliente_nome, telefone: a.cliente_telefone! }));
       } else if (contactSource === 'devedores') {
         const { data, error } = await supabase
           .from('devedores')
@@ -135,11 +156,7 @@ export default function CampanhasVoz() {
           .eq('ativo', true)
           .not('telefone', 'is', null);
         if (error) throw error;
-        return (data || []).map(d => ({
-          id: d.id,
-          nome: d.nome,
-          telefone: d.telefone!,
-        }));
+        return (data || []).map(d => ({ id: d.id, nome: d.nome, telefone: d.telefone! }));
       }
       return [];
     },
@@ -158,11 +175,11 @@ export default function CampanhasVoz() {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
       const contacts = rows.slice(1)
-        .filter(row => row[2])
+        .filter(row => row[1])
         .map(row => ({
           id: crypto.randomUUID(),
-          nome: String(row[1] || ''),
-          telefone: String(row[2] || '').replace(/\D/g, ''),
+          nome: String(row[0] || ''),
+          telefone: String(row[1] || '').replace(/\D/g, ''),
         }))
         .filter(c => c.telefone.length >= 8);
       setImportedContacts(contacts);
@@ -173,62 +190,101 @@ export default function CampanhasVoz() {
     reader.readAsArrayBuffer(file);
   };
 
-  // Audio file handling
-  const handleAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const allowed = ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/ogg', 'audio/wav'];
-    if (!allowed.some(t => file.type.startsWith(t.split('/')[0]))) {
-      toast.error('Formato de áudio não suportado');
+  // Multi-audio handling
+  const handleAudioFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newItems: AudioFileItem[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      newItems.push({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        name: file.name,
+      });
+    }
+    setAudioFiles(prev => [...prev, ...newItems]);
+  };
+
+  const removeAudioFile = (index: number) => {
+    setAudioFiles(prev => {
+      const next = [...prev];
+      URL.revokeObjectURL(next[index].previewUrl);
+      next.splice(index, 1);
+      return next;
+    });
+    if (playingIndex === index) {
+      audioRef.current?.pause();
+      setPlayingIndex(null);
+    }
+  };
+
+  const togglePlayAudio = (index: number) => {
+    if (!audioRef.current) return;
+    if (playingIndex === index) {
+      audioRef.current.pause();
+      setPlayingIndex(null);
+    } else {
+      audioRef.current.src = audioFiles[index].previewUrl;
+      audioRef.current.play();
+      setPlayingIndex(index);
+    }
+  };
+
+  // Create campaign with multiple audios
+  const createCampaign = async () => {
+    if (!user || audioFiles.length === 0 || !campaignName.trim()) {
+      toast.error('Preencha o nome e adicione pelo menos um áudio');
       return;
     }
-    setAudioFile(file);
-    setAudioPreviewUrl(URL.createObjectURL(file));
-  };
-
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
-  };
-
-  // Create campaign
-  const createCampaign = async () => {
-    if (!user || !audioFile || !campaignName.trim()) {
-      toast.error('Preencha o nome e selecione um áudio');
+    if (selectedInstanceIds.length === 0) {
+      toast.error('Selecione pelo menos um WhatsApp');
       return;
     }
     setUploading(true);
     try {
-      const ext = audioFile.name.split('.').pop() || 'mp3';
-      const filePath = `${user.id}/${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('campaign-audio')
-        .upload(filePath, audioFile);
-      if (uploadError) throw uploadError;
+      // Upload all audio files
+      const uploadedAudios: { audio_url: string; file_name: string }[] = [];
+      for (const item of audioFiles) {
+        const ext = item.file.name.split('.').pop() || 'mp3';
+        const filePath = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('campaign-audio')
+          .upload(filePath, item.file);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from('campaign-audio')
+          .getPublicUrl(filePath);
+        uploadedAudios.push({ audio_url: publicUrl, file_name: item.name });
+      }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('campaign-audio')
-        .getPublicUrl(filePath);
-
-      const { error } = await supabase
+      // Create campaign (audio_url = first audio for backward compat)
+      const { data: newCampaign, error } = await supabase
         .from('voice_campaigns')
         .insert({
           user_id: user.id,
           name: campaignName.trim(),
-          audio_url: publicUrl,
-          campaign_type: campaignType,
-        } as any);
+          audio_url: uploadedAudios[0].audio_url,
+          campaign_type: 'audio_message',
+        } as any)
+        .select('id')
+        .single();
       if (error) throw error;
+
+      // Insert all audios into voice_campaign_audios
+      const audioInserts = uploadedAudios.map(a => ({
+        campaign_id: newCampaign.id,
+        audio_url: a.audio_url,
+        file_name: a.file_name,
+      }));
+      const { error: audioError } = await supabase
+        .from('voice_campaign_audios')
+        .insert(audioInserts as any);
+      if (audioError) throw audioError;
 
       toast.success('Campanha criada!');
       setCampaignName('');
-      setAudioFile(null);
-      setAudioPreviewUrl(null);
+      setAudioFiles([]);
       setShowNewCampaign(false);
       queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
     } catch (err: any) {
@@ -256,7 +312,6 @@ export default function CampanhasVoz() {
       return;
     }
 
-    // Update total_contacts
     await supabase
       .from('voice_campaigns')
       .update({ total_contacts: (campaignContacts.length + contacts.length) } as any)
@@ -268,7 +323,7 @@ export default function CampanhasVoz() {
     queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
   };
 
-  // Start sending campaign
+  // Start campaign with combined round-robin (audio + instance)
   const startCampaign = async (campaign: Campaign) => {
     const activeInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
     if (activeInstances.length === 0) {
@@ -276,7 +331,24 @@ export default function CampanhasVoz() {
       return;
     }
 
-    const isVoiceCall = campaign.campaign_type === 'voice_call';
+    // Get audios for this campaign
+    const { data: audios } = await supabase
+      .from('voice_campaign_audios')
+      .select('*')
+      .eq('campaign_id', campaign.id)
+      .order('created_at', { ascending: true });
+
+    // Fallback: if no audios in new table, use legacy audio_url
+    const audioList: { audio_url: string; file_name: string }[] = (audios && audios.length > 0)
+      ? audios.map(a => ({ audio_url: a.audio_url, file_name: a.file_name }))
+      : campaign.audio_url
+        ? [{ audio_url: campaign.audio_url, file_name: 'audio' }]
+        : [];
+
+    if (audioList.length === 0) {
+      toast.error('Nenhum áudio encontrado para esta campanha');
+      return;
+    }
 
     // Get pending contacts
     const { data: pendingContacts, error } = await supabase
@@ -298,8 +370,7 @@ export default function CampanhasVoz() {
       .eq('id', campaign.id);
     queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
 
-    const actionLabel = isVoiceCall ? 'chamadas' : 'envios';
-    toast.success(`Iniciando ${actionLabel} para ${pendingContacts.length} contatos...`);
+    toast.success(`Iniciando envio para ${pendingContacts.length} contatos com ${audioList.length} áudio(s) e ${activeInstances.length} WhatsApp(s)...`);
 
     let sent = campaign.total_sent;
     let errors = campaign.total_errors;
@@ -308,48 +379,25 @@ export default function CampanhasVoz() {
       if (cancelRef.current) break;
       const contact = pendingContacts[i];
       const instance = activeInstances[i % activeInstances.length];
+      const audio = audioList[i % audioList.length];
 
       try {
-        if (isVoiceCall) {
-          // Voice call mode: initiate call via voice-campaign-call
-          const { data, error: fnError } = await supabase.functions.invoke('voice-campaign-call', {
-            body: {
-              campaign_id: campaign.id,
-              contact_id: contact.id,
-              phone_number: contact.telefone,
-              server_url: instance.server_url,
-              instance_token: instance.instance_token,
-            },
-          });
+        const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
+          body: {
+            telefone: contact.telefone,
+            audio_url: audio.audio_url,
+            uazapi_server_url: instance.server_url,
+            uazapi_instance_token: instance.instance_token,
+          },
+        });
 
-          if (fnError || !data?.success) {
-            const errMsg = fnError?.message || data?.error || 'Erro na chamada';
-            await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
-            errors++;
-          } else {
-            // Call initiated - status updated by edge function to 'chamando'
-            // Webhook will handle 'answered'/'missed'/'rejected'
-            sent++; // Count as "processed"
-          }
+        if (fnError || !data?.success) {
+          const errMsg = fnError?.message || data?.error || 'Erro';
+          await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
+          errors++;
         } else {
-          // Audio message mode (existing behavior)
-          const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
-            body: {
-              telefone: contact.telefone,
-              audio_url: campaign.audio_url,
-              uazapi_server_url: instance.server_url,
-              uazapi_instance_token: instance.instance_token,
-            },
-          });
-
-          if (fnError || !data?.success) {
-            const errMsg = fnError?.message || data?.error || 'Erro';
-            await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: errMsg } as any).eq('id', contact.id);
-            errors++;
-          } else {
-            await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
-            sent++;
-          }
+          await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
+          sent++;
         }
       } catch (err: any) {
         await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: err.message } as any).eq('id', contact.id);
@@ -359,11 +407,13 @@ export default function CampanhasVoz() {
       await supabase.from('voice_campaigns').update({ total_sent: sent, total_errors: errors } as any).eq('id', campaign.id);
       queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaign.id] });
 
-      // Random delay 5-15 min between sends (skip last)
+      // Configurable random delay
       if (i < pendingContacts.length - 1 && !cancelRef.current) {
-        const delay = (5 + Math.random() * 10) * 60 * 1000;
+        const min = Math.max(0.1, delayMin);
+        const max = Math.max(min, delayMax);
+        const delay = (min + Math.random() * (max - min)) * 60 * 1000;
         const mins = Math.round(delay / 60000);
-        toast.info(`Próximo ${isVoiceCall ? 'chamada' : 'envio'} em ~${mins} minutos...`);
+        toast.info(`Próximo envio em ~${mins} minuto(s)...`);
         await new Promise<void>(resolve => {
           const timer = setTimeout(resolve, delay);
           const check = setInterval(() => {
@@ -391,9 +441,7 @@ export default function CampanhasVoz() {
     toast.success(cancelRef.current ? 'Campanha cancelada' : 'Campanha finalizada!');
   };
 
-  const cancelCampaign = () => {
-    cancelRef.current = true;
-  };
+  const cancelCampaign = () => { cancelRef.current = true; };
 
   const exportReport = (contacts: CampaignContact[]) => {
     exportarParaExcel(contacts, [
@@ -413,24 +461,25 @@ export default function CampanhasVoz() {
     });
   };
 
+  const toggleAllContacts = () => {
+    if (selectedContacts.size === availableContacts.length) {
+      setSelectedContacts(new Set());
+    } else {
+      setSelectedContacts(new Set(availableContacts.map(c => c.id)));
+    }
+  };
+
   const deleteCampaign = async (campaignId: string) => {
     if (!confirm('Tem certeza que deseja excluir esta campanha?')) return;
     try {
       await supabase.from('voice_campaign_contacts').delete().eq('campaign_id', campaignId);
+      await supabase.from('voice_campaign_audios').delete().eq('campaign_id', campaignId);
       await supabase.from('voice_campaigns').delete().eq('id', campaignId);
       if (selectedCampaignId === campaignId) setSelectedCampaignId(null);
       queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
       toast.success('Campanha excluída');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao excluir');
-    }
-  };
-
-  const toggleAllContacts = () => {
-    if (selectedContacts.size === availableContacts.length) {
-      setSelectedContacts(new Set());
-    } else {
-      setSelectedContacts(new Set(availableContacts.map(c => c.id)));
     }
   };
 
@@ -443,19 +492,17 @@ export default function CampanhasVoz() {
     enviando: 'bg-blue-100 text-blue-800',
     concluido: 'bg-green-100 text-green-800',
     cancelado: 'bg-red-100 text-red-800',
-    chamando: 'bg-blue-200 text-blue-900',
-    atendido: 'bg-green-200 text-green-900',
-    'não atendeu': 'bg-orange-100 text-orange-800',
-    rejeitado: 'bg-red-200 text-red-900',
   };
 
   return (
     <AppLayout>
       <div className="space-y-6">
+        <audio ref={audioRef} onEnded={() => setPlayingIndex(null)} className="hidden" />
+
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Campanhas de Voz</h1>
-            <p className="text-muted-foreground">Envie áudios em massa via WhatsApp</p>
+            <p className="text-muted-foreground">Envie áudios em massa via WhatsApp como nota de voz</p>
           </div>
           <Button onClick={() => setShowNewCampaign(!showNewCampaign)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -481,36 +528,8 @@ export default function CampanhasVoz() {
                   placeholder="Ex: Lembrete de pagamento"
                 />
               </div>
-              <div>
-                <Label>Tipo de Campanha</Label>
-                <div className="flex gap-3 mt-2">
-                  <Button
-                    type="button"
-                    variant={campaignType === 'audio_message' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setCampaignType('audio_message')}
-                    className="flex items-center gap-2"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    Mensagem de Áudio
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={campaignType === 'voice_call' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setCampaignType('voice_call')}
-                    className="flex items-center gap-2"
-                  >
-                    <Phone className="h-4 w-4" />
-                    Chamada de Voz
-                  </Button>
-                </div>
-                {campaignType === 'voice_call' && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ⚠️ Os endpoints de chamada (/call/make, /call/play-audio) precisam ser verificados na documentação da UAZAPI.
-                  </p>
-                )}
-              </div>
+
+              {/* WhatsApp instances */}
               <div>
                 <Label>WhatsApp para envio (selecione um ou mais)</Label>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
@@ -520,9 +539,7 @@ export default function CampanhasVoz() {
                         checked={selectedInstanceIds.includes(inst.id)}
                         onCheckedChange={(checked) => {
                           setSelectedInstanceIds(prev =>
-                            checked
-                              ? [...prev, inst.id]
-                              : prev.filter(id => id !== inst.id)
+                            checked ? [...prev, inst.id] : prev.filter(id => id !== inst.id)
                           );
                         }}
                       />
@@ -534,31 +551,68 @@ export default function CampanhasVoz() {
                   )}
                 </div>
               </div>
+
+              {/* Multi-audio upload */}
               <div>
-                <Label>Áudio (MP3, M4A, AAC, OGG, WAV)</Label>
+                <Label>Áudios (selecione um ou mais arquivos)</Label>
                 <Input
                   type="file"
                   accept="audio/*"
-                  onChange={handleAudioChange}
+                  multiple
+                  onChange={handleAudioFilesChange}
                 />
               </div>
-              {audioPreviewUrl && (
-                <div className="flex items-center gap-3">
-                  <Button size="sm" variant="outline" onClick={togglePlay}>
-                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                  </Button>
-                  <audio
-                    ref={audioRef}
-                    src={audioPreviewUrl}
-                    onEnded={() => setIsPlaying(false)}
-                  />
-                  <span className="text-sm text-muted-foreground">{audioFile?.name}</span>
+
+              {audioFiles.length > 0 && (
+                <div className="space-y-2 border rounded-md p-3">
+                  <p className="text-sm font-medium">{audioFiles.length} áudio(s) selecionado(s)</p>
+                  {audioFiles.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-3 p-2 bg-muted rounded">
+                      <Badge variant="outline" className="shrink-0">Áudio {idx + 1}</Badge>
+                      <Button size="sm" variant="ghost" onClick={() => togglePlayAudio(idx)} className="h-7 w-7 p-0">
+                        {playingIndex === idx ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                      </Button>
+                      <span className="text-sm truncate flex-1">{item.name}</span>
+                      <Button size="sm" variant="ghost" onClick={() => removeAudioFile(idx)} className="h-7 w-7 p-0 text-destructive">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               )}
+
+              {/* Delay config */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Delay mínimo (minutos)</Label>
+                  <Input
+                    type="number"
+                    min={0.1}
+                    step={0.5}
+                    value={delayMin}
+                    onChange={(e) => setDelayMin(Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <Label>Delay máximo (minutos)</Label>
+                  <Input
+                    type="number"
+                    min={0.1}
+                    step={0.5}
+                    value={delayMax}
+                    onChange={(e) => setDelayMax(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                O intervalo entre cada envio será aleatório entre {delayMin} e {delayMax} minuto(s)
+              </p>
+
+              {/* Excel import in creation */}
               <div>
                 <Label className="flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4" />
-                  Importar contatos da planilha (Coluna B = Nome, Coluna C = Telefone)
+                  Importar contatos da planilha (Coluna A = Nome, Coluna B = Telefone)
                 </Label>
                 <Input
                   type="file"
@@ -572,7 +626,8 @@ export default function CampanhasVoz() {
                   </p>
                 )}
               </div>
-              <Button onClick={createCampaign} disabled={uploading || !audioFile || !campaignName.trim()}>
+
+              <Button onClick={createCampaign} disabled={uploading || audioFiles.length === 0 || !campaignName.trim()}>
                 {uploading ? 'Enviando...' : 'Criar Campanha'}
               </Button>
             </CardContent>
@@ -594,9 +649,6 @@ export default function CampanhasVoz() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold truncate">{campaign.name}</h3>
                   <div className="flex items-center gap-2">
-                    {campaign.campaign_type === 'voice_call' && (
-                      <Badge variant="outline" className="text-xs"><Phone className="h-3 w-3 mr-1" />Chamada</Badge>
-                    )}
                     <Badge className={statusColors[campaign.status] || ''}>
                       {campaign.status}
                     </Badge>
@@ -632,11 +684,11 @@ export default function CampanhasVoz() {
         {selectedCampaign && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-lg">{selectedCampaign.name}</CardTitle>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {selectedCampaign.status !== 'enviando' && campaignContacts.length > 0 && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <div className="flex flex-wrap gap-2 border rounded-md p-2 max-w-md">
                         {instances.map(inst => (
                           <label key={inst.id} className="flex items-center gap-1.5 cursor-pointer text-xs">
@@ -644,15 +696,35 @@ export default function CampanhasVoz() {
                               checked={selectedInstanceIds.includes(inst.id)}
                               onCheckedChange={(checked) => {
                                 setSelectedInstanceIds(prev =>
-                                  checked
-                                    ? [...prev, inst.id]
-                                    : prev.filter(id => id !== inst.id)
+                                  checked ? [...prev, inst.id] : prev.filter(id => id !== inst.id)
                                 );
                               }}
                             />
                             <span>{inst.nome || inst.server_url}</span>
                           </label>
                         ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0.1}
+                          step={0.5}
+                          value={delayMin}
+                          onChange={(e) => setDelayMin(Number(e.target.value))}
+                          className="w-20 h-8 text-xs"
+                          placeholder="Min"
+                        />
+                        <span className="text-xs text-muted-foreground">a</span>
+                        <Input
+                          type="number"
+                          min={0.1}
+                          step={0.5}
+                          value={delayMax}
+                          onChange={(e) => setDelayMax(Number(e.target.value))}
+                          className="w-20 h-8 text-xs"
+                          placeholder="Max"
+                        />
+                        <span className="text-xs text-muted-foreground">min</span>
                       </div>
                       <Button
                         onClick={() => startCampaign(selectedCampaign)}
@@ -679,10 +751,26 @@ export default function CampanhasVoz() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Audio preview */}
-              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                <Mic className="h-5 w-5 text-muted-foreground" />
-                <audio controls src={selectedCampaign.audio_url} className="flex-1 h-8" />
+              {/* Audios preview */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Áudios da campanha ({campaignAudios.length})</p>
+                {campaignAudios.length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {campaignAudios.map((a, idx) => (
+                      <div key={a.id} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                        <Badge variant="outline" className="shrink-0 text-xs">Áudio {idx + 1}</Badge>
+                        <audio controls src={a.audio_url} className="flex-1 h-8" />
+                      </div>
+                    ))}
+                  </div>
+                ) : selectedCampaign.audio_url ? (
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <Mic className="h-5 w-5 text-muted-foreground" />
+                    <audio controls src={selectedCampaign.audio_url} className="flex-1 h-8" />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum áudio</p>
+                )}
               </div>
 
               {/* Add contacts section */}
@@ -700,7 +788,7 @@ export default function CampanhasVoz() {
                         <SelectItem value="planilha">Planilha</SelectItem>
                       </SelectContent>
                     </Select>
-                   </div>
+                  </div>
 
                   {contactSource === 'planilha' && (
                     <div className="flex items-center gap-3">
@@ -711,7 +799,7 @@ export default function CampanhasVoz() {
                         onChange={handleExcelImport}
                         className="max-w-xs"
                       />
-                      <span className="text-xs text-muted-foreground">Coluna B = Nome, Coluna C = Telefone</span>
+                      <span className="text-xs text-muted-foreground">Coluna A = Nome, Coluna B = Telefone</span>
                     </div>
                   )}
 
@@ -745,11 +833,7 @@ export default function CampanhasVoz() {
                       </TableBody>
                     </Table>
                   </div>
-                  <Button
-                    onClick={addContactsToCampaign}
-                    disabled={selectedContacts.size === 0}
-                    size="sm"
-                  >
+                  <Button onClick={addContactsToCampaign} disabled={selectedContacts.size === 0} size="sm">
                     Adicionar {selectedContacts.size} contato{selectedContacts.size !== 1 ? 's' : ''}
                   </Button>
                 </div>
