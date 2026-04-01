@@ -99,22 +99,23 @@ Deno.serve(async (req) => {
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
 
-    // Try JSON-based endpoints first (send URL directly), then FormData fallback
-    const jsonEndpoints = [
-      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, audio: audio_url, mediatype: 'ptt' } },
-      { url: `${cleanUrl}/message/sendMedia`, body: { number: telefoneCompleto, mediaUrl: audio_url, mediatype: 'ptt', caption: '' } },
-      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, url: audio_url, mediatype: 'ptt' } },
+    const endpoints = [
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, type: 'ptt', file: audio_url } },
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, type: 'audio', file: audio_url } },
+      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, file: audio_url } },
     ];
 
     let lastError: any = null;
 
-    // Attempt JSON-based endpoints
-    for (const endpoint of jsonEndpoints) {
+    for (const endpoint of endpoints) {
       console.log(`Tentando endpoint JSON: ${endpoint.url}`);
       try {
         const response = await fetch(endpoint.url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', token: instanceToken },
+          headers: {
+            'Content-Type': 'application/json',
+            token: instanceToken,
+          },
           body: JSON.stringify(endpoint.body),
         });
 
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // FormData fallback: download audio and upload
+    // FormData fallback only if the server still expects multipart in this installation
     console.log('Tentando fallback com FormData...');
     const audioFile = await downloadAudioFile(audio_url);
     const formEndpoints = [
