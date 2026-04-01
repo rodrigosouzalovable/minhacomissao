@@ -1,38 +1,43 @@
 
 
-## Plano: Desativar respostas automáticas do chatbot
+## Plano: Múltiplos áudios com rotação combinada (áudio + instância)
 
-O chatbot atual processa todas as mensagens recebidas e responde automaticamente (incluindo notificações ao admin). A mudança fará com que as mensagens sejam apenas salvas no Inbox, sem nenhuma resposta automática.
+### Conceito
+Atualmente a campanha suporta apenas 1 áudio. A mudança permitirá importar N áudios, que serão distribuídos em round-robin combinado com as instâncias WhatsApp selecionadas.
 
-### Mudança única: `whatsapp-chatbot/index.ts`
+**Exemplo com 3 áudios e 4 WhatsApps:**
+- Cliente 1 → WhatsApp 1 envia Áudio 1
+- Cliente 2 → WhatsApp 2 envia Áudio 2
+- Cliente 3 → WhatsApp 3 envia Áudio 3
+- Cliente 4 → WhatsApp 4 envia Áudio 1
+- Cliente 5 → WhatsApp 1 envia Áudio 2
+- ...e assim por diante
 
-Após o bloco de salvamento no Inbox (linha ~683), adicionar um `return` imediato para mensagens de clientes (não-admin, não-fromMe). Isso fará com que:
+### Mudanças no banco de dados
 
-1. A mensagem continue sendo salva nas tabelas `whatsapp_mensagens` e `whatsapp_contatos` (bloco existente, linhas 615-683)
-2. **Imediatamente após salvar**, a função retorna sem processar debounce, regras, templates ou enviar qualquer resposta
-3. Mensagens `fromMe` (saída) continuam sendo rastreadas normalmente
-4. Mensagens do admin continuam funcionando (ensino, instruções, etc.)
+1. **Nova tabela `voice_campaign_audios`** para armazenar múltiplos áudios por campanha:
+   - `id`, `campaign_id` (FK), `audio_url`, `file_name`, `created_at`
+   - RLS: owner da campanha pode ler/inserir/deletar
 
-### O que muda
-- Cliente envia "Oi" → mensagem salva no Inbox → **nenhuma resposta enviada**
-- Admin não recebe mais notificações automáticas tipo "o cliente respondeu algo que eu não soube informar"
-- Toda a lógica do chatbot (debounce, regras, templates, IA) fica inativa para mensagens de clientes
+2. **Coluna `audio_url` na tabela `voice_campaigns`** passa a ser opcional (nullable) — campanhas novas usarão a tabela de áudios
 
-### O que permanece
-- Salvamento de mensagens no Inbox (entrada e saída)
-- Funcionalidades do admin via WhatsApp (teach-chatbot, instruções)
-- Rastreamento de mensagens `fromMe`
-- Envio manual pelo Inbox continua funcionando via `send-whatsapp`
+### Mudanças no frontend (`src/pages/CampanhasVoz.tsx`)
 
-### Detalhe técnico
-Inserir após o bloco `[INBOX] Mensagem salva` (~linha 683) e antes do bloco `fromMe` (~linha 686):
+1. **Upload de múltiplos áudios**: trocar o input de arquivo único para `multiple`, permitindo selecionar vários arquivos de uma vez
+2. **Lista de áudios**: exibir os áudios importados com preview (play) e opção de remover individualmente
+3. **Criação da campanha**: fazer upload de todos os áudios para o bucket `campaign-audio` e inserir cada URL na tabela `voice_campaign_audios`
+4. **Remover tipo "chamada de voz"**: simplificar a interface removendo a opção `voice_call`
+5. **Campos de delay configurável**: adicionar inputs para min/max minutos (padrão 1-5 min)
 
-```text
-// Se não é fromMe e não é admin, apenas salvar no inbox e parar
-if (!isFromMe && !isAdminNumber(telefone)) {
-  return Response com success + inbox_only
-}
-```
+### Lógica de envio (loop principal)
 
-Isso efetivamente "desliga" o chatbot sem remover o código, permitindo reativá-lo facilmente no futuro.
+No loop de envio, para cada contato `i`:
+- Instância = `activeInstances[i % activeInstances.length]`
+- Áudio = `audios[i % audios.length]`
+
+Isso cria a rotação combinada desejada automaticamente.
+
+### Resumo de arquivos
+- **Migração SQL**: criar tabela `voice_campaign_audios`, tornar `audio_url` nullable
+- **`src/pages/CampanhasVoz.tsx`**: upload múltiplo, lista de áudios, delay configurável, rotação de áudios no envio
 
