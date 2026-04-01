@@ -178,10 +178,11 @@ export default function Aquecimento() {
         </div>
 
         <Tabs defaultValue="dashboard">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="dashboard" className="gap-2"><BarChart3 className="h-4 w-4" />Dashboard</TabsTrigger>
             <TabsTrigger value="numeros" className="gap-2"><Phone className="h-4 w-4" />Números</TabsTrigger>
             <TabsTrigger value="config" className="gap-2"><Settings className="h-4 w-4" />Configurações</TabsTrigger>
+            <TabsTrigger value="dialogos" className="gap-2"><MessageCircle className="h-4 w-4" />Diálogos</TabsTrigger>
             <TabsTrigger value="log" className="gap-2"><List className="h-4 w-4" />Log</TabsTrigger>
           </TabsList>
 
