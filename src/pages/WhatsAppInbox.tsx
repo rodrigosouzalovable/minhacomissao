@@ -289,7 +289,7 @@ export default function WhatsAppInbox() {
                         </Badge>
                       )}
                     </div>
-                    {instancias.length > 1 && getInstanciaNome(contato.instancia_id) && (
+{getInstanciaNome(contato.instancia_id) && (
                       <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
                         {getInstanciaNome(contato.instancia_id)}
                       </span>
@@ -327,7 +327,7 @@ export default function WhatsAppInbox() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {formatTelefone(contatoAtivo.telefone)}
-                    {instancias.length > 1 && ` · ${getInstanciaNome(contatoAtivo.instancia_id)}`}
+                    {getInstanciaNome(contatoAtivo.instancia_id) && ` · ${getInstanciaNome(contatoAtivo.instancia_id)}`}
                   </p>
                 </div>
               </div>
