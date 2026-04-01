@@ -40,6 +40,7 @@ import MetaPessoal from "./pages/MetaPessoal";
 import AutomacaoCobMais from "./pages/AutomacaoCobMais";
 import CampanhasVoz from "./pages/CampanhasVoz";
 import WhatsAppInbox from "./pages/WhatsAppInbox";
+import Aquecimento from "./pages/Aquecimento";
 
 const queryClient = new QueryClient();
 
