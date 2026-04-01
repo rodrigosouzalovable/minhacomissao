@@ -119,6 +119,7 @@ const App = () => (
           <WhatsAppSendingProvider>
           <Routes>
             <Route path="/" element={<PortalHome />} />
+            <Route path="/inbox" element={<AdminRoute><WhatsAppInbox /></AdminRoute>} />
             <Route path="/:creditor" element={<PortalConsulta />} />
             <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
             <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
@@ -147,7 +148,6 @@ const App = () => (
             <Route path="/admin/automacao-cobmais" element={<AdminRoute><AutomacaoCobMais /></AdminRoute>} />
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
             <Route path="/campanhas-voz" element={<ProtectedRoute><CampanhasVoz /></ProtectedRoute>} />
-            <Route path="/inbox" element={<AdminRoute><WhatsAppInbox /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </WhatsAppSendingProvider>
