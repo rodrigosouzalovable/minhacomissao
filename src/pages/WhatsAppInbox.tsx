@@ -327,7 +327,7 @@ export default function WhatsAppInbox() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {formatTelefone(contatoAtivo.telefone)}
-                    {instancias.length > 1 && ` · ${getInstanciaNome(contatoAtivo.instancia_id)}`}
+                    {getInstanciaNome(contatoAtivo.instancia_id) && ` · ${getInstanciaNome(contatoAtivo.instancia_id)}`}
                   </p>
                 </div>
               </div>
