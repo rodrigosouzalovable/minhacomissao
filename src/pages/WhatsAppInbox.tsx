@@ -74,16 +74,33 @@ export default function WhatsAppInbox() {
   }, [user]);
 
   // Load contacts
-  const fetchContatos = useCallback(async () => {
+const fetchContatos = useCallback(async () => {
     let query = supabase
       .from('whatsapp_contatos')
-      .select('*')
+      .select(`
+        id,
+        instancia_id,
+        telefone,
+        nome,
+        ultima_mensagem,
+        ultima_mensagem_em,
+        nao_lido,
+        user_whatsapp_instances(nome)
+      `)
       .order('ultima_mensagem_em', { ascending: false });
+
     if (filtroInstancia !== 'todas') {
       query = query.eq('instancia_id', filtroInstancia);
     }
+
     const { data } = await query;
-    if (data) setContatos(data as Contato[]);
+    if (data) {
+      const contatosComNomeInstancia = (data as any[]).map((contato) => ({
+        ...contato,
+        instancia_nome: contato.user_whatsapp_instances?.nome ?? null,
+      }));
+      setContatos(contatosComNomeInstancia as Contato[]);
+    }
   }, [filtroInstancia]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
