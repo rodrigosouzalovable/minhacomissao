@@ -181,11 +181,17 @@ export default function WhatsAppInbox() {
     }
   };
 
-  const contatosFiltrados = contatos.filter(c => {
-    if (!busca) return true;
-    const term = busca.toLowerCase();
-    return (c.nome?.toLowerCase().includes(term) || c.telefone.includes(term));
-  });
+  const contatosFiltrados = contatos
+    .filter(c => {
+      if (!busca) return true;
+      const term = busca.toLowerCase();
+      return (c.nome?.toLowerCase().includes(term) || c.telefone.includes(term));
+    })
+    .sort((a, b) => {
+      if (a.nao_lido > 0 && b.nao_lido === 0) return -1;
+      if (a.nao_lido === 0 && b.nao_lido > 0) return 1;
+      return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
+    });
 
   const getInstanciaNome = (instanciaId: string) => {
     const inst = instancias.find(i => i.id === instanciaId);
