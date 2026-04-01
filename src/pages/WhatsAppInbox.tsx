@@ -56,17 +56,19 @@ export default function WhatsAppInbox() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load instances
+  // Load instances (only for current user)
   useEffect(() => {
+    if (!user) return;
     const fetchInstancias = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances')
         .select('id, nome, server_url, instance_token')
-        .eq('ativo', true);
+        .eq('ativo', true)
+        .eq('user_id', user.id);
       if (data) setInstancias(data);
     };
     fetchInstancias();
-  }, []);
+  }, [user]);
 
   // Load contacts
   const fetchContatos = useCallback(async () => {
