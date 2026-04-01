@@ -151,6 +151,7 @@ const App = () => (
             <Route path="/admin/automacao-cobmais" element={<AdminRoute><AutomacaoCobMais /></AdminRoute>} />
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
             <Route path="/campanhas-voz" element={<ProtectedRoute><CampanhasVoz /></ProtectedRoute>} />
+            <Route path="/aquecimento" element={<AdminRoute><Aquecimento /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </VoiceCampaignSendingProvider>

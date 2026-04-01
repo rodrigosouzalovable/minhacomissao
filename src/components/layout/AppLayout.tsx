@@ -63,6 +63,7 @@ const navItems: NavItem[] = [
   { href: '/admin/automacao-cobmais', label: 'Robô CobMais', icon: Bot, adminOnly: true },
   { href: '/campanhas-voz', label: 'Campanhas de Voz', icon: Volume2 },
   { href: '/inbox', label: 'WhatsApp Inbox', icon: MessageSquare, adminOnly: true },
+  { href: '/aquecimento', label: 'Aquecimento', icon: Flame, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
