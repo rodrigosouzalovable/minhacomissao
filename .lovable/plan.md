@@ -1,24 +1,22 @@
 
 
-## Alterar cron do aquecimento para 30min em horário comercial
+## Adicionar seleção múltipla na aba Números
 
-### Alteração única via SQL
+### Arquivo: `src/pages/Aquecimento.tsx`
 
-Remover o cron job atual e criar um novo com schedule `*/30 11-21 * * 1-6` — a cada 30 minutos, entre 11h e 21h UTC (8h-18h São Paulo), de segunda a sábado.
+**Alterações:**
+1. Adicionar estado `selectedInstances` (Set de IDs) para controlar quais instâncias estão selecionadas
+2. Adicionar checkbox "Selecionar todos" no cabeçalho da tabela (coluna nova antes de "Nome")
+3. Adicionar checkbox individual em cada linha da tabela
+4. Adicionar botão "Iniciar Aquecimento" acima da tabela que aparece quando há instâncias selecionadas, permitindo iniciar o aquecimento para todas as selecionadas de uma vez
+5. Lógica do "Selecionar todos" marca/desmarca apenas instâncias ativas que estão INATIVAS ou PAUSADAS (elegíveis para iniciar)
 
-```sql
-SELECT cron.unschedule('whatsapp-aquecimento-15min');
+**Componente usado:** `Checkbox` de `@/components/ui/checkbox` (já existe no projeto)
 
-SELECT cron.schedule(
-  'whatsapp-aquecimento-30min',
-  '*/30 11-21 * * 1-6',
-  $$ SELECT net.http_post(
-    url:='https://cymdrkeukockakfzjeen.supabase.co/functions/v1/whatsapp-aquecimento',
-    headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5bWRya2V1a29ja2FrZnpqZWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNjI0OTQsImV4cCI6MjA4MTYzODQ5NH0.mjcAvZDXLA6m46JCR474jZDHOF2WmWUXygChA4z__2U"}'::jsonb,
-    body:='{"time": "now"}'::jsonb
-  ) AS request_id; $$
-);
+**Layout da tabela atualizado:**
+```text
+[✓] | Nome | Fase | Dias na Fase | Interações Hoje | Taxa Resposta | Status | Ações
 ```
 
-Isso reduz as invocações de ~96/dia para ~22/dia (apenas horário comercial, dias úteis + sábado).
+**Botão de ação em massa:** aparece condicionalmente acima da tabela quando `selectedInstances.size > 0`, com texto "Iniciar Aquecimento (N selecionados)"
 
