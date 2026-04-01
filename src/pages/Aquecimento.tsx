@@ -13,6 +13,7 @@ import { toast } from '@/hooks/use-toast';
 import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List, MessageCircle } from 'lucide-react';
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
 import AquecimentoDialogosTab from '@/components/aquecimento/AquecimentoDialogosTab';
+import AquecimentoDashboard from '@/components/aquecimento/AquecimentoDashboard';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -186,14 +187,7 @@ export default function Aquecimento() {
           </TabsList>
 
           <TabsContent value="dashboard">
-            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Números</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.total}</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em Aquecimento</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-green-500">{metrics.emAquecimento}</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Interações Hoje</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.interacoesHoje}</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Interações 7 dias</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.interacoes7d}</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Taxa Sucesso</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.taxaSucesso}%</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Agendados</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-orange-500">{metrics.agendados}</div></CardContent></Card>
-            </div>
+            <AquecimentoDashboard metrics={metrics} />
           </TabsContent>
 
           <TabsContent value="numeros">
