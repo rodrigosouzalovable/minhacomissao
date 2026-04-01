@@ -100,17 +100,51 @@ Deno.serve(async (req) => {
     const cleanUrl = serverUrl.replace(/\/+$/, '');
     const audioFile = await downloadAudioFile(audio_url);
 
-    const endpoints = [
-      { url: `${cleanUrl}/send/media`, mediatype: 'ptt' },
-      { url: `${cleanUrl}/send/media`, mediatype: 'audio' },
-      { url: `${cleanUrl}/send/audio` },
+    // Try JSON-based endpoints first (send URL directly), then FormData fallback
+    const jsonEndpoints = [
+      { url: `${cleanUrl}/send/audio`, body: { number: telefoneCompleto, audio: audio_url, mediatype: 'ptt' } },
+      { url: `${cleanUrl}/message/sendMedia`, body: { number: telefoneCompleto, mediaUrl: audio_url, mediatype: 'ptt', caption: '' } },
+      { url: `${cleanUrl}/send/media`, body: { number: telefoneCompleto, url: audio_url, mediatype: 'ptt' } },
     ];
 
     let lastError: any = null;
 
-    for (const endpoint of endpoints) {
-      console.log(`Tentando endpoint: ${endpoint.url}${endpoint.mediatype ? ` (${endpoint.mediatype})` : ''}`);
+    // Attempt JSON-based endpoints
+    for (const endpoint of jsonEndpoints) {
+      console.log(`Tentando endpoint JSON: ${endpoint.url}`);
+      try {
+        const response = await fetch(endpoint.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', token: instanceToken },
+          body: JSON.stringify(endpoint.body),
+        });
 
+        const data = await parseResponseBody(response);
+        console.log(`Resposta de ${endpoint.url}:`, JSON.stringify(data));
+
+        if (response.ok && !data?.error) {
+          return new Response(JSON.stringify({ success: true, data }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        lastError = data;
+      } catch (err) {
+        lastError = err;
+        console.log(`Endpoint ${endpoint.url} falhou:`, err);
+      }
+    }
+
+    // FormData fallback: download audio and upload
+    console.log('Tentando fallback com FormData...');
+    const audioFile = await downloadAudioFile(audio_url);
+    const formEndpoints = [
+      { url: `${cleanUrl}/send/media`, mediatype: 'ptt' },
+      { url: `${cleanUrl}/send/media`, mediatype: 'audio' },
+    ];
+
+    for (const endpoint of formEndpoints) {
+      console.log(`Tentando endpoint FormData: ${endpoint.url} (${endpoint.mediatype})`);
       try {
         const response = await fetch(endpoint.url, {
           method: 'POST',
