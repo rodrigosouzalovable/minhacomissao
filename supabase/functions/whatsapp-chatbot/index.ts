@@ -638,24 +638,73 @@ serve(async (req) => {
           const direcao = isFromMe ? 'saida' : 'entrada';
           const agora = new Date().toISOString();
 
-          // Skip saving fromMe messages — send-whatsapp already saves them
+          const direcaoMsg = isFromMe ? 'saida' : 'entrada';
+
           if (isFromMe) {
-            console.log(`[INBOX] Ignorando fromMe duplicado: ${inboxTelefone} (instancia: ${instanciaId})`);
+            // For fromMe: check if send-whatsapp already saved this message (dedup within 30s)
+            const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
+            const { data: existing } = await supabase
+              .from('whatsapp_mensagens')
+              .select('id')
+              .eq('instancia_id', instanciaId)
+              .eq('telefone_remoto', inboxTelefone)
+              .eq('conteudo', inboxTexto)
+              .eq('direcao', 'saida')
+              .gte('timestamp_msg', thirtySecsAgo)
+              .limit(1)
+              .maybeSingle();
+
+            if (existing) {
+              console.log(`[INBOX] fromMe duplicado (já salvo por send-whatsapp): ${inboxTelefone}`);
+            } else {
+              // Manual send from WhatsApp app — save it
+              await supabase.from('whatsapp_mensagens').insert({
+                instancia_id: instanciaId,
+                telefone_remoto: inboxTelefone,
+                nome_contato: inboxNomeContato,
+                conteudo: inboxTexto,
+                direcao: 'saida',
+                timestamp_msg: agora,
+                lida: true,
+              });
+              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${inboxTelefone}`);
+
+              // Update contact for manual fromMe
+              const { data: contactFM } = await supabase
+                .from('whatsapp_contatos')
+                .select('id')
+                .eq('instancia_id', instanciaId)
+                .eq('telefone', inboxTelefone)
+                .maybeSingle();
+
+              if (contactFM) {
+                await supabase.from('whatsapp_contatos').update({
+                  ultima_mensagem: inboxTexto.slice(0, 200),
+                  ultima_mensagem_em: agora,
+                }).eq('id', contactFM.id);
+              } else {
+                await supabase.from('whatsapp_contatos').insert({
+                  instancia_id: instanciaId,
+                  telefone: inboxTelefone,
+                  nome: inboxNomeContato,
+                  ultima_mensagem: inboxTexto.slice(0, 200),
+                  ultima_mensagem_em: agora,
+                  nao_lido: 0,
+                });
+              }
+            }
           } else {
-            // INSERT message (only incoming)
+            // Incoming message — always save
             await supabase.from('whatsapp_mensagens').insert({
               instancia_id: instanciaId,
               telefone_remoto: inboxTelefone,
               nome_contato: inboxNomeContato,
               conteudo: inboxTexto,
-              direcao,
+              direcao: 'entrada',
               timestamp_msg: agora,
               lida: false,
             });
-          }
 
-          // UPSERT contact (only for incoming messages — send-whatsapp handles outgoing)
-          if (!isFromMe) {
             const { data: existingContact } = await supabase
               .from('whatsapp_contatos')
               .select('id, nao_lido')
