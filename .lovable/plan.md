@@ -1,37 +1,35 @@
 
 
-## Etapas Pendentes do Aquecimento de WhatsApp
+## O que falta implementar no Aquecimento
 
-Comparando o plano original com o que já foi implementado:
+Apesar de a conversa anterior ter mencionado a implementação da etapa 5, o código do webhook `whatsapp-chatbot` **não contém nenhuma lógica de aquecimento**. Confirmei isso com busca no arquivo.
 
-| Etapa | Status |
-|-------|--------|
-| 1. Tabelas no banco de dados | Concluído |
-| 2. Página `/aquecimento` com 4 abas | Concluído |
-| 3. Navegação + rota | Concluído |
-| 4. Edge Function `whatsapp-aquecimento` | Concluído |
-| 5. Detecção de respostas no webhook | **Pendente** |
-| 6. Cron job via pg_cron | Concluído |
+### Pendências obrigatórias
+
+**1. Detecção de respostas de aquecimento no webhook `whatsapp-chatbot/index.ts`**
+- Após identificar a instância e o telefone remetente, buscar na tabela `whatsapp_aquecimento_interacoes` uma interação recente (últimas 2h) com `status = 'ENVIADO'` onde o par origem/destino bate
+- Se encontrar: atualizar para `RESPONDIDO`, calcular `tempo_resposta_segundos`, salvar `conteudo_resposta`
+- Incrementar `respostas_recebidas` na tabela `whatsapp_aquecimento_instancias`
+- Pular processamento normal do chatbot (não responder a mensagens de aquecimento)
+
+### Pendências menores (melhorias)
+
+**2. Log de interações sem nomes de origem/destino**
+- A aba Log não mostra quem enviou para quem — precisa fazer join com `user_whatsapp_instances` para exibir os nomes
+
+**3. Incremento de `dias_na_fase`**
+- A Edge Function verifica `dias_na_fase` para progressão de fase mas nunca incrementa esse campo diariamente de forma independente — o incremento depende do reset de `interacoes_hoje`, que só ocorre se a instância receber interações
+
+**4. Filtros na aba Log**
+- Sem filtros de data ou status na interface — apenas mostra os 100 últimos registros
 
 ---
 
-### O que falta implementar
+### Arquivos a editar
 
-**Etapa 5 — Detectar respostas de aquecimento no webhook `whatsapp-chatbot`**
-
-Quando uma mensagem chega via webhook, o sistema precisa verificar se ela é uma resposta a uma interação de aquecimento antes de processá-la normalmente.
-
-**Alteração em `supabase/functions/whatsapp-chatbot/index.ts`:**
-- Após identificar a `instancia_id` e o telefone remetente, consultar `whatsapp_aquecimento_interacoes` procurando uma interação recente (últimas 2h) com `status = 'ENVIADO'` onde:
-  - `instancia_destino_id` = instância que recebeu a mensagem
-  - `instancia_origem_id` = instância do remetente (buscar pelo telefone nas `user_whatsapp_instances`)
-- Se encontrar, atualizar a interação: `status → 'RESPONDIDO'`, `respondido_em → now()`, `tempo_resposta_segundos → diferença`, `conteudo_resposta → texto recebido`
-- Incrementar `respostas_recebidas` na tabela `whatsapp_aquecimento_instancias` para a instância de origem
-- Pular o processamento normal do chatbot (não responder automaticamente a mensagens de aquecimento)
-
-### Melhorias opcionais (não no plano original)
-- Log de interações sem nomes de origem/destino (a tabela não faz join com `user_whatsapp_instances` para mostrar nomes)
-- Envio de áudios PTT na Edge Function (atualmente só envia texto, linha 123: `eq("tipo", "texto")`)
-- Incremento de `dias_na_fase` (a Edge Function verifica `dias_na_fase` mas nunca incrementa esse campo diariamente)
-- Filtros na aba de Log (data, status) ainda não implementados na UI
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/whatsapp-chatbot/index.ts` | Adicionar bloco de detecção de aquecimento antes do processamento normal |
+| `src/pages/Aquecimento.tsx` | Adicionar colunas Origem/Destino no log + filtros de data/status |
+| `supabase/functions/whatsapp-aquecimento/index.ts` | Garantir incremento correto de `dias_na_fase` |
 
