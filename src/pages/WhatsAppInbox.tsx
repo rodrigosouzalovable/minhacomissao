@@ -195,7 +195,7 @@ export default function WhatsAppInbox() {
 
   const getInstanciaNome = (instanciaId: string) => {
     const inst = instancias.find(i => i.id === instanciaId);
-    return inst?.nome || inst?.server_url?.replace(/https?:\/\//, '').split('.')[0] || 'Instância';
+    return inst?.nome || null;
   };
 
   const formatTelefone = (tel: string) => {
