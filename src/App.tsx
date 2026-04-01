@@ -119,6 +119,7 @@ const App = () => (
           <WhatsAppSendingProvider>
           <Routes>
             <Route path="/" element={<PortalHome />} />
+            <Route path="/inbox" element={<AdminRoute><WhatsAppInbox /></AdminRoute>} />
             <Route path="/:creditor" element={<PortalConsulta />} />
             <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
             <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
