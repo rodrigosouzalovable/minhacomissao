@@ -71,16 +71,17 @@ Deno.serve(async (req) => {
     let totalEnviados = 0;
 
     for (const inst of instancias) {
-      // Reset interacoes_hoje if last interaction was a different day
+      // Reset interacoes_hoje and increment dias_na_fase if last interaction was a different day
       if (inst.ultima_interacao) {
         const lastDate = new Date(inst.ultima_interacao).toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" });
         const todayDate = spTime.toLocaleDateString("en-US");
         if (lastDate !== todayDate) {
           await supabase
             .from("whatsapp_aquecimento_instancias")
-            .update({ interacoes_hoje: 0 })
+            .update({ interacoes_hoje: 0, dias_na_fase: inst.dias_na_fase + 1 })
             .eq("id", inst.id);
           inst.interacoes_hoje = 0;
+          inst.dias_na_fase = inst.dias_na_fase + 1;
         }
       }
 
@@ -114,13 +115,14 @@ Deno.serve(async (req) => {
 
       if (!origemDetails || !destinoDetails) continue;
 
-      // Get dialogue for current phase
+      // Get dialogue for current phase (texto + audio for phase 2+)
+      const tiposPermitidos = inst.fase >= 2 ? ["texto", "audio"] : ["texto"];
       const { data: dialogos } = await supabase
         .from("whatsapp_aquecimento_dialogos")
         .select("*")
         .eq("ativo", true)
         .lte("fase_minima", inst.fase)
-        .eq("tipo", "texto"); // For now, only text
+        .in("tipo", tiposPermitidos);
 
       if (!dialogos || dialogos.length === 0) {
         console.log("[AQUECIMENTO] Sem diálogos disponíveis");
@@ -144,24 +146,44 @@ Deno.serve(async (req) => {
       const token = origemDetails.instance_token;
 
       try {
-        const sendUrl = `${serverUrl}/send/text`;
-        const sendRes = await fetch(sendUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            number: `55${destinoPhone}@s.whatsapp.net`,
-            text: dialogo.conteudo,
-          }),
-        });
+        let sendRes: Response;
+        let sendData: any;
+        const cleanServerUrl = serverUrl.replace(/\/+$/, "");
+        const destinoNumero = `55${destinoPhone}@s.whatsapp.net`;
 
-        const sendData = await sendRes.json();
-        console.log(`[AQUECIMENTO] Mensagem enviada de ${origemDetails.nome} para ${destinoDetails.nome}: ${sendRes.ok}`);
+        if (dialogo.tipo === "audio") {
+          // Send audio PTT
+          const sendUrl = `${cleanServerUrl}/send/media`;
+          sendRes = await fetch(sendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token },
+            body: JSON.stringify({
+              number: destinoNumero,
+              type: "ptt",
+              file: dialogo.conteudo, // audio URL
+            }),
+          });
+        } else {
+          // Send text
+          const sendUrl = `${cleanServerUrl}/send/text`;
+          sendRes = await fetch(sendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token },
+            body: JSON.stringify({
+              number: destinoNumero,
+              text: dialogo.conteudo,
+            }),
+          });
+        }
+
+        sendData = await sendRes.json();
+        console.log(`[AQUECIMENTO] ${dialogo.tipo} enviado de ${origemDetails.nome} para ${destinoDetails.nome}: ${sendRes.ok}`);
 
         // Record interaction
         await supabase.from("whatsapp_aquecimento_interacoes").insert({
           instancia_origem_id: inst.instancia_id,
           instancia_destino_id: destino.instancia_id,
-          tipo: "texto",
+          tipo: dialogo.tipo,
           conteudo: dialogo.conteudo,
           status: sendRes.ok ? "ENVIADO" : "FALHOU",
           mensagem_id: sendData?.key?.id || null,
@@ -185,7 +207,7 @@ Deno.serve(async (req) => {
         await supabase.from("whatsapp_aquecimento_interacoes").insert({
           instancia_origem_id: inst.instancia_id,
           instancia_destino_id: destino.instancia_id,
-          tipo: "texto",
+          tipo: dialogo.tipo,
           conteudo: dialogo.conteudo,
           status: "FALHOU",
           enviado_em: new Date().toISOString(),

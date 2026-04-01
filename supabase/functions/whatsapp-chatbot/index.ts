@@ -736,6 +736,79 @@ serve(async (req) => {
       }
     }
 
+    // --- AQUECIMENTO: Detectar respostas de aquecimento ---
+    if (!isFromMe && inboxTelefone) {
+      try {
+        // Check if the sender phone belongs to one of our warming instances
+        const { data: senderInstance } = await supabase
+          .from('user_whatsapp_instances')
+          .select('id')
+          .or(`nome.ilike.%${inboxTelefone}%`)
+          .eq('ativo', true)
+          .limit(1)
+          .maybeSingle();
+
+        // Also try matching by phone extracted from nome field
+        if (senderInstance && instanciaId) {
+          const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
+          // Find a recent ENVIADO interaction where:
+          // - instancia_origem_id = the instance that SENT the warming message (receiving instance in webhook)
+          // - instancia_destino_id = the instance that should RESPOND (sender instance = senderInstance)
+          // Actually: the warming function sends FROM instancia_origem TO instancia_destino
+          // So when destino responds, the webhook fires on the ORIGEM instance
+          // instancia_origem_id = some instance that sent TO senderInstance
+          // instancia_destino_id = senderInstance.id (the one responding now)
+          const { data: warmingInteraction } = await supabase
+            .from('whatsapp_aquecimento_interacoes')
+            .select('id, instancia_origem_id, enviado_em')
+            .eq('instancia_destino_id', senderInstance.id)
+            .eq('status', 'ENVIADO')
+            .gte('enviado_em', twoHoursAgo)
+            .order('enviado_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (warmingInteraction) {
+            const agora = new Date();
+            const enviadoEm = new Date(warmingInteraction.enviado_em);
+            const tempoRespostaSeg = Math.round((agora.getTime() - enviadoEm.getTime()) / 1000);
+
+            // Update interaction to RESPONDIDO
+            await supabase
+              .from('whatsapp_aquecimento_interacoes')
+              .update({
+                status: 'RESPONDIDO',
+                respondido_em: agora.toISOString(),
+                tempo_resposta_segundos: tempoRespostaSeg,
+                conteudo_resposta: inboxTexto?.slice(0, 500) || null,
+              })
+              .eq('id', warmingInteraction.id);
+
+            // Increment respostas_recebidas on the ORIGIN instance (the one that sent)
+            const { data: origemAquec } = await supabase
+              .from('whatsapp_aquecimento_instancias')
+              .select('id, respostas_recebidas')
+              .eq('instancia_id', warmingInteraction.instancia_origem_id)
+              .maybeSingle();
+
+            if (origemAquec) {
+              await supabase
+                .from('whatsapp_aquecimento_instancias')
+                .update({ respostas_recebidas: origemAquec.respostas_recebidas + 1 })
+                .eq('id', origemAquec.id);
+            }
+
+            console.log(`[AQUECIMENTO] Resposta detectada de ${inboxTelefone}, interação ${warmingInteraction.id} marcada como RESPONDIDO (${tempoRespostaSeg}s)`);
+            return new Response(JSON.stringify({ success: true, aquecimento_response: true }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+      } catch (aquecErr) {
+        console.error('[AQUECIMENTO] Erro ao verificar resposta de aquecimento:', aquecErr);
+      }
+    }
+
     // --- INBOX-ONLY MODE: Não responder automaticamente ---
     // Mensagens de clientes (não-admin, não-fromMe) são apenas salvas no Inbox
     if (!isFromMe && !isAdminNumber(telefone)) {
