@@ -188,6 +188,12 @@ export default function Acionamento() {
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
   
+  // Scheduling state
+  const [agendamentos, setAgendamentos] = useState<Array<{ id: string; agendado_para: string; status: string; total_enviados: number; total_erros: number; historico_data: any }>>([]);
+  const [agendandoEnvio, setAgendandoEnvio] = useState(false);
+  const [agendamentoData, setAgendamentoData] = useState('');
+  const [agendamentoHora, setAgendamentoHora] = useState('08:00');
+  
   // Conversation tracking state
   const [conversasMap, setConversasMap] = useState<Record<string, ConversaInfo>>({});
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
