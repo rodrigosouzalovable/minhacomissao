@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet } from 'lucide-react';
+import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import * as XLSX from 'xlsx';
