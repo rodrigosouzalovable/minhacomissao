@@ -1,26 +1,25 @@
 
 
-## Filtrar WhatsApps conectados nas Campanhas de Voz
+## Corrigir ordem de envio nas Campanhas de Voz
 
-### Problema
-Atualmente, a lista de WhatsApp para envio na aba Campanhas de Voz mostra todas as instâncias ativas, sem verificar se estão realmente conectadas. O status de conexão não é salvo no banco — é verificado em tempo real via a edge function `test-uazapi-connection`.
+### Problema identificado
+Na função `handleStartCampaign` (linha 393 de `CampanhasVoz.tsx`), a busca dos contatos pendentes **não tem `order`**:
 
-### Solução
-Adicionar uma verificação de conexão ao carregar as instâncias na página de Campanhas de Voz, igual ao que já é feito na página de Acionamento. Apenas instâncias conectadas serão exibidas na lista de seleção.
+```typescript
+.from('voice_campaign_contacts')
+.select('*')
+.eq('campaign_id', campaign.id)
+.eq('status', 'pendente')
+// ← falta .order('created_at', { ascending: true })
+```
 
-### Alterações
+Resultado: o banco retorna os contatos em ordem indefinida, então o envio acontece fora da sequência mostrada na tabela (que usa `order created_at asc`). Isso causa a impressão de que contatos estão sendo "pulados".
+
+### Correção
 
 **Arquivo: `src/pages/CampanhasVoz.tsx`**
 
-1. Após carregar as instâncias do banco, chamar `test-uazapi-connection` para cada uma (em paralelo) — mesmo padrão usado em `Acionamento.tsx`
-2. Filtrar a lista `instances` para exibir apenas as que retornarem `connected === true`
-3. Mostrar um indicador de "Verificando conexões..." enquanto o check está em andamento
-4. Aplicar o mesmo filtro no segundo ponto onde instâncias aparecem (seção de envio rápido, se existir)
+Adicionar `.order('created_at', { ascending: true })` na query de contatos pendentes dentro de `handleStartCampaign`, garantindo que o envio siga a mesma ordem exibida na tabela.
 
-### Detalhes técnicos
-
-- Reutilizar a lógica de `checkInstanceConnections` do `Acionamento.tsx`: invocar `supabase.functions.invoke('test-uazapi-connection', { body: { server_url, instance_token } })` para cada instância
-- Guardar o resultado num estado `connectionStatus: Record<string, 'connected' | 'disconnected' | 'checking'>`
-- Filtrar `instances` para mostrar apenas `connectionStatus[id] === 'connected'`
-- As instâncias em estado `checking` mostram um spinner pequeno
+É uma alteração de 1 linha. Nenhuma mudança no banco de dados é necessária.
 
