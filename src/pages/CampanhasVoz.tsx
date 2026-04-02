@@ -502,7 +502,13 @@ export default function CampanhasVoz() {
               <div>
                 <Label>WhatsApp para envio (selecione um ou mais)</Label>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
-                  {instances.map(inst => (
+                  {checkingConnections && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Verificando conexões...
+                    </p>
+                  )}
+                  {!checkingConnections && instances.map(inst => (
                     <label key={inst.id} className="flex items-center gap-2 cursor-pointer">
                       <Checkbox
                         checked={selectedInstanceIds.includes(inst.id)}
@@ -515,7 +521,7 @@ export default function CampanhasVoz() {
                       <span className="text-sm">{inst.nome || inst.server_url}</span>
                     </label>
                   ))}
-                  {instances.length === 0 && (
+                  {!checkingConnections && instances.length === 0 && (
                     <p className="text-sm text-muted-foreground">Nenhum WhatsApp conectado</p>
                   )}
                 </div>
