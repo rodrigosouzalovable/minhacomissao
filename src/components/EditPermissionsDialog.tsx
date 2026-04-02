@@ -145,13 +145,13 @@ export function EditPermissionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[70vh] flex flex-col">
+      <DialogContent className="sm:max-w-md max-h-[70vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Editar Permissões - {userName}</DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 overflow-hidden pr-3">
-          <div className="space-y-6 py-4">
+        <ScrollArea type="always" className="min-h-0 flex-1">
+          <div className="space-y-6 py-4 pr-3">
             <div className="space-y-3">
               <Label className="text-sm font-medium">Abas visíveis</Label>
               {AVAILABLE_TABS.map((tab) => (
