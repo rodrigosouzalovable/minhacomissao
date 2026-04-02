@@ -1404,50 +1404,127 @@ export default function Acionamento() {
             </CardHeader>
             <CardContent className="space-y-4">
               {activeTab === 'pendentes' && (
-                <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
-                  <span className="text-sm font-medium">Envio automático:</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={autoMinSec}
-                    onChange={(e) => setAutoMinSec(Number(e.target.value))}
-                    className="w-20 h-9"
-                    disabled={autoSending}
-                  />
-                  <span className="text-sm">a</span>
-                  <Input
-                    type="number"
-                    min={2}
-                    value={autoMaxSec}
-                    onChange={(e) => setAutoMaxSec(Number(e.target.value))}
-                    className="w-20 h-9"
-                    disabled={autoSending}
-                  />
-                  <span className="text-sm">segundos</span>
-                  {!autoSending ? (
-                    <Button
-                      size="sm"
-                      onClick={handleAutoSend}
-                      disabled={mensagensSalvas.length === 0 || pendentes.length === 0}
-                      className="bg-green-600 hover:bg-green-700 text-primary-foreground"
-                    >
-                      <Play className="h-4 w-4 mr-1" /> Iniciar
-                    </Button>
-                  ) : (
-                    <>
-                      {autoProgress && (
-                        <span className="text-sm font-medium text-muted-foreground">
-                          Enviando {autoProgress.current}/{autoProgress.total}...
-                        </span>
-                      )}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
+                    <span className="text-sm font-medium">Envio automático:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={autoMinSec}
+                      onChange={(e) => setAutoMinSec(Number(e.target.value))}
+                      className="w-20 h-9"
+                      disabled={autoSending}
+                    />
+                    <span className="text-sm">a</span>
+                    <Input
+                      type="number"
+                      min={2}
+                      value={autoMaxSec}
+                      onChange={(e) => setAutoMaxSec(Number(e.target.value))}
+                      className="w-20 h-9"
+                      disabled={autoSending}
+                    />
+                    <span className="text-sm">segundos</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCalcInterval}
+                            disabled={autoSending || activeInstances.length === 0}
+                          >
+                            <Calculator className="h-4 w-4 mr-1" /> Calcular
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Calcula o intervalo ideal para ~30 msgs/número/dia (8h-18h)</p>
+                          <p className="text-xs text-muted-foreground">{activeInstances.length} número(s) robô ativo(s)</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    {!autoSending ? (
                       <Button
                         size="sm"
-                        variant="destructive"
-                        onClick={handleStopAutoSend}
+                        onClick={handleAutoSend}
+                        disabled={mensagensSalvas.length === 0 || pendentes.length === 0}
+                        className="bg-green-600 hover:bg-green-700 text-primary-foreground"
                       >
-                        <Square className="h-4 w-4 mr-1" /> Parar
+                        <Play className="h-4 w-4 mr-1" /> Iniciar
                       </Button>
-                    </>
+                    ) : (
+                      <>
+                        {autoProgress && (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Enviando {autoProgress.current}/{autoProgress.total}...
+                          </span>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={handleStopAutoSend}
+                        >
+                          <Square className="h-4 w-4 mr-1" /> Parar
+                        </Button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Agendamento de envio */}
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
+                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Agendar envio:</span>
+                    <Input
+                      type="date"
+                      value={agendamentoData}
+                      onChange={(e) => setAgendamentoData(e.target.value)}
+                      className="w-40 h-9"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                    <Input
+                      type="time"
+                      value={agendamentoHora}
+                      onChange={(e) => setAgendamentoHora(e.target.value)}
+                      className="w-28 h-9"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAgendar}
+                      disabled={agendandoEnvio || !agendamentoData || mensagensSalvas.length === 0 || pendentes.length === 0}
+                    >
+                      {agendandoEnvio ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Clock className="h-4 w-4 mr-1" />}
+                      Agendar
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Usa o intervalo min/max acima • {pendentes.length} pendentes
+                    </span>
+                  </div>
+
+                  {/* Agendamentos ativos */}
+                  {agendamentos.length > 0 && (
+                    <div className="space-y-1">
+                      {agendamentos.map(ag => (
+                        <div key={ag.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded bg-accent/50">
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          <span>
+                            {new Date(ag.agendado_para).toLocaleDateString('pt-BR')} às{' '}
+                            {new Date(ag.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <Badge variant={ag.status === 'executando' ? 'default' : 'secondary'}>
+                            {ag.status === 'executando' ? `Enviando (${ag.total_enviados})` : 'Pendente'}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {(ag.historico_data as any)?.clientes?.length || 0} clientes
+                          </span>
+                          {ag.status === 'pendente' && (
+                            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => handleCancelAgendamento(ag.id)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
