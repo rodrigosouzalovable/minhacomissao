@@ -614,6 +614,99 @@ export default function Acionamento() {
     stopAutoSend();
   };
 
+  const handleCalcInterval = () => {
+    const numRobos = activeInstances.length;
+    if (numRobos === 0) {
+      toast.error('Nenhuma instância Robô conectada para calcular');
+      return;
+    }
+    const intervaloMedio = 36000 / (30 * numRobos);
+    const min = Math.max(1, Math.floor(intervaloMedio * 0.8));
+    const max = Math.ceil(intervaloMedio * 1.2);
+    setAutoMinSec(min);
+    setAutoMaxSec(max);
+    toast.success(`Intervalo calculado: ${min}s a ${max}s (~30 msgs/número/dia, 8h-18h)`);
+  };
+
+  // Fetch agendamentos
+  const fetchAgendamentos = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('acionamento_agendamentos')
+      .select('*')
+      .eq('user_id', user.id)
+      .in('status', ['pendente', 'executando'])
+      .order('agendado_para', { ascending: true });
+    if (data) setAgendamentos(data as any);
+  }, [user]);
+
+  useEffect(() => {
+    fetchAgendamentos();
+  }, [fetchAgendamentos]);
+
+  const handleAgendar = async () => {
+    if (!user || !agendamentoData || !agendamentoHora) {
+      toast.error('Selecione data e hora para agendar');
+      return;
+    }
+    if (mensagensSalvas.length === 0) {
+      toast.error('Salve pelo menos uma mensagem antes de agendar');
+      return;
+    }
+    if (clientes.length === 0) {
+      toast.error('Importe uma planilha de clientes antes de agendar');
+      return;
+    }
+
+    setAgendandoEnvio(true);
+    try {
+      const agendadoPara = new Date(`${agendamentoData}T${agendamentoHora}:00`).toISOString();
+      
+      // Filter only pending clients
+      const pendingClientes = clientes.filter((_, i) => 
+        sendStatus[i] !== 'success' && sendStatus[i] !== 'error' && !manualChecked.has(i)
+      );
+
+      if (pendingClientes.length === 0) {
+        toast.error('Não há clientes pendentes para agendar');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('acionamento_agendamentos')
+        .insert({
+          user_id: user.id,
+          historico_data: { clientes: pendingClientes, mensagens: mensagensSalvas },
+          agendado_para: agendadoPara,
+          min_sec: autoMinSec,
+          max_sec: autoMaxSec,
+        } as any);
+
+      if (error) throw error;
+      toast.success(`Envio agendado para ${agendamentoData} às ${agendamentoHora}`);
+      setAgendamentoData('');
+      setAgendamentoHora('08:00');
+      fetchAgendamentos();
+    } catch (err: any) {
+      toast.error(`Erro ao agendar: ${err.message}`);
+    } finally {
+      setAgendandoEnvio(false);
+    }
+  };
+
+  const handleCancelAgendamento = async (agendamentoId: string) => {
+    const { error } = await supabase
+      .from('acionamento_agendamentos')
+      .update({ status: 'cancelado' } as any)
+      .eq('id', agendamentoId);
+    if (error) {
+      toast.error('Erro ao cancelar');
+    } else {
+      toast.success('Agendamento cancelado');
+      fetchAgendamentos();
+    }
+  };
+
   const clientesComIndex = useMemo(
     () => clientes.map((c, i) => ({ ...c, originalIndex: i })),
     [clientes]
