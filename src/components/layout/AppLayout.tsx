@@ -112,7 +112,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load sidebar order from profile
   useEffect(() => {
