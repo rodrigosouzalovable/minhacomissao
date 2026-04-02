@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -25,12 +25,28 @@ import {
   Volume2,
   Flame
 } from 'lucide-react';
-import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
 import { RetornoAlertChecker } from '@/components/RetornoAlertChecker';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import acordosIcon from '@/assets/acordos-icon.png';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { SortableNavItem } from './SortableNavItem';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -66,6 +82,28 @@ const navItems: NavItem[] = [
   { href: '/aquecimento', label: 'Aquecimento', icon: Flame, adminOnly: true },
 ];
 
+function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
+  if (!savedOrder || savedOrder.length === 0) return items;
+  
+  const itemMap = new Map(items.map(item => [item.href, item]));
+  const ordered: NavItem[] = [];
+  
+  for (const href of savedOrder) {
+    const item = itemMap.get(href);
+    if (item) {
+      ordered.push(item);
+      itemMap.delete(href);
+    }
+  }
+  
+  // Append any items not in savedOrder at the end
+  for (const item of itemMap.values()) {
+    ordered.push(item);
+  }
+  
+  return ordered;
+}
+
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
@@ -73,19 +111,70 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load sidebar order from profile
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profiles')
+      .select('sidebar_order')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data && (data as any).sidebar_order) {
+          setSidebarOrder((data as any).sidebar_order as string[]);
+        }
+      });
+  }, [user]);
+
+  // Save sidebar order with debounce
+  const saveSidebarOrder = useCallback((newOrder: string[]) => {
+    if (!user) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      supabase
+        .from('profiles')
+        .update({ sidebar_order: newOrder } as any)
+        .eq('id', user.id)
+        .then(() => {});
+    }, 500);
+  }, [user]);
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter((item) => {
     if (isAdmin) return true;
-    // For non-admin users, if abasPermitidas is set, use it as the source of truth
     if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }
-    // If no abasPermitidas configured, apply role-based defaults
     if (item.adminOnly) return false;
     if (item.gestorOnly && !isGestor) return false;
     return true;
   });
+
+  // Apply custom order after filtering
+  const orderedNavItems = applyCustomOrder(filteredNavItems, sidebarOrder);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = orderedNavItems.findIndex(item => item.href === active.id);
+    const newIndex = orderedNavItems.findIndex(item => item.href === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(orderedNavItems, oldIndex, newIndex);
+    const newOrderHrefs = reordered.map(item => item.href);
+    setSidebarOrder(newOrderHrefs);
+    saveSidebarOrder(newOrderHrefs);
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -140,27 +229,28 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           <ScrollArea className="flex-1">
             <nav className="px-4">
-              {filteredNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.href;
-                
-                return (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "hover:bg-sidebar-accent/50"
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={orderedNavItems.map(item => item.href)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {orderedNavItems.map((item) => (
+                    <SortableNavItem
+                      key={item.href}
+                      id={item.href}
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                      isActive={location.pathname === item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </nav>
           </ScrollArea>
 

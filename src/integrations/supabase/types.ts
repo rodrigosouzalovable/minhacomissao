@@ -1160,6 +1160,7 @@ export type Database = {
           email: string
           id: string
           nome: string
+          sidebar_order: Json | null
           whatsapp_lembrete_instance_token: string | null
           whatsapp_lembrete_server_url: string | null
           whatsapp_lembretes_habilitado: boolean
@@ -1171,6 +1172,7 @@ export type Database = {
           email: string
           id: string
           nome: string
+          sidebar_order?: Json | null
           whatsapp_lembrete_instance_token?: string | null
           whatsapp_lembrete_server_url?: string | null
           whatsapp_lembretes_habilitado?: boolean
@@ -1182,6 +1184,7 @@ export type Database = {
           email?: string
           id?: string
           nome?: string
+          sidebar_order?: Json | null
           whatsapp_lembrete_instance_token?: string | null
           whatsapp_lembrete_server_url?: string | null
           whatsapp_lembretes_habilitado?: boolean
