@@ -1,31 +1,26 @@
 
 
-## Reorganizar abas da sidebar com drag-and-drop
+## Filtrar WhatsApps conectados nas Campanhas de Voz
 
-### O que será feito
-Permitir que cada usuário arraste os itens do menu lateral para reorganizá-los na ordem que preferir. A ordem será salva no banco de dados (tabela `profiles`) e carregada automaticamente ao logar.
+### Problema
+Atualmente, a lista de WhatsApp para envio na aba Campanhas de Voz mostra todas as instâncias ativas, sem verificar se estão realmente conectadas. O status de conexão não é salvo no banco — é verificado em tempo real via a edge function `test-uazapi-connection`.
 
-### Como funciona
+### Solução
+Adicionar uma verificação de conexão ao carregar as instâncias na página de Campanhas de Voz, igual ao que já é feito na página de Acionamento. Apenas instâncias conectadas serão exibidas na lista de seleção.
 
-1. **Biblioteca de drag-and-drop**: Instalar `@dnd-kit/core` e `@dnd-kit/sortable` — leve, acessível e ideal para listas reordenáveis.
+### Alterações
 
-2. **Nova coluna no banco**: Adicionar `sidebar_order jsonb default null` na tabela `profiles`. Armazena um array de hrefs na ordem personalizada, ex: `["/dashboard", "/acordos", "/conta", ...]`. Se `null`, usa a ordem padrão.
+**Arquivo: `src/pages/CampanhasVoz.tsx`**
 
-3. **Alteração no `AppLayout.tsx`**:
-   - Carregar a ordem salva do perfil do usuário
-   - Envolver os itens de navegação com `DndContext` + `SortableContext` do dnd-kit
-   - Cada item de nav vira um `SortableItem` com handle de arraste (ícone de grip)
-   - Ao soltar, reordenar o array localmente e salvar no banco (`profiles.sidebar_order`)
-   - Ícone de grip aparece ao passar o mouse sobre o item
-
-4. **Arquivos alterados**:
-   - `src/components/layout/AppLayout.tsx` — lógica de drag-and-drop e reordenação
-   - Nova migração SQL — adicionar coluna `sidebar_order` em `profiles`
-   - `package.json` — adicionar `@dnd-kit/core` e `@dnd-kit/sortable`
+1. Após carregar as instâncias do banco, chamar `test-uazapi-connection` para cada uma (em paralelo) — mesmo padrão usado em `Acionamento.tsx`
+2. Filtrar a lista `instances` para exibir apenas as que retornarem `connected === true`
+3. Mostrar um indicador de "Verificando conexões..." enquanto o check está em andamento
+4. Aplicar o mesmo filtro no segundo ponto onde instâncias aparecem (seção de envio rápido, se existir)
 
 ### Detalhes técnicos
 
-- A coluna `sidebar_order` armazena apenas os `href` dos itens na ordem desejada. Itens novos que não estão no array salvo são adicionados ao final.
-- O filtro de permissões (admin/gestor/abasPermitidas) continua sendo aplicado **antes** da reordenação — o drag-and-drop só reordena itens que o usuário tem acesso.
-- O salvamento é feito com debounce para evitar muitas chamadas ao banco durante arraste rápido.
+- Reutilizar a lógica de `checkInstanceConnections` do `Acionamento.tsx`: invocar `supabase.functions.invoke('test-uazapi-connection', { body: { server_url, instance_token } })` para cada instância
+- Guardar o resultado num estado `connectionStatus: Record<string, 'connected' | 'disconnected' | 'checking'>`
+- Filtrar `instances` para mostrar apenas `connectionStatus[id] === 'connected'`
+- As instâncias em estado `checking` mostram um spinner pequeno
 
