@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet } from 'lucide-react';
+import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import * as XLSX from 'xlsx';
@@ -122,7 +122,7 @@ export default function CampanhasVoz() {
   });
 
   // Fetch WhatsApp instances
-  const { data: instances = [] } = useQuery({
+  const { data: allInstances = [] } = useQuery({
     queryKey: ['whatsapp-instances-voice', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -135,6 +135,47 @@ export default function CampanhasVoz() {
     },
     enabled: !!user,
   });
+
+  // Check connection status for each instance
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'checking' | 'connected' | 'disconnected'>>({});
+  const [checkingConnections, setCheckingConnections] = useState(false);
+
+  useEffect(() => {
+    if (allInstances.length === 0) return;
+    
+    setCheckingConnections(true);
+    const newStatus: Record<string, 'checking' | 'connected' | 'disconnected'> = {};
+    allInstances.forEach(inst => { newStatus[inst.id] = 'checking'; });
+    setConnectionStatus(newStatus);
+
+    const checkAll = async () => {
+      const results = await Promise.allSettled(
+        allInstances.map(async (inst) => {
+          try {
+            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
+              body: { server_url: inst.server_url, instance_token: inst.instance_token },
+            });
+            return { id: inst.id, connected: data?.ok === true };
+          } catch {
+            return { id: inst.id, connected: false };
+          }
+        })
+      );
+
+      const finalStatus: Record<string, 'connected' | 'disconnected'> = {};
+      results.forEach(r => {
+        if (r.status === 'fulfilled') {
+          finalStatus[r.value.id] = r.value.connected ? 'connected' : 'disconnected';
+        }
+      });
+      setConnectionStatus(finalStatus);
+      setCheckingConnections(false);
+    };
+
+    checkAll();
+  }, [allInstances]);
+
+  const instances = allInstances.filter(inst => connectionStatus[inst.id] === 'connected');
 
   // Fetch DB contacts
   const { data: dbContacts = [] } = useQuery({
@@ -461,7 +502,13 @@ export default function CampanhasVoz() {
               <div>
                 <Label>WhatsApp para envio (selecione um ou mais)</Label>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
-                  {instances.map(inst => (
+                  {checkingConnections && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Verificando conexões...
+                    </p>
+                  )}
+                  {!checkingConnections && instances.map(inst => (
                     <label key={inst.id} className="flex items-center gap-2 cursor-pointer">
                       <Checkbox
                         checked={selectedInstanceIds.includes(inst.id)}
@@ -474,7 +521,7 @@ export default function CampanhasVoz() {
                       <span className="text-sm">{inst.nome || inst.server_url}</span>
                     </label>
                   ))}
-                  {instances.length === 0 && (
+                  {!checkingConnections && instances.length === 0 && (
                     <p className="text-sm text-muted-foreground">Nenhum WhatsApp conectado</p>
                   )}
                 </div>
