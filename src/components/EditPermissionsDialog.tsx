@@ -13,7 +13,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface EditPermissionsDialogProps {
   open: boolean;
@@ -150,8 +149,8 @@ export function EditPermissionsDialog({
           <DialogTitle>Editar Permissões - {userName}</DialogTitle>
         </DialogHeader>
 
-        <ScrollArea type="always" className="min-h-0 flex-1">
-          <div className="space-y-6 py-4 pr-3">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--border)) transparent' }}>
+          <div className="space-y-6 py-4 pr-2">
             <div className="space-y-3">
               <Label className="text-sm font-medium">Abas visíveis</Label>
               {AVAILABLE_TABS.map((tab) => (
@@ -192,7 +191,7 @@ export function EditPermissionsDialog({
               />
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
