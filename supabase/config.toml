@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.cleanup-inbox-media]
 verify_jwt = false
+
+[functions.process-acionamento-agendado]
+verify_jwt = false
