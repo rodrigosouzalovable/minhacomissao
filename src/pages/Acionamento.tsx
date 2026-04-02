@@ -20,7 +20,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
@@ -186,6 +187,12 @@ export default function Acionamento() {
 
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
+  
+  // Scheduling state
+  const [agendamentos, setAgendamentos] = useState<Array<{ id: string; agendado_para: string; status: string; total_enviados: number; total_erros: number; historico_data: any }>>([]);
+  const [agendandoEnvio, setAgendandoEnvio] = useState(false);
+  const [agendamentoData, setAgendamentoData] = useState('');
+  const [agendamentoHora, setAgendamentoHora] = useState('08:00');
   
   // Conversation tracking state
   const [conversasMap, setConversasMap] = useState<Record<string, ConversaInfo>>({});
@@ -605,6 +612,99 @@ export default function Acionamento() {
 
   const handleStopAutoSend = () => {
     stopAutoSend();
+  };
+
+  const handleCalcInterval = () => {
+    const numRobos = activeInstances.length;
+    if (numRobos === 0) {
+      toast.error('Nenhuma instância Robô conectada para calcular');
+      return;
+    }
+    const intervaloMedio = 36000 / (30 * numRobos);
+    const min = Math.max(1, Math.floor(intervaloMedio * 0.8));
+    const max = Math.ceil(intervaloMedio * 1.2);
+    setAutoMinSec(min);
+    setAutoMaxSec(max);
+    toast.success(`Intervalo calculado: ${min}s a ${max}s (~30 msgs/número/dia, 8h-18h)`);
+  };
+
+  // Fetch agendamentos
+  const fetchAgendamentos = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('acionamento_agendamentos')
+      .select('*')
+      .eq('user_id', user.id)
+      .in('status', ['pendente', 'executando'])
+      .order('agendado_para', { ascending: true });
+    if (data) setAgendamentos(data as any);
+  }, [user]);
+
+  useEffect(() => {
+    fetchAgendamentos();
+  }, [fetchAgendamentos]);
+
+  const handleAgendar = async () => {
+    if (!user || !agendamentoData || !agendamentoHora) {
+      toast.error('Selecione data e hora para agendar');
+      return;
+    }
+    if (mensagensSalvas.length === 0) {
+      toast.error('Salve pelo menos uma mensagem antes de agendar');
+      return;
+    }
+    if (clientes.length === 0) {
+      toast.error('Importe uma planilha de clientes antes de agendar');
+      return;
+    }
+
+    setAgendandoEnvio(true);
+    try {
+      const agendadoPara = new Date(`${agendamentoData}T${agendamentoHora}:00`).toISOString();
+      
+      // Filter only pending clients
+      const pendingClientes = clientes.filter((_, i) => 
+        sendStatus[i] !== 'success' && sendStatus[i] !== 'error' && !manualChecked.has(i)
+      );
+
+      if (pendingClientes.length === 0) {
+        toast.error('Não há clientes pendentes para agendar');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('acionamento_agendamentos')
+        .insert({
+          user_id: user.id,
+          historico_data: { clientes: pendingClientes, mensagens: mensagensSalvas },
+          agendado_para: agendadoPara,
+          min_sec: autoMinSec,
+          max_sec: autoMaxSec,
+        } as any);
+
+      if (error) throw error;
+      toast.success(`Envio agendado para ${agendamentoData} às ${agendamentoHora}`);
+      setAgendamentoData('');
+      setAgendamentoHora('08:00');
+      fetchAgendamentos();
+    } catch (err: any) {
+      toast.error(`Erro ao agendar: ${err.message}`);
+    } finally {
+      setAgendandoEnvio(false);
+    }
+  };
+
+  const handleCancelAgendamento = async (agendamentoId: string) => {
+    const { error } = await supabase
+      .from('acionamento_agendamentos')
+      .update({ status: 'cancelado' } as any)
+      .eq('id', agendamentoId);
+    if (error) {
+      toast.error('Erro ao cancelar');
+    } else {
+      toast.success('Agendamento cancelado');
+      fetchAgendamentos();
+    }
   };
 
   const clientesComIndex = useMemo(
@@ -1304,50 +1404,127 @@ export default function Acionamento() {
             </CardHeader>
             <CardContent className="space-y-4">
               {activeTab === 'pendentes' && (
-                <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
-                  <span className="text-sm font-medium">Envio automático:</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={autoMinSec}
-                    onChange={(e) => setAutoMinSec(Number(e.target.value))}
-                    className="w-20 h-9"
-                    disabled={autoSending}
-                  />
-                  <span className="text-sm">a</span>
-                  <Input
-                    type="number"
-                    min={2}
-                    value={autoMaxSec}
-                    onChange={(e) => setAutoMaxSec(Number(e.target.value))}
-                    className="w-20 h-9"
-                    disabled={autoSending}
-                  />
-                  <span className="text-sm">segundos</span>
-                  {!autoSending ? (
-                    <Button
-                      size="sm"
-                      onClick={handleAutoSend}
-                      disabled={mensagensSalvas.length === 0 || pendentes.length === 0}
-                      className="bg-green-600 hover:bg-green-700 text-primary-foreground"
-                    >
-                      <Play className="h-4 w-4 mr-1" /> Iniciar
-                    </Button>
-                  ) : (
-                    <>
-                      {autoProgress && (
-                        <span className="text-sm font-medium text-muted-foreground">
-                          Enviando {autoProgress.current}/{autoProgress.total}...
-                        </span>
-                      )}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
+                    <span className="text-sm font-medium">Envio automático:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={autoMinSec}
+                      onChange={(e) => setAutoMinSec(Number(e.target.value))}
+                      className="w-20 h-9"
+                      disabled={autoSending}
+                    />
+                    <span className="text-sm">a</span>
+                    <Input
+                      type="number"
+                      min={2}
+                      value={autoMaxSec}
+                      onChange={(e) => setAutoMaxSec(Number(e.target.value))}
+                      className="w-20 h-9"
+                      disabled={autoSending}
+                    />
+                    <span className="text-sm">segundos</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCalcInterval}
+                            disabled={autoSending || activeInstances.length === 0}
+                          >
+                            <Calculator className="h-4 w-4 mr-1" /> Calcular
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Calcula o intervalo ideal para ~30 msgs/número/dia (8h-18h)</p>
+                          <p className="text-xs text-muted-foreground">{activeInstances.length} número(s) robô ativo(s)</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    {!autoSending ? (
                       <Button
                         size="sm"
-                        variant="destructive"
-                        onClick={handleStopAutoSend}
+                        onClick={handleAutoSend}
+                        disabled={mensagensSalvas.length === 0 || pendentes.length === 0}
+                        className="bg-green-600 hover:bg-green-700 text-primary-foreground"
                       >
-                        <Square className="h-4 w-4 mr-1" /> Parar
+                        <Play className="h-4 w-4 mr-1" /> Iniciar
                       </Button>
-                    </>
+                    ) : (
+                      <>
+                        {autoProgress && (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Enviando {autoProgress.current}/{autoProgress.total}...
+                          </span>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={handleStopAutoSend}
+                        >
+                          <Square className="h-4 w-4 mr-1" /> Parar
+                        </Button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Agendamento de envio */}
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
+                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Agendar envio:</span>
+                    <Input
+                      type="date"
+                      value={agendamentoData}
+                      onChange={(e) => setAgendamentoData(e.target.value)}
+                      className="w-40 h-9"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                    <Input
+                      type="time"
+                      value={agendamentoHora}
+                      onChange={(e) => setAgendamentoHora(e.target.value)}
+                      className="w-28 h-9"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAgendar}
+                      disabled={agendandoEnvio || !agendamentoData || mensagensSalvas.length === 0 || pendentes.length === 0}
+                    >
+                      {agendandoEnvio ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Clock className="h-4 w-4 mr-1" />}
+                      Agendar
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Usa o intervalo min/max acima • {pendentes.length} pendentes
+                    </span>
+                  </div>
+
+                  {/* Agendamentos ativos */}
+                  {agendamentos.length > 0 && (
+                    <div className="space-y-1">
+                      {agendamentos.map(ag => (
+                        <div key={ag.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded bg-accent/50">
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          <span>
+                            {new Date(ag.agendado_para).toLocaleDateString('pt-BR')} às{' '}
+                            {new Date(ag.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <Badge variant={ag.status === 'executando' ? 'default' : 'secondary'}>
+                            {ag.status === 'executando' ? `Enviando (${ag.total_enviados})` : 'Pendente'}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {(ag.historico_data as any)?.clientes?.length || 0} clientes
+                          </span>
+                          {ag.status === 'pendente' && (
+                            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => handleCancelAgendamento(ag.id)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
