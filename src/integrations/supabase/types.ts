@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      acionamento_agendamentos: {
+        Row: {
+          agendado_para: string
+          created_at: string
+          historico_data: Json
+          id: string
+          max_sec: number
+          min_sec: number
+          status: string
+          total_enviados: number
+          total_erros: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agendado_para: string
+          created_at?: string
+          historico_data: Json
+          id?: string
+          max_sec?: number
+          min_sec?: number
+          status?: string
+          total_enviados?: number
+          total_erros?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agendado_para?: string
+          created_at?: string
+          historico_data?: Json
+          id?: string
+          max_sec?: number
+          min_sec?: number
+          status?: string
+          total_enviados?: number
+          total_erros?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       acordos: {
         Row: {
           atualizado_em: string
