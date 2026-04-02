@@ -122,7 +122,7 @@ export default function CampanhasVoz() {
   });
 
   // Fetch WhatsApp instances
-  const { data: instances = [] } = useQuery({
+  const { data: allInstances = [] } = useQuery({
     queryKey: ['whatsapp-instances-voice', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -135,6 +135,47 @@ export default function CampanhasVoz() {
     },
     enabled: !!user,
   });
+
+  // Check connection status for each instance
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'checking' | 'connected' | 'disconnected'>>({});
+  const [checkingConnections, setCheckingConnections] = useState(false);
+
+  useEffect(() => {
+    if (allInstances.length === 0) return;
+    
+    setCheckingConnections(true);
+    const newStatus: Record<string, 'checking' | 'connected' | 'disconnected'> = {};
+    allInstances.forEach(inst => { newStatus[inst.id] = 'checking'; });
+    setConnectionStatus(newStatus);
+
+    const checkAll = async () => {
+      const results = await Promise.allSettled(
+        allInstances.map(async (inst) => {
+          try {
+            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
+              body: { server_url: inst.server_url, instance_token: inst.instance_token },
+            });
+            return { id: inst.id, connected: data?.ok === true };
+          } catch {
+            return { id: inst.id, connected: false };
+          }
+        })
+      );
+
+      const finalStatus: Record<string, 'connected' | 'disconnected'> = {};
+      results.forEach(r => {
+        if (r.status === 'fulfilled') {
+          finalStatus[r.value.id] = r.value.connected ? 'connected' : 'disconnected';
+        }
+      });
+      setConnectionStatus(finalStatus);
+      setCheckingConnections(false);
+    };
+
+    checkAll();
+  }, [allInstances]);
+
+  const instances = allInstances.filter(inst => connectionStatus[inst.id] === 'connected');
 
   // Fetch DB contacts
   const { data: dbContacts = [] } = useQuery({
