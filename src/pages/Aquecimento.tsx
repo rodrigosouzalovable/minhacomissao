@@ -72,8 +72,40 @@ export default function Aquecimento() {
   }
 
   async function loadInstancias() {
-    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, server_url, ativo');
+    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, server_url, instance_token, ativo');
     setAllInstances(instances || []);
+
+    // Check connections
+    if (instances && instances.length > 0) {
+      setCheckingConnections(true);
+      const activeInstances = instances.filter((i: any) => i.ativo);
+      const initialStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
+      activeInstances.forEach((i: any) => { initialStatus[i.id] = 'checking'; });
+      setConnectionStatus(initialStatus);
+
+      const results = await Promise.allSettled(
+        activeInstances.map(async (inst: any) => {
+          try {
+            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
+              body: { server_url: inst.server_url, instance_token: inst.instance_token },
+            });
+            const connected = data?.ok === true;
+            return { id: inst.id, status: connected ? 'connected' as const : 'disconnected' as const };
+          } catch {
+            return { id: inst.id, status: 'disconnected' as const };
+          }
+        })
+      );
+
+      const finalStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
+      results.forEach((r) => {
+        if (r.status === 'fulfilled') {
+          finalStatus[r.value.id] = r.value.status;
+        }
+      });
+      setConnectionStatus(finalStatus);
+      setCheckingConnections(false);
+    }
 
     const { data } = await supabase.from('whatsapp_aquecimento_instancias' as any).select('*');
     if (data) {
