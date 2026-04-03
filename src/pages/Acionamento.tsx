@@ -835,6 +835,23 @@ export default function Acionamento() {
     }
   };
 
+  const handleInstanceDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = instances.findIndex(i => i.id === active.id);
+    const newIndex = instances.findIndex(i => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(instances, oldIndex, newIndex);
+    setInstances(reordered);
+    // Persist order
+    for (let i = 0; i < reordered.length; i++) {
+      await supabase
+        .from('user_whatsapp_instances' as any)
+        .update({ ordem: i } as any)
+        .eq('id', reordered[i].id);
+    }
+  };
+
   // QR Code connection handlers
   const stopQrPolling = useCallback(() => {
     if (qrPollingRef.current) clearInterval(qrPollingRef.current);
