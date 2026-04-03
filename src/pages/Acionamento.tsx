@@ -263,7 +263,8 @@ export default function Acionamento() {
         .from('user_whatsapp_instances' as any)
         .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
         .eq('user_id', user.id)
-        .order('criado_em', { ascending: true });
+        .order('ordem' as any, { ascending: true })
+        .order('criado_em', { ascending: false });
       if (data) {
         setInstances(data as any);
       }
