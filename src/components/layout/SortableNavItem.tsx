@@ -14,7 +14,7 @@ interface SortableNavItemProps {
   badge?: number;
 }
 
-export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick }: SortableNavItemProps) {
+export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick, badge }: SortableNavItemProps) {
   const {
     attributes,
     listeners,
