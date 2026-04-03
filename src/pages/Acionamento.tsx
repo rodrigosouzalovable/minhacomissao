@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { QrCode, Smartphone } from 'lucide-react';
+import { QrCode, Smartphone, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -147,6 +150,29 @@ interface InstanceFormData {
   instance_token: string;
 }
 
+function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.8 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="group/drag relative">
+      <button
+        {...attributes}
+        {...listeners}
+        className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/drag:opacity-60 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 z-10"
+        tabIndex={-1}
+      >
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+      <div className="pl-5">{children}</div>
+    </div>
+  );
+}
+
 export default function Acionamento() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
@@ -260,7 +286,8 @@ export default function Acionamento() {
         .from('user_whatsapp_instances' as any)
         .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
         .eq('user_id', user.id)
-        .order('criado_em', { ascending: true });
+        .order('ordem' as any, { ascending: true })
+        .order('criado_em', { ascending: false });
       if (data) {
         setInstances(data as any);
       }
@@ -820,7 +847,7 @@ export default function Acionamento() {
           .select()
           .single();
         if (error) throw error;
-        setInstances(prev => [...prev, data as any]);
+        setInstances(prev => [data as any, ...prev]);
         toast.success('WhatsApp adicionado!');
       }
       setEditingInstance(null);
@@ -828,6 +855,23 @@ export default function Acionamento() {
       toast.error(`Erro: ${err.message}`);
     } finally {
       setSavingInstance(false);
+    }
+  };
+
+  const handleInstanceDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = instances.findIndex(i => i.id === active.id);
+    const newIndex = instances.findIndex(i => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(instances, oldIndex, newIndex);
+    setInstances(reordered);
+    // Persist order
+    for (let i = 0; i < reordered.length; i++) {
+      await supabase
+        .from('user_whatsapp_instances' as any)
+        .update({ ordem: i } as any)
+        .eq('id', reordered[i].id);
     }
   };
 
@@ -881,7 +925,8 @@ export default function Acionamento() {
             .from('user_whatsapp_instances' as any)
             .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
             .eq('user_id', user?.id)
-            .order('criado_em', { ascending: true });
+            .order('ordem' as any, { ascending: true })
+            .order('criado_em', { ascending: false });
           if (refreshed) setInstances(refreshed as any);
           setQrStep('idle');
           setQrImage(null);
@@ -1696,14 +1741,6 @@ export default function Acionamento() {
               <DialogTitle>Configurações WhatsApp</DialogTitle>
             </DialogHeader>
             <div className="space-y-6">
-              {isAdmin && (
-                <div className="rounded-md border p-4 bg-muted/30">
-                  <p className="text-sm text-muted-foreground">
-                    Sua conta de administrador também utiliza a <strong>Z-API</strong> configurada no sistema como fallback. Caso não tenha instâncias UAZAPI ativas, o envio será feito pela Z-API.
-                  </p>
-                  <Badge variant="default" className="mt-2">Z-API (Padrão do sistema)</Badge>
-                </div>
-              )}
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1883,134 +1920,140 @@ export default function Acionamento() {
                   {instances.length === 0 && !editingInstance && (
                     <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância cadastrada</p>
                   )}
-                  {instances.map((inst) => {
-                    const status = connectionStatus[inst.id];
-                    return (
-                    <div key={inst.id} className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <WhatsAppIcon />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-sm truncate">{inst.nome || 'Sem nome'}</span>
-                            <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
-                              {inst.ativo ? 'Ativo' : 'Inativo'}
-                            </Badge>
-                            {inst.ativo && status === 'connected' && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
-                                Conectado
-                              </Badge>
-                            )}
-                            {inst.ativo && status === 'disconnected' && (
-                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-destructive-foreground mr-1" />
-                                Desconectado
-                              </Badge>
-                            )}
-                            {inst.ativo && status === 'checking' && (
-                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                             )}
-                            {inst.apenas_lembretes && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-amber-500 text-amber-600">
-                                Só Lembretes
-                              </Badge>
-                            )}
-                            {inst.robo && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500 text-blue-600">
-                                Robô
-                              </Badge>
-                            )}
-                            {inst.ia_responde && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
-                                IA Responde
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1 shrink-0">
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={inst.ativo}
-                            onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
-                            className="scale-90"
-                            title="Ativar/Desativar"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleTestInstance(inst)}
-                            disabled={testingInstanceId === inst.id}
-                            title="Testar conexão"
-                          >
-                            {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
-                            title="Editar"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => handleDeleteInstance(inst.id)}
-                            title="Remover"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        {inst.ativo && (
-                          <div className="flex flex-col gap-1 items-end">
-                            <div className="flex items-center gap-1.5">
-                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
-                                Apenas Lembretes
-                              </Label>
-                              <Checkbox
-                                id={`lembretes-only-${inst.id}`}
-                                checked={inst.apenas_lembretes}
-                                onCheckedChange={(checked) => handleToggleApenasLembretes(inst.id, !!checked)}
-                                className="h-3.5 w-3.5"
-                              />
+                  <DndContext collisionDetection={closestCenter} onDragEnd={handleInstanceDragEnd}>
+                    <SortableContext items={instances.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                      {instances.map((inst) => {
+                        const status = connectionStatus[inst.id];
+                        return (
+                          <SortableInstanceCard key={inst.id} id={inst.id}>
+                            <div className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <WhatsAppIcon />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-medium text-sm truncate">{inst.nome || 'Sem nome'}</span>
+                                    <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
+                                      {inst.ativo ? 'Ativo' : 'Inativo'}
+                                    </Badge>
+                                    {inst.ativo && status === 'connected' && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
+                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
+                                        Conectado
+                                      </Badge>
+                                    )}
+                                    {inst.ativo && status === 'disconnected' && (
+                                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0">
+                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-destructive-foreground mr-1" />
+                                        Desconectado
+                                      </Badge>
+                                    )}
+                                    {inst.ativo && status === 'checking' && (
+                                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                    )}
+                                    {inst.apenas_lembretes && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-amber-500 text-amber-600">
+                                        Só Lembretes
+                                      </Badge>
+                                    )}
+                                    {inst.robo && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500 text-blue-600">
+                                        Robô
+                                      </Badge>
+                                    )}
+                                    {inst.ia_responde && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
+                                        IA Responde
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-1 shrink-0">
+                                <div className="flex items-center gap-1">
+                                  <Switch
+                                    checked={inst.ativo}
+                                    onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
+                                    className="scale-90"
+                                    title="Ativar/Desativar"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => handleTestInstance(inst)}
+                                    disabled={testingInstanceId === inst.id}
+                                    title="Testar conexão"
+                                  >
+                                    {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-destructive hover:text-destructive"
+                                    onClick={() => handleDeleteInstance(inst.id)}
+                                    title="Remover"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                                {inst.ativo && (
+                                  <div className="flex flex-col gap-1 items-end">
+                                    <div className="flex items-center gap-1.5">
+                                      <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
+                                        Apenas Lembretes
+                                      </Label>
+                                      <Checkbox
+                                        id={`lembretes-only-${inst.id}`}
+                                        checked={inst.apenas_lembretes}
+                                        onCheckedChange={(checked) => handleToggleApenasLembretes(inst.id, !!checked)}
+                                        className="h-3.5 w-3.5"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`robo-${inst.id}`}>
+                                        Robô
+                                      </Label>
+                                      <Checkbox
+                                        id={`robo-${inst.id}`}
+                                        checked={inst.robo}
+                                        onCheckedChange={(checked) => handleToggleRobo(inst.id, !!checked)}
+                                        className="h-3.5 w-3.5"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`ia-responde-${inst.id}`}>
+                                        IA Responde
+                                      </Label>
+                                      <Checkbox
+                                        id={`ia-responde-${inst.id}`}
+                                        checked={inst.ia_responde}
+                                        onCheckedChange={(checked) => handleToggleIaResponde(inst.id, !!checked)}
+                                        className="h-3.5 w-3.5"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`robo-${inst.id}`}>
-                                Robô
-                              </Label>
-                              <Checkbox
-                                id={`robo-${inst.id}`}
-                                checked={inst.robo}
-                                onCheckedChange={(checked) => handleToggleRobo(inst.id, !!checked)}
-                                className="h-3.5 w-3.5"
-                              />
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`ia-responde-${inst.id}`}>
-                                IA Responde
-                              </Label>
-                              <Checkbox
-                                id={`ia-responde-${inst.id}`}
-                                checked={inst.ia_responde}
-                                onCheckedChange={(checked) => handleToggleIaResponde(inst.id, !!checked)}
-                                className="h-3.5 w-3.5"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    );
-                  })}
+                          </SortableInstanceCard>
+                        );
+                      })}
+                    </SortableContext>
+                  </DndContext>
                 </div>
 
 
-              {isAdmin && (
+              {user?.email === 'rodrigo.rs2013@gmail.com' && (
                 <>
                   <Separator />
                   <div className="space-y-3">
@@ -2053,24 +2096,6 @@ export default function Acionamento() {
                 </>
               )}
 
-              <Separator />
-
-              <div className="space-y-3">
-                <h3 className="text-base font-semibold">Testar envio</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="test-phone">Telefone para teste</Label>
-                  <Input
-                    id="test-phone"
-                    placeholder="11999999999"
-                    value={testPhone}
-                    onChange={(e) => setTestPhone(e.target.value)}
-                  />
-                </div>
-                <Button onClick={() => handleTestSend()} disabled={sendingTest || !testPhone.trim()}>
-                  {sendingTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                  Testar envio
-                </Button>
-              </div>
             </div>
           </DialogContent>
         </Dialog>
