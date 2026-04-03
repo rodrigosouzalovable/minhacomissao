@@ -56,6 +56,8 @@ export default function WhatsAppInbox() {
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [carregandoMensagens, setCarregandoMensagens] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
