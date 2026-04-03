@@ -54,6 +54,8 @@ export default function Aquecimento() {
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   
   const [loading, setLoading] = useState(true);
+  const [checkingConnections, setCheckingConnections] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
