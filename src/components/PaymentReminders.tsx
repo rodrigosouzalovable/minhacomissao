@@ -55,7 +55,12 @@ export function PaymentReminders() {
 
   // WhatsApp instances
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
-  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lembretes-selected-instances');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const roundRobinRef = useRef(0);
 
   // Templates & operator
@@ -68,9 +73,11 @@ export function PaymentReminders() {
   const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
 
   const toggleInstance = (id: string) => {
-    setSelectedInstanceIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+    setSelectedInstanceIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('lembretes-selected-instances', JSON.stringify(next));
+      return next;
+    });
   };
 
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
