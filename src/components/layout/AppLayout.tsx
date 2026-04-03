@@ -130,6 +130,43 @@ export function AppLayout({ children }: AppLayoutProps) {
       });
   }, [user]);
 
+  // Fetch inbox unread count
+  const fetchUnreadCount = useCallback(async () => {
+    if (!user) return;
+    // Get user's instances
+    const { data: instances } = await supabase
+      .from('user_whatsapp_instances')
+      .select('id')
+      .eq('user_id', user.id);
+    
+    if (!instances || instances.length === 0) {
+      setInboxUnreadCount(0);
+      return;
+    }
+
+    const instanceIds = instances.map(i => i.id);
+    const { count } = await supabase
+      .from('whatsapp_contatos')
+      .select('id', { count: 'exact', head: true })
+      .in('instancia_id', instanceIds)
+      .gt('nao_lido', 0);
+    
+    setInboxUnreadCount(count ?? 0);
+  }, [user]);
+
+  useEffect(() => {
+    fetchUnreadCount();
+
+    const channel = supabase
+      .channel('inbox-unread-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_contatos' }, () => {
+        fetchUnreadCount();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchUnreadCount]);
+
   // Save sidebar order with debounce
   const saveSidebarOrder = useCallback((newOrder: string[]) => {
     if (!user) return;
