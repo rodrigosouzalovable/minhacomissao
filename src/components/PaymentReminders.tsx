@@ -448,6 +448,11 @@ export function PaymentReminders() {
                 <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4" />
                   Vence hoje
+                  {enviadosHoje > 0 && (
+                    <Badge className="bg-emerald-600 text-white flex items-center gap-1 text-[10px] px-1.5 py-0.5">
+                      <Send className="h-3 w-3" /> {enviadosHoje} enviado{enviadosHoje > 1 ? 's' : ''}
+                    </Badge>
+                  )}
                   {!inDialog && (
                     <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" title="Expandir lembretes" onClick={(e) => { e.stopPropagation(); setPopoverOpen(false); setDialogOpen(true); }}>
                       <Maximize2 className="h-3.5 w-3.5" />
