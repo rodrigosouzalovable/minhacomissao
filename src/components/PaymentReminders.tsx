@@ -73,9 +73,11 @@ export function PaymentReminders() {
   const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
 
   const toggleInstance = (id: string) => {
-    setSelectedInstanceIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+    setSelectedInstanceIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('lembretes-selected-instances', JSON.stringify(next));
+      return next;
+    });
   };
 
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
