@@ -358,7 +358,8 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
     }]);
 
     if (status === 'enviado') {
-      toast.success(`Mensagem enviada para ${item.cliente_nome}`);
+      const instanceLabel = instance.nome || instance.server_url.replace(/https?:\/\//, '').split('/')[0];
+      toast.success(`Mensagem enviada para ${item.cliente_nome}, pelo número ${instanceLabel}`);
     } else {
       toast.error(`Erro ao enviar para ${item.cliente_nome}: ${erroMsg}`);
     }
