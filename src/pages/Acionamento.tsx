@@ -824,7 +824,7 @@ export default function Acionamento() {
           .select()
           .single();
         if (error) throw error;
-        setInstances(prev => [...prev, data as any]);
+        setInstances(prev => [data as any, ...prev]);
         toast.success('WhatsApp adicionado!');
       }
       setEditingInstance(null);
