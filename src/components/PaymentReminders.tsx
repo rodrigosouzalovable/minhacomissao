@@ -166,6 +166,9 @@ export function PaymentReminders() {
   // Compute progress
   const enviadosCount = allPendingReminders.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'enviado').length;
   const errosCount = allPendingReminders.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'erro').length;
+  const enviadosHoje = lembretesHoje.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'enviado').length;
+  const enviadosVencidos = lembretesVencidos.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'enviado').length;
+  const enviadosTresDias = lembretesTresDias.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'enviado').length;
   const naoEnviadosCount = allPendingReminders.filter(r => getWhatsAppStatus(r.id, r.cliente_telefone) === 'nao_enviado').length;
   const progressPercent = allPendingReminders.length > 0 ? Math.round(((enviadosCount + errosCount) / allPendingReminders.length) * 100) : 0;
 
