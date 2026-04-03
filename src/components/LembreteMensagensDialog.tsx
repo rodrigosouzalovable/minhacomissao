@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { MessageCircle, Save, Loader2, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { MessageCircle, Save, Loader2, Plus, Trash2, RotateCcw, Upload, Volume2 } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -24,6 +24,7 @@ interface TemplateRow {
   mensagem: string;
   ativo: boolean;
   ordem: number;
+  audio_url?: string | null;
 }
 
 interface TipoLembrete {
@@ -70,6 +71,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
   const [activeTipo, setActiveTipo] = useState(BASE_TIPOS[0].key);
   const [showAddDay, setShowAddDay] = useState(false);
   const [newDayInput, setNewDayInput] = useState('');
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open && user) loadTemplates();
@@ -125,6 +128,7 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
             mensagem: existing.mensagem,
             ativo: existing.ativo ?? true,
             ordem: existing.ordem ?? 0,
+            audio_url: existing.audio_url || null,
           });
         } else {
           const match = tipo.key.match(/^vencido_d(\d+)$/);
@@ -134,6 +138,7 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
             mensagem: DEFAULT_MESSAGES[tipo.key] || getGenericMessage(dias),
             ativo: true,
             ordem: 0,
+            audio_url: null,
           });
         }
       }
@@ -161,6 +166,7 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
         mensagem: t.mensagem,
         ativo: t.ativo,
         ordem: t.ordem,
+        audio_url: t.audio_url || null,
       }));
 
       if (rows.length > 0) {
@@ -194,6 +200,60 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
     const dias = match ? parseInt(match[1]) : 0;
     const defaultMsg = DEFAULT_MESSAGES[activeTipo] || getGenericMessage(dias);
     updateCurrentTemplate('mensagem', defaultMsg);
+  };
+
+  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Reset input
+    if (audioInputRef.current) audioInputRef.current.value = '';
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 10MB.');
+      return;
+    }
+
+    setUploadingAudio(true);
+    try {
+      const ext = file.name.split('.').pop() || 'mp3';
+      const path = `${user.id}/lembretes/${activeTipo}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('campaign-audio')
+        .upload(path, file, { contentType: file.type, upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('campaign-audio')
+        .getPublicUrl(path);
+
+      // Add cache-bust to URL
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      updateCurrentTemplate('audio_url', publicUrl);
+      toast.success('Áudio importado!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro ao importar áudio: ' + (err.message || ''));
+    } finally {
+      setUploadingAudio(false);
+    }
+  };
+
+  const handleRemoveAudio = async () => {
+    if (!user) return;
+    try {
+      const currentAudioUrl = currentTemplate?.audio_url;
+      if (currentAudioUrl) {
+        // Try to delete from storage
+        const ext = currentAudioUrl.split('.').pop()?.split('?')[0] || 'mp3';
+        const path = `${user.id}/lembretes/${activeTipo}.${ext}`;
+        await supabase.storage.from('campaign-audio').remove([path]);
+      }
+    } catch { /* ignore */ }
+    updateCurrentTemplate('audio_url', null);
+    toast.success('Áudio removido');
   };
 
   const addCustomDay = () => {
@@ -231,6 +291,7 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
       mensagem: getGenericMessage(dias),
       ativo: true,
       ordem: 0,
+      audio_url: null,
     }]);
 
     setActiveTipo(key);
@@ -286,7 +347,12 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
                             : 'hover:bg-muted text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        {tipo.label}
+                        <span className="flex items-center gap-1">
+                          {tipo.label}
+                          {templates.find(t => t.tipo_lembrete === tipo.key)?.audio_url && (
+                            <Volume2 className="h-3 w-3 shrink-0" />
+                          )}
+                        </span>
                       </button>
                       {tipo.custom && (
                         <Button
@@ -348,37 +414,88 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
                   )}
 
                   {currentTemplate && (
-                    <div className="space-y-2 border rounded-md p-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs text-muted-foreground">Mensagem</Label>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            <Switch
-                              checked={currentTemplate.ativo}
-                              onCheckedChange={(v) => updateCurrentTemplate('ativo', v)}
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {currentTemplate.ativo ? 'Ativo' : 'Inativo'}
-                            </span>
+                    <>
+                      <div className="space-y-2 border rounded-md p-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs text-muted-foreground">Mensagem</Label>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              <Switch
+                                checked={currentTemplate.ativo}
+                                onCheckedChange={(v) => updateCurrentTemplate('ativo', v)}
+                              />
+                              <span className="text-xs text-muted-foreground">
+                                {currentTemplate.ativo ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={resetToDefault}
+                              title="Restaurar padrão"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={resetToDefault}
-                            title="Restaurar padrão"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          </Button>
                         </div>
+                        <Textarea
+                          value={currentTemplate.mensagem}
+                          onChange={(e) => updateCurrentTemplate('mensagem', e.target.value)}
+                          rows={5}
+                          className="text-sm"
+                        />
                       </div>
-                      <Textarea
-                        value={currentTemplate.mensagem}
-                        onChange={(e) => updateCurrentTemplate('mensagem', e.target.value)}
-                        rows={5}
-                        className="text-sm"
-                      />
-                    </div>
+
+                      {/* Audio section */}
+                      <div className="border rounded-md p-3 space-y-2">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Volume2 className="h-3.5 w-3.5" />
+                          Áudio de lembrete
+                        </Label>
+                        {currentTemplate.audio_url ? (
+                          <div className="space-y-2">
+                            <audio controls className="w-full h-10" src={currentTemplate.audio_url} />
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => audioInputRef.current?.click()}
+                                disabled={uploadingAudio}
+                              >
+                                {uploadingAudio ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+                                Substituir
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={handleRemoveAudio}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                Remover
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => audioInputRef.current?.click()}
+                            disabled={uploadingAudio}
+                          >
+                            {uploadingAudio ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+                            Importar áudio
+                          </Button>
+                        )}
+                        <input
+                          ref={audioInputRef}
+                          type="file"
+                          accept="audio/*"
+                          className="hidden"
+                          onChange={handleAudioUpload}
+                        />
+                      </div>
+                    </>
                   )}
                 </div>
               </ScrollArea>

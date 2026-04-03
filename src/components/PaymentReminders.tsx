@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare, Volume2 } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { useAuth } from '@/hooks/useAuth';
@@ -43,6 +43,7 @@ function WhatsAppStatusBadge({ status }: { status: string }) {
 interface LembreteTemplate {
   tipo_lembrete: string;
   mensagem: string;
+  audio_url?: string | null;
 }
 
 export function PaymentReminders() {
@@ -95,7 +96,7 @@ export function PaymentReminders() {
           .eq('ativo', true),
         supabase
           .from('lembrete_mensagens_templates')
-          .select('tipo_lembrete, mensagem')
+          .select('tipo_lembrete, mensagem, audio_url')
           .eq('user_id', user.id)
           .eq('ativo', true),
         supabase
@@ -329,6 +330,57 @@ export function PaymentReminders() {
               >
                 <MessageSquare className="h-4 w-4" />
                 Enviar mensagem
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!lembrete.cliente_telefone) {
+                    toast.error('Cliente sem telefone cadastrado');
+                    return;
+                  }
+                  if (selectedInstances.length === 0) {
+                    toast.error('Selecione uma instância WhatsApp primeiro');
+                    return;
+                  }
+                  // Find the audio_url for this reminder type
+                  const tipoKey = lembrete.tipo === 'hoje' ? 'dia_vencimento'
+                    : lembrete.tipo === 'tres_dias' ? '3_dias'
+                    : (() => {
+                        const hoje = new Date();
+                        const vencimento = new Date(lembrete.data_prevista + 'T00:00:00');
+                        const diffDays = Math.floor((hoje.getTime() - vencimento.getTime()) / (1000 * 60 * 60 * 24));
+                        return `vencido_d${diffDays}`;
+                      })();
+                  const tpl = templates.find(t => t.tipo_lembrete === tipoKey);
+                  if (!tpl?.audio_url) {
+                    toast.error('Nenhum áudio configurado para este tipo de lembrete');
+                    return;
+                  }
+                  const instance = selectedInstances[roundRobinRef.current % selectedInstances.length];
+                  roundRobinRef.current += 1;
+                  (async () => {
+                    try {
+                      const { error } = await supabase.functions.invoke('send-whatsapp-audio', {
+                        body: {
+                          telefone: lembrete.cliente_telefone,
+                          audio_url: tpl.audio_url,
+                          uazapi_server_url: instance.server_url,
+                          uazapi_instance_token: instance.instance_token,
+                          instancia_id: instance.id,
+                        },
+                      });
+                      if (error) throw error;
+                      markAsEnviado(lembrete.id, lembrete.cliente_nome, lembrete.cliente_telefone || '');
+                      toast.success(`Áudio enviado para ${lembrete.cliente_nome}`);
+                    } catch (err: any) {
+                      toast.error('Erro ao enviar áudio: ' + (err.message || ''));
+                    }
+                  })();
+                }}
+              >
+                <Volume2 className="h-4 w-4" />
+                Enviar áudio
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="gap-2 cursor-pointer"
