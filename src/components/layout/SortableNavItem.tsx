@@ -11,9 +11,10 @@ interface SortableNavItemProps {
   icon: React.ComponentType<{ className?: string }>;
   isActive: boolean;
   onClick: () => void;
+  badge?: number;
 }
 
-export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick }: SortableNavItemProps) {
+export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick, badge }: SortableNavItemProps) {
   const {
     attributes,
     listeners,
@@ -53,6 +54,11 @@ export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick
         >
           <Icon className="h-5 w-5" />
           <span>{label}</span>
+          {badge != null && badge > 0 && (
+            <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+              {badge}
+            </span>
+          )}
         </Link>
       </div>
     </div>
