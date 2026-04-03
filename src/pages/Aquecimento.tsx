@@ -235,6 +235,12 @@ export default function Aquecimento() {
                 <CardTitle>Instâncias WhatsApp</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {checkingConnections && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Activity className="h-4 w-4 animate-spin" />
+                    Verificando conexões...
+                  </div>
+                )}
                 {selectedInstances.size > 0 && (
                   <div className="flex items-center gap-3">
                     <Button
@@ -258,16 +264,14 @@ export default function Aquecimento() {
                       <TableHead className="w-10">
                         <Checkbox
                           checked={(() => {
-                            const eligible = allInstances.filter(i => {
-                              if (!i.ativo) return false;
+                            const eligible = connectedInstances.filter(i => {
                               const aq = instancias.find(a => a.instancia_id === i.id);
                               return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
                             });
                             return eligible.length > 0 && eligible.every(i => selectedInstances.has(i.id));
                           })()}
                           onCheckedChange={(checked) => {
-                            const eligible = allInstances.filter(i => {
-                              if (!i.ativo) return false;
+                            const eligible = connectedInstances.filter(i => {
                               const aq = instancias.find(a => a.instancia_id === i.id);
                               return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
                             });
@@ -289,7 +293,10 @@ export default function Aquecimento() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allInstances.filter(i => i.ativo).map(inst => {
+                    {connectedInstances.length === 0 && !checkingConnections && (
+                      <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum WhatsApp conectado</TableCell></TableRow>
+                    )}
+                    {connectedInstances.map(inst => {
                       const aq = instancias.find(a => a.instancia_id === inst.id);
                       const taxaResp = aq && aq.interacoes_total > 0 ? Math.round((aq.respostas_recebidas / aq.interacoes_total) * 100) : 0;
                       return (
