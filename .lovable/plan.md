@@ -1,26 +1,40 @@
 
 
-## Badge de conversas não lidas no menu lateral "WhatsApp Inbox"
+## 5 Modificações nas Configurações WhatsApp (Acionamento)
 
 ### Resumo
-Adicionar um círculo vermelho com o número total de conversas não lidas ao lado do label "WhatsApp Inbox" na sidebar, igual ao estilo do sino de notificações.
+1. Remover bloco Z-API (linhas 1699-1706)
+2. Novos números aparecem no topo da lista
+3. Drag-and-drop para reordenar instâncias
+4. Webhook do Chatbot IA visível apenas para rodrigo.rs2013@gmail.com
+5. Remover seção "Testar envio" do dialog de configurações
 
 ### Alterações
 
-**Arquivo: `src/components/layout/SortableNavItem.tsx`**
+**Migração de banco de dados:**
+- Adicionar coluna `ordem integer default 0` à tabela `user_whatsapp_instances`
 
-1. Adicionar prop opcional `badge?: number` à interface `SortableNavItemProps`
-2. Quando `badge > 0`, renderizar um `<span>` circular vermelho com o número ao lado direito do label, com estilo similar ao badge do sino (fundo vermelho, texto branco, tamanho pequeno)
+**Arquivo: `src/pages/Acionamento.tsx`**
 
-**Arquivo: `src/components/layout/AppLayout.tsx`**
+1. **Remover bloco Z-API** (linhas 1699-1706): Deletar o bloco `{isAdmin && (...)}` com a mensagem sobre Z-API fallback e o badge "Z-API (Padrão do sistema)"
 
-1. Criar um estado `inboxUnreadCount` e um `useEffect` que consulta a tabela `whatsapp_contatos` filtrando por `nao_lido > 0` e pelas instâncias do usuário, contando o total de conversas com mensagens não lidas
-2. Adicionar um subscription realtime na tabela `whatsapp_contatos` para manter o contador atualizado em tempo real
-3. Passar a prop `badge={inboxUnreadCount}` ao `SortableNavItem` cujo `href === '/inbox'`
+2. **Novos números no topo** (linha 823): Trocar `[...prev, data as any]` por `[data as any, ...prev]`
+
+3. **Drag-and-drop nas instâncias**:
+   - Importar `DndContext`, `SortableContext`, `closestCenter`, `verticalListSortingStrategy`, `arrayMove`, `useSortable`, `CSS` (mesmas libs já usadas na sidebar)
+   - Criar um componente inline `SortableInstanceCard` que usa `useSortable` e renderiza cada card de instância com ícone `GripVertical` à esquerda
+   - Envolver a lista de instâncias (linha 1886) com `DndContext` + `SortableContext`
+   - No `handleDragEnd`, reordenar array local e persistir via updates no campo `ordem`
+   - Alterar fetch (linha 263) para ordenar por `ordem ASC, criado_em DESC`
+
+4. **Webhook visível só para rodrigo.rs2013@gmail.com** (linha 2013): Trocar `{isAdmin && (` por `{user?.email === 'rodrigo.rs2013@gmail.com' && (`
+
+5. **Remover "Testar envio"** (linhas 2056-2073): Deletar o `<Separator />` e o bloco inteiro de "Testar envio" dentro do dialog de configurações (manter o "Testar envio" da área principal de acionamento, se existir)
 
 ### Detalhes técnicos
 
-- Query: `supabase.from('whatsapp_contatos').select('id', { count: 'exact' }).gt('nao_lido', 0)` filtrado pelas instâncias vinculadas ao usuário (via `user_whatsapp_instances`)
-- Realtime: subscribe a changes na tabela `whatsapp_contatos` para re-fetch quando houver updates
-- Badge visual: `bg-red-500 text-white text-[10px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center` posicionado com `ml-auto`
+- O `@dnd-kit/sortable` já está instalado no projeto (usado em `SortableNavItem.tsx`)
+- O `SortableInstanceCard` seguirá o mesmo padrão do `SortableNavItem`: `useSortable` → `transform`/`transition` → `GripVertical` no hover
+- A persistência de ordem faz um loop de updates: `UPDATE user_whatsapp_instances SET ordem = index WHERE id = ...`
+- Variáveis `testPhone` e `sendingTest` permanecem no componente pois são usadas no "Testar envio" da área principal (linha 1337)
 
