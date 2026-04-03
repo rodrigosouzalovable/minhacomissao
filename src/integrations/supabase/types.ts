@@ -1392,6 +1392,7 @@ export type Database = {
           id: string
           instance_token: string
           nome: string | null
+          ordem: number | null
           robo: boolean
           server_url: string
           user_id: string
@@ -1404,6 +1405,7 @@ export type Database = {
           id?: string
           instance_token: string
           nome?: string | null
+          ordem?: number | null
           robo?: boolean
           server_url: string
           user_id: string
@@ -1416,6 +1418,7 @@ export type Database = {
           id?: string
           instance_token?: string
           nome?: string | null
+          ordem?: number | null
           robo?: boolean
           server_url?: string
           user_id?: string
