@@ -2049,24 +2049,6 @@ export default function Acionamento() {
                 </>
               )}
 
-              <Separator />
-
-              <div className="space-y-3">
-                <h3 className="text-base font-semibold">Testar envio</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="test-phone">Telefone para teste</Label>
-                  <Input
-                    id="test-phone"
-                    placeholder="11999999999"
-                    value={testPhone}
-                    onChange={(e) => setTestPhone(e.target.value)}
-                  />
-                </div>
-                <Button onClick={() => handleTestSend()} disabled={sendingTest || !testPhone.trim()}>
-                  {sendingTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                  Testar envio
-                </Button>
-              </div>
             </div>
           </DialogContent>
         </Dialog>
