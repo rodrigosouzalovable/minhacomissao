@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Send, Mic, Paperclip, X, Square, Loader2 } from 'lucide-react';
@@ -14,11 +14,14 @@ interface ChatInputBarProps {
   onTextSent: (texto: string) => Promise<void>;
   onMediaSent: () => void;
   enviando: boolean;
+  externalFile?: File | null;
+  onExternalFileHandled?: () => void;
 }
 
 export function ChatInputBar({
   instanciaId, telefone, serverUrl, instanceToken,
   onTextSent, onMediaSent, enviando,
+  externalFile, onExternalFileHandled,
 }: ChatInputBarProps) {
   const { toast } = useToast();
   const [textoMensagem, setTextoMensagem] = useState('');
@@ -33,18 +36,7 @@ export function ChatInputBar({
     onSent: onMediaSent,
   });
 
-  const handleEnviarTexto = async () => {
-    if (!textoMensagem.trim() || enviando) return;
-    const texto = textoMensagem.trim();
-    setTextoMensagem('');
-    await onTextSent(texto);
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-
+  const handleFileSend = async (file: File) => {
     const isImage = file.type.startsWith('image/');
     const isPdf = file.type === 'application/pdf';
     if (!isImage && !isPdf) {
@@ -87,6 +79,44 @@ export function ChatInputBar({
     } finally {
       setEnviandoArquivo(false);
     }
+  };
+
+  // Handle external file (from drag & drop)
+  useEffect(() => {
+    if (externalFile) {
+      handleFileSend(externalFile);
+      onExternalFileHandled?.();
+    }
+  }, [externalFile]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    await handleFileSend(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (file) {
+          const namedFile = new File([file], `clipboard-${Date.now()}.png`, { type: file.type });
+          handleFileSend(namedFile);
+        }
+        return;
+      }
+    }
+  };
+
+  const handleEnviarTexto = async () => {
+    if (!textoMensagem.trim() || enviando) return;
+    const texto = textoMensagem.trim();
+    setTextoMensagem('');
+    await onTextSent(texto);
   };
 
   const isLoading = enviando || enviandoAudio || enviandoArquivo;
@@ -136,6 +166,7 @@ export function ChatInputBar({
             handleEnviarTexto();
           }
         }}
+        onPaste={handlePaste}
         disabled={isLoading}
         className="flex-1"
       />
