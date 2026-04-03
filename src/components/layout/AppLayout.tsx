@@ -285,6 +285,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       icon={item.icon}
                       isActive={location.pathname === item.href}
                       onClick={() => setMobileMenuOpen(false)}
+                      badge={item.href === '/inbox' ? inboxUnreadCount : undefined}
                     />
                   ))}
                 </SortableContext>
