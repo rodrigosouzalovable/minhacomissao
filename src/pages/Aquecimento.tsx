@@ -54,6 +54,8 @@ export default function Aquecimento() {
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   
   const [loading, setLoading] = useState(true);
+  const [checkingConnections, setCheckingConnections] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
@@ -70,8 +72,40 @@ export default function Aquecimento() {
   }
 
   async function loadInstancias() {
-    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, server_url, ativo');
+    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, server_url, instance_token, ativo');
     setAllInstances(instances || []);
+
+    // Check connections
+    if (instances && instances.length > 0) {
+      setCheckingConnections(true);
+      const activeInstances = instances.filter((i: any) => i.ativo);
+      const initialStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
+      activeInstances.forEach((i: any) => { initialStatus[i.id] = 'checking'; });
+      setConnectionStatus(initialStatus);
+
+      const results = await Promise.allSettled(
+        activeInstances.map(async (inst: any) => {
+          try {
+            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
+              body: { server_url: inst.server_url, instance_token: inst.instance_token },
+            });
+            const connected = data?.ok === true;
+            return { id: inst.id, status: connected ? 'connected' as const : 'disconnected' as const };
+          } catch {
+            return { id: inst.id, status: 'disconnected' as const };
+          }
+        })
+      );
+
+      const finalStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
+      results.forEach((r) => {
+        if (r.status === 'fulfilled') {
+          finalStatus[r.value.id] = r.value.status;
+        }
+      });
+      setConnectionStatus(finalStatus);
+      setCheckingConnections(false);
+    }
 
     const { data } = await supabase.from('whatsapp_aquecimento_instancias' as any).select('*');
     if (data) {
@@ -171,6 +205,8 @@ export default function Aquecimento() {
     return `Fase ${fase}`;
   };
 
+  const connectedInstances = allInstances.filter(i => i.ativo && connectionStatus[i.id] === 'connected');
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -201,6 +237,12 @@ export default function Aquecimento() {
                 <CardTitle>Instâncias WhatsApp</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {checkingConnections && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Activity className="h-4 w-4 animate-spin" />
+                    Verificando conexões...
+                  </div>
+                )}
                 {selectedInstances.size > 0 && (
                   <div className="flex items-center gap-3">
                     <Button
@@ -224,16 +266,14 @@ export default function Aquecimento() {
                       <TableHead className="w-10">
                         <Checkbox
                           checked={(() => {
-                            const eligible = allInstances.filter(i => {
-                              if (!i.ativo) return false;
+                            const eligible = connectedInstances.filter(i => {
                               const aq = instancias.find(a => a.instancia_id === i.id);
                               return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
                             });
                             return eligible.length > 0 && eligible.every(i => selectedInstances.has(i.id));
                           })()}
                           onCheckedChange={(checked) => {
-                            const eligible = allInstances.filter(i => {
-                              if (!i.ativo) return false;
+                            const eligible = connectedInstances.filter(i => {
                               const aq = instancias.find(a => a.instancia_id === i.id);
                               return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
                             });
@@ -255,7 +295,10 @@ export default function Aquecimento() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allInstances.filter(i => i.ativo).map(inst => {
+                    {connectedInstances.length === 0 && !checkingConnections && (
+                      <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum WhatsApp conectado</TableCell></TableRow>
+                    )}
+                    {connectedInstances.map(inst => {
                       const aq = instancias.find(a => a.instancia_id === inst.id);
                       const taxaResp = aq && aq.interacoes_total > 0 ? Math.round((aq.respostas_recebidas / aq.interacoes_total) * 100) : 0;
                       return (
