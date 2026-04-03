@@ -2006,7 +2006,7 @@ export default function Acionamento() {
                 </div>
 
 
-              {isAdmin && (
+              {user?.email === 'rodrigo.rs2013@gmail.com' && (
                 <>
                   <Separator />
                   <div className="space-y-3">
