@@ -43,6 +43,7 @@ function WhatsAppStatusBadge({ status }: { status: string }) {
 interface LembreteTemplate {
   tipo_lembrete: string;
   mensagem: string;
+  audio_url?: string | null;
 }
 
 export function PaymentReminders() {
