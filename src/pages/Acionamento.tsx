@@ -150,6 +150,29 @@ interface InstanceFormData {
   instance_token: string;
 }
 
+function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.8 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="group/drag relative">
+      <button
+        {...attributes}
+        {...listeners}
+        className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/drag:opacity-60 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 z-10"
+        tabIndex={-1}
+      >
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+      <div className="pl-5">{children}</div>
+    </div>
+  );
+}
+
 export default function Acionamento() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
