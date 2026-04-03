@@ -205,6 +205,8 @@ export default function Aquecimento() {
     return `Fase ${fase}`;
   };
 
+  const connectedInstances = allInstances.filter(i => i.ativo && connectionStatus[i.id] === 'connected');
+
   return (
     <AppLayout>
       <div className="space-y-6">
