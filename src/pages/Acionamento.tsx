@@ -1700,14 +1700,6 @@ export default function Acionamento() {
               <DialogTitle>Configurações WhatsApp</DialogTitle>
             </DialogHeader>
             <div className="space-y-6">
-              {isAdmin && (
-                <div className="rounded-md border p-4 bg-muted/30">
-                  <p className="text-sm text-muted-foreground">
-                    Sua conta de administrador também utiliza a <strong>Z-API</strong> configurada no sistema como fallback. Caso não tenha instâncias UAZAPI ativas, o envio será feito pela Z-API.
-                  </p>
-                  <Badge variant="default" className="mt-2">Z-API (Padrão do sistema)</Badge>
-                </div>
-              )}
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
