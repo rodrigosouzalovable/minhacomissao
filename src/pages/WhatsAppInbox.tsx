@@ -417,6 +417,8 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                   onTextSent={handleEnviarTexto}
                   onMediaSent={fetchMensagens}
                   enviando={enviando}
+                  externalFile={droppedFile}
+                  onExternalFileHandled={() => setDroppedFile(null)}
                 />
               )}
             </>
