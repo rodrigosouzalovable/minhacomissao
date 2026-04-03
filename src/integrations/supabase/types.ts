@@ -960,6 +960,7 @@ export type Database = {
       lembrete_mensagens_templates: {
         Row: {
           ativo: boolean | null
+          audio_url: string | null
           created_at: string | null
           id: string
           mensagem: string
@@ -969,6 +970,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
+          audio_url?: string | null
           created_at?: string | null
           id?: string
           mensagem: string
@@ -978,6 +980,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
+          audio_url?: string | null
           created_at?: string | null
           id?: string
           mensagem?: string
