@@ -11,6 +11,7 @@ interface SortableNavItemProps {
   icon: React.ComponentType<{ className?: string }>;
   isActive: boolean;
   onClick: () => void;
+  badge?: number;
 }
 
 export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick }: SortableNavItemProps) {
