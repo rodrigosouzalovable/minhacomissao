@@ -643,15 +643,22 @@ export function PaymentReminders() {
                         Cancelar
                       </Button>
                     ) : (
-                      <Button
-                        size="sm"
-                        className="gap-1.5"
-                        disabled={selectedInstanceIds.length === 0 || totalLembretes === 0}
-                        onClick={handleStartEnvios}
-                      >
-                        <Play className="h-3.5 w-3.5" />
-                        Enviar
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {selectedInstanceIds.length > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {selectedInstanceIds.length}
+                          </Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={selectedInstanceIds.length === 0 || totalLembretes === 0}
+                          onClick={handleStartEnvios}
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Enviar
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
