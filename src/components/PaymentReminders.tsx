@@ -378,7 +378,8 @@ export function PaymentReminders() {
                         return;
                       }
                       markAsEnviado(lembrete.id, lembrete.cliente_nome, lembrete.cliente_telefone || '');
-                      toast.success(`Áudio enviado para ${lembrete.cliente_nome}`);
+                      const instNome = instance.nome || instance.server_url?.replace(/https?:\/\//, '').split('.')[0] || 'instância';
+                      toast.success(`Áudio enviado para ${lembrete.cliente_nome} pelo número ${instNome}`);
                     } catch (err: any) {
                       const msg = err.message || '';
                       const friendly = msg.includes('not on WhatsApp') ? 'Este número não possui WhatsApp registrado' : `Erro ao enviar áudio: ${msg}`;
