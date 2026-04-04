@@ -43,6 +43,7 @@ const BASE_TIPOS: TipoLembrete[] = [
   { key: 'vencido_d11', label: 'D+11 (11 dias após)', desc: 'Enviada 11 dias após o vencimento' },
   { key: 'vencido_d20', label: 'D+20 (20 dias após)', desc: 'Enviada 20 dias após o vencimento' },
   { key: 'vencido_d30', label: 'D+30 (30 dias após)', desc: 'Enviada 30 dias após o vencimento' },
+  { key: 'vencido_generico', label: 'Vencido (genérico)', desc: 'Usado quando não há template específico para o dia de atraso' },
 ];
 
 const BASE_KEYS = new Set(BASE_TIPOS.map(t => t.key));
