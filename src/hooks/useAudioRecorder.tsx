@@ -92,7 +92,7 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
             .from('inbox-media')
             .getPublicUrl(fileName);
 
-          const { error } = await supabase.functions.invoke('send-whatsapp-audio', {
+          const { data, error } = await supabase.functions.invoke('send-whatsapp-audio', {
             body: {
               telefone,
               audio_url: urlData.publicUrl,
@@ -103,9 +103,20 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
           });
 
           if (error) throw error;
+          if (data && !data.success) {
+            const msg = data.error || 'Erro desconhecido';
+            const friendly = msg.includes('not on WhatsApp') ? 'Este número não possui WhatsApp registrado' : msg;
+            toast({ title: 'Erro ao enviar áudio', description: friendly, variant: 'destructive' });
+            setEnviandoAudio(false);
+            setTempoGravacao(0);
+            resolve();
+            return;
+          }
           onSent();
         } catch (err: any) {
-          toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
+          const msg = err.message || '';
+          const friendly = msg.includes('not on WhatsApp') ? 'Este número não possui WhatsApp registrado' : msg;
+          toast({ title: 'Erro ao enviar áudio', description: friendly, variant: 'destructive' });
         } finally {
           setEnviandoAudio(false);
           setTempoGravacao(0);

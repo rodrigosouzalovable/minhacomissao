@@ -361,7 +361,7 @@ export function PaymentReminders() {
                   roundRobinRef.current += 1;
                   (async () => {
                     try {
-                      const { error } = await supabase.functions.invoke('send-whatsapp-audio', {
+                      const { data, error } = await supabase.functions.invoke('send-whatsapp-audio', {
                         body: {
                           telefone: lembrete.cliente_telefone,
                           audio_url: tpl.audio_url,
@@ -371,10 +371,18 @@ export function PaymentReminders() {
                         },
                       });
                       if (error) throw error;
+                      if (data && !data.success) {
+                        const msg = data.error || 'Erro desconhecido';
+                        const friendly = msg.includes('not on WhatsApp') ? 'Este número não possui WhatsApp registrado' : msg;
+                        toast.error(friendly);
+                        return;
+                      }
                       markAsEnviado(lembrete.id, lembrete.cliente_nome, lembrete.cliente_telefone || '');
                       toast.success(`Áudio enviado para ${lembrete.cliente_nome}`);
                     } catch (err: any) {
-                      toast.error('Erro ao enviar áudio: ' + (err.message || ''));
+                      const msg = err.message || '';
+                      const friendly = msg.includes('not on WhatsApp') ? 'Este número não possui WhatsApp registrado' : `Erro ao enviar áudio: ${msg}`;
+                      toast.error(friendly);
                     }
                   })();
                 }}
