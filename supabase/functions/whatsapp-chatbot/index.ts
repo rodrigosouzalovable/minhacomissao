@@ -624,28 +624,48 @@ serve(async (req) => {
     let inboxMediaUrl: string | null = null;
     let inboxMediaFallback = '';
 
+    // UAZAPI fields
+    const uazapiMessageType = (payload?.message?.messageType || '').toLowerCase(); // e.g. "audiomessage", "imagemessage"
+    const uazapiMediaType = (payload?.message?.mediaType || '').toLowerCase(); // e.g. "audio", "image"
+    const uazapiContentUrl = payload?.message?.content?.URL || null;
+    const uazapiMimetype = payload?.message?.content?.mimetype || '';
+
+    // Legacy/alternative fields
     const msgType = payload?.message?.type || '';
     const audioMsg = payload?.message?.audioMessage;
     const imageMsg = payload?.message?.imageMessage;
     const documentMsg = payload?.message?.documentMessage;
     const videoMsg = payload?.message?.videoMessage;
 
-    if (audioMsg || msgType === 'audio' || msgType === 'ptt') {
+    const isAudio = audioMsg || msgType === 'audio' || msgType === 'ptt' || uazapiMessageType.includes('audio') || uazapiMediaType === 'audio' || uazapiMimetype.startsWith('audio/');
+    const isImage = imageMsg || msgType === 'image' || uazapiMessageType.includes('image') || uazapiMediaType === 'image' || uazapiMimetype.startsWith('image/');
+    const isDocument = documentMsg || msgType === 'document' || uazapiMessageType.includes('document') || uazapiMediaType === 'document' || uazapiMimetype === 'application/pdf';
+    const isVideo = videoMsg || msgType === 'video' || uazapiMessageType.includes('video') || uazapiMediaType === 'video' || uazapiMimetype.startsWith('video/');
+    const isSticker = uazapiMessageType.includes('sticker') || uazapiMediaType === 'sticker';
+
+    if (isAudio) {
       inboxTipoConteudo = 'audio';
-      inboxMediaUrl = audioMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+      inboxMediaUrl = audioMsg?.url || uazapiContentUrl || payload?.message?.media_url || payload?.message?.mediaUrl || null;
       inboxMediaFallback = '🎤 Áudio';
-    } else if (imageMsg || msgType === 'image') {
+    } else if (isImage && !isSticker) {
       inboxTipoConteudo = 'imagem';
-      inboxMediaUrl = imageMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+      inboxMediaUrl = imageMsg?.url || uazapiContentUrl || payload?.message?.media_url || payload?.message?.mediaUrl || null;
       inboxMediaFallback = '📷 Imagem';
-    } else if (documentMsg || msgType === 'document') {
+    } else if (isDocument) {
       inboxTipoConteudo = 'documento';
-      inboxMediaUrl = documentMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+      inboxMediaUrl = documentMsg?.url || uazapiContentUrl || payload?.message?.media_url || payload?.message?.mediaUrl || null;
       inboxMediaFallback = '📄 Documento';
-    } else if (videoMsg || msgType === 'video') {
-      inboxTipoConteudo = 'imagem'; // treat video as image for display
-      inboxMediaUrl = videoMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+    } else if (isVideo) {
+      inboxTipoConteudo = 'imagem';
+      inboxMediaUrl = videoMsg?.url || uazapiContentUrl || payload?.message?.media_url || payload?.message?.mediaUrl || null;
       inboxMediaFallback = '🎬 Vídeo';
+    } else if (uazapiContentUrl && msgType === 'media') {
+      // Generic media fallback - detect by mimetype
+      if (uazapiMimetype.startsWith('audio/')) { inboxTipoConteudo = 'audio'; inboxMediaFallback = '🎤 Áudio'; }
+      else if (uazapiMimetype.startsWith('image/')) { inboxTipoConteudo = 'imagem'; inboxMediaFallback = '📷 Imagem'; }
+      else if (uazapiMimetype.startsWith('video/')) { inboxTipoConteudo = 'imagem'; inboxMediaFallback = '🎬 Vídeo'; }
+      else { inboxTipoConteudo = 'documento'; inboxMediaFallback = '📄 Arquivo'; }
+      inboxMediaUrl = uazapiContentUrl;
     }
 
     // Also check top-level media_url
@@ -655,6 +675,8 @@ serve(async (req) => {
     if (!inboxMediaUrl && payload?.message?.mediaUrl) {
       inboxMediaUrl = payload.message.mediaUrl;
     }
+
+    console.log(`[INBOX-MEDIA] messageType=${uazapiMessageType} mediaType=${uazapiMediaType} contentUrl=${!!uazapiContentUrl} mimetype=${uazapiMimetype} -> tipo=${inboxTipoConteudo} mediaUrl=${!!inboxMediaUrl}`);
 
     const inboxConteudo = inboxTexto || inboxMediaFallback;
 
