@@ -687,7 +687,10 @@ serve(async (req) => {
         const mediaResp = await fetch(inboxMediaUrl);
         if (mediaResp.ok) {
           const blob = await mediaResp.blob();
-          const ext = inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : 'bin';
+          // Determine extension from mimetype or tipo
+          const mimeToExt: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
+          const contentType = blob.type || uazapiMimetype || '';
+          const ext = mimeToExt[contentType] || (inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : inboxTipoConteudo === 'documento' ? 'pdf' : 'bin');
           const storagePath = `${inboxTelefone}/${Date.now()}.${ext}`;
           const { error: upErr } = await supabase.storage
             .from('inbox-media')
