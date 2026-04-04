@@ -112,6 +112,7 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
         const getOrder = (t: TipoLembrete) => {
           if (t.key === '3_dias') return -3;
           if (t.key === 'dia_vencimento') return 0;
+          if (t.key === 'vencido_generico') return 99999;
           const m = t.key.match(/^vencido_d(\d+)$/);
           return m ? parseInt(m[1]) : 999;
         };
