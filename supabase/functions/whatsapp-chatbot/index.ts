@@ -619,7 +619,78 @@ serve(async (req) => {
     const inboxServerUrl = payload?.BaseUrl?.replace(/\/+$/, '') || '';
     const inboxInstanceToken = payload?.token || '';
 
-    if (inboxTelefone && inboxTexto) {
+    // --- MEDIA DETECTION ---
+    let inboxTipoConteudo = 'texto';
+    let inboxMediaUrl: string | null = null;
+    let inboxMediaFallback = '';
+
+    const msgType = payload?.message?.type || '';
+    const audioMsg = payload?.message?.audioMessage;
+    const imageMsg = payload?.message?.imageMessage;
+    const documentMsg = payload?.message?.documentMessage;
+    const videoMsg = payload?.message?.videoMessage;
+
+    if (audioMsg || msgType === 'audio' || msgType === 'ptt') {
+      inboxTipoConteudo = 'audio';
+      inboxMediaUrl = audioMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+      inboxMediaFallback = '🎤 Áudio';
+    } else if (imageMsg || msgType === 'image') {
+      inboxTipoConteudo = 'imagem';
+      inboxMediaUrl = imageMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+      inboxMediaFallback = '📷 Imagem';
+    } else if (documentMsg || msgType === 'document') {
+      inboxTipoConteudo = 'documento';
+      inboxMediaUrl = documentMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+      inboxMediaFallback = '📄 Documento';
+    } else if (videoMsg || msgType === 'video') {
+      inboxTipoConteudo = 'imagem'; // treat video as image for display
+      inboxMediaUrl = videoMsg?.url || payload?.message?.media_url || payload?.message?.mediaUrl || null;
+      inboxMediaFallback = '🎬 Vídeo';
+    }
+
+    // Also check top-level media_url
+    if (!inboxMediaUrl && payload?.message?.media_url) {
+      inboxMediaUrl = payload.message.media_url;
+    }
+    if (!inboxMediaUrl && payload?.message?.mediaUrl) {
+      inboxMediaUrl = payload.message.mediaUrl;
+    }
+
+    const inboxConteudo = inboxTexto || inboxMediaFallback;
+
+    // Download media to inbox-media bucket for permanent URL
+    let inboxPermanentMediaUrl: string | null = null;
+    if (inboxMediaUrl) {
+      try {
+        const mediaResp = await fetch(inboxMediaUrl);
+        if (mediaResp.ok) {
+          const blob = await mediaResp.blob();
+          const ext = inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : 'bin';
+          const storagePath = `${inboxTelefone}/${Date.now()}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from('inbox-media')
+            .upload(storagePath, blob, { contentType: blob.type || 'application/octet-stream', upsert: false });
+          if (!upErr) {
+            const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
+            inboxPermanentMediaUrl = pubData?.publicUrl || inboxMediaUrl;
+            console.log(`[INBOX] Mídia salva no storage: ${storagePath}`);
+          } else {
+            console.error('[INBOX] Erro upload mídia:', upErr);
+            inboxPermanentMediaUrl = inboxMediaUrl;
+          }
+        } else {
+          console.error(`[INBOX] Falha download mídia: HTTP ${mediaResp.status}`);
+          inboxPermanentMediaUrl = inboxMediaUrl;
+        }
+      } catch (dlErr) {
+        console.error('[INBOX] Erro download mídia:', dlErr);
+        inboxPermanentMediaUrl = inboxMediaUrl;
+      }
+    }
+
+    const finalMediaUrl = inboxPermanentMediaUrl;
+
+    if (inboxTelefone && (inboxTexto || inboxMediaUrl)) {
       try {
         // Find the instance by matching token
         let instanciaId: string | null = null;
@@ -646,7 +717,6 @@ serve(async (req) => {
               .select('id')
               .eq('instancia_id', instanciaId)
               .eq('telefone_remoto', inboxTelefone)
-              .eq('conteudo', inboxTexto)
               .eq('direcao', 'saida')
               .gte('timestamp_msg', thirtySecsAgo)
               .limit(1)
@@ -660,12 +730,14 @@ serve(async (req) => {
                 instancia_id: instanciaId,
                 telefone_remoto: inboxTelefone,
                 nome_contato: inboxNomeContato,
-                conteudo: inboxTexto,
+                conteudo: inboxConteudo,
                 direcao: 'saida',
                 timestamp_msg: agora,
                 lida: true,
+                tipo_conteudo: inboxTipoConteudo,
+                media_url: finalMediaUrl,
               });
-              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${inboxTelefone}`);
+              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${inboxTelefone} tipo=${inboxTipoConteudo}`);
 
               // Update contact for manual fromMe
               const { data: contactFM } = await supabase
@@ -677,7 +749,7 @@ serve(async (req) => {
 
               if (contactFM) {
                 await supabase.from('whatsapp_contatos').update({
-                  ultima_mensagem: inboxTexto.slice(0, 200),
+                  ultima_mensagem: inboxConteudo.slice(0, 200),
                   ultima_mensagem_em: agora,
                 }).eq('id', contactFM.id);
               } else {
@@ -685,7 +757,7 @@ serve(async (req) => {
                   instancia_id: instanciaId,
                   telefone: inboxTelefone,
                   nome: inboxNomeContato,
-                  ultima_mensagem: inboxTexto.slice(0, 200),
+                  ultima_mensagem: inboxConteudo.slice(0, 200),
                   ultima_mensagem_em: agora,
                   nao_lido: 0,
                 });
@@ -697,10 +769,12 @@ serve(async (req) => {
               instancia_id: instanciaId,
               telefone_remoto: inboxTelefone,
               nome_contato: inboxNomeContato,
-              conteudo: inboxTexto,
+              conteudo: inboxConteudo,
               direcao: 'entrada',
               timestamp_msg: agora,
               lida: false,
+              tipo_conteudo: inboxTipoConteudo,
+              media_url: finalMediaUrl,
             });
 
             const { data: existingContact } = await supabase
@@ -713,7 +787,7 @@ serve(async (req) => {
             if (existingContact) {
               await supabase.from('whatsapp_contatos').update({
                 nome: inboxNomeContato || undefined,
-                ultima_mensagem: inboxTexto.slice(0, 200),
+                ultima_mensagem: inboxConteudo.slice(0, 200),
                 ultima_mensagem_em: agora,
                 nao_lido: existingContact.nao_lido + 1,
               }).eq('id', existingContact.id);
@@ -722,13 +796,13 @@ serve(async (req) => {
                 instancia_id: instanciaId,
                 telefone: inboxTelefone,
                 nome: inboxNomeContato,
-                ultima_mensagem: inboxTexto.slice(0, 200),
+                ultima_mensagem: inboxConteudo.slice(0, 200),
                 ultima_mensagem_em: agora,
                 nao_lido: 1,
               });
             }
 
-            console.log(`[INBOX] Mensagem entrada salva: ${inboxTelefone} (instancia: ${instanciaId})`);
+            console.log(`[INBOX] Mensagem entrada salva: ${inboxTelefone} tipo=${inboxTipoConteudo} (instancia: ${instanciaId})`);
           }
         }
       } catch (inboxErr) {
