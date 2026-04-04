@@ -43,6 +43,7 @@ const BASE_TIPOS: TipoLembrete[] = [
   { key: 'vencido_d11', label: 'D+11 (11 dias após)', desc: 'Enviada 11 dias após o vencimento' },
   { key: 'vencido_d20', label: 'D+20 (20 dias após)', desc: 'Enviada 20 dias após o vencimento' },
   { key: 'vencido_d30', label: 'D+30 (30 dias após)', desc: 'Enviada 30 dias após o vencimento' },
+  { key: 'vencido_generico', label: 'Vencido (genérico)', desc: 'Usado quando não há template específico para o dia de atraso' },
 ];
 
 const BASE_KEYS = new Set(BASE_TIPOS.map(t => t.key));
@@ -56,6 +57,7 @@ const DEFAULT_MESSAGES: Record<string, string> = {
   'vencido_d11': 'Olá {nome_cliente}, aqui é {nome_operador}, do departamento de acordos das Lojas Novo Mundo. Reforçamos que sua parcela de {valor} (vencimento {data_vencimento}) segue pendente há 11 dias. Por favor, regularize o quanto antes para evitar problemas com seu acordo. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.',
   'vencido_d20': 'Olá {nome_cliente}, aqui é {nome_operador}, do departamento de acordos das Lojas Novo Mundo. Sua parcela de {valor} está em atraso há 20 dias (vencimento {data_vencimento}). Pedimos que regularize a situação o mais breve possível para evitar o descumprimento do acordo. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.',
   'vencido_d30': 'Olá {nome_cliente}, aqui é {nome_operador}, do departamento de acordos das Lojas Novo Mundo. Este é o último aviso referente à parcela de {valor} vencida em {data_vencimento}, em atraso há 30 dias. Caso o pagamento não seja regularizado, o acordo poderá ser considerado descumprido. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.',
+  'vencido_generico': 'Olá {primeiro_nome}, aqui é {nome_operador}, do departamento de acordos das Lojas Novo Mundo. Sua parcela no valor de {valor} com vencimento em {data_vencimento} encontra-se em atraso há {dias_atraso} dias. Caso tenha efetuado o pagamento, nos envie o comprovante por gentileza.',
 };
 
 function getGenericMessage(dias: number): string {
@@ -110,6 +112,7 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
         const getOrder = (t: TipoLembrete) => {
           if (t.key === '3_dias') return -3;
           if (t.key === 'dia_vencimento') return 0;
+          if (t.key === 'vencido_generico') return 99999;
           const m = t.key.match(/^vencido_d(\d+)$/);
           return m ? parseInt(m[1]) : 999;
         };
@@ -279,6 +282,7 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
       const getOrder = (t: TipoLembrete) => {
         if (t.key === '3_dias') return -3;
         if (t.key === 'dia_vencimento') return 0;
+        if (t.key === 'vencido_generico') return 99999;
         const m = t.key.match(/^vencido_d(\d+)$/);
         return m ? parseInt(m[1]) : 999;
       };

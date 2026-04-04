@@ -352,11 +352,12 @@ export function PaymentReminders() {
                         const diffDays = Math.floor((hoje.getTime() - vencimento.getTime()) / (1000 * 60 * 60 * 24));
                         return `vencido_d${diffDays}`;
                       })();
-                  const tpl = templates.find(t => t.tipo_lembrete === tipoKey);
-                  if (!tpl?.audio_url) {
-                    toast.error('Nenhum áudio configurado para este tipo de lembrete');
-                    return;
-                  }
+                   const tpl = templates.find(t => t.tipo_lembrete === tipoKey)
+                     || (tipoKey.startsWith('vencido_d') ? templates.find(t => t.tipo_lembrete === 'vencido_generico') : undefined);
+                   if (!tpl?.audio_url) {
+                     toast.error('Nenhum áudio configurado para este tipo de lembrete');
+                     return;
+                   }
                   const instance = selectedInstances[roundRobinRef.current % selectedInstances.length];
                   roundRobinRef.current += 1;
                   (async () => {
