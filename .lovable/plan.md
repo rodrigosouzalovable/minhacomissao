@@ -1,44 +1,39 @@
 
+## Exibir Áudios e Imagens no WhatsApp Inbox
 
-## Upload de Áudio por Tipo de Lembrete + Envio de Áudio na Aba Lembretes
+### Problema
+O webhook (`whatsapp-chatbot`) só extrai texto das mensagens recebidas. Mensagens de áudio e imagem da UAZAPI são ignoradas porque:
+1. O texto é extraído apenas de campos de texto (linha 617)
+2. A condição `if (inboxTelefone && inboxTexto)` pula mensagens sem texto (áudios/imagens)
+3. Os inserts não incluem `tipo_conteudo` nem `media_url`
 
-### Resumo
-1. Adicionar campo de upload de áudio em cada aba (D-3, D-0, D+1...) no dialog "Mensagens de Lembrete"
-2. Adicionar opção "Enviar áudio" no dropdown do avião na aba Lembretes, que envia o áudio correspondente ao tipo de atraso do cliente
-3. A opção "Enviar áudio" só aparece quando existe um áudio configurado para aquele tipo de lembrete
+O componente `ChatMessage.tsx` já renderiza áudio, imagem e documento corretamente — o problema é apenas no backend.
 
 ### Alterações
 
-**Migração de banco de dados:**
-- Adicionar coluna `audio_url text` à tabela `lembrete_mensagens_templates` para armazenar a URL do áudio de cada tipo de lembrete
+**Arquivo: `supabase/functions/whatsapp-chatbot/index.ts`**
 
-**Arquivo: `src/components/LembreteMensagensDialog.tsx`**
+1. Após extrair `inboxTexto` (linha 617), adicionar detecção de mídia do payload UAZAPI:
+   - Detectar áudio: `payload?.message?.audioMessage` ou `payload?.message?.type === 'audio'`
+   - Detectar imagem: `payload?.message?.imageMessage` ou `payload?.message?.type === 'image'`
+   - Detectar documento: `payload?.message?.documentMessage` ou `payload?.message?.type === 'document'`
+   - Extrair URL da mídia: `payload?.message?.media_url` ou `payload?.message?.audioMessage?.url` ou `payload?.message?.imageMessage?.url` etc.
 
-1. Adicionar campo `audio_url` à interface `TemplateRow`
-2. Abaixo do Textarea de mensagem, renderizar uma seção de áudio:
-   - Se não há áudio: botão "Importar áudio" que abre um file input (`accept="audio/*"`)
-   - Se há áudio: player de áudio (`<audio>` com controls) + botão para remover o áudio
-3. No upload: fazer upload para o bucket `campaign-audio` com path `{user_id}/lembretes/{tipo_lembrete}.mp3`, obter URL pública e salvar no template
-4. No `handleSave`: incluir `audio_url` nas rows inseridas
+2. Definir variáveis `inboxTipoConteudo` (texto/audio/imagem/documento) e `inboxMediaUrl`
 
-**Arquivo: `src/components/PaymentReminders.tsx`**
+3. Alterar a condição da linha 622 de `if (inboxTelefone && inboxTexto)` para `if (inboxTelefone && (inboxTexto || inboxMediaUrl))` — para não pular mensagens de mídia
 
-1. Expandir a interface `LembreteTemplate` para incluir `audio_url?: string`
-2. No fetch de templates (useEffect), incluir `audio_url` no select
-3. No dropdown do avião (DropdownMenu, linhas ~299-344), adicionar uma terceira opção "Enviar áudio" entre "Enviar mensagem" e "Marcar como enviado":
-   - Só aparece se existe um template com `audio_url` para o `tipo` do lembrete
-   - Ao clicar: invoca a edge function `send-whatsapp-audio` com o telefone do cliente e a `audio_url` do template correspondente ao tipo de atraso
-   - Usa a mesma lógica de round-robin de instâncias
+4. Nos dois inserts de `whatsapp_mensagens` (linhas 659 e 696), adicionar:
+   - `tipo_conteudo: inboxTipoConteudo`
+   - `media_url: inboxMediaUrl || null`
 
-**Lógica de mapeamento tipo -> audio_url:**
-- Lembrete com `tipo === 'hoje'` → template `dia_vencimento`
-- Lembrete com `tipo === '3_dias'` → template `3_dias`
-- Lembrete com `tipo === 'vencido'` → calcular dias de atraso e buscar template `vencido_d{dias}` mais próximo
+5. Para o `conteudo` quando for mídia sem texto: usar fallback como "🎤 Áudio", "📷 Imagem" ou "📄 Documento"
+
+6. Fazer download do arquivo de mídia (se a URL for temporária da UAZAPI) e salvar no bucket `inbox-media` para ter uma URL permanente, seguindo o mesmo padrão já usado no `send-whatsapp-media`
 
 ### Detalhes técnicos
 
-- O bucket `campaign-audio` já existe com acesso público (necessário para a UAZAPI baixar o arquivo)
-- A edge function `send-whatsapp-audio` já existe e aceita `{ telefone, audio_url, uazapi_server_url, uazapi_instance_token, instancia_id }`
-- O upload substitui o arquivo anterior no mesmo path (upsert), evitando acúmulo de arquivos
-- A URL pública é obtida via `supabase.storage.from('campaign-audio').getPublicUrl(path)`
-
+- O payload da UAZAPI para mídia tipicamente contém: `message.type` (audio/image/document), `message.media_url` ou URLs dentro de `message.audioMessage.url`, `message.imageMessage.url`
+- O bucket `inbox-media` já existe com acesso público
+- A política de retenção de 3 dias do `cleanup-inbox-media` já cobre esses arquivos automaticamente
+- O `ChatMessage.tsx` já renderiza `<audio>`, `<img>` e links de documento baseado no `tipo_conteudo` — nenhuma alteração no frontend é necessária
