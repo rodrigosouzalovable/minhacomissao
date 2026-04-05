@@ -1,26 +1,41 @@
 
 
-## Adicionar Template "Genérico Vencido" (Fallback) no Configurador de Lembretes
+## Corrigir reprodução de áudio e exibição de imagens no WhatsApp Inbox
 
-### Problema
-Quando o usuário tenta enviar áudio para um lembrete cujo dia de atraso exato (ex: D+5) não tem template configurado, aparece "Nenhum áudio configurado para este tipo de lembrete". Falta um template fallback para cobrir dias não configurados individualmente.
+### Problema raiz
+Os arquivos de mídia (áudio, imagens, documentos) estão sendo salvos no storage com o MIME type errado: `application/octet-stream`. Isso acontece porque ao baixar o arquivo da UAZAPI, o `blob.type` vem vazio, e o código faz fallback para `application/octet-stream`. O navegador não consegue reproduzir áudio nem exibir imagens quando o Content-Type está errado.
 
-### Solução
-Adicionar uma nova aba fixa chamada **"Vencido (genérico)"** no configurador de Mensagens de Lembrete. Esse template será usado como fallback quando não existir um template específico para o dia de atraso exato.
+### Solução (2 partes)
 
-### Alterações
+**1. Corrigir o upload no webhook (para novos arquivos)**
 
-**Arquivo: `src/components/LembreteMensagensDialog.tsx`**
-1. Adicionar um novo tipo fixo em `BASE_TIPOS` com key `vencido_generico`, label "Vencido (genérico)" e descrição "Usado quando não há template específico para o dia de atraso"
-2. Adicionar mensagem padrão em `DEFAULT_MESSAGES` para `vencido_generico`
-3. Posicionar essa aba no final da lista (ordem 9999)
+No `supabase/functions/whatsapp-chatbot/index.ts`, na linha ~697 do upload, usar o MIME type correto baseado no `uazapiMimetype` ou no tipo detectado, em vez de confiar no `blob.type`:
 
-**Arquivo: `src/components/PaymentReminders.tsx`**
-1. Na lógica de envio de áudio (linha ~355), quando `templates.find(t => t.tipo_lembrete === tipoKey)` não encontra template com áudio, buscar fallback em `templates.find(t => t.tipo_lembrete === 'vencido_generico')`
-2. Aplicar a mesma lógica de fallback para o envio de mensagem de texto
+```typescript
+// Antes:
+.upload(storagePath, blob, { contentType: blob.type || 'application/octet-stream' })
 
-### Detalhes técnicos
-- Nenhuma migração necessária — a coluna `tipo_lembrete` é texto livre, basta inserir `vencido_generico`
-- O fallback só se aplica a lembretes do tipo `vencido` (não afeta D-3 ou D-0)
-- Se nem o template específico nem o genérico tiverem áudio, a mensagem de erro atual permanece
+// Depois:
+const correctMimeType = uazapiMimetype || blob.type || 
+  (inboxTipoConteudo === 'audio' ? 'audio/ogg' : 
+   inboxTipoConteudo === 'imagem' ? 'image/jpeg' : 
+   inboxTipoConteudo === 'documento' ? 'application/pdf' : 
+   'application/octet-stream');
+.upload(storagePath, blob, { contentType: correctMimeType })
+```
+
+**2. Corrigir o componente ChatMessage (para arquivos já existentes)**
+
+No `src/components/inbox/ChatMessage.tsx`, adicionar `type` na tag `<source>` do áudio para forçar o MIME type correto baseado na extensão da URL. Para imagens, o problema também se resolve no lado do servidor, mas podemos adicionar um handler de erro para mostrar um fallback.
+
+- Audio: inferir o tipo MIME da extensão da URL (.ogg -> audio/ogg, .mp3 -> audio/mpeg)
+- Imagem: adicionar `onError` handler para exibir placeholder
+
+**3. Migração dos arquivos existentes (opcional mas recomendado)**
+
+Atualizar o MIME type dos arquivos já salvos no bucket via uma query SQL de update nos metadados do storage.
+
+### Arquivos a alterar
+- `supabase/functions/whatsapp-chatbot/index.ts` - corrigir contentType no upload
+- `src/components/inbox/ChatMessage.tsx` - adicionar type no source e fallback de imagem
 
