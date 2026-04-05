@@ -789,8 +789,28 @@ serve(async (req) => {
           }
         }
 
+        // Strategy 3: Use JPEGThumbnail from payload as last resort (lower quality but valid)
+        if (!downloadSuccess && inboxTipoConteudo === 'imagem') {
+          const thumbnail = payload?.message?.content?.JPEGThumbnail
+            || payload?.message?.imageMessage?.jpegThumbnail
+            || payload?.message?.content?.jpegThumbnail;
+          if (thumbnail && typeof thumbnail === 'string' && thumbnail.length > 50) {
+            try {
+              const b64Clean = thumbnail.replace(/^data:[^;]+;base64,/, '');
+              const binaryStr = atob(b64Clean);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+              mediaBlob = new Blob([bytes], { type: 'image/jpeg' });
+              downloadSuccess = true;
+              console.log(`[INBOX] Usando JPEGThumbnail como fallback, size=${mediaBlob.size}`);
+            } catch (thumbErr) {
+              console.warn(`[INBOX] Falha ao decodificar JPEGThumbnail: ${thumbErr}`);
+            }
+          }
+        }
+
         // If all download strategies failed, don't save a broken URL
-        if (!inboxPermanentMediaUrl) {
+        if (!inboxPermanentMediaUrl && !downloadSuccess) {
           console.warn('[INBOX] Não foi possível baixar mídia decodificada, salvando mensagem sem media_url');
         }
       } catch (dlErr) {
