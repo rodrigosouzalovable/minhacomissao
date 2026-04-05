@@ -763,32 +763,6 @@ serve(async (req) => {
           }
         }
 
-        if (downloadSuccess && mediaBlob && mediaBlob.size > 0) {
-          const mimeToExt: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
-          const detectedMime = uazapiMimetype || (mediaBlob.type !== 'application/octet-stream' ? mediaBlob.type : '') || '';
-          const correctMimeType = detectedMime || 
-            (inboxTipoConteudo === 'audio' ? 'audio/ogg' : 
-             inboxTipoConteudo === 'imagem' ? 'image/jpeg' : 
-             inboxTipoConteudo === 'documento' ? 'application/pdf' :
-             'application/octet-stream');
-          const ext = mimeToExt[correctMimeType] || mimeToExt[detectedMime] || (inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : inboxTipoConteudo === 'documento' ? 'pdf' : 'bin');
-          const storagePath = `${inboxTelefone}/${Date.now()}.${ext}`;
-          
-          // Force correct content type on the blob
-          const uploadBlob = new Blob([mediaBlob], { type: correctMimeType });
-          
-          const { error: upErr } = await supabase.storage
-            .from('inbox-media')
-            .upload(storagePath, uploadBlob, { contentType: correctMimeType, upsert: false });
-          if (!upErr) {
-            const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
-            inboxPermanentMediaUrl = pubData?.publicUrl || null;
-            console.log(`[INBOX] Mídia salva no storage: ${storagePath} (${correctMimeType})`);
-          } else {
-            console.error('[INBOX] Erro upload mídia:', upErr);
-          }
-        }
-
         // Strategy 3: Use JPEGThumbnail from payload as last resort (lower quality but valid)
         if (!downloadSuccess && inboxTipoConteudo === 'imagem') {
           const thumbnail = payload?.message?.content?.JPEGThumbnail
@@ -809,9 +783,34 @@ serve(async (req) => {
           }
         }
 
-        // If all download strategies failed, don't save a broken URL
+        // Upload the final blob to storage (regardless of which strategy succeeded)
+        if (downloadSuccess && mediaBlob && mediaBlob.size > 0) {
+          const mimeToExt: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
+          const detectedMime = uazapiMimetype || (mediaBlob.type !== 'application/octet-stream' ? mediaBlob.type : '') || '';
+          const correctMimeType = detectedMime || 
+            (inboxTipoConteudo === 'audio' ? 'audio/ogg' : 
+             inboxTipoConteudo === 'imagem' ? 'image/jpeg' : 
+             inboxTipoConteudo === 'documento' ? 'application/pdf' :
+             'application/octet-stream');
+          const ext = mimeToExt[correctMimeType] || mimeToExt[detectedMime] || (inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : inboxTipoConteudo === 'documento' ? 'pdf' : 'bin');
+          const storagePath = `${inboxTelefone}/${Date.now()}.${ext}`;
+          
+          const uploadBlob = new Blob([mediaBlob], { type: correctMimeType });
+          
+          const { error: upErr } = await supabase.storage
+            .from('inbox-media')
+            .upload(storagePath, uploadBlob, { contentType: correctMimeType, upsert: false });
+          if (!upErr) {
+            const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
+            inboxPermanentMediaUrl = pubData?.publicUrl || null;
+            console.log(`[INBOX] Mídia salva no storage: ${storagePath} (${correctMimeType}) via ${mediaBlob.type === 'image/jpeg' && !uazapiMimetype ? 'thumbnail-fallback' : 'download'}`);
+          } else {
+            console.error('[INBOX] Erro upload mídia:', upErr);
+          }
+        }
+
         if (!inboxPermanentMediaUrl && !downloadSuccess) {
-          console.warn('[INBOX] Não foi possível baixar mídia decodificada, salvando mensagem sem media_url');
+          console.warn('[INBOX] Nenhuma estratégia de download funcionou. messageId=' + messageId + ' mediaUrl=' + inboxMediaUrl);
         }
       } catch (dlErr) {
         console.error('[INBOX] Erro geral download mídia:', dlErr);
