@@ -50,6 +50,7 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
   const [imgError, setImgError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
+  const lightboxImageSrc = msg.media_url || blobUrl;
 
   const closeLightbox = useCallback(() => setShowLightbox(false), []);
 
@@ -225,7 +226,7 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
         </div>
       </div>
 
-      {showLightbox && blobUrl && createPortal(
+      {showLightbox && lightboxImageSrc && createPortal(
         <div
           className="fixed inset-0 z-[100] bg-black/90 animate-in fade-in-0 duration-200"
           onClick={closeLightbox}
@@ -238,7 +239,7 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
           </button>
           <div className="flex h-full w-full items-center justify-center p-4 sm:p-6 md:p-10">
             <img
-              src={blobUrl}
+              src={lightboxImageSrc}
               alt="Imagem ampliada"
               className="h-full w-full object-contain"
               onClick={(e) => e.stopPropagation()}
