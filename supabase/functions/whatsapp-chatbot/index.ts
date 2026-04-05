@@ -876,16 +876,16 @@ serve(async (req) => {
         if (downloadSuccess && mediaBlob && inboxTipoConteudo === 'imagem') {
           const tinyImage = await isTinyImageBlob(mediaBlob);
           if (tinyImage && downloadStrategy === 'thumbnail') {
-            console.warn(`[INBOX] Thumbnail detectado como imagem pequena demais (${mediaBlob.size} bytes); não será salvo como original.`);
-            downloadSuccess = false;
-            mediaBlob = null;
+            console.warn(`[INBOX] Thumbnail detectado como fallback (${mediaBlob.size} bytes); salvando para evitar \"Mídia indisponível\" até o download original voltar a responder.`);
           }
         }
 
         // Upload the final blob to storage (regardless of which strategy succeeded)
         if (downloadSuccess && mediaBlob && mediaBlob.size > 0) {
           const mimeToExt: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
-          const detectedMime = uazapiMimetype || (mediaBlob.type !== 'application/octet-stream' ? mediaBlob.type : '') || '';
+          const detectedMime = downloadStrategy === 'thumbnail'
+            ? 'image/jpeg'
+            : uazapiMimetype || (mediaBlob.type !== 'application/octet-stream' ? mediaBlob.type : '') || '';
           const correctMimeType = detectedMime || 
             (inboxTipoConteudo === 'audio' ? 'audio/ogg' : 
              inboxTipoConteudo === 'imagem' ? 'image/jpeg' : 
