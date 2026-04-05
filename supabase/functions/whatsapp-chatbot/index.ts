@@ -7,6 +7,63 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function getImageDimensions(bytes: Uint8Array, mimeType?: string): { width: number; height: number } | null {
+  const mime = (mimeType || '').toLowerCase();
+
+  if (bytes.length >= 24 && (mime.includes('png') || (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47))) {
+    const width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+    const height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+
+  if (bytes.length >= 10 && (mime.includes('gif') || (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46))) {
+    const width = bytes[6] | (bytes[7] << 8);
+    const height = bytes[8] | (bytes[9] << 8);
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+
+  if (bytes.length >= 30 && (mime.includes('webp') || (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46))) {
+    const chunk = String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]);
+    if (chunk === 'VP8X' && bytes.length >= 30) {
+      const width = 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16);
+      const height = 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16);
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+  }
+
+  if (mime.includes('jpeg') || mime.includes('jpg') || (bytes[0] === 0xff && bytes[1] === 0xd8)) {
+    let offset = 2;
+    while (offset < bytes.length - 9) {
+      if (bytes[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = bytes[offset + 1];
+      if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2 || marker === 0xc3 || marker === 0xc5 || marker === 0xc6 || marker === 0xc7 || marker === 0xc9 || marker === 0xca || marker === 0xcb || marker === 0xcd || marker === 0xce || marker === 0xcf) {
+        const height = (bytes[offset + 5] << 8) | bytes[offset + 6];
+        const width = (bytes[offset + 7] << 8) | bytes[offset + 8];
+        return width > 0 && height > 0 ? { width, height } : null;
+      }
+      const segmentLength = (bytes[offset + 2] << 8) | bytes[offset + 3];
+      if (segmentLength <= 0) break;
+      offset += 2 + segmentLength;
+    }
+  }
+
+  return null;
+}
+
+async function isTinyImageBlob(blob: Blob): Promise<boolean> {
+  const mime = (blob.type || '').toLowerCase();
+  if (!mime.startsWith('image/')) return false;
+
+  const headerBytes = new Uint8Array(await blob.slice(0, Math.min(blob.size, 256 * 1024)).arrayBuffer());
+  const dims = getImageDimensions(headerBytes, mime);
+  if (!dims) return blob.size < 10_000;
+
+  return dims.width <= 160 || dims.height <= 160 || blob.size < 10_000;
+}
+
 const VALOR_MINIMO_PARCELA = 100;
 
 function formatCurrency(value: number) {
