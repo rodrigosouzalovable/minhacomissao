@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { FileText, Image as ImageIcon } from 'lucide-react';
+import { FileText, ImageIcon } from 'lucide-react';
 
 interface Mensagem {
   id: string;
@@ -15,9 +16,23 @@ interface ChatMessageProps {
   formatMsgTime: (ts: string) => string;
 }
 
+function getMimeFromUrl(url: string): string | undefined {
+  const ext = url.split('.').pop()?.split('?')[0]?.toLowerCase();
+  const map: Record<string, string> = {
+    ogg: 'audio/ogg',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    aac: 'audio/aac',
+    wav: 'audio/wav',
+    webm: 'audio/webm',
+  };
+  return ext ? map[ext] : undefined;
+}
+
 export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
   const tipo = msg.tipo_conteudo || 'texto';
   const isSaida = msg.direcao === 'saida';
+  const [imgError, setImgError] = useState(false);
 
   const renderContent = () => {
     // Media expired
@@ -28,15 +43,25 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
     }
 
     if (tipo === 'audio' && msg.media_url) {
+      const mimeType = getMimeFromUrl(msg.media_url);
       return (
         <audio controls className="max-w-full" preload="none">
-          <source src={msg.media_url} />
+          <source src={msg.media_url} type={mimeType} />
           Seu navegador não suporta áudio.
         </audio>
       );
     }
 
     if (tipo === 'imagem' && msg.media_url) {
+      if (imgError) {
+        return (
+          <a href={msg.media_url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 p-3 rounded bg-background/30 hover:bg-background/50 transition">
+            <ImageIcon className="h-5 w-5 shrink-0" />
+            <span className="text-xs underline">Abrir imagem</span>
+          </a>
+        );
+      }
       return (
         <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
           <img
@@ -44,6 +69,7 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
             alt="Imagem"
             className="max-w-[250px] rounded-md cursor-pointer hover:opacity-90 transition"
             loading="lazy"
+            onError={() => setImgError(true)}
           />
         </a>
       );
