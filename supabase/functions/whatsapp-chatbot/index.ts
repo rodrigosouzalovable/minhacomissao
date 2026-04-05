@@ -577,7 +577,10 @@ serve(async (req) => {
     // --- END VOICE CALL EVENT HANDLING ---
 
     // --- Deduplicação ---
-    const messageId = payload?.message?.id || payload?.key?.id || payload?.messageId || '';
+    const rawMessageId = payload?.message?.id || payload?.key?.id || payload?.messageId || '';
+    // UAZAPI /download-media expects the clean message ID without the owner prefix
+    // e.g. "5562...:AC47ECC8..." → "AC47ECC8..."
+    const messageId = rawMessageId.includes(':') ? rawMessageId.split(':').pop()! : rawMessageId;
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
