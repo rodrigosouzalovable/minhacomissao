@@ -64,6 +64,128 @@ async function isTinyImageBlob(blob: Blob): Promise<boolean> {
   return dims.width <= 160 || dims.height <= 160 || blob.size < 10_000;
 }
 
+// ===== WhatsApp .enc media decryption helpers =====
+const MEDIA_HKDF_INFO: Record<string, string> = {
+  'imagem': 'WhatsApp Image Keys',
+  'audio': 'WhatsApp Audio Keys',
+  'video': 'WhatsApp Video Keys',
+  'documento': 'WhatsApp Document Keys',
+};
+
+function extractMediaMetadata(payload: any) {
+  const content = payload?.message?.content || {};
+  const imageMsg = payload?.message?.imageMessage || {};
+  const audioMsg = payload?.message?.audioMessage || {};
+  const videoMsg = payload?.message?.videoMessage || {};
+  const docMsg = payload?.message?.documentMessage || {};
+  const msg = payload?.message || {};
+
+  // Merge all possible sources
+  const sources = [content, imageMsg, audioMsg, videoMsg, docMsg, msg];
+
+  const pick = (keys: string[]) => {
+    for (const src of sources) {
+      for (const k of keys) {
+        if (src[k]) return src[k];
+      }
+    }
+    return null;
+  };
+
+  return {
+    encUrl: pick(['URL', 'url', 'imageLink', 'mediaUrl', 'directPath']),
+    mediaKey: pick(['mediaKey']),
+    fileEncSha256: pick(['fileEncSha256', 'fileEncSHA256']),
+    fileSha256: pick(['fileSha256', 'fileSHA256']),
+    fileLength: Number(pick(['fileLength']) || 0),
+    mimetype: pick(['mimetype', 'mimeType']) || '',
+    width: Number(pick(['width']) || 0),
+    height: Number(pick(['height']) || 0),
+  };
+}
+
+async function decryptWhatsAppMedia(
+  encUrl: string,
+  mediaKeyB64: string,
+  mediaType: string,
+  expectedMime: string,
+): Promise<Blob | null> {
+  try {
+    const infoString = MEDIA_HKDF_INFO[mediaType] || 'WhatsApp Image Keys';
+    console.log(`[MEDIA-DECRYPT] Iniciando descriptografia. URL=${encUrl.substring(0, 80)}... info="${infoString}"`);
+
+    // 1. Download encrypted file
+    const encResp = await fetch(encUrl);
+    if (!encResp.ok) {
+      console.warn(`[MEDIA-DECRYPT] Falha ao baixar .enc: HTTP ${encResp.status}`);
+      await encResp.text();
+      return null;
+    }
+    const encBuffer = new Uint8Array(await encResp.arrayBuffer());
+    console.log(`[MEDIA-DECRYPT] Arquivo .enc baixado: ${encBuffer.length} bytes`);
+
+    if (encBuffer.length < 10) {
+      console.warn(`[MEDIA-DECRYPT] Arquivo .enc muito pequeno: ${encBuffer.length} bytes`);
+      return null;
+    }
+
+    // 2. Decode mediaKey from base64
+    const binaryStr = atob(mediaKeyB64);
+    const mediaKeyBytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) mediaKeyBytes[i] = binaryStr.charCodeAt(i);
+
+    // 3. HKDF expand: derive 112 bytes using SHA-256
+    const infoBytes = new TextEncoder().encode(infoString);
+    const mediaKeyMaterial = await crypto.subtle.importKey('raw', mediaKeyBytes, 'HKDF', false, ['deriveBits']);
+    const expandedBits = await crypto.subtle.deriveBits(
+      { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: infoBytes },
+      mediaKeyMaterial,
+      112 * 8, // 112 bytes
+    );
+    const expanded = new Uint8Array(expandedBits);
+
+    // 4. Split expanded key: iv(16) + cipherKey(32) + macKey(32) + refKey(32)
+    const iv = expanded.slice(0, 16);
+    const cipherKey = expanded.slice(16, 48);
+    // macKey = expanded.slice(48, 80); // not needed for decryption
+    // refKey = expanded.slice(80, 112); // not used
+
+    // 5. Strip last 10 bytes (MAC) from encrypted data
+    const ciphertext = encBuffer.slice(0, encBuffer.length - 10);
+
+    // 6. AES-CBC decrypt
+    const aesKey = await crypto.subtle.importKey('raw', cipherKey, { name: 'AES-CBC' }, false, ['decrypt']);
+    const decryptedBuffer = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, aesKey, ciphertext);
+
+    const decryptedBytes = new Uint8Array(decryptedBuffer);
+    console.log(`[MEDIA-DECRYPT] ✅ Descriptografia OK! Tamanho: ${decryptedBytes.length} bytes`);
+
+    // 7. Validate magic bytes
+    const mime = expectedMime || 'application/octet-stream';
+    const blob = new Blob([decryptedBytes], { type: mime });
+
+    // Quick sanity: check if first bytes look like valid media
+    if (decryptedBytes.length > 4) {
+      const isJpeg = decryptedBytes[0] === 0xFF && decryptedBytes[1] === 0xD8;
+      const isPng = decryptedBytes[0] === 0x89 && decryptedBytes[1] === 0x50;
+      const isWebp = decryptedBytes[0] === 0x52 && decryptedBytes[1] === 0x49;
+      const isOgg = decryptedBytes[0] === 0x4F && decryptedBytes[1] === 0x67;
+      const isPdf = decryptedBytes[0] === 0x25 && decryptedBytes[1] === 0x50;
+      const isAnyKnown = isJpeg || isPng || isWebp || isOgg || isPdf || (decryptedBytes[3] === 0x66); // mp4 ftyp
+
+      if (!isAnyKnown) {
+        console.warn(`[MEDIA-DECRYPT] ⚠️ Magic bytes não reconhecidos após decrypt: [${Array.from(decryptedBytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(',')}]`);
+        // Still return it — might be a format we don't check for
+      }
+    }
+
+    return blob;
+  } catch (err) {
+    console.error(`[MEDIA-DECRYPT] ❌ Erro na descriptografia:`, err);
+    return null;
+  }
+}
+
 const VALOR_MINIMO_PARCELA = 100;
 
 function formatCurrency(value: number) {
