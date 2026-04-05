@@ -756,23 +756,23 @@ serve(async (req) => {
           await new Promise(r => setTimeout(r, 2000));
 
           const cleanUrl = inboxServerUrl.replace(/\/+$/, '');
-          // Try multiple UAZAPI endpoints and methods
+          // Try multiple UAZAPI endpoints — POST with JSON body (UAZAPI standard)
           const uazapiAttempts = [
-            { url: `${cleanUrl}/chat/getMessageById`, method: 'GET', qs: `?messageId=${messageId}&download=true` },
-            { url: `${cleanUrl}/chat/getMessageById`, method: 'GET', qs: `?messageId=${rawMessageId}&download=true` },
-            { url: `${cleanUrl}/download-media`, method: 'GET', qs: `?messageId=${messageId}` },
-            { url: `${cleanUrl}/download-media`, method: 'GET', qs: `?messageId=${rawMessageId}` },
-            { url: `${cleanUrl}/chat/downloadMedia`, method: 'GET', qs: `?messageId=${messageId}` },
+            { url: `${cleanUrl}/chat/downloadMedia`, method: 'POST', body: { messageId: rawMessageId } },
+            { url: `${cleanUrl}/chat/downloadMedia`, method: 'POST', body: { messageId: messageId } },
+            { url: `${cleanUrl}/download-media`, method: 'POST', body: { messageId: rawMessageId } },
+            { url: `${cleanUrl}/download-media`, method: 'POST', body: { messageId: messageId } },
+            { url: `${cleanUrl}/chat/getMessageById`, method: 'POST', body: { messageId: rawMessageId, download: true } },
           ];
 
           for (const attempt of uazapiAttempts) {
             if (downloadSuccess) break;
             try {
-              const fullUrl = `${attempt.url}${attempt.qs}`;
-              console.log(`[INBOX] Tentando UAZAPI: ${attempt.method} ${fullUrl}`);
-              const uazapiResp = await fetch(fullUrl, {
+              console.log(`[INBOX] Tentando UAZAPI: ${attempt.method} ${attempt.url} body=${JSON.stringify(attempt.body)}`);
+              const uazapiResp = await fetch(attempt.url, {
                 method: attempt.method,
-                headers: { 'Content-Type': 'application/json', token: inboxInstanceToken },
+                headers: { 'Content-Type': 'application/json', 'token': inboxInstanceToken },
+                body: JSON.stringify(attempt.body),
               });
               console.log(`[INBOX] UAZAPI resposta: HTTP ${uazapiResp.status} CT=${uazapiResp.headers.get('content-type')}`);
               if (uazapiResp.ok) {
