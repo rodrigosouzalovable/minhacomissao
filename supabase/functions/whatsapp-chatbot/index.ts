@@ -870,13 +870,13 @@ serve(async (req) => {
       try {
         let mediaBlob: Blob | null = null;
         let downloadSuccess = false;
-        let downloadStrategy: 'uazapi-json' | 'uazapi-binary' | 'direct-fetch' | 'thumbnail' | null = null;
+        let downloadStrategy: 'uazapi-json' | 'uazapi-binary' | 'direct-fetch' | 'local-decrypt' | 'thumbnail' | null = null;
 
-        // Expected file size from payload metadata (used for quality validation)
-        const expectedFileLength = Number(payload?.message?.content?.fileLength || payload?.message?.imageMessage?.fileLength || 0);
-        const expectedWidth = Number(payload?.message?.content?.width || payload?.message?.imageMessage?.width || 0);
-        const expectedHeight = Number(payload?.message?.content?.height || payload?.message?.imageMessage?.height || 0);
-        console.log(`[MEDIA-QUALITY] Expected: fileLength=${expectedFileLength}, width=${expectedWidth}, height=${expectedHeight}`);
+        // Extract all media metadata from payload
+        const mediaMeta = extractMediaMetadata(payload);
+        console.log(`[MEDIA] Metadados extraídos: fileLength=${mediaMeta.fileLength}, width=${mediaMeta.width}, height=${mediaMeta.height}, mediaKey=${!!mediaMeta.mediaKey}, encUrl=${!!mediaMeta.encUrl}, mime=${mediaMeta.mimetype}`);
+
+        const expectedFileLength = mediaMeta.fileLength;
 
         // Helper: check if a blob is high-quality enough to be the original
         async function isOriginalQuality(blob: Blob, strategy: string): Promise<boolean> {
