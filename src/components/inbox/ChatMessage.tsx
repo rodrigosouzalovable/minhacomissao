@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { FileText, Image as ImageIcon, Loader2, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 interface Mensagem {
   id: string;
@@ -48,6 +49,16 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
   const [imgLoading, setImgLoading] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [showLightbox, setShowLightbox] = useState(false);
+
+  const closeLightbox = useCallback(() => setShowLightbox(false), []);
+
+  useEffect(() => {
+    if (!showLightbox) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showLightbox, closeLightbox]);
 
   // For images: fetch as blob to bypass wrong Content-Type from storage
   useEffect(() => {
@@ -165,14 +176,14 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
         );
       }
       return (
-        <a href={blobUrl} target="_blank" rel="noopener noreferrer">
+        <div className="cursor-zoom-in" onClick={() => setShowLightbox(true)}>
           <img
             src={blobUrl}
             alt="Imagem"
-            className="max-w-[250px] rounded-md cursor-pointer hover:opacity-90 transition"
+            className="max-w-[250px] rounded-md hover:opacity-90 transition"
             onError={() => setImgError(true)}
           />
-        </a>
+        </div>
       );
     }
 
@@ -194,23 +205,46 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
   };
 
   return (
-    <div className={cn("flex", isSaida ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm",
-          isSaida
-            ? "bg-primary text-primary-foreground rounded-br-none"
-            : "bg-card text-card-foreground border border-border rounded-bl-none"
-        )}
-      >
-        {renderContent()}
-        <p className={cn(
-          "text-[10px] mt-1 text-right",
-          isSaida ? "text-primary-foreground/70" : "text-muted-foreground"
-        )}>
-          {formatMsgTime(msg.timestamp_msg)}
-        </p>
+    <>
+      <div className={cn("flex", isSaida ? "justify-end" : "justify-start")}>
+        <div
+          className={cn(
+            "max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm",
+            isSaida
+              ? "bg-primary text-primary-foreground rounded-br-none"
+              : "bg-card text-card-foreground border border-border rounded-bl-none"
+          )}
+        >
+          {renderContent()}
+          <p className={cn(
+            "text-[10px] mt-1 text-right",
+            isSaida ? "text-primary-foreground/70" : "text-muted-foreground"
+          )}>
+            {formatMsgTime(msg.timestamp_msg)}
+          </p>
+        </div>
       </div>
-    </div>
+
+      {showLightbox && blobUrl && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 animate-in fade-in-0 duration-200"
+          onClick={closeLightbox}
+        >
+          <button
+            onClick={closeLightbox}
+            className="absolute top-4 right-4 text-white/80 hover:text-white transition p-2 rounded-full bg-white/10 hover:bg-white/20"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={blobUrl}
+            alt="Imagem ampliada"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
