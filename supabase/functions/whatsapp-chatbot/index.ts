@@ -750,13 +750,36 @@ serve(async (req) => {
         let downloadSuccess = false;
         let downloadStrategy: 'uazapi-json' | 'uazapi-binary' | 'direct-fetch' | 'thumbnail' | null = null;
 
+        // Expected file size from payload metadata (used for quality validation)
+        const expectedFileLength = Number(payload?.message?.content?.fileLength || payload?.message?.imageMessage?.fileLength || 0);
+        const expectedWidth = Number(payload?.message?.content?.width || payload?.message?.imageMessage?.width || 0);
+        const expectedHeight = Number(payload?.message?.content?.height || payload?.message?.imageMessage?.height || 0);
+        console.log(`[MEDIA-QUALITY] Expected: fileLength=${expectedFileLength}, width=${expectedWidth}, height=${expectedHeight}`);
+
+        // Helper: check if a blob is high-quality enough to be the original
+        async function isOriginalQuality(blob: Blob, strategy: string): Promise<boolean> {
+          if (inboxTipoConteudo !== 'imagem') return blob.size > 100;
+          
+          const tiny = await isTinyImageBlob(blob);
+          if (tiny) {
+            console.warn(`[MEDIA-QUALITY] ${strategy}: blob rejeitado como thumbnail (size=${blob.size})`);
+            return false;
+          }
+          
+          // If we know expected size, reject if blob is much smaller (likely preview)
+          if (expectedFileLength > 0 && blob.size < expectedFileLength * 0.3) {
+            console.warn(`[MEDIA-QUALITY] ${strategy}: blob muito menor que esperado (${blob.size} vs ${expectedFileLength})`);
+            return false;
+          }
+          
+          return true;
+        }
+
         // Strategy 1: Use UAZAPI endpoints to download decrypted media
         if (messageId && inboxServerUrl && inboxInstanceToken) {
-          // Small delay to give UAZAPI time to process/store the media
           await new Promise(r => setTimeout(r, 2000));
 
           const cleanUrl = inboxServerUrl.replace(/\/+$/, '');
-          // Try multiple UAZAPI endpoints — POST with JSON body (UAZAPI standard)
           const uazapiAttempts = [
             { url: `${cleanUrl}/chat/downloadMedia`, method: 'POST', body: { messageId: rawMessageId } },
             { url: `${cleanUrl}/chat/downloadMedia`, method: 'POST', body: { messageId: messageId } },
@@ -765,94 +788,120 @@ serve(async (req) => {
             { url: `${cleanUrl}/chat/getMessageById`, method: 'POST', body: { messageId: rawMessageId, download: true } },
           ];
 
+          // Try with both header styles: 'token' and 'Authorization: Bearer'
+          const headerStyles = [
+            { 'Content-Type': 'application/json', 'token': inboxInstanceToken },
+            { 'Content-Type': 'application/json', 'Authorization': `Bearer ${inboxInstanceToken}` },
+          ];
+
           for (const attempt of uazapiAttempts) {
             if (downloadSuccess) break;
-            try {
-              console.log(`[INBOX] Tentando UAZAPI: ${attempt.method} ${attempt.url} body=${JSON.stringify(attempt.body)}`);
-              const uazapiResp = await fetch(attempt.url, {
-                method: attempt.method,
-                headers: { 'Content-Type': 'application/json', 'token': inboxInstanceToken },
-                body: JSON.stringify(attempt.body),
-              });
-              console.log(`[INBOX] UAZAPI resposta: HTTP ${uazapiResp.status} CT=${uazapiResp.headers.get('content-type')}`);
-              if (uazapiResp.ok) {
+            for (const headers of headerStyles) {
+              if (downloadSuccess) break;
+              try {
+                const headerMode = 'token' in headers ? 'token-header' : 'bearer-header';
+                console.log(`[INBOX] Tentando UAZAPI: ${attempt.method} ${attempt.url} [${headerMode}] body=${JSON.stringify(attempt.body)}`);
+                const uazapiResp = await fetch(attempt.url, {
+                  method: attempt.method,
+                  headers,
+                  body: JSON.stringify(attempt.body),
+                });
                 const respContentType = uazapiResp.headers.get('content-type') || '';
+                console.log(`[INBOX] UAZAPI resposta: HTTP ${uazapiResp.status} CT=${respContentType} [${headerMode}]`);
+                
+                if (!uazapiResp.ok) {
+                  await uazapiResp.text(); // consume body
+                  continue;
+                }
+
                 if (respContentType.includes('application/json')) {
                   const jsonResp = await uazapiResp.json();
-                  // Check for base64 data in response
                   const b64Data = jsonResp?.base64 || jsonResp?.data || jsonResp?.message?.base64 || jsonResp?.message?.data;
                   const mediaUrlFromJson = jsonResp?.url || jsonResp?.mediaUrl || jsonResp?.message?.url || jsonResp?.message?.mediaUrl || jsonResp?.data?.url;
+                  
                   if (b64Data && typeof b64Data === 'string' && b64Data.length > 100) {
                     const binaryStr = atob(b64Data.replace(/^data:[^;]+;base64,/, ''));
                     const bytes = new Uint8Array(binaryStr.length);
                     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
                     const mime = jsonResp.mimetype || jsonResp.message?.mimetype || uazapiMimetype || 'application/octet-stream';
-                    mediaBlob = new Blob([bytes], { type: mime });
-                    downloadSuccess = true;
-                    downloadStrategy = 'uazapi-json';
-                    console.log(`[INBOX] Download via UAZAPI JSON ok, size=${mediaBlob.size}, mime=${mime}`);
+                    const candidateBlob = new Blob([bytes], { type: mime });
+                    
+                    if (await isOriginalQuality(candidateBlob, 'uazapi-json')) {
+                      mediaBlob = candidateBlob;
+                      downloadSuccess = true;
+                      downloadStrategy = 'uazapi-json';
+                      console.log(`[INBOX] ✅ Download via UAZAPI JSON ok, size=${mediaBlob.size}, mime=${mime}`);
+                    }
                   } else if (mediaUrlFromJson && typeof mediaUrlFromJson === 'string' && mediaUrlFromJson.startsWith('http')) {
-                    // UAZAPI returned a direct URL to download
                     console.log(`[INBOX] UAZAPI retornou URL de mídia: ${mediaUrlFromJson}`);
                     const mediaFetchResp = await fetch(mediaUrlFromJson);
                     if (mediaFetchResp.ok) {
-                      mediaBlob = await mediaFetchResp.blob();
-                      if (mediaBlob.size > 100) {
+                      const candidateBlob = await mediaFetchResp.blob();
+                      if (await isOriginalQuality(candidateBlob, 'uazapi-url')) {
+                        mediaBlob = candidateBlob;
                         downloadSuccess = true;
                         downloadStrategy = 'uazapi-json';
-                        console.log(`[INBOX] Download via URL UAZAPI ok, size=${mediaBlob.size}`);
+                        console.log(`[INBOX] ✅ Download via URL UAZAPI ok, size=${mediaBlob.size}`);
                       }
+                    } else {
+                      await mediaFetchResp.text();
                     }
                   } else {
                     console.log(`[INBOX] UAZAPI JSON sem base64/url válida, keys=${Object.keys(jsonResp).join(',')}`);
                   }
                 } else if (respContentType.startsWith('image/') || respContentType.startsWith('audio/') || respContentType.startsWith('video/') || respContentType === 'application/octet-stream') {
-                  mediaBlob = await uazapiResp.blob();
-                  downloadSuccess = mediaBlob.size > 100;
-                  if (downloadSuccess) {
+                  const candidateBlob = await uazapiResp.blob();
+                  if (await isOriginalQuality(candidateBlob, 'uazapi-binary')) {
+                    mediaBlob = candidateBlob;
+                    downloadSuccess = true;
                     downloadStrategy = 'uazapi-binary';
-                    console.log(`[INBOX] Download via UAZAPI binary ok, size=${mediaBlob.size}, type=${mediaBlob.type}`);
+                    console.log(`[INBOX] ✅ Download via UAZAPI binary ok, size=${mediaBlob.size}, type=${mediaBlob.type}`);
                   }
+                } else {
+                  await uazapiResp.text();
                 }
+              } catch (uazErr) {
+                console.log(`[INBOX] UAZAPI tentativa falhou: ${uazErr}`);
               }
-            } catch (uazErr) {
-              console.log(`[INBOX] UAZAPI tentativa falhou: ${uazErr}`);
             }
           }
         }
 
-        // Strategy 2: Direct fetch (works for already-public URLs, e.g. outgoing messages)
+        // Strategy 2: Direct fetch (works for already-public URLs)
         if (!downloadSuccess && inboxMediaUrl) {
-          const mediaResp = await fetch(inboxMediaUrl);
-          if (mediaResp.ok) {
-            const blob = await mediaResp.blob();
-            // Validate it's real media (not encrypted data)
-            // Check first bytes for known magic numbers
-            const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
-            const isJpeg = header[0] === 0xFF && header[1] === 0xD8;
-            const isPng = header[0] === 0x89 && header[1] === 0x50;
-            const isWebp = header[0] === 0x52 && header[1] === 0x49; // RIFF
-            const isOgg = header[0] === 0x4F && header[1] === 0x67; // OggS
-            const isPdf = header[0] === 0x25 && header[1] === 0x50; // %PDF
-            const isMp4 = header.length >= 4 && header[3] === 0x66; // ftyp at offset 4
-            const isMp3 = header[0] === 0xFF && (header[1] & 0xE0) === 0xE0;
-            const isM4a = isMp4;
-            const isValidMedia = isJpeg || isPng || isWebp || isOgg || isPdf || isMp4 || isMp3 || isM4a || (blob.type && blob.type !== 'application/octet-stream');
+          try {
+            const mediaResp = await fetch(inboxMediaUrl);
+            if (mediaResp.ok) {
+              const blob = await mediaResp.blob();
+              const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+              const isJpeg = header[0] === 0xFF && header[1] === 0xD8;
+              const isPng = header[0] === 0x89 && header[1] === 0x50;
+              const isWebp = header[0] === 0x52 && header[1] === 0x49;
+              const isOgg = header[0] === 0x4F && header[1] === 0x67;
+              const isPdf = header[0] === 0x25 && header[1] === 0x50;
+              const isMp4 = header.length >= 4 && header[3] === 0x66;
+              const isMp3 = header[0] === 0xFF && (header[1] & 0xE0) === 0xE0;
+              const isM4a = isMp4;
+              const isValidMedia = isJpeg || isPng || isWebp || isOgg || isPdf || isMp4 || isMp3 || isM4a || (blob.type && blob.type !== 'application/octet-stream');
 
-            if (isValidMedia) {
-              mediaBlob = blob;
-               downloadSuccess = true;
-               downloadStrategy = 'direct-fetch';
-              console.log(`[INBOX] Download direto ok, size=${blob.size}, type=${blob.type}`);
+              if (isValidMedia && await isOriginalQuality(blob, 'direct-fetch')) {
+                mediaBlob = blob;
+                downloadSuccess = true;
+                downloadStrategy = 'direct-fetch';
+                console.log(`[INBOX] ✅ Download direto ok, size=${blob.size}, type=${blob.type}`);
+              } else if (!isValidMedia) {
+                console.warn(`[INBOX] Download direto retornou dados não-mídia (possivelmente criptografados), header=[${Array.from(header).map(b => b.toString(16)).join(',')}]`);
+              }
             } else {
-              console.warn(`[INBOX] Download direto retornou dados não-mídia (possivelmente criptografados), header=[${Array.from(header).map(b => b.toString(16)).join(',')}]`);
+              console.error(`[INBOX] Falha download mídia: HTTP ${mediaResp.status}`);
+              await mediaResp.text();
             }
-          } else {
-            console.error(`[INBOX] Falha download mídia: HTTP ${mediaResp.status}`);
+          } catch (directErr) {
+            console.log(`[INBOX] Direct fetch falhou: ${directErr}`);
           }
         }
 
-        // Strategy 3: Use JPEGThumbnail from payload as last resort (lower quality but valid)
+        // Strategy 3: JPEGThumbnail as LAST RESORT ONLY
         if (!downloadSuccess && inboxTipoConteudo === 'imagem') {
           const thumbnail = payload?.message?.content?.JPEGThumbnail
             || payload?.message?.imageMessage?.jpegThumbnail
@@ -864,24 +913,19 @@ serve(async (req) => {
               const bytes = new Uint8Array(binaryStr.length);
               for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
               mediaBlob = new Blob([bytes], { type: 'image/jpeg' });
-               downloadSuccess = true;
-               downloadStrategy = 'thumbnail';
-              console.log(`[INBOX] Usando JPEGThumbnail como fallback, size=${mediaBlob.size}`);
+              downloadSuccess = true;
+              downloadStrategy = 'thumbnail';
+              console.warn(`[INBOX] ⚠️ Usando JPEGThumbnail como ÚLTIMO RECURSO, size=${mediaBlob.size} — imagem será de baixa qualidade`);
             } catch (thumbErr) {
               console.warn(`[INBOX] Falha ao decodificar JPEGThumbnail: ${thumbErr}`);
             }
           }
         }
 
-        if (downloadSuccess && mediaBlob && inboxTipoConteudo === 'imagem') {
-          const tinyImage = await isTinyImageBlob(mediaBlob);
-          if (tinyImage && downloadStrategy === 'thumbnail') {
-            console.warn(`[INBOX] Thumbnail detectado como fallback (${mediaBlob.size} bytes); salvando para evitar \"Mídia indisponível\" até o download original voltar a responder.`);
-          }
-        }
-
-        // Upload the final blob to storage (regardless of which strategy succeeded)
+        // Upload the final blob to storage
         if (downloadSuccess && mediaBlob && mediaBlob.size > 0) {
+          console.log(`[MEDIA-RESULT] Estratégia vencedora: ${downloadStrategy}, tamanho final: ${mediaBlob.size} bytes`);
+          
           const mimeToExt: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
           const detectedMime = downloadStrategy === 'thumbnail'
             ? 'image/jpeg'
@@ -902,14 +946,14 @@ serve(async (req) => {
           if (!upErr) {
             const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
             inboxPermanentMediaUrl = pubData?.publicUrl || null;
-            console.log(`[INBOX] Mídia salva no storage: ${storagePath} (${correctMimeType}) via ${downloadStrategy || 'desconhecido'}`);
+            console.log(`[INBOX] ✅ Mídia salva no storage: ${storagePath} (${correctMimeType}) via ${downloadStrategy}`);
           } else {
             console.error('[INBOX] Erro upload mídia:', upErr);
           }
         }
 
         if (!inboxPermanentMediaUrl && !downloadSuccess) {
-          console.warn('[INBOX] Nenhuma estratégia de download funcionou. messageId=' + messageId + ' mediaUrl=' + inboxMediaUrl);
+          console.warn('[INBOX] ❌ Nenhuma estratégia de download funcionou. messageId=' + messageId + ' mediaUrl=' + inboxMediaUrl);
         }
       } catch (dlErr) {
         console.error('[INBOX] Erro geral download mídia:', dlErr);
