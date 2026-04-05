@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { FileText, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { WhatsAppAudioPlayer } from './WhatsAppAudioPlayer';
 
 interface Mensagem {
   id: string;
@@ -152,10 +153,12 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
       const src = audioBlobUrl || msg.media_url;
       const mimeType = getMimeFromUrl(msg.media_url);
       return (
-        <audio controls className="max-w-full" preload="none">
-          <source src={src} type={mimeType} />
-          Seu navegador não suporta áudio.
-        </audio>
+        <WhatsAppAudioPlayer
+          src={src}
+          isSaida={isSaida}
+          messageId={msg.id}
+          mimeType={mimeType}
+        />
       );
     }
 
