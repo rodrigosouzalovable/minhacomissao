@@ -696,8 +696,8 @@ serve(async (req) => {
         if (messageId && inboxServerUrl && inboxInstanceToken) {
           try {
             const downloadEndpoint = `${inboxServerUrl}/download-media`;
-            console.log(`[INBOX] Tentando download via UAZAPI: ${downloadEndpoint} messageId=${messageId}`);
-            const uazapiResp = await fetch(downloadEndpoint, {
+              console.log(`[INBOX] Tentando download via UAZAPI: ${downloadEndpoint} messageId=${messageId} (raw=${rawMessageId})`);
+              const uazapiResp = await fetch(downloadEndpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', token: inboxInstanceToken },
               body: JSON.stringify({ messageId }),
