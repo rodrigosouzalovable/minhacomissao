@@ -1,41 +1,49 @@
 
+## Corrigir abertura de imagem no WhatsApp Inbox e preparar teste de envio
 
-## Corrigir reprodução de áudio e exibição de imagens no WhatsApp Inbox
+### Diagnóstico provável
+Pelo código atual e pelos logs, há dois pontos diferentes causando esse comportamento:
 
-### Problema raiz
-Os arquivos de mídia (áudio, imagens, documentos) estão sendo salvos no storage com o MIME type errado: `application/octet-stream`. Isso acontece porque ao baixar o arquivo da UAZAPI, o `blob.type` vem vazio, e o código faz fallback para `application/octet-stream`. O navegador não consegue reproduzir áudio nem exibir imagens quando o Content-Type está errado.
+1. **Mídia recebida**: o webhook está salvando arquivos vindos da integração a partir de URLs `...mmg.whatsapp.net/...enc`, ou seja, mídia potencialmente **criptografada**, que o navegador não consegue abrir como imagem/áudio.
+2. **Mídia exibida no inbox**: o componente `ChatMessage` tenta renderizar via `blobUrl`, mas:
+   - não trata o erro real do `<img>` (`onError`)
+   - ao clicar, ainda abre `msg.media_url` original, e não a URL corrigida em memória
 
-### Solução (2 partes)
+### O que vou ajustar
+1. **`supabase/functions/whatsapp-chatbot/index.ts`**
+   - reforçar a lógica de mídia para **não considerar a URL `.enc` como imagem final pronta**
+   - priorizar uma URL/arquivo já utilizável da integração antes de salvar no bucket
+   - se a integração só entregar mídia criptografada, registrar isso claramente e salvar a mensagem como anexo com fallback seguro, em vez de quebrar a visualização
 
-**1. Corrigir o upload no webhook (para novos arquivos)**
+2. **`src/components/inbox/ChatMessage.tsx`**
+   - adicionar `onError` no `<img>` para trocar automaticamente para fallback
+   - quando existir `blobUrl`, usar essa URL também no clique/abertura da imagem
+   - melhorar a normalização de MIME para imagem e áudio
+   - evitar mostrar imagem “quebrada” dentro da conversa
 
-No `supabase/functions/whatsapp-chatbot/index.ts`, na linha ~697 do upload, usar o MIME type correto baseado no `uazapiMimetype` ou no tipo detectado, em vez de confiar no `blob.type`:
+3. **Fluxo de envio de imagem para teste**
+   - revisar o fluxo do envio manual do inbox para garantir que a imagem enviada fique com URL e tipo corretos no histórico
+   - depois da correção, validar um envio real para um número e confirmar:
+     - preview no inbox
+     - clique para abrir
+     - persistência no histórico
+     - funcionamento também para áudio e arquivos
 
-```typescript
-// Antes:
-.upload(storagePath, blob, { contentType: blob.type || 'application/octet-stream' })
+### Arquivos principais
+- `supabase/functions/whatsapp-chatbot/index.ts`
+- `src/components/inbox/ChatMessage.tsx`
+- possivelmente `src/components/inbox/ChatInputBar.tsx` se precisar reforçar metadados do arquivo enviado
 
-// Depois:
-const correctMimeType = uazapiMimetype || blob.type || 
-  (inboxTipoConteudo === 'audio' ? 'audio/ogg' : 
-   inboxTipoConteudo === 'imagem' ? 'image/jpeg' : 
-   inboxTipoConteudo === 'documento' ? 'application/pdf' : 
-   'application/octet-stream');
-.upload(storagePath, blob, { contentType: correctMimeType })
-```
+### Detalhes técnicos
+- O problema atual aparenta ser **mais do que Content-Type**: o log indica URL de mídia com extensão/rota **`.enc`**, o que sugere que parte da mídia recebida não está em formato diretamente renderizável.
+- Mesmo quando a imagem é corrigida em memória com `blobUrl`, o clique ainda aponta para a `media_url` original; isso explica casos em que “aparece algo” mas **não abre ao clicar**.
+- Não vejo necessidade de migração de banco para essa correção.
 
-**2. Corrigir o componente ChatMessage (para arquivos já existentes)**
-
-No `src/components/inbox/ChatMessage.tsx`, adicionar `type` na tag `<source>` do áudio para forçar o MIME type correto baseado na extensão da URL. Para imagens, o problema também se resolve no lado do servidor, mas podemos adicionar um handler de erro para mostrar um fallback.
-
-- Audio: inferir o tipo MIME da extensão da URL (.ogg -> audio/ogg, .mp3 -> audio/mpeg)
-- Imagem: adicionar `onError` handler para exibir placeholder
-
-**3. Migração dos arquivos existentes (opcional mas recomendado)**
-
-Atualizar o MIME type dos arquivos já salvos no bucket via uma query SQL de update nos metadados do storage.
-
-### Arquivos a alterar
-- `supabase/functions/whatsapp-chatbot/index.ts` - corrigir contentType no upload
-- `src/components/inbox/ChatMessage.tsx` - adicionar type no source e fallback de imagem
-
+### Validação final
+- Enviar uma imagem pelo inbox para um número de teste
+- Receber uma imagem no mesmo chat
+- Confirmar que:
+  - a miniatura aparece
+  - o clique abre corretamente
+  - áudios reproduzem
+  - documentos continuam abrindo normalmente
