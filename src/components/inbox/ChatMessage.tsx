@@ -61,8 +61,21 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
         if (!r.ok) throw new Error('fetch failed');
         return r.blob();
       })
-      .then(blob => {
+      .then(async (blob) => {
         if (cancelled) return;
+        // Validate the blob is actually image data by checking magic bytes
+        const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+        const isJpeg = header[0] === 0xFF && header[1] === 0xD8;
+        const isPng = header[0] === 0x89 && header[1] === 0x50;
+        const isWebp = header[0] === 0x52 && header[1] === 0x49; // RIFF
+        const isGif = header[0] === 0x47 && header[1] === 0x49; // GIF
+
+        if (!isJpeg && !isPng && !isWebp && !isGif) {
+          console.warn('[ChatMessage] Blob is not valid image data, showing fallback');
+          setImgError(true);
+          return;
+        }
+
         const mime = getImageMimeFromUrl(msg.media_url!);
         const correctedBlob = blob.type && blob.type !== 'application/octet-stream'
           ? blob
@@ -114,6 +127,15 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
       );
     }
 
+    // Media without URL (encrypted/unavailable)
+    if (tipo !== 'texto' && !msg.media_url) {
+      return (
+        <p className="text-xs italic text-muted-foreground">
+          {msg.conteudo || 'Mídia indisponível'}
+        </p>
+      );
+    }
+
     if (tipo === 'audio' && msg.media_url) {
       const src = audioBlobUrl || msg.media_url;
       const mimeType = getMimeFromUrl(msg.media_url);
@@ -143,11 +165,12 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
         );
       }
       return (
-        <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+        <a href={blobUrl} target="_blank" rel="noopener noreferrer">
           <img
             src={blobUrl}
             alt="Imagem"
             className="max-w-[250px] rounded-md cursor-pointer hover:opacity-90 transition"
+            onError={() => setImgError(true)}
           />
         </a>
       );
