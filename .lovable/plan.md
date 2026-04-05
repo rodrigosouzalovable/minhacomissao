@@ -1,49 +1,44 @@
 
-## Corrigir abertura de imagem no WhatsApp Inbox e preparar teste de envio
 
-### Diagnóstico provável
-Pelo código atual e pelos logs, há dois pontos diferentes causando esse comportamento:
+## Corrigir download de mídia recebida no WhatsApp Inbox
 
-1. **Mídia recebida**: o webhook está salvando arquivos vindos da integração a partir de URLs `...mmg.whatsapp.net/...enc`, ou seja, mídia potencialmente **criptografada**, que o navegador não consegue abrir como imagem/áudio.
-2. **Mídia exibida no inbox**: o componente `ChatMessage` tenta renderizar via `blobUrl`, mas:
-   - não trata o erro real do `<img>` (`onError`)
-   - ao clicar, ainda abre `msg.media_url` original, e não a URL corrigida em memória
+### Diagnóstico confirmado
 
-### O que vou ajustar
-1. **`supabase/functions/whatsapp-chatbot/index.ts`**
-   - reforçar a lógica de mídia para **não considerar a URL `.enc` como imagem final pronta**
-   - priorizar uma URL/arquivo já utilizável da integração antes de salvar no bucket
-   - se a integração só entregar mídia criptografada, registrar isso claramente e salvar a mensagem como anexo com fallback seguro, em vez de quebrar a visualização
+Ao verificar o banco de dados, as duas imagens mais recentes recebidas (18:04 e 17:58) estão salvas com `media_url = NULL`, enquanto uma anterior (17:49) tem URL válida. Isso confirma que o download da mídia pelo webhook está falhando silenciosamente em alguns casos.
 
-2. **`src/components/inbox/ChatMessage.tsx`**
-   - adicionar `onError` no `<img>` para trocar automaticamente para fallback
-   - quando existir `blobUrl`, usar essa URL também no clique/abertura da imagem
-   - melhorar a normalização de MIME para imagem e áudio
-   - evitar mostrar imagem “quebrada” dentro da conversa
+Dois problemas identificados no código:
 
-3. **Fluxo de envio de imagem para teste**
-   - revisar o fluxo do envio manual do inbox para garantir que a imagem enviada fique com URL e tipo corretos no histórico
-   - depois da correção, validar um envio real para um número e confirmar:
-     - preview no inbox
-     - clique para abrir
-     - persistência no histórico
-     - funcionamento também para áudio e arquivos
+1. **messageId errado para a UAZAPI**: O código usa `payload.message.id` que retorna o ID com prefixo do dono (ex: `556282199214:AC47ECC8B09E...`), mas o endpoint `/download-media` da UAZAPI espera apenas o `messageid` sem prefixo (ex: `AC47ECC8B09E...`). A inconsistência faz com que o download funcione às vezes e falhe em outras.
 
-### Arquivos principais
-- `supabase/functions/whatsapp-chatbot/index.ts`
-- `src/components/inbox/ChatMessage.tsx`
-- possivelmente `src/components/inbox/ChatInputBar.tsx` se precisar reforçar metadados do arquivo enviado
+2. **Sem fallback do thumbnail**: A UAZAPI envia um campo `JPEGThumbnail` (base64) no payload de imagens que poderia ser usado como fallback quando o download falha, mas o código não aproveita isso.
+
+### Solução
+
+**Arquivo: `supabase/functions/whatsapp-chatbot/index.ts`**
+
+1. Usar `payload.message.messageid` (sem prefixo) ao chamar `/download-media`
+2. Quando ambas estratégias de download falharem, usar o `JPEGThumbnail` do payload como fallback — decodificar o base64, salvar no storage e usar como `media_url`
+3. Adicionar mais logs para identificar falhas futuras
+
+**Arquivo: `src/components/inbox/ChatMessage.tsx`**
+
+4. Quando `media_url` for null e `conteudo` for um fallback de mídia (ex: "📷 Imagem"), mostrar "Mídia indisponível" em vez do texto do conteúdo que parece um link clicável
 
 ### Detalhes técnicos
-- O problema atual aparenta ser **mais do que Content-Type**: o log indica URL de mídia com extensão/rota **`.enc`**, o que sugere que parte da mídia recebida não está em formato diretamente renderizável.
-- Mesmo quando a imagem é corrigida em memória com `blobUrl`, o clique ainda aponta para a `media_url` original; isso explica casos em que “aparece algo” mas **não abre ao clicar**.
-- Não vejo necessidade de migração de banco para essa correção.
 
-### Validação final
-- Enviar uma imagem pelo inbox para um número de teste
-- Receber uma imagem no mesmo chat
-- Confirmar que:
-  - a miniatura aparece
-  - o clique abre corretamente
-  - áudios reproduzem
-  - documentos continuam abrindo normalmente
+```text
+Fluxo atual (falha):
+  Webhook → messageId = "owner:HEXID" → POST /download-media → 404/erro
+  → fallback fetch URL .enc → dados criptografados → validação falha
+  → media_url = NULL salvo no banco
+
+Fluxo corrigido:
+  Webhook → messageId = "HEXID" → POST /download-media → blob OK → storage
+  Se falhar → JPEGThumbnail base64 → blob → storage (thumbnail menor)
+  Se tudo falhar → media_url = NULL (mantém comportamento atual)
+```
+
+### Arquivos a alterar
+- `supabase/functions/whatsapp-chatbot/index.ts` — corrigir messageId e adicionar fallback thumbnail
+- `src/components/inbox/ChatMessage.tsx` — melhorar exibição quando media_url é null
+
