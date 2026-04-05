@@ -748,6 +748,7 @@ serve(async (req) => {
       try {
         let mediaBlob: Blob | null = null;
         let downloadSuccess = false;
+        let downloadStrategy: 'uazapi-json' | 'uazapi-binary' | 'direct-fetch' | 'thumbnail' | null = null;
 
         // Strategy 1: Use UAZAPI download-media endpoint (decrypts the media)
         if (messageId && inboxServerUrl && inboxInstanceToken) {
@@ -772,6 +773,7 @@ serve(async (req) => {
                   const mime = jsonResp.mimetype || uazapiMimetype || 'application/octet-stream';
                   mediaBlob = new Blob([bytes], { type: mime });
                   downloadSuccess = true;
+                  downloadStrategy = 'uazapi-json';
                   console.log(`[INBOX] Download via UAZAPI JSON ok, size=${mediaBlob.size}, mime=${mime}`);
                 }
               } else {
@@ -779,6 +781,7 @@ serve(async (req) => {
                 mediaBlob = await uazapiResp.blob();
                 downloadSuccess = mediaBlob.size > 100; // sanity check
                 if (downloadSuccess) {
+                  downloadStrategy = 'uazapi-binary';
                   console.log(`[INBOX] Download via UAZAPI binary ok, size=${mediaBlob.size}, type=${mediaBlob.type}`);
                 }
               }
@@ -810,7 +813,8 @@ serve(async (req) => {
 
             if (isValidMedia) {
               mediaBlob = blob;
-              downloadSuccess = true;
+               downloadSuccess = true;
+               downloadStrategy = 'direct-fetch';
               console.log(`[INBOX] Download direto ok, size=${blob.size}, type=${blob.type}`);
             } else {
               console.warn(`[INBOX] Download direto retornou dados não-mídia (possivelmente criptografados), header=[${Array.from(header).map(b => b.toString(16)).join(',')}]`);
@@ -832,11 +836,21 @@ serve(async (req) => {
               const bytes = new Uint8Array(binaryStr.length);
               for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
               mediaBlob = new Blob([bytes], { type: 'image/jpeg' });
-              downloadSuccess = true;
+               downloadSuccess = true;
+               downloadStrategy = 'thumbnail';
               console.log(`[INBOX] Usando JPEGThumbnail como fallback, size=${mediaBlob.size}`);
             } catch (thumbErr) {
               console.warn(`[INBOX] Falha ao decodificar JPEGThumbnail: ${thumbErr}`);
             }
+          }
+        }
+
+        if (downloadSuccess && mediaBlob && inboxTipoConteudo === 'imagem') {
+          const tinyImage = await isTinyImageBlob(mediaBlob);
+          if (tinyImage && downloadStrategy === 'thumbnail') {
+            console.warn(`[INBOX] Thumbnail detectado como imagem pequena demais (${mediaBlob.size} bytes); não será salvo como original.`);
+            downloadSuccess = false;
+            mediaBlob = null;
           }
         }
 
@@ -860,7 +874,7 @@ serve(async (req) => {
           if (!upErr) {
             const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
             inboxPermanentMediaUrl = pubData?.publicUrl || null;
-            console.log(`[INBOX] Mídia salva no storage: ${storagePath} (${correctMimeType}) via ${mediaBlob.type === 'image/jpeg' && !uazapiMimetype ? 'thumbnail-fallback' : 'download'}`);
+            console.log(`[INBOX] Mídia salva no storage: ${storagePath} (${correctMimeType}) via ${downloadStrategy || 'desconhecido'}`);
           } else {
             console.error('[INBOX] Erro upload mídia:', upErr);
           }
