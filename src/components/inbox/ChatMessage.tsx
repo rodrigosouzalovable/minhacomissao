@@ -50,7 +50,7 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
   const [imgError, setImgError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
-  const lightboxImageSrc = msg.media_url || blobUrl;
+  const lightboxImageSrc = blobUrl || msg.media_url;
 
   const closeLightbox = useCallback(() => setShowLightbox(false), []);
 
