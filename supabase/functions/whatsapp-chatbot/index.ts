@@ -681,42 +681,117 @@ serve(async (req) => {
     const inboxConteudo = inboxTexto || inboxMediaFallback;
 
     // Download media to inbox-media bucket for permanent URL
+    // IMPORTANT: content.URL from UAZAPI is WhatsApp's encrypted CDN URL.
+    // We must use UAZAPI's /download-media endpoint to get the decrypted file.
     let inboxPermanentMediaUrl: string | null = null;
-    if (inboxMediaUrl) {
+    if (inboxMediaUrl && inboxTipoConteudo !== 'texto') {
       try {
-        const mediaResp = await fetch(inboxMediaUrl);
-        if (mediaResp.ok) {
-          const blob = await mediaResp.blob();
-          // Determine extension from mimetype or tipo
+        let mediaBlob: Blob | null = null;
+        let downloadSuccess = false;
+
+        // Strategy 1: Use UAZAPI download-media endpoint (decrypts the media)
+        if (messageId && inboxServerUrl && inboxInstanceToken) {
+          try {
+            const downloadEndpoint = `${inboxServerUrl}/download-media`;
+            console.log(`[INBOX] Tentando download via UAZAPI: ${downloadEndpoint} messageId=${messageId}`);
+            const uazapiResp = await fetch(downloadEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', token: inboxInstanceToken },
+              body: JSON.stringify({ messageId }),
+            });
+            if (uazapiResp.ok) {
+              const respContentType = uazapiResp.headers.get('content-type') || '';
+              // UAZAPI may return JSON with base64 or raw binary
+              if (respContentType.includes('application/json')) {
+                const jsonResp = await uazapiResp.json();
+                if (jsonResp?.base64 || jsonResp?.data) {
+                  const b64Data = jsonResp.base64 || jsonResp.data;
+                  const binaryStr = atob(b64Data.replace(/^data:[^;]+;base64,/, ''));
+                  const bytes = new Uint8Array(binaryStr.length);
+                  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                  const mime = jsonResp.mimetype || uazapiMimetype || 'application/octet-stream';
+                  mediaBlob = new Blob([bytes], { type: mime });
+                  downloadSuccess = true;
+                  console.log(`[INBOX] Download via UAZAPI JSON ok, size=${mediaBlob.size}, mime=${mime}`);
+                }
+              } else {
+                // Raw binary response
+                mediaBlob = await uazapiResp.blob();
+                downloadSuccess = mediaBlob.size > 100; // sanity check
+                if (downloadSuccess) {
+                  console.log(`[INBOX] Download via UAZAPI binary ok, size=${mediaBlob.size}, type=${mediaBlob.type}`);
+                }
+              }
+            } else {
+              console.log(`[INBOX] UAZAPI download-media retornou HTTP ${uazapiResp.status}, tentando fallback`);
+            }
+          } catch (uazErr) {
+            console.log(`[INBOX] UAZAPI download-media falhou: ${uazErr}, tentando fallback`);
+          }
+        }
+
+        // Strategy 2: Direct fetch (works for already-public URLs, e.g. outgoing messages)
+        if (!downloadSuccess && inboxMediaUrl) {
+          const mediaResp = await fetch(inboxMediaUrl);
+          if (mediaResp.ok) {
+            const blob = await mediaResp.blob();
+            // Validate it's real media (not encrypted data)
+            // Check first bytes for known magic numbers
+            const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+            const isJpeg = header[0] === 0xFF && header[1] === 0xD8;
+            const isPng = header[0] === 0x89 && header[1] === 0x50;
+            const isWebp = header[0] === 0x52 && header[1] === 0x49; // RIFF
+            const isOgg = header[0] === 0x4F && header[1] === 0x67; // OggS
+            const isPdf = header[0] === 0x25 && header[1] === 0x50; // %PDF
+            const isMp4 = header.length >= 4 && header[3] === 0x66; // ftyp at offset 4
+            const isMp3 = header[0] === 0xFF && (header[1] & 0xE0) === 0xE0;
+            const isM4a = isMp4;
+            const isValidMedia = isJpeg || isPng || isWebp || isOgg || isPdf || isMp4 || isMp3 || isM4a || (blob.type && blob.type !== 'application/octet-stream');
+
+            if (isValidMedia) {
+              mediaBlob = blob;
+              downloadSuccess = true;
+              console.log(`[INBOX] Download direto ok, size=${blob.size}, type=${blob.type}`);
+            } else {
+              console.warn(`[INBOX] Download direto retornou dados não-mídia (possivelmente criptografados), header=[${Array.from(header).map(b => b.toString(16)).join(',')}]`);
+            }
+          } else {
+            console.error(`[INBOX] Falha download mídia: HTTP ${mediaResp.status}`);
+          }
+        }
+
+        if (downloadSuccess && mediaBlob && mediaBlob.size > 0) {
           const mimeToExt: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
-          const detectedMime = uazapiMimetype || blob.type || '';
-          const contentType = detectedMime;
-          const ext = mimeToExt[contentType] || (inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : inboxTipoConteudo === 'documento' ? 'pdf' : 'bin');
-          const storagePath = `${inboxTelefone}/${Date.now()}.${ext}`;
+          const detectedMime = uazapiMimetype || (mediaBlob.type !== 'application/octet-stream' ? mediaBlob.type : '') || '';
           const correctMimeType = detectedMime || 
             (inboxTipoConteudo === 'audio' ? 'audio/ogg' : 
              inboxTipoConteudo === 'imagem' ? 'image/jpeg' : 
              inboxTipoConteudo === 'documento' ? 'application/pdf' :
-             inboxTipoConteudo === 'video' ? 'video/mp4' :
              'application/octet-stream');
+          const ext = mimeToExt[correctMimeType] || mimeToExt[detectedMime] || (inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : inboxTipoConteudo === 'documento' ? 'pdf' : 'bin');
+          const storagePath = `${inboxTelefone}/${Date.now()}.${ext}`;
+          
+          // Force correct content type on the blob
+          const uploadBlob = new Blob([mediaBlob], { type: correctMimeType });
+          
           const { error: upErr } = await supabase.storage
             .from('inbox-media')
-            .upload(storagePath, blob, { contentType: correctMimeType, upsert: false });
+            .upload(storagePath, uploadBlob, { contentType: correctMimeType, upsert: false });
           if (!upErr) {
             const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
-            inboxPermanentMediaUrl = pubData?.publicUrl || inboxMediaUrl;
-            console.log(`[INBOX] Mídia salva no storage: ${storagePath}`);
+            inboxPermanentMediaUrl = pubData?.publicUrl || null;
+            console.log(`[INBOX] Mídia salva no storage: ${storagePath} (${correctMimeType})`);
           } else {
             console.error('[INBOX] Erro upload mídia:', upErr);
-            inboxPermanentMediaUrl = inboxMediaUrl;
           }
-        } else {
-          console.error(`[INBOX] Falha download mídia: HTTP ${mediaResp.status}`);
-          inboxPermanentMediaUrl = inboxMediaUrl;
+        }
+
+        // If all download strategies failed, don't save a broken URL
+        if (!inboxPermanentMediaUrl) {
+          console.warn('[INBOX] Não foi possível baixar mídia decodificada, salvando mensagem sem media_url');
         }
       } catch (dlErr) {
-        console.error('[INBOX] Erro download mídia:', dlErr);
-        inboxPermanentMediaUrl = inboxMediaUrl;
+        console.error('[INBOX] Erro geral download mídia:', dlErr);
       }
     }
 
