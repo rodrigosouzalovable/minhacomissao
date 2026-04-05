@@ -577,7 +577,10 @@ serve(async (req) => {
     // --- END VOICE CALL EVENT HANDLING ---
 
     // --- Deduplicação ---
-    const messageId = payload?.message?.id || payload?.key?.id || payload?.messageId || '';
+    const rawMessageId = payload?.message?.id || payload?.key?.id || payload?.messageId || '';
+    // UAZAPI /download-media expects the clean message ID without the owner prefix
+    // e.g. "5562...:AC47ECC8..." → "AC47ECC8..."
+    const messageId = rawMessageId.includes(':') ? rawMessageId.split(':').pop()! : rawMessageId;
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -693,8 +696,8 @@ serve(async (req) => {
         if (messageId && inboxServerUrl && inboxInstanceToken) {
           try {
             const downloadEndpoint = `${inboxServerUrl}/download-media`;
-            console.log(`[INBOX] Tentando download via UAZAPI: ${downloadEndpoint} messageId=${messageId}`);
-            const uazapiResp = await fetch(downloadEndpoint, {
+              console.log(`[INBOX] Tentando download via UAZAPI: ${downloadEndpoint} messageId=${messageId} (raw=${rawMessageId})`);
+              const uazapiResp = await fetch(downloadEndpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', token: inboxInstanceToken },
               body: JSON.stringify({ messageId }),
@@ -786,8 +789,28 @@ serve(async (req) => {
           }
         }
 
+        // Strategy 3: Use JPEGThumbnail from payload as last resort (lower quality but valid)
+        if (!downloadSuccess && inboxTipoConteudo === 'imagem') {
+          const thumbnail = payload?.message?.content?.JPEGThumbnail
+            || payload?.message?.imageMessage?.jpegThumbnail
+            || payload?.message?.content?.jpegThumbnail;
+          if (thumbnail && typeof thumbnail === 'string' && thumbnail.length > 50) {
+            try {
+              const b64Clean = thumbnail.replace(/^data:[^;]+;base64,/, '');
+              const binaryStr = atob(b64Clean);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+              mediaBlob = new Blob([bytes], { type: 'image/jpeg' });
+              downloadSuccess = true;
+              console.log(`[INBOX] Usando JPEGThumbnail como fallback, size=${mediaBlob.size}`);
+            } catch (thumbErr) {
+              console.warn(`[INBOX] Falha ao decodificar JPEGThumbnail: ${thumbErr}`);
+            }
+          }
+        }
+
         // If all download strategies failed, don't save a broken URL
-        if (!inboxPermanentMediaUrl) {
+        if (!inboxPermanentMediaUrl && !downloadSuccess) {
           console.warn('[INBOX] Não foi possível baixar mídia decodificada, salvando mensagem sem media_url');
         }
       } catch (dlErr) {

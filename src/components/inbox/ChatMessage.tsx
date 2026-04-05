@@ -131,7 +131,7 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
     if (tipo !== 'texto' && !msg.media_url) {
       return (
         <p className="text-xs italic text-muted-foreground">
-          {msg.conteudo || 'Mídia indisponível'}
+          Mídia indisponível
         </p>
       );
     }
