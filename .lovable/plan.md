@@ -1,80 +1,89 @@
 
-Objetivo: fazer o WhatsApp Inbox salvar e exibir a imagem original em alta qualidade, usando thumbnail só como último fallback real.
+Objetivo: corrigir definitivamente a qualidade das imagens recebidas no WhatsApp Inbox implementando descriptografia local do arquivo `.enc` quando a UAZAPI não devolver o original.
 
-O que encontrei no código atual
-- `supabase/functions/whatsapp-chatbot/index.ts` já tenta a ordem UAZAPI -> fetch direto -> thumbnail, mas a validação está fraca: qualquer blob/json minimamente válido pode ser salvo como “sucesso”.
-- A checagem `isTinyImageBlob()` hoje só gera aviso quando a origem é `thumbnail`; ela não rejeita miniaturas/preview vindas da própria UAZAPI ou da URL direta.
-- O webhook já recebe campos importantes no payload (`messageid`, `content.URL`, `mimetype`, `fileLength`, `mediaKey`, `directPath`, `width`, `height`), mas eles não estão sendo usados para validar qualidade nem para fallback robusto.
-- `src/components/inbox/ChatMessage.tsx` está com a prioridade do lightbox invertida: usa `msg.media_url || blobUrl`, quando deveria priorizar `blobUrl` para manter consistência com a imagem carregada no chat.
+O que já existe hoje
+- `supabase/functions/whatsapp-chatbot/index.ts` já faz:
+  1. tentativa via UAZAPI,
+  2. fetch direto,
+  3. thumbnail por último.
+- O gargalo atual é que ainda não existe a etapa de descriptografia local com `mediaKey`.
+- `src/components/inbox/ChatMessage.tsx` já está priorizando `blobUrl || msg.media_url`, então o principal ajuste agora é no backend.
 
-Plano de correção
-1. Refatorar o download da mídia no `whatsapp-chatbot`
-- Extrair helpers para:
-  - normalizar `messageId` (raw + clean sem prefixo);
-  - baixar mídia original via UAZAPI;
-  - baixar via URL direta/CDN;
-  - decodificar thumbnail apenas como fallback final;
-  - validar se o blob recebido é realmente “original” ou só preview.
-- Centralizar a decisão em um fluxo único, para impedir que preview/thumbnail sejam aceitos cedo demais.
+Plano atualizado
+1. Extrair metadados completos da mídia
+- Ler e normalizar, a partir do payload:
+  - `messageId` bruto e limpo
+  - `content.URL`, `imageLink`, `mediaUrl`, `directPath`
+  - `mimetype`, `fileLength`, `width`, `height`
+  - `mediaKey`, `fileEncSHA256`
+- Centralizar isso em um helper único para evitar variações de campo.
 
-2. Endurecer a prioridade real do download
+2. Reorganizar o fluxo de download
 ```text
-UAZAPI original
-  -> URL direta/CDN (com suporte a .enc quando necessário)
-    -> JPEGThumbnail (último caso)
+UAZAPI /download-media
+  -> UAZAPI /chat/getMessageById (se ajudar com URL/metadados)
+    -> fetch do .enc + descriptografia local
+      -> JPEGThumbnail como último recurso
 ```
-- A etapa UAZAPI vai tentar os endpoints relevantes com `POST` e `messageId` limpo e bruto.
-- Se necessário, a chamada será testada com os formatos de header aceitos pela UAZAPI (`token` e/ou `Authorization: Bearer ...`) sem quebrar o padrão atual do projeto.
-- `chat/getMessageById` ficará só como apoio de diagnóstico/metadados, não como fonte principal de imagem final.
+- A UAZAPI continua sendo tentada primeiro.
+- Se ela devolver preview, blob pequeno ou JSON inconsistente, o código não salva.
+- A terceira etapa vira o fallback principal real: descriptografar o arquivo original baixado do CDN.
 
-3. Bloquear thumbnails disfarçados de original
-- Antes de salvar no storage, validar:
+3. Implementar descriptografia local do arquivo `.enc`
+- Baixar o binário criptografado da URL do WhatsApp.
+- Decodificar `mediaKey` de base64.
+- Derivar as chaves com HKDF usando o contexto correto do tipo de mídia:
+  - imagem: `WhatsApp Image Keys`
+  - vídeo: `WhatsApp Video Keys`
+  - áudio: `WhatsApp Audio Keys`
+  - documento: `WhatsApp Document Keys`
+- Usar AES-CBC para descriptografar.
+- Remover padding.
+- Validar integridade do resultado comparando tamanho, assinatura do arquivo e, quando possível, `fileEncSHA256`/MAC esperado.
+- Salvar exatamente o blob descriptografado, sem resize e sem recompressão.
+
+4. Endurecer a validação de “original”
+- Só aceitar blob como original se passar por:
   - `blob.size`
-  - dimensões reais da imagem
-  - `mimetype`
-  - comparação com metadados do payload (`fileLength`, `width`, `height`) quando existirem
-- Rejeitar como “original” qualquer imagem pequena/miniatura mesmo que venha da UAZAPI JSON, UAZAPI binary ou fetch direto.
-- Só permitir `thumbnail` quando as duas etapas anteriores falharem de verdade.
-
-4. Implementar fallback robusto da URL direta
-- Usar `content.URL` / `imageLink` / `mediaUrl` / `directPath` quando disponíveis.
-- Se a URL for arquivo criptografado `.enc`, preparar o fallback com descriptografia local usando os dados do payload (`mediaKey`, `directPath`, `fileEncSHA256`, etc.) em vez de salvar o preview.
-- Salvar no storage exatamente o blob original, sem resize, sem recompressão e preservando o MIME correto.
-
-5. Melhorar os logs de diagnóstico
-- Adicionar logs estruturados como:
-  - `messageId bruto/limpo`
-  - endpoint tentado
-  - header mode usado
-  - status HTTP
-  - content-type retornado
-  - tamanho do blob
+  - tipo MIME real
+  - magic bytes do arquivo
   - dimensões detectadas
-  - motivo de rejeição
-  - estratégia vencedora (`uazapi-original`, `cdn-direct`, `thumbnail`)
-- Isso vai permitir identificar rapidamente se a UAZAPI está devolvendo preview em vez do original.
+  - comparação com `fileLength`, `width` e `height` do payload
+- Rejeitar qualquer retorno da UAZAPI que seja thumbnail disfarçado de original.
 
-6. Ajustar o lightbox no frontend
-- Em `ChatMessage.tsx`, trocar a prioridade para `blobUrl || msg.media_url`.
-- Assim o lightbox usa a mesma imagem já validada/carregada no chat, evitando inconsistência entre miniatura e tela cheia.
+5. Melhorar logs de diagnóstico
+- Padronizar logs como:
+  - `[MEDIA] messageId bruto/limpo`
+  - `[MEDIA] fileLength do payload`
+  - `[MEDIA] URL .enc disponível`
+  - `[MEDIA] mediaKey disponível`
+  - `[MEDIA] tentativa UAZAPI`
+  - `[MEDIA] tentando descriptografia local`
+  - `[MEDIA] descriptografia sucesso/falha`
+  - `[MEDIA] tamanho após descriptografia`
+  - `[MEDIA] estratégia vencedora: uazapi | local_decrypt | thumbnail`
+- Isso vai mostrar claramente se a UAZAPI está devolvendo preview e se o decrypt local resolveu.
+
+6. Preservar o comportamento do frontend
+- Não há mudança estrutural nova no `ChatMessage.tsx`.
+- O foco é garantir que `media_url` já aponte para o arquivo original salvo no storage.
 
 7. Validação pós-implementação
-- Enviar uma nova imagem para o número conectado.
-- Confirmar no banco que a nova `media_url` aponta para um arquivo substancialmente maior que thumbnail.
+- Receber uma nova imagem no número conectado.
+- Confirmar que o arquivo salvo é muito maior que thumbnail e compatível com `fileLength`.
 - Confirmar no Inbox:
-  - miniatura nítida no chat;
-  - imagem nítida ao expandir;
-  - mesma qualidade da enviada no WhatsApp.
-- Se a UAZAPI continuar devolvendo preview, a etapa seguinte será confirmar o endpoint/formato correto e manter o fallback por descriptografia do CDN como solução definitiva, sem aceitar thumbnail como padrão.
+  - imagem nítida no chat,
+  - imagem nítida ao expandir,
+  - mesma qualidade percebida da enviada no WhatsApp.
+- Se a UAZAPI continuar falhando, o sistema ainda deve funcionar com `local_decrypt` como estratégia vencedora, sem depender do thumbnail.
 
 Detalhes técnicos
-- Arquivos afetados:
-  - `supabase/functions/whatsapp-chatbot/index.ts`
-  - `src/components/inbox/ChatMessage.tsx`
-- Não vejo necessidade de migration de banco para a correção principal.
-- A infraestrutura atual de storage e autenticação pode ser mantida como está.
+- Arquivo principal: `supabase/functions/whatsapp-chatbot/index.ts`
+- `ChatMessage.tsx` só precisa ser revisto se surgir inconsistência nova; pelo estado atual, o problema não parece estar mais nele.
+- Não vejo necessidade de migration de banco.
+- Ponto importante: a derivação de chave precisa usar o contexto correto por tipo de mídia; não basta um HKDF genérico único.
 
 Resultado esperado
-- O sistema deixa de salvar preview/thumbnail como se fosse original.
-- O Inbox passa a abrir a imagem recebida com qualidade real, inclusive no lightbox.
-- O thumbnail continua existindo apenas como contingência extrema, nunca como caminho normal.
+- O sistema deixa de depender da UAZAPI para obter a imagem original.
+- Quando a API retornar thumbnail/preview, o webhook baixa o `.enc`, descriptografa localmente e salva o arquivo real.
+- O thumbnail passa a ser apenas contingência extrema.
