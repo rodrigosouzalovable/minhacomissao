@@ -689,12 +689,19 @@ serve(async (req) => {
           const blob = await mediaResp.blob();
           // Determine extension from mimetype or tipo
           const mimeToExt: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
-          const contentType = blob.type || uazapiMimetype || '';
+          const detectedMime = uazapiMimetype || blob.type || '';
+          const contentType = detectedMime;
           const ext = mimeToExt[contentType] || (inboxTipoConteudo === 'audio' ? 'ogg' : inboxTipoConteudo === 'imagem' ? 'jpg' : inboxTipoConteudo === 'documento' ? 'pdf' : 'bin');
           const storagePath = `${inboxTelefone}/${Date.now()}.${ext}`;
+          const correctMimeType = detectedMime || 
+            (inboxTipoConteudo === 'audio' ? 'audio/ogg' : 
+             inboxTipoConteudo === 'imagem' ? 'image/jpeg' : 
+             inboxTipoConteudo === 'documento' ? 'application/pdf' :
+             inboxTipoConteudo === 'video' ? 'video/mp4' :
+             'application/octet-stream');
           const { error: upErr } = await supabase.storage
             .from('inbox-media')
-            .upload(storagePath, blob, { contentType: blob.type || 'application/octet-stream', upsert: false });
+            .upload(storagePath, blob, { contentType: correctMimeType, upsert: false });
           if (!upErr) {
             const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
             inboxPermanentMediaUrl = pubData?.publicUrl || inboxMediaUrl;
