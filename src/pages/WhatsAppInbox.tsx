@@ -45,6 +45,16 @@ interface Mensagem {
   media_url?: string | null;
 }
 
+interface MediaSentPayload {
+  conteudo: string;
+  tipo_conteudo: 'imagem' | 'documento';
+  media_url: string;
+}
+
+const getMessageIdentity = (msg: Pick<Mensagem, 'direcao' | 'tipo_conteudo' | 'media_url' | 'conteudo'>) => (
+  `${msg.direcao}|${msg.tipo_conteudo || 'texto'}|${msg.media_url || ''}|${msg.conteudo}`
+);
+
 export default function WhatsAppInbox() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -61,7 +71,6 @@ export default function WhatsAppInbox() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load instances
   useEffect(() => {
     if (!user) return;
     const fetchInstancias = async () => {
@@ -75,8 +84,7 @@ export default function WhatsAppInbox() {
     fetchInstancias();
   }, [user]);
 
-  // Load contacts
-const fetchContatos = useCallback(async () => {
+  const fetchContatos = useCallback(async () => {
     let query = supabase
       .from('whatsapp_contatos')
       .select(`
@@ -107,7 +115,6 @@ const fetchContatos = useCallback(async () => {
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
-  // Realtime for contacts
   useEffect(() => {
     const channel = supabase
       .channel('whatsapp-contatos-changes')
@@ -118,7 +125,6 @@ const fetchContatos = useCallback(async () => {
     return () => { supabase.removeChannel(channel); };
   }, [fetchContatos]);
 
-  // Load messages
   const fetchMensagens = useCallback(async () => {
     if (!contatoAtivo) return;
     setCarregandoMensagens(true);
@@ -129,13 +135,25 @@ const fetchContatos = useCallback(async () => {
       .eq('telefone_remoto', contatoAtivo.telefone)
       .order('timestamp_msg', { ascending: true })
       .limit(100);
-    if (data) setMensagens(data as Mensagem[]);
+
+    if (data) {
+      setMensagens(prev => {
+        const persistedMessages = data as Mensagem[];
+        const persistedKeys = new Set(persistedMessages.map(getMessageIdentity));
+        const unresolvedTempMessages = prev.filter(
+          msg => msg.id.startsWith('temp-') && !persistedKeys.has(getMessageIdentity(msg))
+        );
+
+        return [...persistedMessages, ...unresolvedTempMessages].sort(
+          (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
+        );
+      });
+    }
     setCarregandoMensagens(false);
   }, [contatoAtivo]);
 
   useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
 
-  // Realtime for messages
   useEffect(() => {
     if (!contatoAtivo) return;
     const channel = supabase
@@ -146,8 +164,13 @@ const fetchContatos = useCallback(async () => {
             newMsg.telefone_remoto === contatoAtivo.telefone) {
           setMensagens(prev => {
             if (prev.some(m => m.id === newMsg.id)) return prev;
-            const filtered = prev.filter(m => !m.id.startsWith('temp-'));
-            return [...filtered, newMsg];
+            const newIdentity = getMessageIdentity(newMsg);
+            const filtered = prev.filter(
+              msg => !(msg.id.startsWith('temp-') && getMessageIdentity(msg) === newIdentity)
+            );
+            return [...filtered, newMsg].sort(
+              (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
+            );
           });
         }
       })
@@ -155,12 +178,10 @@ const fetchContatos = useCallback(async () => {
     return () => { supabase.removeChannel(channel); };
   }, [contatoAtivo]);
 
-  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens]);
 
-  // Mark as read
   useEffect(() => {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
     const markRead = async () => {
@@ -199,7 +220,6 @@ const fetchContatos = useCallback(async () => {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
 
-      // Mensagem otimista - aparece imediatamente na UI
       const msgOtimista: Mensagem = {
         id: `temp-${Date.now()}`,
         instancia_id: contatoAtivo.instancia_id,
@@ -211,8 +231,6 @@ const fetchContatos = useCallback(async () => {
         lida: true,
       };
       setMensagens(prev => [...prev, msgOtimista]);
-
-      // Re-fetch para sincronizar com DB
       setTimeout(() => fetchMensagens(), 1500);
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
@@ -220,6 +238,26 @@ const fetchContatos = useCallback(async () => {
       setEnviando(false);
     }
   };
+
+  const handleMediaSent = useCallback((payload?: MediaSentPayload) => {
+    if (payload && contatoAtivo) {
+      const msgOtimista: Mensagem = {
+        id: `temp-${Date.now()}`,
+        instancia_id: contatoAtivo.instancia_id,
+        telefone_remoto: contatoAtivo.telefone,
+        nome_contato: contatoAtivo.nome,
+        conteudo: payload.conteudo,
+        direcao: 'saida',
+        timestamp_msg: new Date().toISOString(),
+        lida: true,
+        tipo_conteudo: payload.tipo_conteudo,
+        media_url: payload.media_url,
+      };
+      setMensagens(prev => [...prev, msgOtimista]);
+    }
+
+    setTimeout(() => fetchMensagens(), 1500);
+  }, [contatoAtivo, fetchMensagens]);
 
   const contatosFiltrados = contatos
     .filter(c => {
@@ -233,7 +271,7 @@ const fetchContatos = useCallback(async () => {
       return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
     });
 
-const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | null) => {
+  const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | null) => {
     if (instanciaNomeContato) return instanciaNomeContato;
     const inst = instancias.find(i => i.id === instanciaId);
     return inst?.nome || null;
@@ -264,10 +302,9 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-5rem)] lg:h-[calc(100vh-2rem)] rounded-lg overflow-hidden border border-border bg-card">
-        {/* Left Panel - Contact List */}
         <div className={cn(
-          "w-full md:w-80 lg:w-96 md:min-w-[20rem] lg:min-w-[24rem] md:max-w-[20rem] lg:max-w-[24rem] shrink-0 border-r border-border flex flex-col bg-card overflow-hidden",
-          contatoAtivo ? "hidden md:flex" : "flex"
+          'w-full md:w-80 lg:w-96 md:min-w-[20rem] lg:min-w-[24rem] md:max-w-[20rem] lg:max-w-[24rem] shrink-0 border-r border-border flex flex-col bg-card overflow-hidden',
+          contatoAtivo ? 'hidden md:flex' : 'flex'
         )}>
           <div className="p-3 border-b border-border space-y-2">
             <div className="flex items-center gap-2">
@@ -304,8 +341,8 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                   key={contato.id}
                   onClick={() => handleSelectContato(contato)}
                   className={cn(
-                    "w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden",
-                    contatoAtivo?.id === contato.id && "bg-accent"
+                    'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
+                    contatoAtivo?.id === contato.id && 'bg-accent'
                   )}
                 >
                   <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
@@ -330,7 +367,7 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                         </Badge>
                       )}
                     </div>
-{getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
+                    {getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
                       <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
                         {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
                       </span>
@@ -342,8 +379,7 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
           </ScrollArea>
         </div>
 
-        {/* Right Panel - Chat */}
-        <div className={cn("flex-1 flex flex-col", !contatoAtivo ? "hidden md:flex" : "flex")}>
+        <div className={cn('flex-1 flex flex-col', !contatoAtivo ? 'hidden md:flex' : 'flex')}>
           {!contatoAtivo ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
@@ -354,7 +390,6 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
             </div>
           ) : (
             <>
-              {/* Chat Header */}
               <div className="p-3 border-b border-border flex items-center gap-3 bg-card">
                 <button className="md:hidden text-muted-foreground" onClick={() => setContatoAtivo(null)}>
                   <ArrowDown className="h-5 w-5 rotate-90" />
@@ -373,7 +408,6 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                 </div>
               </div>
 
-              {/* Messages */}
               <div
                 ref={chatContainerRef}
                 className="flex-1 overflow-y-auto p-4 space-y-2 bg-background/50 relative"
@@ -407,7 +441,6 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input */}
               {activeInstancia && (
                 <ChatInputBar
                   instanciaId={activeInstancia.id}
@@ -415,7 +448,7 @@ const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | n
                   serverUrl={activeInstancia.server_url}
                   instanceToken={activeInstancia.instance_token}
                   onTextSent={handleEnviarTexto}
-                  onMediaSent={fetchMensagens}
+                  onMediaSent={handleMediaSent}
                   enviando={enviando}
                   externalFile={droppedFile}
                   onExternalFileHandled={() => setDroppedFile(null)}
