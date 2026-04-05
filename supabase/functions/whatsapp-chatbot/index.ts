@@ -1023,7 +1023,34 @@ serve(async (req) => {
           }
         }
 
-        // Strategy 3: JPEGThumbnail as LAST RESORT ONLY
+        // Strategy 3: Local decryption of .enc file using mediaKey
+        if (!downloadSuccess && mediaMeta.mediaKey && mediaMeta.encUrl) {
+          console.log(`[MEDIA] Tentando descriptografia local do .enc...`);
+          try {
+            const decryptedBlob = await decryptWhatsAppMedia(
+              mediaMeta.encUrl,
+              mediaMeta.mediaKey,
+              inboxTipoConteudo,
+              mediaMeta.mimetype || (inboxTipoConteudo === 'imagem' ? 'image/jpeg' : inboxTipoConteudo === 'audio' ? 'audio/ogg' : 'application/octet-stream'),
+            );
+            if (decryptedBlob && decryptedBlob.size > 100) {
+              if (await isOriginalQuality(decryptedBlob, 'local-decrypt')) {
+                mediaBlob = decryptedBlob;
+                downloadSuccess = true;
+                downloadStrategy = 'local-decrypt';
+                console.log(`[MEDIA] ✅ Descriptografia local OK! size=${decryptedBlob.size} bytes`);
+              } else {
+                console.warn(`[MEDIA] Descriptografia local retornou blob de baixa qualidade (size=${decryptedBlob.size})`);
+              }
+            }
+          } catch (decryptErr) {
+            console.error(`[MEDIA] Falha na descriptografia local:`, decryptErr);
+          }
+        } else if (!downloadSuccess && !mediaMeta.mediaKey) {
+          console.log(`[MEDIA] Sem mediaKey no payload — descriptografia local indisponível`);
+        }
+
+        // Strategy 4: JPEGThumbnail as LAST RESORT ONLY
         if (!downloadSuccess && inboxTipoConteudo === 'imagem') {
           const thumbnail = payload?.message?.content?.JPEGThumbnail
             || payload?.message?.imageMessage?.jpegThumbnail
