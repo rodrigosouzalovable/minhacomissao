@@ -227,21 +227,23 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
 
       {showLightbox && blobUrl && createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 animate-in fade-in-0 duration-200"
+          className="fixed inset-0 z-[100] bg-black/90 animate-in fade-in-0 duration-200"
           onClick={closeLightbox}
         >
           <button
             onClick={closeLightbox}
-            className="absolute top-4 right-4 text-white/80 hover:text-white transition p-2 rounded-full bg-white/10 hover:bg-white/20"
+            className="absolute top-4 right-4 z-10 text-white/80 hover:text-white transition p-2 rounded-full bg-white/10 hover:bg-white/20"
           >
             <X className="h-6 w-6" />
           </button>
-          <img
-            src={blobUrl}
-            alt="Imagem ampliada"
-            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <div className="flex h-full w-full items-center justify-center p-4 sm:p-6 md:p-10">
+            <img
+              src={blobUrl}
+              alt="Imagem ampliada"
+              className="h-full w-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         </div>,
         document.body
       )}
