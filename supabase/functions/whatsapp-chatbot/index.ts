@@ -750,46 +750,74 @@ serve(async (req) => {
         let downloadSuccess = false;
         let downloadStrategy: 'uazapi-json' | 'uazapi-binary' | 'direct-fetch' | 'thumbnail' | null = null;
 
-        // Strategy 1: Use UAZAPI download-media endpoint (decrypts the media)
+        // Strategy 1: Use UAZAPI endpoints to download decrypted media
         if (messageId && inboxServerUrl && inboxInstanceToken) {
-          try {
-            const downloadEndpoint = `${inboxServerUrl}/download-media`;
-              console.log(`[INBOX] Tentando download via UAZAPI: ${downloadEndpoint} messageId=${messageId} (raw=${rawMessageId})`);
-              const uazapiResp = await fetch(downloadEndpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', token: inboxInstanceToken },
-              body: JSON.stringify({ messageId }),
-            });
-            if (uazapiResp.ok) {
-              const respContentType = uazapiResp.headers.get('content-type') || '';
-              // UAZAPI may return JSON with base64 or raw binary
-              if (respContentType.includes('application/json')) {
-                const jsonResp = await uazapiResp.json();
-                if (jsonResp?.base64 || jsonResp?.data) {
-                  const b64Data = jsonResp.base64 || jsonResp.data;
-                  const binaryStr = atob(b64Data.replace(/^data:[^;]+;base64,/, ''));
-                  const bytes = new Uint8Array(binaryStr.length);
-                  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-                  const mime = jsonResp.mimetype || uazapiMimetype || 'application/octet-stream';
-                  mediaBlob = new Blob([bytes], { type: mime });
-                  downloadSuccess = true;
-                  downloadStrategy = 'uazapi-json';
-                  console.log(`[INBOX] Download via UAZAPI JSON ok, size=${mediaBlob.size}, mime=${mime}`);
-                }
-              } else {
-                // Raw binary response
-                mediaBlob = await uazapiResp.blob();
-                downloadSuccess = mediaBlob.size > 100; // sanity check
-                if (downloadSuccess) {
-                  downloadStrategy = 'uazapi-binary';
-                  console.log(`[INBOX] Download via UAZAPI binary ok, size=${mediaBlob.size}, type=${mediaBlob.type}`);
+          // Small delay to give UAZAPI time to process/store the media
+          await new Promise(r => setTimeout(r, 2000));
+
+          const cleanUrl = inboxServerUrl.replace(/\/+$/, '');
+          // Try multiple UAZAPI endpoints and methods
+          const uazapiAttempts = [
+            { url: `${cleanUrl}/chat/getMessageById`, method: 'GET', qs: `?messageId=${messageId}&download=true` },
+            { url: `${cleanUrl}/chat/getMessageById`, method: 'GET', qs: `?messageId=${rawMessageId}&download=true` },
+            { url: `${cleanUrl}/download-media`, method: 'GET', qs: `?messageId=${messageId}` },
+            { url: `${cleanUrl}/download-media`, method: 'GET', qs: `?messageId=${rawMessageId}` },
+            { url: `${cleanUrl}/chat/downloadMedia`, method: 'GET', qs: `?messageId=${messageId}` },
+          ];
+
+          for (const attempt of uazapiAttempts) {
+            if (downloadSuccess) break;
+            try {
+              const fullUrl = `${attempt.url}${attempt.qs}`;
+              console.log(`[INBOX] Tentando UAZAPI: ${attempt.method} ${fullUrl}`);
+              const uazapiResp = await fetch(fullUrl, {
+                method: attempt.method,
+                headers: { 'Content-Type': 'application/json', token: inboxInstanceToken },
+              });
+              console.log(`[INBOX] UAZAPI resposta: HTTP ${uazapiResp.status} CT=${uazapiResp.headers.get('content-type')}`);
+              if (uazapiResp.ok) {
+                const respContentType = uazapiResp.headers.get('content-type') || '';
+                if (respContentType.includes('application/json')) {
+                  const jsonResp = await uazapiResp.json();
+                  // Check for base64 data in response
+                  const b64Data = jsonResp?.base64 || jsonResp?.data || jsonResp?.message?.base64 || jsonResp?.message?.data;
+                  const mediaUrlFromJson = jsonResp?.url || jsonResp?.mediaUrl || jsonResp?.message?.url || jsonResp?.message?.mediaUrl || jsonResp?.data?.url;
+                  if (b64Data && typeof b64Data === 'string' && b64Data.length > 100) {
+                    const binaryStr = atob(b64Data.replace(/^data:[^;]+;base64,/, ''));
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                    const mime = jsonResp.mimetype || jsonResp.message?.mimetype || uazapiMimetype || 'application/octet-stream';
+                    mediaBlob = new Blob([bytes], { type: mime });
+                    downloadSuccess = true;
+                    downloadStrategy = 'uazapi-json';
+                    console.log(`[INBOX] Download via UAZAPI JSON ok, size=${mediaBlob.size}, mime=${mime}`);
+                  } else if (mediaUrlFromJson && typeof mediaUrlFromJson === 'string' && mediaUrlFromJson.startsWith('http')) {
+                    // UAZAPI returned a direct URL to download
+                    console.log(`[INBOX] UAZAPI retornou URL de mídia: ${mediaUrlFromJson}`);
+                    const mediaFetchResp = await fetch(mediaUrlFromJson);
+                    if (mediaFetchResp.ok) {
+                      mediaBlob = await mediaFetchResp.blob();
+                      if (mediaBlob.size > 100) {
+                        downloadSuccess = true;
+                        downloadStrategy = 'uazapi-json';
+                        console.log(`[INBOX] Download via URL UAZAPI ok, size=${mediaBlob.size}`);
+                      }
+                    }
+                  } else {
+                    console.log(`[INBOX] UAZAPI JSON sem base64/url válida, keys=${Object.keys(jsonResp).join(',')}`);
+                  }
+                } else if (respContentType.startsWith('image/') || respContentType.startsWith('audio/') || respContentType.startsWith('video/') || respContentType === 'application/octet-stream') {
+                  mediaBlob = await uazapiResp.blob();
+                  downloadSuccess = mediaBlob.size > 100;
+                  if (downloadSuccess) {
+                    downloadStrategy = 'uazapi-binary';
+                    console.log(`[INBOX] Download via UAZAPI binary ok, size=${mediaBlob.size}, type=${mediaBlob.type}`);
+                  }
                 }
               }
-            } else {
-              console.log(`[INBOX] UAZAPI download-media retornou HTTP ${uazapiResp.status}, tentando fallback`);
+            } catch (uazErr) {
+              console.log(`[INBOX] UAZAPI tentativa falhou: ${uazErr}`);
             }
-          } catch (uazErr) {
-            console.log(`[INBOX] UAZAPI download-media falhou: ${uazErr}, tentando fallback`);
           }
         }
 
