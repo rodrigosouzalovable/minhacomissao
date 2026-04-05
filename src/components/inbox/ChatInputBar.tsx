@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Mic, Paperclip, X, Square, Loader2 } from 'lucide-react';
+import { Send, Mic, Paperclip, X, Loader2 } from 'lucide-react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+
+interface MediaSentPayload {
+  conteudo: string;
+  tipo_conteudo: 'imagem' | 'documento';
+  media_url: string;
+}
 
 interface ChatInputBarProps {
   instanciaId: string;
@@ -12,7 +18,7 @@ interface ChatInputBarProps {
   serverUrl: string;
   instanceToken: string;
   onTextSent: (texto: string) => Promise<void>;
-  onMediaSent: () => void;
+  onMediaSent: (payload?: MediaSentPayload) => void;
   enviando: boolean;
   externalFile?: File | null;
   onExternalFileHandled?: () => void;
@@ -33,7 +39,7 @@ export function ChatInputBar({
     iniciarGravacao, cancelarGravacao, enviarGravacao, formatTempo,
   } = useAudioRecorder({
     instanciaId, telefone, serverUrl, instanceToken,
-    onSent: onMediaSent,
+    onSent: () => onMediaSent(),
   });
 
   const handleFileSend = async (file: File) => {
@@ -59,10 +65,12 @@ export function ChatInputBar({
         .from('inbox-media')
         .getPublicUrl(fileName);
 
+      const publicUrl = urlData.publicUrl;
+
       const { data, error } = await supabase.functions.invoke('send-whatsapp-media', {
         body: {
           telefone,
-          media_url: urlData.publicUrl,
+          media_url: publicUrl,
           type: isImage ? 'image' : 'document',
           uazapi_server_url: serverUrl,
           uazapi_instance_token: instanceToken,
@@ -73,7 +81,12 @@ export function ChatInputBar({
 
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
-      onMediaSent();
+
+      onMediaSent({
+        conteudo: isImage ? '📷 Imagem enviada' : `📄 ${file.name}`,
+        tipo_conteudo: isImage ? 'imagem' : 'documento',
+        media_url: publicUrl,
+      });
     } catch (err: any) {
       toast({ title: 'Erro ao enviar arquivo', description: err.message, variant: 'destructive' });
     } finally {
@@ -81,7 +94,6 @@ export function ChatInputBar({
     }
   };
 
-  // Handle external file (from drag & drop)
   useEffect(() => {
     if (externalFile) {
       handleFileSend(externalFile);
