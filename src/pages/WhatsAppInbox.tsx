@@ -611,9 +611,28 @@ export default function WhatsAppInbox() {
                 ) : mensagens.length === 0 ? (
                   <div className="text-center text-muted-foreground text-sm py-8">Nenhuma mensagem</div>
                 ) : (
-                  mensagens.map(msg => (
-                    <ChatMessage key={msg.id} msg={msg} formatMsgTime={formatMsgTime} />
-                  ))
+                  <>
+                    {temMaisAnteriores && (
+                      <div className="text-center py-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => fetchMensagens(true)}
+                          disabled={carregandoAnteriores}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {carregandoAnteriores ? (
+                            <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Carregando...</>
+                          ) : (
+                            'Carregar mensagens anteriores'
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                    {mensagens.map(msg => (
+                      <ChatMessage key={msg.id} msg={msg} formatMsgTime={formatMsgTime} />
+                    ))}
+                  </>
                 )}
                 <div ref={messagesEndRef} />
               </div>
