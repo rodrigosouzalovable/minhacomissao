@@ -527,6 +527,20 @@ export default function WhatsAppInbox() {
                     {getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome) && ` · ${getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome)}`}
                   </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => fetchHistorico(true)}
+                  disabled={carregandoHistorico}
+                  title="Carregar histórico de mensagens"
+                >
+                  {carregandoHistorico ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <History className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
 
               <div
