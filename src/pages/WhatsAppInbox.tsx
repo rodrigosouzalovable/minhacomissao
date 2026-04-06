@@ -520,7 +520,16 @@ export default function WhatsAppInbox() {
           <div className="p-3 border-b border-border space-y-2">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold text-foreground">WhatsApp Inbox</h2>
+              <h2 className="font-semibold text-foreground flex-1">WhatsApp Inbox</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
+                onClick={() => setNovaConversaOpen(true)}
+                title="Nova conversa"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
