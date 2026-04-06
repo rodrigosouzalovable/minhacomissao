@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare, Volume2 } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare, Volume2, Square } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,9 @@ import { useWhatsAppSending } from '@/contexts/WhatsAppSendingContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 import {
   Popover,
