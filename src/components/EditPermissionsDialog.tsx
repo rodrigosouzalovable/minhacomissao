@@ -83,10 +83,12 @@ export function EditPermissionsDialog({
       setSelectedTabs(permissions.abas_permitidas);
       setCredores((permissions as any).credores ?? ['ume_novo_mundo']);
       setVisivelRanking((permissions as any).visivel_ranking ?? true);
+      setInboxCompartilhado((permissions as any).inbox_compartilhado ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
       setVisivelRanking(true);
+      setInboxCompartilhado(false);
     }
   }, [permissions, open]);
 

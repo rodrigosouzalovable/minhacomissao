@@ -59,6 +59,8 @@ const getMessageIdentity = (msg: Pick<Mensagem, 'direcao' | 'tipo_conteudo' | 'm
 
 export default function WhatsAppInbox() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
+  const { inboxCompartilhado } = useUserPermissions();
   const { toast } = useToast();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
@@ -76,15 +78,20 @@ export default function WhatsAppInbox() {
   useEffect(() => {
     if (!user) return;
     const fetchInstancias = async () => {
-      const { data } = await supabase
+      let query = supabase
         .from('user_whatsapp_instances')
         .select('id, nome, server_url, instance_token')
-        .eq('ativo', true)
-        .eq('user_id', user.id);
+        .eq('ativo', true);
+      
+      if (!isAdmin && !inboxCompartilhado) {
+        query = query.eq('user_id', user.id);
+      }
+      
+      const { data } = await query;
       if (data) setInstancias(data);
     };
     fetchInstancias();
-  }, [user]);
+  }, [user, isAdmin, inboxCompartilhado]);
 
   const fetchContatos = useCallback(async () => {
     let query = supabase
