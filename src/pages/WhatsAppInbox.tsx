@@ -586,6 +586,7 @@ export default function WhatsAppInbox() {
                           <span className="font-medium text-sm text-foreground truncate block min-w-0 flex-1">
                             {contato.nome || formatTelefone(contato.telefone)}
                           </span>
+                          {contato.fixado && <Pin className="h-3 w-3 text-muted-foreground shrink-0 rotate-45" />}
                           <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
                             {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
                           </span>
@@ -740,6 +741,52 @@ export default function WhatsAppInbox() {
           )}
         </div>
       </div>
+
+      <Dialog open={novaConversaOpen} onOpenChange={setNovaConversaOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova conversa</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input
+                placeholder="5511999999999"
+                value={novoTelefone}
+                onChange={e => setNovoTelefone(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Inclua o código do país (55 para Brasil)</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Instância</Label>
+              <Select value={novaInstanciaId} onValueChange={setNovaInstanciaId}>
+                <SelectTrigger><SelectValue placeholder="Selecione uma instância" /></SelectTrigger>
+                <SelectContent>
+                  {instancias.map(inst => (
+                    <SelectItem key={inst.id} value={inst.id}>{inst.nome || 'Instância'}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Mensagem</Label>
+              <Textarea
+                placeholder="Digite a primeira mensagem..."
+                value={novaMensagem}
+                onChange={e => setNovaMensagem(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <Button
+              onClick={handleNovaConversa}
+              disabled={enviandoNova || !novoTelefone || !novaInstanciaId || !novaMensagem.trim()}
+              className="w-full"
+            >
+              {enviandoNova ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : 'Iniciar conversa'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
