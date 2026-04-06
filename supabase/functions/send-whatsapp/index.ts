@@ -91,22 +91,25 @@ serve(async (req) => {
       const resolvedId = await resolveInstanciaId(supabase, instancia_id, serverUrl, instanceToken);
 
       if (resolvedId) {
+        // Find existing contact to use the correct phone format
+        const suffix = telefoneCompleto.slice(-8);
+        const { data: existingContact } = await supabase
+          .from('whatsapp_contatos')
+          .select('id, telefone')
+          .eq('instancia_id', resolvedId)
+          .like('telefone', `%${suffix}`)
+          .maybeSingle();
+
+        const telefoneParaSalvar = existingContact?.telefone || telefoneCompleto;
+
         await supabase.from('whatsapp_mensagens').insert({
           instancia_id: resolvedId,
-          telefone_remoto: telefoneCompleto,
+          telefone_remoto: telefoneParaSalvar,
           conteudo: mensagem,
           direcao: 'saida',
           timestamp_msg: agora,
           lida: true,
         });
-
-        // UPSERT contact
-        const { data: existingContact } = await supabase
-          .from('whatsapp_contatos')
-          .select('id')
-          .eq('instancia_id', resolvedId)
-          .eq('telefone', telefoneCompleto)
-          .maybeSingle();
 
         if (existingContact) {
           await supabase.from('whatsapp_contatos').update({
