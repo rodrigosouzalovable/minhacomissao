@@ -302,6 +302,65 @@ export default function Acionamento() {
   }, [user]);
 
 
+  // Load relatório diário config
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+    const loadRelatorioConfig = async () => {
+      const { data } = await supabase
+        .from('relatorio_diario_config' as any)
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        setRelatorioInstanciaId((data as any).instancia_id || '');
+        setRelatorioTelefone((data as any).telefone_destino || '');
+        setRelatorioAtivo((data as any).ativo ?? true);
+      }
+    };
+    loadRelatorioConfig();
+  }, [user, isAdmin]);
+
+  const handleSalvarRelatorio = async () => {
+    if (!relatorioInstanciaId || !relatorioTelefone) {
+      toast.error('Selecione uma instância e informe o telefone destino');
+      return;
+    }
+    setSalvandoRelatorio(true);
+    try {
+      const { data: existing } = await supabase
+        .from('relatorio_diario_config' as any)
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+      
+      if (existing) {
+        await supabase
+          .from('relatorio_diario_config' as any)
+          .update({
+            instancia_id: relatorioInstanciaId,
+            telefone_destino: relatorioTelefone,
+            ativo: relatorioAtivo,
+            atualizado_em: new Date().toISOString(),
+          } as any)
+          .eq('id', (existing as any).id);
+      } else {
+        await supabase
+          .from('relatorio_diario_config' as any)
+          .insert({
+            instancia_id: relatorioInstanciaId,
+            telefone_destino: relatorioTelefone,
+            ativo: relatorioAtivo,
+          } as any);
+      }
+      toast.success('Configuração do relatório salva!');
+    } catch (err) {
+      toast.error('Erro ao salvar configuração');
+    } finally {
+      setSalvandoRelatorio(false);
+    }
+  };
+
+
   const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
     const activeOnes = instancesToCheck.filter(i => i.ativo);
     if (activeOnes.length === 0) return;
