@@ -33,12 +33,18 @@ interface EnvioProgressItem {
   enviado_em: string | null;
 }
 
+interface SendingOptions {
+  minDelayMin: number;
+  maxDelayMin: number;
+  tipoEnvio: 'texto' | 'audio';
+}
+
 interface WhatsAppSendingContextType {
   isSending: boolean;
   currentSendingId: string | null;
   statusMap: Record<string, 'enviado' | 'erro' | 'enviando'>;
   envioProgresso: EnvioProgressItem[];
-  startSending: (items: SendQueueItem[], instances: WhatsAppInstance[], templates: LembreteTemplate[], operadorNome: string) => void;
+  startSending: (items: SendQueueItem[], instances: WhatsAppInstance[], templates: LembreteTemplate[], operadorNome: string, options?: SendingOptions) => void;
   cancelSending: () => void;
   loadSavedProgress: () => Promise<void>;
   markAsEnviado: (pagamentoId: string, clienteNome: string, clienteTelefone: string) => Promise<void>;
@@ -175,9 +181,13 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
     items: SendQueueItem[],
     instances: WhatsAppInstance[],
     templates: LembreteTemplate[],
-    operadorNome: string
+    operadorNome: string,
+    options?: SendingOptions
   ) => {
     if (sendingRef.current || !user || items.length === 0 || instances.length === 0) return;
+    const minDelayMs = (options?.minDelayMin ?? 5) * 60 * 1000;
+    const maxDelayMs = (options?.maxDelayMin ?? 15) * 60 * 1000;
+    const tipoEnvio = options?.tipoEnvio ?? 'texto';
 
     sendingRef.current = true;
     setIsSending(true);
