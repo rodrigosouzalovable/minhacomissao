@@ -97,6 +97,7 @@ export default function WhatsAppInbox() {
   const [novaInstanciaId, setNovaInstanciaId] = useState('');
   const [novaMensagem, setNovaMensagem] = useState('');
   const [enviandoNova, setEnviandoNova] = useState(false);
+  const [instanciaComboOpen, setInstanciaComboOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
