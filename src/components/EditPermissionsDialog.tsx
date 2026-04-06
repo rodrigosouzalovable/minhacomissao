@@ -94,14 +94,16 @@ export function EditPermissionsDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (permissions) {
-        const { error } = await supabase
-          .from('user_permissions')
-          .update({
+        const payload = {
             abas_permitidas: selectedTabs,
             credores,
             visivel_ranking: visivelRanking,
-          } as any)
+            inbox_compartilhado: inboxCompartilhado,
+          };
+      if (permissions) {
+        const { error } = await supabase
+          .from('user_permissions')
+          .update(payload as any)
           .eq('user_id', userId);
         if (error) throw error;
       } else {
@@ -109,9 +111,7 @@ export function EditPermissionsDialog({
           .from('user_permissions')
           .insert({
             user_id: userId,
-            abas_permitidas: selectedTabs,
-            credores,
-            visivel_ranking: visivelRanking,
+            ...payload,
           } as any);
         if (error) throw error;
       }
@@ -191,6 +191,17 @@ export function EditPermissionsDialog({
               <Switch
                 checked={visivelRanking}
                 onCheckedChange={setVisivelRanking}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Inbox Compartilhado</Label>
+                <p className="text-xs text-muted-foreground">Permite ver e responder todas as conversas do WhatsApp Inbox</p>
+              </div>
+              <Switch
+                checked={inboxCompartilhado}
+                onCheckedChange={setInboxCompartilhado}
               />
             </div>
           </div>
