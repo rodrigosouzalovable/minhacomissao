@@ -385,6 +385,8 @@ export default function Acordos() {
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('todos');
   const [rankingAberto, setRankingAberto] = useState(false);
+  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
+  const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
 
   // Buscar perfil do operador para nome dinâmico
   const { data: profile } = useQuery({
