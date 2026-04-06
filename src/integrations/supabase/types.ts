@@ -1834,6 +1834,7 @@ export type Database = {
       whatsapp_contatos: {
         Row: {
           criado_em: string
+          fixado: boolean
           id: string
           instancia_id: string
           nao_lido: number
@@ -1844,6 +1845,7 @@ export type Database = {
         }
         Insert: {
           criado_em?: string
+          fixado?: boolean
           id?: string
           instancia_id: string
           nao_lido?: number
@@ -1854,6 +1856,7 @@ export type Database = {
         }
         Update: {
           criado_em?: string
+          fixado?: boolean
           id?: string
           instancia_id?: string
           nao_lido?: number
