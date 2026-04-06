@@ -565,9 +565,11 @@ export default function WhatsAppInbox() {
                     contatoId={contato.id}
                     etiquetas={etiquetas}
                     contatoEtiquetaIds={etIds}
+                    fixado={!!contato.fixado}
                     onMarcarNaoLida={fetchContatos}
                     onEtiquetaToggle={handleEtiquetaToggle}
                     onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
+                    onFixarToggle={handleFixarToggle}
                   >
                     <button
                       onClick={() => handleSelectContato(contato)}
