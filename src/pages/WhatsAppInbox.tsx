@@ -331,6 +331,8 @@ export default function WhatsAppInbox() {
   const handleSelectContato = (contato: Contato) => {
     setContatoAtivo(contato);
     setMensagens([]);
+    setPaginaAtual(0);
+    setTemMaisAnteriores(true);
   };
 
   const handleEnviarTexto = async (texto: string) => {
