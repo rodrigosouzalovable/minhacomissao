@@ -200,7 +200,6 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
 
         const lembrete = items[i];
         const instance = instances[i % instances.length];
-        const mensagem = gerarMensagem(lembrete, templates, operadorNome);
 
         setCurrentSendingId(lembrete.id);
         setStatusMap(prev => ({ ...prev, [lembrete.id]: 'enviando' }));
@@ -209,21 +208,63 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
         let erroMsg: string | null = null;
 
         try {
-          const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-            body: {
-              telefone: lembrete.cliente_telefone,
-              mensagem,
-              uazapi_server_url: instance.server_url,
-              uazapi_instance_token: instance.instance_token,
-              instancia_id: instance.id,
-            },
-          });
+          // Determine if we should send audio
+          let sentAsAudio = false;
+          if (tipoEnvio === 'audio') {
+            // Find audio_url for this reminder type
+            const hoje = new Date();
+            const venc = new Date((lembrete.data_prevista || '') + 'T00:00:00');
+            const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
+            let tipoKey = '';
+            if (lembrete.tipo === 'vencido') tipoKey = `vencido_d${diasAtraso}`;
+            else if (lembrete.tipo === 'hoje') tipoKey = 'dia_vencimento';
+            else tipoKey = '3_dias';
 
-          if (error || !data?.success) {
-            status = 'erro';
-            erroMsg = error?.message || data?.error || 'Erro desconhecido';
-          } else {
-            status = 'enviado';
+            let tpl = templates.find(t => t.tipo_lembrete === tipoKey);
+            if (!tpl && lembrete.tipo === 'vencido') {
+              tpl = templates.find(t => t.tipo_lembrete === 'vencido_generico');
+            }
+
+            if (tpl?.audio_url) {
+              sentAsAudio = true;
+              const { data, error } = await supabase.functions.invoke('send-whatsapp-audio', {
+                body: {
+                  telefone: lembrete.cliente_telefone,
+                  audio_url: tpl.audio_url,
+                  uazapi_server_url: instance.server_url,
+                  uazapi_instance_token: instance.instance_token,
+                  instancia_id: instance.id,
+                },
+              });
+              if (error || !data?.success) {
+                status = 'erro';
+                erroMsg = error?.message || data?.error || 'Erro desconhecido';
+              } else {
+                status = 'enviado';
+              }
+            }
+          }
+
+          // Fallback to text if not sent as audio
+          if (!sentAsAudio || (tipoEnvio === 'texto')) {
+            if (tipoEnvio === 'texto' || !sentAsAudio) {
+              const mensagem = gerarMensagem(lembrete, templates, operadorNome);
+              const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+                body: {
+                  telefone: lembrete.cliente_telefone,
+                  mensagem,
+                  uazapi_server_url: instance.server_url,
+                  uazapi_instance_token: instance.instance_token,
+                  instancia_id: instance.id,
+                },
+              });
+              if (error || !data?.success) {
+                status = 'erro';
+                erroMsg = error?.message || data?.error || 'Erro desconhecido';
+              } else {
+                status = 'enviado';
+              }
+            }
           }
         } catch (err: any) {
           status = 'erro';
@@ -253,9 +294,9 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
           enviado_em: status === 'enviado' ? new Date().toISOString() : null,
         }]);
 
-        // Wait 5-15 min before next (skip on last or cancel)
+        // Wait randomized delay before next (skip on last or cancel)
         if (i < items.length - 1 && !cancelRef.current) {
-          const delay = (5 + Math.random() * 10) * 60 * 1000;
+          const delay = minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
           const delayMinutes = Math.round(delay / 60000);
           toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
           await new Promise<void>(resolve => {
