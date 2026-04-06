@@ -82,6 +82,7 @@ export default function WhatsAppInbox() {
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -204,6 +205,39 @@ export default function WhatsAppInbox() {
   }, [contatoAtivo]);
 
   useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
+
+  const fetchHistorico = useCallback(async (manual = false) => {
+    if (!contatoAtivo || carregandoHistorico) return;
+    const instancia = instancias.find(i => i.id === contatoAtivo.instancia_id);
+    if (!instancia) return;
+    setCarregandoHistorico(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-whatsapp-history', {
+        body: {
+          server_url: instancia.server_url,
+          instance_token: instancia.instance_token,
+          instancia_id: instancia.id,
+          telefone: contatoAtivo.telefone,
+        },
+      });
+      if (error) throw error;
+      if (data?.imported > 0) {
+        await fetchMensagens();
+        if (manual) {
+          toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas` });
+        }
+      } else if (manual) {
+        toast({ title: 'Histórico', description: 'Nenhuma mensagem nova encontrada' });
+      }
+    } catch (err: any) {
+      if (manual) {
+        toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+      }
+      console.error('Erro ao buscar histórico:', err);
+    } finally {
+      setCarregandoHistorico(false);
+    }
+  }, [contatoAtivo, instancias, carregandoHistorico, fetchMensagens, toast]);
 
   useEffect(() => {
     if (!contatoAtivo) return;
