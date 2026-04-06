@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 Deno.serve(async (req) => {
@@ -20,31 +20,64 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch messages from UAZAPI
+    const cleanUrl = server_url.replace(/\/+$/, '');
     const chatId = `${telefone}@s.whatsapp.net`;
-    const uazapiRes = await fetch(`${server_url}/chat/getMessages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${instance_token}`,
-      },
-      body: JSON.stringify({ id: chatId, count: 50 }),
-    });
 
-    if (!uazapiRes.ok) {
-      const errorText = await uazapiRes.text();
-      console.error("UAZAPI error:", uazapiRes.status, errorText);
-      return new Response(
-        JSON.stringify({ error: `Erro ao buscar histórico: ${uazapiRes.status}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Try multiple endpoint patterns for UAZAPI
+    const endpoints = [
+      { url: `${cleanUrl}/chat/getMessages`, body: { id: chatId, count: 50 } },
+      { url: `${cleanUrl}/chat/getMessages`, body: { phone: chatId, count: 50 } },
+      { url: `${cleanUrl}/chat/getMessages/${instance_token}`, body: { id: chatId, count: 50 }, noHeader: true },
+    ];
+
+    let messages: any[] | null = null;
+    let lastError = "";
+
+    for (const ep of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${ep.url}`);
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (!ep.noHeader) {
+          headers["token"] = instance_token;
+        }
+
+        const uazapiRes = await fetch(ep.url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(ep.body),
+        });
+
+        const text = await uazapiRes.text();
+        console.log(`Response from ${ep.url}: status=${uazapiRes.status}, length=${text.length}`);
+
+        if (uazapiRes.ok) {
+          let parsed;
+          try { parsed = JSON.parse(text); } catch { parsed = null; }
+
+          if (Array.isArray(parsed)) {
+            messages = parsed;
+            break;
+          } else if (parsed?.messages && Array.isArray(parsed.messages)) {
+            messages = parsed.messages;
+            break;
+          } else if (parsed?.data && Array.isArray(parsed.data)) {
+            messages = parsed.data;
+            break;
+          }
+          console.log(`Endpoint OK but unexpected format:`, JSON.stringify(parsed).substring(0, 200));
+        } else {
+          lastError = `${uazapiRes.status}: ${text.substring(0, 200)}`;
+          console.log(`Endpoint failed: ${lastError}`);
+        }
+      } catch (e) {
+        lastError = e.message;
+        console.log(`Endpoint error: ${e.message}`);
+      }
     }
 
-    const messages = await uazapiRes.json();
-
-    if (!Array.isArray(messages) || messages.length === 0) {
+    if (!messages || messages.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, imported: 0 }),
+        JSON.stringify({ success: true, imported: 0, debug: lastError || "no messages found" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -73,7 +106,6 @@ Deno.serve(async (req) => {
       const fromMe = key.fromMe === true;
       const direcao = fromMe ? "saida" : "entrada";
 
-      // Extract content
       const message = msg.message || {};
       let conteudo =
         message.conversation ||
@@ -83,9 +115,8 @@ Deno.serve(async (req) => {
         message.documentMessage?.fileName ||
         "";
 
-      // Determine content type
       let tipo_conteudo = "texto";
-      let media_url: string | null = null;
+      const media_url: string | null = null;
 
       if (message.imageMessage) {
         tipo_conteudo = "imagem";
@@ -112,7 +143,6 @@ Deno.serve(async (req) => {
 
       if (!conteudo) continue;
 
-      // Parse timestamp
       let timestamp_msg: string;
       if (msg.messageTimestamp) {
         const ts = typeof msg.messageTimestamp === "number"
@@ -123,17 +153,14 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Deduplicate
       const dedupeKey = `${timestamp_msg}|${direcao}|${conteudo.substring(0, 100)}`;
       if (existingKeys.has(dedupeKey)) continue;
       existingKeys.add(dedupeKey);
 
-      const nomeContato = msg.pushName || null;
-
       toInsert.push({
         instancia_id: instancia_id,
         telefone_remoto: telefone,
-        nome_contato: nomeContato,
+        nome_contato: msg.pushName || null,
         conteudo,
         direcao,
         timestamp_msg,
@@ -145,7 +172,6 @@ Deno.serve(async (req) => {
 
     let imported = 0;
     if (toInsert.length > 0) {
-      // Insert in batches of 50
       for (let i = 0; i < toInsert.length; i += 50) {
         const batch = toInsert.slice(i, i + 50);
         const { error } = await supabase.from("whatsapp_mensagens").insert(batch);
