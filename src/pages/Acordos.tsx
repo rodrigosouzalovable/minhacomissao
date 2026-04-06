@@ -952,6 +952,35 @@ export default function Acordos() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por cliente ou CPF..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full sm:w-[220px] justify-start text-left font-normal",
+                  !filtroDataVencimento && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {filtroDataVencimento ? format(filtroDataVencimento, "dd/MM/yyyy") : "Filtrar por vencimento"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={filtroDataVencimento}
+                onSelect={setFiltroDataVencimento}
+                locale={ptBR}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+          {filtroDataVencimento && (
+            <Button variant="ghost" size="icon" onClick={() => setFiltroDataVencimento(undefined)} title="Limpar filtro de data">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Status" />
