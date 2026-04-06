@@ -15,6 +15,13 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { ChatInputBar } from '@/components/inbox/ChatInputBar';
+import { ConversaContextMenu } from '@/components/inbox/ConversaContextMenu';
+
+interface Etiqueta {
+  id: string;
+  nome: string;
+  cor: string;
+}
 
 interface Instancia {
   id: string;
