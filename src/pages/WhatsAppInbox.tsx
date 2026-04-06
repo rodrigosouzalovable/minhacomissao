@@ -450,8 +450,9 @@ export default function WhatsAppInbox() {
                     </button>
                   </ConversaContextMenu>
                 );
-              }))
+              })
             )}
+
           </ScrollArea>
         </div>
 
