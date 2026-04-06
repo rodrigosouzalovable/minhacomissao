@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2 } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +17,9 @@ import { ptBR } from 'date-fns/locale';
 import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { ChatInputBar } from '@/components/inbox/ChatInputBar';
 import { ConversaContextMenu } from '@/components/inbox/ConversaContextMenu';
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 interface Etiqueta {
   id: string;
   nome: string;
@@ -39,6 +41,7 @@ interface Contato {
   ultima_mensagem: string | null;
   ultima_mensagem_em: string | null;
   nao_lido: number;
+  fixado?: boolean;
   instancia_nome?: string | null;
 }
 
@@ -86,6 +89,11 @@ export default function WhatsAppInbox() {
   const [paginaAtual, setPaginaAtual] = useState(0);
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
+  const [novaConversaOpen, setNovaConversaOpen] = useState(false);
+  const [novoTelefone, setNovoTelefone] = useState('');
+  const [novaInstanciaId, setNovaInstanciaId] = useState('');
+  const [novaMensagem, setNovaMensagem] = useState('');
+  const [enviandoNova, setEnviandoNova] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -151,6 +159,7 @@ export default function WhatsAppInbox() {
         ultima_mensagem,
         ultima_mensagem_em,
         nao_lido,
+        fixado,
         user_whatsapp_instances(nome)
       `)
       .order('ultima_mensagem_em', { ascending: false });
@@ -409,6 +418,9 @@ export default function WhatsAppInbox() {
       return (c.nome?.toLowerCase().includes(term) || c.telefone.includes(term));
     })
     .sort((a, b) => {
+      const aFixado = a.fixado ? 1 : 0;
+      const bFixado = b.fixado ? 1 : 0;
+      if (aFixado !== bFixado) return bFixado - aFixado;
       if (a.nao_lido > 0 && b.nao_lido === 0) return -1;
       if (a.nao_lido === 0 && b.nao_lido > 0) return 1;
       return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
@@ -442,6 +454,62 @@ export default function WhatsAppInbox() {
     ? instancias.find(i => i.id === contatoAtivo.instancia_id)
     : null;
 
+  const handleFixarToggle = async (contatoId: string, fixado: boolean) => {
+    await supabase.from('whatsapp_contatos').update({ fixado } as any).eq('id', contatoId);
+    setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
+  };
+
+  const handleNovaConversa = async () => {
+    if (!novoTelefone || !novaInstanciaId || !novaMensagem.trim()) {
+      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
+      return;
+    }
+    const instancia = instancias.find(i => i.id === novaInstanciaId);
+    if (!instancia) return;
+
+    const telefoneFormatado = novoTelefone.replace(/\D/g, '');
+    const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
+
+    setEnviandoNova(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          telefone: telefoneCompleto,
+          mensagem: novaMensagem.trim(),
+          uazapi_server_url: instancia.server_url,
+          uazapi_instance_token: instancia.instance_token,
+          instancia_id: instancia.id,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
+
+      toast({ title: 'Mensagem enviada', description: 'Conversa iniciada com sucesso' });
+      setNovaConversaOpen(false);
+      setNovoTelefone('');
+      setNovaMensagem('');
+      setNovaInstanciaId('');
+
+      // Wait for realtime to create contact, then try to select it
+      setTimeout(async () => {
+        await fetchContatos();
+        const { data: contatoData } = await supabase
+          .from('whatsapp_contatos')
+          .select('id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, nao_lido, fixado')
+          .eq('instancia_id', instancia.id)
+          .eq('telefone', telefoneCompleto)
+          .maybeSingle();
+        if (contatoData) {
+          handleSelectContato(contatoData as Contato);
+        }
+      }, 2000);
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+    } finally {
+      setEnviandoNova(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-5rem)] lg:h-[calc(100vh-2rem)] rounded-lg overflow-hidden border border-border bg-card">
@@ -452,7 +520,16 @@ export default function WhatsAppInbox() {
           <div className="p-3 border-b border-border space-y-2">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold text-foreground">WhatsApp Inbox</h2>
+              <h2 className="font-semibold text-foreground flex-1">WhatsApp Inbox</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
+                onClick={() => setNovaConversaOpen(true)}
+                title="Nova conversa"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -488,9 +565,11 @@ export default function WhatsAppInbox() {
                     contatoId={contato.id}
                     etiquetas={etiquetas}
                     contatoEtiquetaIds={etIds}
+                    fixado={!!contato.fixado}
                     onMarcarNaoLida={fetchContatos}
                     onEtiquetaToggle={handleEtiquetaToggle}
                     onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
+                    onFixarToggle={handleFixarToggle}
                   >
                     <button
                       onClick={() => handleSelectContato(contato)}
@@ -507,6 +586,7 @@ export default function WhatsAppInbox() {
                           <span className="font-medium text-sm text-foreground truncate block min-w-0 flex-1">
                             {contato.nome || formatTelefone(contato.telefone)}
                           </span>
+                          {contato.fixado && <Pin className="h-3 w-3 text-muted-foreground shrink-0 rotate-45" />}
                           <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
                             {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
                           </span>
@@ -661,6 +741,52 @@ export default function WhatsAppInbox() {
           )}
         </div>
       </div>
+
+      <Dialog open={novaConversaOpen} onOpenChange={setNovaConversaOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova conversa</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input
+                placeholder="5511999999999"
+                value={novoTelefone}
+                onChange={e => setNovoTelefone(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Inclua o código do país (55 para Brasil)</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Instância</Label>
+              <Select value={novaInstanciaId} onValueChange={setNovaInstanciaId}>
+                <SelectTrigger><SelectValue placeholder="Selecione uma instância" /></SelectTrigger>
+                <SelectContent>
+                  {instancias.map(inst => (
+                    <SelectItem key={inst.id} value={inst.id}>{inst.nome || 'Instância'}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Mensagem</Label>
+              <Textarea
+                placeholder="Digite a primeira mensagem..."
+                value={novaMensagem}
+                onChange={e => setNovaMensagem(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <Button
+              onClick={handleNovaConversa}
+              disabled={enviandoNova || !novoTelefone || !novaInstanciaId || !novaMensagem.trim()}
+              className="w-full"
+            >
+              {enviandoNova ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : 'Iniciar conversa'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
