@@ -20,6 +20,9 @@ import { ConversaContextMenu } from '@/components/inbox/ConversaContextMenu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Check, ChevronsUpDown } from 'lucide-react';
 interface Etiqueta {
   id: string;
   nome: string;
@@ -94,6 +97,7 @@ export default function WhatsAppInbox() {
   const [novaInstanciaId, setNovaInstanciaId] = useState('');
   const [novaMensagem, setNovaMensagem] = useState('');
   const [enviandoNova, setEnviandoNova] = useState(false);
+  const [instanciaComboOpen, setInstanciaComboOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -759,14 +763,39 @@ export default function WhatsAppInbox() {
             </div>
             <div className="space-y-2">
               <Label>Instância</Label>
-              <Select value={novaInstanciaId} onValueChange={setNovaInstanciaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione uma instância" /></SelectTrigger>
-                <SelectContent>
-                  {instancias.map(inst => (
-                    <SelectItem key={inst.id} value={inst.id}>{inst.nome || 'Instância'}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={instanciaComboOpen} onOpenChange={setInstanciaComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" aria-expanded={instanciaComboOpen} className="w-full justify-between font-normal">
+                    {novaInstanciaId
+                      ? (instancias.find(i => i.id === novaInstanciaId)?.nome || 'Instância')
+                      : 'Selecione uma instância'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar instância..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhuma instância encontrada.</CommandEmpty>
+                      <CommandGroup>
+                        {instancias.map(inst => (
+                          <CommandItem
+                            key={inst.id}
+                            value={inst.nome || inst.id}
+                            onSelect={() => {
+                              setNovaInstanciaId(inst.id);
+                              setInstanciaComboOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", novaInstanciaId === inst.id ? "opacity-100" : "opacity-0")} />
+                            {inst.nome || 'Instância'}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label>Mensagem</Label>
