@@ -305,16 +305,29 @@ export default function WhatsAppInbox() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [mensagens]);
+  }, [mensagens.length]);
 
-  // Auto-fetch history when conversation has few messages
+  // Infinite scroll: load older messages when scrolling near the top
   useEffect(() => {
-    if (!contatoAtivo || carregandoMensagens) return;
-    const realMessages = mensagens.filter(m => !m.id.startsWith('temp-'));
-    if (realMessages.length < 5) {
-      fetchHistorico(false);
-    }
-  }, [contatoAtivo, carregandoMensagens, mensagens.length]);
+    const container = chatContainerRef.current;
+    if (!container || !contatoAtivo) return;
+
+    const handleScroll = () => {
+      if (container.scrollTop < 120 && temMaisAnteriores && !carregandoAnteriores && !carregandoMensagens) {
+        const oldScrollHeight = container.scrollHeight;
+        fetchMensagens(true).then(() => {
+          requestAnimationFrame(() => {
+            if (chatContainerRef.current) {
+              chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight - oldScrollHeight;
+            }
+          });
+        });
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [contatoAtivo, temMaisAnteriores, carregandoAnteriores, carregandoMensagens, fetchMensagens]);
 
   useEffect(() => {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
