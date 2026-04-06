@@ -157,8 +157,8 @@ Deno.serve(async (req) => {
 
     // If all endpoints returned 404/405, the API doesn't support history
     if (!messages) {
-      const allUnsupported = lastError.includes("não suportado");
-      apiNotSupported = allUnsupported;
+      // If most endpoints returned 404/405, mark as unsupported
+      const apiNotSupported = unsupportedCount >= totalEndpoints / 2;
       
       return new Response(
         JSON.stringify({ 
