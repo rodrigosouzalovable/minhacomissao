@@ -1,73 +1,48 @@
 
 
-## Plano: Menu de contexto com "Marcar como Não Lida" e Etiquetas no Inbox
+## Plano: Importar histórico de mensagens antigas do WhatsApp
 
 ### O que será feito
 
-Ao clicar com o botão direito em uma conversa na lista lateral do Inbox, abrirá um menu de contexto (como no WhatsApp Web) com duas opções:
-1. **Marcar como não lida** — seta `nao_lido` para 1 no contato
-2. **Etiquetar conversa** — submenu com etiquetas coloridas criadas pelo usuário
+Ao abrir uma conversa no Inbox que ainda não tenha mensagens no banco (ou que tenha poucas), o sistema buscará automaticamente o histórico de mensagens antigas diretamente da API da UAZAPI e salvará no banco para exibição.
 
-### Alterações
+### Como funciona
 
-**1. Migration SQL**
+A UAZAPI possui o endpoint `POST /chat/getMessages` que retorna mensagens anteriores de um chat. O sistema chamará esse endpoint para importar mensagens antigas quando o usuário abrir uma conversa.
 
-- Criar tabela `whatsapp_etiquetas` (id, user_id, nome, cor, criado_em) — etiquetas personalizadas do usuário
-- Criar tabela `whatsapp_contato_etiquetas` (id, contato_id FK, etiqueta_id FK) — relação N:N
-- RLS: usuários autenticados podem CRUD nas suas próprias etiquetas; admin e inbox compartilhado podem ver todas
-- Habilitar realtime na tabela de etiquetas dos contatos
+### Implementação
 
-**2. Componente `ConversaContextMenu.tsx`**
+**1. Nova Edge Function: `fetch-whatsapp-history`**
 
-- Usa `ContextMenu` (já existe no projeto via Radix)
-- Envolve cada item de conversa na lista
-- Opções:
-  - "Marcar como não lida" — faz `UPDATE whatsapp_contatos SET nao_lido = 1 WHERE id = contatoId`
-  - "Etiquetas" → submenu listando etiquetas do usuário com checkbox (toggle on/off)
-  - "Gerenciar etiquetas" → abre dialog para criar/editar/excluir etiquetas (nome + cor)
+- Recebe: `server_url`, `instance_token`, `instancia_id`, `telefone`
+- Chama `POST {server_url}/chat/getMessages` com o número formatado (`telefone@s.whatsapp.net`) e `count: 50`
+- Para cada mensagem retornada, faz upsert na tabela `whatsapp_mensagens` (evitando duplicatas via verificação de timestamp + conteúdo + direção)
+- Também cria/atualiza o registro em `whatsapp_contatos` se necessário
+- Retorna o número de mensagens importadas
 
-**3. Componente `GerenciarEtiquetasDialog.tsx`**
+**2. Atualizar `WhatsAppInbox.tsx`**
 
-- Dialog para criar novas etiquetas com nome e cor (palette de ~8 cores pré-definidas)
-- Listar etiquetas existentes com opção de renomear ou excluir
+- Ao selecionar um contato, após carregar as mensagens do banco, se houver poucas mensagens (ex: < 5), dispara automaticamente a chamada à edge function `fetch-whatsapp-history`
+- Adiciona um botão "Carregar histórico" no topo do chat para importação manual
+- Exibe um indicador de carregamento durante a importação
+- Após a importação, recarrega as mensagens do banco
 
-**4. Atualizar `WhatsAppInbox.tsx`**
+**3. Botão manual no cabeçalho do chat**
 
-- Envolver cada `<button>` de contato com `<ConversaContextMenu>`
-- Buscar etiquetas do usuário e etiquetas atribuídas a contatos
-- Exibir badges coloridos das etiquetas ao lado do nome do contato na lista
-- Adicionar filtro opcional por etiqueta no cabeçalho da lista
-
-**5. Atualizar interface `Contato`**
-
-- Adicionar campo `etiquetas` (array de {id, nome, cor}) populado via join
+- Ícone de "download/histórico" ao lado do nome do contato
+- Ao clicar, chama a edge function e importa mensagens antigas
+- Toast de sucesso com quantidade de mensagens importadas
 
 ### Detalhes técnicos
 
-- Tabelas novas:
+- O endpoint da UAZAPI para histórico: `POST /chat/getMessages` com body `{ id: "5511999999999@s.whatsapp.net", count: 50 }`
+- Deduplicação: antes de inserir, verifica se já existe mensagem com mesmo `instancia_id`, `telefone_remoto`, `timestamp_msg` e `conteudo`
+- Mensagens do histórico terão `direcao` definida pelo campo `fromMe` do payload
+- O conteúdo é extraído do campo `message.conversation` ou `message.extendedTextMessage.text`
+- Limite de 50 mensagens por requisição para não sobrecarregar
+- Sem necessidade de migration SQL (usa tabelas existentes)
 
-```text
-whatsapp_etiquetas
-├── id (uuid PK)
-├── user_id (uuid, ref auth.users)
-├── nome (text)
-├── cor (text, ex: '#25D366')
-└── criado_em (timestamptz)
-
-whatsapp_contato_etiquetas
-├── id (uuid PK)
-├── contato_id (uuid FK → whatsapp_contatos)
-├── etiqueta_id (uuid FK → whatsapp_etiquetas)
-└── unique(contato_id, etiqueta_id)
-```
-
-- O "Marcar como não lida" apenas seta `nao_lido = 1` — a lógica existente já trata contatos com `nao_lido > 0` como não lidos (badge, ordenação)
-- As etiquetas aparecem como pequenos badges coloridos abaixo da última mensagem no item da conversa
-- O ContextMenu usa os componentes Radix já importados no projeto (`src/components/ui/context-menu.tsx`)
-
-Arquivos afetados:
-- Nova migration SQL (2 tabelas + RLS)
-- Novo: `src/components/inbox/ConversaContextMenu.tsx`
-- Novo: `src/components/inbox/GerenciarEtiquetasDialog.tsx`
+### Arquivos afetados
+- Nova: `supabase/functions/fetch-whatsapp-history/index.ts`
 - Editado: `src/pages/WhatsAppInbox.tsx`
 
