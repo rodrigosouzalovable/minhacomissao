@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { CopyButton } from '@/components/CopyButton';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -22,6 +24,8 @@ import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy, Square, XCircle, CalendarIcon, X } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
