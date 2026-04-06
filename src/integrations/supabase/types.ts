@@ -1312,6 +1312,7 @@ export type Database = {
           credores: string[]
           criado_em: string
           id: string
+          inbox_compartilhado: boolean
           user_id: string
           visivel_ranking: boolean
         }
@@ -1321,6 +1322,7 @@ export type Database = {
           credores?: string[]
           criado_em?: string
           id?: string
+          inbox_compartilhado?: boolean
           user_id: string
           visivel_ranking?: boolean
         }
@@ -1330,6 +1332,7 @@ export type Database = {
           credores?: string[]
           criado_em?: string
           id?: string
+          inbox_compartilhado?: boolean
           user_id?: string
           visivel_ranking?: boolean
         }
@@ -2029,6 +2032,7 @@ export type Database = {
         Args: { p_acordo_id: string }
         Returns: undefined
       }
+      has_inbox_compartilhado: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

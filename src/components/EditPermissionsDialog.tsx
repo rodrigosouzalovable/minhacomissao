@@ -62,6 +62,7 @@ export function EditPermissionsDialog({
   );
   const [credores, setCredores] = useState<string[]>(['ume_novo_mundo']);
   const [visivelRanking, setVisivelRanking] = useState(true);
+  const [inboxCompartilhado, setInboxCompartilhado] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -82,23 +83,27 @@ export function EditPermissionsDialog({
       setSelectedTabs(permissions.abas_permitidas);
       setCredores((permissions as any).credores ?? ['ume_novo_mundo']);
       setVisivelRanking((permissions as any).visivel_ranking ?? true);
+      setInboxCompartilhado((permissions as any).inbox_compartilhado ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
       setVisivelRanking(true);
+      setInboxCompartilhado(false);
     }
   }, [permissions, open]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (permissions) {
-        const { error } = await supabase
-          .from('user_permissions')
-          .update({
+        const payload = {
             abas_permitidas: selectedTabs,
             credores,
             visivel_ranking: visivelRanking,
-          } as any)
+            inbox_compartilhado: inboxCompartilhado,
+          };
+      if (permissions) {
+        const { error } = await supabase
+          .from('user_permissions')
+          .update(payload as any)
           .eq('user_id', userId);
         if (error) throw error;
       } else {
@@ -106,9 +111,7 @@ export function EditPermissionsDialog({
           .from('user_permissions')
           .insert({
             user_id: userId,
-            abas_permitidas: selectedTabs,
-            credores,
-            visivel_ranking: visivelRanking,
+            ...payload,
           } as any);
         if (error) throw error;
       }
@@ -188,6 +191,17 @@ export function EditPermissionsDialog({
               <Switch
                 checked={visivelRanking}
                 onCheckedChange={setVisivelRanking}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Inbox Compartilhado</Label>
+                <p className="text-xs text-muted-foreground">Permite ver e responder todas as conversas do WhatsApp Inbox</p>
+              </div>
+              <Switch
+                checked={inboxCompartilhado}
+                onCheckedChange={setInboxCompartilhado}
               />
             </div>
           </div>

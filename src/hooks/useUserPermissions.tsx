@@ -23,6 +23,7 @@ export function useUserPermissions() {
     abasPermitidas: permissions?.abas_permitidas ?? null,
     credores: permissions?.credores ?? null,
     visivelRanking: permissions?.visivel_ranking ?? true,
+    inboxCompartilhado: permissions?.inbox_compartilhado ?? false,
     isLoading,
   };
 }

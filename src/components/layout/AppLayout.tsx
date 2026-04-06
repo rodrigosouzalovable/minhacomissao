@@ -133,7 +133,28 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Fetch inbox unread count
   const fetchUnreadCount = useCallback(async () => {
     if (!user) return;
-    // Get user's instances
+
+    if (isAdmin || abasPermitidas?.includes('/inbox')) {
+      // Check if user has shared inbox access
+      const { data: perms } = await supabase
+        .from('user_permissions')
+        .select('inbox_compartilhado')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const shared = isAdmin || (perms as any)?.inbox_compartilhado;
+
+      if (shared) {
+        const { count } = await supabase
+          .from('whatsapp_contatos')
+          .select('id', { count: 'exact', head: true })
+          .gt('nao_lido', 0);
+        setInboxUnreadCount(count ?? 0);
+        return;
+      }
+    }
+
+    // Default: only own instances
     const { data: instances } = await supabase
       .from('user_whatsapp_instances')
       .select('id')
@@ -152,7 +173,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       .gt('nao_lido', 0);
     
     setInboxUnreadCount(count ?? 0);
-  }, [user]);
+  }, [user, isAdmin, abasPermitidas]);
 
   useEffect(() => {
     fetchUnreadCount();
