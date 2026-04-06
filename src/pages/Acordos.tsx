@@ -741,27 +741,30 @@ export default function Acordos() {
       description: `${acordosParaExportar.length} acordo(s) exportado(s) para Excel.`
     });
   };
+  // Helper: check if an acordo has a parcela matching the selected date
+  const matchesDateFilter = (acordoId: string) => {
+    if (!filtroDataVencimento) return true;
+    const datas = todasDatasPorAcordo.get(acordoId) || [];
+    const selectedStr = format(filtroDataVencimento, 'yyyy-MM-dd');
+    return datas.some(d => d === selectedStr);
+  };
+
   const filteredAcordos = acordos.filter(acordo => {
     const searchLower = search.toLowerCase();
     const searchDigits = search.replace(/\D/g, '');
     const matchesSearch = acordo.cliente_nome.toLowerCase().includes(searchLower) || 
       (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesDateFilter(acordo.id);
   });
 
   // Acordos Pagos: têm pelo menos 1 parcela paga
   const acordosPagos = filteredAcordos.filter(acordo => acordosComPagamentosPagos.has(acordo.id));
 
   // Acordos Negociados: não têm nenhuma parcela paga E não têm parcelas vencidas
-  // Acordos com parcelas vencidas vão exclusivamente para a aba "Vencidas"
-  // Ordenados: 1º Aguardando boleto (laranja), 2º Normais
   const acordosNegociados = filteredAcordos.filter(acordo => !acordosComPagamentosPagos.has(acordo.id) && !acordosComParcelasVencidas.has(acordo.id)).sort((a, b) => {
-    // Primeiro critério: acordos sem boleto enviado vêm primeiro (laranja)
     if (!a.boleto_enviado && b.boleto_enviado) return -1;
     if (a.boleto_enviado && !b.boleto_enviado) return 1;
-    
-    // Segundo critério: ordenar por data_primeiro_pagamento (mais recente primeiro)
     const dataA = a.data_primeiro_pagamento || '';
     const dataB = b.data_primeiro_pagamento || '';
     return dataB.localeCompare(dataA);
@@ -785,8 +788,7 @@ export default function Acordos() {
       return dataB.localeCompare(dataA);
     });
 
-  // Acordos com Parcelas Próximas ao Vencimento: têm parcelas pendentes vencendo em 0-3 dias
-  // Ordenados pela data mais próxima primeiro
+  // Acordos com Parcelas Próximas ao Vencimento
   const acordosProximos = filteredAcordos
     .filter(acordo => acordosComParcelasProximas.has(acordo.id))
     .sort((a, b) => {
