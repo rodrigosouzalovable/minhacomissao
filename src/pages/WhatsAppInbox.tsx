@@ -159,6 +159,7 @@ export default function WhatsAppInbox() {
         ultima_mensagem,
         ultima_mensagem_em,
         nao_lido,
+        fixado,
         user_whatsapp_instances(nome)
       `)
       .order('ultima_mensagem_em', { ascending: false });
@@ -417,6 +418,9 @@ export default function WhatsAppInbox() {
       return (c.nome?.toLowerCase().includes(term) || c.telefone.includes(term));
     })
     .sort((a, b) => {
+      const aFixado = a.fixado ? 1 : 0;
+      const bFixado = b.fixado ? 1 : 0;
+      if (aFixado !== bFixado) return bFixado - aFixado;
       if (a.nao_lido > 0 && b.nao_lido === 0) return -1;
       if (a.nao_lido === 0 && b.nao_lido > 0) return 1;
       return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
