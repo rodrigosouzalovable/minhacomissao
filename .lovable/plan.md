@@ -1,45 +1,28 @@
 
 
-## Plano: Compartilhar WhatsApp Inbox com Funcionários
-
-### Problema atual
-O Inbox filtra instâncias por `user_id = auth.uid()`, então cada usuário só vê suas próprias instâncias. As políticas RLS de `whatsapp_contatos` e `whatsapp_mensagens` também restringem acesso às instâncias do próprio usuário. Mesmo que o admin libere a aba `/inbox` nas permissões, a funcionária não verá nenhuma conversa porque não possui instâncias próprias.
-
-### Solução
-Adicionar uma flag `inbox_compartilhado` na tabela `user_permissions`. Quando ativada pelo admin, o funcionário verá **todas** as instâncias e conversas no Inbox, podendo acompanhar e responder.
+## Plano: Filtro por data de vencimento nas abas de Acordos
 
 ### O que será feito
 
-**1. Migration: adicionar coluna e atualizar RLS**
-- Adicionar coluna `inbox_compartilhado` (boolean, default false) na tabela `user_permissions`
-- Criar função auxiliar `has_inbox_compartilhado(uuid)` (SECURITY DEFINER) que verifica se o usuário tem a flag ativa
-- Adicionar políticas RLS nas 3 tabelas:
-  - `user_whatsapp_instances`: SELECT para usuários com inbox compartilhado
-  - `whatsapp_contatos`: SELECT e UPDATE para usuários com inbox compartilhado
-  - `whatsapp_mensagens`: SELECT e UPDATE para usuários com inbox compartilhado
+Adicionar um seletor de data em cada aba da página "Meus Acordos". Ao selecionar uma data, apenas os acordos que possuem uma parcela com `data_prevista` igual à data selecionada serão exibidos.
 
-**2. Atualizar `EditPermissionsDialog.tsx`**
-- Adicionar um Switch "Inbox Compartilhado" abaixo do "Visível no Ranking"
-- Salvar/ler o campo `inbox_compartilhado` junto com as demais permissões
+### Implementação
 
-**3. Atualizar `WhatsAppInbox.tsx`**
-- Se o usuário for admin OU tiver `inbox_compartilhado = true`, buscar TODAS as instâncias ativas (sem filtro de `user_id`)
-- Caso contrário, manter o comportamento atual (só instâncias próprias)
+**Arquivo: `src/pages/Acordos.tsx`**
 
-**4. Atualizar `useUserPermissions.tsx`**
-- Expor o campo `inboxCompartilhado` no hook para uso no Inbox
-
-**5. Atualizar `AppLayout.tsx`**
-- Ajustar a contagem de não-lidos no badge do menu lateral para também considerar todas as instâncias quando o usuário tiver inbox compartilhado
+1. Adicionar estado `filtroDataVencimento` (tipo `Date | undefined`)
+2. Adicionar um `Popover` com `Calendar` (componente já existente no projeto) logo acima da lista de cards em cada `TabsContent`, ao lado do `BulkSendPanel` quando houver
+3. Na lógica de filtragem de cada aba, quando `filtroDataVencimento` estiver definida:
+   - Comparar com os Maps já existentes (`dataVencidaPorAcordo`, `dataProximaPorAcordo`) para abas que os usam
+   - Para as abas que não têm Map de datas, carregar também um Map geral `dataParcelaPorAcordo` que associa cada `acordo_id` às suas datas de parcelas pendentes (já carregadas no `useEffect` existente)
+   - Filtrar: mostrar apenas acordos que tenham pelo menos uma parcela pendente com `data_prevista === dataFormatada`
+4. A query existente no `useEffect` que já busca parcelas pendentes será estendida para guardar **todas** as datas de parcelas por acordo (não apenas a mais antiga/próxima), permitindo filtrar por qualquer data
+5. Botão de limpar filtro ao lado do date picker
 
 ### Detalhes técnicos
 
-Arquivos afetados:
-- Nova migration SQL
-- `src/components/EditPermissionsDialog.tsx`
-- `src/pages/WhatsAppInbox.tsx`
-- `src/hooks/useUserPermissions.tsx`
-- `src/components/layout/AppLayout.tsx`
-
-A flag é por usuário, controlada exclusivamente pelo admin. Não expõe dados sensíveis (tokens) — a funcionária vê contatos e mensagens mas não as credenciais das instâncias. O envio de mensagens funcionará normalmente porque o Inbox já usa `server_url` e `instance_token` da instância selecionada (que virá do SELECT permitido pela RLS).
+- O filtro de data é **adicional** aos filtros de busca e status já existentes
+- O estado `filtroDataVencimento` é compartilhado entre as abas (ao trocar de aba, o filtro continua ativo)
+- O componente `Calendar` com `Popover` já é usado no projeto (`DateRangePicker.tsx`), então seguiremos o mesmo padrão visual
+- Não há necessidade de migration ou mudança no banco
 
