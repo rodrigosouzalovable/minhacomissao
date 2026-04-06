@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2 } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +17,9 @@ import { ptBR } from 'date-fns/locale';
 import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { ChatInputBar } from '@/components/inbox/ChatInputBar';
 import { ConversaContextMenu } from '@/components/inbox/ConversaContextMenu';
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 interface Etiqueta {
   id: string;
   nome: string;
@@ -39,6 +41,7 @@ interface Contato {
   ultima_mensagem: string | null;
   ultima_mensagem_em: string | null;
   nao_lido: number;
+  fixado?: boolean;
   instancia_nome?: string | null;
 }
 
