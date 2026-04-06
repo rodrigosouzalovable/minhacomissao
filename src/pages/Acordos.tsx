@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { CopyButton } from '@/components/CopyButton';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -20,8 +22,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy, Square, XCircle } from 'lucide-react';
+import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy, Square, XCircle, CalendarIcon, X } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
@@ -381,6 +385,8 @@ export default function Acordos() {
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('todos');
   const [rankingAberto, setRankingAberto] = useState(false);
+  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
+  const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
 
   // Buscar perfil do operador para nome dinâmico
   const { data: profile } = useQuery({
@@ -621,12 +627,18 @@ export default function Acordos() {
         if (!quebraError && todasParcelasPendentes) {
           // Agrupar por acordo_id e pegar a MAX data_prevista de cada
           const ultimaParcelaPorAcordo = new Map<string, string>();
+          const allDatesMap = new Map<string, string[]>();
           todasParcelasPendentes.forEach(p => {
             const atual = ultimaParcelaPorAcordo.get(p.acordo_id);
             if (!atual || p.data_prevista > atual) {
               ultimaParcelaPorAcordo.set(p.acordo_id, p.data_prevista);
             }
+            // Collect all dates per acordo
+            const existing = allDatesMap.get(p.acordo_id) || [];
+            existing.push(p.data_prevista);
+            allDatesMap.set(p.acordo_id, existing);
           });
+          setTodasDatasPorAcordo(allDatesMap);
           
           // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
           ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
@@ -729,27 +741,30 @@ export default function Acordos() {
       description: `${acordosParaExportar.length} acordo(s) exportado(s) para Excel.`
     });
   };
+  // Helper: check if an acordo has a parcela matching the selected date
+  const matchesDateFilter = (acordoId: string) => {
+    if (!filtroDataVencimento) return true;
+    const datas = todasDatasPorAcordo.get(acordoId) || [];
+    const selectedStr = format(filtroDataVencimento, 'yyyy-MM-dd');
+    return datas.some(d => d === selectedStr);
+  };
+
   const filteredAcordos = acordos.filter(acordo => {
     const searchLower = search.toLowerCase();
     const searchDigits = search.replace(/\D/g, '');
     const matchesSearch = acordo.cliente_nome.toLowerCase().includes(searchLower) || 
       (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesDateFilter(acordo.id);
   });
 
   // Acordos Pagos: têm pelo menos 1 parcela paga
   const acordosPagos = filteredAcordos.filter(acordo => acordosComPagamentosPagos.has(acordo.id));
 
   // Acordos Negociados: não têm nenhuma parcela paga E não têm parcelas vencidas
-  // Acordos com parcelas vencidas vão exclusivamente para a aba "Vencidas"
-  // Ordenados: 1º Aguardando boleto (laranja), 2º Normais
   const acordosNegociados = filteredAcordos.filter(acordo => !acordosComPagamentosPagos.has(acordo.id) && !acordosComParcelasVencidas.has(acordo.id)).sort((a, b) => {
-    // Primeiro critério: acordos sem boleto enviado vêm primeiro (laranja)
     if (!a.boleto_enviado && b.boleto_enviado) return -1;
     if (a.boleto_enviado && !b.boleto_enviado) return 1;
-    
-    // Segundo critério: ordenar por data_primeiro_pagamento (mais recente primeiro)
     const dataA = a.data_primeiro_pagamento || '';
     const dataB = b.data_primeiro_pagamento || '';
     return dataB.localeCompare(dataA);
@@ -773,8 +788,7 @@ export default function Acordos() {
       return dataB.localeCompare(dataA);
     });
 
-  // Acordos com Parcelas Próximas ao Vencimento: têm parcelas pendentes vencendo em 0-3 dias
-  // Ordenados pela data mais próxima primeiro
+  // Acordos com Parcelas Próximas ao Vencimento
   const acordosProximos = filteredAcordos
     .filter(acordo => acordosComParcelasProximas.has(acordo.id))
     .sort((a, b) => {
@@ -938,6 +952,35 @@ export default function Acordos() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por cliente ou CPF..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full sm:w-[220px] justify-start text-left font-normal",
+                  !filtroDataVencimento && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {filtroDataVencimento ? format(filtroDataVencimento, "dd/MM/yyyy") : "Filtrar por vencimento"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={filtroDataVencimento}
+                onSelect={setFiltroDataVencimento}
+                locale={ptBR}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+          {filtroDataVencimento && (
+            <Button variant="ghost" size="icon" onClick={() => setFiltroDataVencimento(undefined)} title="Limpar filtro de data">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Status" />
