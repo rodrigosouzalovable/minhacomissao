@@ -88,7 +88,7 @@ export default function WhatsAppInbox() {
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const PAGE_SIZE = 100;
+  const PAGE_SIZE = 200;
 
   useEffect(() => {
     if (!user) return;
