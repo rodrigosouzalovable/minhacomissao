@@ -15,6 +15,13 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { ChatInputBar } from '@/components/inbox/ChatInputBar';
+import { ConversaContextMenu } from '@/components/inbox/ConversaContextMenu';
+
+interface Etiqueta {
+  id: string;
+  nome: string;
+  cor: string;
+}
 
 interface Instancia {
   id: string;
@@ -72,6 +79,8 @@ export default function WhatsAppInbox() {
   const [carregandoMensagens, setCarregandoMensagens] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
+  const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +101,38 @@ export default function WhatsAppInbox() {
     };
     fetchInstancias();
   }, [user, isAdmin, inboxCompartilhado]);
+
+  const fetchEtiquetas = useCallback(async () => {
+    const { data } = await supabase
+      .from('whatsapp_etiquetas')
+      .select('id, nome, cor')
+      .order('criado_em', { ascending: true });
+    if (data) setEtiquetas(data as Etiqueta[]);
+  }, []);
+
+  const fetchContatoEtiquetas = useCallback(async () => {
+    const { data } = await supabase
+      .from('whatsapp_contato_etiquetas')
+      .select('contato_id, etiqueta_id');
+    if (data) {
+      const map: Record<string, string[]> = {};
+      (data as any[]).forEach(row => {
+        if (!map[row.contato_id]) map[row.contato_id] = [];
+        map[row.contato_id].push(row.etiqueta_id);
+      });
+      setContatoEtiquetas(map);
+    }
+  }, []);
+
+  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); }, [fetchEtiquetas, fetchContatoEtiquetas]);
+
+  const handleEtiquetaToggle = (contatoId: string, etiquetaId: string, ativo: boolean) => {
+    setContatoEtiquetas(prev => {
+      const ids = prev[contatoId] || [];
+      if (ativo) return { ...prev, [contatoId]: [...ids, etiquetaId] };
+      return { ...prev, [contatoId]: ids.filter(id => id !== etiquetaId) };
+    });
+  };
 
   const fetchContatos = useCallback(async () => {
     let query = supabase
@@ -345,45 +386,71 @@ export default function WhatsAppInbox() {
                 <p className="text-xs mt-1">As mensagens aparecerão aqui quando chegarem</p>
               </div>
             ) : (
-              contatosFiltrados.map(contato => (
-                <button
-                  key={contato.id}
-                  onClick={() => handleSelectContato(contato)}
-                  className={cn(
-                    'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
-                    contatoAtivo?.id === contato.id && 'bg-accent'
-                  )}
-                >
-                  <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                    <Phone className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm text-foreground truncate block min-w-0 flex-1">
-                        {contato.nome || formatTelefone(contato.telefone)}
-                      </span>
-                      <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                        {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="text-xs text-muted-foreground truncate block min-w-0 flex-1">
-                        {contato.ultima_mensagem || 'Sem mensagens'}
-                      </p>
-                      {contato.nao_lido > 0 && (
-                        <Badge className="h-5 min-w-[20px] text-xs bg-primary text-primary-foreground shrink-0">
-                          {contato.nao_lido}
-                        </Badge>
+              contatosFiltrados.map(contato => {
+                const etIds = contatoEtiquetas[contato.id] || [];
+                const etBadges = etiquetas.filter(e => etIds.includes(e.id));
+                return (
+                  <ConversaContextMenu
+                    key={contato.id}
+                    contatoId={contato.id}
+                    etiquetas={etiquetas}
+                    contatoEtiquetaIds={etIds}
+                    onMarcarNaoLida={fetchContatos}
+                    onEtiquetaToggle={handleEtiquetaToggle}
+                    onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
+                  >
+                    <button
+                      onClick={() => handleSelectContato(contato)}
+                      className={cn(
+                        'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
+                        contatoAtivo?.id === contato.id && 'bg-accent'
                       )}
-                    </div>
-                    {getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
-                      <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
-                        {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))
+                    >
+                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                        <Phone className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm text-foreground truncate block min-w-0 flex-1">
+                            {contato.nome || formatTelefone(contato.telefone)}
+                          </span>
+                          <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                            {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <p className="text-xs text-muted-foreground truncate block min-w-0 flex-1">
+                            {contato.ultima_mensagem || 'Sem mensagens'}
+                          </p>
+                          {contato.nao_lido > 0 && (
+                            <Badge className="h-5 min-w-[20px] text-xs bg-primary text-primary-foreground shrink-0">
+                              {contato.nao_lido}
+                            </Badge>
+                          )}
+                        </div>
+                        {etBadges.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {etBadges.map(et => (
+                              <span
+                                key={et.id}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white leading-none"
+                                style={{ backgroundColor: et.cor }}
+                              >
+                                {et.nome}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
+                          <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
+                            {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </ConversaContextMenu>
+                );
+              }))
             )}
           </ScrollArea>
         </div>

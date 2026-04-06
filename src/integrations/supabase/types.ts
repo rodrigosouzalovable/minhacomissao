@@ -1795,6 +1795,42 @@ export type Database = {
           },
         ]
       }
+      whatsapp_contato_etiquetas: {
+        Row: {
+          contato_id: string
+          criado_em: string
+          etiqueta_id: string
+          id: string
+        }
+        Insert: {
+          contato_id: string
+          criado_em?: string
+          etiqueta_id: string
+          id?: string
+        }
+        Update: {
+          contato_id?: string
+          criado_em?: string
+          etiqueta_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_contato_etiquetas_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_contato_etiquetas_etiqueta_id_fkey"
+            columns: ["etiqueta_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_etiquetas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_contatos: {
         Row: {
           criado_em: string
@@ -1835,6 +1871,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_etiquetas: {
+        Row: {
+          cor: string
+          criado_em: string
+          id: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          cor?: string
+          criado_em?: string
+          id?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          cor?: string
+          criado_em?: string
+          id?: string
+          nome?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       whatsapp_fila: {
         Row: {
