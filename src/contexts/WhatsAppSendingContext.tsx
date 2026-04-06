@@ -23,6 +23,7 @@ interface WhatsAppInstance {
 interface LembreteTemplate {
   tipo_lembrete: string;
   mensagem: string;
+  audio_url?: string | null;
 }
 
 interface EnvioProgressItem {
