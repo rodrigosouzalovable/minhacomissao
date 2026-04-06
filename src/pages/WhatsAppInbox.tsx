@@ -266,8 +266,7 @@ export default function WhatsAppInbox() {
         toast({ title: 'Histórico completo', description: 'Todas as mensagens já estão carregadas. Role para cima para ver mensagens anteriores.' });
       }
     } catch (err: any) {
-      if (manual) {
-        toast({ title: 'Erro ao buscar histórico', description: 'Falha na comunicação com a API. Tente novamente.', variant: 'destructive' });
+      toast({ title: 'Erro ao buscar histórico', description: 'Falha na comunicação com a API. Tente novamente.', variant: 'destructive' });
       }
       console.error('Erro ao buscar histórico:', err);
     } finally {
