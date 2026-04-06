@@ -79,7 +79,8 @@ Deno.serve(async (req) => {
     let messages: any[] | null = null;
     let lastError = "";
     let endpointUsed = "";
-    let apiNotSupported = false;
+    let unsupportedCount = 0;
+    let totalEndpoints = endpoints.length;
 
     for (const ep of endpoints) {
       try {
