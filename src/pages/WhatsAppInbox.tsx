@@ -102,6 +102,38 @@ export default function WhatsAppInbox() {
     fetchInstancias();
   }, [user, isAdmin, inboxCompartilhado]);
 
+  const fetchEtiquetas = useCallback(async () => {
+    const { data } = await supabase
+      .from('whatsapp_etiquetas')
+      .select('id, nome, cor')
+      .order('criado_em', { ascending: true });
+    if (data) setEtiquetas(data as Etiqueta[]);
+  }, []);
+
+  const fetchContatoEtiquetas = useCallback(async () => {
+    const { data } = await supabase
+      .from('whatsapp_contato_etiquetas')
+      .select('contato_id, etiqueta_id');
+    if (data) {
+      const map: Record<string, string[]> = {};
+      (data as any[]).forEach(row => {
+        if (!map[row.contato_id]) map[row.contato_id] = [];
+        map[row.contato_id].push(row.etiqueta_id);
+      });
+      setContatoEtiquetas(map);
+    }
+  }, []);
+
+  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); }, [fetchEtiquetas, fetchContatoEtiquetas]);
+
+  const handleEtiquetaToggle = (contatoId: string, etiquetaId: string, ativo: boolean) => {
+    setContatoEtiquetas(prev => {
+      const ids = prev[contatoId] || [];
+      if (ativo) return { ...prev, [contatoId]: [...ids, etiquetaId] };
+      return { ...prev, [contatoId]: ids.filter(id => id !== etiquetaId) };
+    });
+  };
+
   const fetchContatos = useCallback(async () => {
     let query = supabase
       .from('whatsapp_contatos')
