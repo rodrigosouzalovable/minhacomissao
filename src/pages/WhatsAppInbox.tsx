@@ -255,19 +255,15 @@ export default function WhatsAppInbox() {
       
       if (data?.imported > 0) {
         await fetchMensagens();
-        if (manual) {
-          toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas` });
-        }
-      } else if (manual) {
-        if (data?.api_supported === false) {
-          toast({ 
-            title: 'Histórico indisponível', 
-            description: 'Esta instância da API não suporta recuperação de histórico antigo',
-            variant: 'destructive'
-          });
-        } else {
-          toast({ title: 'Histórico', description: 'Todas as mensagens já estão carregadas' });
-        }
+        toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas com sucesso` });
+      } else if (data?.api_supported === false) {
+        toast({ 
+          title: 'Histórico indisponível', 
+          description: 'Esta instância não suporta recuperação de histórico antigo. As mensagens salvas desde a conexão estão disponíveis ao rolar para cima.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({ title: 'Histórico completo', description: 'Todas as mensagens já estão carregadas. Role para cima para ver mensagens anteriores.' });
       }
     } catch (err: any) {
       if (manual) {
