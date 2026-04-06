@@ -181,32 +181,59 @@ export default function WhatsAppInbox() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchContatos]);
 
-  const fetchMensagens = useCallback(async () => {
+  const fetchMensagens = useCallback(async (loadMore = false) => {
     if (!contatoAtivo) return;
-    setCarregandoMensagens(true);
-    const { data } = await supabase
+    if (loadMore) {
+      setCarregandoAnteriores(true);
+    } else {
+      setCarregandoMensagens(true);
+    }
+
+    // For initial load, get most recent messages; for load-more, get older ones
+    const offset = loadMore ? (paginaAtual + 1) * PAGE_SIZE : 0;
+    
+    const { data, count } = await supabase
       .from('whatsapp_mensagens')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('instancia_id', contatoAtivo.instancia_id)
       .eq('telefone_remoto', contatoAtivo.telefone)
-      .order('timestamp_msg', { ascending: true })
-      .limit(100);
+      .order('timestamp_msg', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
 
     if (data) {
-      setMensagens(prev => {
-        const persistedMessages = data as Mensagem[];
-        const persistedKeys = new Set(persistedMessages.map(getMessageIdentity));
-        const unresolvedTempMessages = prev.filter(
-          msg => msg.id.startsWith('temp-') && !persistedKeys.has(getMessageIdentity(msg))
-        );
-
-        return [...persistedMessages, ...unresolvedTempMessages].sort(
-          (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
-        );
-      });
+      const newMessages = (data as Mensagem[]).reverse(); // back to ascending order
+      
+      if (loadMore) {
+        // Prepend older messages
+        setMensagens(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const unique = newMessages.filter(m => !existingIds.has(m.id));
+          return [...unique, ...prev];
+        });
+        setPaginaAtual(p => p + 1);
+        setTemMaisAnteriores(newMessages.length === PAGE_SIZE);
+      } else {
+        setMensagens(prev => {
+          const persistedMessages = newMessages;
+          const persistedKeys = new Set(persistedMessages.map(getMessageIdentity));
+          const unresolvedTempMessages = prev.filter(
+            msg => msg.id.startsWith('temp-') && !persistedKeys.has(getMessageIdentity(msg))
+          );
+          return [...persistedMessages, ...unresolvedTempMessages].sort(
+            (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
+          );
+        });
+        // Check if there are more messages beyond the first page
+        setTemMaisAnteriores((count || 0) > PAGE_SIZE);
+      }
     }
-    setCarregandoMensagens(false);
-  }, [contatoAtivo]);
+    
+    if (loadMore) {
+      setCarregandoAnteriores(false);
+    } else {
+      setCarregandoMensagens(false);
+    }
+  }, [contatoAtivo, paginaAtual]);
 
   useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
 
