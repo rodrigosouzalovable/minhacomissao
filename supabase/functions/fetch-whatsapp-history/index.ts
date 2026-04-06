@@ -24,9 +24,8 @@ Deno.serve(async (req) => {
     const chatId = `${telefone}@s.whatsapp.net`;
 
     // UAZAPI V2 endpoints for fetching chat messages
-    // Auth via query string OR header depending on endpoint
     const endpoints = [
-      // /chat/find with query string auth (UAZAPI v2 standard)
+      // /chat/find with query string auth
       {
         url: `${cleanUrl}/chat/find?token=${instance_token}`,
         method: "POST",
@@ -40,25 +39,39 @@ Deno.serve(async (req) => {
         body: { id: chatId, count: 50 },
         noHeader: false,
       },
-      // /chat/details with query string auth
+      // /chat/details with number field + query string auth
       {
         url: `${cleanUrl}/chat/details?token=${instance_token}`,
         method: "POST",
-        body: { id: chatId },
+        body: { number: telefone, count: 50 },
         noHeader: true,
       },
-      // /chat/getMessages with header auth (legacy)
+      // /chat/details with header auth
+      {
+        url: `${cleanUrl}/chat/details`,
+        method: "POST",
+        body: { number: telefone, count: 50 },
+        noHeader: false,
+      },
+      // /chat/getMessages (legacy) 
       {
         url: `${cleanUrl}/chat/getMessages`,
         method: "POST",
         body: { id: chatId, count: 50 },
         noHeader: false,
       },
-      // /chat/getMessages with query string auth
+      // /chat/getMessages with query string
       {
         url: `${cleanUrl}/chat/getMessages?token=${instance_token}`,
         method: "POST",
         body: { id: chatId, count: 50 },
+        noHeader: true,
+      },
+      // Try GET /chat/find with query params
+      {
+        url: `${cleanUrl}/chat/find?token=${instance_token}&id=${encodeURIComponent(chatId)}&count=50`,
+        method: "GET",
+        body: null,
         noHeader: true,
       },
     ];
