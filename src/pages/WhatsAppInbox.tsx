@@ -89,6 +89,11 @@ export default function WhatsAppInbox() {
   const [paginaAtual, setPaginaAtual] = useState(0);
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
+  const [novaConversaOpen, setNovaConversaOpen] = useState(false);
+  const [novoTelefone, setNovoTelefone] = useState('');
+  const [novaInstanciaId, setNovaInstanciaId] = useState('');
+  const [novaMensagem, setNovaMensagem] = useState('');
+  const [enviandoNova, setEnviandoNova] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
