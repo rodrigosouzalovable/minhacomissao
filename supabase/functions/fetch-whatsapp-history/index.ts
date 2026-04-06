@@ -89,11 +89,15 @@ Deno.serve(async (req) => {
           headers["token"] = instance_token;
         }
 
-        const uazapiRes = await fetch(ep.url, {
+        const fetchOptions: RequestInit = {
           method: ep.method,
           headers,
-          body: JSON.stringify(ep.body),
-        });
+        };
+        if (ep.body && ep.method !== "GET") {
+          fetchOptions.body = JSON.stringify(ep.body);
+        }
+
+        const uazapiRes = await fetch(ep.url, fetchOptions);
 
         const text = await uazapiRes.text();
         console.log(`[fetch-history] Response from ${ep.url}: status=${uazapiRes.status}, length=${text.length}`);
