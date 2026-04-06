@@ -83,8 +83,12 @@ export default function WhatsAppInbox() {
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [paginaAtual, setPaginaAtual] = useState(0);
+  const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
+  const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const PAGE_SIZE = 100;
 
   useEffect(() => {
     if (!user) return;
