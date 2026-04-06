@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -89,6 +89,8 @@ export default function WhatsAppInbox() {
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
+  const [etiquetaFilterOpen, setEtiquetaFilterOpen] = useState(false);
   const [paginaAtual, setPaginaAtual] = useState(0);
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
@@ -417,9 +419,15 @@ export default function WhatsAppInbox() {
 
   const contatosFiltrados = contatos
     .filter(c => {
-      if (!busca) return true;
-      const term = busca.toLowerCase();
-      return (c.nome?.toLowerCase().includes(term) || c.telefone.includes(term));
+      if (busca) {
+        const term = busca.toLowerCase();
+        if (!(c.nome?.toLowerCase().includes(term) || c.telefone.includes(term))) return false;
+      }
+      if (filtroEtiqueta) {
+        const ids = contatoEtiquetas[c.id] || [];
+        if (!ids.includes(filtroEtiqueta)) return false;
+      }
+      return true;
     })
     .sort((a, b) => {
       const aFixado = a.fixado ? 1 : 0;
@@ -525,6 +533,60 @@ export default function WhatsAppInbox() {
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
               <h2 className="font-semibold text-foreground flex-1">WhatsApp Inbox</h2>
+              <Popover open={etiquetaFilterOpen} onOpenChange={setEtiquetaFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 rounded-full",
+                      filtroEtiqueta
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "bg-primary/10 hover:bg-primary/20 text-primary"
+                    )}
+                    title="Filtrar por etiqueta"
+                  >
+                    <Tag className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-1" align="end">
+                  <div className="space-y-0.5">
+                    {etiquetas.length === 0 ? (
+                      <p className="text-xs text-muted-foreground p-2 text-center">Nenhuma etiqueta criada</p>
+                    ) : (
+                      etiquetas.map(et => (
+                        <button
+                          key={et.id}
+                          className={cn(
+                            "flex items-center gap-2 w-full rounded-sm px-2 py-1.5 text-sm hover:bg-accent transition-colors",
+                            filtroEtiqueta === et.id && "bg-accent"
+                          )}
+                          onClick={() => {
+                            setFiltroEtiqueta(filtroEtiqueta === et.id ? null : et.id);
+                            setEtiquetaFilterOpen(false);
+                          }}
+                        >
+                          <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
+                          <span className="flex-1 truncate text-left">{et.nome}</span>
+                          {filtroEtiqueta === et.id && <Check className="h-4 w-4 text-primary shrink-0" />}
+                        </button>
+                      ))
+                    )}
+                    {filtroEtiqueta && (
+                      <>
+                        <div className="border-t border-border my-1" />
+                        <button
+                          className="flex items-center gap-2 w-full rounded-sm px-2 py-1.5 text-sm hover:bg-accent text-muted-foreground transition-colors"
+                          onClick={() => { setFiltroEtiqueta(null); setEtiquetaFilterOpen(false); }}
+                        >
+                          <X className="h-3 w-3" />
+                          Limpar filtro
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Button
                 variant="ghost"
                 size="icon"
