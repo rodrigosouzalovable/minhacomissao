@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare, Volume2 } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare, Volume2, Square } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,9 @@ import { useWhatsAppSending } from '@/contexts/WhatsAppSendingContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 import {
   Popover,
@@ -53,6 +56,9 @@ export function PaymentReminders() {
   const [activeTab, setActiveTab] = useState('pendentes');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [minDelay, setMinDelay] = useState(5);
+  const [maxDelay, setMaxDelay] = useState(15);
+  const [tipoEnvio, setTipoEnvio] = useState<'texto' | 'audio'>('texto');
 
   // WhatsApp instances
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
@@ -202,7 +208,11 @@ export function PaymentReminders() {
       acordo_id: r.acordo_id,
     }));
 
-    startSending(queueItems, selectedInstances, templates, operadorNome);
+    startSending(queueItems, selectedInstances, templates, operadorNome, {
+      minDelayMin: minDelay,
+      maxDelayMin: maxDelay,
+      tipoEnvio,
+    });
   };
 
   const formatCurrency = (value: number) => {
@@ -639,8 +649,9 @@ export function PaymentReminders() {
                   <span className="text-sm font-medium">WhatsApp</span>
                   <div className="flex gap-2">
                     {isSending ? (
-                      <Button variant="destructive" size="sm" onClick={cancelSending}>
-                        Cancelar
+                      <Button variant="destructive" size="sm" onClick={cancelSending} className="gap-1.5">
+                        <Square className="h-3.5 w-3.5" />
+                        Cancelar Envio
                       </Button>
                     ) : (
                       <div className="flex items-center gap-2">
@@ -656,7 +667,7 @@ export function PaymentReminders() {
                           onClick={handleStartEnvios}
                         >
                           <Play className="h-3.5 w-3.5" />
-                          Enviar
+                          Iniciar Envio
                         </Button>
                       </div>
                     )}
@@ -682,6 +693,60 @@ export function PaymentReminders() {
                   {instances.length === 0 && (
                     <span className="text-xs text-muted-foreground">Nenhuma instância conectada</span>
                   )}
+                </div>
+
+                {/* Tipo de envio */}
+                <div className="flex items-center gap-4 pt-1">
+                  <span className="text-xs font-medium text-muted-foreground">Tipo de envio:</span>
+                  <RadioGroup
+                    value={tipoEnvio}
+                    onValueChange={(v) => setTipoEnvio(v as 'texto' | 'audio')}
+                    className="flex gap-4"
+                    disabled={isSending}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <RadioGroupItem value="texto" id="tipo-texto" />
+                      <Label htmlFor="tipo-texto" className="text-xs cursor-pointer flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3" /> Texto
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <RadioGroupItem value="audio" id="tipo-audio" />
+                      <Label htmlFor="tipo-audio" className="text-xs cursor-pointer flex items-center gap-1">
+                        <Volume2 className="h-3 w-3" /> Áudio
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {/* Intervalo de delay */}
+                <div className="flex items-center gap-3 pt-1">
+                  <span className="text-xs font-medium text-muted-foreground">Intervalo:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Min</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={maxDelay}
+                      value={minDelay}
+                      onChange={(e) => setMinDelay(Math.max(1, parseInt(e.target.value) || 1))}
+                      disabled={isSending}
+                      className="h-7 w-16 text-xs"
+                    />
+                    <span className="text-xs text-muted-foreground">min</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Max</span>
+                    <Input
+                      type="number"
+                      min={minDelay}
+                      value={maxDelay}
+                      onChange={(e) => setMaxDelay(Math.max(minDelay, parseInt(e.target.value) || minDelay))}
+                      disabled={isSending}
+                      className="h-7 w-16 text-xs"
+                    />
+                    <span className="text-xs text-muted-foreground">min</span>
+                  </div>
                 </div>
               </div>
 
