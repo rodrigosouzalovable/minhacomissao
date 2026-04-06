@@ -1,55 +1,45 @@
 
 
-## Plano: Configuração de tempo e tipo de envio no dialog de lembretes
+## Plano: Nova conversa, fixar conversas e proteção contra exclusão
 
-### O que será feito
+### 1. Botão "+" para nova conversa
 
-Adicionar ao dialog de Lembretes (`PaymentReminders.tsx`):
-1. Dois campos numéricos para configurar o intervalo de delay randomizado (mínimo e máximo em minutos)
-2. Um seletor de tipo de envio: "Mensagem de texto" ou "Áudio"
-3. Um botão "Iniciar Envio" que muda para "Cancelar Envio" quando ativo
-4. Envio na ordem de cima para baixo, pulando itens já marcados como "Enviado"
+Adicionar um ícone "+" ao lado do título "WhatsApp Inbox" (linha 454) que abre um Dialog com:
+- Campo de telefone (com código do país, placeholder "55...")
+- Select para escolher a instância
+- Campo de texto para a primeira mensagem
+- Botão "Conversa" que envia a mensagem via `send-whatsapp` e abre/cria o contato no inbox
+
+**Arquivo:** `src/pages/WhatsAppInbox.tsx` — novo state `novaConversaOpen`, novo componente Dialog inline ou extraído.
+
+### 2. Fixar conversa (pin)
+
+**Migração:** Adicionar coluna `fixado boolean default false` na tabela `whatsapp_contatos`.
+
+**Context menu:** Adicionar opção "Fixar conversa" / "Desafixar conversa" no `ConversaContextMenu.tsx` com ícone `Pin`. Ao clicar, faz update em `whatsapp_contatos.fixado`.
+
+**Ordenação:** No `contatosFiltrados` (linha 405-415), alterar o sort para priorizar `fixado = true` antes de `nao_lido`, exatamente como o WhatsApp Web. Conversas fixadas mostrarão um ícone de pin pequeno na lista.
+
+**Props:** Passar `fixado` e callback `onFixarToggle` para o `ConversaContextMenu`.
+
+### 3. Proteção contra exclusão de mensagens
+
+As mensagens já são persistidas no banco via webhook. O requisito "não sumir do sistema mesmo que apaguem no WhatsApp" já está atendido — o webhook salva e não há lógica de DELETE sincronizado. Nenhuma alteração necessária aqui, pois a UAZAPI não envia evento de exclusão que o sistema processe.
 
 ### Arquivos afetados
 
-**1. `src/components/PaymentReminders.tsx`**
-- Adicionar estados `minDelay` e `maxDelay` (em minutos, padrão 5 e 15) com inputs numéricos
-- Adicionar estado `tipoEnvio`: `'texto' | 'audio'`
-- Renderizar os campos dentro do bloco `border rounded-lg p-3 bg-muted/30` existente, abaixo do seletor de instâncias
-- Substituir o botão "Enviar" atual pelo botão "Iniciar Envio" / "Cancelar Envio"
-- Modificar `handleStartEnvios` para passar `minDelay`, `maxDelay` e `tipoEnvio` ao contexto
-- Quando `tipoEnvio === 'audio'`, o envio usará a edge function `send-whatsapp-audio` com o `audio_url` do template correspondente ao tipo do lembrete
+- `src/pages/WhatsAppInbox.tsx` — botão +, dialog nova conversa, ordenação com fixado
+- `src/components/inbox/ConversaContextMenu.tsx` — opção fixar/desafixar
+- Migração SQL — coluna `fixado` em `whatsapp_contatos`
 
-**2. `src/contexts/WhatsAppSendingContext.tsx`**
-- Alterar a assinatura de `startSending` para aceitar `options: { minDelayMin: number, maxDelayMin: number, tipoEnvio: 'texto' | 'audio' }`
-- Usar `minDelayMin` e `maxDelayMin` no cálculo do delay entre mensagens (em vez do hardcoded 5-15 min)
-- Quando `tipoEnvio === 'audio'`:
-  - Buscar o `audio_url` do template correspondente
-  - Se tiver áudio, chamar `send-whatsapp-audio`; se não tiver, fazer fallback para texto
-- Alterar a interface `LembreteTemplate` para incluir `audio_url?: string | null`
+### Detalhes técnicos
 
-### Detalhes da UI
-
-No bloco WhatsApp do dialog, abaixo dos chips de instância:
-
+**Ordenação final dos contatos:**
 ```text
-┌─────────────────────────────────────────────┐
-│ WhatsApp                  [Iniciar Envio]   │
-│ [chip inst1] [chip inst2]                   │
-│                                             │
-│ Tipo de envio:  (●) Texto  ( ) Áudio        │
-│ Intervalo:  Min [5] min   Max [15] min      │
-└─────────────────────────────────────────────┘
+1. fixado DESC (fixados primeiro)
+2. nao_lido > 0 (não lidos depois)
+3. ultima_mensagem_em DESC (mais recentes)
 ```
 
-- O botão muda para "Cancelar Envio" (vermelho) quando o envio está ativo
-- Os campos ficam desabilitados durante o envio
-- Os inputs de delay são do tipo number com min=1
-
-### Lógica de envio
-
-- Filtra `allPendingReminders` na ordem existente (hoje > vencidos > 3 dias)
-- Pula itens com status `enviado` (verifica via `getWhatsAppStatus`)
-- Para cada item pendente, usa round-robin nas instâncias selecionadas
-- Se tipo = áudio e não houver áudio configurado para aquele tipo de lembrete, faz fallback para texto e mostra toast informando
+**Dialog nova conversa:** Ao enviar, o sistema chama `send-whatsapp` com a instância selecionada. Se o contato já existir no banco, abre a conversa. Se não, o webhook criará o contato automaticamente e a lista será atualizada via realtime.
 
