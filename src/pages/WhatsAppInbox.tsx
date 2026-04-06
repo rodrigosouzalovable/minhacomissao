@@ -267,6 +267,15 @@ export default function WhatsAppInbox() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens]);
 
+  // Auto-fetch history when conversation has few messages
+  useEffect(() => {
+    if (!contatoAtivo || carregandoMensagens) return;
+    const realMessages = mensagens.filter(m => !m.id.startsWith('temp-'));
+    if (realMessages.length < 5) {
+      fetchHistorico(false);
+    }
+  }, [contatoAtivo, carregandoMensagens, mensagens.length]);
+
   useEffect(() => {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
     const markRead = async () => {
