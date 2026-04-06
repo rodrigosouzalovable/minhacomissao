@@ -454,6 +454,62 @@ export default function WhatsAppInbox() {
     ? instancias.find(i => i.id === contatoAtivo.instancia_id)
     : null;
 
+  const handleFixarToggle = async (contatoId: string, fixado: boolean) => {
+    await supabase.from('whatsapp_contatos').update({ fixado } as any).eq('id', contatoId);
+    setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
+  };
+
+  const handleNovaConversa = async () => {
+    if (!novoTelefone || !novaInstanciaId || !novaMensagem.trim()) {
+      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
+      return;
+    }
+    const instancia = instancias.find(i => i.id === novaInstanciaId);
+    if (!instancia) return;
+
+    const telefoneFormatado = novoTelefone.replace(/\D/g, '');
+    const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
+
+    setEnviandoNova(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          telefone: telefoneCompleto,
+          mensagem: novaMensagem.trim(),
+          uazapi_server_url: instancia.server_url,
+          uazapi_instance_token: instancia.instance_token,
+          instancia_id: instancia.id,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
+
+      toast({ title: 'Mensagem enviada', description: 'Conversa iniciada com sucesso' });
+      setNovaConversaOpen(false);
+      setNovoTelefone('');
+      setNovaMensagem('');
+      setNovaInstanciaId('');
+
+      // Wait for realtime to create contact, then try to select it
+      setTimeout(async () => {
+        await fetchContatos();
+        const { data: contatoData } = await supabase
+          .from('whatsapp_contatos')
+          .select('id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, nao_lido, fixado')
+          .eq('instancia_id', instancia.id)
+          .eq('telefone', telefoneCompleto)
+          .maybeSingle();
+        if (contatoData) {
+          handleSelectContato(contatoData as Contato);
+        }
+      }, 2000);
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+    } finally {
+      setEnviandoNova(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-5rem)] lg:h-[calc(100vh-2rem)] rounded-lg overflow-hidden border border-border bg-card">
