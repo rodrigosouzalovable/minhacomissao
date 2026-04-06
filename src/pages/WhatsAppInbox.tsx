@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -81,6 +82,7 @@ export default function WhatsAppInbox() {
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -204,6 +206,39 @@ export default function WhatsAppInbox() {
 
   useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
 
+  const fetchHistorico = useCallback(async (manual = false) => {
+    if (!contatoAtivo || carregandoHistorico) return;
+    const instancia = instancias.find(i => i.id === contatoAtivo.instancia_id);
+    if (!instancia) return;
+    setCarregandoHistorico(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-whatsapp-history', {
+        body: {
+          server_url: instancia.server_url,
+          instance_token: instancia.instance_token,
+          instancia_id: instancia.id,
+          telefone: contatoAtivo.telefone,
+        },
+      });
+      if (error) throw error;
+      if (data?.imported > 0) {
+        await fetchMensagens();
+        if (manual) {
+          toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas` });
+        }
+      } else if (manual) {
+        toast({ title: 'Histórico', description: 'Nenhuma mensagem nova encontrada' });
+      }
+    } catch (err: any) {
+      if (manual) {
+        toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+      }
+      console.error('Erro ao buscar histórico:', err);
+    } finally {
+      setCarregandoHistorico(false);
+    }
+  }, [contatoAtivo, instancias, carregandoHistorico, fetchMensagens, toast]);
+
   useEffect(() => {
     if (!contatoAtivo) return;
     const channel = supabase
@@ -231,6 +266,15 @@ export default function WhatsAppInbox() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens]);
+
+  // Auto-fetch history when conversation has few messages
+  useEffect(() => {
+    if (!contatoAtivo || carregandoMensagens) return;
+    const realMessages = mensagens.filter(m => !m.id.startsWith('temp-'));
+    if (realMessages.length < 5) {
+      fetchHistorico(false);
+    }
+  }, [contatoAtivo, carregandoMensagens, mensagens.length]);
 
   useEffect(() => {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
@@ -483,6 +527,20 @@ export default function WhatsAppInbox() {
                     {getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome) && ` · ${getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome)}`}
                   </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => fetchHistorico(true)}
+                  disabled={carregandoHistorico}
+                  title="Carregar histórico de mensagens"
+                >
+                  {carregandoHistorico ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <History className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
 
               <div
