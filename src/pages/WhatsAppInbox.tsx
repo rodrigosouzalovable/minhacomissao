@@ -83,8 +83,12 @@ export default function WhatsAppInbox() {
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [paginaAtual, setPaginaAtual] = useState(0);
+  const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
+  const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const PAGE_SIZE = 100;
 
   useEffect(() => {
     if (!user) return;
@@ -177,32 +181,59 @@ export default function WhatsAppInbox() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchContatos]);
 
-  const fetchMensagens = useCallback(async () => {
+  const fetchMensagens = useCallback(async (loadMore = false) => {
     if (!contatoAtivo) return;
-    setCarregandoMensagens(true);
-    const { data } = await supabase
+    if (loadMore) {
+      setCarregandoAnteriores(true);
+    } else {
+      setCarregandoMensagens(true);
+    }
+
+    // For initial load, get most recent messages; for load-more, get older ones
+    const offset = loadMore ? (paginaAtual + 1) * PAGE_SIZE : 0;
+    
+    const { data, count } = await supabase
       .from('whatsapp_mensagens')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('instancia_id', contatoAtivo.instancia_id)
       .eq('telefone_remoto', contatoAtivo.telefone)
-      .order('timestamp_msg', { ascending: true })
-      .limit(100);
+      .order('timestamp_msg', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
 
     if (data) {
-      setMensagens(prev => {
-        const persistedMessages = data as Mensagem[];
-        const persistedKeys = new Set(persistedMessages.map(getMessageIdentity));
-        const unresolvedTempMessages = prev.filter(
-          msg => msg.id.startsWith('temp-') && !persistedKeys.has(getMessageIdentity(msg))
-        );
-
-        return [...persistedMessages, ...unresolvedTempMessages].sort(
-          (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
-        );
-      });
+      const newMessages = (data as Mensagem[]).reverse(); // back to ascending order
+      
+      if (loadMore) {
+        // Prepend older messages
+        setMensagens(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const unique = newMessages.filter(m => !existingIds.has(m.id));
+          return [...unique, ...prev];
+        });
+        setPaginaAtual(p => p + 1);
+        setTemMaisAnteriores(newMessages.length === PAGE_SIZE);
+      } else {
+        setMensagens(prev => {
+          const persistedMessages = newMessages;
+          const persistedKeys = new Set(persistedMessages.map(getMessageIdentity));
+          const unresolvedTempMessages = prev.filter(
+            msg => msg.id.startsWith('temp-') && !persistedKeys.has(getMessageIdentity(msg))
+          );
+          return [...persistedMessages, ...unresolvedTempMessages].sort(
+            (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
+          );
+        });
+        // Check if there are more messages beyond the first page
+        setTemMaisAnteriores((count || 0) > PAGE_SIZE);
+      }
     }
-    setCarregandoMensagens(false);
-  }, [contatoAtivo]);
+    
+    if (loadMore) {
+      setCarregandoAnteriores(false);
+    } else {
+      setCarregandoMensagens(false);
+    }
+  }, [contatoAtivo, paginaAtual]);
 
   useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
 
@@ -221,17 +252,26 @@ export default function WhatsAppInbox() {
         },
       });
       if (error) throw error;
+      
       if (data?.imported > 0) {
         await fetchMensagens();
         if (manual) {
           toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas` });
         }
       } else if (manual) {
-        toast({ title: 'Histórico', description: 'Nenhuma mensagem nova encontrada' });
+        if (data?.api_supported === false) {
+          toast({ 
+            title: 'Histórico indisponível', 
+            description: 'Esta instância da API não suporta recuperação de histórico antigo',
+            variant: 'destructive'
+          });
+        } else {
+          toast({ title: 'Histórico', description: 'Todas as mensagens já estão carregadas' });
+        }
       }
     } catch (err: any) {
       if (manual) {
-        toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+        toast({ title: 'Erro ao buscar histórico', description: 'Falha na comunicação com a API. Tente novamente.', variant: 'destructive' });
       }
       console.error('Erro ao buscar histórico:', err);
     } finally {
@@ -291,6 +331,8 @@ export default function WhatsAppInbox() {
   const handleSelectContato = (contato: Contato) => {
     setContatoAtivo(contato);
     setMensagens([]);
+    setPaginaAtual(0);
+    setTemMaisAnteriores(true);
   };
 
   const handleEnviarTexto = async (texto: string) => {
@@ -569,9 +611,28 @@ export default function WhatsAppInbox() {
                 ) : mensagens.length === 0 ? (
                   <div className="text-center text-muted-foreground text-sm py-8">Nenhuma mensagem</div>
                 ) : (
-                  mensagens.map(msg => (
-                    <ChatMessage key={msg.id} msg={msg} formatMsgTime={formatMsgTime} />
-                  ))
+                  <>
+                    {temMaisAnteriores && (
+                      <div className="text-center py-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => fetchMensagens(true)}
+                          disabled={carregandoAnteriores}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {carregandoAnteriores ? (
+                            <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Carregando...</>
+                          ) : (
+                            'Carregar mensagens anteriores'
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                    {mensagens.map(msg => (
+                      <ChatMessage key={msg.id} msg={msg} formatMsgTime={formatMsgTime} />
+                    ))}
+                  </>
                 )}
                 <div ref={messagesEndRef} />
               </div>

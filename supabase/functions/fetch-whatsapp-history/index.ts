@@ -23,64 +23,156 @@ Deno.serve(async (req) => {
     const cleanUrl = server_url.replace(/\/+$/, '');
     const chatId = `${telefone}@s.whatsapp.net`;
 
-    // Try multiple endpoint patterns for UAZAPI
+    // UAZAPI V2 endpoints for fetching chat messages
     const endpoints = [
-      { url: `${cleanUrl}/chat/getMessages`, body: { id: chatId, count: 50 } },
-      { url: `${cleanUrl}/chat/getMessages`, body: { phone: chatId, count: 50 } },
-      { url: `${cleanUrl}/chat/getMessages/${instance_token}`, body: { id: chatId, count: 50 }, noHeader: true },
+      // /chat/find with query string auth
+      {
+        url: `${cleanUrl}/chat/find?token=${instance_token}`,
+        method: "POST",
+        body: { id: chatId, count: 50 },
+        noHeader: true,
+      },
+      // /chat/find with header auth
+      {
+        url: `${cleanUrl}/chat/find`,
+        method: "POST",
+        body: { id: chatId, count: 50 },
+        noHeader: false,
+      },
+      // /chat/details with number field + query string auth
+      {
+        url: `${cleanUrl}/chat/details?token=${instance_token}`,
+        method: "POST",
+        body: { number: telefone, count: 50 },
+        noHeader: true,
+      },
+      // /chat/details with header auth
+      {
+        url: `${cleanUrl}/chat/details`,
+        method: "POST",
+        body: { number: telefone, count: 50 },
+        noHeader: false,
+      },
+      // /chat/getMessages (legacy) 
+      {
+        url: `${cleanUrl}/chat/getMessages`,
+        method: "POST",
+        body: { id: chatId, count: 50 },
+        noHeader: false,
+      },
+      // /chat/getMessages with query string
+      {
+        url: `${cleanUrl}/chat/getMessages?token=${instance_token}`,
+        method: "POST",
+        body: { id: chatId, count: 50 },
+        noHeader: true,
+      },
+      // Try GET /chat/find with query params
+      {
+        url: `${cleanUrl}/chat/find?token=${instance_token}&id=${encodeURIComponent(chatId)}&count=50`,
+        method: "GET",
+        body: null,
+        noHeader: true,
+      },
     ];
 
     let messages: any[] | null = null;
     let lastError = "";
+    let endpointUsed = "";
+    let apiNotSupported = false;
 
     for (const ep of endpoints) {
       try {
-        console.log(`Trying endpoint: ${ep.url}`);
+        console.log(`[fetch-history] Trying: ${ep.method} ${ep.url}`);
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (!ep.noHeader) {
           headers["token"] = instance_token;
         }
 
-        const uazapiRes = await fetch(ep.url, {
-          method: "POST",
+        const fetchOptions: RequestInit = {
+          method: ep.method,
           headers,
-          body: JSON.stringify(ep.body),
-        });
+        };
+        if (ep.body && ep.method !== "GET") {
+          fetchOptions.body = JSON.stringify(ep.body);
+        }
+
+        const uazapiRes = await fetch(ep.url, fetchOptions);
 
         const text = await uazapiRes.text();
-        console.log(`Response from ${ep.url}: status=${uazapiRes.status}, length=${text.length}`);
+        console.log(`[fetch-history] Response from ${ep.url}: status=${uazapiRes.status}, length=${text.length}`);
 
         if (uazapiRes.ok) {
           let parsed;
           try { parsed = JSON.parse(text); } catch { parsed = null; }
 
-          if (Array.isArray(parsed)) {
-            messages = parsed;
-            break;
-          } else if (parsed?.messages && Array.isArray(parsed.messages)) {
-            messages = parsed.messages;
-            break;
-          } else if (parsed?.data && Array.isArray(parsed.data)) {
-            messages = parsed.data;
-            break;
+          // Extract messages array from various response formats
+          const candidates = [
+            parsed,
+            parsed?.messages,
+            parsed?.data,
+            parsed?.result,
+            parsed?.chat?.messages,
+          ];
+          
+          // Also check if chats array contains messages
+          if (parsed?.chats && Array.isArray(parsed.chats)) {
+            for (const chat of parsed.chats) {
+              if (chat.messages && Array.isArray(chat.messages)) {
+                candidates.push(chat.messages);
+              }
+            }
           }
-          console.log(`Endpoint OK but unexpected format:`, JSON.stringify(parsed).substring(0, 200));
+          
+          for (const candidate of candidates) {
+            if (Array.isArray(candidate) && candidate.length > 0) {
+              // Verify it looks like messages (has key/message or body/content)
+              const sample = candidate[0];
+              const looksLikeMessages = sample.key || sample.message || sample.body || 
+                                         sample.content || sample.messageTimestamp || sample.timestamp;
+              if (looksLikeMessages) {
+                messages = candidate;
+                endpointUsed = ep.url;
+                break;
+              }
+            }
+          }
+          
+          if (messages) break;
+          
+          console.log(`[fetch-history] OK but no messages in response:`, JSON.stringify(parsed).substring(0, 300));
+        } else if (uazapiRes.status === 404 || uazapiRes.status === 405) {
+          lastError = `${uazapiRes.status}: endpoint não suportado`;
+          console.log(`[fetch-history] Endpoint not supported: ${uazapiRes.status}`);
         } else {
           lastError = `${uazapiRes.status}: ${text.substring(0, 200)}`;
-          console.log(`Endpoint failed: ${lastError}`);
+          console.log(`[fetch-history] Failed: ${lastError}`);
         }
       } catch (e) {
         lastError = e.message;
-        console.log(`Endpoint error: ${e.message}`);
+        console.log(`[fetch-history] Error: ${e.message}`);
       }
     }
 
-    if (!messages || messages.length === 0) {
+    // If all endpoints returned 404/405, the API doesn't support history
+    if (!messages) {
+      const allUnsupported = lastError.includes("não suportado");
+      apiNotSupported = allUnsupported;
+      
       return new Response(
-        JSON.stringify({ success: true, imported: 0, debug: lastError || "no messages found" }),
+        JSON.stringify({ 
+          success: true, 
+          imported: 0, 
+          api_supported: !apiNotSupported,
+          debug: apiNotSupported 
+            ? "Esta instância da API não suporta recuperação de histórico de mensagens" 
+            : (lastError || "Nenhuma mensagem encontrada")
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log(`[fetch-history] Found ${messages.length} messages from ${endpointUsed}`);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -113,10 +205,13 @@ Deno.serve(async (req) => {
         message.imageMessage?.caption ||
         message.videoMessage?.caption ||
         message.documentMessage?.fileName ||
+        msg.body ||
+        msg.text ||
+        msg.content ||
         "";
 
       let tipo_conteudo = "texto";
-      const media_url: string | null = null;
+      let media_url: string | null = null;
 
       if (message.imageMessage) {
         tipo_conteudo = "imagem";
@@ -141,6 +236,13 @@ Deno.serve(async (req) => {
         if (!conteudo) conteudo = "📍 Localização";
       }
 
+      // Try to get media URL if available
+      const mediaMsg = message.imageMessage || message.audioMessage || message.pttMessage || 
+                        message.videoMessage || message.documentMessage;
+      if (mediaMsg) {
+        media_url = mediaMsg.url || mediaMsg.directPath || mediaMsg.mediaUrl || null;
+      }
+
       if (!conteudo) continue;
 
       let timestamp_msg: string;
@@ -149,6 +251,13 @@ Deno.serve(async (req) => {
           ? msg.messageTimestamp
           : parseInt(msg.messageTimestamp, 10);
         timestamp_msg = new Date(ts * 1000).toISOString();
+      } else if (msg.timestamp) {
+        const ts = typeof msg.timestamp === "number"
+          ? msg.timestamp
+          : parseInt(msg.timestamp, 10);
+        timestamp_msg = new Date(ts * 1000).toISOString();
+      } else if (msg.date || msg.created_at) {
+        timestamp_msg = new Date(msg.date || msg.created_at).toISOString();
       } else {
         continue;
       }
@@ -160,7 +269,7 @@ Deno.serve(async (req) => {
       toInsert.push({
         instancia_id: instancia_id,
         telefone_remoto: telefone,
-        nome_contato: msg.pushName || null,
+        nome_contato: msg.pushName || msg.notifyName || null,
         conteudo,
         direcao,
         timestamp_msg,
@@ -176,21 +285,21 @@ Deno.serve(async (req) => {
         const batch = toInsert.slice(i, i + 50);
         const { error } = await supabase.from("whatsapp_mensagens").insert(batch);
         if (error) {
-          console.error("Insert error:", error);
+          console.error("[fetch-history] Insert error:", error);
         } else {
           imported += batch.length;
         }
       }
     }
 
-    console.log(`Imported ${imported} messages for ${telefone}`);
+    console.log(`[fetch-history] Imported ${imported} messages for ${telefone}`);
 
     return new Response(
-      JSON.stringify({ success: true, imported }),
+      JSON.stringify({ success: true, imported, api_supported: true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    console.error("Error:", err);
+    console.error("[fetch-history] Error:", err);
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
