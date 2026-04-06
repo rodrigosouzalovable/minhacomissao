@@ -252,17 +252,26 @@ export default function WhatsAppInbox() {
         },
       });
       if (error) throw error;
+      
       if (data?.imported > 0) {
         await fetchMensagens();
         if (manual) {
           toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas` });
         }
       } else if (manual) {
-        toast({ title: 'Histórico', description: 'Nenhuma mensagem nova encontrada' });
+        if (data?.api_supported === false) {
+          toast({ 
+            title: 'Histórico indisponível', 
+            description: 'Esta instância da API não suporta recuperação de histórico antigo',
+            variant: 'destructive'
+          });
+        } else {
+          toast({ title: 'Histórico', description: 'Todas as mensagens já estão carregadas' });
+        }
       }
     } catch (err: any) {
       if (manual) {
-        toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+        toast({ title: 'Erro ao buscar histórico', description: 'Falha na comunicação com a API. Tente novamente.', variant: 'destructive' });
       }
       console.error('Erro ao buscar histórico:', err);
     } finally {
