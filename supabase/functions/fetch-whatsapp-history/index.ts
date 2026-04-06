@@ -79,7 +79,8 @@ Deno.serve(async (req) => {
     let messages: any[] | null = null;
     let lastError = "";
     let endpointUsed = "";
-    let apiNotSupported = false;
+    let unsupportedCount = 0;
+    let totalEndpoints = endpoints.length;
 
     for (const ep of endpoints) {
       try {
@@ -142,8 +143,8 @@ Deno.serve(async (req) => {
           
           console.log(`[fetch-history] OK but no messages in response:`, JSON.stringify(parsed).substring(0, 300));
         } else if (uazapiRes.status === 404 || uazapiRes.status === 405) {
+          unsupportedCount++;
           lastError = `${uazapiRes.status}: endpoint não suportado`;
-          console.log(`[fetch-history] Endpoint not supported: ${uazapiRes.status}`);
         } else {
           lastError = `${uazapiRes.status}: ${text.substring(0, 200)}`;
           console.log(`[fetch-history] Failed: ${lastError}`);
@@ -156,8 +157,8 @@ Deno.serve(async (req) => {
 
     // If all endpoints returned 404/405, the API doesn't support history
     if (!messages) {
-      const allUnsupported = lastError.includes("não suportado");
-      apiNotSupported = allUnsupported;
+      // If most endpoints returned 404/405, mark as unsupported
+      const apiNotSupported = unsupportedCount >= totalEndpoints / 2;
       
       return new Response(
         JSON.stringify({ 

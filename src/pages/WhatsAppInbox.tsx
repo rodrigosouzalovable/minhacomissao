@@ -88,7 +88,7 @@ export default function WhatsAppInbox() {
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const PAGE_SIZE = 100;
+  const PAGE_SIZE = 200;
 
   useEffect(() => {
     if (!user) return;
@@ -237,7 +237,7 @@ export default function WhatsAppInbox() {
 
   useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
 
-  const fetchHistorico = useCallback(async (manual = false) => {
+  const fetchHistorico = useCallback(async () => {
     if (!contatoAtivo || carregandoHistorico) return;
     const instancia = instancias.find(i => i.id === contatoAtivo.instancia_id);
     if (!instancia) return;
@@ -255,24 +255,18 @@ export default function WhatsAppInbox() {
       
       if (data?.imported > 0) {
         await fetchMensagens();
-        if (manual) {
-          toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas` });
-        }
-      } else if (manual) {
-        if (data?.api_supported === false) {
-          toast({ 
-            title: 'Histórico indisponível', 
-            description: 'Esta instância da API não suporta recuperação de histórico antigo',
-            variant: 'destructive'
-          });
-        } else {
-          toast({ title: 'Histórico', description: 'Todas as mensagens já estão carregadas' });
-        }
+        toast({ title: 'Histórico importado', description: `${data.imported} mensagens importadas com sucesso` });
+      } else if (data?.api_supported === false) {
+        toast({ 
+          title: 'Histórico indisponível', 
+          description: 'Esta instância não suporta recuperação de histórico antigo. As mensagens salvas desde a conexão estão disponíveis ao rolar para cima.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({ title: 'Histórico completo', description: 'Todas as mensagens já estão carregadas. Role para cima para ver mensagens anteriores.' });
       }
     } catch (err: any) {
-      if (manual) {
-        toast({ title: 'Erro ao buscar histórico', description: 'Falha na comunicação com a API. Tente novamente.', variant: 'destructive' });
-      }
+      toast({ title: 'Erro ao buscar histórico', description: 'Falha na comunicação com a API. Tente novamente.', variant: 'destructive' });
       console.error('Erro ao buscar histórico:', err);
     } finally {
       setCarregandoHistorico(false);
@@ -305,16 +299,29 @@ export default function WhatsAppInbox() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [mensagens]);
+  }, [mensagens.length]);
 
-  // Auto-fetch history when conversation has few messages
+  // Infinite scroll: load older messages when scrolling near the top
   useEffect(() => {
-    if (!contatoAtivo || carregandoMensagens) return;
-    const realMessages = mensagens.filter(m => !m.id.startsWith('temp-'));
-    if (realMessages.length < 5) {
-      fetchHistorico(false);
-    }
-  }, [contatoAtivo, carregandoMensagens, mensagens.length]);
+    const container = chatContainerRef.current;
+    if (!container || !contatoAtivo) return;
+
+    const handleScroll = () => {
+      if (container.scrollTop < 120 && temMaisAnteriores && !carregandoAnteriores && !carregandoMensagens) {
+        const oldScrollHeight = container.scrollHeight;
+        fetchMensagens(true).then(() => {
+          requestAnimationFrame(() => {
+            if (chatContainerRef.current) {
+              chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight - oldScrollHeight;
+            }
+          });
+        });
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [contatoAtivo, temMaisAnteriores, carregandoAnteriores, carregandoMensagens, fetchMensagens]);
 
   useEffect(() => {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
@@ -573,7 +580,7 @@ export default function WhatsAppInbox() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 shrink-0"
-                  onClick={() => fetchHistorico(true)}
+                  onClick={() => fetchHistorico()}
                   disabled={carregandoHistorico}
                   title="Carregar histórico de mensagens"
                 >
