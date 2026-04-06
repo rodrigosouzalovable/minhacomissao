@@ -2118,6 +2118,52 @@ export default function Acionamento() {
                 </div>
 
 
+
+              {isAdmin && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <h3 className="text-base font-semibold">📊 Relatório Diário WhatsApp</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Selecione qual instância será responsável por enviar o relatório diário e para qual número.
+                    </p>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label>Instância responsável</Label>
+                        <Select value={relatorioInstanciaId} onValueChange={setRelatorioInstanciaId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma instância" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {instances.map((inst) => (
+                              <SelectItem key={inst.id} value={inst.id}>
+                                {inst.nome || inst.server_url} {!inst.ativo ? '(Inativo)' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Telefone destino (com DDD)</Label>
+                        <Input
+                          placeholder="5562991672674"
+                          value={relatorioTelefone}
+                          onChange={(e) => setRelatorioTelefone(e.target.value.replace(/\D/g, ''))}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={relatorioAtivo} onCheckedChange={setRelatorioAtivo} />
+                        <Label className="text-sm">Envio ativo</Label>
+                      </div>
+                      <Button onClick={handleSalvarRelatorio} disabled={salvandoRelatorio} size="sm">
+                        {salvandoRelatorio ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                        Salvar configuração
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+
               {user?.email === 'rodrigo.rs2013@gmail.com' && (
                 <>
                   <Separator />
