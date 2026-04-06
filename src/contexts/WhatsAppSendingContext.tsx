@@ -246,25 +246,23 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          // Fallback to text if not sent as audio
-          if (!sentAsAudio || (tipoEnvio === 'texto')) {
-            if (tipoEnvio === 'texto' || !sentAsAudio) {
-              const mensagem = gerarMensagem(lembrete, templates, operadorNome);
-              const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-                body: {
-                  telefone: lembrete.cliente_telefone,
-                  mensagem,
-                  uazapi_server_url: instance.server_url,
-                  uazapi_instance_token: instance.instance_token,
-                  instancia_id: instance.id,
-                },
-              });
-              if (error || !data?.success) {
-                status = 'erro';
-                erroMsg = error?.message || data?.error || 'Erro desconhecido';
-              } else {
-                status = 'enviado';
-              }
+          // Send as text if tipo is texto, or audio fallback (no audio_url found)
+          if (tipoEnvio === 'texto' || !sentAsAudio) {
+            const mensagem = gerarMensagem(lembrete, templates, operadorNome);
+            const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+              body: {
+                telefone: lembrete.cliente_telefone,
+                mensagem,
+                uazapi_server_url: instance.server_url,
+                uazapi_instance_token: instance.instance_token,
+                instancia_id: instance.id,
+              },
+            });
+            if (error || !data?.success) {
+              status = 'erro';
+              erroMsg = error?.message || data?.error || 'Erro desconhecido';
+            } else {
+              status = 'enviado';
             }
           }
         } catch (err: any) {
