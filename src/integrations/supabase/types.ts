@@ -1227,6 +1227,41 @@ export type Database = {
         }
         Relationships: []
       }
+      relatorio_diario_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          instancia_id: string
+          telefone_destino: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          instancia_id: string
+          telefone_destino: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          instancia_id?: string
+          telefone_destino?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "relatorio_diario_config_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       retornos: {
         Row: {
           atualizado_em: string
