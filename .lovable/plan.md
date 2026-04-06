@@ -1,48 +1,65 @@
 
+Objetivo: corrigir o Inbox para que a conversa mostre todo o histórico possível, sem dizer “não há mensagens antigas” quando elas existem.
 
-## Plano: Importar histórico de mensagens antigas do WhatsApp
+O que encontrei
+- A função atual `fetch-whatsapp-history` está chamando `POST /chat/getMessages`.
+- Nos logs, esse endpoint responde `405 Method Not Allowed` repetidamente.
+- Nas referências da UAZAPI V2 que conferi, esse endpoint não aparece no conjunto principal de endpoints usados pelo projeto.
+- Além disso, o frontend hoje busca no banco só `100` mensagens (`WhatsAppInbox.tsx`), então mesmo que já exista histórico salvo no banco, ele não aparecerá inteiro.
+- Para áudio/imagem antigos, a função atual também não salva `media_url`, então mesmo quando importar, mídias antigas podem continuar indisponíveis.
 
-### O que será feito
+Plano de correção
+1. Corrigir a origem do histórico
+- Revisar a integração da edge function para usar o endpoint realmente suportado por esta instância da API, em vez de insistir em `/chat/getMessages`.
+- Testar as variações válidas de autenticação e rota já compatíveis com esse provedor.
+- Se a API dessa instância realmente não expuser histórico de mensagens antigas, o sistema deve parar de prometer essa restauração e passar a informar isso corretamente.
 
-Ao abrir uma conversa no Inbox que ainda não tenha mensagens no banco (ou que tenha poucas), o sistema buscará automaticamente o histórico de mensagens antigas diretamente da API da UAZAPI e salvará no banco para exibição.
+2. Ajustar a edge function para importação real
+- Reescrever `fetch-whatsapp-history` para:
+  - usar o endpoint suportado;
+  - interpretar corretamente texto, áudio, imagem, vídeo e documento;
+  - deduplicar de forma mais confiável;
+  - retornar um resultado claro: importadas, já existentes, mídia indisponível, endpoint não suportado.
+- Reaproveitar a lógica já existente de tratamento de mídia do fluxo de webhook, quando houver `messageId` suficiente para tentar recuperar arquivos.
 
-### Como funciona
+3. Exibir todo o histórico já salvo no banco
+- Remover o gargalo atual de `.limit(100)` no carregamento da conversa.
+- Implementar carregamento progressivo/paginação no chat:
+  - carregar as mensagens mais recentes primeiro;
+  - ao subir a conversa, buscar blocos anteriores;
+  - manter ordenação correta por `timestamp_msg`.
+- Isso resolve dois casos:
+  - conversas já antigas que já estão no banco;
+  - conversas que receberem histórico importado em lotes.
 
-A UAZAPI possui o endpoint `POST /chat/getMessages` que retorna mensagens anteriores de um chat. O sistema chamará esse endpoint para importar mensagens antigas quando o usuário abrir uma conversa.
+4. Melhorar a UX do botão do relógio
+- O botão não deve mais mostrar “nenhuma mensagem nova encontrada” quando, na verdade, houve falha de integração.
+- Separar os estados:
+  - histórico importado;
+  - conversa já estava completa no banco;
+  - API não suporta histórico;
+  - erro temporário de comunicação.
+- Mostrar toast/mensagem coerente com o resultado real.
 
-### Implementação
+5. Garantir compatibilidade com mídias antigas
+- Para mensagens antigas de áudio/imagem/documento:
+  - se a API devolver URL ou permitir download por `messageId`, salvar `media_url`;
+  - se não devolver mídia recuperável, exibir a mensagem textual corretamente sem quebrar a conversa.
+- Para áudio antigo, integrar com o fluxo já usado no projeto para download/normalização de mídia quando possível.
 
-**1. Nova Edge Function: `fetch-whatsapp-history`**
+Arquivos que devem ser ajustados
+- `supabase/functions/fetch-whatsapp-history/index.ts`
+- `src/pages/WhatsAppInbox.tsx`
+- possivelmente reaproveitar partes de:
+  - `supabase/functions/whatsapp-chatbot/index.ts`
+  - `src/components/inbox/ChatMessage.tsx`
 
-- Recebe: `server_url`, `instance_token`, `instancia_id`, `telefone`
-- Chama `POST {server_url}/chat/getMessages` com o número formatado (`telefone@s.whatsapp.net`) e `count: 50`
-- Para cada mensagem retornada, faz upsert na tabela `whatsapp_mensagens` (evitando duplicatas via verificação de timestamp + conteúdo + direção)
-- Também cria/atualiza o registro em `whatsapp_contatos` se necessário
-- Retorna o número de mensagens importadas
+Detalhes técnicos
+- Não vejo necessidade imediata de mudar RLS para esse conserto.
+- O principal problema hoje não é permissão: é endpoint incorreto + limite de 100 mensagens no frontend.
+- Se a API de histórico suportar identificador único de mensagem, a implementação ideal é persistir esse identificador para deduplicação melhor do que `timestamp + conteúdo + direção`.
 
-**2. Atualizar `WhatsAppInbox.tsx`**
-
-- Ao selecionar um contato, após carregar as mensagens do banco, se houver poucas mensagens (ex: < 5), dispara automaticamente a chamada à edge function `fetch-whatsapp-history`
-- Adiciona um botão "Carregar histórico" no topo do chat para importação manual
-- Exibe um indicador de carregamento durante a importação
-- Após a importação, recarrega as mensagens do banco
-
-**3. Botão manual no cabeçalho do chat**
-
-- Ícone de "download/histórico" ao lado do nome do contato
-- Ao clicar, chama a edge function e importa mensagens antigas
-- Toast de sucesso com quantidade de mensagens importadas
-
-### Detalhes técnicos
-
-- O endpoint da UAZAPI para histórico: `POST /chat/getMessages` com body `{ id: "5511999999999@s.whatsapp.net", count: 50 }`
-- Deduplicação: antes de inserir, verifica se já existe mensagem com mesmo `instancia_id`, `telefone_remoto`, `timestamp_msg` e `conteudo`
-- Mensagens do histórico terão `direcao` definida pelo campo `fromMe` do payload
-- O conteúdo é extraído do campo `message.conversation` ou `message.extendedTextMessage.text`
-- Limite de 50 mensagens por requisição para não sobrecarregar
-- Sem necessidade de migration SQL (usa tabelas existentes)
-
-### Arquivos afetados
-- Nova: `supabase/functions/fetch-whatsapp-history/index.ts`
-- Editado: `src/pages/WhatsAppInbox.tsx`
-
+Resultado esperado após a implementação
+- Se o provedor permitir histórico: ao clicar no relógio, o chat importa e mostra mensagens antigas reais, inclusive em lotes maiores.
+- Se o histórico já estiver salvo no banco: o usuário conseguirá navegar por toda a conversa, não só pelas últimas 100 mensagens.
+- Se a API não oferecer histórico retroativo nessa instância: o sistema deixará isso explícito e o botão não dará falso negativo.
