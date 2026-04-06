@@ -62,6 +62,7 @@ export function EditPermissionsDialog({
   );
   const [credores, setCredores] = useState<string[]>(['ume_novo_mundo']);
   const [visivelRanking, setVisivelRanking] = useState(true);
+  const [inboxCompartilhado, setInboxCompartilhado] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
