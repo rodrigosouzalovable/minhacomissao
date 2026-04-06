@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/context-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { MailOpen, Tag, Settings, Check } from 'lucide-react';
+import { MailOpen, Tag, Settings, Check, Pin } from 'lucide-react';
 import { GerenciarEtiquetasDialog } from './GerenciarEtiquetasDialog';
 
 interface Etiqueta {
@@ -25,9 +25,11 @@ interface Props {
   contatoId: string;
   etiquetas: Etiqueta[];
   contatoEtiquetaIds: string[];
+  fixado: boolean;
   onMarcarNaoLida: () => void;
   onEtiquetaToggle: (contatoId: string, etiquetaId: string, ativo: boolean) => void;
   onEtiquetasChange: () => void;
+  onFixarToggle: (contatoId: string, fixado: boolean) => void;
 }
 
 export function ConversaContextMenu({
@@ -35,9 +37,11 @@ export function ConversaContextMenu({
   contatoId,
   etiquetas,
   contatoEtiquetaIds,
+  fixado,
   onMarcarNaoLida,
   onEtiquetaToggle,
   onEtiquetasChange,
+  onFixarToggle,
 }: Props) {
   const { toast } = useToast();
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
@@ -70,6 +74,10 @@ export function ConversaContextMenu({
     onEtiquetaToggle(contatoId, etiquetaId, !isAtivo);
   };
 
+  const handleFixarToggle = () => {
+    onFixarToggle(contatoId, !fixado);
+  };
+
   return (
     <>
       <ContextMenu>
@@ -78,6 +86,10 @@ export function ConversaContextMenu({
           <ContextMenuItem onClick={handleMarcarNaoLida}>
             <MailOpen className="h-4 w-4 mr-2" />
             Marcar como não lida
+          </ContextMenuItem>
+          <ContextMenuItem onClick={handleFixarToggle}>
+            <Pin className="h-4 w-4 mr-2" />
+            {fixado ? 'Desafixar conversa' : 'Fixar conversa'}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuSub>
