@@ -56,6 +56,9 @@ export function PaymentReminders() {
   const [activeTab, setActiveTab] = useState('pendentes');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [minDelay, setMinDelay] = useState(5);
+  const [maxDelay, setMaxDelay] = useState(15);
+  const [tipoEnvio, setTipoEnvio] = useState<'texto' | 'audio'>('texto');
 
   // WhatsApp instances
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
