@@ -580,7 +580,7 @@ export default function WhatsAppInbox() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 shrink-0"
-                  onClick={() => fetchHistorico(true)}
+                  onClick={() => fetchHistorico()}
                   disabled={carregandoHistorico}
                   title="Carregar histórico de mensagens"
                 >
