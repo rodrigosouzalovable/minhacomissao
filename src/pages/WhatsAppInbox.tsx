@@ -782,9 +782,33 @@ export default function WhatsAppInbox() {
                         </Button>
                       </div>
                     )}
-                    {mensagens.map(msg => (
-                      <ChatMessage key={msg.id} msg={msg} formatMsgTime={formatMsgTime} />
-                    ))}
+                    {mensagens.map((msg, idx) => {
+                      const msgDate = new Date(msg.timestamp_msg);
+                      const msgDateStr = msgDate.toLocaleDateString('pt-BR');
+                      const prevMsg = idx > 0 ? mensagens[idx - 1] : null;
+                      const prevDateStr = prevMsg ? new Date(prevMsg.timestamp_msg).toLocaleDateString('pt-BR') : null;
+                      const showDateSep = !prevMsg || msgDateStr !== prevDateStr;
+
+                      let dateLabel = msgDateStr;
+                      const hoje = new Date();
+                      const ontem = new Date();
+                      ontem.setDate(ontem.getDate() - 1);
+                      if (msgDateStr === hoje.toLocaleDateString('pt-BR')) dateLabel = 'HOJE';
+                      else if (msgDateStr === ontem.toLocaleDateString('pt-BR')) dateLabel = 'ONTEM';
+
+                      return (
+                        <div key={msg.id}>
+                          {showDateSep && (
+                            <div className="flex justify-center my-3">
+                              <span className="bg-muted text-muted-foreground text-xs px-3 py-1 rounded-md shadow-sm">
+                                {dateLabel}
+                              </span>
+                            </div>
+                          )}
+                          <ChatMessage msg={msg} formatMsgTime={formatMsgTime} />
+                        </div>
+                      );
+                    })}
                   </>
                 )}
                 <div ref={messagesEndRef} />
