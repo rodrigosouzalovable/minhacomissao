@@ -73,9 +73,20 @@ Deno.serve(async (req) => {
       if (resolvedInstanciaId) {
         const agora = new Date().toISOString();
 
+        // Find existing contact to use the correct phone format
+        const suffix = telefoneCompleto.slice(-8);
+        const { data: existingContact } = await supabase
+          .from('whatsapp_contatos')
+          .select('id, telefone')
+          .eq('instancia_id', resolvedInstanciaId)
+          .like('telefone', `%${suffix}`)
+          .maybeSingle();
+
+        const telefoneParaSalvar = existingContact?.telefone || telefoneCompleto;
+
         await supabase.from('whatsapp_mensagens').insert({
           instancia_id: resolvedInstanciaId,
-          telefone_remoto: telefoneCompleto,
+          telefone_remoto: telefoneParaSalvar,
           conteudo: '🎵 Áudio enviado',
           direcao: 'saida',
           timestamp_msg: agora,
@@ -83,14 +94,6 @@ Deno.serve(async (req) => {
           tipo_conteudo: 'audio',
           media_url: audio_url,
         });
-
-        // Upsert contact
-        const { data: existingContact } = await supabase
-          .from('whatsapp_contatos')
-          .select('id')
-          .eq('instancia_id', resolvedInstanciaId)
-          .eq('telefone', telefoneCompleto)
-          .maybeSingle();
 
         if (existingContact) {
           await supabase.from('whatsapp_contatos').update({
