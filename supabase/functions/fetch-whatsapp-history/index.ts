@@ -115,17 +115,32 @@ Deno.serve(async (req) => {
             parsed?.chat?.messages,
           ];
           
+          // Also check if chats array contains messages
+          if (parsed?.chats && Array.isArray(parsed.chats)) {
+            for (const chat of parsed.chats) {
+              if (chat.messages && Array.isArray(chat.messages)) {
+                candidates.push(chat.messages);
+              }
+            }
+          }
+          
           for (const candidate of candidates) {
             if (Array.isArray(candidate) && candidate.length > 0) {
-              messages = candidate;
-              endpointUsed = ep.url;
-              break;
+              // Verify it looks like messages (has key/message or body/content)
+              const sample = candidate[0];
+              const looksLikeMessages = sample.key || sample.message || sample.body || 
+                                         sample.content || sample.messageTimestamp || sample.timestamp;
+              if (looksLikeMessages) {
+                messages = candidate;
+                endpointUsed = ep.url;
+                break;
+              }
             }
           }
           
           if (messages) break;
           
-          console.log(`[fetch-history] OK but unexpected format:`, JSON.stringify(parsed).substring(0, 300));
+          console.log(`[fetch-history] OK but no messages in response:`, JSON.stringify(parsed).substring(0, 300));
         } else if (uazapiRes.status === 404 || uazapiRes.status === 405) {
           lastError = `${uazapiRes.status}: endpoint não suportado`;
           console.log(`[fetch-history] Endpoint not supported: ${uazapiRes.status}`);
