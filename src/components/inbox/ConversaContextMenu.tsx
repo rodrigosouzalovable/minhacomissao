@@ -92,7 +92,13 @@ export function ConversaContextMenu({
                 </ContextMenuItem>
               ) : (
                 etiquetas.map(et => (
-                  <ContextMenuItem key={et.id} onClick={() => handleToggleEtiqueta(et.id)}>
+                  <ContextMenuItem
+                    key={et.id}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleToggleEtiqueta(et.id);
+                    }}
+                  >
                     <div className="flex items-center gap-2 w-full">
                       <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
                       <span className="flex-1 truncate">{et.nome}</span>
