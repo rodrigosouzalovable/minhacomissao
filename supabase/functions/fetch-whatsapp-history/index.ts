@@ -143,8 +143,8 @@ Deno.serve(async (req) => {
           
           console.log(`[fetch-history] OK but no messages in response:`, JSON.stringify(parsed).substring(0, 300));
         } else if (uazapiRes.status === 404 || uazapiRes.status === 405) {
+          unsupportedCount++;
           lastError = `${uazapiRes.status}: endpoint não suportado`;
-          console.log(`[fetch-history] Endpoint not supported: ${uazapiRes.status}`);
         } else {
           lastError = `${uazapiRes.status}: ${text.substring(0, 200)}`;
           console.log(`[fetch-history] Failed: ${lastError}`);
