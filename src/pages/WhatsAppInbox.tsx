@@ -237,7 +237,7 @@ export default function WhatsAppInbox() {
 
   useEffect(() => { fetchMensagens(); }, [fetchMensagens]);
 
-  const fetchHistorico = useCallback(async (manual = false) => {
+  const fetchHistorico = useCallback(async () => {
     if (!contatoAtivo || carregandoHistorico) return;
     const instancia = instancias.find(i => i.id === contatoAtivo.instancia_id);
     if (!instancia) return;
