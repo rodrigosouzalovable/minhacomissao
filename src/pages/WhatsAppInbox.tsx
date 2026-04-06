@@ -386,45 +386,71 @@ export default function WhatsAppInbox() {
                 <p className="text-xs mt-1">As mensagens aparecerão aqui quando chegarem</p>
               </div>
             ) : (
-              contatosFiltrados.map(contato => (
-                <button
-                  key={contato.id}
-                  onClick={() => handleSelectContato(contato)}
-                  className={cn(
-                    'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
-                    contatoAtivo?.id === contato.id && 'bg-accent'
-                  )}
-                >
-                  <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                    <Phone className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm text-foreground truncate block min-w-0 flex-1">
-                        {contato.nome || formatTelefone(contato.telefone)}
-                      </span>
-                      <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                        {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="text-xs text-muted-foreground truncate block min-w-0 flex-1">
-                        {contato.ultima_mensagem || 'Sem mensagens'}
-                      </p>
-                      {contato.nao_lido > 0 && (
-                        <Badge className="h-5 min-w-[20px] text-xs bg-primary text-primary-foreground shrink-0">
-                          {contato.nao_lido}
-                        </Badge>
+              contatosFiltrados.map(contato => {
+                const etIds = contatoEtiquetas[contato.id] || [];
+                const etBadges = etiquetas.filter(e => etIds.includes(e.id));
+                return (
+                  <ConversaContextMenu
+                    key={contato.id}
+                    contatoId={contato.id}
+                    etiquetas={etiquetas}
+                    contatoEtiquetaIds={etIds}
+                    onMarcarNaoLida={fetchContatos}
+                    onEtiquetaToggle={handleEtiquetaToggle}
+                    onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
+                  >
+                    <button
+                      onClick={() => handleSelectContato(contato)}
+                      className={cn(
+                        'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
+                        contatoAtivo?.id === contato.id && 'bg-accent'
                       )}
-                    </div>
-                    {getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
-                      <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
-                        {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))
+                    >
+                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                        <Phone className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm text-foreground truncate block min-w-0 flex-1">
+                            {contato.nome || formatTelefone(contato.telefone)}
+                          </span>
+                          <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                            {contato.ultima_mensagem_em && formatMsgTime(contato.ultima_mensagem_em)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <p className="text-xs text-muted-foreground truncate block min-w-0 flex-1">
+                            {contato.ultima_mensagem || 'Sem mensagens'}
+                          </p>
+                          {contato.nao_lido > 0 && (
+                            <Badge className="h-5 min-w-[20px] text-xs bg-primary text-primary-foreground shrink-0">
+                              {contato.nao_lido}
+                            </Badge>
+                          )}
+                        </div>
+                        {etBadges.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {etBadges.map(et => (
+                              <span
+                                key={et.id}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-white leading-none"
+                                style={{ backgroundColor: et.cor }}
+                              >
+                                {et.nome}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
+                          <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
+                            {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </ConversaContextMenu>
+                );
+              }))
             )}
           </ScrollArea>
         </div>
