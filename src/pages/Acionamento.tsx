@@ -191,6 +191,12 @@ export default function Acionamento() {
   const [sendingTest, setSendingTest] = useState(false);
   const [lembreteMensagensOpen, setLembreteMensagensOpen] = useState(false);
   
+  // Relatório diário config
+  const [relatorioInstanciaId, setRelatorioInstanciaId] = useState<string>('');
+  const [relatorioTelefone, setRelatorioTelefone] = useState<string>('');
+  const [relatorioAtivo, setRelatorioAtivo] = useState(true);
+  const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
+  
   // Multi-instance UAZAPI state
   const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
