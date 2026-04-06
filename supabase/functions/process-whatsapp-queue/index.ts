@@ -107,21 +107,26 @@ serve(async (req) => {
 
         if (instanciaId) {
           const agoraStr = new Date().toISOString();
+
+          // Find existing contact to use correct phone format
+          const suffix = mensagem.telefone.slice(-8);
+          const { data: existingContact } = await supabase
+            .from('whatsapp_contatos')
+            .select('id, telefone')
+            .eq('instancia_id', instanciaId)
+            .like('telefone', `%${suffix}`)
+            .maybeSingle();
+
+          const telefoneParaSalvar = existingContact?.telefone || mensagem.telefone;
+
           await supabase.from('whatsapp_mensagens').insert({
             instancia_id: instanciaId,
-            telefone_remoto: mensagem.telefone,
+            telefone_remoto: telefoneParaSalvar,
             conteudo: mensagem.mensagem,
             direcao: 'saida',
             timestamp_msg: agoraStr,
             lida: true,
           });
-
-          const { data: existingContact } = await supabase
-            .from('whatsapp_contatos')
-            .select('id')
-            .eq('instancia_id', instanciaId)
-            .eq('telefone', mensagem.telefone)
-            .maybeSingle();
 
           if (existingContact) {
             await supabase.from('whatsapp_contatos').update({
