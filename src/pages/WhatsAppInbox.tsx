@@ -267,7 +267,6 @@ export default function WhatsAppInbox() {
       }
     } catch (err: any) {
       toast({ title: 'Erro ao buscar histórico', description: 'Falha na comunicação com a API. Tente novamente.', variant: 'destructive' });
-      }
       console.error('Erro ao buscar histórico:', err);
     } finally {
       setCarregandoHistorico(false);
