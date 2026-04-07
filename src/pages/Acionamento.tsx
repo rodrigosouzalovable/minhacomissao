@@ -370,7 +370,7 @@ export default function Acionamento() {
     activeOnes.forEach(i => { initialStatus[i.id] = 'checking'; });
     setConnectionStatus(prev => ({ ...prev, ...initialStatus }));
 
-    await Promise.all(activeOnes.map(async (inst) => {
+    const results = await Promise.all(activeOnes.map(async (inst) => {
       try {
         const { data, error } = await supabase.functions.invoke('test-uazapi-connection', {
           body: { server_url: inst.server_url, instance_token: inst.instance_token }
@@ -378,10 +378,34 @@ export default function Acionamento() {
         if (error) throw error;
         const isConnected = data?.ok && data?.data?.status?.connected === true;
         setConnectionStatus(prev => ({ ...prev, [inst.id]: isConnected ? 'connected' : 'disconnected' }));
+        return { id: inst.id, connected: isConnected };
       } catch {
         setConnectionStatus(prev => ({ ...prev, [inst.id]: 'disconnected' }));
+        return { id: inst.id, connected: false };
       }
     }));
+
+    // Sync ativo flag in database based on real connection status
+    for (const result of results) {
+      const inst = activeOnes.find(i => i.id === result.id);
+      if (!inst) continue;
+      if (!result.connected && inst.ativo) {
+        await supabase.from('user_whatsapp_instances' as any).update({ ativo: false } as any).eq('id', result.id);
+      }
+    }
+    // Also re-activate instances that were marked inactive but are now connected
+    const inactiveOnes = instancesToCheck.filter(i => !i.ativo);
+    for (const inst of inactiveOnes) {
+      try {
+        const { data } = await supabase.functions.invoke('test-uazapi-connection', {
+          body: { server_url: inst.server_url, instance_token: inst.instance_token }
+        });
+        if (data?.ok && data?.data?.status?.connected === true) {
+          await supabase.from('user_whatsapp_instances' as any).update({ ativo: true } as any).eq('id', inst.id);
+          setConnectionStatus(prev => ({ ...prev, [inst.id]: 'connected' }));
+        }
+      } catch {}
+    }
     setCheckingConnections(false);
   }, []);
 
