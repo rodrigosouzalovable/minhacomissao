@@ -294,6 +294,32 @@ Deno.serve(async (req) => {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) continue;
 
+      // ========== HEALTH CHECK: Detect ban/disconnection ==========
+      const cleanServerUrlCheck = instDetails.server_url.replace(/\/+$/, "");
+      try {
+        const healthRes = await fetch(`${cleanServerUrlCheck}/instance/status`, {
+          method: "GET",
+          headers: { token: instDetails.instance_token },
+        });
+        const healthData = await healthRes.json().catch(() => ({}));
+        const connected = healthData?.connected || healthData?.status === "CONNECTED" || healthData?.state === "open";
+        if (!connected) {
+          console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: DESCONECTADO/BANIDO. Pausando.`);
+          await supabase.from("whatsapp_aquecimento_instancias")
+            .update({ status: "PAUSADO" })
+            .eq("id", inst.id);
+          await supabase.from("aquecimento_notificacoes").insert({
+            tipo: "desconexao",
+            instancia_id: inst.instancia_id,
+            mensagem: `🚫 Número "${instDetails.nome || inst.instancia_id.slice(0, 8)}" está desconectado ou banido. Aquecimento pausado automaticamente.`,
+          });
+          continue;
+        }
+      } catch (healthErr) {
+        console.error(`[AQUECIMENTO-AUTO] Health check falhou para ${instDetails.nome}: ${healthErr}`);
+        // Continue anyway — network error doesn't mean banned
+      }
+
       // ========== AGE-BASED PHASE CALCULATION ==========
       if (inst.fase_auto) {
         const diasConectado = Math.floor((Date.now() - new Date(instDetails.criado_em).getTime()) / 86400000);
@@ -362,7 +388,25 @@ Deno.serve(async (req) => {
         .gte("enviado_em", twoHoursAgo);
 
       const recentDestinos = new Set((recentInteractions || []).map((r: any) => r.instancia_destino_id));
-      const possibleDestinos = instanciasAquecimento.filter((d: any) => d.instancia_id !== inst.instancia_id && !recentDestinos.has(d.instancia_id));
+      
+      // ========== DESTINATION FREQUENCY CAP (max 3 received/day) ==========
+      const todayStartISO = new Date(new Date(spTime).setHours(0, 0, 0, 0)).toISOString();
+      const possibleDestinosAll = instanciasAquecimento.filter((d: any) => d.instancia_id !== inst.instancia_id && !recentDestinos.has(d.instancia_id));
+      
+      // Filter out destinations that already received >= 3 messages today
+      const filteredDestinos: any[] = [];
+      for (const d of possibleDestinosAll) {
+        const { count: receivedToday } = await supabase
+          .from("whatsapp_aquecimento_interacoes")
+          .select("id", { count: "exact", head: true })
+          .eq("instancia_destino_id", d.instancia_id)
+          .eq("tipo_interacao", "mensagem")
+          .gte("enviado_em", todayStartISO);
+        if ((receivedToday || 0) < 3) {
+          filteredDestinos.push(d);
+        }
+      }
+      const possibleDestinos = filteredDestinos;
 
       if (possibleDestinos.length === 0) {
         console.log(`[AQUECIMENTO-AUTO] Sem destino disponível para ${instDetails.nome}`);
