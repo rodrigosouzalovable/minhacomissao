@@ -202,9 +202,10 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     setActiveInstances(mapped);
 
     // Build timeline (last 5 interactions of today)
-    const timelineData: TimelineItem[] = interacoes.slice(0, 5).map((i: any) => ({
+    const timelineData: TimelineItem[] = interacoes.slice(0, 10).map((i: any) => ({
       id: i.id,
       tipo: i.tipo,
+      tipo_interacao: i.tipo_interacao || 'mensagem',
       conteudo: i.conteudo,
       status: i.status,
       enviado_em: i.enviado_em,
