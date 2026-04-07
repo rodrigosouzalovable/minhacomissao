@@ -682,7 +682,7 @@ export default function CampanhasVoz() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-lg">{selectedCampaign.name}</CardTitle>
                 <div className="flex gap-2 flex-wrap">
-                  {selectedCampaign.status !== 'enviando' && campaignContacts.length > 0 && (
+                  {(selectedCampaign.status !== 'enviando' || (selectedCampaign.status === 'enviando' && sendingCampaignId !== selectedCampaign.id)) && campaignContacts.length > 0 && (
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="flex flex-wrap gap-2 border rounded-md p-2 max-w-md">
                         {instances.map(inst => (
@@ -726,7 +726,7 @@ export default function CampanhasVoz() {
                         disabled={sendingCampaignId !== null || selectedInstanceIds.length === 0}
                       >
                         <Send className="h-4 w-4 mr-2" />
-                        Iniciar Envio
+                        {selectedCampaign.status === 'enviando' ? 'Retomar Envio' : 'Iniciar Envio'}
                       </Button>
                     </div>
                   )}
