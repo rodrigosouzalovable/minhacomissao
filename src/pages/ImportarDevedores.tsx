@@ -712,6 +712,9 @@ export default function ImportarDevedores() {
         variant: 'destructive',
       });
     } else {
+      if (isMontreal) {
+        await insertTelefonesFromRows(rows, user.id);
+      }
       toast({ title: 'Importação concluída', description: `${records.length} registros importados com sucesso.` });
       setImported(true);
       fetchImportacoes();
@@ -812,6 +815,7 @@ export default function ImportarDevedores() {
         variant: 'destructive',
       });
     } else {
+      await insertTelefonesFromRows(toImport, user.id);
       toast({ title: 'Importação concluída', description: `${inserted} registros importados (${montrealRows.filter(r => r.status_importacao === 'existe').length} ignorados por já existirem).` });
       setImported(true);
       fetchImportacoes();
