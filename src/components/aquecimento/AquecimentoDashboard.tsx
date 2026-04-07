@@ -31,6 +31,8 @@ interface ActiveInstance {
   ultima_msg_hora?: string;
   ultima_msg_tipo?: string;
   proximo_agendamento?: string;
+  em_carencia?: boolean;
+  dias_conectado?: number;
 }
 
 interface TimelineItem {
@@ -128,7 +130,7 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     const [configRes, instancesRes, allInstancesRes] = await Promise.all([
       supabase.from('whatsapp_aquecimento_config' as any).select('chave, valor'),
       supabase.from('whatsapp_aquecimento_instancias' as any).select('*').eq('status', 'EM_AQUECIMENTO'),
-      supabase.from('user_whatsapp_instances').select('id, nome'),
+      supabase.from('user_whatsapp_instances').select('id, nome, criado_em'),
     ]);
 
     // Parse config
@@ -179,9 +181,14 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     const agendamentos = (agendamentosRes.data as any[]) || [];
 
     // Build active instance cards
+    // Load instance creation dates for grace period check
+    const instanceCreatedMap = new Map((allInstancesRes.data || []).map((i: any) => [i.id, i.criado_em]));
+
     const mapped: ActiveInstance[] = activeData.map((inst: any) => {
       const lastInteraction = interacoes.find((i: any) => i.instancia_origem_id === inst.instancia_id);
       const nextSchedule = agendamentos.find((a: any) => a.instancia_origem_id === inst.instancia_id);
+      const criado_em = instanceCreatedMap.get(inst.instancia_id);
+      const diasConectado = criado_em ? Math.floor((Date.now() - new Date(criado_em).getTime()) / 86400000) : 999;
 
       return {
         id: inst.id,
@@ -196,6 +203,8 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         ultima_msg_hora: lastInteraction?.enviado_em || null,
         ultima_msg_tipo: lastInteraction?.tipo || null,
         proximo_agendamento: nextSchedule?.agendado_para || null,
+        em_carencia: diasConectado < 2,
+        dias_conectado: diasConectado,
       };
     });
 
@@ -284,7 +293,14 @@ export default function AquecimentoDashboard({ metrics }: Props) {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-semibold">{inst.instance_name}</CardTitle>
-                    <Badge variant="outline" className="text-xs">{faseLabel(inst.fase)}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      {inst.em_carencia && (
+                        <Badge variant="outline" className="text-[10px] border-yellow-500 text-yellow-600 dark:text-yellow-400">
+                          ⏳ Em carência ({inst.dias_conectado ?? 0}d)
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-xs">{faseLabel(inst.fase)}</Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
