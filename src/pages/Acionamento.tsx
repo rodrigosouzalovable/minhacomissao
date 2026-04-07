@@ -940,6 +940,13 @@ export default function Acionamento() {
     setLoadingProfile(false);
   }, []);
 
+  // Load WhatsApp profile when editing a connected instance
+  useEffect(() => {
+    if (editingInstance?.id && connectionStatus[editingInstance.id] === 'connected') {
+      loadWhatsAppProfile(editingInstance.server_url, editingInstance.instance_token);
+    }
+  }, [editingInstance?.id, connectionStatus, loadWhatsAppProfile]);
+
   const handleSaveProfileName = async () => {
     if (!editingInstance) return;
     setSavingProfileName(true);
