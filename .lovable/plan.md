@@ -1,46 +1,22 @@
 
 
-## Plano: Importação Inteligente Montreal (Atualização + Inserção)
+## Plano: Botão "Retomar Envio" para campanhas interrompidas
 
 ### Problema
-Ao reimportar uma planilha Montreal, o sistema atual insere TODOS os registros como novos, causando duplicação. O usuário precisa que o sistema identifique quais parcelas já existem e insira apenas as novas.
+O estado de envio vive apenas na memória (React Context). Ao atualizar a página ou sair, o loop para mas o status da campanha fica "enviando" no banco. A UI esconde o botão "Iniciar Envio" quando `status === 'enviando'` e só mostra progresso quando `sendingCampaignId` está ativo — resultado: nenhum botão aparece.
 
 ### Solução
 
-Adicionar um novo layout **"Montreal (Atualização)"** na página de importação que funciona em 3 etapas:
+**Arquivo: `src/pages/CampanhasVoz.tsx`**
 
-**Arquivo: `src/pages/ImportarDevedores.tsx`**
+1. Adicionar uma condição para campanhas com `status === 'enviando'` que **não** estejam sendo processadas pelo contexto (`sendingCampaignId !== selectedCampaign.id`):
+   - Mostrar botão **"Retomar Envio"** que chama `handleStartCampaign` normalmente (o sistema já filtra contatos pendentes)
+   - Mostrar também as opções de instância e delay, igual ao "Iniciar Envio"
 
-1. **Novo tipo de layout**: Adicionar opção `montreal_atualizacao` ao `CredorLayout`
+2. A lógica existente de `handleStartCampaign` já busca apenas contatos com `status = 'pendente'`, então retomar funciona sem alteração no contexto.
 
-2. **Parser inteligente com cruzamento**:
-   - Ler a planilha no formato Montreal (mesmas colunas: C=CNPJ/CPF, B=Razão Social, H=Nro Nota (contrato), I=Desdob (descrição), J=Valor, K=Dt Vencimento)
-   - Para cada CPF encontrado na planilha, buscar registros existentes no banco (`devedores` com `credor = 'MONTREAL'` e `ativo = true`)
-   - Comparar cada linha da planilha com o banco usando a chave: **CPF + contrato (Nro Nota) + descricao (Desdob) + data_vencimento**
-   - Classificar cada linha como: "Já existe" ou "Nova parcela"
-
-3. **Preview com status**:
-   - Mostrar tabela com badge indicando o status de cada linha (verde = já existe, amarelo = nova parcela, azul = cliente novo)
-   - Contador de resumo: X já existentes, Y novas parcelas, Z clientes novos
-
-4. **Importação seletiva**:
-   - Inserir apenas as linhas marcadas como "Nova parcela" ou "Cliente novo"
-   - Não duplicar registros que já estão no sistema
-
-### Detalhes técnicos
-
-| Aspecto | Detalhe |
-|---------|---------|
-| Chave de duplicidade | `cpf` + `contrato` + `descricao` (desdob) + `data_vencimento` |
-| Credor fixo | MONTREAL (automático) |
-| Busca no banco | Query por CPFs únicos da planilha em `devedores` WHERE `credor = 'MONTREAL'` AND `ativo = true` |
-| Telefones | Colunas D e E da planilha (FONE1, FONE2) |
-| Mapeamento colunas | B=nome, C=CPF, D=fone1, E=fone2, H=contrato, I=descricao, J=valor, K=vencimento |
-
-### Fluxo do usuário
-1. Seleciona layout "Montreal (Atualização)"
-2. Faz upload da planilha
-3. Sistema cruza com dados existentes e mostra preview
-4. Clica em "Importar" para inserir apenas as parcelas novas
-5. Recebe feedback de quantas foram inseridas vs ignoradas
+3. Cenários cobertos:
+   - Campanha "enviando" + contexto inativo → botão "Retomar Envio"
+   - Campanha "enviando" + contexto ativo → mostra progresso + cancelar (já funciona)
+   - Campanha outro status + contatos pendentes → botão "Iniciar Envio" (já funciona)
 
