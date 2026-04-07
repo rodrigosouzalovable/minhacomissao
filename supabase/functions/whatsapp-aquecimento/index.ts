@@ -5,6 +5,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Phase config: limits and allowed types per phase (age-based)
+const PHASE_CONFIG: Record<number, { limite: number; tipos: string[] }> = {
+  1: { limite: 3, tipos: ["texto"] },
+  2: { limite: 10, tipos: ["texto", "audio"] },
+  3: { limite: 20, tipos: ["texto", "audio"] },
+  4: { limite: 30, tipos: ["texto", "audio"] },
+  5: { limite: 50, tipos: ["texto", "audio"] },
+};
+
+function calcFaseByAge(diasConectado: number): number {
+  if (diasConectado < 7) return 1;
+  if (diasConectado < 14) return 2;
+  if (diasConectado < 21) return 3;
+  if (diasConectado < 28) return 4;
+  return 5;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -15,13 +32,13 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    console.log("[AQUECIMENTO] Iniciando ciclo de aquecimento...");
+    console.log("[AQUECIMENTO-AUTO] Iniciando ciclo automático...");
 
     // Check business hours (São Paulo timezone)
     const now = new Date();
     const spTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = spTime.getHours();
-    const dayOfWeek = spTime.getDay(); // 0=Sunday
+    const dayOfWeek = spTime.getDay();
 
     // Load config
     const { data: configRows } = await supabase.from("whatsapp_aquecimento_config").select("*");
@@ -32,68 +49,146 @@ Deno.serve(async (req) => {
     const [hInicio] = (horario.inicio || "08:00").split(":").map(Number);
     const [hFim] = (horario.fim || "18:00").split(":").map(Number);
     const diasAtivos: number[] = config.dias_ativos || [1, 2, 3, 4, 5, 6];
+    const delayConfig = config.delay_config || { min_segundos: 30, max_segundos: 180 };
 
     if (hour < hInicio || hour >= hFim) {
-      console.log(`[AQUECIMENTO] Fora do horário comercial (${hour}h). Pulando.`);
+      console.log(`[AQUECIMENTO-AUTO] Fora do horário comercial (${hour}h). Pulando.`);
       return new Response(JSON.stringify({ message: "Fora do horário comercial" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (!diasAtivos.includes(dayOfWeek)) {
-      console.log(`[AQUECIMENTO] Dia da semana ${dayOfWeek} não é dia ativo. Pulando.`);
+      console.log(`[AQUECIMENTO-AUTO] Dia ${dayOfWeek} não é ativo. Pulando.`);
       return new Response(JSON.stringify({ message: "Dia não ativo" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Get active warming instances
+    // ========== AUTO-ENROLLMENT ==========
+    // Find active instances NOT yet in aquecimento table
+    const { data: allActiveInstances } = await supabase
+      .from("user_whatsapp_instances")
+      .select("id, nome, server_url, instance_token, criado_em, ativo")
+      .eq("ativo", true);
+
+    const { data: existingAquecimento } = await supabase
+      .from("whatsapp_aquecimento_instancias")
+      .select("instancia_id");
+
+    const existingIds = new Set((existingAquecimento || []).map((e: any) => e.instancia_id));
+    const newInstances = (allActiveInstances || []).filter((i: any) => !existingIds.has(i.id));
+
+    for (const newInst of newInstances) {
+      const diasConectado = Math.floor((Date.now() - new Date(newInst.criado_em).getTime()) / 86400000);
+      const fase = calcFaseByAge(diasConectado);
+      const phaseConfig = PHASE_CONFIG[fase] || PHASE_CONFIG[1];
+
+      await supabase.from("whatsapp_aquecimento_instancias").insert({
+        instancia_id: newInst.id,
+        status: "EM_AQUECIMENTO",
+        fase,
+        fase_auto: true,
+        limite_diario: phaseConfig.limite,
+        dias_na_fase: 0,
+        interacoes_hoje: 0,
+        interacoes_total: 0,
+        respostas_recebidas: 0,
+      });
+
+      // Notify
+      await supabase.from("aquecimento_notificacoes").insert({
+        tipo: "novo_numero",
+        instancia_id: newInst.id,
+        mensagem: `🔌 Número "${newInst.nome || newInst.id.slice(0, 8)}" conectado. Aquecimento iniciado automaticamente na Fase ${fase}.`,
+      });
+
+      console.log(`[AQUECIMENTO-AUTO] Auto-enrolled: ${newInst.nome} (Fase ${fase}, ${diasConectado} dias)`);
+    }
+
+    // ========== GET ALL WARMING INSTANCES ==========
     const { data: instancias } = await supabase
       .from("whatsapp_aquecimento_instancias")
       .select("*")
       .eq("status", "EM_AQUECIMENTO");
 
     if (!instancias || instancias.length < 2) {
-      console.log("[AQUECIMENTO] Menos de 2 instâncias em aquecimento. Necessário pelo menos 2.");
-      return new Response(JSON.stringify({ message: "Necessário pelo menos 2 instâncias ativas" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      console.log("[AQUECIMENTO-AUTO] Menos de 2 instâncias ativas.");
+      return new Response(JSON.stringify({ message: "Necessário pelo menos 2 instâncias ativas", enrolled: newInstances.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Load instance details (server_url, instance_token)
+    // Load instance details
     const instanciaIds = instancias.map((i: any) => i.instancia_id);
     const { data: whatsappInstances } = await supabase
       .from("user_whatsapp_instances")
-      .select("id, nome, server_url, instance_token")
+      .select("id, nome, server_url, instance_token, criado_em")
       .in("id", instanciaIds);
 
     const instanceMap = new Map((whatsappInstances || []).map((i: any) => [i.id, i]));
 
-    // Load limits per phase
-    const limitesPorFase = config.limites_por_fase || { fase1: 10, fase2: 15, fase3: 25, fase4: 30 };
-    const diasPorFase = config.dias_por_fase || { fase1: 7, fase2: 7, fase3: 7, fase4: 7 };
-    const delayConfig = config.delay_config || { min_segundos: 30, max_segundos: 180 };
-
     let totalEnviados = 0;
 
     for (const inst of instancias) {
-      // Reset interacoes_hoje and increment dias_na_fase if last interaction was a different day
+      const instDetails = instanceMap.get(inst.instancia_id);
+      if (!instDetails) continue;
+
+      // ========== AGE-BASED PHASE CALCULATION ==========
+      if (inst.fase_auto) {
+        const diasConectado = Math.floor((Date.now() - new Date(instDetails.criado_em).getTime()) / 86400000);
+        const faseCalculada = calcFaseByAge(diasConectado);
+        const phaseConfig = PHASE_CONFIG[faseCalculada] || PHASE_CONFIG[1];
+
+        if (faseCalculada !== inst.fase) {
+          const faseAnterior = inst.fase;
+          await supabase
+            .from("whatsapp_aquecimento_instancias")
+            .update({ fase: faseCalculada, limite_diario: phaseConfig.limite, dias_na_fase: 0 })
+            .eq("id", inst.id);
+          inst.fase = faseCalculada;
+          inst.limite_diario = phaseConfig.limite;
+
+          // Notify phase change
+          if (faseCalculada === 5) {
+            await supabase.from("aquecimento_notificacoes").insert({
+              tipo: "aquecido",
+              instancia_id: inst.instancia_id,
+              mensagem: `✅ Número "${instDetails.nome || inst.instancia_id.slice(0, 8)}" está AQUECIDO! Pronto para enviar até ${phaseConfig.limite} mensagens/dia.`,
+            });
+            await supabase
+              .from("whatsapp_aquecimento_instancias")
+              .update({ status: "AQUECIDO" })
+              .eq("id", inst.id);
+            console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome} está AQUECIDO!`);
+            continue; // Don't send more messages for this instance
+          } else {
+            await supabase.from("aquecimento_notificacoes").insert({
+              tipo: "mudanca_fase",
+              instancia_id: inst.instancia_id,
+              mensagem: `📈 Número "${instDetails.nome || inst.instancia_id.slice(0, 8)}" avançou de Fase ${faseAnterior} para Fase ${faseCalculada}. Agora enviará ${phaseConfig.limite} mensagens/dia.`,
+            });
+          }
+          console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: Fase ${faseAnterior} → ${faseCalculada}`);
+        }
+      }
+
+      // ========== RESET DAILY COUNTER ==========
       if (inst.ultima_interacao) {
         const lastDate = new Date(inst.ultima_interacao).toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" });
         const todayDate = spTime.toLocaleDateString("en-US");
         if (lastDate !== todayDate) {
           await supabase
             .from("whatsapp_aquecimento_instancias")
-            .update({ interacoes_hoje: 0, dias_na_fase: inst.dias_na_fase + 1 })
+            .update({ interacoes_hoje: 0 })
             .eq("id", inst.id);
           inst.interacoes_hoje = 0;
-          inst.dias_na_fase = inst.dias_na_fase + 1;
         }
       }
 
-      // Check daily limit
-      const faseKey = `fase${inst.fase}`;
-      const limite = limitesPorFase[faseKey] || inst.limite_diario;
+      // ========== CHECK DAILY LIMIT ==========
+      const phaseConfig = PHASE_CONFIG[inst.fase] || PHASE_CONFIG[1];
+      const limite = phaseConfig.limite;
       if (inst.interacoes_hoje >= limite) {
-        console.log(`[AQUECIMENTO] Instância ${inst.instancia_id} atingiu limite diário (${inst.interacoes_hoje}/${limite})`);
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: limite atingido (${inst.interacoes_hoje}/${limite})`);
         continue;
       }
 
-      // Select random destination (different instance, not interacted in last 2h)
+      // ========== SELECT DESTINATION (not interacted in last 2h) ==========
       const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
       const { data: recentInteractions } = await supabase
         .from("whatsapp_aquecimento_interacoes")
@@ -105,18 +200,16 @@ Deno.serve(async (req) => {
       const possibleDestinos = instancias.filter((d: any) => d.instancia_id !== inst.instancia_id && !recentDestinos.has(d.instancia_id));
 
       if (possibleDestinos.length === 0) {
-        console.log(`[AQUECIMENTO] Sem destino disponível para ${inst.instancia_id}`);
+        console.log(`[AQUECIMENTO-AUTO] Sem destino disponível para ${instDetails.nome}`);
         continue;
       }
 
       const destino = possibleDestinos[Math.floor(Math.random() * possibleDestinos.length)];
-      const origemDetails = instanceMap.get(inst.instancia_id);
       const destinoDetails = instanceMap.get(destino.instancia_id);
+      if (!destinoDetails) continue;
 
-      if (!origemDetails || !destinoDetails) continue;
-
-      // Get dialogue for current phase (texto + audio for phase 2+)
-      const tiposPermitidos = inst.fase >= 2 ? ["texto", "audio"] : ["texto"];
+      // ========== SELECT DIALOGUE ==========
+      const tiposPermitidos = phaseConfig.tipos;
       const { data: dialogos } = await supabase
         .from("whatsapp_aquecimento_dialogos")
         .select("*")
@@ -125,61 +218,57 @@ Deno.serve(async (req) => {
         .in("tipo", tiposPermitidos);
 
       if (!dialogos || dialogos.length === 0) {
-        console.log("[AQUECIMENTO] Sem diálogos disponíveis");
+        console.log("[AQUECIMENTO-AUTO] Sem diálogos disponíveis");
         continue;
       }
 
-      const dialogo = dialogos[Math.floor(Math.random() * dialogos.length)];
+      // Check content not sent to same destination recently (last 24h)
+      const oneDayAgo = new Date(Date.now() - 24 * 3600000).toISOString();
+      const { data: recentContent } = await supabase
+        .from("whatsapp_aquecimento_interacoes")
+        .select("conteudo")
+        .eq("instancia_origem_id", inst.instancia_id)
+        .eq("instancia_destino_id", destino.instancia_id)
+        .gte("enviado_em", oneDayAgo);
 
-      // Extract phone number from server_url or instance name
-      // The destino phone is typically in the instance name or we need to extract from server_url
-      // For UAZAPI, the phone is part of the instance configuration
-      // We'll use the instance_token to send via the origin's API
+      const usedContent = new Set((recentContent || []).map((r: any) => r.conteudo));
+      const availableDialogos = dialogos.filter((d: any) => !usedContent.has(d.conteudo));
+      const dialogo = availableDialogos.length > 0
+        ? availableDialogos[Math.floor(Math.random() * availableDialogos.length)]
+        : dialogos[Math.floor(Math.random() * dialogos.length)]; // fallback if all used
+
+      // ========== SEND MESSAGE ==========
       const destinoPhone = destinoDetails.nome?.replace(/\D/g, "") || "";
       if (!destinoPhone) {
-        console.log(`[AQUECIMENTO] Não foi possível extrair telefone do destino ${destinoDetails.nome}`);
+        console.log(`[AQUECIMENTO-AUTO] Não extrair telefone de ${destinoDetails.nome}`);
         continue;
       }
 
-      // Send message via UAZAPI
-      const serverUrl = origemDetails.server_url;
-      const token = origemDetails.instance_token;
+      const serverUrl = instDetails.server_url;
+      const token = instDetails.instance_token;
 
       try {
         let sendRes: Response;
-        let sendData: any;
         const cleanServerUrl = serverUrl.replace(/\/+$/, "");
         const destinoNumero = `55${destinoPhone}@s.whatsapp.net`;
 
         if (dialogo.tipo === "audio") {
-          // Send audio PTT
-          const sendUrl = `${cleanServerUrl}/send/media`;
-          sendRes = await fetch(sendUrl, {
+          sendRes = await fetch(`${cleanServerUrl}/send/media`, {
             method: "POST",
             headers: { "Content-Type": "application/json", token },
-            body: JSON.stringify({
-              number: destinoNumero,
-              type: "ptt",
-              file: dialogo.conteudo, // audio URL
-            }),
+            body: JSON.stringify({ number: destinoNumero, type: "ptt", file: dialogo.conteudo }),
           });
         } else {
-          // Send text
-          const sendUrl = `${cleanServerUrl}/send/text`;
-          sendRes = await fetch(sendUrl, {
+          sendRes = await fetch(`${cleanServerUrl}/send/text`, {
             method: "POST",
             headers: { "Content-Type": "application/json", token },
-            body: JSON.stringify({
-              number: destinoNumero,
-              text: dialogo.conteudo,
-            }),
+            body: JSON.stringify({ number: destinoNumero, text: dialogo.conteudo }),
           });
         }
 
-        sendData = await sendRes.json();
-        console.log(`[AQUECIMENTO] ${dialogo.tipo} enviado de ${origemDetails.nome} para ${destinoDetails.nome}: ${sendRes.ok}`);
+        const sendData = await sendRes.json().catch(() => ({}));
+        console.log(`[AQUECIMENTO-AUTO] ${dialogo.tipo} enviado: ${instDetails.nome} → ${destinoDetails.nome} (${sendRes.ok})`);
 
-        // Record interaction
         await supabase.from("whatsapp_aquecimento_interacoes").insert({
           instancia_origem_id: inst.instancia_id,
           instancia_destino_id: destino.instancia_id,
@@ -190,7 +279,6 @@ Deno.serve(async (req) => {
           enviado_em: new Date().toISOString(),
         });
 
-        // Update instance metrics
         if (sendRes.ok) {
           totalEnviados++;
           await supabase
@@ -203,7 +291,7 @@ Deno.serve(async (req) => {
             .eq("id", inst.id);
         }
       } catch (sendErr) {
-        console.error(`[AQUECIMENTO] Erro ao enviar: ${sendErr}`);
+        console.error(`[AQUECIMENTO-AUTO] Erro ao enviar: ${sendErr}`);
         await supabase.from("whatsapp_aquecimento_interacoes").insert({
           instancia_origem_id: inst.instancia_id,
           instancia_destino_id: destino.instancia_id,
@@ -213,35 +301,9 @@ Deno.serve(async (req) => {
           enviado_em: new Date().toISOString(),
         });
       }
-
-      // Phase progression check
-      const diasNecessarios = diasPorFase[faseKey] || 7;
-      if (inst.dias_na_fase >= diasNecessarios && inst.fase < 4) {
-        // Check response rate > 70%
-        const taxaResposta = inst.interacoes_total > 0 ? inst.respostas_recebidas / inst.interacoes_total : 0;
-        if (taxaResposta >= 0.7 || inst.interacoes_total < 5) {
-          const novaFase = inst.fase + 1;
-          const novoLimite = limitesPorFase[`fase${novaFase}`] || 30;
-          await supabase
-            .from("whatsapp_aquecimento_instancias")
-            .update({ fase: novaFase, dias_na_fase: 0, limite_diario: novoLimite })
-            .eq("id", inst.id);
-          console.log(`[AQUECIMENTO] Instância ${origemDetails.nome} avançou para fase ${novaFase}`);
-        }
-      } else if (inst.dias_na_fase >= diasNecessarios && inst.fase >= 4) {
-        await supabase
-          .from("whatsapp_aquecimento_instancias")
-          .update({ status: "AQUECIDO" })
-          .eq("id", inst.id);
-        console.log(`[AQUECIMENTO] Instância ${origemDetails.nome} marcada como AQUECIDO!`);
-      }
-
-      // Add random delay simulation (log only, actual delay between cron runs)
-      const delay = Math.floor(Math.random() * (delayConfig.max_segundos - delayConfig.min_segundos) + delayConfig.min_segundos);
-      console.log(`[AQUECIMENTO] Delay simulado: ${delay}s para próxima interação`);
     }
 
-    // Check failure rate - auto-pause if > 10% failures in last hour
+    // ========== FAILURE RATE CHECK ==========
     const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
     const { data: lastHourInteracoes } = await supabase
       .from("whatsapp_aquecimento_interacoes")
@@ -251,21 +313,26 @@ Deno.serve(async (req) => {
     if (lastHourInteracoes && lastHourInteracoes.length > 10) {
       const falhas = lastHourInteracoes.filter((i: any) => i.status === "FALHOU").length;
       const taxaFalha = falhas / lastHourInteracoes.length;
-      if (taxaFalha > 0.1) {
-        console.log(`[AQUECIMENTO] Taxa de falha alta (${Math.round(taxaFalha * 100)}%). Pausando todas as instâncias.`);
+      if (taxaFalha > 0.15) {
+        console.log(`[AQUECIMENTO-AUTO] Taxa de falha alta (${Math.round(taxaFalha * 100)}%). Pausando.`);
         await supabase
           .from("whatsapp_aquecimento_instancias")
           .update({ status: "PAUSADO" })
           .eq("status", "EM_AQUECIMENTO");
+
+        await supabase.from("aquecimento_notificacoes").insert({
+          tipo: "risco_bloqueio",
+          mensagem: `⚠️ Taxa de falha ${Math.round(taxaFalha * 100)}% na última hora. Todos os números foram pausados automaticamente.`,
+        });
       }
     }
 
-    console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} mensagens enviadas.`);
-    return new Response(JSON.stringify({ success: true, enviados: totalEnviados }), {
+    console.log(`[AQUECIMENTO-AUTO] Ciclo concluído. ${totalEnviados} mensagens, ${newInstances.length} novos números.`);
+    return new Response(JSON.stringify({ success: true, enviados: totalEnviados, novos: newInstances.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("[AQUECIMENTO] Erro:", error);
+    console.error("[AQUECIMENTO-AUTO] Erro:", error);
     return new Response(JSON.stringify({ error: String(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
