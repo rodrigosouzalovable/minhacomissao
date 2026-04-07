@@ -1,45 +1,67 @@
 
 
-## Plano: Nova conversa, fixar conversas e proteção contra exclusão
+## Plano: Monitor de Envios WhatsApp
 
-### 1. Botão "+" para nova conversa
+### Resumo
 
-Adicionar um ícone "+" ao lado do título "WhatsApp Inbox" (linha 454) que abre um Dialog com:
-- Campo de telefone (com código do país, placeholder "55...")
-- Select para escolher a instância
-- Campo de texto para a primeira mensagem
-- Botão "Conversa" que envia a mensagem via `send-whatsapp` e abre/cria o contato no inbox
+Criar uma nova página `/monitor-envios` com dashboard de monitoramento em tempo real dos envios WhatsApp por instância, usando as tabelas existentes `whatsapp_mensagens` e `user_whatsapp_instances`.
 
-**Arquivo:** `src/pages/WhatsAppInbox.tsx` — novo state `novaConversaOpen`, novo componente Dialog inline ou extraído.
+### Viabilidade
 
-### 2. Fixar conversa (pin)
+- A tabela `whatsapp_mensagens` já registra direção (`saida`/`entrada`), `instancia_id` e `timestamp_msg` -- tudo que precisamos para contar envios por instância por dia.
+- As instâncias já estão cadastradas em `user_whatsapp_instances` com campos `nome`, `ativo`, `robo`, `apenas_lembretes`.
+- Não é necessário criar Edge Functions -- as queries podem ser feitas direto pelo Supabase client.
+- O sistema já tem ~40 instâncias ativas.
 
-**Migração:** Adicionar coluna `fixado boolean default false` na tabela `whatsapp_contatos`.
+### Adaptações ao nosso sistema
 
-**Context menu:** Adicionar opção "Fixar conversa" / "Desafixar conversa" no `ConversaContextMenu.tsx` com ícone `Pin`. Ao clicar, faz update em `whatsapp_contatos.fixado`.
+O prompt do DeepSeek é genérico. Aqui estão as adaptações:
 
-**Ordenação:** No `contatosFiltrados` (linha 405-415), alterar o sort para priorizar `fixado = true` antes de `nao_lido`, exatamente como o WhatsApp Web. Conversas fixadas mostrarão um ícone de pin pequeno na lista.
+1. **Direção**: usar `direcao = 'saida'` (não `outbound`)
+2. **Limite diário**: o prompt sugere 10/dia fixo, mas nosso acionamento usa ~30 msgs/dia por robô. Vamos tornar configurável por instância, default 30.
+3. **Delay**: nosso sistema já usa intervalo de 300-500 segundos (5-8 min), não 81 segundos.
+4. **Controle de pausa**: usar o campo `ativo` já existente na tabela de instâncias.
+5. **Gráfico de evolução**: implementar como opcional (v2), focar primeiro no dashboard funcional.
 
-**Props:** Passar `fixado` e callback `onFixarToggle` para o `ConversaContextMenu`.
+### Etapas de implementação
 
-### 3. Proteção contra exclusão de mensagens
+**1. Criar página `MonitorEnvios.tsx`**
+- Cards de resumo: total enviadas hoje, instâncias ativas, progresso geral, tempo estimado para término
+- Tabela com cada instância: nome, enviadas hoje (barra de progresso), último envio, próximo envio estimado, status (ativo/pausado/limite), tipo (robô/lembretes)
+- Botões: pausar/retomar por instância
+- Configurações: limite diário (default 30), delay entre mensagens
 
-As mensagens já são persistidas no banco via webhook. O requisito "não sumir do sistema mesmo que apaguem no WhatsApp" já está atendido — o webhook salva e não há lógica de DELETE sincronizado. Nenhuma alteração necessária aqui, pois a UAZAPI não envia evento de exclusão que o sistema processe.
+**2. Criar hook `useMonitorEnvios.ts`**
+- Query que conta mensagens de saída por instância no dia atual
+- Polling a cada 30 segundos para atualização automática
+- Buscar horário do último envio por instância
 
-### Arquivos afetados
+**3. Adicionar rota e menu**
+- Nova rota `/monitor-envios` em `App.tsx` com `PermissionRoute`
+- Novo item no menu lateral em `AppLayout.tsx` (ícone: `Activity` ou `BarChart3`)
 
-- `src/pages/WhatsAppInbox.tsx` — botão +, dialog nova conversa, ordenação com fixado
-- `src/components/inbox/ConversaContextMenu.tsx` — opção fixar/desafixar
-- Migração SQL — coluna `fixado` em `whatsapp_contatos`
+**4. Lógica de status**
+- Verde: abaixo de 80% do limite
+- Amarelo: 80-99% do limite
+- Vermelho: limite atingido
+- Cinza: pausado (ativo = false)
 
-### Detalhes técnicos
+**5. Previsão de próximo envio**
+- Calcular com base no último envio + delay médio configurado + posição round-robin
 
-**Ordenação final dos contatos:**
-```text
-1. fixado DESC (fixados primeiro)
-2. nao_lido > 0 (não lidos depois)
-3. ultima_mensagem_em DESC (mais recentes)
-```
+### Arquivos a criar/alterar
 
-**Dialog nova conversa:** Ao enviar, o sistema chama `send-whatsapp` com a instância selecionada. Se o contato já existir no banco, abre a conversa. Se não, o webhook criará o contato automaticamente e a lista será atualizada via realtime.
+| Arquivo | Ação |
+|---------|------|
+| `src/pages/MonitorEnvios.tsx` | Criar |
+| `src/hooks/useMonitorEnvios.ts` | Criar |
+| `src/App.tsx` | Adicionar rota |
+| `src/components/layout/AppLayout.tsx` | Adicionar item no menu |
+
+### O que NÃO será feito nesta versão
+
+- Gráfico de evolução ao longo do dia (pode ser adicionado depois)
+- Edge Function dedicada (desnecessária, queries diretas são suficientes)
+- "Resetar contagem" (perigoso, pode apagar dados reais)
+- Configuração de limite persistida em banco (usaremos estado local inicialmente; pode ser migrado para tabela depois)
 
