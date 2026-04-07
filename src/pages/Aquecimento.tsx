@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import { format } from 'date-fns';
 
@@ -198,9 +199,25 @@ export default function Aquecimento() {
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Atualizar
             </Button>
             {pausadoInstances.length > 0 && (
-              <Button variant="outline" size="sm" onClick={forcarReinicio} className="gap-1">
-                <Zap className="h-4 w-4" /> Forçar Reinício ({pausadoInstances.length})
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1">
+                    <PlayCircle className="h-4 w-4" /> Reativar Todos ({pausadoInstances.length})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reativar todos os números?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Isso vai reativar {pausadoInstances.length} número(s) pausado(s) e retomar o aquecimento automático.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={forcarReinicio}>Reativar Todos</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         </div>
@@ -375,7 +392,28 @@ export default function Aquecimento() {
                 {pausadoInstances.length > 0 && (
                   <Card className="border-yellow-500/30">
                     <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
                       <CardTitle className="text-base text-yellow-500">⏸️ Pausados ({pausadoInstances.length})</CardTitle>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="gap-1">
+                            <PlayCircle className="h-3 w-3" /> Reativar Todos
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Reativar todos os números?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Isso vai reativar {pausadoInstances.length} número(s) pausado(s) e retomar o aquecimento automático.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={forcarReinicio}>Reativar Todos</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                     </CardHeader>
                     <CardContent>
                       <Table>
