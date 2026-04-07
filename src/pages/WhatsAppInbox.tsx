@@ -110,18 +110,22 @@ export default function WhatsAppInbox() {
       // Check if user has inbox_compartilhado permission
       const { data: perms } = await supabase
         .from('user_permissions')
-        .select('inbox_compartilhado')
+        .select('inbox_compartilhado, concedido_por')
         .eq('user_id', user.id)
         .maybeSingle();
 
       const compartilhado = (perms as any)?.inbox_compartilhado === true;
+      const concedidoPor = (perms as any)?.concedido_por as string | null;
 
       let query = supabase
         .from('user_whatsapp_instances')
         .select('id, nome, server_url, instance_token')
         .eq('ativo', true);
 
-      if (!compartilhado) {
+      if (compartilhado && concedidoPor) {
+        // Show only instances belonging to the admin who granted access
+        query = query.eq('user_id', concedidoPor);
+      } else {
         query = query.eq('user_id', user.id);
       }
 

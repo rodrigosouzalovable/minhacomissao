@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/hooks/useAuth';
 
 interface EditPermissionsDialogProps {
   open: boolean;
@@ -92,13 +93,16 @@ export function EditPermissionsDialog({
     }
   }, [permissions, open]);
 
-  const saveMutation = useMutation({
+    const { user: currentUser } = useAuth();
+
+    const saveMutation = useMutation({
     mutationFn: async () => {
         const payload = {
             abas_permitidas: selectedTabs,
             credores,
             visivel_ranking: visivelRanking,
             inbox_compartilhado: inboxCompartilhado,
+            concedido_por: inboxCompartilhado ? currentUser?.id : null,
           };
       if (permissions) {
         const { error } = await supabase
