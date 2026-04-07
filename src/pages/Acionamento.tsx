@@ -206,6 +206,17 @@ export default function Acionamento() {
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
   const [checkingConnections, setCheckingConnections] = useState(false);
 
+  // WhatsApp profile editing state
+  const [profileName, setProfileName] = useState('');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const [profileDescription, setProfileDescription] = useState('');
+  const [profileAddress, setProfileAddress] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingProfileName, setSavingProfileName] = useState(false);
+  const [savingProfilePhoto, setSavingProfilePhoto] = useState(false);
+  const [savingProfileBusiness, setSavingProfileBusiness] = useState(false);
+
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
