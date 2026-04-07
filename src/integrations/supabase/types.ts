@@ -1019,6 +1019,30 @@ export type Database = {
           },
         ]
       }
+      mentor_conversas: {
+        Row: {
+          content: string
+          criado_em: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          criado_em?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          criado_em?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       metas_funcionarios: {
         Row: {
           atualizado_em: string
