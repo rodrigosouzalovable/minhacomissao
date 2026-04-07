@@ -880,7 +880,7 @@ export default function ImportarDevedores() {
                   <div>
                     <p className="font-semibold text-sm">Processando planilha...</p>
                     <p className="text-xs text-muted-foreground">
-                      {isPagamentos ? 'Lendo parcelas e cruzando com acordos no sistema...' : 'Lendo abas e cruzando dados, aguarde...'}
+                      {isPagamentos ? 'Lendo parcelas e cruzando com acordos no sistema...' : isMontrealAtualizacao ? 'Cruzando com dados existentes no sistema...' : 'Lendo abas e cruzando dados, aguarde...'}
                     </p>
                   </div>
                 </CardContent>
