@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Save, Clock, Calendar, MessageSquare, Timer, Zap } from 'lucide-react';
+import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone } from 'lucide-react';
 
 interface ConfigItem {
   id: string;
