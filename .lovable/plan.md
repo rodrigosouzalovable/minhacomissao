@@ -1,35 +1,22 @@
 
 
-## Plano: Adicionar Áudios e Imagens ao Aquecimento
+## Plano: Botão "Reativar Todos"
+
+### Situação atual
+
+Já existe um botão "Forçar Reinício" no header da página (linha 200-204 do `Aquecimento.tsx`) que faz exatamente isso — muda todas as instâncias PAUSADO para EM_AQUECIMENTO. O botão só aparece quando há instâncias pausadas.
 
 ### O que será feito
 
-Copiar os 3 áudios MP3 e as 7 imagens enviadas para o bucket de storage, e criar registros na tabela `whatsapp_aquecimento_dialogos` apontando para as URLs públicas.
+1. **Renomear o botão** de "Forçar Reinício" para "▶ Reativar Todos" para ficar mais claro
+2. **Adicionar confirmação** antes de reativar (dialog de confirmação para evitar cliques acidentais)
+3. **Reativar as 21 instâncias pausadas agora** via update direto no banco de dados
+4. **Adicionar botão "Reativar Todos"** também na seção de Pausados para maior visibilidade
 
-### Arquivos de mídia
+### Arquivos alterados
 
-**Áudios (3 MP3):**
-- Mario voice → `aquecimento/audio_mario.mp3`
-- Adam Borges voice → `aquecimento/audio_adam.mp3`
-- Lax Whisper voice → `aquecimento/audio_whisper.mp3`
-
-**Imagens (7 JPG):**
-- Bom dia terça-feira (balões/flores)
-- 6 imagens motivacionais/religiosas
-
-### Etapas
-
-| # | Ação |
-|---|------|
-| 1 | Copiar os 10 arquivos para o projeto temporariamente |
-| 2 | Criar script que faz upload de cada arquivo para o bucket `campaign-audio` (pastas `aquecimento/` e `aquecimento-imagens/`) |
-| 3 | Inserir 10 novos registros em `whatsapp_aquecimento_dialogos` com as URLs públicas geradas |
-| 4 | Áudios serão fase_minima = 2, imagens fase_minima = 1 |
-
-### Detalhes técnicos
-
-- Os áudios vão para `campaign-audio/aquecimento/*.mp3`
-- As imagens vão para `campaign-audio/aquecimento-imagens/*.jpg`
-- Cada arquivo gera uma URL pública do tipo `https://cymdrkeukockakfzjeen.supabase.co/storage/v1/object/public/campaign-audio/...`
-- Os registros existentes com nomes de arquivo sem URL (ex: `audio_boa_tarde.ogg`) serão mantidos — os novos arquivos reais complementam o pool
+| Arquivo | Mudança |
+|---------|---------|
+| `src/pages/Aquecimento.tsx` | Renomear botão, adicionar confirmação, duplicar na seção pausados |
+| Dados (UPDATE SQL) | Mudar status de PAUSADO → EM_AQUECIMENTO nas 21 instâncias |
 
