@@ -107,12 +107,25 @@ export default function WhatsAppInbox() {
     }
 
     const fetchInstancias = async () => {
-      const { data } = await supabase
+      // Check if user has inbox_compartilhado permission
+      const { data: perms } = await supabase
+        .from('user_permissions')
+        .select('inbox_compartilhado')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const compartilhado = (perms as any)?.inbox_compartilhado === true;
+
+      let query = supabase
         .from('user_whatsapp_instances')
         .select('id, nome, server_url, instance_token')
-        .eq('ativo', true)
-        .eq('user_id', user.id);
+        .eq('ativo', true);
 
+      if (!compartilhado) {
+        query = query.eq('user_id', user.id);
+      }
+
+      const { data } = await query;
       setInstancias((data as Instancia[]) ?? []);
     };
 
