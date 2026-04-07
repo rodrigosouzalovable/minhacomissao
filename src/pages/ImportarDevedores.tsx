@@ -851,6 +851,11 @@ export default function ImportarDevedores() {
                 Credor: <strong>UME | NOVO MUNDO</strong> (automático)
               </div>
             )}
+            {isMontrealAtualizacao && (
+              <div className="text-sm text-muted-foreground">
+                Credor: <strong>MONTREAL</strong> (automático) — O sistema cruzará os dados e importará apenas parcelas novas.
+              </div>
+            )}
             <div className="flex items-center gap-4">
               <Input
                 ref={fileInputRef}
