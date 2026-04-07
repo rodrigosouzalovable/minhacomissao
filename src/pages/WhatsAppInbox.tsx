@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useUserRole } from '@/hooks/useUserRole';
-import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -73,8 +71,6 @@ const getMessageIdentity = (msg: Pick<Mensagem, 'direcao' | 'tipo_conteudo' | 'm
 
 export default function WhatsAppInbox() {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
-  const { inboxCompartilhado } = useUserPermissions();
   const { toast } = useToast();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
@@ -105,22 +101,23 @@ export default function WhatsAppInbox() {
   const PAGE_SIZE = 200;
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setInstancias([]);
+      return;
+    }
+
     const fetchInstancias = async () => {
-      let query = supabase
+      const { data } = await supabase
         .from('user_whatsapp_instances')
         .select('id, nome, server_url, instance_token')
-        .eq('ativo', true);
-      
-      if (!isAdmin && !inboxCompartilhado) {
-        query = query.eq('user_id', user.id);
-      }
-      
-      const { data } = await query;
-      if (data) setInstancias(data);
+        .eq('ativo', true)
+        .eq('user_id', user.id);
+
+      setInstancias((data as Instancia[]) ?? []);
     };
+
     fetchInstancias();
-  }, [user, isAdmin, inboxCompartilhado]);
+  }, [user]);
 
   const fetchEtiquetas = useCallback(async () => {
     const { data } = await supabase
@@ -155,8 +152,9 @@ export default function WhatsAppInbox() {
   };
 
   const fetchContatos = useCallback(async () => {
-    // Wait for instancias to load before querying contacts
-    if (!isAdmin && !inboxCompartilhado && instancias.length === 0) {
+    const instanciaIds = instancias.map(instancia => instancia.id);
+
+    if (instanciaIds.length === 0) {
       setContatos([]);
       return;
     }
@@ -176,11 +174,9 @@ export default function WhatsAppInbox() {
       `)
       .order('ultima_mensagem_em', { ascending: false });
 
-    if (filtroInstancia !== 'todas') {
+    if (filtroInstancia !== 'todas' && instanciaIds.includes(filtroInstancia)) {
       query = query.eq('instancia_id', filtroInstancia);
-    } else if (!isAdmin && !inboxCompartilhado) {
-      // Filter contacts to only show instances owned by the current user
-      const instanciaIds = instancias.map(i => i.id);
+    } else {
       query = query.in('instancia_id', instanciaIds);
     }
 
@@ -192,9 +188,22 @@ export default function WhatsAppInbox() {
       }));
       setContatos(contatosComNomeInstancia as Contato[]);
     }
-  }, [filtroInstancia, instancias, isAdmin, inboxCompartilhado]);
+  }, [filtroInstancia, instancias]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
+
+  useEffect(() => {
+    if (filtroInstancia === 'todas') return;
+    if (instancias.some(instancia => instancia.id === filtroInstancia)) return;
+    setFiltroInstancia('todas');
+  }, [filtroInstancia, instancias]);
+
+  useEffect(() => {
+    if (!contatoAtivo) return;
+    if (instancias.some(instancia => instancia.id === contatoAtivo.instancia_id)) return;
+    setContatoAtivo(null);
+    setMensagens([]);
+  }, [contatoAtivo, instancias]);
 
   useEffect(() => {
     const channel = supabase
