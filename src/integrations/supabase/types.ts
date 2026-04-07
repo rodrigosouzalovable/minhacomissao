@@ -158,6 +158,41 @@ export type Database = {
         }
         Relationships: []
       }
+      aquecimento_notificacoes: {
+        Row: {
+          criado_em: string
+          id: string
+          instancia_id: string | null
+          lida: boolean
+          mensagem: string
+          tipo: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          instancia_id?: string | null
+          lida?: boolean
+          mensagem: string
+          tipo: string
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          instancia_id?: string | null
+          lida?: boolean
+          mensagem?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aquecimento_notificacoes_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       auditoria_divergencias: {
         Row: {
           acordo_id: string | null
@@ -1740,6 +1775,7 @@ export type Database = {
           created_at: string
           dias_na_fase: number
           fase: number
+          fase_auto: boolean
           id: string
           instancia_id: string
           interacoes_hoje: number
@@ -1755,6 +1791,7 @@ export type Database = {
           created_at?: string
           dias_na_fase?: number
           fase?: number
+          fase_auto?: boolean
           id?: string
           instancia_id: string
           interacoes_hoje?: number
@@ -1770,6 +1807,7 @@ export type Database = {
           created_at?: string
           dias_na_fase?: number
           fase?: number
+          fase_auto?: boolean
           id?: string
           instancia_id?: string
           interacoes_hoje?: number
