@@ -113,8 +113,14 @@ export default function Aquecimento() {
   }
 
   async function loadMetrics() {
+    // Count only instances that are both ativo=true AND exist in aquecimento table
     const { count: total } = await supabase.from('user_whatsapp_instances').select('id', { count: 'exact', head: true }).eq('ativo', true);
-    const { data: aquecData } = await supabase.from('whatsapp_aquecimento_instancias' as any).select('status, fase');
+    const { data: aquecData } = await supabase.from('whatsapp_aquecimento_instancias' as any).select('status, fase, instancia_id');
+    
+    // Filter aquecimento data to only include instances that are still active
+    const { data: activeInstances } = await supabase.from('user_whatsapp_instances').select('id').eq('ativo', true);
+    const activeIds = new Set((activeInstances || []).map((i: any) => i.id));
+    const filteredAquecData = (aquecData || []).filter((a: any) => activeIds.has(a.instancia_id));
     
     const emAquecimento = (aquecData || []).filter((a: any) => a.status === 'EM_AQUECIMENTO').length;
     const aquecidos = (aquecData || []).filter((a: any) => a.status === 'AQUECIDO').length;
