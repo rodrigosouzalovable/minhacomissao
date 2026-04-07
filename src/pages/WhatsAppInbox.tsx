@@ -735,7 +735,7 @@ export default function WhatsAppInbox() {
           </ScrollArea>
         </div>
 
-        <div className={cn('flex-1 flex flex-col', !contatoAtivo ? 'hidden md:flex' : 'flex')}>
+        <div className={cn('flex-1 min-w-0 flex flex-col', !contatoAtivo ? 'hidden md:flex' : 'flex')}>
           {!contatoAtivo ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
