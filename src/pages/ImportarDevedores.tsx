@@ -699,11 +699,88 @@ export default function ImportarDevedores() {
     setFile(null);
     setRows([]);
     setPagamentoRows([]);
+    setMontrealRows([]);
     setImported(false);
     setPagamentoImported(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleImportMontrealAtualizacao = async () => {
+    if (!user) return;
+    const toImport = montrealRows.filter(r => r.status_importacao !== 'existe');
+    if (toImport.length === 0) {
+      toast({ title: 'Nada para importar', description: 'Todas as parcelas já existem no sistema.', variant: 'destructive' });
+      return;
+    }
+
+    setImporting(true);
+    setImportProgress(0);
+    setInsertedCount(0);
+
+    const { data: importacao, error: importError } = await supabase
+      .from('importacoes' as any)
+      .insert({
+        nome_arquivo: file?.name || 'unknown',
+        credor: 'MONTREAL',
+        total_registros: toImport.length,
+        importado_por: user.id,
+      } as any)
+      .select('id')
+      .single();
+
+    if (importError || !importacao) {
+      toast({ title: 'Erro ao registrar importação', description: importError?.message, variant: 'destructive' });
+      setImporting(false);
+      return;
+    }
+
+    const importacaoId = (importacao as any).id;
+
+    const records = toImport.map(r => ({
+      nome: r.nome,
+      cpf: r.cpf,
+      valor_original: r.valor_original,
+      valor_atualizado: r.valor_atualizado,
+      credor: 'MONTREAL',
+      descricao: r.descricao || null,
+      contrato: r.contrato || null,
+      data_vencimento: parseDate(r.atraso),
+      telefone: r.telefone || null,
+      importado_por: user.id,
+      arquivo_importacao: file?.name || 'unknown',
+      importacao_id: importacaoId,
+    }));
+
+    const BATCH_SIZE = 500;
+    let inserted = 0;
+    let batchError: any = null;
+
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const batch = records.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('devedores' as any).insert(batch as any);
+      if (error) {
+        batchError = error;
+        break;
+      }
+      inserted += batch.length;
+      setInsertedCount(inserted);
+      setImportProgress(Math.round((inserted / records.length) * 100));
+    }
+
+    if (batchError) {
+      toast({
+        title: 'Erro na importação',
+        description: `${inserted} de ${records.length} registros inseridos antes do erro: ${batchError.message}`,
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Importação concluída', description: `${inserted} registros importados (${montrealRows.filter(r => r.status_importacao === 'existe').length} ignorados por já existirem).` });
+      setImported(true);
+      fetchImportacoes();
+    }
+    setImporting(false);
   };
 
   const isMontreal = credorSelecionado === 'montreal';
