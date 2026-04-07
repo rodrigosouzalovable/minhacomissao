@@ -1,22 +1,31 @@
 
 
-## Plano: Botão "Reativar Todos"
+## Plano: Filtrar Aquecimento por Usuário (owner)
 
-### Situação atual
+### Problema
 
-Já existe um botão "Forçar Reinício" no header da página (linha 200-204 do `Aquecimento.tsx`) que faz exatamente isso — muda todas as instâncias PAUSADO para EM_AQUECIMENTO. O botão só aparece quando há instâncias pausadas.
+O sistema atual inscreve **todas** as 47 instâncias ativas no aquecimento, incluindo as de outros usuários (Anna Flavia: 2, Daniel: 1). Apenas as suas 44 instâncias devem participar.
 
 ### O que será feito
 
-1. **Renomear o botão** de "Forçar Reinício" para "▶ Reativar Todos" para ficar mais claro
-2. **Adicionar confirmação** antes de reativar (dialog de confirmação para evitar cliques acidentais)
-3. **Reativar as 21 instâncias pausadas agora** via update direto no banco de dados
-4. **Adicionar botão "Reativar Todos"** também na seção de Pausados para maior visibilidade
+| # | Ação |
+|---|------|
+| 1 | Filtrar a Edge Function `whatsapp-aquecimento` para inscrever e processar apenas instâncias do admin (seu `user_id`) |
+| 2 | Remover da tabela `whatsapp_aquecimento_instancias` as instâncias que não são suas (3 registros de outros usuários) |
+| 3 | Inserir as instâncias suas que ainda não foram cadastradas no aquecimento |
 
-### Arquivos alterados
+### Detalhes técnicos
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/Aquecimento.tsx` | Renomear botão, adicionar confirmação, duplicar na seção pausados |
-| Dados (UPDATE SQL) | Mudar status de PAUSADO → EM_AQUECIMENTO nas 21 instâncias |
+**Edge Function** (`supabase/functions/whatsapp-aquecimento/index.ts`):
+- Na query de auto-enrollment (linha 66-69), adicionar filtro `.eq("user_id", ADMIN_USER_ID)` para buscar apenas instâncias do admin
+- Isso garante que instâncias de funcionários nunca entrem no aquecimento automaticamente
+- O `user_id` do admin será obtido via config (`whatsapp_aquecimento_config`) com uma nova chave `admin_user_id`, ou hardcoded como constante
+
+**Dados**:
+- DELETE das 3 instâncias de outros usuários na tabela de aquecimento
+- INSERT das instâncias suas que faltam (das 44 ativas, as que não estão cadastradas)
+
+### Alternativa futura
+
+Quando o sistema virar multi-tenant, cada usuário poderá ter seu próprio aquecimento — mas por agora, filtramos pelo admin.
 
