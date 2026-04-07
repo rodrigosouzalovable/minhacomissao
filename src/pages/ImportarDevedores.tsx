@@ -192,6 +192,7 @@ export default function ImportarDevedores() {
         valor_original: valor,
         valor_atualizado: valor,
         telefone: tel1 || tel2 || undefined,
+        telefone2: tel1 ? (tel2 || undefined) : undefined,
       };
     }).filter(r => r.cpf.length >= 11);
   };
