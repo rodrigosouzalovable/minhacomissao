@@ -428,6 +428,13 @@ export default function Acionamento() {
     }
   }, [instances, checkInstanceConnections]);
 
+  // Load WhatsApp profile when editing a connected instance
+  useEffect(() => {
+    if (editingInstance?.id && connectionStatus[editingInstance.id] === 'connected') {
+      loadWhatsAppProfile(editingInstance.server_url, editingInstance.instance_token);
+    }
+  }, [editingInstance?.id, connectionStatus, loadWhatsAppProfile]);
+
   const disconnectedInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'disconnected'),
     [instances, connectionStatus]
