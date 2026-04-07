@@ -886,7 +886,12 @@ export default function WhatsAppInbox() {
                               </span>
                             </div>
                           )}
-                          <ChatMessage msg={msg} formatMsgTime={formatMsgTime} />
+                          <ChatMessage
+                            msg={msg}
+                            formatMsgTime={formatMsgTime}
+                            onApagarParaMim={handleApagarParaMim}
+                            onApagarParaTodos={handleApagarParaTodos}
+                          />
                         </div>
                       );
                     })}
