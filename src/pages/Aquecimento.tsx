@@ -122,11 +122,11 @@ export default function Aquecimento() {
     const activeIds = new Set((activeInstances || []).map((i: any) => i.id));
     const filteredAquecData = (aquecData || []).filter((a: any) => activeIds.has(a.instancia_id));
     
-    const emAquecimento = (aquecData || []).filter((a: any) => a.status === 'EM_AQUECIMENTO').length;
-    const aquecidos = (aquecData || []).filter((a: any) => a.status === 'AQUECIDO').length;
+    const emAquecimento = filteredAquecData.filter((a: any) => a.status === 'EM_AQUECIMENTO').length;
+    const aquecidos = filteredAquecData.filter((a: any) => a.status === 'AQUECIDO').length;
     
     const porFase: Record<number, number> = {};
-    (aquecData || []).filter((a: any) => a.status === 'EM_AQUECIMENTO').forEach((a: any) => {
+    filteredAquecData.filter((a: any) => a.status === 'EM_AQUECIMENTO').forEach((a: any) => {
       porFase[a.fase] = (porFase[a.fase] || 0) + 1;
     });
 
