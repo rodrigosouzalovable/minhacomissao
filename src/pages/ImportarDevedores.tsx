@@ -188,13 +188,43 @@ export default function ImportarDevedores() {
       }
     }
 
-    if (phoneRecords.length === 0) return;
+    if (phoneRecords.length === 0) return 0;
+
+    // Fetch existing phones to avoid duplicates
+    const cpfs = [...new Set(phoneRecords.map(p => p.devedor_cpf))];
+    const existingPhones = new Set<string>();
+    const PAGE_SIZE = 1000;
+    for (let i = 0; i < cpfs.length; i += 10) {
+      const cpfBatch = cpfs.slice(i, i + 10);
+      let from = 0;
+      while (true) {
+        const { data } = await supabase
+          .from('devedor_telefones' as any)
+          .select('devedor_cpf, numero')
+          .in('devedor_cpf', cpfBatch)
+          .range(from, from + PAGE_SIZE - 1);
+        if (!data || data.length === 0) break;
+        for (const t of data as any[]) {
+          existingPhones.add(`${t.devedor_cpf}_${String(t.numero).replace(/\D/g, '')}`);
+        }
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+    }
+
+    const newRecords = phoneRecords.filter(p => {
+      const key = `${p.devedor_cpf}_${p.numero.replace(/\D/g, '')}`;
+      return !existingPhones.has(key);
+    });
+
+    if (newRecords.length === 0) return 0;
 
     const BATCH = 500;
-    for (let i = 0; i < phoneRecords.length; i += BATCH) {
-      const batch = phoneRecords.slice(i, i + BATCH);
+    for (let i = 0; i < newRecords.length; i += BATCH) {
+      const batch = newRecords.slice(i, i + BATCH);
       await supabase.from('devedor_telefones' as any).insert(batch as any);
     }
+    return newRecords.length;
   };
 
   const parseMontreal = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
@@ -759,6 +789,19 @@ export default function ImportarDevedores() {
     }
   };
 
+  const handleImportTelefonesOnly = async () => {
+    if (!user) return;
+    setImporting(true);
+    const count = await insertTelefonesFromRows(montrealRows, user.id);
+    if (count === 0) {
+      toast({ title: 'Sem telefones novos', description: 'Todos os telefones da planilha já estão cadastrados.', variant: 'destructive' });
+    } else {
+      toast({ title: 'Telefones importados', description: `${count} telefones novos cadastrados.` });
+    }
+    setImported(true);
+    setImporting(false);
+  };
+
   const handleImportMontrealAtualizacao = async () => {
     if (!user) return;
     const toImport = montrealRows.filter(r => r.status_importacao !== 'existe');
@@ -828,7 +871,7 @@ export default function ImportarDevedores() {
         variant: 'destructive',
       });
     } else {
-      await insertTelefonesFromRows(toImport, user.id);
+      await insertTelefonesFromRows(montrealRows, user.id);
       toast({ title: 'Importação concluída', description: `${inserted} registros importados (${montrealRows.filter(r => r.status_importacao === 'existe').length} ignorados por já existirem).` });
       setImported(true);
       fetchImportacoes();
@@ -983,23 +1026,32 @@ export default function ImportarDevedores() {
                     </CardDescription>
                   </div>
                   {!imported ? (
-                    <Button
-                      onClick={handleImportMontrealAtualizacao}
-                      disabled={importing || toImport === 0}
-                      style={{ background: '#00a86b', color: '#fff' }}
-                    >
-                      {importing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          Importando...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-4 w-4 mr-1" />
-                          Importar {toImport} registros
-                        </>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleImportTelefonesOnly}
+                        disabled={importing}
+                        variant="outline"
+                      >
+                        {importing ? (
+                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Importando...</>
+                        ) : (
+                          <>📞 Importar Telefones</>
+                        )}
+                      </Button>
+                      {toImport > 0 && (
+                        <Button
+                          onClick={handleImportMontrealAtualizacao}
+                          disabled={importing}
+                          style={{ background: '#00a86b', color: '#fff' }}
+                        >
+                          {importing ? (
+                            <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Importando...</>
+                          ) : (
+                            <><Check className="h-4 w-4 mr-1" />Importar {toImport} registros</>
+                          )}
+                        </Button>
                       )}
-                    </Button>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
                       <Check className="h-4 w-4" />
