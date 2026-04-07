@@ -83,6 +83,7 @@ export default function ImportarDevedores() {
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
   const [grouped, setGrouped] = useState(false);
+  const [montrealGrouped, setMontrealGrouped] = useState(true);
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
