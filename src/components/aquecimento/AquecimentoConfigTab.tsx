@@ -33,6 +33,10 @@ const DEFAULTS = {
   dias_ativos: [1, 2, 3, 4, 5, 6],
   delay_config: { min: 30, max: 180 },
   auto_start: { horario_inicio: '09:00', novas_instancias: false },
+  salvar_contatos_auto: true,
+  postar_status_auto: true,
+  status_incluir_imagens: true,
+  status_incluir_videos: false,
 };
 
 export default function AquecimentoConfigTab() {
@@ -79,7 +83,7 @@ export default function AquecimentoConfigTab() {
 
   async function saveAll() {
     setSaving(true);
-    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start'];
+    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
     for (const chave of knownKeys) {
       if (getConfig(chave)) {
         await saveConfig(chave);
@@ -99,7 +103,7 @@ export default function AquecimentoConfigTab() {
   const delayConfig = getVal('delay_config');
   const autoStart = getVal('auto_start');
 
-  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start'];
+  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
   const unknownConfigs = configs.filter(c => !knownKeys.includes(c.chave));
 
   const faseDescricoes: Record<number, string> = {
