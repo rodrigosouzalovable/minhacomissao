@@ -1,41 +1,36 @@
 
 
-## Plano: Edição de perfil WhatsApp nas configurações de instância
+## Plano: Exibir foto atual do perfil e permitir upload de arquivo
 
-### Resumo
-Adicionar ao formulário de edição de instância (em Acionamento > Configurações) uma seção "Perfil WhatsApp" que permite alterar foto, nome do perfil, descrição comercial, endereço e email via endpoints UAZAPI.
+### Problema
+1. A foto atual do perfil WhatsApp não é exibida no formulário de edição
+2. Só é possível alterar a foto via URL — o usuário quer poder fazer upload de arquivo local
 
-### Endpoints UAZAPI utilizados
-- `POST /profile/name` — altera o nome do perfil
-- `POST /profile/image` — altera a foto (aceita URL ou base64)
-- `POST /business/update/profile` — altera description, address, email
+### Solução
 
-### Alterações
+**Arquivo: `src/pages/Acionamento.tsx`**
 
-**1. `src/pages/Acionamento.tsx`**
+**1. Exibir foto atual do perfil**
+- Adicionar estado `currentProfilePhotoUrl` para armazenar a URL da foto atual
+- No `loadWhatsAppProfile`, buscar a foto atual via `GET {server_url}/profile/image` ou extrair do retorno de `/business/get/profile` (campo `profilePictureUrl` ou similar)
+- Exibir um avatar/thumbnail acima do input de foto mostrando a imagem atual (ou um placeholder se não houver)
 
-- Adicionar nova seção "Perfil WhatsApp" no formulário de edição de instância existente (abaixo dos campos Server URL / Instance Token), visível **apenas para instâncias existentes e conectadas**.
-- Campos:
-  - **Foto do perfil**: Input de URL da imagem + botão "Aplicar" + botão "Remover foto"
-  - **Nome do perfil**: Input de texto + botão "Salvar"
-  - **Descrição comercial**: Textarea + botão "Salvar"
-  - **Endereço comercial**: Input de texto
-  - **Email comercial**: Input de texto
-  - Botão único "Salvar dados comerciais" para description + address + email (todos no mesmo endpoint)
+**2. Upload de arquivo local (converter para base64)**
+- Substituir o input de URL por um input `type="file"` (accept="image/*") com um botão "Enviar"
+- Ao selecionar o arquivo, converter para base64 usando `FileReader`
+- Enviar para `POST /profile/image` com body `{ "base64": "data:image/jpeg;base64,..." }` (a UAZAPI aceita base64)
+- Exibir preview da imagem selecionada antes do envio
+- Manter o botão "Remover" para remover a foto
 
-- Cada ação chama a API UAZAPI diretamente do frontend:
-  - Nome: `POST {server_url}/profile/name` com header `token: {instance_token}` e body `{ "name": "..." }`
-  - Foto: `POST {server_url}/profile/image` com header `token: {instance_token}` e body `{ "url": "..." }` ou `{ "remove": true }`
-  - Dados comerciais: `POST {server_url}/business/update/profile` com header `token: {instance_token}` e body `{ "description": "...", "address": "...", "email": "..." }`
+**3. Layout da seção de foto**
+- Foto atual (circular, ~64px) à esquerda
+- À direita: botão "Escolher imagem" + botão "Remover"
+- Abaixo: preview da imagem selecionada (se houver) + botão "Aplicar"
 
-- Adicionar estados para os campos do perfil e loading individual por ação.
-- Ao abrir a edição de uma instância conectada, buscar dados atuais do perfil via `POST {server_url}/business/get/profile` para pré-preencher os campos.
+### Detalhes técnicos
 
-### Arquivos afetados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/Acionamento.tsx` | Adicionar seção de perfil WhatsApp no formulário de edição |
-
-Nenhuma alteração de banco de dados necessária — tudo é via API UAZAPI.
+- A UAZAPI aceita base64 no endpoint `/profile/image` — o body pode ser `{ "url": "data:image/jpeg;base64,..." }` ou `{ "base64": "..." }`
+- O `loadWhatsAppProfile` será expandido para também buscar `profilePictureUrl` do retorno da API
+- Usar `FileReader.readAsDataURL()` para converter o arquivo para base64
+- Remover o campo `profilePhotoUrl` de texto e substituir por `profilePhotoFile` (File | null) e `profilePhotoPreview` (string base64)
 
