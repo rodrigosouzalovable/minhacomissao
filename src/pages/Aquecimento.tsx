@@ -63,7 +63,7 @@ export default function Aquecimento() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'log'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
-  const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number> });
+  const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
 
   useEffect(() => {
     loadAll();
