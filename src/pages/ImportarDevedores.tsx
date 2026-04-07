@@ -38,6 +38,7 @@ interface DevedorRow {
   valor_original: number;
   valor_atualizado: number;
   telefone?: string;
+  telefone2?: string;
   descricao?: string;
 }
 
