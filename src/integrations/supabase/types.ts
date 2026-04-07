@@ -1844,6 +1844,7 @@ export type Database = {
           status: string
           tempo_resposta_segundos: number | null
           tipo: string
+          tipo_interacao: string
         }
         Insert: {
           conteudo?: string | null
@@ -1859,6 +1860,7 @@ export type Database = {
           status?: string
           tempo_resposta_segundos?: number | null
           tipo: string
+          tipo_interacao?: string
         }
         Update: {
           conteudo?: string | null
@@ -1874,6 +1876,7 @@ export type Database = {
           status?: string
           tempo_resposta_segundos?: number | null
           tipo?: string
+          tipo_interacao?: string
         }
         Relationships: [
           {
@@ -1886,6 +1889,44 @@ export type Database = {
           {
             foreignKeyName: "whatsapp_aquecimento_interacoes_instancia_origem_id_fkey"
             columns: ["instancia_origem_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_aquecimento_status_log: {
+        Row: {
+          conteudo: string | null
+          conteudo_url: string | null
+          id: string
+          instancia_id: string
+          postado_em: string
+          resultado: string
+          tipo: string
+        }
+        Insert: {
+          conteudo?: string | null
+          conteudo_url?: string | null
+          id?: string
+          instancia_id: string
+          postado_em?: string
+          resultado?: string
+          tipo?: string
+        }
+        Update: {
+          conteudo?: string | null
+          conteudo_url?: string | null
+          id?: string
+          instancia_id?: string
+          postado_em?: string
+          resultado?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_status_log_instancia_id_fkey"
+            columns: ["instancia_id"]
             isOneToOne: false
             referencedRelation: "user_whatsapp_instances"
             referencedColumns: ["id"]
