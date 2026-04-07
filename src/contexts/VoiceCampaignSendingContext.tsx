@@ -32,8 +32,16 @@ interface StartCampaignParams {
   delayMax: number;
 }
 
+interface SendingProgress {
+  sent: number;
+  errors: number;
+  total: number;
+  currentContact: string | null;
+}
+
 interface VoiceCampaignSendingContextType {
   sendingCampaignId: string | null;
+  sendingProgress: SendingProgress | null;
   startCampaign: (params: StartCampaignParams) => void;
   cancelCampaign: () => void;
 }
@@ -43,6 +51,7 @@ const VoiceCampaignSendingContext = createContext<VoiceCampaignSendingContextTyp
 export function VoiceCampaignSendingProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
+  const [sendingProgress, setSendingProgress] = useState<SendingProgress | null>(null);
   const cancelRef = useRef(false);
   const sendingRef = useRef(false);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,6 +68,12 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
     sendingRef.current = true;
     cancelRef.current = false;
     setSendingCampaignId(campaignId);
+    setSendingProgress({
+      sent: initialSent,
+      errors: initialErrors,
+      total: initialSent + initialErrors + pendingContacts.length,
+      currentContact: null,
+    });
 
     (async () => {
       await supabase
@@ -77,6 +92,11 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
         const contact = pendingContacts[i];
         const instance = instances[i % instances.length];
         const audio = audioList[i % audioList.length];
+
+        setSendingProgress(prev => prev ? {
+          ...prev,
+          currentContact: contact.nome || contact.telefone,
+        } : null);
 
         try {
           const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
@@ -101,6 +121,12 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
           await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: err.message } as any).eq('id', contact.id);
           errors++;
         }
+
+        setSendingProgress(prev => prev ? {
+          ...prev,
+          sent,
+          errors,
+        } : null);
 
         await supabase.from('voice_campaigns').update({ total_sent: sent, total_errors: errors } as any).eq('id', campaignId);
         queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaignId] });
@@ -132,6 +158,7 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
       } as any).eq('id', campaignId);
 
       setSendingCampaignId(null);
+      setSendingProgress(null);
       sendingRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['voice-campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaignId] });
@@ -152,7 +179,7 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
   }, []);
 
   return (
-    <VoiceCampaignSendingContext.Provider value={{ sendingCampaignId, startCampaign, cancelCampaign }}>
+    <VoiceCampaignSendingContext.Provider value={{ sendingCampaignId, sendingProgress, startCampaign, cancelCampaign }}>
       {children}
     </VoiceCampaignSendingContext.Provider>
   );

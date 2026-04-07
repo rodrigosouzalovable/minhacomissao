@@ -72,7 +72,7 @@ export default function CampanhasVoz() {
   const [delayMin, setDelayMin] = useState(1);
   const [delayMax, setDelayMax] = useState(5);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const { sendingCampaignId, startCampaign: startCampaignContext, cancelCampaign } = useVoiceCampaignSending();
+  const { sendingCampaignId, sendingProgress, startCampaign: startCampaignContext, cancelCampaign } = useVoiceCampaignSending();
 
   // Fetch campaigns
   const { data: campaigns = [], isLoading: loadingCampaigns } = useQuery({
@@ -731,10 +731,29 @@ export default function CampanhasVoz() {
                     </div>
                   )}
                   {sendingCampaignId === selectedCampaign.id && (
-                    <Button variant="destructive" onClick={cancelCampaign}>
-                      <StopCircle className="h-4 w-4 mr-2" />
-                      Cancelar
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      {sendingProgress && (
+                        <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-lg">
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          <span className="text-sm font-medium">
+                            Enviados: <span className="text-green-600">{sendingProgress.sent}</span>
+                            {sendingProgress.errors > 0 && (
+                              <> | Erros: <span className="text-destructive">{sendingProgress.errors}</span></>
+                            )}
+                            {' '}/ {sendingProgress.total}
+                          </span>
+                          {sendingProgress.currentContact && (
+                            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+                              — {sendingProgress.currentContact}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <Button variant="destructive" onClick={cancelCampaign}>
+                        <StopCircle className="h-4 w-4 mr-2" />
+                        Cancelar
+                      </Button>
+                    </div>
                   )}
                   {campaignContacts.length > 0 && (
                     <Button variant="outline" onClick={() => exportReport(campaignContacts)}>

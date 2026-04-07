@@ -12,9 +12,10 @@ interface SortableNavItemProps {
   isActive: boolean;
   onClick: () => void;
   badge?: number;
+  statusBadge?: string;
 }
 
-export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick, badge }: SortableNavItemProps) {
+export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick, badge, statusBadge }: SortableNavItemProps) {
   const {
     attributes,
     listeners,
@@ -57,6 +58,11 @@ export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick
           {badge != null && badge > 0 && (
             <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
               {badge}
+            </span>
+          )}
+          {statusBadge && (
+            <span className="ml-auto bg-green-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1.5 animate-pulse">
+              {statusBadge}
             </span>
           )}
         </Link>
