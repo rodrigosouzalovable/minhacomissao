@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { User, Building2, Mail, MapPin, ImageIcon } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { QrCode, Smartphone, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
@@ -205,6 +206,17 @@ export default function Acionamento() {
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
   const [checkingConnections, setCheckingConnections] = useState(false);
 
+  // WhatsApp profile editing state
+  const [profileName, setProfileName] = useState('');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const [profileDescription, setProfileDescription] = useState('');
+  const [profileAddress, setProfileAddress] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingProfileName, setSavingProfileName] = useState(false);
+  const [savingProfilePhoto, setSavingProfilePhoto] = useState(false);
+  const [savingProfileBusiness, setSavingProfileBusiness] = useState(false);
+
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
@@ -359,6 +371,7 @@ export default function Acionamento() {
       setSalvandoRelatorio(false);
     }
   };
+
 
 
   const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
@@ -899,6 +912,98 @@ export default function Acionamento() {
       clienteNome: cliente.nome,
     });
     setChatDialogOpen(true);
+  };
+
+  // WhatsApp profile management
+  const loadWhatsAppProfile = useCallback(async (serverUrl: string, token: string) => {
+    setLoadingProfile(true);
+    setProfileName('');
+    setProfilePhotoUrl('');
+    setProfileDescription('');
+    setProfileAddress('');
+    setProfileEmail('');
+    try {
+      const cleanUrl = serverUrl.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/business/get/profile`, {
+        method: 'POST',
+        headers: { 'token': token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jid: '' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const profile = data?.data || data?.profile || data;
+        setProfileDescription(profile?.description || '');
+        setProfileAddress(profile?.address || '');
+        setProfileEmail(profile?.email || '');
+      }
+    } catch {}
+    setLoadingProfile(false);
+  }, []);
+
+  // Load WhatsApp profile when editing a connected instance
+  useEffect(() => {
+    if (editingInstance?.id && connectionStatus[editingInstance.id] === 'connected') {
+      loadWhatsAppProfile(editingInstance.server_url, editingInstance.instance_token);
+    }
+  }, [editingInstance?.id, connectionStatus, loadWhatsAppProfile]);
+
+  const handleSaveProfileName = async () => {
+    if (!editingInstance) return;
+    setSavingProfileName(true);
+    try {
+      const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/profile/name`, {
+        method: 'POST',
+        headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: profileName }),
+      });
+      if (!res.ok) throw new Error('Falha ao alterar nome');
+      toast.success('Nome do perfil atualizado!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar nome');
+    } finally {
+      setSavingProfileName(false);
+    }
+  };
+
+  const handleSaveProfilePhoto = async (remove = false) => {
+    if (!editingInstance) return;
+    setSavingProfilePhoto(true);
+    try {
+      const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
+      const body = remove ? { remove: true } : { url: profilePhotoUrl };
+      const res = await fetch(`${cleanUrl}/profile/image`, {
+        method: 'POST',
+        headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Falha ao alterar foto');
+      toast.success(remove ? 'Foto removida!' : 'Foto do perfil atualizada!');
+      if (remove) setProfilePhotoUrl('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar foto');
+    } finally {
+      setSavingProfilePhoto(false);
+    }
+  };
+
+  const handleSaveProfileBusiness = async () => {
+    if (!editingInstance) return;
+    setSavingProfileBusiness(true);
+    try {
+      const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/business/update/profile`, {
+        method: 'POST',
+        headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: profileDescription, address: profileAddress, email: profileEmail }),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar dados comerciais');
+      toast.success('Dados comerciais atualizados!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar dados comerciais');
+    } finally {
+      setSavingProfileBusiness(false);
+    }
   };
 
   // Instance management
@@ -1990,6 +2095,125 @@ export default function Acionamento() {
                         <div className="flex items-center justify-center gap-2 p-4">
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                           <span className="text-sm text-muted-foreground">Obtendo QR Code...</span>
+                        </div>
+                      )}
+
+                      {/* WhatsApp Profile Editing - only for existing connected instances */}
+                      {editingInstance.id && connectionStatus[editingInstance.id] === 'connected' && (
+                        <div className="space-y-3 rounded-md border p-3 bg-background">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-sm font-semibold flex items-center gap-1.5">
+                              <User className="h-4 w-4" />
+                              Perfil WhatsApp
+                            </h5>
+                            {loadingProfile && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                          </div>
+
+                          {/* Profile Photo */}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs flex items-center gap-1">
+                              <ImageIcon className="h-3 w-3" /> Foto do perfil (URL da imagem)
+                            </Label>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="https://exemplo.com/foto.jpg"
+                                value={profilePhotoUrl}
+                                onChange={(e) => setProfilePhotoUrl(e.target.value)}
+                                className="text-xs h-8"
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => handleSaveProfilePhoto(false)}
+                                disabled={savingProfilePhoto || !profilePhotoUrl.trim()}
+                              >
+                                {savingProfilePhoto ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs"
+                                onClick={() => handleSaveProfilePhoto(true)}
+                                disabled={savingProfilePhoto}
+                              >
+                                Remover
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Profile Name */}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs flex items-center gap-1">
+                              <User className="h-3 w-3" /> Nome do perfil
+                            </Label>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Nome exibido no WhatsApp"
+                                value={profileName}
+                                onChange={(e) => setProfileName(e.target.value)}
+                                className="text-xs h-8"
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={handleSaveProfileName}
+                                disabled={savingProfileName || !profileName.trim()}
+                              >
+                                {savingProfileName ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* Business Info */}
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium flex items-center gap-1">
+                              <Building2 className="h-3 w-3" /> Dados Comerciais
+                            </p>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Descrição</Label>
+                              <Textarea
+                                placeholder="Descrição do negócio..."
+                                value={profileDescription}
+                                onChange={(e) => setProfileDescription(e.target.value)}
+                                className="text-xs min-h-[60px]"
+                                rows={2}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs flex items-center gap-1">
+                                <MapPin className="h-3 w-3" /> Endereço
+                              </Label>
+                              <Input
+                                placeholder="Endereço comercial"
+                                value={profileAddress}
+                                onChange={(e) => setProfileAddress(e.target.value)}
+                                className="text-xs h-8"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs flex items-center gap-1">
+                                <Mail className="h-3 w-3" /> Email
+                              </Label>
+                              <Input
+                                placeholder="email@empresa.com"
+                                value={profileEmail}
+                                onChange={(e) => setProfileEmail(e.target.value)}
+                                className="text-xs h-8"
+                                type="email"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              className="h-8 text-xs w-full"
+                              onClick={handleSaveProfileBusiness}
+                              disabled={savingProfileBusiness}
+                            >
+                              {savingProfileBusiness ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
+                              Salvar dados comerciais
+                            </Button>
+                          </div>
                         </div>
                       )}
 
