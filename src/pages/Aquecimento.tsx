@@ -133,6 +133,15 @@ export default function Aquecimento() {
     const sucessos = recentData?.filter((r: any) => ['ENTREGUE', 'RESPONDIDO', 'ENVIADO'].includes(r.status)).length || 0;
     const taxaSucesso = total7d > 0 ? Math.round((sucessos / total7d) * 100) : 0;
 
+    // Status posted today
+    const { count: statusHoje } = await supabase.from('whatsapp_aquecimento_status_log' as any).select('id', { count: 'exact', head: true }).gte('postado_em', today).eq('resultado', 'ENVIADO');
+
+    // Contacts saved this month
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const { count: contatosSalvosMes } = await supabase.from('whatsapp_aquecimento_interacoes' as any).select('id', { count: 'exact', head: true }).eq('tipo_interacao', 'contato_salvo').gte('enviado_em', monthStart.toISOString());
+
     setMetrics({
       total: total || 0,
       emAquecimento,
@@ -140,6 +149,8 @@ export default function Aquecimento() {
       interacoesHoje: interacoesHoje || 0,
       taxaSucesso,
       porFase,
+      statusHoje: statusHoje || 0,
+      contatosSalvosMes: contatosSalvosMes || 0,
     });
   }
 

@@ -358,11 +358,15 @@ export default function AquecimentoDashboard({ metrics }: Props) {
                   <div className="flex items-center gap-1.5 shrink-0 w-14 text-xs text-muted-foreground">
                     {item.enviado_em ? format(new Date(item.enviado_em), 'HH:mm') : '--:--'}
                   </div>
-                  <div className="shrink-0">{tipoIcon(item.tipo)}</div>
+                  <div className="shrink-0">{tipoIcon(item.tipo, item.tipo_interacao)}</div>
                   <div className="truncate flex-1 text-muted-foreground">
-                    <span className="font-medium text-foreground">{item.origem_nome}</span>
-                    <span className="mx-1">→</span>
-                    <span className="font-medium text-foreground">{item.destino_nome}</span>
+                    {item.tipo_interacao === 'status' ? (
+                      <><span className="font-medium text-foreground">{item.origem_nome}</span><span className="ml-1 text-xs text-purple-500">📸 postou status</span></>
+                    ) : item.tipo_interacao === 'contato_salvo' ? (
+                      <><span className="font-medium text-foreground">{item.origem_nome}</span><span className="ml-1 text-xs text-cyan-500">📇 salvou contato</span></>
+                    ) : (
+                      <><span className="font-medium text-foreground">{item.origem_nome}</span><span className="mx-1">→</span><span className="font-medium text-foreground">{item.destino_nome}</span></>
+                    )}
                     {item.conteudo && (
                       <span className="ml-2 text-xs">"{item.conteudo.length > 30 ? item.conteudo.slice(0, 30) + '…' : item.conteudo}"</span>
                     )}
