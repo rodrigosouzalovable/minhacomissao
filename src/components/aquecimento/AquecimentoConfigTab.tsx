@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Save, Clock, Calendar, MessageSquare, Timer, Zap } from 'lucide-react';
+import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone } from 'lucide-react';
 
 interface ConfigItem {
   id: string;
@@ -33,6 +33,10 @@ const DEFAULTS = {
   dias_ativos: [1, 2, 3, 4, 5, 6],
   delay_config: { min: 30, max: 180 },
   auto_start: { horario_inicio: '09:00', novas_instancias: false },
+  salvar_contatos_auto: true,
+  postar_status_auto: true,
+  status_incluir_imagens: true,
+  status_incluir_videos: false,
 };
 
 export default function AquecimentoConfigTab() {
@@ -79,7 +83,7 @@ export default function AquecimentoConfigTab() {
 
   async function saveAll() {
     setSaving(true);
-    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start'];
+    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
     for (const chave of knownKeys) {
       if (getConfig(chave)) {
         await saveConfig(chave);
@@ -99,7 +103,7 @@ export default function AquecimentoConfigTab() {
   const delayConfig = getVal('delay_config');
   const autoStart = getVal('auto_start');
 
-  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start'];
+  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
   const unknownConfigs = configs.filter(c => !knownKeys.includes(c.chave));
 
   const faseDescricoes: Record<number, string> = {
@@ -346,6 +350,73 @@ export default function AquecimentoConfigTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Comportamento Automático */}
+      <Card className="border-primary/30">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Smartphone className="h-5 w-5 text-primary" />
+            <CardTitle className="text-lg">Comportamento Automático</CardTitle>
+          </div>
+          <CardDescription>
+            Controles gerais do aquecimento automático. O sistema decide os detalhes (horário, conteúdo, frequência) com base na fase de cada número.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Camera className="h-5 w-5 text-purple-500" />
+                <div>
+                  <Label className="text-sm font-semibold">Postar status automaticamente</Label>
+                  <p className="text-xs text-muted-foreground">Cada número posta 1-2 status/dia (texto, imagem) conforme a fase</p>
+                </div>
+              </div>
+              <Switch
+                checked={editValues['postar_status_auto'] ?? DEFAULTS.postar_status_auto}
+                onCheckedChange={(checked) => updateLocal('postar_status_auto', checked)}
+              />
+            </div>
+            {(editValues['postar_status_auto'] ?? DEFAULTS.postar_status_auto) && (
+              <div className="ml-8 space-y-3 border-l-2 border-border pl-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Incluir imagens nos status (Fase 2+)</Label>
+                    <p className="text-xs text-muted-foreground">Posta imagens genéricas de paisagem, natureza, etc.</p>
+                  </div>
+                  <Switch
+                    checked={editValues['status_incluir_imagens'] ?? DEFAULTS.status_incluir_imagens}
+                    onCheckedChange={(checked) => updateLocal('status_incluir_imagens', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Incluir vídeos nos status (Fase 5+)</Label>
+                    <p className="text-xs text-muted-foreground">Vídeos curtos para números já aquecidos</p>
+                  </div>
+                  <Switch
+                    checked={editValues['status_incluir_videos'] ?? DEFAULTS.status_incluir_videos}
+                    onCheckedChange={(checked) => updateLocal('status_incluir_videos', checked)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-border">
+            <div className="flex items-center gap-3">
+              <UserPlus className="h-5 w-5 text-cyan-500" />
+              <div>
+                <Label className="text-sm font-semibold">Salvar contatos automaticamente</Label>
+                <p className="text-xs text-muted-foreground">Salva na agenda do WhatsApp números que enviam mensagem</p>
+              </div>
+            </div>
+            <Switch
+              checked={editValues['salvar_contatos_auto'] ?? DEFAULTS.salvar_contatos_auto}
+              onCheckedChange={(checked) => updateLocal('salvar_contatos_auto', checked)}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Fallback para configs desconhecidas */}
       {unknownConfigs.map(cfg => (

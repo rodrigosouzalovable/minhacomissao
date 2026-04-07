@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle } from 'lucide-react';
+import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DashboardMetrics {
@@ -13,6 +13,9 @@ interface DashboardMetrics {
   interacoes7d: number;
   taxaSucesso: number;
   agendados: number;
+  statusHoje?: number;
+  statusTotal?: number;
+  contatosSalvosMes?: number;
 }
 
 interface ActiveInstance {
@@ -33,6 +36,7 @@ interface ActiveInstance {
 interface TimelineItem {
   id: string;
   tipo: string;
+  tipo_interacao?: string;
   conteudo: string | null;
   status: string;
   enviado_em: string | null;
@@ -85,7 +89,9 @@ function findNextActiveDay(diasAtivos: number[], horaInicio: number, brNow: Date
   return { time: 'Não configurado', isActive: false, isToday: false };
 }
 
-function tipoIcon(tipo: string) {
+function tipoIcon(tipo: string, tipoInteracao?: string) {
+  if (tipoInteracao === 'status') return <Camera className="h-3.5 w-3.5 text-purple-500" />;
+  if (tipoInteracao === 'contato_salvo') return <UserPlus className="h-3.5 w-3.5 text-cyan-500" />;
   switch (tipo) {
     case 'texto': return <MessageCircle className="h-3.5 w-3.5" />;
     case 'audio': return <Mic className="h-3.5 w-3.5" />;
@@ -196,9 +202,10 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     setActiveInstances(mapped);
 
     // Build timeline (last 5 interactions of today)
-    const timelineData: TimelineItem[] = interacoes.slice(0, 5).map((i: any) => ({
+    const timelineData: TimelineItem[] = interacoes.slice(0, 10).map((i: any) => ({
       id: i.id,
       tipo: i.tipo,
+      tipo_interacao: i.tipo_interacao || 'mensagem',
       conteudo: i.conteudo,
       status: i.status,
       enviado_em: i.enviado_em,
@@ -218,13 +225,16 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   return (
     <div className="space-y-4">
       {/* Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Números</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.total}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em Aquecimento</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-green-500">{metrics.emAquecimento}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Interações Hoje</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.interacoesHoje}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Interações 7 dias</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.interacoes7d}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Taxa Sucesso</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.taxaSucesso}%</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Agendados</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-orange-500">{metrics.agendados}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Camera className="h-3.5 w-3.5" /> Status Hoje</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-purple-500">{metrics.statusHoje ?? 0}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><UserPlus className="h-3.5 w-3.5" /> Contatos Salvos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-cyan-500">{metrics.contatosSalvosMes ?? 0}<span className="text-xs text-muted-foreground ml-1">este mês</span></div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> Reputação</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{Math.min(100, Math.round(((metrics.statusHoje ?? 0) * 2 + (metrics.contatosSalvosMes ?? 0) * 0.5 + metrics.taxaSucesso) / 3))}%</div></CardContent></Card>
       </div>
 
       {/* Status Banner */}
@@ -348,11 +358,15 @@ export default function AquecimentoDashboard({ metrics }: Props) {
                   <div className="flex items-center gap-1.5 shrink-0 w-14 text-xs text-muted-foreground">
                     {item.enviado_em ? format(new Date(item.enviado_em), 'HH:mm') : '--:--'}
                   </div>
-                  <div className="shrink-0">{tipoIcon(item.tipo)}</div>
+                  <div className="shrink-0">{tipoIcon(item.tipo, item.tipo_interacao)}</div>
                   <div className="truncate flex-1 text-muted-foreground">
-                    <span className="font-medium text-foreground">{item.origem_nome}</span>
-                    <span className="mx-1">→</span>
-                    <span className="font-medium text-foreground">{item.destino_nome}</span>
+                    {item.tipo_interacao === 'status' ? (
+                      <><span className="font-medium text-foreground">{item.origem_nome}</span><span className="ml-1 text-xs text-purple-500">📸 postou status</span></>
+                    ) : item.tipo_interacao === 'contato_salvo' ? (
+                      <><span className="font-medium text-foreground">{item.origem_nome}</span><span className="ml-1 text-xs text-cyan-500">📇 salvou contato</span></>
+                    ) : (
+                      <><span className="font-medium text-foreground">{item.origem_nome}</span><span className="mx-1">→</span><span className="font-medium text-foreground">{item.destino_nome}</span></>
+                    )}
                     {item.conteudo && (
                       <span className="ml-2 text-xs">"{item.conteudo.length > 30 ? item.conteudo.slice(0, 30) + '…' : item.conteudo}"</span>
                     )}
