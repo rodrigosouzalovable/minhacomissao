@@ -2090,7 +2090,125 @@ export default function Acionamento() {
                         </div>
                       )}
 
-                      <div className="flex gap-2">
+                      {/* WhatsApp Profile Editing - only for existing connected instances */}
+                      {editingInstance.id && connectionStatus[editingInstance.id] === 'connected' && (
+                        <div className="space-y-3 rounded-md border p-3 bg-background">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-sm font-semibold flex items-center gap-1.5">
+                              <User className="h-4 w-4" />
+                              Perfil WhatsApp
+                            </h5>
+                            {loadingProfile && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                          </div>
+
+                          {/* Profile Photo */}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs flex items-center gap-1">
+                              <ImageIcon className="h-3 w-3" /> Foto do perfil (URL da imagem)
+                            </Label>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="https://exemplo.com/foto.jpg"
+                                value={profilePhotoUrl}
+                                onChange={(e) => setProfilePhotoUrl(e.target.value)}
+                                className="text-xs h-8"
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => handleSaveProfilePhoto(false)}
+                                disabled={savingProfilePhoto || !profilePhotoUrl.trim()}
+                              >
+                                {savingProfilePhoto ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs"
+                                onClick={() => handleSaveProfilePhoto(true)}
+                                disabled={savingProfilePhoto}
+                              >
+                                Remover
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Profile Name */}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs flex items-center gap-1">
+                              <User className="h-3 w-3" /> Nome do perfil
+                            </Label>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Nome exibido no WhatsApp"
+                                value={profileName}
+                                onChange={(e) => setProfileName(e.target.value)}
+                                className="text-xs h-8"
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={handleSaveProfileName}
+                                disabled={savingProfileName || !profileName.trim()}
+                              >
+                                {savingProfileName ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* Business Info */}
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium flex items-center gap-1">
+                              <Building2 className="h-3 w-3" /> Dados Comerciais
+                            </p>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Descrição</Label>
+                              <Textarea
+                                placeholder="Descrição do negócio..."
+                                value={profileDescription}
+                                onChange={(e) => setProfileDescription(e.target.value)}
+                                className="text-xs min-h-[60px]"
+                                rows={2}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs flex items-center gap-1">
+                                <MapPin className="h-3 w-3" /> Endereço
+                              </Label>
+                              <Input
+                                placeholder="Endereço comercial"
+                                value={profileAddress}
+                                onChange={(e) => setProfileAddress(e.target.value)}
+                                className="text-xs h-8"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs flex items-center gap-1">
+                                <Mail className="h-3 w-3" /> Email
+                              </Label>
+                              <Input
+                                placeholder="email@empresa.com"
+                                value={profileEmail}
+                                onChange={(e) => setProfileEmail(e.target.value)}
+                                className="text-xs h-8"
+                                type="email"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              className="h-8 text-xs w-full"
+                              onClick={handleSaveProfileBusiness}
+                              disabled={savingProfileBusiness}
+                            >
+                              {savingProfileBusiness ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
+                              Salvar dados comerciais
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                         <Button onClick={handleSaveInstance} disabled={savingInstance} size="sm">
                           {savingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                           Salvar
