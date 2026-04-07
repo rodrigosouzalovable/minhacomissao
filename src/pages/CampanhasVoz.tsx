@@ -68,9 +68,30 @@ export default function CampanhasVoz() {
   const [contactSource, setContactSource] = useState<'acordos' | 'devedores' | 'planilha'>('planilha');
   const [importedContacts, setImportedContacts] = useState<{ id: string; nome: string; telefone: string }[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>([]);
-  const [delayMin, setDelayMin] = useState(1);
-  const [delayMax, setDelayMax] = useState(5);
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('voice-campaign-instances');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [delayMin, setDelayMin] = useState(() => {
+    const saved = localStorage.getItem('voice-campaign-delay-min');
+    return saved ? Number(saved) : 1;
+  });
+  const [delayMax, setDelayMax] = useState(() => {
+    const saved = localStorage.getItem('voice-campaign-delay-max');
+    return saved ? Number(saved) : 5;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('voice-campaign-instances', JSON.stringify(selectedInstanceIds));
+  }, [selectedInstanceIds]);
+  useEffect(() => {
+    localStorage.setItem('voice-campaign-delay-min', String(delayMin));
+  }, [delayMin]);
+  useEffect(() => {
+    localStorage.setItem('voice-campaign-delay-max', String(delayMax));
+  }, [delayMax]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { sendingCampaignId, sendingProgress, startCampaign: startCampaignContext, cancelCampaign } = useVoiceCampaignSending();
 
