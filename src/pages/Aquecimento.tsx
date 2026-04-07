@@ -1,19 +1,16 @@
 import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Settings, List, MessageCircle } from 'lucide-react';
-import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
-import AquecimentoDialogosTab from '@/components/aquecimento/AquecimentoDialogosTab';
-import AquecimentoDashboard from '@/components/aquecimento/AquecimentoDashboard';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap } from 'lucide-react';
+import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -21,6 +18,7 @@ interface AquecimentoInstancia {
   instancia_id: string;
   status: string;
   fase: number;
+  fase_auto: boolean;
   dias_na_fase: number;
   interacoes_hoje: number;
   interacoes_total: number;
@@ -28,6 +26,7 @@ interface AquecimentoInstancia {
   limite_diario: number;
   ultima_interacao: string | null;
   instance_name?: string;
+  dias_conectado?: number;
 }
 
 interface Interacao {
@@ -45,21 +44,25 @@ interface Interacao {
   destino_nome?: string;
 }
 
+const PHASE_LABELS: Record<number, string> = {
+  1: 'Fase 1 — Iniciante (3/dia)',
+  2: 'Fase 2 — Crescimento (10/dia)',
+  3: 'Fase 3 — Maturação (20/dia)',
+  4: 'Fase 4 — Consolidação (30/dia)',
+  5: 'AQUECIDO ✅ (50/dia)',
+};
 
-
+const PHASE_DAYS: Record<number, number> = { 1: 7, 2: 14, 3: 21, 4: 28, 5: 28 };
 
 export default function Aquecimento() {
   const [instancias, setInstancias] = useState<AquecimentoInstancia[]>([]);
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
-  
   const [loading, setLoading] = useState(true);
-  const [checkingConnections, setCheckingConnections] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
-  const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, interacoesHoje: 0, interacoes7d: 0, taxaSucesso: 0, agendados: 0 });
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
-  const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set());
+  const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number> });
 
   useEffect(() => {
     loadAll();
@@ -72,54 +75,27 @@ export default function Aquecimento() {
   }
 
   async function loadInstancias() {
-    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, server_url, instance_token, ativo');
+    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, criado_em, ativo');
     setAllInstances(instances || []);
 
-    // Check connections
-    if (instances && instances.length > 0) {
-      setCheckingConnections(true);
-      const activeInstances = instances.filter((i: any) => i.ativo);
-      const initialStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
-      activeInstances.forEach((i: any) => { initialStatus[i.id] = 'checking'; });
-      setConnectionStatus(initialStatus);
-
-      const results = await Promise.allSettled(
-        activeInstances.map(async (inst: any) => {
-          try {
-            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
-              body: { server_url: inst.server_url, instance_token: inst.instance_token },
-            });
-            const connected = data?.ok === true;
-            return { id: inst.id, status: connected ? 'connected' as const : 'disconnected' as const };
-          } catch {
-            return { id: inst.id, status: 'disconnected' as const };
-          }
-        })
-      );
-
-      const finalStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
-      results.forEach((r) => {
-        if (r.status === 'fulfilled') {
-          finalStatus[r.value.id] = r.value.status;
-        }
-      });
-      setConnectionStatus(finalStatus);
-      setCheckingConnections(false);
-    }
-
     const { data } = await supabase.from('whatsapp_aquecimento_instancias' as any).select('*');
-    if (data) {
-      const mapped = (data as any[]).map((d: any) => ({
-        ...d,
-        instance_name: instances?.find((i: any) => i.id === d.instancia_id)?.nome || 'Sem nome',
-      }));
+    if (data && instances) {
+      const mapped = (data as any[]).map((d: any) => {
+        const inst = instances.find((i: any) => i.id === d.instancia_id);
+        const diasConectado = inst ? Math.floor((Date.now() - new Date(inst.criado_em).getTime()) / 86400000) : 0;
+        return {
+          ...d,
+          instance_name: inst?.nome || 'Sem nome',
+          dias_conectado: diasConectado,
+        };
+      });
       setInstancias(mapped);
     }
   }
 
   async function loadInteracoes() {
     const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome');
-    const instanceNameMap = new Map((instances || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
+    const nameMap = new Map((instances || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
 
     const { data } = await supabase
       .from('whatsapp_aquecimento_interacoes' as any)
@@ -127,300 +103,401 @@ export default function Aquecimento() {
       .order('created_at', { ascending: false })
       .limit(200);
     if (data) {
-      const mapped = (data as any[]).map((d: any) => ({
+      setInteracoes((data as any[]).map((d: any) => ({
         ...d,
-        origem_nome: instanceNameMap.get(d.instancia_origem_id) || 'Desconhecido',
-        destino_nome: instanceNameMap.get(d.instancia_destino_id) || 'Desconhecido',
-      }));
-      setInteracoes(mapped);
+        origem_nome: nameMap.get(d.instancia_origem_id) || '?',
+        destino_nome: nameMap.get(d.instancia_destino_id) || '?',
+      })));
     }
   }
-
-
-
 
   async function loadMetrics() {
     const { count: total } = await supabase.from('user_whatsapp_instances').select('id', { count: 'exact', head: true }).eq('ativo', true);
-    const { count: emAquecimento } = await supabase.from('whatsapp_aquecimento_instancias' as any).select('id', { count: 'exact', head: true }).eq('status', 'EM_AQUECIMENTO');
+    const { data: aquecData } = await supabase.from('whatsapp_aquecimento_instancias' as any).select('status, fase');
     
+    const emAquecimento = (aquecData || []).filter((a: any) => a.status === 'EM_AQUECIMENTO').length;
+    const aquecidos = (aquecData || []).filter((a: any) => a.status === 'AQUECIDO').length;
+    
+    const porFase: Record<number, number> = {};
+    (aquecData || []).filter((a: any) => a.status === 'EM_AQUECIMENTO').forEach((a: any) => {
+      porFase[a.fase] = (porFase[a.fase] || 0) + 1;
+    });
+
     const today = new Date().toISOString().split('T')[0];
     const { count: interacoesHoje } = await supabase.from('whatsapp_aquecimento_interacoes' as any).select('id', { count: 'exact', head: true }).gte('enviado_em', today);
-    
+
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
     const { data: recentData } = await supabase.from('whatsapp_aquecimento_interacoes' as any).select('status').gte('enviado_em', sevenDaysAgo);
-    const interacoes7d = recentData?.length || 0;
-    const sucessos = recentData?.filter((r: any) => ['ENTREGUE', 'RESPONDIDO'].includes(r.status)).length || 0;
-    const taxaSucesso = interacoes7d > 0 ? Math.round((sucessos / interacoes7d) * 100) : 0;
-
-    const { count: agendados } = await supabase.from('whatsapp_aquecimento_agendamentos' as any).select('id', { count: 'exact', head: true }).eq('status', 'AGENDADO');
+    const total7d = recentData?.length || 0;
+    const sucessos = recentData?.filter((r: any) => ['ENTREGUE', 'RESPONDIDO', 'ENVIADO'].includes(r.status)).length || 0;
+    const taxaSucesso = total7d > 0 ? Math.round((sucessos / total7d) * 100) : 0;
 
     setMetrics({
       total: total || 0,
-      emAquecimento: emAquecimento || 0,
+      emAquecimento,
+      aquecidos,
       interacoesHoje: interacoesHoje || 0,
-      interacoes7d,
       taxaSucesso,
-      agendados: agendados || 0,
+      porFase,
     });
   }
 
-  async function iniciarAquecimento(instanciaId: string) {
-    const existing = instancias.find(i => i.instancia_id === instanciaId);
-    if (existing) {
-      await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'EM_AQUECIMENTO' } as any).eq('id', existing.id);
-    } else {
-      await supabase.from('whatsapp_aquecimento_instancias' as any).insert({ instancia_id: instanciaId, status: 'EM_AQUECIMENTO' } as any);
-    }
-    toast({ title: 'Aquecimento iniciado!' });
-    loadAll();
-  }
-
   async function pausarAquecimento(id: string) {
-    const { error } = await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'PAUSADO' } as any).eq('id', id);
-    if (error) {
-      console.error('Erro ao pausar:', error);
-      toast({ title: 'Erro ao pausar', description: error.message, variant: 'destructive' });
-      return;
-    }
+    await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'PAUSADO' } as any).eq('id', id);
     toast({ title: 'Aquecimento pausado' });
     await loadAll();
   }
 
+  async function retomarAquecimento(id: string) {
+    await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'EM_AQUECIMENTO' } as any).eq('id', id);
+    toast({ title: 'Aquecimento retomado' });
+    await loadAll();
+  }
 
-
+  async function forcarReinicio() {
+    // Reset all PAUSADO to EM_AQUECIMENTO
+    await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'EM_AQUECIMENTO' } as any).eq('status', 'PAUSADO');
+    toast({ title: 'Todos os números pausados foram reiniciados' });
+    await loadAll();
+  }
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
       'EM_AQUECIMENTO': 'bg-green-500/20 text-green-400 border-green-500/30',
       'PAUSADO': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
       'AQUECIDO': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      'INATIVO': 'bg-muted text-muted-foreground',
       'BLOQUEADO': 'bg-red-500/20 text-red-400 border-red-500/30',
     };
-    return <Badge className={map[status] || ''}>{status}</Badge>;
+    return <Badge className={map[status] || 'bg-muted text-muted-foreground'}>{status}</Badge>;
   };
 
-  const faseLabel = (fase: number, status: string) => {
-    if (status === 'AQUECIDO') return 'AQUECIDO';
-    return `Fase ${fase}`;
-  };
+  const emAquecimentoInstances = instancias.filter(i => i.status === 'EM_AQUECIMENTO');
+  const pausadoInstances = instancias.filter(i => i.status === 'PAUSADO');
+  const aquecidoInstances = instancias.filter(i => i.status === 'AQUECIDO');
 
-  const connectedInstances = allInstances.filter(i => i.ativo && connectionStatus[i.id] === 'connected');
+  // Numbers close to being warmed (phase 4, sorted by days connected desc)
+  const proximosAquecer = emAquecimentoInstances
+    .filter(i => i.fase >= 3)
+    .sort((a, b) => (b.dias_conectado || 0) - (a.dias_conectado || 0))
+    .slice(0, 5);
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Flame className="h-8 w-8 text-orange-500" />
-          <div>
-            <h1 className="text-2xl font-bold">Aquecimento de WhatsApp</h1>
-            <p className="text-muted-foreground">Simule conversas naturais entre seus números para evitar bloqueios</p>
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <Flame className="h-8 w-8 text-orange-500" />
+            <div>
+              <h1 className="text-2xl font-bold">🤖 Aquecimento Automático</h1>
+              <p className="text-muted-foreground text-sm">Sistema 100% automático — números são detectados e aquecidos sem configuração</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+            </Button>
+            {pausadoInstances.length > 0 && (
+              <Button variant="outline" size="sm" onClick={forcarReinicio} className="gap-1">
+                <Zap className="h-4 w-4" /> Forçar Reinício ({pausadoInstances.length})
+              </Button>
+            )}
           </div>
         </div>
 
-        <Tabs defaultValue="dashboard">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="dashboard" className="gap-2"><BarChart3 className="h-4 w-4" />Dashboard</TabsTrigger>
-            <TabsTrigger value="numeros" className="gap-2"><Phone className="h-4 w-4" />Números</TabsTrigger>
-            <TabsTrigger value="config" className="gap-2"><Settings className="h-4 w-4" />Configurações</TabsTrigger>
-            <TabsTrigger value="dialogos" className="gap-2"><MessageCircle className="h-4 w-4" />Diálogos</TabsTrigger>
-            <TabsTrigger value="log" className="gap-2"><List className="h-4 w-4" />Log</TabsTrigger>
-          </TabsList>
+        {/* Tab Selector */}
+        <div className="flex gap-2">
+          <Button
+            variant={activeTab === 'dashboard' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('dashboard')}
+            className="gap-1"
+          >
+            <BarChart3 className="h-4 w-4" /> Dashboard
+          </Button>
+          <Button
+            variant={activeTab === 'log' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('log')}
+            className="gap-1"
+          >
+            <List className="h-4 w-4" /> Log de Interações
+          </Button>
+        </div>
 
-          <TabsContent value="dashboard">
-            <AquecimentoDashboard metrics={metrics} />
-          </TabsContent>
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            {/* Summary Cards */}
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Números Conectados</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{metrics.total}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Em Aquecimento</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-500">{metrics.emAquecimento}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {Object.entries(metrics.porFase).map(([f, c]) => `F${f}: ${c}`).join(' | ') || '-'}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Aquecidos ✅</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-500">{metrics.aquecidos}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Interações Hoje</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{metrics.interacoesHoje}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Taxa Sucesso (7d)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{metrics.taxaSucesso}%</div>
+                </CardContent>
+              </Card>
+            </div>
 
-          <TabsContent value="numeros">
-            <Card>
-              <CardHeader>
-                <CardTitle>Instâncias WhatsApp</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {checkingConnections && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Activity className="h-4 w-4 animate-spin" />
-                    Verificando conexões...
-                  </div>
-                )}
-                {selectedInstances.size > 0 && (
-                  <div className="flex items-center gap-3">
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        for (const id of selectedInstances) {
-                          await iniciarAquecimento(id);
-                        }
-                        setSelectedInstances(new Set());
-                      }}
-                      className="gap-1"
-                    >
-                      <Play className="h-3 w-3" /> Iniciar Aquecimento ({selectedInstances.size} selecionados)
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedInstances(new Set())}>Limpar seleção</Button>
-                  </div>
-                )}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">
-                        <Checkbox
-                          checked={(() => {
-                            const eligible = connectedInstances.filter(i => {
-                              const aq = instancias.find(a => a.instancia_id === i.id);
-                              return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
-                            });
-                            return eligible.length > 0 && eligible.every(i => selectedInstances.has(i.id));
-                          })()}
-                          onCheckedChange={(checked) => {
-                            const eligible = connectedInstances.filter(i => {
-                              const aq = instancias.find(a => a.instancia_id === i.id);
-                              return !aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO';
-                            });
-                            if (checked) {
-                              setSelectedInstances(new Set(eligible.map(i => i.id)));
-                            } else {
-                              setSelectedInstances(new Set());
-                            }
-                          }}
-                        />
-                      </TableHead>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Fase</TableHead>
-                      <TableHead>Dias na Fase</TableHead>
-                      <TableHead>Interações Hoje</TableHead>
-                      <TableHead>Taxa Resposta</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {connectedInstances.length === 0 && !checkingConnections && (
-                      <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum WhatsApp conectado</TableCell></TableRow>
-                    )}
-                    {connectedInstances.map(inst => {
-                      const aq = instancias.find(a => a.instancia_id === inst.id);
-                      const taxaResp = aq && aq.interacoes_total > 0 ? Math.round((aq.respostas_recebidas / aq.interacoes_total) * 100) : 0;
+            {/* Próximos a aquecer */}
+            {proximosAquecer.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Clock className="h-4 w-4" /> Próximos Números a Aquecer
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {proximosAquecer.map(inst => {
+                      const diasFaltam = Math.max(0, 28 - (inst.dias_conectado || 0));
+                      const progressPct = Math.min(100, Math.round(((inst.dias_conectado || 0) / 28) * 100));
                       return (
-                         <TableRow key={inst.id}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedInstances.has(inst.id)}
-                              onCheckedChange={(checked) => {
-                                const next = new Set(selectedInstances);
-                                if (checked) next.add(inst.id); else next.delete(inst.id);
-                                setSelectedInstances(next);
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">{inst.nome || 'Sem nome'}</TableCell>
-                          <TableCell>{aq ? faseLabel(aq.fase, aq.status) : '-'}</TableCell>
-                          <TableCell>{aq?.dias_na_fase ?? '-'}</TableCell>
-                          <TableCell>{aq ? `${aq.interacoes_hoje}/${aq.limite_diario}` : '-'}</TableCell>
-                          <TableCell>{aq ? `${taxaResp}%` : '-'}</TableCell>
-                          <TableCell>{aq ? statusBadge(aq.status) : statusBadge('INATIVO')}</TableCell>
-                          <TableCell>
-                            {(!aq || aq.status === 'INATIVO' || aq.status === 'PAUSADO') ? (
-                              <Button size="sm" variant="outline" onClick={() => iniciarAquecimento(inst.id)} className="gap-1">
-                                <Play className="h-3 w-3" /> Iniciar
-                              </Button>
-                            ) : aq.status === 'EM_AQUECIMENTO' ? (
-                              <Button size="sm" variant="outline" onClick={() => pausarAquecimento(aq.id)} className="gap-1">
-                                <Pause className="h-3 w-3" /> Pausar
-                              </Button>
-                            ) : null}
-                          </TableCell>
-                        </TableRow>
+                        <div key={inst.id} className="flex items-center gap-4 py-2">
+                          <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm truncate">{inst.instance_name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {diasFaltam === 0 ? 'Pronto!' : `faltam ${diasFaltam} dias`}
+                              </span>
+                            </div>
+                            <Progress value={progressPct} className="h-2" />
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">Fase {inst.fase}</Badge>
+                        </div>
                       );
                     })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="config">
-            <AquecimentoConfigTab />
-          </TabsContent>
-
-          <TabsContent value="dialogos">
-            <AquecimentoDialogosTab />
-          </TabsContent>
-
-          <TabsContent value="log">
-            <Card>
-              <CardHeader>
-                <CardTitle>Log de Interações</CardTitle>
-                <div className="flex gap-3 mt-3">
-                  <div>
-                    <Label className="text-xs">Status</Label>
-                    <select
-                      value={logFilterStatus}
-                      onChange={(e) => setLogFilterStatus(e.target.value)}
-                      className="ml-2 rounded border border-input bg-background px-2 py-1 text-sm"
-                    >
-                      <option value="todos">Todos</option>
-                      <option value="ENVIADO">Enviado</option>
-                      <option value="RESPONDIDO">Respondido</option>
-                      <option value="ENTREGUE">Entregue</option>
-                      <option value="FALHOU">Falhou</option>
-                    </select>
                   </div>
-                  <div>
-                    <Label className="text-xs">Data</Label>
-                    <Input
-                      type="date"
-                      value={logFilterDate}
-                      onChange={(e) => setLogFilterDate(e.target.value)}
-                      className="ml-2 w-40 h-8 text-sm inline-block"
-                    />
-                  </div>
-                  {(logFilterStatus !== 'todos' || logFilterDate) && (
-                    <Button variant="ghost" size="sm" onClick={() => { setLogFilterStatus('todos'); setLogFilterDate(''); }}>Limpar</Button>
-                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Main grid: Instances + Notifications */}
+            <div className="grid gap-6 lg:grid-cols-3">
+              {/* Instances List */}
+              <div className="lg:col-span-2 space-y-4">
+                {/* Aquecidos */}
+                {aquecidoInstances.length > 0 && (
+                  <Card className="border-green-500/30">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base text-green-500">✅ Números Aquecidos ({aquecidoInstances.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-2">
+                        {aquecidoInstances.map(inst => (
+                          <Badge key={inst.id} className="bg-green-500/20 text-green-400 border-green-500/30 text-sm py-1 px-3">
+                            📱 {inst.instance_name} — {inst.dias_conectado}d
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Em Aquecimento */}
+                {emAquecimentoInstances.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">🔥 Em Aquecimento ({emAquecimentoInstances.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Fase</TableHead>
+                            <TableHead>Dias</TableHead>
+                            <TableHead>Hoje</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead>Ação</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {emAquecimentoInstances.map(inst => (
+                            <TableRow key={inst.id}>
+                              <TableCell className="font-medium text-sm">📱 {inst.instance_name}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">{PHASE_LABELS[inst.fase] || `Fase ${inst.fase}`}</Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">{inst.dias_conectado}d</TableCell>
+                              <TableCell className="text-sm">{inst.interacoes_hoje}/{inst.limite_diario}</TableCell>
+                              <TableCell className="text-sm">{inst.interacoes_total}</TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="ghost" onClick={() => pausarAquecimento(inst.id)}>
+                                  <Pause className="h-3 w-3" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Pausados */}
+                {pausadoInstances.length > 0 && (
+                  <Card className="border-yellow-500/30">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base text-yellow-500">⏸️ Pausados ({pausadoInstances.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Fase</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead>Ação</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pausadoInstances.map(inst => (
+                            <TableRow key={inst.id}>
+                              <TableCell className="font-medium text-sm">{inst.instance_name}</TableCell>
+                              <TableCell><Badge variant="outline" className="text-xs">Fase {inst.fase}</Badge></TableCell>
+                              <TableCell className="text-sm">{inst.interacoes_total}</TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="ghost" onClick={() => retomarAquecimento(inst.id)}>
+                                  <Play className="h-3 w-3" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {instancias.length === 0 && !loading && (
+                  <Card className="border-dashed">
+                    <CardContent className="py-12 text-center text-muted-foreground">
+                      <Flame className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                      <p className="text-lg font-medium">Nenhum número em aquecimento</p>
+                      <p className="text-sm mt-1">Conecte um número WhatsApp e ele será detectado automaticamente!</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Notifications */}
+              <div>
+                <AquecimentoNotificacoes />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'log' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Log de Interações</CardTitle>
+              <div className="flex gap-3 mt-3">
+                <div>
+                  <Label className="text-xs">Status</Label>
+                  <select
+                    value={logFilterStatus}
+                    onChange={(e) => setLogFilterStatus(e.target.value)}
+                    className="ml-2 rounded border border-input bg-background px-2 py-1 text-sm"
+                  >
+                    <option value="todos">Todos</option>
+                    <option value="ENVIADO">Enviado</option>
+                    <option value="RESPONDIDO">Respondido</option>
+                    <option value="ENTREGUE">Entregue</option>
+                    <option value="FALHOU">Falhou</option>
+                  </select>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data/Hora</TableHead>
-                      <TableHead>Origem</TableHead>
-                      <TableHead>Destino</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Conteúdo</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Resposta</TableHead>
-                      <TableHead>Tempo Resp.</TableHead>
+                <div>
+                  <Label className="text-xs">Data</Label>
+                  <Input
+                    type="date"
+                    value={logFilterDate}
+                    onChange={(e) => setLogFilterDate(e.target.value)}
+                    className="ml-2 w-40 h-8 text-sm inline-block"
+                  />
+                </div>
+                {(logFilterStatus !== 'todos' || logFilterDate) && (
+                  <Button variant="ghost" size="sm" onClick={() => { setLogFilterStatus('todos'); setLogFilterDate(''); }}>Limpar</Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data/Hora</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead>Destino</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Conteúdo</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Resposta</TableHead>
+                    <TableHead>Tempo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {interacoes
+                    .filter(i => logFilterStatus === 'todos' || i.status === logFilterStatus)
+                    .filter(i => !logFilterDate || (i.enviado_em && i.enviado_em.startsWith(logFilterDate)))
+                    .map(i => (
+                    <TableRow key={i.id}>
+                      <TableCell className="text-sm whitespace-nowrap">{i.enviado_em ? format(new Date(i.enviado_em), 'dd/MM HH:mm') : '-'}</TableCell>
+                      <TableCell className="text-sm">{i.origem_nome}</TableCell>
+                      <TableCell className="text-sm">{i.destino_nome}</TableCell>
+                      <TableCell><Badge variant="outline">{i.tipo}</Badge></TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm">{i.conteudo}</TableCell>
+                      <TableCell>
+                        <Badge variant={i.status === 'RESPONDIDO' ? 'default' : i.status === 'FALHOU' ? 'destructive' : 'secondary'}>{i.status}</Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm">{i.conteudo_resposta || '-'}</TableCell>
+                      <TableCell>{i.tempo_resposta_segundos ? `${i.tempo_resposta_segundos}s` : '-'}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {interacoes
-                      .filter(i => logFilterStatus === 'todos' || i.status === logFilterStatus)
-                      .filter(i => !logFilterDate || (i.enviado_em && i.enviado_em.startsWith(logFilterDate)))
-                      .map(i => (
-                      <TableRow key={i.id}>
-                        <TableCell className="text-sm whitespace-nowrap">{i.enviado_em ? format(new Date(i.enviado_em), 'dd/MM HH:mm') : '-'}</TableCell>
-                        <TableCell className="text-sm">{i.origem_nome || '-'}</TableCell>
-                        <TableCell className="text-sm">{i.destino_nome || '-'}</TableCell>
-                        <TableCell><Badge variant="outline">{i.tipo}</Badge></TableCell>
-                        <TableCell className="max-w-[200px] truncate text-sm">{i.conteudo}</TableCell>
-                        <TableCell>
-                          <Badge variant={i.status === 'RESPONDIDO' ? 'default' : i.status === 'FALHOU' ? 'destructive' : 'secondary'}>{i.status}</Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate text-sm">{i.conteudo_resposta || '-'}</TableCell>
-                        <TableCell>{i.tempo_resposta_segundos ? `${i.tempo_resposta_segundos}s` : '-'}</TableCell>
-                      </TableRow>
-                    ))}
-                    {interacoes.filter(i => logFilterStatus === 'todos' || i.status === logFilterStatus).filter(i => !logFilterDate || (i.enviado_em && i.enviado_em.startsWith(logFilterDate))).length === 0 && (
-                      <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma interação registrada</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  ))}
+                  {interacoes.filter(i => logFilterStatus === 'todos' || i.status === logFilterStatus).filter(i => !logFilterDate || (i.enviado_em && i.enviado_em.startsWith(logFilterDate))).length === 0 && (
+                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma interação registrada</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppLayout>
   );
