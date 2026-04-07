@@ -501,7 +501,26 @@ export default function CampanhasVoz() {
 
               {/* WhatsApp instances */}
               <div>
-                <Label>WhatsApp para envio (selecione um ou mais)</Label>
+              <div className="flex items-center justify-between">
+                  <Label>WhatsApp para envio ({selectedInstanceIds.length}/{instances.length} selecionadas)</Label>
+                  {!checkingConnections && instances.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        if (selectedInstanceIds.length === instances.length) {
+                          setSelectedInstanceIds([]);
+                        } else {
+                          setSelectedInstanceIds(instances.map(i => i.id));
+                        }
+                      }}
+                    >
+                      {selectedInstanceIds.length === instances.length ? 'Desmarcar todas' : 'Selecionar todas'}
+                    </Button>
+                  )}
+                </div>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
                   {checkingConnections && (
                     <p className="text-sm text-muted-foreground flex items-center gap-2">
