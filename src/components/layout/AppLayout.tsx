@@ -32,6 +32,7 @@ import { RetornoAlertChecker } from '@/components/RetornoAlertChecker';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import acordosIcon from '@/assets/acordos-icon.png';
 import { supabase } from '@/integrations/supabase/client';
+import { useVoiceCampaignSending } from '@/contexts/VoiceCampaignSendingContext';
 import {
   DndContext,
   closestCenter,
@@ -116,6 +117,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(null);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { sendingCampaignId, sendingProgress } = useVoiceCampaignSending();
 
   // Load sidebar order from profile
   useEffect(() => {
@@ -335,6 +337,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                       isActive={location.pathname === item.href}
                       onClick={() => setMobileMenuOpen(false)}
                       badge={item.href === '/inbox' ? inboxUnreadCount : undefined}
+                      statusBadge={item.href === '/campanhas-voz' && sendingCampaignId && sendingProgress
+                        ? `${sendingProgress.sent + sendingProgress.errors}/${sendingProgress.total}`
+                        : undefined}
                     />
                   ))}
                 </SortableContext>
