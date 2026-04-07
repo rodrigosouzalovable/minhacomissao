@@ -223,7 +223,7 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   return (
     <div className="space-y-4">
       {/* Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Números</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.total}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Em Aquecimento</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-green-500">{metrics.emAquecimento}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Interações Hoje</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{metrics.interacoesHoje}</div></CardContent></Card>
