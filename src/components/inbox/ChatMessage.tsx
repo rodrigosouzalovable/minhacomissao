@@ -213,7 +213,7 @@ export function ChatMessage({ msg, formatMsgTime }: ChatMessageProps) {
       <div className={cn("flex", isSaida ? "justify-end" : "justify-start")}>
         <div
           className={cn(
-            "max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm",
+            "max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm overflow-hidden break-words",
             isSaida
               ? "bg-primary text-primary-foreground rounded-br-none"
               : "bg-card text-card-foreground border border-border rounded-bl-none"
