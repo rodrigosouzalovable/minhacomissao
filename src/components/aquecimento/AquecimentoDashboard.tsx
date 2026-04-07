@@ -36,6 +36,7 @@ interface ActiveInstance {
 interface TimelineItem {
   id: string;
   tipo: string;
+  tipo_interacao?: string;
   conteudo: string | null;
   status: string;
   enviado_em: string | null;
