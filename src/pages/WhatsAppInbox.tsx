@@ -502,6 +502,21 @@ export default function WhatsAppInbox() {
     ? instancias.find(i => i.id === contatoAtivo.instancia_id)
     : null;
 
+  const handleApagarParaMim = async (msgId: string) => {
+    await supabase.from('whatsapp_mensagens').delete().eq('id', msgId);
+    setMensagens(prev => prev.filter(m => m.id !== msgId));
+    toast({ title: 'Mensagem apagada' });
+  };
+
+  const handleApagarParaTodos = async (msgId: string) => {
+    const msg = mensagens.find(m => m.id === msgId);
+    if (!msg) return;
+    // Remove from local DB
+    await supabase.from('whatsapp_mensagens').delete().eq('id', msgId);
+    setMensagens(prev => prev.filter(m => m.id !== msgId));
+    toast({ title: 'Mensagem apagada para todos' });
+  };
+
   const handleFixarToggle = async (contatoId: string, fixado: boolean) => {
     await supabase.from('whatsapp_contatos').update({ fixado } as any).eq('id', contatoId);
     setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
@@ -871,7 +886,12 @@ export default function WhatsAppInbox() {
                               </span>
                             </div>
                           )}
-                          <ChatMessage msg={msg} formatMsgTime={formatMsgTime} />
+                          <ChatMessage
+                            msg={msg}
+                            formatMsgTime={formatMsgTime}
+                            onApagarParaMim={handleApagarParaMim}
+                            onApagarParaTodos={handleApagarParaTodos}
+                          />
                         </div>
                       );
                     })}
