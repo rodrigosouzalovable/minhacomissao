@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle } from 'lucide-react';
+import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DashboardMetrics {
@@ -13,6 +13,9 @@ interface DashboardMetrics {
   interacoes7d: number;
   taxaSucesso: number;
   agendados: number;
+  statusHoje?: number;
+  statusTotal?: number;
+  contatosSalvosMes?: number;
 }
 
 interface ActiveInstance {
@@ -85,7 +88,9 @@ function findNextActiveDay(diasAtivos: number[], horaInicio: number, brNow: Date
   return { time: 'Não configurado', isActive: false, isToday: false };
 }
 
-function tipoIcon(tipo: string) {
+function tipoIcon(tipo: string, tipoInteracao?: string) {
+  if (tipoInteracao === 'status') return <Camera className="h-3.5 w-3.5 text-purple-500" />;
+  if (tipoInteracao === 'contato_salvo') return <UserPlus className="h-3.5 w-3.5 text-cyan-500" />;
   switch (tipo) {
     case 'texto': return <MessageCircle className="h-3.5 w-3.5" />;
     case 'audio': return <Mic className="h-3.5 w-3.5" />;
