@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { MentorChat } from '@/components/monitor/MentorChat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -56,6 +57,7 @@ export default function MonitorEnvios() {
   const [limiteDiario, setLimiteDiario] = useState(30);
   const [delaySegundos, setDelaySegundos] = useState(400);
   const [configOpen, setConfigOpen] = useState(false);
+  const [mentorOpen, setMentorOpen] = useState(false);
   const [tempLimite, setTempLimite] = useState(30);
   const [tempDelay, setTempDelay] = useState(400);
 
@@ -250,6 +252,29 @@ export default function MonitorEnvios() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Floating mentor button */}
+      <button
+        onClick={() => setMentorOpen(true)}
+        className="fixed bottom-6 right-6 z-40 bg-primary text-primary-foreground rounded-full px-4 py-3 shadow-lg hover:shadow-xl transition-all flex items-center gap-2 text-sm font-medium"
+      >
+        💬 Consultar Especialista
+      </button>
+
+      <MentorChat
+        open={mentorOpen}
+        onOpenChange={setMentorOpen}
+        contexto={{
+          totalEnviadas,
+          totalAtivas,
+          totalInstancias: instances.length,
+          totalCapacidade,
+          progresso,
+          limiteDiario,
+          delaySegundos,
+          instances,
+        }}
+      />
     </AppLayout>
   );
 }
