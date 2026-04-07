@@ -239,26 +239,39 @@ export default function ImportarDevedores() {
     // Fetch existing devedores for these CPFs
     const existingMap = new Map<string, { cpf: string; contrato: string; descricao: string; data_vencimento: string }[]>();
     
-    for (let i = 0; i < uniqueCpfs.length; i += 50) {
-      const batch = uniqueCpfs.slice(i, i + 50);
-      const { data } = await supabase
-        .from('devedores')
-        .select('cpf, contrato, descricao, data_vencimento')
-        .eq('credor', 'MONTREAL')
-        .eq('ativo', true)
-        .in('cpf', batch);
+    for (let i = 0; i < uniqueCpfs.length; i += 10) {
+      const batch = uniqueCpfs.slice(i, i + 10);
+      let allData: any[] = [];
+      let from = 0;
+      const PAGE_SIZE = 1000;
       
-      if (data) {
-        for (const d of data) {
-          const cpfNorm = (d.cpf || '').replace(/\D/g, '');
-          if (!existingMap.has(cpfNorm)) existingMap.set(cpfNorm, []);
-          existingMap.get(cpfNorm)!.push({
-            cpf: cpfNorm,
-            contrato: d.contrato || '',
-            descricao: d.descricao || '',
-            data_vencimento: d.data_vencimento || '',
-          });
+      while (true) {
+        const { data } = await supabase
+          .from('devedores')
+          .select('cpf, contrato, descricao, data_vencimento')
+          .eq('credor', 'MONTREAL')
+          .eq('ativo', true)
+          .in('cpf', batch)
+          .range(from, from + PAGE_SIZE - 1);
+        
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          if (data.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        } else {
+          break;
         }
+      }
+      
+      for (const d of allData) {
+        const cpfNorm = (d.cpf || '').replace(/\D/g, '');
+        if (!existingMap.has(cpfNorm)) existingMap.set(cpfNorm, []);
+        existingMap.get(cpfNorm)!.push({
+          cpf: cpfNorm,
+          contrato: d.contrato || '',
+          descricao: d.descricao || '',
+          data_vencimento: d.data_vencimento || '',
+        });
       }
     }
 
