@@ -889,6 +889,110 @@ export default function ImportarDevedores() {
           </CardContent>
         </Card>
 
+        {/* Montreal Atualização Preview */}
+        {isMontrealAtualizacao && montrealRows.length > 0 && (() => {
+          const existe = montrealRows.filter(r => r.status_importacao === 'existe').length;
+          const novaParcela = montrealRows.filter(r => r.status_importacao === 'nova_parcela').length;
+          const clienteNovo = montrealRows.filter(r => r.status_importacao === 'cliente_novo').length;
+          const toImport = novaParcela + clienteNovo;
+          return (
+            <Card className="mb-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-5 w-5" />
+                      Preview Montreal ({montrealRows.length} registros)
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      {file?.name} — 
+                      <span className="text-green-600 font-medium"> {existe} já existem</span>,
+                      <span className="text-yellow-600 font-medium"> {novaParcela} novas parcelas</span>,
+                      <span className="text-blue-600 font-medium"> {clienteNovo} clientes novos</span>
+                      {toImport > 0 && <span className="font-semibold"> → {toImport} serão importados</span>}
+                    </CardDescription>
+                  </div>
+                  {!imported ? (
+                    <Button
+                      onClick={handleImportMontrealAtualizacao}
+                      disabled={importing || toImport === 0}
+                      style={{ background: '#00a86b', color: '#fff' }}
+                    >
+                      {importing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          Importando...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-1" />
+                          Importar {toImport} registros
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
+                      <Check className="h-4 w-4" />
+                      {insertedCount} registros importados
+                    </div>
+                  )}
+                </div>
+                {importing && (
+                  <div className="mt-4 space-y-2">
+                    <Progress value={importProgress} className="h-3" />
+                    <p className="text-sm text-muted-foreground text-center">
+                      Inserindo {insertedCount.toLocaleString('pt-BR')} de {toImport.toLocaleString('pt-BR')} registros... ({importProgress}%)
+                    </p>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto max-h-96">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Status</TableHead>
+                        <TableHead>CPF/CNPJ</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Nro Nota</TableHead>
+                        <TableHead>Desdob.</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead>Valor (R$)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {montrealRows.slice(0, 100).map((row, i) => (
+                        <TableRow key={i} className={row.status_importacao === 'existe' ? 'opacity-50' : ''}>
+                          <TableCell>
+                            {row.status_importacao === 'existe' ? (
+                              <Badge className="bg-green-600 hover:bg-green-700 text-white">Já existe</Badge>
+                            ) : row.status_importacao === 'nova_parcela' ? (
+                              <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Nova parcela</Badge>
+                            ) : (
+                              <Badge className="bg-blue-500 hover:bg-blue-600 text-white">Cliente novo</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
+                          <TableCell>{row.nome}</TableCell>
+                          <TableCell>{row.contrato || '-'}</TableCell>
+                          <TableCell>{row.descricao || '-'}</TableCell>
+                          <TableCell>{row.atraso || '-'}</TableCell>
+                          <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {montrealRows.length > 100 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      Mostrando 100 de {montrealRows.length} registros
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* Pagamentos Preview */}
         {isPagamentos && pagamentoRows.length > 0 && (
           <Card className="mb-6">
