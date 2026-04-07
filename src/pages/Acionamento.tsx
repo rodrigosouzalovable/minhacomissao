@@ -2209,6 +2209,7 @@ export default function Acionamento() {
                         </div>
                       )}
 
+                      <div className="flex gap-2">
                         <Button onClick={handleSaveInstance} disabled={savingInstance} size="sm">
                           {savingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                           Salvar
