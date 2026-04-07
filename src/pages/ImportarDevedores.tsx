@@ -194,6 +194,58 @@ export default function ImportarDevedores() {
     }).filter(r => r.cpf.length >= 11);
   };
 
+  const parseMontrealAtualizacao = async (dataRows: Record<string, unknown>[]): Promise<MontrealAtualizacaoRow[]> => {
+    const parsed = parseMontreal(dataRows);
+    if (parsed.length === 0) return [];
+
+    const uniqueCpfs = [...new Set(parsed.map(r => r.cpf))];
+
+    // Fetch existing devedores for these CPFs
+    const existingMap = new Map<string, { cpf: string; contrato: string; descricao: string; data_vencimento: string }[]>();
+    
+    for (let i = 0; i < uniqueCpfs.length; i += 50) {
+      const batch = uniqueCpfs.slice(i, i + 50);
+      const { data } = await supabase
+        .from('devedores')
+        .select('cpf, contrato, descricao, data_vencimento')
+        .eq('credor', 'MONTREAL')
+        .eq('ativo', true)
+        .in('cpf', batch);
+      
+      if (data) {
+        for (const d of data) {
+          const cpfNorm = (d.cpf || '').replace(/\D/g, '');
+          if (!existingMap.has(cpfNorm)) existingMap.set(cpfNorm, []);
+          existingMap.get(cpfNorm)!.push({
+            cpf: cpfNorm,
+            contrato: d.contrato || '',
+            descricao: d.descricao || '',
+            data_vencimento: d.data_vencimento || '',
+          });
+        }
+      }
+    }
+
+    return parsed.map(row => {
+      const existingForCpf = existingMap.get(row.cpf);
+      if (!existingForCpf || existingForCpf.length === 0) {
+        return { ...row, status_importacao: 'cliente_novo' as MontrealRowStatus };
+      }
+
+      const vencIso = parseDate(row.atraso);
+      const match = existingForCpf.find(e => 
+        e.contrato === (row.contrato || '') && 
+        e.descricao === (row.descricao || '') &&
+        e.data_vencimento === (vencIso || '')
+      );
+
+      return {
+        ...row,
+        status_importacao: match ? 'existe' as MontrealRowStatus : 'nova_parcela' as MontrealRowStatus,
+      };
+    });
+  };
+
   const parsePesquisa = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
     return dataRows.map((row) => {
       const cpf = String(row['A'] ?? '').replace(/\D/g, '');
