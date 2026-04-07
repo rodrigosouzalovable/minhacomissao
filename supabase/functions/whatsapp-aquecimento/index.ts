@@ -45,6 +45,13 @@ Deno.serve(async (req) => {
     const config: Record<string, any> = {};
     (configRows || []).forEach((c: any) => { config[c.chave] = c.valor; });
 
+    // Admin user filter - only process instances belonging to this user
+    const adminUserId = config.admin_user_id || null;
+    if (!adminUserId) {
+      console.log("[AQUECIMENTO-AUTO] admin_user_id não configurado. Abortando.");
+      return new Response(JSON.stringify({ error: "admin_user_id não configurado" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const horario = config.horario_comercial || { inicio: "08:00", fim: "18:00" };
     const [hInicio] = (horario.inicio || "08:00").split(":").map(Number);
     const [hFim] = (horario.fim || "18:00").split(":").map(Number);
@@ -66,7 +73,8 @@ Deno.serve(async (req) => {
     const { data: allActiveInstances } = await supabase
       .from("user_whatsapp_instances")
       .select("id, nome, server_url, instance_token, criado_em, ativo")
-      .eq("ativo", true);
+      .eq("ativo", true)
+      .eq("user_id", adminUserId);
 
     const { data: existingAquecimento } = await supabase
       .from("whatsapp_aquecimento_instancias")
