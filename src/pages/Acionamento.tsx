@@ -937,28 +937,52 @@ export default function Acionamento() {
       });
       if (res.ok) {
         const data = await res.json();
+        console.log('[WhatsApp Profile] /business/get/profile response:', JSON.stringify(data));
         const profile = data?.data || data?.profile || data;
         setProfileDescription(profile?.description || '');
         setProfileAddress(profile?.address || '');
         setProfileEmail(profile?.email || '');
-        if (profile?.profilePictureUrl || profile?.imgUrl || profile?.picture) {
-          setCurrentProfilePhotoUrl(profile?.profilePictureUrl || profile?.imgUrl || profile?.picture || '');
-        }
+        // Try multiple photo fields
+        const photoFromProfile = profile?.profilePictureUrl || profile?.imgUrl || profile?.picture || profile?.photo || profile?.profilePicUrl || '';
+        if (photoFromProfile) setCurrentProfilePhotoUrl(photoFromProfile);
       }
-      // Try to fetch profile picture URL separately
+
+      // Try /contacts/getProfilePicture with own number
       try {
-        const picRes = await fetch(`${cleanUrl}/profile/image`, {
+        const picRes = await fetch(`${cleanUrl}/contacts/getProfilePicture`, {
           method: 'POST',
           headers: { 'token': token, 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         });
         if (picRes.ok) {
           const picData = await picRes.json();
-          const picUrl = picData?.data?.profilePictureUrl || picData?.data?.imgUrl || picData?.profilePictureUrl || picData?.imgUrl || picData?.url || '';
+          console.log('[WhatsApp Profile] /contacts/getProfilePicture response:', JSON.stringify(picData));
+          const picUrl = picData?.data?.profilePictureUrl || picData?.data?.imgUrl || picData?.profilePictureUrl || picData?.imgUrl || picData?.url || picData?.data?.url || picData?.data?.picture || '';
           if (picUrl) setCurrentProfilePhotoUrl(picUrl);
         }
-      } catch {}
-    } catch {}
+      } catch (e) {
+        console.log('[WhatsApp Profile] /contacts/getProfilePicture error:', e);
+      }
+
+      // Try /instance/info as fallback
+      try {
+        const infoRes = await fetch(`${cleanUrl}/instance/info`, {
+          method: 'GET',
+          headers: { 'token': token },
+        });
+        if (infoRes.ok) {
+          const infoData = await infoRes.json();
+          console.log('[WhatsApp Profile] /instance/info response:', JSON.stringify(infoData));
+          const info = infoData?.data || infoData;
+          const infoPhoto = info?.profilePictureUrl || info?.imgUrl || info?.picture || info?.photo || info?.profilePicUrl || '';
+          if (infoPhoto) setCurrentProfilePhotoUrl(infoPhoto);
+        }
+      } catch (e) {
+        console.log('[WhatsApp Profile] /instance/info error:', e);
+      }
+    } catch (e) {
+      console.log('[WhatsApp Profile] main error:', e);
+    }
     setLoadingProfile(false);
   }, []);
 
