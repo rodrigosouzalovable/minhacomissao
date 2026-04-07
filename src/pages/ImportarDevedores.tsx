@@ -20,7 +20,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 
-type CredorLayout = 'padrao' | 'montreal' | 'cobmais' | 'pesquisa' | 'pagamentos';
+type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos';
+
+type MontrealRowStatus = 'existe' | 'nova_parcela' | 'cliente_novo';
+
+interface MontrealAtualizacaoRow extends DevedorRow {
+  status_importacao: MontrealRowStatus;
+}
 
 interface DevedorRow {
   cpf: string;
@@ -61,6 +67,7 @@ interface Importacao {
 const DESCRICOES: Record<CredorLayout, string> = {
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
+  montreal_atualizacao: 'Importação inteligente MONTREAL — Cruza com dados existentes e insere apenas parcelas novas. Mesmo layout da planilha Montreal.',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
   pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
   pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
@@ -92,10 +99,14 @@ export default function ImportarDevedores() {
   const [pagamentoProgress, setPagamentoProgress] = useState(0);
   const [pagamentoUpdated, setPagamentoUpdated] = useState(0);
 
+  // Montreal Atualização state
+  const [montrealRows, setMontrealRows] = useState<MontrealAtualizacaoRow[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const CREDORES_OPCOES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
 
   const isPagamentos = credorSelecionado === 'pagamentos';
+  const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -118,10 +129,14 @@ export default function ImportarDevedores() {
     setFile(null);
     setRows([]);
     setPagamentoRows([]);
+    setMontrealRows([]);
     setImported(false);
     setPagamentoImported(false);
     if (value === 'pagamentos') {
       setCredorDestino('UME | NOVO MUNDO');
+    }
+    if (value === 'montreal_atualizacao') {
+      setCredorDestino('MONTREAL');
     }
   };
 
