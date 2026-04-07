@@ -1,65 +1,43 @@
 
 
-## Plano: Relatório Diário de Aquecimento via WhatsApp às 20h
+## Plano: Sincronizar contagem de números no Aquecimento com status real de conexão
 
-### Resumo
-Criar uma Edge Function que envia um relatório resumido do aquecimento de todos os números via WhatsApp, agendado para as 20h (BRT), usando a mesma instância e telefone destino configurados no `relatorio_diario_config`.
+### Problema
+A aba Aquecimento conta **todas** as linhas da tabela `user_whatsapp_instances` com `ativo=true` (49), mas na realidade apenas 46 estão conectadas ao WhatsApp. O campo `ativo` não é atualizado quando um número desconecta — ele continua `true`.
 
----
+### Solução
 
-### 1. Nova Edge Function `daily-report-aquecimento`
+**1. Usar a mesma lógica de conexão do Acionamento**
 
-Seguindo o padrão do `daily-report-whatsapp`:
-- Busca config de `relatorio_diario_config` (mesma instância e telefone destino)
-- Consulta todas as instâncias de aquecimento ativas
-- Para cada número, coleta: fase atual, dias conectado, status postados hoje, contatos salvos hoje, total de interações do dia
-- Gera mensagem formatada com seções:
+No `loadMetrics()` do `Aquecimento.tsx`, em vez de contar apenas `ativo=true`, verificar o status real de conexão das instâncias usando a API UAZAPI (mesmo mecanismo que o Acionamento usa via `checkInstanceConnections`).
 
-```text
-📱 RELATÓRIO DE AQUECIMENTO - 07/04/2026
+Porém isso seria lento (chamada API por instância). A abordagem mais prática:
 
-📊 RESUMO GERAL
-• 45 números ativos
-• 38 status postados hoje (84%)
-• 12 contatos salvos hoje
-• 0 alertas críticos
+**Abordagem escolhida: Atualizar `ativo=false` quando desconectar**
 
-🔥 POR FASE:
-• Fase 5 (Aquecidos): 20 números
-• Fase 4: 8 números
-• Fase 3: 7 números
-• Fase 2: 6 números
-• Fase 1: 4 números
+Adicionar lógica para que, quando o sistema detecta uma instância desconectada (no Acionamento ou no ciclo de aquecimento), marque `ativo=false` na tabela `user_whatsapp_instances`. Isso mantém a contagem coerente em todas as páginas.
 
-⚠️ ALERTAS:
-• Número X pausado por falhas
-• Número Y não postou status (3 dias)
+**2. Alterações no `src/pages/Aquecimento.tsx`**
 
-━━━━━━━━━━━━━━━━━━━━
-✅ Sistema 100% autônomo
-```
+- O card "Total Números" passa a refletir apenas instâncias que estão na tabela de aquecimento **e** existem em `user_whatsapp_instances` com `ativo=true` (join).
+- Melhorar a query do `loadMetrics()` para cruzar com instâncias reais ativas.
 
-### 2. Cron Job (pg_cron)
+**3. Limpeza automática na Edge Function `whatsapp-aquecimento`**
 
-Agendar via `cron.schedule` para executar às 23:00 UTC (= 20:00 BRT):
+Adicionar ao início do ciclo de 15min:
+- Verificar se cada instância em aquecimento ainda existe em `user_whatsapp_instances` com `ativo=true`
+- Se não existe mais → atualizar status para `REMOVIDO` na tabela de aquecimento
+- Isso garante que números desconectados/removidos saiam automaticamente do aquecimento
 
-```sql
-SELECT cron.schedule(
-  'daily-report-aquecimento-20h',
-  '0 23 * * *',
-  $$ SELECT net.http_post(...) $$
-);
-```
+**4. Alterações no `src/pages/Acionamento.tsx`**
 
-### 3. Config no `supabase/config.toml`
+Quando `checkInstanceConnections` detectar uma instância desconectada, atualizar `ativo=false` no banco. Quando reconectar, voltar para `ativo=true`.
 
-Adicionar bloco `[functions.daily-report-aquecimento]` com `verify_jwt = false`.
+### Arquivos afetados
 
-### 4. Arquivos
-
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/daily-report-aquecimento/index.ts` | Criar (nova Edge Function) |
-| `supabase/config.toml` | Adicionar config da função |
-| Cron job via SQL insert | Agendar às 23:00 UTC |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/Aquecimento.tsx` | `loadMetrics()` — contar apenas instâncias com correspondência ativa |
+| `src/pages/Acionamento.tsx` | `checkInstanceConnections` — sincronizar `ativo` no banco |
+| `supabase/functions/whatsapp-aquecimento/index.ts` | Limpeza de instâncias removidas no início do ciclo |
 
