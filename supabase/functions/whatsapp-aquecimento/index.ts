@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
     const { data: allActiveInstances } = await supabase
       .from("user_whatsapp_instances")
       .select("id, nome, server_url, instance_token, criado_em, ativo")
-      .eq("ativo", true);
+      .eq("ativo", true)
+      .eq("user_id", adminUserId);
 
     const { data: existingAquecimento } = await supabase
       .from("whatsapp_aquecimento_instancias")
