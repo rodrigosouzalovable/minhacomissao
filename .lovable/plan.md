@@ -1,36 +1,39 @@
 
 
-## Plano: Exibir foto atual do perfil e permitir upload de arquivo
+## Plano: Exibir foto atual do perfil WhatsApp
 
 ### Problema
-1. A foto atual do perfil WhatsApp não é exibida no formulário de edição
-2. Só é possível alterar a foto via URL — o usuário quer poder fazer upload de arquivo local
+A foto do perfil não aparece porque estamos tentando buscar via endpoints que são para **alterar** a foto, não para **obter** a foto atual. O endpoint `/profile/image` (POST) é para definir uma nova imagem, e o `/business/get/profile` pode não retornar a URL da foto.
 
 ### Solução
 
 **Arquivo: `src/pages/Acionamento.tsx`**
 
-**1. Exibir foto atual do perfil**
-- Adicionar estado `currentProfilePhotoUrl` para armazenar a URL da foto atual
-- No `loadWhatsAppProfile`, buscar a foto atual via `GET {server_url}/profile/image` ou extrair do retorno de `/business/get/profile` (campo `profilePictureUrl` ou similar)
-- Exibir um avatar/thumbnail acima do input de foto mostrando a imagem atual (ou um placeholder se não houver)
+**1. Adicionar logging para depurar a resposta da API**
+- Adicionar `console.log` temporário nas respostas de `/business/get/profile` e `/profile/image` para ver exatamente o que a UAZAPI retorna — isso nos dirá se a foto está vindo em algum campo que não estamos lendo.
 
-**2. Upload de arquivo local (converter para base64)**
-- Substituir o input de URL por um input `type="file"` (accept="image/*") com um botão "Enviar"
-- Ao selecionar o arquivo, converter para base64 usando `FileReader`
-- Enviar para `POST /profile/image` com body `{ "base64": "data:image/jpeg;base64,..." }` (a UAZAPI aceita base64)
-- Exibir preview da imagem selecionada antes do envio
-- Manter o botão "Remover" para remover a foto
+**2. Usar o endpoint correto para buscar a foto**
+A UAZAPI provavelmente disponibiliza a foto do perfil via um endpoint de contatos ou instância. Vamos tentar:
+- `GET {server_url}/instance/info` ou `POST {server_url}/instance/info` — muitas APIs retornam dados completos da instância incluindo a foto
+- `POST {server_url}/contacts/getProfilePicture` com o próprio JID da instância — endpoint comum para obter foto de qualquer número
+- Manter o fallback para campos da resposta do `/business/get/profile`
 
-**3. Layout da seção de foto**
-- Foto atual (circular, ~64px) à esquerda
-- À direita: botão "Escolher imagem" + botão "Remover"
-- Abaixo: preview da imagem selecionada (se houver) + botão "Aplicar"
+**3. Atualizar `loadWhatsAppProfile`**
+- Tentar buscar a foto via múltiplos endpoints em cascata:
+  1. Extrair do retorno de `/business/get/profile` (campos: `profilePictureUrl`, `imgUrl`, `picture`, `profilePicUrl`, `photo`)
+  2. Tentar `POST /contacts/getProfilePicture` passando o JID próprio
+  3. Tentar `GET /instance/info` para dados completos
+- Logar a resposta completa de cada endpoint para debug
 
 ### Detalhes técnicos
 
-- A UAZAPI aceita base64 no endpoint `/profile/image` — o body pode ser `{ "url": "data:image/jpeg;base64,..." }` ou `{ "base64": "..." }`
-- O `loadWhatsAppProfile` será expandido para também buscar `profilePictureUrl` do retorno da API
-- Usar `FileReader.readAsDataURL()` para converter o arquivo para base64
-- Remover o campo `profilePhotoUrl` de texto e substituir por `profilePhotoFile` (File | null) e `profilePhotoPreview` (string base64)
+- O principal problema é que não sabemos com certeza o formato exato da resposta. Vou adicionar logs e testar múltiplos endpoints em cascata.
+- A abordagem será resiliente: tentar vários endpoints e usar o primeiro que retornar uma URL válida.
+- A foto será exibida no avatar circular já existente na UI.
+
+### Arquivo afetado
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/Acionamento.tsx` | Melhorar `loadWhatsAppProfile` com endpoints adicionais e logs de debug |
 
