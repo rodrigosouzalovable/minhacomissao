@@ -27,6 +27,7 @@ interface Props {
   contatoEtiquetaIds: string[];
   fixado: boolean;
   onMarcarNaoLida: () => void;
+  onExcluirConversa: (contatoId: string) => void;
   onEtiquetaToggle: (contatoId: string, etiquetaId: string, ativo: boolean) => void;
   onEtiquetasChange: () => void;
   onFixarToggle: (contatoId: string, fixado: boolean) => void;
