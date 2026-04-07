@@ -481,6 +481,35 @@ export default function WhatsAppInbox() {
     setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
   };
 
+  const handleExcluirConversa = async (contatoId: string) => {
+    const contato = contatos.find(c => c.id === contatoId);
+    if (!contato) return;
+
+    // Delete messages first, then the contact
+    await supabase
+      .from('whatsapp_mensagens')
+      .delete()
+      .eq('instancia_id', contato.instancia_id)
+      .eq('telefone_remoto', contato.telefone);
+
+    await supabase
+      .from('whatsapp_contato_etiquetas')
+      .delete()
+      .eq('contato_id', contatoId);
+
+    await supabase
+      .from('whatsapp_contatos')
+      .delete()
+      .eq('id', contatoId);
+
+    setContatos(prev => prev.filter(c => c.id !== contatoId));
+    if (contatoAtivo?.id === contatoId) {
+      setContatoAtivo(null);
+      setMensagens([]);
+    }
+    toast({ title: 'Conversa excluída' });
+  };
+
   const handleNovaConversa = async () => {
     if (!novoTelefone || !novaInstanciaId || !novaMensagem.trim()) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
@@ -646,6 +675,7 @@ export default function WhatsAppInbox() {
                     onEtiquetaToggle={handleEtiquetaToggle}
                     onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
                     onFixarToggle={handleFixarToggle}
+                    onExcluirConversa={handleExcluirConversa}
                   >
                     <button
                       onClick={() => handleSelectContato(contato)}

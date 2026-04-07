@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/context-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { MailOpen, Tag, Settings, Check, Pin } from 'lucide-react';
+import { MailOpen, Tag, Settings, Check, Pin, Trash2 } from 'lucide-react';
 import { GerenciarEtiquetasDialog } from './GerenciarEtiquetasDialog';
 
 interface Etiqueta {
@@ -27,6 +27,7 @@ interface Props {
   contatoEtiquetaIds: string[];
   fixado: boolean;
   onMarcarNaoLida: () => void;
+  onExcluirConversa: (contatoId: string) => void;
   onEtiquetaToggle: (contatoId: string, etiquetaId: string, ativo: boolean) => void;
   onEtiquetasChange: () => void;
   onFixarToggle: (contatoId: string, fixado: boolean) => void;
@@ -39,6 +40,7 @@ export function ConversaContextMenu({
   contatoEtiquetaIds,
   fixado,
   onMarcarNaoLida,
+  onExcluirConversa,
   onEtiquetaToggle,
   onEtiquetasChange,
   onFixarToggle,
@@ -90,6 +92,11 @@ export function ConversaContextMenu({
           <ContextMenuItem onClick={handleFixarToggle}>
             <Pin className="h-4 w-4 mr-2" />
             {fixado ? 'Desafixar conversa' : 'Fixar conversa'}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => onExcluirConversa(contatoId)} className="text-destructive focus:text-destructive">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Excluir conversa
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuSub>
