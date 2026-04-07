@@ -913,6 +913,91 @@ export default function Acionamento() {
     setChatDialogOpen(true);
   };
 
+  // WhatsApp profile management
+  const loadWhatsAppProfile = useCallback(async (serverUrl: string, token: string) => {
+    setLoadingProfile(true);
+    setProfileName('');
+    setProfilePhotoUrl('');
+    setProfileDescription('');
+    setProfileAddress('');
+    setProfileEmail('');
+    try {
+      const cleanUrl = serverUrl.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/business/get/profile`, {
+        method: 'POST',
+        headers: { 'token': token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jid: '' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const profile = data?.data || data?.profile || data;
+        setProfileDescription(profile?.description || '');
+        setProfileAddress(profile?.address || '');
+        setProfileEmail(profile?.email || '');
+      }
+    } catch {}
+    setLoadingProfile(false);
+  }, []);
+
+  const handleSaveProfileName = async () => {
+    if (!editingInstance) return;
+    setSavingProfileName(true);
+    try {
+      const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/profile/name`, {
+        method: 'POST',
+        headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: profileName }),
+      });
+      if (!res.ok) throw new Error('Falha ao alterar nome');
+      toast.success('Nome do perfil atualizado!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar nome');
+    } finally {
+      setSavingProfileName(false);
+    }
+  };
+
+  const handleSaveProfilePhoto = async (remove = false) => {
+    if (!editingInstance) return;
+    setSavingProfilePhoto(true);
+    try {
+      const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
+      const body = remove ? { remove: true } : { url: profilePhotoUrl };
+      const res = await fetch(`${cleanUrl}/profile/image`, {
+        method: 'POST',
+        headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Falha ao alterar foto');
+      toast.success(remove ? 'Foto removida!' : 'Foto do perfil atualizada!');
+      if (remove) setProfilePhotoUrl('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar foto');
+    } finally {
+      setSavingProfilePhoto(false);
+    }
+  };
+
+  const handleSaveProfileBusiness = async () => {
+    if (!editingInstance) return;
+    setSavingProfileBusiness(true);
+    try {
+      const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/business/update/profile`, {
+        method: 'POST',
+        headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: profileDescription, address: profileAddress, email: profileEmail }),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar dados comerciais');
+      toast.success('Dados comerciais atualizados!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar dados comerciais');
+    } finally {
+      setSavingProfileBusiness(false);
+    }
+  };
+
   // Instance management
   const handleSaveInstance = async () => {
     if (!user || !editingInstance) return;
