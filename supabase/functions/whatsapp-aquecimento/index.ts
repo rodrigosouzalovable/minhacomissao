@@ -362,7 +362,7 @@ Deno.serve(async (req) => {
         : dialogos[Math.floor(Math.random() * dialogos.length)];
 
       // ========== SEND MESSAGE ==========
-      const destinoPhone = destinoDetails.nome?.replace(/\D/g, "") || "";
+      const destinoPhone = destinoDetails.nome?.match(/^\d+/)?.[0] || "";
       if (!destinoPhone) {
         console.log(`[AQUECIMENTO-AUTO] Não extrair telefone de ${destinoDetails.nome}`);
         continue;
