@@ -1403,6 +1403,7 @@ export type Database = {
         Row: {
           abas_permitidas: string[]
           atualizado_em: string
+          concedido_por: string | null
           credores: string[]
           criado_em: string
           id: string
@@ -1413,6 +1414,7 @@ export type Database = {
         Insert: {
           abas_permitidas?: string[]
           atualizado_em?: string
+          concedido_por?: string | null
           credores?: string[]
           criado_em?: string
           id?: string
@@ -1423,6 +1425,7 @@ export type Database = {
         Update: {
           abas_permitidas?: string[]
           atualizado_em?: string
+          concedido_por?: string | null
           credores?: string[]
           criado_em?: string
           id?: string
