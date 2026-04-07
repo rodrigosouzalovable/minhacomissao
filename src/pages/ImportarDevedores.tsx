@@ -520,6 +520,17 @@ export default function ImportarDevedores() {
           if (parsed.length === 0) {
             toast({ title: 'Nenhuma parcela PAGA encontrada', description: 'A planilha não contém linhas com status PAGA.', variant: 'destructive' });
           }
+        } else if (credorSelecionado === 'montreal_atualizacao') {
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          const dataRows = json.slice(1);
+          const parsed = await parseMontrealAtualizacao(dataRows);
+          setMontrealRows(parsed);
+          setRows([]);
+          setPagamentoRows([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
+          }
         } else {
           let parsed: DevedorRow[];
           if (credorSelecionado === 'cobmais') {
@@ -532,6 +543,7 @@ export default function ImportarDevedores() {
           }
           setRows(parsed);
           setPagamentoRows([]);
+          setMontrealRows([]);
           if (parsed.length === 0) {
             toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos para importar.', variant: 'destructive' });
           }
