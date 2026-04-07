@@ -8,10 +8,10 @@ const corsHeaders = {
 // Phase config: limits and allowed types per phase (age-based)
 const PHASE_CONFIG: Record<number, { limite: number; tipos: string[]; statusTipos: string[] }> = {
   1: { limite: 1, tipos: ["texto"], statusTipos: ["text"] },
-  2: { limite: 10, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
-  3: { limite: 20, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
-  4: { limite: 30, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
-  5: { limite: 50, tipos: ["texto", "audio"], statusTipos: ["text", "image", "video"] },
+  2: { limite: 3, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
+  3: { limite: 7, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
+  4: { limite: 15, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
+  5: { limite: 25, tipos: ["texto", "audio"], statusTipos: ["text", "image", "video"] },
 };
 
 function calcFaseByAge(diasConectado: number): number {
@@ -22,7 +22,7 @@ function calcFaseByAge(diasConectado: number): number {
   return 5;
 }
 
-// ========== STATUS CONTENT POOLS ==========
+// ========== STATUS CONTENT POOLS (expanded for anti-fingerprint) ==========
 const STATUS_TEXTOS_FASE1 = [
   "Bom dia! 🌞", "Ótimo dia para todos!", "Boa noite! 🌙",
   "Final de semana chegando! 🎉", "Mais um dia produtivo pela frente! 💪",
@@ -31,6 +31,18 @@ const STATUS_TEXTOS_FASE1 = [
   "Que Deus abençoe nosso dia! 🙌",
   "Começando mais uma semana com energia! ⚡", "Boa noite e bons sonhos! 💤",
   "Vamos que vamos! 🚀", "Feliz dia! 😊", "Gratidão por mais um dia! 🌻",
+  // Expanded pool
+  "Sexta-feira finalmente! 🥳", "Bom descanso a todos! 😴",
+  "Aproveitando o dia ☕", "Que venham coisas boas! 🍀",
+  "Dia lindo hoje! 🌈", "Tudo no tempo certo 🕐",
+  "Bom começo de semana! 📅", "Boa semana pra geral! 🙂",
+  "Mais um dia, mais uma oportunidade! 🌅",
+  "Renovando as energias! 🔋", "Curtindo o momento 😌",
+  "Paz e saúde pra todos! 💚", "Hoje é dia de agradecer 🙏",
+  "Segunda cheia de energia! 💥", "Metade da semana já! ⏳",
+  "Foco total hoje 🎯", "Dia de recomeçar! 🌱",
+  "Que a tarde seja produtiva! ☀️", "Noite tranquila 🌃",
+  "Cada dia é uma nova chance! 🌟",
 ];
 
 const STATUS_TEXTOS_FASE3 = [
@@ -45,6 +57,18 @@ const STATUS_TEXTOS_FASE3 = [
   "O futuro é agora! 🌍", "Conectando pessoas, gerando valor! 🤝",
   "Sempre em evolução! 🔄", "Qualidade em primeiro lugar! ✅",
   "Fazendo acontecer! 🔥",
+  // Expanded pool
+  "Trabalho duro compensa! 💎", "Construindo o futuro hoje 🏗️",
+  "Cada detalhe importa! 🔍", "Disciplina gera resultado! 📋",
+  "O caminho é longo mas vale a pena! 🛤️",
+  "Confiança no processo! 🔑", "Metas sendo alcançadas! 🏅",
+  "Progresso, não perfeição! 📐", "Time forte, resultado forte! 👊",
+  "Dedicação é tudo! 💯", "Evoluindo sempre! 🧬",
+  "Planejamento é a base! 📝", "Persistência vence! 🏋️",
+  "Um passo de cada vez! 👣", "Vencer é questão de tempo! ⏰",
+  "Oportunidades aparecem pra quem trabalha! 🔧",
+  "Produtividade em alta! ⚡", "Objetivo claro, mente focada! 🧠",
+  "Superação diária! 🦅", "Gratidão pelo progresso! 🌻",
 ];
 
 const STATUS_IMAGENS = [
@@ -63,27 +87,49 @@ const STATUS_IMAGENS = [
   "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=800&q=80",
   "https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=800&q=80",
   "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=800&q=80",
+  // Expanded pool — diversified categories to reduce fingerprint
+  "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=800&q=80",
+  "https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?w=800&q=80",
+  "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&q=80",
+  "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=800&q=80",
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80",
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
+  "https://images.unsplash.com/photo-1494500764479-0c8f2919a3d8?w=800&q=80",
+  "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=800&q=80",
+  "https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=800&q=80",
+  "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&q=80",
+  "https://images.unsplash.com/photo-1476610182048-b716b8518aae?w=800&q=80",
+  "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=800&q=80",
+  "https://images.unsplash.com/photo-1439853949127-fa647821eba0?w=800&q=80",
+  "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&q=80",
+  "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=800&q=80",
 ];
 
 const BG_COLORS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 const FONTS = [1, 2, 3, 4, 5];
 
 function isWithinStatusHours(hour: number): boolean {
-  // 7h-21h, never post after 21h or before 7h
   return hour >= 7 && hour < 21;
 }
 
 function shouldPostStatus(hour: number): boolean {
   if (!isWithinStatusHours(hour)) return false;
-  // Probability based on time of day
-  // Morning (8-11): 40%, Afternoon (12-17): 40%, Evening (18-21): 20%
-  // We check every 15 min, so ~4 checks/hour. We want ~1 post/day.
-  // With ~14 active hours and 4 checks/hour = 56 checks. 1/56 ≈ 1.8% per check
   const rand = Math.random();
-  if (hour >= 8 && hour < 12) return rand < 0.035; // morning bias
-  if (hour >= 12 && hour < 18) return rand < 0.035; // afternoon bias
-  if (hour >= 18 && hour < 21) return rand < 0.02; // evening lower
-  return rand < 0.01; // early morning very low
+  if (hour >= 8 && hour < 12) return rand < 0.035;
+  if (hour >= 12 && hour < 18) return rand < 0.035;
+  if (hour >= 18 && hour < 21) return rand < 0.02;
+  return rand < 0.01;
+}
+
+// Deterministic "silent day" check: 20% chance per instance per day
+function isSilentDay(instanceId: string, dateStr: string): boolean {
+  let hash = 0;
+  const seed = instanceId + dateStr;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  return (Math.abs(hash) % 100) < 20; // 20% chance
 }
 
 Deno.serve(async (req) => {
@@ -98,18 +144,17 @@ Deno.serve(async (req) => {
   try {
     console.log("[AQUECIMENTO-AUTO] Iniciando ciclo automático...");
 
-    // Check business hours (São Paulo timezone)
     const now = new Date();
     const spTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = spTime.getHours();
     const dayOfWeek = spTime.getDay();
+    const todayDateStr = spTime.toISOString().slice(0, 10); // YYYY-MM-DD for silent day seed
 
     // Load config
     const { data: configRows } = await supabase.from("whatsapp_aquecimento_config").select("*");
     const config: Record<string, any> = {};
     (configRows || []).forEach((c: any) => { config[c.chave] = c.valor; });
 
-    // Admin user filter
     const adminUserId = config.admin_user_id || null;
     if (!adminUserId) {
       console.log("[AQUECIMENTO-AUTO] admin_user_id não configurado. Abortando.");
@@ -123,7 +168,6 @@ Deno.serve(async (req) => {
     const delayConfig = config.delay_config || { min_segundos: 30, max_segundos: 180 };
     const diasCarencia: number = config.dias_carencia ?? 2;
 
-    // Feature toggles
     const postarStatusAuto = config.postar_status_auto !== false;
     const salvarContatosAuto = config.salvar_contatos_auto !== false;
     const statusIncluirImagens = config.status_incluir_imagens !== false;
@@ -136,7 +180,7 @@ Deno.serve(async (req) => {
         hash = ((hash << 5) - hash) + instanceId.charCodeAt(i);
         hash |= 0;
       }
-      return (Math.abs(hash) % 121) - 60; // -60 to +60 minutes
+      return (Math.abs(hash) % 121) - 60;
     }
 
     if (!diasAtivos.includes(dayOfWeek)) {
@@ -144,7 +188,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ message: "Dia não ativo" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Global hour check (with 1h buffer for offsets)
     if (hour < (hInicio - 1) || hour >= (hFim + 1)) {
       console.log(`[AQUECIMENTO-AUTO] Fora do horário comercial (${hour}h). Pulando.`);
       return new Response(JSON.stringify({ message: "Fora do horário comercial" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -197,7 +240,6 @@ Deno.serve(async (req) => {
       const fase = calcFaseByAge(diasConectado);
       const phaseConfig = PHASE_CONFIG[fase] || PHASE_CONFIG[1];
 
-      // Check if there's a REMOVIDO entry to reactivate
       const { data: removedEntry } = await supabase
         .from("whatsapp_aquecimento_instancias")
         .select("id")
@@ -246,7 +288,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ message: "Necessário pelo menos 2 instâncias ativas", enrolled: newInstances.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Load instance details
     const instanciaIds = instancias.map((i: any) => i.instancia_id);
     const { data: whatsappInstances } = await supabase
       .from("user_whatsapp_instances")
@@ -259,11 +300,9 @@ Deno.serve(async (req) => {
     let totalStatusPostados = 0;
     let totalContatosSalvos = 0;
 
-    // Only process EM_AQUECIMENTO for messaging
     const instanciasAquecimento = instancias.filter((i: any) => i.status === "EM_AQUECIMENTO");
 
-    // ========== GRACE PERIOD + SINGLE INSTANCE PER CYCLE ==========
-    // Filter out instances connected less than 2 days (grace period)
+    // ========== GRACE PERIOD + SILENT DAY + SINGLE INSTANCE PER CYCLE ==========
     const eligibleInstances = instanciasAquecimento.filter((inst: any) => {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) return false;
@@ -272,7 +311,12 @@ Deno.serve(async (req) => {
         console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: em carência (${diasConectado}/${diasCarencia} dias). Pulando.`);
         return false;
       }
-      // Per-instance hour offset for more human-like behavior
+      // Silent day: 20% chance of skipping entire day
+      if (isSilentDay(inst.instancia_id, todayDateStr)) {
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: dia silencioso. Pulando.`);
+        return false;
+      }
+      // Per-instance hour offset
       const offset = getInstanceHourOffset(inst.instancia_id);
       const adjustedMinute = spTime.getMinutes() + offset;
       const adjustedHour = hour + Math.floor(adjustedMinute / 60);
@@ -283,7 +327,7 @@ Deno.serve(async (req) => {
       return true;
     });
 
-    // Process only 1 random instance per cycle to avoid sending all at once
+    // Process only 1 random instance per cycle
     const selectedInstance = eligibleInstances.length > 0
       ? eligibleInstances[Math.floor(Math.random() * eligibleInstances.length)]
       : null;
@@ -294,13 +338,17 @@ Deno.serve(async (req) => {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) continue;
 
-      // ========== HEALTH CHECK: Detect ban/disconnection ==========
+      // ========== HEALTH CHECK with timeout ==========
       const cleanServerUrlCheck = instDetails.server_url.replace(/\/+$/, "");
       try {
+        const healthController = new AbortController();
+        const healthTimeout = setTimeout(() => healthController.abort(), 8000);
         const healthRes = await fetch(`${cleanServerUrlCheck}/instance/status`, {
           method: "GET",
           headers: { token: instDetails.instance_token },
+          signal: healthController.signal,
         });
+        clearTimeout(healthTimeout);
         const healthData = await healthRes.json().catch(() => ({}));
         const connected = healthData?.connected || healthData?.status === "CONNECTED" || healthData?.state === "open";
         if (!connected) {
@@ -317,7 +365,7 @@ Deno.serve(async (req) => {
         }
       } catch (healthErr) {
         console.error(`[AQUECIMENTO-AUTO] Health check falhou para ${instDetails.nome}: ${healthErr}`);
-        // Continue anyway — network error doesn't mean banned
+        // Continue anyway — network/timeout error doesn't mean banned
       }
 
       // ========== AGE-BASED PHASE CALCULATION ==========
@@ -393,7 +441,6 @@ Deno.serve(async (req) => {
       const todayStartISO = new Date(new Date(spTime).setHours(0, 0, 0, 0)).toISOString();
       const possibleDestinosAll = instanciasAquecimento.filter((d: any) => d.instancia_id !== inst.instancia_id && !recentDestinos.has(d.instancia_id));
       
-      // Filter out destinations that already received >= 3 messages today
       const filteredDestinos: any[] = [];
       for (const d of possibleDestinosAll) {
         const { count: receivedToday } = await supabase
@@ -525,7 +572,10 @@ Deno.serve(async (req) => {
         const d = instanceMap.get(i.instancia_id);
         if (!d) return false;
         const dias = Math.floor((Date.now() - new Date(d.criado_em).getTime()) / 86400000);
-        return dias >= diasCarencia;
+        if (dias < diasCarencia) return false;
+        // Silent day also skips status
+        if (isSilentDay(i.instancia_id, todayDateStr)) return false;
+        return true;
       });
       const statusInst = statusEligible.length > 0
         ? statusEligible[Math.floor(Math.random() * statusEligible.length)]
@@ -537,7 +587,6 @@ Deno.serve(async (req) => {
 
         const fase = inst.fase;
 
-        // Check if already posted today
         const { count: statusHoje } = await supabase
           .from("whatsapp_aquecimento_status_log")
           .select("id", { count: "exact", head: true })
@@ -547,10 +596,8 @@ Deno.serve(async (req) => {
         const maxStatusDia = fase >= 3 ? 2 : 1;
         if ((statusHoje || 0) >= maxStatusDia) continue;
 
-        // Probabilistic check - should we post now?
         if (!shouldPostStatus(hour)) continue;
 
-        // Determine status type based on phase and config
         const phaseConfig = PHASE_CONFIG[fase] || PHASE_CONFIG[1];
         let allowedStatusTypes = ["text"];
         if (fase >= 2 && statusIncluirImagens) allowedStatusTypes.push("image");
@@ -558,7 +605,6 @@ Deno.serve(async (req) => {
 
         const statusType = allowedStatusTypes[Math.floor(Math.random() * allowedStatusTypes.length)];
 
-        // Get content not used in last 7 days for this instance
         const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
         const { data: recentStatusLogs } = await supabase
           .from("whatsapp_aquecimento_status_log")
@@ -604,7 +650,6 @@ Deno.serve(async (req) => {
             logConteudo = caption;
             logUrl = imgUrl;
           } else {
-            // Video - skip for now (no free video pool), fall back to image
             continue;
           }
 
@@ -614,10 +659,9 @@ Deno.serve(async (req) => {
             body: JSON.stringify(statusBody),
           });
 
-          await statusRes.text(); // consume body
+          await statusRes.text();
           const resultado = statusRes.ok ? "ENVIADO" : "FALHOU";
 
-          // Log to status_log table
           await supabase.from("whatsapp_aquecimento_status_log").insert({
             instancia_id: inst.instancia_id,
             tipo: statusType,
@@ -626,10 +670,9 @@ Deno.serve(async (req) => {
             resultado,
           });
 
-          // Log to interacoes table
           await supabase.from("whatsapp_aquecimento_interacoes").insert({
             instancia_origem_id: inst.instancia_id,
-            instancia_destino_id: inst.instancia_id, // self - status is self-directed
+            instancia_destino_id: inst.instancia_id,
             tipo: statusType,
             conteudo: logConteudo,
             status: resultado,
@@ -641,7 +684,6 @@ Deno.serve(async (req) => {
             totalStatusPostados++;
             console.log(`[AQUECIMENTO-STATUS] ${instDetails.nome}: ${statusType} status postado`);
 
-            // Check if first status ever for notification
             const { count: totalStatus } = await supabase
               .from("whatsapp_aquecimento_status_log")
               .select("id", { count: "exact", head: true })
@@ -658,7 +700,6 @@ Deno.serve(async (req) => {
           } else {
             console.error(`[AQUECIMENTO-STATUS] ${instDetails.nome}: falha ao postar status`);
 
-            // Check for 3 consecutive failures
             const { data: recentFails } = await supabase
               .from("whatsapp_aquecimento_status_log")
               .select("resultado")
@@ -680,18 +721,28 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ========== CONTACT SAVING ==========
+    // ========== CONTACT SAVING (1 random instance per cycle) ==========
     if (salvarContatosAuto) {
       console.log("[AQUECIMENTO-AUTO] Verificando contatos para salvar...");
 
-      for (const inst of instancias) {
+      // Select only 1 random instance for contact saving (same anti-burst logic)
+      const contactEligible = instancias.filter((i: any) => {
+        const d = instanceMap.get(i.instancia_id);
+        if (!d) return false;
+        if (isSilentDay(i.instancia_id, todayDateStr)) return false;
+        return true;
+      });
+      const contactInst = contactEligible.length > 0
+        ? contactEligible[Math.floor(Math.random() * contactEligible.length)]
+        : null;
+
+      for (const inst of (contactInst ? [contactInst] : [])) {
         const instDetails = instanceMap.get(inst.instancia_id);
         if (!instDetails) continue;
 
         const cleanServerUrl = instDetails.server_url.replace(/\/+$/, "");
         const token = instDetails.instance_token;
 
-        // Find recent contacts that interacted with this instance but are not saved
         const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
         const { data: recentContatos } = await supabase
           .from("whatsapp_contatos")
@@ -701,8 +752,6 @@ Deno.serve(async (req) => {
 
         if (!recentContatos || recentContatos.length === 0) continue;
 
-        // For each recent contact, try to save to UAZAPI agenda
-        // We limit to 3 per cycle to avoid rate limiting
         let savedCount = 0;
         for (const contato of recentContatos.slice(0, 3)) {
           const phone = contato.telefone?.replace(/\D/g, "") || "";
@@ -715,13 +764,12 @@ Deno.serve(async (req) => {
               body: JSON.stringify({ number: phone, name: phone }),
             });
 
-            await addRes.text(); // consume body
+            await addRes.text();
 
             if (addRes.ok) {
               savedCount++;
               totalContatosSalvos++;
 
-              // Log interaction
               await supabase.from("whatsapp_aquecimento_interacoes").insert({
                 instancia_origem_id: inst.instancia_id,
                 instancia_destino_id: inst.instancia_id,
@@ -740,7 +788,6 @@ Deno.serve(async (req) => {
         if (savedCount > 0) {
           console.log(`[AQUECIMENTO-CONTATO] ${instDetails.nome}: ${savedCount} contatos salvos`);
 
-          // Check milestone: 50+ contacts
           const { count: totalContatos } = await supabase
             .from("whatsapp_aquecimento_interacoes")
             .select("id", { count: "exact", head: true })
