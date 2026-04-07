@@ -817,13 +817,14 @@ export default function ImportarDevedores() {
                 <SelectContent>
                   <SelectItem value="padrao">Padrão</SelectItem>
                   <SelectItem value="montreal">MONTREAL</SelectItem>
+                  <SelectItem value="montreal_atualizacao">MONTREAL (Atualização)</SelectItem>
                    <SelectItem value="cobmais">COBMAIS</SelectItem>
                    <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
                    <SelectItem value="pagamentos">Pagamentos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {!isPagamentos && (
+            {!isPagamentos && !isMontrealAtualizacao && (
               <div className="space-y-2">
                 <Label>Credor de Destino</Label>
                 <Select value={credorDestino} onValueChange={setCredorDestino}>
