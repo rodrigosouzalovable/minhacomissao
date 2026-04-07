@@ -1,74 +1,95 @@
 
 
-# Melhorias de Segurança Anti-Restrição do Aquecimento
+# Análise Minuciosa: Riscos de Restrição/Banimento do WhatsApp
 
-## O que já está implementado
-- Carência de 2 dias para novos números
-- Apenas 1 instância por ciclo de 15 min
-- Pausa automática com taxa de falha > 15%
-- Horário comercial e dias ativos
+## Problemas encontrados no sistema de Aquecimento
 
-## Problemas restantes identificados
+### 🔴 CRÍTICO 1 — Salvamento de contatos NÃO respeita 1 instância/ciclo
+**Arquivo:** `whatsapp-aquecimento/index.ts` (linhas 684-758)
 
-### 1. Status é postado para TODAS as instâncias no mesmo ciclo
-O bloco de status (linha 459) itera **todas** as instâncias, não respeita o limite de 1 por ciclo. Se 20 números estão ativos, todos podem postar status no mesmo ciclo — comportamento antinatural.
+O bloco de mensagens foi corrigido para processar apenas 1 instância por ciclo, mas o bloco de **salvamento de contatos** (linha 687) ainda itera `for (const inst of instancias)` — **TODAS** as instâncias. Isso significa que todas as instâncias salvam contatos ao mesmo tempo, gerando atividade simultânea suspeita.
 
-### 2. Sem variação de horário entre instâncias
-Todas as instâncias operam no mesmo horário exato. Humanos reais não começam e param todos ao mesmo tempo.
+### 🔴 CRÍTICO 2 — Fase 2 permite 10 msgs/dia — muito agressivo
+**Arquivo:** `whatsapp-aquecimento/index.ts` (linha 11)
 
-### 3. Sem limite de interações recebidas por destino
-Um número pode receber mensagens de muitas instâncias diferentes no mesmo dia, o que é suspeito.
+Fase 2 (7-14 dias) permite **10 mensagens/dia**. Um número com apenas 1 semana de vida enviando 10 msgs/dia é antinatural. A progressão segura deveria ser mais gradual: 1 → 3 → 5 → 10 → 20.
 
-### 4. Fase 1 permite 3 mensagens/dia — ainda alto para número novo
-Números com 2-7 dias deveriam enviar no máximo 1-2 mensagens/dia.
+### 🟡 ALTO 3 — Status com imagens do Unsplash = fingerprint
+**Arquivo:** `whatsapp-aquecimento/index.ts` (linhas 50-66)
 
-### 5. Sem detecção de desconexão/ban
-Se um número é banido, o sistema continua tentando enviar e acumulando falhas.
+Todas as instâncias usam o **mesmo pool de 15 imagens do Unsplash**. Se o WhatsApp detectar que múltiplos números postam as mesmas URLs de imagem, isso é uma assinatura clara de automação. As imagens deveriam ser únicas ou variadas.
+
+### 🟡 ALTO 4 — Textos de status genéricos e repetitivos
+**Arquivo:** `whatsapp-aquecimento/index.ts` (linhas 26-48)
+
+Apenas **15 frases de status** para Fase 1 e **15 para Fase 3**. Com verificação de 7 dias para evitar repetição (linha 562), os textos se esgotam rapidamente, forçando repetição. Textos genéricos como "Bom dia! 🌞" usados em múltiplos números são suspeitos.
+
+### 🟡 ALTO 5 — Mensagens do aquecimento são só entre instâncias próprias
+**Arquivo:** `whatsapp-aquecimento/index.ts` (linha 394)
+
+O sistema só envia mensagens entre as próprias instâncias do admin (`instanciasAquecimento`). Isso cria um **grupo fechado** de números que só conversam entre si — padrão facilmente detectável. Números reais conversam com contatos externos variados.
+
+### 🟡 ALTO 6 — Sem variação no tipo de conteúdo por dia
+O sistema não varia o padrão diário. Todo dia é: mensagem de texto → status → salvar contato. Humanos reais variam: alguns dias só olham, outros só mandam áudio, outros postam status. Deveria haver dias "silenciosos" aleatórios.
+
+### 🟡 MÉDIO 7 — Health check pode causar timeout
+**Arquivo:** `whatsapp-aquecimento/index.ts` (linhas 298-321)
+
+O health check (`GET /instance/status`) não tem timeout. Se a API da UAZAPI estiver lenta, a edge function pode travar. Deveria ter um timeout de 5-10 segundos.
+
+### 🟡 MÉDIO 8 — Acionamento agendado sem limite diário por instância
+**Arquivo:** `process-acionamento-agendado/index.ts`
+
+O envio agendado não tem limite diário por instância. Um agendamento com 500 clientes usando 2 instâncias = 250 msgs por número/dia, extremamente alto. Deveria ter um cap de ~50 msgs/dia por instância.
+
+### 🟡 MÉDIO 9 — Nenhum "read receipt" ou "typing" simulado
+Quando um humano conversa, ele primeiro **abre o chat**, depois aparece **"digitando..."**, e só depois envia. O sistema envia diretamente sem simular presença, o que é detectável.
 
 ---
 
-## Plano de implementação
+## Plano de correções prioritárias
 
-### Mudança 1 — Limitar status a 1 instância por ciclo
-**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
+### Mudança 1 — Limitar salvamento de contatos a 1 instância/ciclo
+Aplicar a mesma lógica de seleção aleatória usada para mensagens e status.
 
-No bloco de status (linha 452-610), selecionar apenas 1 instância aleatória elegível ao invés de iterar todas, igual já fazemos para mensagens.
+### Mudança 2 — Reduzir progressão de fases
+```
+Fase 1 (0-7 dias):   1 msg/dia  → manter
+Fase 2 (7-14 dias):  10 → 3 msgs/dia
+Fase 3 (14-21 dias): 20 → 7 msgs/dia
+Fase 4 (21-28 dias): 30 → 15 msgs/dia
+Fase 5 (28+ dias):   50 → 25 msgs/dia
+```
 
-### Mudança 2 — Offset aleatório por instância no horário
-**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
+### Mudança 3 — Adicionar "dias silenciosos" aleatórios
+Cada instância tem 20% de chance de ficar em silêncio total num dia (sem mensagens, sem status). Isso simula comportamento humano real.
 
-Usar o ID da instância para gerar um offset de ±60 minutos no horário de início/fim. Isso faz com que cada número "acorde" e "durma" em horários ligeiramente diferentes.
+### Mudança 4 — Adicionar timeout ao health check
+Limitar o fetch do health check a 8 segundos com `AbortController`.
 
-### Mudança 3 — Limite de recebimento por destino (max 3/dia)
-**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
+### Mudança 5 — Expandir pool de textos de status
+Adicionar pelo menos mais 20-30 frases variadas para reduzir repetição.
 
-Antes de selecionar o destino (linha 337), verificar quantas mensagens o destino já **recebeu** hoje. Se >= 3, pular esse destino.
-
-### Mudança 4 — Reduzir limite da Fase 1 para 1 msg/dia
-**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
-
-Alterar `PHASE_CONFIG[1].limite` de 3 para 1.
-
-### Mudança 5 — Detectar ban/desconexão e pausar automaticamente
-**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
-
-Antes de enviar, fazer um health check (`GET /instance/status`) na instância. Se retornar desconectado, pausar a instância e notificar.
-
-### Mudança 6 — Configuração de carência editável no painel
-**Arquivo:** `src/components/aquecimento/AquecimentoConfigTab.tsx`
-
-Adicionar um campo na aba de configurações para o usuário definir quantos dias de carência (padrão 2), ao invés de fixo no código.
+### Mudança 6 — Limitar envio diário no acionamento agendado
+Adicionar cap de 80 msgs/dia por instância no `process-acionamento-agendado`.
 
 ---
 
 ## Resumo
 
-| Mudança | Arquivo | Impacto |
-|---------|---------|---------|
-| Status 1 instância/ciclo | `whatsapp-aquecimento/index.ts` | Evita burst de status |
-| Offset aleatório no horário | `whatsapp-aquecimento/index.ts` | Padrão mais humano |
-| Limite recebimento destino | `whatsapp-aquecimento/index.ts` | Evita número "bombardeado" |
-| Fase 1 = 1 msg/dia | `whatsapp-aquecimento/index.ts` | Proteção números novos |
-| Health check antes de enviar | `whatsapp-aquecimento/index.ts` | Detecta bans cedo |
-| Carência configurável | `AquecimentoConfigTab.tsx` | Flexibilidade pro admin |
+| Nível | Problema | Correção |
+|-------|----------|----------|
+| 🔴 Crítico | Contatos salvos em TODAS instâncias | Limitar a 1/ciclo |
+| 🔴 Crítico | Fase 2 = 10 msgs (muito alto) | Reduzir para 3 |
+| 🟡 Alto | Imagens Unsplash = fingerprint | Expandir/diversificar pool |
+| 🟡 Alto | Pool de textos pequeno (15+15) | Expandir para 40+ |
+| 🟡 Alto | Conversas só entre próprios números | Limitação de design |
+| 🟡 Alto | Sem dias silenciosos | Adicionar 20% chance skip |
+| 🟡 Médio | Health check sem timeout | Adicionar AbortController |
+| 🟡 Médio | Acionamento sem limite diário | Cap 80 msgs/instância/dia |
+| 🟡 Médio | Sem simulação de typing | Limitação da API |
+
+**Arquivos a editar:**
+- `supabase/functions/whatsapp-aquecimento/index.ts` (mudanças 1-5)
+- `supabase/functions/process-acionamento-agendado/index.ts` (mudança 6)
 
