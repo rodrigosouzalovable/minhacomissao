@@ -155,6 +155,12 @@ export default function WhatsAppInbox() {
   };
 
   const fetchContatos = useCallback(async () => {
+    // Wait for instancias to load before querying contacts
+    if (!isAdmin && !inboxCompartilhado && instancias.length === 0) {
+      setContatos([]);
+      return;
+    }
+
     let query = supabase
       .from('whatsapp_contatos')
       .select(`
@@ -172,6 +178,10 @@ export default function WhatsAppInbox() {
 
     if (filtroInstancia !== 'todas') {
       query = query.eq('instancia_id', filtroInstancia);
+    } else if (!isAdmin && !inboxCompartilhado) {
+      // Filter contacts to only show instances owned by the current user
+      const instanciaIds = instancias.map(i => i.id);
+      query = query.in('instancia_id', instanciaIds);
     }
 
     const { data } = await query;
@@ -182,7 +192,7 @@ export default function WhatsAppInbox() {
       }));
       setContatos(contatosComNomeInstancia as Contato[]);
     }
-  }, [filtroInstancia]);
+  }, [filtroInstancia, instancias, isAdmin, inboxCompartilhado]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
