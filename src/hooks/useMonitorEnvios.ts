@@ -16,15 +16,23 @@ export function useMonitorEnvios(limiteDiario: number = 30, delaySegundos: numbe
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     // Get today start in local timezone
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
     const hojeISO = hoje.toISOString();
 
-    // Fetch all instances
+    // Fetch only instances belonging to the current user
     const { data: instancias } = await supabase
       .from('user_whatsapp_instances')
       .select('id, nome, ativo, robo, apenas_lembretes')
+      .eq('user_id', user.id)
       .order('ordem', { ascending: true });
 
     if (!instancias) {
