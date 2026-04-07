@@ -675,6 +675,7 @@ export default function WhatsAppInbox() {
                     onEtiquetaToggle={handleEtiquetaToggle}
                     onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
                     onFixarToggle={handleFixarToggle}
+                    onExcluirConversa={handleExcluirConversa}
                   >
                     <button
                       onClick={() => handleSelectContato(contato)}
