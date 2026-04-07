@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/hooks/useAuth';
 
 interface EditPermissionsDialogProps {
   open: boolean;
