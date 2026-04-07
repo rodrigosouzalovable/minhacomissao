@@ -896,6 +896,23 @@ export default function ImportarDevedores() {
           const novaParcela = montrealRows.filter(r => r.status_importacao === 'nova_parcela').length;
           const clienteNovo = montrealRows.filter(r => r.status_importacao === 'cliente_novo').length;
           const toImport = novaParcela + clienteNovo;
+
+          // Group by CPF
+          const groupedData = montrealRows.reduce<Record<string, { cpf: string; nome: string; telefone?: string; rows: MontrealAtualizacaoRow[]; valorTotal: number; existeCount: number; novaCount: number; }>>((acc, row) => {
+            const cpfNorm = row.cpf.replace(/\D/g, '');
+            if (!acc[cpfNorm]) {
+              acc[cpfNorm] = { cpf: row.cpf, nome: row.nome, telefone: row.telefone, rows: [], valorTotal: 0, existeCount: 0, novaCount: 0 };
+            }
+            acc[cpfNorm].rows.push(row);
+            acc[cpfNorm].valorTotal += row.valor_original;
+            if (row.status_importacao === 'existe') acc[cpfNorm].existeCount++;
+            else acc[cpfNorm].novaCount++;
+            return acc;
+          }, {});
+          const groupEntries = Object.entries(groupedData);
+          const clientesNovosCount = groupEntries.filter(([, g]) => g.rows.every(r => r.status_importacao === 'cliente_novo')).length;
+          const clientesExistentesCount = groupEntries.filter(([, g]) => g.rows.some(r => r.status_importacao !== 'cliente_novo')).length;
+
           return (
             <Card className="mb-6">
               <CardHeader>
@@ -903,7 +920,7 @@ export default function ImportarDevedores() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <FileSpreadsheet className="h-5 w-5" />
-                      Preview Montreal ({montrealRows.length} registros)
+                      Preview Montreal ({montrealRows.length} registros — {groupEntries.length} clientes)
                     </CardTitle>
                     <CardDescription className="mt-1">
                       {file?.name} — 
@@ -948,52 +965,101 @@ export default function ImportarDevedores() {
                 )}
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto max-h-96">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Status</TableHead>
-                        <TableHead>CPF/CNPJ</TableHead>
-                        <TableHead>Nome</TableHead>
-                        <TableHead>Nro Nota</TableHead>
-                        <TableHead>Desdob.</TableHead>
-                        <TableHead>Vencimento</TableHead>
-                        <TableHead>Valor (R$)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {montrealRows.slice(0, 100).map((row, i) => (
-                        <TableRow key={i} className={row.status_importacao === 'existe' ? 'opacity-50' : ''}>
-                          <TableCell>
-                            {row.status_importacao === 'existe' ? (
-                              <Badge className="bg-green-600 hover:bg-green-700 text-white">Já existe</Badge>
-                            ) : row.status_importacao === 'nova_parcela' ? (
-                              <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Nova parcela</Badge>
-                            ) : (
-                              <Badge className="bg-blue-500 hover:bg-blue-600 text-white">Cliente novo</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
-                          <TableCell>{row.nome}</TableCell>
-                          <TableCell>{row.contrato || '-'}</TableCell>
-                          <TableCell>{row.descricao || '-'}</TableCell>
-                          <TableCell>{row.atraso || '-'}</TableCell>
-                          <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {montrealRows.length > 100 && (
-                    <p className="text-sm text-muted-foreground text-center py-2">
-                      Mostrando 100 de {montrealRows.length} registros
-                    </p>
-                  )}
+                <div className="flex items-center gap-2 mb-4">
+                  <Switch checked={montrealGrouped} onCheckedChange={setMontrealGrouped} id="montreal-group-toggle" />
+                  <Label htmlFor="montreal-group-toggle" className="flex items-center gap-1 cursor-pointer">
+                    <Users className="h-4 w-4" />
+                    Agrupar por CPF/CNPJ
+                  </Label>
                 </div>
+
+                {montrealGrouped ? (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {groupEntries.map(([cpfNorm, g]) => {
+                      const isAllExist = g.rows.every(r => r.status_importacao === 'existe');
+                      const isNewClient = g.rows.every(r => r.status_importacao === 'cliente_novo');
+                      const novasDoCliente = g.rows.filter(r => r.status_importacao !== 'existe');
+                      const valorNovas = novasDoCliente.reduce((sum, r) => sum + r.valor_original, 0);
+
+                      return (
+                        <div key={cpfNorm} className={`border rounded-lg p-3 ${isAllExist ? 'opacity-50' : ''}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {isNewClient ? (
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">Cliente novo</Badge>
+                              ) : isAllExist ? (
+                                <Badge className="bg-green-600 hover:bg-green-700 text-white text-xs">Tudo existe</Badge>
+                              ) : (
+                                <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs">{g.novaCount} nova{g.novaCount !== 1 ? 's' : ''}</Badge>
+                              )}
+                              <div>
+                                <p className="font-medium text-sm">{g.nome}</p>
+                                <p className="text-xs text-muted-foreground font-mono">{g.cpf}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold">
+                                {g.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {g.rows.length} contrato{g.rows.length !== 1 ? 's' : ''}
+                                {!isAllExist && !isNewClient && (
+                                  <> · <span className="text-yellow-600">{valorNovas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} novas</span></>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto max-h-96">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Status</TableHead>
+                          <TableHead>CPF/CNPJ</TableHead>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Nro Nota</TableHead>
+                          <TableHead>Desdob.</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                          <TableHead>Valor (R$)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {montrealRows.slice(0, 100).map((row, i) => (
+                          <TableRow key={i} className={row.status_importacao === 'existe' ? 'opacity-50' : ''}>
+                            <TableCell>
+                              {row.status_importacao === 'existe' ? (
+                                <Badge className="bg-green-600 hover:bg-green-700 text-white">Já existe</Badge>
+                              ) : row.status_importacao === 'nova_parcela' ? (
+                                <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Nova parcela</Badge>
+                              ) : (
+                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white">Cliente novo</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
+                            <TableCell>{row.nome}</TableCell>
+                            <TableCell>{row.contrato || '-'}</TableCell>
+                            <TableCell>{row.descricao || '-'}</TableCell>
+                            <TableCell>{row.atraso || '-'}</TableCell>
+                            <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {montrealRows.length > 100 && (
+                      <p className="text-sm text-muted-foreground text-center py-2">
+                        Mostrando 100 de {montrealRows.length} registros
+                      </p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
         })()}
-
         {/* Pagamentos Preview */}
         {isPagamentos && pagamentoRows.length > 0 && (
           <Card className="mb-6">
