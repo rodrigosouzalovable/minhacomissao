@@ -7,7 +7,7 @@ const corsHeaders = {
 
 // Phase config: limits and allowed types per phase (age-based)
 const PHASE_CONFIG: Record<number, { limite: number; tipos: string[]; statusTipos: string[] }> = {
-  1: { limite: 3, tipos: ["texto"], statusTipos: ["text"] },
+  1: { limite: 1, tipos: ["texto"], statusTipos: ["text"] },
   2: { limite: 10, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
   3: { limite: 20, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
   4: { limite: 30, tipos: ["texto", "audio"], statusTipos: ["text", "image"] },
@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
     const [hFim] = (horario.fim || "18:00").split(":").map(Number);
     const diasAtivos: number[] = config.dias_ativos || [1, 2, 3, 4, 5, 6];
     const delayConfig = config.delay_config || { min_segundos: 30, max_segundos: 180 };
+    const diasCarencia: number = config.dias_carencia ?? 2;
 
     // Feature toggles
     const postarStatusAuto = config.postar_status_auto !== false;
@@ -128,14 +129,25 @@ Deno.serve(async (req) => {
     const statusIncluirImagens = config.status_incluir_imagens !== false;
     const statusIncluirVideos = config.status_incluir_videos === true;
 
-    if (hour < hInicio || hour >= hFim) {
-      console.log(`[AQUECIMENTO-AUTO] Fora do horário comercial (${hour}h). Pulando.`);
-      return new Response(JSON.stringify({ message: "Fora do horário comercial" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Helper: generate a deterministic offset ±60min from instance ID
+    function getInstanceHourOffset(instanceId: string): number {
+      let hash = 0;
+      for (let i = 0; i < instanceId.length; i++) {
+        hash = ((hash << 5) - hash) + instanceId.charCodeAt(i);
+        hash |= 0;
+      }
+      return (Math.abs(hash) % 121) - 60; // -60 to +60 minutes
     }
 
     if (!diasAtivos.includes(dayOfWeek)) {
       console.log(`[AQUECIMENTO-AUTO] Dia ${dayOfWeek} não é ativo. Pulando.`);
       return new Response(JSON.stringify({ message: "Dia não ativo" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Global hour check (with 1h buffer for offsets)
+    if (hour < (hInicio - 1) || hour >= (hFim + 1)) {
+      console.log(`[AQUECIMENTO-AUTO] Fora do horário comercial (${hour}h). Pulando.`);
+      return new Response(JSON.stringify({ message: "Fora do horário comercial" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ========== CLEANUP: Remove instances no longer active ==========
@@ -256,8 +268,16 @@ Deno.serve(async (req) => {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) return false;
       const diasConectado = Math.floor((Date.now() - new Date(instDetails.criado_em).getTime()) / 86400000);
-      if (diasConectado < 2) {
-        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: em carência (${diasConectado} dias). Pulando.`);
+      if (diasConectado < diasCarencia) {
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: em carência (${diasConectado}/${diasCarencia} dias). Pulando.`);
+        return false;
+      }
+      // Per-instance hour offset for more human-like behavior
+      const offset = getInstanceHourOffset(inst.instancia_id);
+      const adjustedMinute = spTime.getMinutes() + offset;
+      const adjustedHour = hour + Math.floor(adjustedMinute / 60);
+      if (adjustedHour < hInicio || adjustedHour >= hFim) {
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: fora do horário ajustado (offset ${offset}min). Pulando.`);
         return false;
       }
       return true;
@@ -273,6 +293,32 @@ Deno.serve(async (req) => {
     for (const inst of instanciasToProcess) {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) continue;
+
+      // ========== HEALTH CHECK: Detect ban/disconnection ==========
+      const cleanServerUrlCheck = instDetails.server_url.replace(/\/+$/, "");
+      try {
+        const healthRes = await fetch(`${cleanServerUrlCheck}/instance/status`, {
+          method: "GET",
+          headers: { token: instDetails.instance_token },
+        });
+        const healthData = await healthRes.json().catch(() => ({}));
+        const connected = healthData?.connected || healthData?.status === "CONNECTED" || healthData?.state === "open";
+        if (!connected) {
+          console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: DESCONECTADO/BANIDO. Pausando.`);
+          await supabase.from("whatsapp_aquecimento_instancias")
+            .update({ status: "PAUSADO" })
+            .eq("id", inst.id);
+          await supabase.from("aquecimento_notificacoes").insert({
+            tipo: "desconexao",
+            instancia_id: inst.instancia_id,
+            mensagem: `🚫 Número "${instDetails.nome || inst.instancia_id.slice(0, 8)}" está desconectado ou banido. Aquecimento pausado automaticamente.`,
+          });
+          continue;
+        }
+      } catch (healthErr) {
+        console.error(`[AQUECIMENTO-AUTO] Health check falhou para ${instDetails.nome}: ${healthErr}`);
+        // Continue anyway — network error doesn't mean banned
+      }
 
       // ========== AGE-BASED PHASE CALCULATION ==========
       if (inst.fase_auto) {
@@ -342,7 +388,25 @@ Deno.serve(async (req) => {
         .gte("enviado_em", twoHoursAgo);
 
       const recentDestinos = new Set((recentInteractions || []).map((r: any) => r.instancia_destino_id));
-      const possibleDestinos = instanciasAquecimento.filter((d: any) => d.instancia_id !== inst.instancia_id && !recentDestinos.has(d.instancia_id));
+      
+      // ========== DESTINATION FREQUENCY CAP (max 3 received/day) ==========
+      const todayStartISO = new Date(new Date(spTime).setHours(0, 0, 0, 0)).toISOString();
+      const possibleDestinosAll = instanciasAquecimento.filter((d: any) => d.instancia_id !== inst.instancia_id && !recentDestinos.has(d.instancia_id));
+      
+      // Filter out destinations that already received >= 3 messages today
+      const filteredDestinos: any[] = [];
+      for (const d of possibleDestinosAll) {
+        const { count: receivedToday } = await supabase
+          .from("whatsapp_aquecimento_interacoes")
+          .select("id", { count: "exact", head: true })
+          .eq("instancia_destino_id", d.instancia_id)
+          .eq("tipo_interacao", "mensagem")
+          .gte("enviado_em", todayStartISO);
+        if ((receivedToday || 0) < 3) {
+          filteredDestinos.push(d);
+        }
+      }
+      const possibleDestinos = filteredDestinos;
 
       if (possibleDestinos.length === 0) {
         console.log(`[AQUECIMENTO-AUTO] Sem destino disponível para ${instDetails.nome}`);
@@ -456,13 +520,20 @@ Deno.serve(async (req) => {
       todayStart.setHours(0, 0, 0, 0);
       const todayISO = todayStart.toISOString();
 
-      for (const inst of instancias) {
+      // Select only 1 random eligible instance for status per cycle (anti-burst)
+      const statusEligible = instancias.filter((i: any) => {
+        const d = instanceMap.get(i.instancia_id);
+        if (!d) return false;
+        const dias = Math.floor((Date.now() - new Date(d.criado_em).getTime()) / 86400000);
+        return dias >= diasCarencia;
+      });
+      const statusInst = statusEligible.length > 0
+        ? statusEligible[Math.floor(Math.random() * statusEligible.length)]
+        : null;
+
+      for (const inst of (statusInst ? [statusInst] : [])) {
         const instDetails = instanceMap.get(inst.instancia_id);
         if (!instDetails) continue;
-
-        const diasConectado = Math.floor((Date.now() - new Date(instDetails.criado_em).getTime()) / 86400000);
-        // Phase 0 (< 2 days): no status
-        if (diasConectado < 2) continue;
 
         const fase = inst.fase;
 

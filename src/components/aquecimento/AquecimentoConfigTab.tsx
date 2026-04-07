@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone } from 'lucide-react';
+import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone, Shield } from 'lucide-react';
 
 interface ConfigItem {
   id: string;
@@ -33,6 +33,7 @@ const DEFAULTS = {
   dias_ativos: [1, 2, 3, 4, 5, 6],
   delay_config: { min: 30, max: 180 },
   auto_start: { horario_inicio: '09:00', novas_instancias: false },
+  dias_carencia: 2,
   salvar_contatos_auto: true,
   postar_status_auto: true,
   status_incluir_imagens: true,
@@ -83,7 +84,7 @@ export default function AquecimentoConfigTab() {
 
   async function saveAll() {
     setSaving(true);
-    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
+    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'dias_carencia', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
     for (const chave of knownKeys) {
       if (getConfig(chave)) {
         await saveConfig(chave);
@@ -103,7 +104,7 @@ export default function AquecimentoConfigTab() {
   const delayConfig = getVal('delay_config');
   const autoStart = getVal('auto_start');
 
-  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
+  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'dias_carencia', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
   const unknownConfigs = configs.filter(c => !knownKeys.includes(c.chave));
 
   const faseDescricoes: Record<number, string> = {
@@ -350,6 +351,33 @@ export default function AquecimentoConfigTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Carência (Grace Period) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            <CardTitle className="text-lg">Período de Carência</CardTitle>
+          </div>
+          <CardDescription>
+            Quantos dias um número recém-conectado deve esperar antes de começar a enviar mensagens de aquecimento.
+            Isso protege números novos de serem restringidos logo no início.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-w-[200px] space-y-1">
+            <Label className="text-xs font-semibold">Dias de carência</Label>
+            <Input
+              type="number"
+              min={0}
+              max={30}
+              placeholder={String(DEFAULTS.dias_carencia)}
+              value={editValues['dias_carencia'] ?? DEFAULTS.dias_carencia}
+              onChange={e => updateLocal('dias_carencia', Number(e.target.value))}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Comportamento Automático */}
       <Card className="border-primary/30">
