@@ -23,7 +23,8 @@ import {
   Target,
   Bot,
   Volume2,
-  Flame
+  Flame,
+  Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -80,6 +81,7 @@ const navItems: NavItem[] = [
   { href: '/campanhas-voz', label: 'Campanhas de Voz', icon: Volume2 },
   { href: '/inbox', label: 'WhatsApp Inbox', icon: MessageSquare, adminOnly: true },
   { href: '/aquecimento', label: 'Aquecimento', icon: Flame, adminOnly: true },
+  { href: '/monitor-envios', label: 'Monitor Envios', icon: Activity, adminOnly: true },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {

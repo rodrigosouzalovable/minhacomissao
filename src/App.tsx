@@ -182,6 +182,7 @@ const App = () => (
             <Route path="/meta" element={<ProtectedRoute><MetaPessoal /></ProtectedRoute>} />
             <Route path="/campanhas-voz" element={<PermissionRoute><CampanhasVoz /></PermissionRoute>} />
             <Route path="/aquecimento" element={<PermissionRoute><Aquecimento /></PermissionRoute>} />
+            <Route path="/monitor-envios" element={<PermissionRoute><MonitorEnvios /></PermissionRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </VoiceCampaignSendingProvider>
