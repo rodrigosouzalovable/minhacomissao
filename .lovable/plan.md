@@ -1,69 +1,74 @@
 
 
-# Fix: Aquecimento — Add Delay Between Sends + Grace Period
+# Melhorias de Segurança Anti-Restrição do Aquecimento
 
-## Problems
+## O que já está implementado
+- Carência de 2 dias para novos números
+- Apenas 1 instância por ciclo de 15 min
+- Pausa automática com taxa de falha > 15%
+- Horário comercial e dias ativos
 
-1. **No delay between sends**: The main loop (line 253) processes all instances sequentially with zero wait time. All messages fire within seconds, which triggers WhatsApp's spam detection and gets numbers banned.
+## Problemas restantes identificados
 
-2. **No grace period for new instances**: When a new WhatsApp is connected, it immediately starts sending messages. Newly connected numbers need at least 2 days of inactivity before the warming system begins sending.
+### 1. Status é postado para TODAS as instâncias no mesmo ciclo
+O bloco de status (linha 459) itera **todas** as instâncias, não respeita o limite de 1 por ciclo. Se 20 números estão ativos, todos podem postar status no mesmo ciclo — comportamento antinatural.
 
-3. **Delay config exists but is unused**: The `delay_config` (min/max seconds) is loaded from config at line 123 but never applied.
+### 2. Sem variação de horário entre instâncias
+Todas as instâncias operam no mesmo horário exato. Humanos reais não começam e param todos ao mesmo tempo.
 
-## Solution
+### 3. Sem limite de interações recebidas por destino
+Um número pode receber mensagens de muitas instâncias diferentes no mesmo dia, o que é suspeito.
 
-### 1. Add delay between message sends (edge function)
+### 4. Fase 1 permite 3 mensagens/dia — ainda alto para número novo
+Números com 2-7 dias deveriam enviar no máximo 1-2 mensagens/dia.
 
-**File: `supabase/functions/whatsapp-aquecimento/index.ts`**
+### 5. Sem detecção de desconexão/ban
+Se um número é banido, o sistema continua tentando enviar e acumulando falhas.
 
-After each successful or failed message send (around line 429, end of the send block), add a random delay using the existing `delayConfig`:
+---
 
-```typescript
-// After sending each message, wait a random delay before the next
-const delayMs = (delayConfig.min_segundos + Math.random() * (delayConfig.max_segundos - delayConfig.min_segundos)) * 1000;
-console.log(`[AQUECIMENTO-AUTO] Aguardando ${Math.round(delayMs/1000)}s antes do próximo envio...`);
-await new Promise(resolve => setTimeout(resolve, delayMs));
-```
+## Plano de implementação
 
-This uses the already-configured `delay_config` (default: 30-180 seconds between sends).
+### Mudança 1 — Limitar status a 1 instância por ciclo
+**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
 
-**Important**: Since edge functions have a timeout (~60s default), we also need to limit processing to only **1 instance per invocation** instead of looping through all. The cron runs every 15 minutes, so each cycle processes one instance with proper spacing.
+No bloco de status (linha 452-610), selecionar apenas 1 instância aleatória elegível ao invés de iterar todas, igual já fazemos para mensagens.
 
-### 2. Add 2-day grace period for new instances
+### Mudança 2 — Offset aleatório por instância no horário
+**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
 
-**File: `supabase/functions/whatsapp-aquecimento/index.ts`**
+Usar o ID da instância para gerar um offset de ±60 minutos no horário de início/fim. Isso faz com que cada número "acorde" e "durma" em horários ligeiramente diferentes.
 
-In the main processing loop (line 253), after getting `instDetails`, add a check:
+### Mudança 3 — Limite de recebimento por destino (max 3/dia)
+**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
 
-```typescript
-const diasConectado = Math.floor((Date.now() - new Date(instDetails.criado_em).getTime()) / 86400000);
-if (diasConectado < 2) {
-  console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: em carência (${diasConectado} dias). Pulando.`);
-  continue;
-}
-```
+Antes de selecionar o destino (linha 337), verificar quantas mensagens o destino já **recebeu** hoje. Se >= 3, pular esse destino.
 
-This skips any instance connected less than 2 days ago. The status posting already has this check (line 445), but message sending does not.
+### Mudança 4 — Reduzir limite da Fase 1 para 1 msg/dia
+**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
 
-### 3. Process only 1 instance per cycle
+Alterar `PHASE_CONFIG[1].limite` de 3 para 1.
 
-Change the loop to pick a single random eligible instance instead of iterating all. This ensures:
-- Each 15-min cron cycle sends at most 1 message
-- Natural spacing between different instances across cycles
-- No edge function timeout risk
+### Mudança 5 — Detectar ban/desconexão e pausar automaticamente
+**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
 
-### 4. Update dashboard to show grace period badge
+Antes de enviar, fazer um health check (`GET /instance/status`) na instância. Se retornar desconectado, pausar a instância e notificar.
 
-**File: `src/components/aquecimento/AquecimentoDashboard.tsx`**
+### Mudança 6 — Configuração de carência editável no painel
+**Arquivo:** `src/components/aquecimento/AquecimentoConfigTab.tsx`
 
-Show an "Em carência" badge on instances connected less than 2 days ago, so the user knows why they aren't sending yet.
+Adicionar um campo na aba de configurações para o usuário definir quantos dias de carência (padrão 2), ao invés de fixo no código.
 
-## Summary
+---
 
-| Change | File |
-|--------|------|
-| Add grace period (2 days) for new instances | `whatsapp-aquecimento/index.ts` |
-| Process only 1 instance per cycle (not all at once) | `whatsapp-aquecimento/index.ts` |
-| Add delay between sends using existing config | `whatsapp-aquecimento/index.ts` |
-| Show "Em carência" badge on new instances | `AquecimentoDashboard.tsx` |
+## Resumo
+
+| Mudança | Arquivo | Impacto |
+|---------|---------|---------|
+| Status 1 instância/ciclo | `whatsapp-aquecimento/index.ts` | Evita burst de status |
+| Offset aleatório no horário | `whatsapp-aquecimento/index.ts` | Padrão mais humano |
+| Limite recebimento destino | `whatsapp-aquecimento/index.ts` | Evita número "bombardeado" |
+| Fase 1 = 1 msg/dia | `whatsapp-aquecimento/index.ts` | Proteção números novos |
+| Health check antes de enviar | `whatsapp-aquecimento/index.ts` | Detecta bans cedo |
+| Carência configurável | `AquecimentoConfigTab.tsx` | Flexibilidade pro admin |
 
