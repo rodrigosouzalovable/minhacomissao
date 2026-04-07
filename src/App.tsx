@@ -42,6 +42,7 @@ import AutomacaoCobMais from "./pages/AutomacaoCobMais";
 import CampanhasVoz from "./pages/CampanhasVoz";
 import WhatsAppInbox from "./pages/WhatsAppInbox";
 import Aquecimento from "./pages/Aquecimento";
+import MonitorEnvios from "./pages/MonitorEnvios";
 
 const queryClient = new QueryClient();
 
