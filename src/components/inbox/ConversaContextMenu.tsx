@@ -94,6 +94,11 @@ export function ConversaContextMenu({
             {fixado ? 'Desafixar conversa' : 'Fixar conversa'}
           </ContextMenuItem>
           <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => onExcluirConversa(contatoId)} className="text-destructive focus:text-destructive">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Excluir conversa
+          </ContextMenuItem>
+          <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger>
               <Tag className="h-4 w-4 mr-2" />
