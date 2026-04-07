@@ -12,6 +12,7 @@ interface SortableNavItemProps {
   isActive: boolean;
   onClick: () => void;
   badge?: number;
+  statusBadge?: string;
 }
 
 export function SortableNavItem({ id, href, label, icon: Icon, isActive, onClick, badge }: SortableNavItemProps) {
