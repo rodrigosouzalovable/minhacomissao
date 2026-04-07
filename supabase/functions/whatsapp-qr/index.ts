@@ -140,62 +140,61 @@ async function fetchQr(instanceId: string) {
   }
   const base = instance.server_url.replace(/\/+$/, "");
   const token = instance.instance_token;
-  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
-
-  const attempts = [
-    { url: uazUrl(base, "/instance/connect", { token, admintoken: adminToken }), method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
-    { url: `${base}/instance/connect`, method: "POST", headers: { "Content-Type": "application/json", token, admintoken: adminToken }, body: "{}" },
-    { url: `${base}/instance/connect`, method: "POST", headers: { "Content-Type": "application/json", token }, body: "{}" },
-    { url: uazUrl(base, "/instance/connect", { token, admintoken: adminToken }), method: "GET", headers: {}, body: undefined },
-    { url: `${base}/instance/connect`, method: "GET", headers: { token, admintoken: adminToken }, body: undefined },
-  ];
 
   const debugLogs: string[] = [];
 
-  for (const attempt of attempts) {
-    try {
-      console.log(`[QR] Trying: ${attempt.method} ${attempt.url}`);
-      const fetchOpts: any = { method: attempt.method, headers: attempt.headers };
-      if (attempt.body) fetchOpts.body = attempt.body;
-      const res = await fetch(attempt.url, fetchOpts);
+  // Primary approach: POST /instance/connect with token header
+  try {
+    console.log(`[QR] POST ${base}/instance/connect (token header)`);
+    const res = await fetch(`${base}/instance/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token },
+      body: "{}",
+    });
+
+    const text = await res.text();
+    console.log(`[QR] Response ${res.status}: ${text.substring(0, 500)}`);
+
+    if (res.status === 401) {
+      return json({
+        ok: false,
+        error: `Token inválido para a instância "${instance.nome || instanceId}". Esta instância pode ter sido removida do servidor. Tente criar uma nova conexão.`,
+      }, 401);
+    }
+
+    if (!res.ok) {
+      debugLogs.push(`${res.status}: ${text.substring(0, 150)}`);
+    } else {
       const contentType = res.headers.get("content-type") || "";
-
-      if (!res.ok) {
-        const body = await res.text();
-        console.log(`[QR] ${attempt.url} => ${res.status}: ${body.substring(0, 300)}`);
-        debugLogs.push(`${res.status}: ${body.substring(0, 150)}`);
-        continue;
-      }
-
       if (contentType.includes("image")) {
-        const buf = await res.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const buf = new TextEncoder().encode(text);
+        const base64 = btoa(String.fromCharCode(...buf));
         return json({ ok: true, qr: `data:${contentType};base64,${base64}`, pairingCode: null });
       }
 
-      const body = await res.text();
-      console.log(`[QR] ${attempt.url} => ${res.status}: ${body.substring(0, 500)}`);
-
       let data: any = null;
-      try { data = JSON.parse(body); } catch (_) { continue; }
+      try { data = JSON.parse(text); } catch (_) {}
 
-      const qr = data.qrcode || data.qr || data.base64 || data.qrCode || data.code ||
-                 data.instance?.qrcode || null;
-      const pairingCode = data.pairingCode || data.pairing_code || data.instance?.paircode || null;
+      if (data) {
+        const qr = data.qrcode || data.qr || data.base64 || data.qrCode || data.code ||
+                   data.instance?.qrcode || null;
+        const pairingCode = data.pairingCode || data.pairing_code || data.instance?.paircode || null;
 
-      if (qr) return json({ ok: true, qr, pairingCode });
+        if (qr) return json({ ok: true, qr, pairingCode });
 
-      if (data.connected || data.status === "CONNECTED" || data.status === "open" ||
-          data.instance?.status === "connected") {
-        const phone = data.phoneNumber || data.phone || data.wid || data.instance?.phone || null;
-        return json({ ok: true, alreadyConnected: true, connected: true, phone });
+        if (data.connected || data.status === "CONNECTED" || data.status === "open" ||
+            data.instance?.status === "connected" || data.loggedIn) {
+          const phone = data.phoneNumber || data.phone || data.wid || data.owner ||
+                        data.instance?.phone || data.jid || null;
+          return json({ ok: true, alreadyConnected: true, connected: true, phone });
+        }
+
+        debugLogs.push(`200 no QR: ${JSON.stringify(data).substring(0, 150)}`);
       }
-
-      debugLogs.push(`200 no QR: ${JSON.stringify(data).substring(0, 150)}`);
-    } catch (e) {
-      console.log(`[QR] Error: ${e.message}`);
-      debugLogs.push(`ERROR: ${e.message}`);
     }
+  } catch (e) {
+    console.log(`[QR] Error: ${e.message}`);
+    debugLogs.push(`ERROR: ${e.message}`);
   }
 
   return json({ ok: false, error: "Não foi possível obter o QR Code.", debug: debugLogs }, 400);
