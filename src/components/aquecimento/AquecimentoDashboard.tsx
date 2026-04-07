@@ -179,9 +179,14 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     const agendamentos = (agendamentosRes.data as any[]) || [];
 
     // Build active instance cards
+    // Load instance creation dates for grace period check
+    const instanceCreatedMap = new Map((allInstancesRes.data || []).map((i: any) => [i.id, i.criado_em]));
+
     const mapped: ActiveInstance[] = activeData.map((inst: any) => {
       const lastInteraction = interacoes.find((i: any) => i.instancia_origem_id === inst.instancia_id);
       const nextSchedule = agendamentos.find((a: any) => a.instancia_origem_id === inst.instancia_id);
+      const criado_em = instanceCreatedMap.get(inst.instancia_id);
+      const diasConectado = criado_em ? Math.floor((Date.now() - new Date(criado_em).getTime()) / 86400000) : 999;
 
       return {
         id: inst.id,
@@ -196,6 +201,8 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         ultima_msg_hora: lastInteraction?.enviado_em || null,
         ultima_msg_tipo: lastInteraction?.tipo || null,
         proximo_agendamento: nextSchedule?.agendado_para || null,
+        em_carencia: diasConectado < 2,
+        dias_conectado: diasConectado,
       };
     });
 

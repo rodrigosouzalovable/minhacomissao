@@ -250,7 +250,27 @@ Deno.serve(async (req) => {
     // Only process EM_AQUECIMENTO for messaging
     const instanciasAquecimento = instancias.filter((i: any) => i.status === "EM_AQUECIMENTO");
 
-    for (const inst of instanciasAquecimento) {
+    // ========== GRACE PERIOD + SINGLE INSTANCE PER CYCLE ==========
+    // Filter out instances connected less than 2 days (grace period)
+    const eligibleInstances = instanciasAquecimento.filter((inst: any) => {
+      const instDetails = instanceMap.get(inst.instancia_id);
+      if (!instDetails) return false;
+      const diasConectado = Math.floor((Date.now() - new Date(instDetails.criado_em).getTime()) / 86400000);
+      if (diasConectado < 2) {
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: em carência (${diasConectado} dias). Pulando.`);
+        return false;
+      }
+      return true;
+    });
+
+    // Process only 1 random instance per cycle to avoid sending all at once
+    const selectedInstance = eligibleInstances.length > 0
+      ? eligibleInstances[Math.floor(Math.random() * eligibleInstances.length)]
+      : null;
+
+    const instanciasToProcess = selectedInstance ? [selectedInstance] : [];
+
+    for (const inst of instanciasToProcess) {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) continue;
 
