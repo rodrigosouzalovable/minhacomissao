@@ -208,7 +208,10 @@ export default function Acionamento() {
 
   // WhatsApp profile editing state
   const [profileName, setProfileName] = useState('');
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const [currentProfilePhotoUrl, setCurrentProfilePhotoUrl] = useState('');
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState('');
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   const [profileDescription, setProfileDescription] = useState('');
   const [profileAddress, setProfileAddress] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
