@@ -1,25 +1,46 @@
 
 
-## Plano: Filtrar conversas do Inbox por instâncias do usuário
+## Plano: Importação Inteligente Montreal (Atualização + Inserção)
 
 ### Problema
-A query de **contatos** (`whatsapp_contatos`) não filtra por instância do usuário. Embora o dropdown de instâncias já mostre apenas as do usuário logado, a lista de conversas carrega contatos de **todas** as instâncias, incluindo as de outros usuários.
+Ao reimportar uma planilha Montreal, o sistema atual insere TODOS os registros como novos, causando duplicação. O usuário precisa que o sistema identifique quais parcelas já existem e insira apenas as novas.
 
 ### Solução
 
-**Arquivo: `src/pages/WhatsAppInbox.tsx`**
+Adicionar um novo layout **"Montreal (Atualização)"** na página de importação que funciona em 3 etapas:
 
-1. **Filtrar contatos pelas instâncias do usuário**: No `fetchContatos`, quando o usuário não é admin e não tem `inboxCompartilhado`, adicionar `.in('instancia_id', instancias.map(i => i.id))` para limitar os contatos apenas às instâncias carregadas para aquele usuário.
+**Arquivo: `src/pages/ImportarDevedores.tsx`**
 
-2. **Adicionar dependências corretas**: Incluir `instancias`, `isAdmin` e `inboxCompartilhado` nas dependências do `useCallback` de `fetchContatos`.
+1. **Novo tipo de layout**: Adicionar opção `montreal_atualizacao` ao `CredorLayout`
 
-3. **Aguardar instâncias carregarem**: Só executar `fetchContatos` quando as instâncias já tiverem sido carregadas, evitando uma query sem filtro no primeiro render.
+2. **Parser inteligente com cruzamento**:
+   - Ler a planilha no formato Montreal (mesmas colunas: C=CNPJ/CPF, B=Razão Social, H=Nro Nota (contrato), I=Desdob (descrição), J=Valor, K=Dt Vencimento)
+   - Para cada CPF encontrado na planilha, buscar registros existentes no banco (`devedores` com `credor = 'MONTREAL'` e `ativo = true`)
+   - Comparar cada linha da planilha com o banco usando a chave: **CPF + contrato (Nro Nota) + descricao (Desdob) + data_vencimento**
+   - Classificar cada linha como: "Já existe" ou "Nova parcela"
+
+3. **Preview com status**:
+   - Mostrar tabela com badge indicando o status de cada linha (verde = já existe, amarelo = nova parcela, azul = cliente novo)
+   - Contador de resumo: X já existentes, Y novas parcelas, Z clientes novos
+
+4. **Importação seletiva**:
+   - Inserir apenas as linhas marcadas como "Nova parcela" ou "Cliente novo"
+   - Não duplicar registros que já estão no sistema
 
 ### Detalhes técnicos
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/WhatsAppInbox.tsx` | Adicionar filtro `.in('instancia_id', ...)` em `fetchContatos` quando não admin/compartilhado |
+| Aspecto | Detalhe |
+|---------|---------|
+| Chave de duplicidade | `cpf` + `contrato` + `descricao` (desdob) + `data_vencimento` |
+| Credor fixo | MONTREAL (automático) |
+| Busca no banco | Query por CPFs únicos da planilha em `devedores` WHERE `credor = 'MONTREAL'` AND `ativo = true` |
+| Telefones | Colunas D e E da planilha (FONE1, FONE2) |
+| Mapeamento colunas | B=nome, C=CPF, D=fone1, E=fone2, H=contrato, I=descricao, J=valor, K=vencimento |
 
-A mesma lógica já existe em `fetchInstancias` (linhas 115-117) — vamos replicar o padrão para os contatos.
+### Fluxo do usuário
+1. Seleciona layout "Montreal (Atualização)"
+2. Faz upload da planilha
+3. Sistema cruza com dados existentes e mostra preview
+4. Clica em "Importar" para inserir apenas as parcelas novas
+5. Recebe feedback de quantas foram inseridas vs ignoradas
 
