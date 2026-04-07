@@ -138,6 +138,33 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ message: "Dia não ativo" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ========== CLEANUP: Remove instances no longer active ==========
+    const { data: existingAquecimento } = await supabase
+      .from("whatsapp_aquecimento_instancias")
+      .select("id, instancia_id, status")
+      .in("status", ["EM_AQUECIMENTO", "AQUECIDO", "PAUSADO"]);
+
+    if (existingAquecimento && existingAquecimento.length > 0) {
+      const aquecInstIds = existingAquecimento.map((e: any) => e.instancia_id);
+      const { data: stillActive } = await supabase
+        .from("user_whatsapp_instances")
+        .select("id")
+        .in("id", aquecInstIds)
+        .eq("ativo", true);
+      
+      const stillActiveIds = new Set((stillActive || []).map((i: any) => i.id));
+      
+      for (const aquecInst of existingAquecimento) {
+        if (!stillActiveIds.has(aquecInst.instancia_id)) {
+          await supabase
+            .from("whatsapp_aquecimento_instancias")
+            .update({ status: "REMOVIDO" })
+            .eq("id", aquecInst.id);
+          console.log(`[AQUECIMENTO-AUTO] Instância ${aquecInst.instancia_id} removida (não mais ativa)`);
+        }
+      }
+    }
+
     // ========== AUTO-ENROLLMENT ==========
     const { data: allActiveInstances } = await supabase
       .from("user_whatsapp_instances")
@@ -145,11 +172,12 @@ Deno.serve(async (req) => {
       .eq("ativo", true)
       .eq("user_id", adminUserId);
 
-    const { data: existingAquecimento } = await supabase
+    const { data: existingAquecimentoEnroll } = await supabase
       .from("whatsapp_aquecimento_instancias")
-      .select("instancia_id");
+      .select("instancia_id")
+      .neq("status", "REMOVIDO");
 
-    const existingIds = new Set((existingAquecimento || []).map((e: any) => e.instancia_id));
+    const existingIds = new Set((existingAquecimentoEnroll || []).map((e: any) => e.instancia_id));
     const newInstances = (allActiveInstances || []).filter((i: any) => !existingIds.has(i.id));
 
     for (const newInst of newInstances) {
@@ -157,17 +185,34 @@ Deno.serve(async (req) => {
       const fase = calcFaseByAge(diasConectado);
       const phaseConfig = PHASE_CONFIG[fase] || PHASE_CONFIG[1];
 
-      await supabase.from("whatsapp_aquecimento_instancias").insert({
-        instancia_id: newInst.id,
-        status: "EM_AQUECIMENTO",
-        fase,
-        fase_auto: true,
-        limite_diario: phaseConfig.limite,
-        dias_na_fase: 0,
-        interacoes_hoje: 0,
-        interacoes_total: 0,
-        respostas_recebidas: 0,
-      });
+      // Check if there's a REMOVIDO entry to reactivate
+      const { data: removedEntry } = await supabase
+        .from("whatsapp_aquecimento_instancias")
+        .select("id")
+        .eq("instancia_id", newInst.id)
+        .eq("status", "REMOVIDO")
+        .maybeSingle();
+
+      if (removedEntry) {
+        await supabase.from("whatsapp_aquecimento_instancias").update({
+          status: "EM_AQUECIMENTO",
+          fase,
+          limite_diario: phaseConfig.limite,
+        }).eq("id", removedEntry.id);
+        console.log(`[AQUECIMENTO-AUTO] Reativado: ${newInst.nome} (Fase ${fase})`);
+      } else {
+        await supabase.from("whatsapp_aquecimento_instancias").insert({
+          instancia_id: newInst.id,
+          status: "EM_AQUECIMENTO",
+          fase,
+          fase_auto: true,
+          limite_diario: phaseConfig.limite,
+          dias_na_fase: 0,
+          interacoes_hoje: 0,
+          interacoes_total: 0,
+          respostas_recebidas: 0,
+        });
+      }
 
       await supabase.from("aquecimento_notificacoes").insert({
         tipo: "novo_numero",
