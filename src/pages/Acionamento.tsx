@@ -372,12 +372,7 @@ export default function Acionamento() {
     }
   };
 
-  // Load WhatsApp profile when editing a connected instance
-  useEffect(() => {
-    if (editingInstance?.id && connectionStatus[editingInstance.id] === 'connected') {
-      loadWhatsAppProfile(editingInstance.server_url, editingInstance.instance_token);
-    }
-  }, [editingInstance?.id, connectionStatus, loadWhatsAppProfile]);
+
 
   const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
     const activeOnes = instancesToCheck.filter(i => i.ativo);
