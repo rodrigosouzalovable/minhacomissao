@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const MAX_MSGS_PER_INSTANCE_PER_DAY = 80;
+
 interface ClienteData {
   cpf: string;
   nome: string;
@@ -139,6 +141,24 @@ serve(async (req) => {
     let rrCounter = 0;
     const consecutiveErrors: Record<string, number> = {};
 
+    // ========== DAILY CAP PER INSTANCE ==========
+    // Track how many messages each instance has sent today (across all schedules)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayISO = todayStart.toISOString();
+
+    const instanceDailyCount: Record<string, number> = {};
+    for (const inst of activeInstances) {
+      // Count messages sent today by this instance via inbox log
+      const { count } = await supabase
+        .from('whatsapp_mensagens')
+        .select('id', { count: 'exact', head: true })
+        .eq('instancia_id', inst.id)
+        .eq('direcao', 'saida')
+        .gte('timestamp_msg', todayISO);
+      instanceDailyCount[inst.id] = count || 0;
+    }
+
     for (let i = 0; i < uniqueClientes.length; i++) {
       // Check if cancelled
       if (i % 10 === 0 && i > 0) {
@@ -166,10 +186,13 @@ serve(async (req) => {
       lastMsgIndex = msgIndex;
       const msg = replaceVariables(mensagens[msgIndex], cliente);
 
-      // Round-robin instance selection (skip disabled ones)
-      const availableInstances = activeInstances.filter(inst => (consecutiveErrors[inst.id] || 0) < 3);
+      // Round-robin instance selection (skip disabled ones AND those over daily cap)
+      const availableInstances = activeInstances.filter(inst => 
+        (consecutiveErrors[inst.id] || 0) < 3 &&
+        (instanceDailyCount[inst.id] || 0) < MAX_MSGS_PER_INSTANCE_PER_DAY
+      );
       if (availableInstances.length === 0) {
-        console.error('[Agendamento] Todas as instâncias desativadas por falhas');
+        console.error('[Agendamento] Todas as instâncias indisponíveis (falhas ou limite diário atingido)');
         break;
       }
       const instance = availableInstances[rrCounter % availableInstances.length];
@@ -179,7 +202,8 @@ serve(async (req) => {
         await sendViaUazapi(instance.server_url, instance.instance_token, telefoneCompleto, msg);
         totalEnviados++;
         consecutiveErrors[instance.id] = 0;
-        console.log(`[Agendamento] Enviado para ${telefoneCompleto} via ${instance.nome || instance.id}`);
+        instanceDailyCount[instance.id] = (instanceDailyCount[instance.id] || 0) + 1;
+        console.log(`[Agendamento] Enviado para ${telefoneCompleto} via ${instance.nome || instance.id} (${instanceDailyCount[instance.id]}/${MAX_MSGS_PER_INSTANCE_PER_DAY} hoje)`);
 
         // Save to inbox
         try {
