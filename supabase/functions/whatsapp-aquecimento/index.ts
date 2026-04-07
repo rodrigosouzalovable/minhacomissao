@@ -520,13 +520,20 @@ Deno.serve(async (req) => {
       todayStart.setHours(0, 0, 0, 0);
       const todayISO = todayStart.toISOString();
 
-      for (const inst of instancias) {
+      // Select only 1 random eligible instance for status per cycle (anti-burst)
+      const statusEligible = instancias.filter((i: any) => {
+        const d = instanceMap.get(i.instancia_id);
+        if (!d) return false;
+        const dias = Math.floor((Date.now() - new Date(d.criado_em).getTime()) / 86400000);
+        return dias >= diasCarencia;
+      });
+      const statusInst = statusEligible.length > 0
+        ? statusEligible[Math.floor(Math.random() * statusEligible.length)]
+        : null;
+
+      for (const inst of (statusInst ? [statusInst] : [])) {
         const instDetails = instanceMap.get(inst.instancia_id);
         if (!instDetails) continue;
-
-        const diasConectado = Math.floor((Date.now() - new Date(instDetails.criado_em).getTime()) / 86400000);
-        // Phase 0 (< 2 days): no status
-        if (diasConectado < 2) continue;
 
         const fase = inst.fase;
 
