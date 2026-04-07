@@ -1030,9 +1030,9 @@ export default function Acionamento() {
       const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
       let body: any;
       if (remove) {
-        body = { remove: true };
+        body = { image: '' };
       } else if (profilePhotoPreview) {
-        body = { url: profilePhotoPreview };
+        body = { image: profilePhotoPreview };
       } else {
         toast.error('Selecione uma imagem primeiro');
         setSavingProfilePhoto(false);
