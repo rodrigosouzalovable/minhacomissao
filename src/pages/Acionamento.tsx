@@ -1032,7 +1032,13 @@ export default function Acionamento() {
       if (remove) {
         body = { image: '' };
       } else if (profilePhotoPreview) {
-        body = { image: profilePhotoPreview };
+        // Strip data URI prefix — UAZAPI expects raw base64
+        let rawBase64 = profilePhotoPreview;
+        if (rawBase64.includes(',') && rawBase64.startsWith('data:')) {
+          rawBase64 = rawBase64.split(',')[1];
+        }
+        rawBase64 = rawBase64.replace(/\s/g, '');
+        body = { image: rawBase64 };
       } else {
         toast.error('Selecione uma imagem primeiro');
         setSavingProfilePhoto(false);
@@ -1043,7 +1049,9 @@ export default function Acionamento() {
         headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Falha ao alterar foto');
+      const resData = await res.json().catch(() => null);
+      console.log('[UAZAPI] profile/image response:', res.status, resData);
+      if (!res.ok) throw new Error(resData?.error || 'Falha ao alterar foto');
       toast.success(remove ? 'Foto removida!' : 'Foto do perfil atualizada!');
       if (remove) {
         setCurrentProfilePhotoUrl('');
