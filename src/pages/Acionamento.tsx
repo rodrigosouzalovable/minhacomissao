@@ -920,13 +920,16 @@ export default function Acionamento() {
   // WhatsApp profile management
   const loadWhatsAppProfile = useCallback(async (serverUrl: string, token: string) => {
     setLoadingProfile(true);
+    setCurrentProfilePhotoUrl('');
+    setProfilePhotoFile(null);
+    setProfilePhotoPreview('');
     setProfileName('');
-    setProfilePhotoUrl('');
     setProfileDescription('');
     setProfileAddress('');
     setProfileEmail('');
     try {
       const cleanUrl = serverUrl.replace(/\/+$/, '');
+      // Fetch business profile
       const res = await fetch(`${cleanUrl}/business/get/profile`, {
         method: 'POST',
         headers: { 'token': token, 'Content-Type': 'application/json' },
@@ -938,7 +941,23 @@ export default function Acionamento() {
         setProfileDescription(profile?.description || '');
         setProfileAddress(profile?.address || '');
         setProfileEmail(profile?.email || '');
+        if (profile?.profilePictureUrl || profile?.imgUrl || profile?.picture) {
+          setCurrentProfilePhotoUrl(profile?.profilePictureUrl || profile?.imgUrl || profile?.picture || '');
+        }
       }
+      // Try to fetch profile picture URL separately
+      try {
+        const picRes = await fetch(`${cleanUrl}/profile/image`, {
+          method: 'POST',
+          headers: { 'token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (picRes.ok) {
+          const picData = await picRes.json();
+          const picUrl = picData?.data?.profilePictureUrl || picData?.data?.imgUrl || picData?.profilePictureUrl || picData?.imgUrl || picData?.url || '';
+          if (picUrl) setCurrentProfilePhotoUrl(picUrl);
+        }
+      } catch {}
     } catch {}
     setLoadingProfile(false);
   }, []);
@@ -969,12 +988,32 @@ export default function Acionamento() {
     }
   };
 
+  const handleProfilePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProfilePhotoFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfilePhotoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveProfilePhoto = async (remove = false) => {
     if (!editingInstance) return;
     setSavingProfilePhoto(true);
     try {
       const cleanUrl = editingInstance.server_url.replace(/\/+$/, '');
-      const body = remove ? { remove: true } : { url: profilePhotoUrl };
+      let body: any;
+      if (remove) {
+        body = { remove: true };
+      } else if (profilePhotoPreview) {
+        body = { url: profilePhotoPreview };
+      } else {
+        toast.error('Selecione uma imagem primeiro');
+        setSavingProfilePhoto(false);
+        return;
+      }
       const res = await fetch(`${cleanUrl}/profile/image`, {
         method: 'POST',
         headers: { 'token': editingInstance.instance_token, 'Content-Type': 'application/json' },
@@ -982,7 +1021,15 @@ export default function Acionamento() {
       });
       if (!res.ok) throw new Error('Falha ao alterar foto');
       toast.success(remove ? 'Foto removida!' : 'Foto do perfil atualizada!');
-      if (remove) setProfilePhotoUrl('');
+      if (remove) {
+        setCurrentProfilePhotoUrl('');
+        setProfilePhotoFile(null);
+        setProfilePhotoPreview('');
+      } else {
+        setCurrentProfilePhotoUrl(profilePhotoPreview);
+        setProfilePhotoFile(null);
+        setProfilePhotoPreview('');
+      }
     } catch (err: any) {
       toast.error(err.message || 'Erro ao alterar foto');
     } finally {
@@ -2113,34 +2160,65 @@ export default function Acionamento() {
                           </div>
 
                           {/* Profile Photo */}
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             <Label className="text-xs flex items-center gap-1">
-                              <ImageIcon className="h-3 w-3" /> Foto do perfil (URL da imagem)
+                              <ImageIcon className="h-3 w-3" /> Foto do perfil
                             </Label>
-                            <div className="flex gap-2">
-                              <Input
-                                placeholder="https://exemplo.com/foto.jpg"
-                                value={profilePhotoUrl}
-                                onChange={(e) => setProfilePhotoUrl(e.target.value)}
-                                className="text-xs h-8"
-                              />
-                              <Button
-                                size="sm"
-                                className="h-8 text-xs"
-                                onClick={() => handleSaveProfilePhoto(false)}
-                                disabled={savingProfilePhoto || !profilePhotoUrl.trim()}
-                              >
-                                {savingProfilePhoto ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-xs"
-                                onClick={() => handleSaveProfilePhoto(true)}
-                                disabled={savingProfilePhoto}
-                              >
-                                Remover
-                              </Button>
+                            <div className="flex items-center gap-4">
+                              {/* Current photo or preview */}
+                              <div className="h-16 w-16 rounded-full overflow-hidden bg-muted flex items-center justify-center shrink-0 border">
+                                {(profilePhotoPreview || currentProfilePhotoUrl) ? (
+                                  <img
+                                    src={profilePhotoPreview || currentProfilePhotoUrl}
+                                    alt="Foto do perfil"
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <User className="h-6 w-6 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <input
+                                  ref={profilePhotoInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={handleProfilePhotoSelect}
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs"
+                                    onClick={() => profilePhotoInputRef.current?.click()}
+                                    disabled={savingProfilePhoto}
+                                  >
+                                    <Upload className="h-3 w-3 mr-1" /> Escolher imagem
+                                  </Button>
+                                  {profilePhotoPreview && (
+                                    <Button
+                                      size="sm"
+                                      className="h-8 text-xs"
+                                      onClick={() => handleSaveProfilePhoto(false)}
+                                      disabled={savingProfilePhoto}
+                                    >
+                                      {savingProfilePhoto ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs"
+                                    onClick={() => handleSaveProfilePhoto(true)}
+                                    disabled={savingProfilePhoto}
+                                  >
+                                    <Trash2 className="h-3 w-3 mr-1" /> Remover
+                                  </Button>
+                                </div>
+                                {profilePhotoFile && (
+                                  <span className="text-xs text-muted-foreground truncate max-w-[200px]">{profilePhotoFile.name}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
