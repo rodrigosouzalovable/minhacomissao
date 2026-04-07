@@ -40,6 +40,7 @@ export function ConversaContextMenu({
   contatoEtiquetaIds,
   fixado,
   onMarcarNaoLida,
+  onExcluirConversa,
   onEtiquetaToggle,
   onEtiquetasChange,
   onFixarToggle,
