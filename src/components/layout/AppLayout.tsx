@@ -140,19 +140,45 @@ export function AppLayout({ children }: AppLayoutProps) {
       // Check if user has shared inbox access
       const { data: perms } = await supabase
         .from('user_permissions')
-        .select('inbox_compartilhado')
+        .select('inbox_compartilhado, concedido_por')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      const shared = isAdmin || (perms as any)?.inbox_compartilhado;
+      const shared = (perms as any)?.inbox_compartilhado;
+      const concedidoPor = (perms as any)?.concedido_por as string | null;
 
-      if (shared) {
-        const { count } = await supabase
-          .from('whatsapp_contatos')
-          .select('id', { count: 'exact', head: true })
-          .gt('nao_lido', 0);
-        setInboxUnreadCount(count ?? 0);
-        return;
+      if (isAdmin) {
+        // Admin sees all their own instances unread count
+        const { data: adminInstances } = await supabase
+          .from('user_whatsapp_instances')
+          .select('id')
+          .eq('user_id', user.id);
+        if (adminInstances && adminInstances.length > 0) {
+          const ids = adminInstances.map(i => i.id);
+          const { count } = await supabase
+            .from('whatsapp_contatos')
+            .select('id', { count: 'exact', head: true })
+            .in('instancia_id', ids)
+            .gt('nao_lido', 0);
+          setInboxUnreadCount(count ?? 0);
+          return;
+        }
+      } else if (shared && concedidoPor) {
+        // Shared inbox: show unread from admin who granted access
+        const { data: sharedInstances } = await supabase
+          .from('user_whatsapp_instances')
+          .select('id')
+          .eq('user_id', concedidoPor);
+        if (sharedInstances && sharedInstances.length > 0) {
+          const ids = sharedInstances.map(i => i.id);
+          const { count } = await supabase
+            .from('whatsapp_contatos')
+            .select('id', { count: 'exact', head: true })
+            .in('instancia_id', ids)
+            .gt('nao_lido', 0);
+          setInboxUnreadCount(count ?? 0);
+          return;
+        }
       }
     }
 
