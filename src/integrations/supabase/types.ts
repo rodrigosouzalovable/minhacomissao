@@ -1498,6 +1498,7 @@ export type Database = {
           ordem: number | null
           robo: boolean
           server_url: string
+          tipo: string | null
           user_id: string
         }
         Insert: {
@@ -1511,6 +1512,7 @@ export type Database = {
           ordem?: number | null
           robo?: boolean
           server_url: string
+          tipo?: string | null
           user_id: string
         }
         Update: {
@@ -1524,6 +1526,7 @@ export type Database = {
           ordem?: number | null
           robo?: boolean
           server_url?: string
+          tipo?: string | null
           user_id?: string
         }
         Relationships: []

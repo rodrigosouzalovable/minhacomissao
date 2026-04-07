@@ -22,7 +22,39 @@ function calcFaseByAge(diasConectado: number): number {
   return 5;
 }
 
-// ========== STATUS CONTENT POOLS (expanded for anti-fingerprint) ==========
+// ========== DETERMINISTIC HASH UTILITY ==========
+function deterministicHash(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+// ========== ANTI-BAN: Read-only day (15% chance) — skips messages only, keeps status/contacts ==========
+function isReadOnlyDay(instanceId: string, dateStr: string): boolean {
+  return (deterministicHash(instanceId + "readonly" + dateStr) % 100) < 15;
+}
+
+// ========== ANTI-BAN: Burst morning (30% chance) — 2-3 fast messages between 8-9h ==========
+function isBurstMorning(instanceId: string, dateStr: string): boolean {
+  return (deterministicHash(instanceId + "burst" + dateStr) % 100) < 30;
+}
+
+// ========== ANTI-BAN: Random skip (30% chance per cycle) ==========
+function shouldSkipCycle(instanceId: string, minuteKey: string): boolean {
+  return (deterministicHash(instanceId + "skip" + minuteKey) % 100) < 30;
+}
+
+// ========== DYNAMIC IMAGE URL (per-instance per-day, no shared fingerprint) ==========
+function getStatusImageUrl(instanceId: string, dateStr: string, index: number): string {
+  const seed = deterministicHash(instanceId + dateStr + String(index));
+  // Use Lorem Picsum with deterministic seed per instance/day
+  return `https://picsum.photos/seed/${seed}/800/600`;
+}
+
+// ========== STATUS CONTENT POOLS ==========
 const STATUS_TEXTOS_FASE1 = [
   "Bom dia! 🌞", "Ótimo dia para todos!", "Boa noite! 🌙",
   "Final de semana chegando! 🎉", "Mais um dia produtivo pela frente! 💪",
@@ -31,7 +63,6 @@ const STATUS_TEXTOS_FASE1 = [
   "Que Deus abençoe nosso dia! 🙌",
   "Começando mais uma semana com energia! ⚡", "Boa noite e bons sonhos! 💤",
   "Vamos que vamos! 🚀", "Feliz dia! 😊", "Gratidão por mais um dia! 🌻",
-  // Expanded pool
   "Sexta-feira finalmente! 🥳", "Bom descanso a todos! 😴",
   "Aproveitando o dia ☕", "Que venham coisas boas! 🍀",
   "Dia lindo hoje! 🌈", "Tudo no tempo certo 🕐",
@@ -57,7 +88,6 @@ const STATUS_TEXTOS_FASE3 = [
   "O futuro é agora! 🌍", "Conectando pessoas, gerando valor! 🤝",
   "Sempre em evolução! 🔄", "Qualidade em primeiro lugar! ✅",
   "Fazendo acontecer! 🔥",
-  // Expanded pool
   "Trabalho duro compensa! 💎", "Construindo o futuro hoje 🏗️",
   "Cada detalhe importa! 🔍", "Disciplina gera resultado! 📋",
   "O caminho é longo mas vale a pena! 🛤️",
@@ -71,38 +101,13 @@ const STATUS_TEXTOS_FASE3 = [
   "Superação diária! 🦅", "Gratidão pelo progresso! 🌻",
 ];
 
-const STATUS_IMAGENS = [
+// Fallback static images (only used if Picsum fails)
+const STATUS_IMAGENS_FALLBACK = [
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&q=80",
   "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80",
   "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80",
-  "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=800&q=80",
-  "https://images.unsplash.com/photo-1504198453319-5ce911bafcde?w=800&q=80",
   "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80",
   "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&q=80",
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80",
-  "https://images.unsplash.com/photo-1518173946687-a1e13f60320e?w=800&q=80",
-  "https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=800&q=80",
-  "https://images.unsplash.com/photo-1540206395-68808572332f?w=800&q=80",
-  "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&q=80",
-  "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=800&q=80",
-  "https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=800&q=80",
-  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=800&q=80",
-  // Expanded pool — diversified categories to reduce fingerprint
-  "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=800&q=80",
-  "https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?w=800&q=80",
-  "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&q=80",
-  "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=800&q=80",
-  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80",
-  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
-  "https://images.unsplash.com/photo-1494500764479-0c8f2919a3d8?w=800&q=80",
-  "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=800&q=80",
-  "https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=800&q=80",
-  "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&q=80",
-  "https://images.unsplash.com/photo-1476610182048-b716b8518aae?w=800&q=80",
-  "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=800&q=80",
-  "https://images.unsplash.com/photo-1439853949127-fa647821eba0?w=800&q=80",
-  "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&q=80",
-  "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=800&q=80",
 ];
 
 const BG_COLORS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
@@ -123,13 +128,7 @@ function shouldPostStatus(hour: number): boolean {
 
 // Deterministic "silent day" check: 20% chance per instance per day
 function isSilentDay(instanceId: string, dateStr: string): boolean {
-  let hash = 0;
-  const seed = instanceId + dateStr;
-  for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-    hash |= 0;
-  }
-  return (Math.abs(hash) % 100) < 20; // 20% chance
+  return (deterministicHash(instanceId + dateStr) % 100) < 20;
 }
 
 Deno.serve(async (req) => {
@@ -142,13 +141,25 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
+    // ========== ANTI-BAN: Jitter 0-180 seconds ==========
+    const jitterSeconds = Math.floor(Math.random() * 180);
+    console.log(`[AQUECIMENTO-AUTO] Jitter de ${jitterSeconds}s antes de iniciar...`);
+    await new Promise(resolve => setTimeout(resolve, jitterSeconds * 1000));
+
     console.log("[AQUECIMENTO-AUTO] Iniciando ciclo automático...");
 
     const now = new Date();
     const spTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = spTime.getHours();
     const dayOfWeek = spTime.getDay();
-    const todayDateStr = spTime.toISOString().slice(0, 10); // YYYY-MM-DD for silent day seed
+    const todayDateStr = spTime.toISOString().slice(0, 10);
+    const minuteKey = spTime.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM for skip seed
+
+    // ========== ANTI-BAN: Lunch break (12h-14h) ==========
+    if (hour >= 12 && hour < 14) {
+      console.log(`[AQUECIMENTO-AUTO] Pausa de almoço (${hour}h). Pulando ciclo.`);
+      return new Response(JSON.stringify({ message: "Pausa de almoço" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // Load config
     const { data: configRows } = await supabase.from("whatsapp_aquecimento_config").select("*");
@@ -173,14 +184,12 @@ Deno.serve(async (req) => {
     const statusIncluirImagens = config.status_incluir_imagens !== false;
     const statusIncluirVideos = config.status_incluir_videos === true;
 
+    // ========== ANTI-BAN: Weekend reduction from config ==========
+    const reducaoFimSemana = config.reducao_fim_semana ?? { sabado: 60, domingo: 40 };
+
     // Helper: generate a deterministic offset ±60min from instance ID
     function getInstanceHourOffset(instanceId: string): number {
-      let hash = 0;
-      for (let i = 0; i < instanceId.length; i++) {
-        hash = ((hash << 5) - hash) + instanceId.charCodeAt(i);
-        hash |= 0;
-      }
-      return (Math.abs(hash) % 121) - 60;
+      return (deterministicHash(instanceId + "offset") % 121) - 60;
     }
 
     if (!diasAtivos.includes(dayOfWeek)) {
@@ -302,7 +311,7 @@ Deno.serve(async (req) => {
 
     const instanciasAquecimento = instancias.filter((i: any) => i.status === "EM_AQUECIMENTO");
 
-    // ========== GRACE PERIOD + SILENT DAY + SINGLE INSTANCE PER CYCLE ==========
+    // ========== GRACE PERIOD + SILENT DAY + READ-ONLY DAY + SINGLE INSTANCE PER CYCLE ==========
     const eligibleInstances = instanciasAquecimento.filter((inst: any) => {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) return false;
@@ -311,9 +320,14 @@ Deno.serve(async (req) => {
         console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: em carência (${diasConectado}/${diasCarencia} dias). Pulando.`);
         return false;
       }
-      // Silent day: 20% chance of skipping entire day
+      // Silent day: 20% chance of skipping entire day (messages + status + contacts)
       if (isSilentDay(inst.instancia_id, todayDateStr)) {
         console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: dia silencioso. Pulando.`);
+        return false;
+      }
+      // Read-only day: 15% chance — skip messages only (status/contacts still run)
+      if (isReadOnlyDay(inst.instancia_id, todayDateStr)) {
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: dia somente-leitura. Pulando mensagens.`);
         return false;
       }
       // Per-instance hour offset
@@ -337,6 +351,12 @@ Deno.serve(async (req) => {
     for (const inst of instanciasToProcess) {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) continue;
+
+      // ========== ANTI-BAN: 30% skip chance per cycle ==========
+      if (shouldSkipCycle(inst.instancia_id, minuteKey)) {
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: skip aleatório (30%). Pulando.`);
+        continue;
+      }
 
       // ========== HEALTH CHECK with timeout ==========
       const cleanServerUrlCheck = instDetails.server_url.replace(/\/+$/, "");
@@ -365,7 +385,6 @@ Deno.serve(async (req) => {
         }
       } catch (healthErr) {
         console.error(`[AQUECIMENTO-AUTO] Health check falhou para ${instDetails.nome}: ${healthErr}`);
-        // Continue anyway — network/timeout error doesn't mean banned
       }
 
       // ========== AGE-BASED PHASE CALCULATION ==========
@@ -419,11 +438,32 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ========== CHECK DAILY LIMIT ==========
+      // ========== CHECK DAILY LIMIT (with weekend reduction) ==========
       const phaseConfig = PHASE_CONFIG[inst.fase] || PHASE_CONFIG[1];
-      const limite = phaseConfig.limite;
+      let limite = phaseConfig.limite;
+
+      // Weekend reduction
+      if (dayOfWeek === 6) { // Saturday
+        limite = Math.max(1, Math.floor(limite * (reducaoFimSemana.sabado ?? 60) / 100));
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: sábado, limite reduzido para ${limite}`);
+      } else if (dayOfWeek === 0) { // Sunday
+        limite = Math.max(1, Math.floor(limite * (reducaoFimSemana.domingo ?? 40) / 100));
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: domingo, limite reduzido para ${limite}`);
+      }
+
       if (inst.interacoes_hoje >= limite) {
         console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: limite atingido (${inst.interacoes_hoje}/${limite})`);
+        continue;
+      }
+
+      // ========== ANTI-BAN: Burst morning (30% of days, 8-9h, send 2-3 fast) ==========
+      const isBurst = isBurstMorning(inst.instancia_id, todayDateStr);
+      let burstCount = 0;
+      const maxBurst = isBurst && hour >= 8 && hour < 9 ? (2 + (deterministicHash(inst.instancia_id + "burstN" + todayDateStr) % 2)) : 0;
+
+      // If burst morning and hour 9-11, skip (post-burst cooldown)
+      if (isBurst && hour >= 9 && hour < 11) {
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: cooldown pós-burst matinal. Pulando.`);
         continue;
       }
 
@@ -460,120 +500,136 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const destino = possibleDestinos[Math.floor(Math.random() * possibleDestinos.length)];
-      const destinoDetails = instanceMap.get(destino.instancia_id);
-      if (!destinoDetails) continue;
+      // ========== SEND MESSAGE(S) — single or burst ==========
+      const messagesToSend = maxBurst > 0 ? maxBurst : 1;
 
-      // ========== SELECT DIALOGUE ==========
-      const tiposPermitidos = phaseConfig.tipos;
-      const { data: dialogos } = await supabase
-        .from("whatsapp_aquecimento_dialogos")
-        .select("*")
-        .eq("ativo", true)
-        .lte("fase_minima", inst.fase)
-        .in("tipo", tiposPermitidos);
+      for (let msgIdx = 0; msgIdx < messagesToSend; msgIdx++) {
+        if (inst.interacoes_hoje + msgIdx >= limite) break;
 
-      if (!dialogos || dialogos.length === 0) {
-        console.log("[AQUECIMENTO-AUTO] Sem diálogos disponíveis");
-        continue;
-      }
+        const destino = possibleDestinos[Math.floor(Math.random() * possibleDestinos.length)];
+        const destinoDetails = instanceMap.get(destino.instancia_id);
+        if (!destinoDetails) continue;
 
-      const oneDayAgo = new Date(Date.now() - 24 * 3600000).toISOString();
-      const { data: recentContent } = await supabase
-        .from("whatsapp_aquecimento_interacoes")
-        .select("conteudo")
-        .eq("instancia_origem_id", inst.instancia_id)
-        .eq("instancia_destino_id", destino.instancia_id)
-        .gte("enviado_em", oneDayAgo);
+        // ========== SELECT DIALOGUE ==========
+        const tiposPermitidos = (PHASE_CONFIG[inst.fase] || PHASE_CONFIG[1]).tipos;
+        const { data: dialogos } = await supabase
+          .from("whatsapp_aquecimento_dialogos")
+          .select("*")
+          .eq("ativo", true)
+          .lte("fase_minima", inst.fase)
+          .in("tipo", tiposPermitidos);
 
-      const usedContent = new Set((recentContent || []).map((r: any) => r.conteudo));
-      const availableDialogos = dialogos.filter((d: any) => !usedContent.has(d.conteudo));
-      const dialogo = availableDialogos.length > 0
-        ? availableDialogos[Math.floor(Math.random() * availableDialogos.length)]
-        : dialogos[Math.floor(Math.random() * dialogos.length)];
-
-      // ========== SEND MESSAGE ==========
-      const destinoPhone = destinoDetails.nome?.match(/^\d+/)?.[0] || "";
-      if (!destinoPhone) {
-        console.log(`[AQUECIMENTO-AUTO] Não extrair telefone de ${destinoDetails.nome}`);
-        continue;
-      }
-
-      const serverUrl = instDetails.server_url;
-      const token = instDetails.instance_token;
-
-      try {
-        let sendRes: Response;
-        const cleanServerUrl = serverUrl.replace(/\/+$/, "");
-        const destinoNumero = `55${destinoPhone}@s.whatsapp.net`;
-
-        if (dialogo.tipo === "audio") {
-          sendRes = await fetch(`${cleanServerUrl}/send/media`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", token },
-            body: JSON.stringify({ number: destinoNumero, type: "ptt", file: dialogo.conteudo }),
-          });
-        } else {
-          sendRes = await fetch(`${cleanServerUrl}/send/text`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", token },
-            body: JSON.stringify({ number: destinoNumero, text: dialogo.conteudo }),
-          });
+        if (!dialogos || dialogos.length === 0) {
+          console.log("[AQUECIMENTO-AUTO] Sem diálogos disponíveis");
+          break;
         }
 
-        const sendData = await sendRes.json().catch(() => ({}));
-        console.log(`[AQUECIMENTO-AUTO] ${dialogo.tipo} enviado: ${instDetails.nome} → ${destinoDetails.nome} (${sendRes.ok})`);
+        const oneDayAgo = new Date(Date.now() - 24 * 3600000).toISOString();
+        const { data: recentContent } = await supabase
+          .from("whatsapp_aquecimento_interacoes")
+          .select("conteudo")
+          .eq("instancia_origem_id", inst.instancia_id)
+          .eq("instancia_destino_id", destino.instancia_id)
+          .gte("enviado_em", oneDayAgo);
 
-        await supabase.from("whatsapp_aquecimento_interacoes").insert({
-          instancia_origem_id: inst.instancia_id,
-          instancia_destino_id: destino.instancia_id,
-          tipo: dialogo.tipo,
-          conteudo: dialogo.conteudo,
-          status: sendRes.ok ? "ENVIADO" : "FALHOU",
-          mensagem_id: sendData?.key?.id || null,
-          enviado_em: new Date().toISOString(),
-          tipo_interacao: "mensagem",
-        });
+        const usedContent = new Set((recentContent || []).map((r: any) => r.conteudo));
+        const availableDialogos = dialogos.filter((d: any) => !usedContent.has(d.conteudo));
+        const dialogo = availableDialogos.length > 0
+          ? availableDialogos[Math.floor(Math.random() * availableDialogos.length)]
+          : dialogos[Math.floor(Math.random() * dialogos.length)];
 
-        if (sendRes.ok) {
-          totalEnviados++;
-          await supabase
-            .from("whatsapp_aquecimento_instancias")
-            .update({
-              interacoes_hoje: inst.interacoes_hoje + 1,
-              interacoes_total: inst.interacoes_total + 1,
-              ultima_interacao: new Date().toISOString(),
-            })
-            .eq("id", inst.id);
+        // ========== SEND MESSAGE ==========
+        const destinoPhone = destinoDetails.nome?.match(/^\d+/)?.[0] || "";
+        if (!destinoPhone) {
+          console.log(`[AQUECIMENTO-AUTO] Não extrair telefone de ${destinoDetails.nome}`);
+          continue;
         }
-      } catch (sendErr) {
-        console.error(`[AQUECIMENTO-AUTO] Erro ao enviar: ${sendErr}`);
-        await supabase.from("whatsapp_aquecimento_interacoes").insert({
-          instancia_origem_id: inst.instancia_id,
-          instancia_destino_id: destino.instancia_id,
-          tipo: dialogo.tipo,
-          conteudo: dialogo.conteudo,
-          status: "FALHOU",
-          enviado_em: new Date().toISOString(),
-          tipo_interacao: "mensagem",
-        });
+
+        const serverUrl = instDetails.server_url;
+        const token = instDetails.instance_token;
+
+        try {
+          let sendRes: Response;
+          const cleanServerUrl = serverUrl.replace(/\/+$/, "");
+          const destinoNumero = `55${destinoPhone}@s.whatsapp.net`;
+
+          if (dialogo.tipo === "audio") {
+            sendRes = await fetch(`${cleanServerUrl}/send/media`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", token },
+              body: JSON.stringify({ number: destinoNumero, type: "ptt", file: dialogo.conteudo }),
+            });
+          } else {
+            sendRes = await fetch(`${cleanServerUrl}/send/text`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", token },
+              body: JSON.stringify({ number: destinoNumero, text: dialogo.conteudo }),
+            });
+          }
+
+          const sendData = await sendRes.json().catch(() => ({}));
+          console.log(`[AQUECIMENTO-AUTO] ${dialogo.tipo} enviado: ${instDetails.nome} → ${destinoDetails.nome} (${sendRes.ok})`);
+
+          await supabase.from("whatsapp_aquecimento_interacoes").insert({
+            instancia_origem_id: inst.instancia_id,
+            instancia_destino_id: destino.instancia_id,
+            tipo: dialogo.tipo,
+            conteudo: dialogo.conteudo,
+            status: sendRes.ok ? "ENVIADO" : "FALHOU",
+            mensagem_id: sendData?.key?.id || null,
+            enviado_em: new Date().toISOString(),
+            tipo_interacao: "mensagem",
+          });
+
+          if (sendRes.ok) {
+            totalEnviados++;
+            burstCount++;
+            await supabase
+              .from("whatsapp_aquecimento_instancias")
+              .update({
+                interacoes_hoje: inst.interacoes_hoje + burstCount,
+                interacoes_total: inst.interacoes_total + 1,
+                ultima_interacao: new Date().toISOString(),
+              })
+              .eq("id", inst.id);
+          }
+
+          // Burst delay: 30-60s between burst messages
+          if (maxBurst > 0 && msgIdx < messagesToSend - 1) {
+            const burstDelay = 30 + Math.floor(Math.random() * 30);
+            console.log(`[AQUECIMENTO-AUTO] Burst delay: ${burstDelay}s`);
+            await new Promise(resolve => setTimeout(resolve, burstDelay * 1000));
+          }
+        } catch (sendErr) {
+          console.error(`[AQUECIMENTO-AUTO] Erro ao enviar: ${sendErr}`);
+          await supabase.from("whatsapp_aquecimento_interacoes").insert({
+            instancia_origem_id: inst.instancia_id,
+            instancia_destino_id: destino.instancia_id,
+            tipo: dialogo.tipo,
+            conteudo: dialogo.conteudo,
+            status: "FALHOU",
+            enviado_em: new Date().toISOString(),
+            tipo_interacao: "mensagem",
+          });
+        }
       }
     }
 
-    // ========== STATUS POSTING ==========
+    // ========== STATUS POSTING (uses dynamic Picsum images) ==========
     if (postarStatusAuto) {
       console.log("[AQUECIMENTO-AUTO] Verificando postagem de status...");
       const todayStart = new Date(spTime);
       todayStart.setHours(0, 0, 0, 0);
       const todayISO = todayStart.toISOString();
 
-      // Select only 1 random eligible instance for status per cycle (anti-burst)
+      // Select only 1 random eligible instance for status per cycle
+      // Note: read-only day instances CAN post status (only messages are skipped)
       const statusEligible = instancias.filter((i: any) => {
         const d = instanceMap.get(i.instancia_id);
         if (!d) return false;
         const dias = Math.floor((Date.now() - new Date(d.criado_em).getTime()) / 86400000);
         if (dias < diasCarencia) return false;
-        // Silent day also skips status
+        // Silent day skips everything including status
         if (isSilentDay(i.instancia_id, todayDateStr)) return false;
         return true;
       });
@@ -598,7 +654,6 @@ Deno.serve(async (req) => {
 
         if (!shouldPostStatus(hour)) continue;
 
-        const phaseConfig = PHASE_CONFIG[fase] || PHASE_CONFIG[1];
         let allowedStatusTypes = ["text"];
         if (fase >= 2 && statusIncluirImagens) allowedStatusTypes.push("image");
         if (fase >= 5 && statusIncluirVideos) allowedStatusTypes.push("video");
@@ -613,7 +668,6 @@ Deno.serve(async (req) => {
           .gte("postado_em", sevenDaysAgo);
 
         const usedTexts = new Set((recentStatusLogs || []).map((s: any) => s.conteudo));
-        const usedUrls = new Set((recentStatusLogs || []).map((s: any) => s.conteudo_url));
 
         const cleanServerUrl = instDetails.server_url.replace(/\/+$/, "");
         const token = instDetails.instance_token;
@@ -638,10 +692,8 @@ Deno.serve(async (req) => {
             };
             logConteudo = text;
           } else if (statusType === "image") {
-            const availableImgs = STATUS_IMAGENS.filter(u => !usedUrls.has(u));
-            const imgUrl = availableImgs.length > 0
-              ? availableImgs[Math.floor(Math.random() * availableImgs.length)]
-              : STATUS_IMAGENS[Math.floor(Math.random() * STATUS_IMAGENS.length)];
+            // Dynamic image URL per instance per day (no shared fingerprint)
+            const imgUrl = getStatusImageUrl(inst.instancia_id, todayDateStr, statusHoje || 0);
 
             const captionPool = fase >= 3 ? STATUS_TEXTOS_FASE3 : STATUS_TEXTOS_FASE1;
             const caption = captionPool[Math.floor(Math.random() * captionPool.length)];
@@ -725,7 +777,6 @@ Deno.serve(async (req) => {
     if (salvarContatosAuto) {
       console.log("[AQUECIMENTO-AUTO] Verificando contatos para salvar...");
 
-      // Select only 1 random instance for contact saving (same anti-burst logic)
       const contactEligible = instancias.filter((i: any) => {
         const d = instanceMap.get(i.instancia_id);
         if (!d) return false;
@@ -743,20 +794,46 @@ Deno.serve(async (req) => {
         const cleanServerUrl = instDetails.server_url.replace(/\/+$/, "");
         const token = instDetails.instance_token;
 
+        // Fallback: use recent warming interaction partners as contacts to save
         const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
+        
+        // Try whatsapp_contatos first
         const { data: recentContatos } = await supabase
-          .from("whatsapp_contatos")
+          .from("whatsapp_contatos" as any)
           .select("telefone")
           .eq("instancia_id", inst.instancia_id)
           .gte("criado_em", twoHoursAgo);
 
-        if (!recentContatos || recentContatos.length === 0) continue;
+        // Fallback: use recent interaction destinations
+        let phonesToSave: string[] = [];
+        if (recentContatos && recentContatos.length > 0) {
+          phonesToSave = (recentContatos as any[]).slice(0, 3).map((c: any) => c.telefone?.replace(/\D/g, "") || "").filter((p: string) => p.length >= 10);
+        } else {
+          // Fallback: get phone numbers from recent warming interaction partners
+          const { data: recentPartners } = await supabase
+            .from("whatsapp_aquecimento_interacoes")
+            .select("instancia_destino_id")
+            .eq("instancia_origem_id", inst.instancia_id)
+            .eq("tipo_interacao", "mensagem")
+            .eq("status", "ENVIADO")
+            .gte("enviado_em", twoHoursAgo)
+            .limit(3);
+          
+          if (recentPartners && recentPartners.length > 0) {
+            for (const partner of recentPartners) {
+              const partnerDetails = instanceMap.get(partner.instancia_destino_id);
+              if (partnerDetails) {
+                const phone = partnerDetails.nome?.match(/^\d+/)?.[0] || "";
+                if (phone.length >= 10) phonesToSave.push(phone);
+              }
+            }
+          }
+        }
+
+        if (phonesToSave.length === 0) continue;
 
         let savedCount = 0;
-        for (const contato of recentContatos.slice(0, 3)) {
-          const phone = contato.telefone?.replace(/\D/g, "") || "";
-          if (!phone || phone.length < 10) continue;
-
+        for (const phone of phonesToSave) {
           try {
             const addRes = await fetch(`${cleanServerUrl}/contact/add`, {
               method: "POST",

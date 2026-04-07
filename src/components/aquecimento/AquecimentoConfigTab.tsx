@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone, Shield } from 'lucide-react';
+import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone, Shield, Coffee, TrendingDown } from 'lucide-react';
 
 interface ConfigItem {
   id: string;
@@ -27,8 +27,8 @@ const DIAS_SEMANA = [
 ];
 
 const DEFAULTS = {
-  limites_por_fase: { '1': 5, '2': 10, '3': 20, '4': 30, aquecido: 50 },
-  dias_por_fase: { '1': 7, '2': 7, '3': 7, '4': 7 },
+  limites_por_fase: { '1': 1, '2': 3, '3': 7, '4': 15, '5': 25 },
+  dias_por_fase: { '1': 7, '2': 7, '3': 7, '4': 7, '5': 0 },
   horario_comercial: { inicio: '08:00', fim: '18:00', timezone: 'America/Sao_Paulo' },
   dias_ativos: [1, 2, 3, 4, 5, 6],
   delay_config: { min: 30, max: 180 },
@@ -38,6 +38,8 @@ const DEFAULTS = {
   postar_status_auto: true,
   status_incluir_imagens: true,
   status_incluir_videos: false,
+  pausa_almoco: { ativo: true, inicio: '12:00', fim: '14:00' },
+  reducao_fim_semana: { sabado: 60, domingo: 40 },
 };
 
 export default function AquecimentoConfigTab() {
@@ -84,7 +86,7 @@ export default function AquecimentoConfigTab() {
 
   async function saveAll() {
     setSaving(true);
-    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'dias_carencia', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
+    const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'dias_carencia', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos', 'pausa_almoco', 'reducao_fim_semana'];
     for (const chave of knownKeys) {
       if (getConfig(chave)) {
         await saveConfig(chave);
@@ -103,8 +105,10 @@ export default function AquecimentoConfigTab() {
   const diasAtivos = editValues['dias_ativos'] ?? DEFAULTS.dias_ativos;
   const delayConfig = getVal('delay_config');
   const autoStart = getVal('auto_start');
+  const pausaAlmoco = getVal('pausa_almoco');
+  const reducaoFimSemana = getVal('reducao_fim_semana');
 
-  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'dias_carencia', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos'];
+  const knownKeys = ['limites_por_fase', 'dias_por_fase', 'horario_comercial', 'dias_ativos', 'delay_config', 'auto_start', 'dias_carencia', 'salvar_contatos_auto', 'postar_status_auto', 'status_incluir_imagens', 'status_incluir_videos', 'pausa_almoco', 'reducao_fim_semana'];
   const unknownConfigs = configs.filter(c => !knownKeys.includes(c.chave));
 
   const faseDescricoes: Record<number, string> = {
@@ -112,6 +116,7 @@ export default function AquecimentoConfigTab() {
     2: 'Número já tem algum histórico',
     3: 'Quase pronto, volume moderado',
     4: 'Fase final antes de ser considerado aquecido',
+    5: 'Aquecido — limite máximo diário',
   };
 
   return (
@@ -126,14 +131,14 @@ export default function AquecimentoConfigTab() {
             </div>
             <CardDescription>
               Quantas mensagens cada número pode enviar <strong>por dia</strong> em cada fase. 
-              Números novos começam na Fase 1 (poucas mensagens) e avançam gradualmente até serem considerados "aquecidos".
+              Progressão conservadora: 1 → 3 → 7 → 15 → 25 (aquecimento completo em ~28 dias).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
-              {[1, 2, 3, 4].map(fase => (
+              {[1, 2, 3, 4, 5].map(fase => (
                 <div key={fase} className="space-y-1">
-                  <Label className="text-xs font-semibold">Fase {fase}</Label>
+                  <Label className="text-xs font-semibold">Fase {fase} {fase === 5 ? '✅' : ''}</Label>
                   <p className="text-[10px] text-muted-foreground leading-tight min-h-[24px]">{faseDescricoes[fase]}</p>
                   <Input
                     type="number"
@@ -144,17 +149,6 @@ export default function AquecimentoConfigTab() {
                   />
                 </div>
               ))}
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Aquecido ✅</Label>
-                <p className="text-[10px] text-muted-foreground leading-tight min-h-[24px]">Limite após concluir todas as fases</p>
-                <Input
-                  type="number"
-                  min={1}
-                  placeholder={String(DEFAULTS.limites_por_fase.aquecido)}
-                  value={limitesPorFase['aquecido'] ?? ''}
-                  onChange={e => updateLocal('limites_por_fase', { ...limitesPorFase, aquecido: Number(e.target.value) })}
-                />
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -169,21 +163,22 @@ export default function AquecimentoConfigTab() {
               <CardTitle className="text-lg">Dias em Cada Fase</CardTitle>
             </div>
             <CardDescription>
-              Quantos dias o número precisa ficar em cada fase antes de avançar para a próxima. 
-              Exemplo: com 7 dias por fase, o aquecimento completo leva ~28 dias.
+              Quantos dias o número precisa ficar em cada fase antes de avançar. 
+              Baseado na idade do número (dias desde conexão). Fase 5 é permanente.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map(fase => (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {[1, 2, 3, 4, 5].map(fase => (
                 <div key={fase} className="space-y-1">
-                  <Label className="text-xs font-semibold">Fase {fase}</Label>
+                  <Label className="text-xs font-semibold">Fase {fase} {fase === 5 ? '(permanente)' : ''}</Label>
                   <Input
                     type="number"
-                    min={1}
+                    min={fase === 5 ? 0 : 1}
                     placeholder={String((DEFAULTS.dias_por_fase as any)[String(fase)])}
                     value={diasPorFase[String(fase)] ?? ''}
                     onChange={e => updateLocal('dias_por_fase', { ...diasPorFase, [String(fase)]: Number(e.target.value) })}
+                    disabled={fase === 5}
                   />
                 </div>
               ))}
@@ -201,8 +196,7 @@ export default function AquecimentoConfigTab() {
               <CardTitle className="text-lg">Horário de Funcionamento</CardTitle>
             </div>
             <CardDescription>
-              O aquecimento só enviará mensagens dentro deste horário. Fora dele, nenhuma mensagem será enviada. 
-              Isso evita envios em horários suspeitos (madrugada, etc.).
+              O aquecimento só enviará mensagens dentro deste horário. Fora dele, nenhuma mensagem será enviada.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -234,6 +228,90 @@ export default function AquecimentoConfigTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Pausa de Almoço */}
+      <Card className="border-amber-500/30">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Coffee className="h-5 w-5 text-amber-500" />
+            <CardTitle className="text-lg">Pausa de Almoço</CardTitle>
+          </div>
+          <CardDescription>
+            Nenhuma atividade é realizada durante o horário de almoço. Simula comportamento humano real — pessoas não enviam mensagens durante a refeição.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-semibold">Ativar pausa de almoço</Label>
+            <Switch
+              checked={pausaAlmoco['ativo'] ?? DEFAULTS.pausa_almoco.ativo}
+              onCheckedChange={(checked) => updateLocal('pausa_almoco', { ...pausaAlmoco, ativo: checked })}
+            />
+          </div>
+          {(pausaAlmoco['ativo'] ?? DEFAULTS.pausa_almoco.ativo) && (
+            <div className="grid grid-cols-2 gap-4 max-w-sm">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Início</Label>
+                <Input
+                  type="time"
+                  value={pausaAlmoco['inicio'] ?? DEFAULTS.pausa_almoco.inicio}
+                  onChange={e => updateLocal('pausa_almoco', { ...pausaAlmoco, inicio: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Fim</Label>
+                <Input
+                  type="time"
+                  value={pausaAlmoco['fim'] ?? DEFAULTS.pausa_almoco.fim}
+                  onChange={e => updateLocal('pausa_almoco', { ...pausaAlmoco, fim: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Redução Fim de Semana */}
+      <Card className="border-blue-500/30">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <TrendingDown className="h-5 w-5 text-blue-500" />
+            <CardTitle className="text-lg">Redução de Fim de Semana</CardTitle>
+          </div>
+          <CardDescription>
+            Reduz automaticamente o limite diário de mensagens nos fins de semana. Sábado e domingo têm padrões diferentes de uso real.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 max-w-sm">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Sábado (% do limite)</Label>
+              <Input
+                type="number"
+                min={10}
+                max={100}
+                placeholder="60"
+                value={reducaoFimSemana['sabado'] ?? DEFAULTS.reducao_fim_semana.sabado}
+                onChange={e => updateLocal('reducao_fim_semana', { ...reducaoFimSemana, sabado: Number(e.target.value) })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Domingo (% do limite)</Label>
+              <Input
+                type="number"
+                min={10}
+                max={100}
+                placeholder="40"
+                value={reducaoFimSemana['domingo'] ?? DEFAULTS.reducao_fim_semana.domingo}
+                onChange={e => updateLocal('reducao_fim_semana', { ...reducaoFimSemana, domingo: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Exemplo: Com limite de 25 msgs/dia, sábado envia até {Math.floor(25 * (reducaoFimSemana['sabado'] ?? 60) / 100)} e domingo até {Math.floor(25 * (reducaoFimSemana['domingo'] ?? 40) / 100)}.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Dias Ativos */}
       {getConfig('dias_ativos') && (
@@ -326,8 +404,7 @@ export default function AquecimentoConfigTab() {
               <CardTitle className="text-lg">Início Automático</CardTitle>
             </div>
             <CardDescription>
-              Se ativado, o sistema inicia o aquecimento automaticamente todos os dias no horário definido. 
-              Novas instâncias adicionadas também entram no aquecimento de forma automática.
+              Se ativado, o sistema inicia o aquecimento automaticamente todos os dias no horário definido.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -361,7 +438,6 @@ export default function AquecimentoConfigTab() {
           </div>
           <CardDescription>
             Quantos dias um número recém-conectado deve esperar antes de começar a enviar mensagens de aquecimento.
-            Isso protege números novos de serem restringidos logo no início.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -387,7 +463,7 @@ export default function AquecimentoConfigTab() {
             <CardTitle className="text-lg">Comportamento Automático</CardTitle>
           </div>
           <CardDescription>
-            Controles gerais do aquecimento automático. O sistema decide os detalhes (horário, conteúdo, frequência) com base na fase de cada número.
+            Controles gerais do aquecimento automático. Inclui proteções anti-ban: 20% dias silenciosos, 15% dias somente-leitura, 30% skip por ciclo, burst matinal aleatório.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -410,7 +486,7 @@ export default function AquecimentoConfigTab() {
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="text-sm">Incluir imagens nos status (Fase 2+)</Label>
-                    <p className="text-xs text-muted-foreground">Posta imagens genéricas de paisagem, natureza, etc.</p>
+                    <p className="text-xs text-muted-foreground">Imagens únicas por número/dia via Lorem Picsum</p>
                   </div>
                   <Switch
                     checked={editValues['status_incluir_imagens'] ?? DEFAULTS.status_incluir_imagens}
@@ -435,7 +511,7 @@ export default function AquecimentoConfigTab() {
               <UserPlus className="h-5 w-5 text-cyan-500" />
               <div>
                 <Label className="text-sm font-semibold">Salvar contatos automaticamente</Label>
-                <p className="text-xs text-muted-foreground">Salva na agenda do WhatsApp números que enviam mensagem</p>
+                <p className="text-xs text-muted-foreground">Salva na agenda do WhatsApp números de interações recentes</p>
               </div>
             </div>
             <Switch
