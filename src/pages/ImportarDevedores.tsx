@@ -38,6 +38,7 @@ interface DevedorRow {
   valor_original: number;
   valor_atualizado: number;
   telefone?: string;
+  telefone2?: string;
   descricao?: string;
 }
 
@@ -163,6 +164,39 @@ export default function ImportarDevedores() {
     }).filter(r => r.cpf.length >= 11);
   };
 
+  const insertTelefonesFromRows = async (importedRows: DevedorRow[], userId: string) => {
+    const phoneRecords: { devedor_cpf: string; numero: string; tipo: string; criado_por: string; is_whatsapp: boolean; is_contato: boolean; observacao: string }[] = [];
+    const seenPhones = new Set<string>();
+
+    for (const row of importedRows) {
+      const phones = [row.telefone, row.telefone2].filter(Boolean) as string[];
+      for (const phone of phones) {
+        const normalized = phone.replace(/\D/g, '');
+        if (!normalized || normalized.length < 10) continue;
+        const key = `${row.cpf}_${normalized}`;
+        if (seenPhones.has(key)) continue;
+        seenPhones.add(key);
+        phoneRecords.push({
+          devedor_cpf: row.cpf,
+          numero: phone,
+          tipo: 'celular',
+          criado_por: userId,
+          is_whatsapp: false,
+          is_contato: false,
+          observacao: 'Importado da planilha',
+        });
+      }
+    }
+
+    if (phoneRecords.length === 0) return;
+
+    const BATCH = 500;
+    for (let i = 0; i < phoneRecords.length; i += BATCH) {
+      const batch = phoneRecords.slice(i, i + BATCH);
+      await supabase.from('devedor_telefones' as any).insert(batch as any);
+    }
+  };
+
   const parseMontreal = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
     return dataRows.map((row) => {
       const valor = parseNum(row['J']);
@@ -191,6 +225,7 @@ export default function ImportarDevedores() {
         valor_original: valor,
         valor_atualizado: valor,
         telefone: tel1 || tel2 || undefined,
+        telefone2: tel1 ? (tel2 || undefined) : undefined,
       };
     }).filter(r => r.cpf.length >= 11);
   };
@@ -677,6 +712,9 @@ export default function ImportarDevedores() {
         variant: 'destructive',
       });
     } else {
+      if (isMontreal) {
+        await insertTelefonesFromRows(rows, user.id);
+      }
       toast({ title: 'Importação concluída', description: `${records.length} registros importados com sucesso.` });
       setImported(true);
       fetchImportacoes();
@@ -777,6 +815,7 @@ export default function ImportarDevedores() {
         variant: 'destructive',
       });
     } else {
+      await insertTelefonesFromRows(toImport, user.id);
       toast({ title: 'Importação concluída', description: `${inserted} registros importados (${montrealRows.filter(r => r.status_importacao === 'existe').length} ignorados por já existirem).` });
       setImported(true);
       fetchImportacoes();
