@@ -26,6 +26,14 @@ async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone:
     const data = await response.json();
     console.log(`Resposta de ${url}:`, JSON.stringify(data));
     if (response.ok) return data;
+    
+    // If the endpoint responded with a real UAZAPI error (not 405 Method Not Allowed),
+    // it means the endpoint is correct but the request itself failed (e.g. number not on WhatsApp)
+    if (response.status !== 405) {
+      const errMsg = data?.error || data?.message || 'Erro UAZAPI';
+      throw new Error(errMsg);
+    }
+    
     lastError = data;
     console.log(`Endpoint ${url} falhou com status ${response.status}`);
   }
