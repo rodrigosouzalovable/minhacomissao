@@ -519,6 +519,25 @@ export default function WhatsAppInbox() {
     toast({ title: 'Mensagem apagada para todos' });
   };
 
+  const handleEditarMensagem = (msgId: string, conteudoAtual: string) => {
+    setEditandoMsg({ id: msgId, conteudo: conteudoAtual });
+    setEditTexto(conteudoAtual);
+  };
+
+  const handleSalvarEdicao = async () => {
+    if (!editandoMsg || !editTexto.trim()) return;
+    await supabase
+      .from('whatsapp_mensagens')
+      .update({ conteudo: editTexto.trim() } as any)
+      .eq('id', editandoMsg.id);
+    setMensagens(prev =>
+      prev.map(m => m.id === editandoMsg.id ? { ...m, conteudo: editTexto.trim() } : m)
+    );
+    setEditandoMsg(null);
+    setEditTexto('');
+    toast({ title: 'Mensagem editada' });
+  };
+
   const handleFixarToggle = async (contatoId: string, fixado: boolean) => {
     await supabase.from('whatsapp_contatos').update({ fixado } as any).eq('id', contatoId);
     setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
