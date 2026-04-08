@@ -134,6 +134,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
             ativo: existing.ativo ?? true,
             ordem: existing.ordem ?? 0,
             audio_url: existing.audio_url || null,
+            botoes_texto: existing.botoes_texto || null,
+            botoes_choices: existing.botoes_choices || null,
           });
         } else {
           const match = tipo.key.match(/^vencido_d(\d+)$/);
