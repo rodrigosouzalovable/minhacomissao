@@ -176,6 +176,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
         ativo: t.ativo,
         ordem: t.ordem,
         audio_url: t.audio_url || null,
+        botoes_texto: t.botoes_texto || null,
+        botoes_choices: t.botoes_choices && t.botoes_choices.length > 0 ? t.botoes_choices : null,
       }));
 
       if (rows.length > 0) {
