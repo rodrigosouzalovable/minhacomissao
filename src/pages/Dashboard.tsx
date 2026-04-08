@@ -36,14 +36,14 @@ export default function Dashboard() {
       const [acordosRes, pagamentosRes, acordosAtualRes, acordosAnteriorRes, pgRecAtualRes, pgRecAnteriorRes] = await Promise.all([
         supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', { ascending: false }),
         supabase.from('pagamentos').select('*, acordos!inner(user_id)').eq('acordos.user_id', user.id),
-        // Acordos mês atual
-        supabase.from('acordos').select('id, valor_total').eq('user_id', user.id).gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO),
-        // Acordos mês anterior (mesmo intervalo de dias)
-        supabase.from('acordos').select('id, valor_total').eq('user_id', user.id).gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO),
-        // Pagamentos recebidos mês atual
-        supabase.from('pagamentos').select('id, valor_parcela, acordos!inner(user_id)').eq('acordos.user_id', user.id).eq('status', 'pago').gte('data_paga', inicioAtualISO.slice(0, 10)).lte('data_paga', agoraISO.slice(0, 10)),
-        // Pagamentos recebidos mês anterior
-        supabase.from('pagamentos').select('id, valor_parcela, acordos!inner(user_id)').eq('acordos.user_id', user.id).eq('status', 'pago').gte('data_paga', inicioAnteriorISO.slice(0, 10)).lte('data_paga', mesmoDiaAnteriorISO.slice(0, 10)),
+        // Acordos mês atual (todos os usuários)
+        supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO),
+        // Acordos mês anterior (mesmo intervalo de dias, todos os usuários)
+        supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO),
+        // Pagamentos recebidos mês atual (todos os usuários)
+        supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAtualISO.slice(0, 10)).lte('data_paga', agoraISO.slice(0, 10)),
+        // Pagamentos recebidos mês anterior (todos os usuários)
+        supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAnteriorISO.slice(0, 10)).lte('data_paga', mesmoDiaAnteriorISO.slice(0, 10)),
       ]);
 
       const acordos = acordosRes.data || [];
