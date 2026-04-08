@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban } from 'lucide-react';
+import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { WhatsAppAudioPlayer } from './WhatsAppAudioPlayer';
 import {
@@ -35,6 +35,7 @@ interface ChatMessageProps {
   formatMsgTime: (ts: string) => string;
   onApagarParaMim?: (msgId: string) => void;
   onApagarParaTodos?: (msgId: string) => void;
+  onEditar?: (msgId: string, conteudoAtual: string) => void;
 }
 
 function getMimeFromUrl(url: string): string | undefined {
@@ -62,7 +63,7 @@ function getImageMimeFromUrl(url: string): string {
   return (ext && map[ext]) || 'image/jpeg';
 }
 
-export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos }: ChatMessageProps) {
+export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar }: ChatMessageProps) {
   const tipo = msg.tipo_conteudo || 'texto';
   const isSaida = msg.direcao === 'saida';
   const isTemp = msg.id.startsWith('temp-');
@@ -257,6 +258,17 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
             {messageBubble}
           </ContextMenuTrigger>
           <ContextMenuContent className="w-52">
+            {isSaida && tipo === 'texto' && onEditar && (
+              <>
+                <ContextMenuItem
+                  onClick={() => onEditar(msg.id, msg.conteudo)}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
             <ContextMenuItem
               onClick={() => setConfirmDialog('mim')}
             >
