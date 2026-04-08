@@ -844,9 +844,13 @@ export function PaymentReminders() {
                     <Input
                       type="number"
                       min={1}
-                      max={maxDelay}
-                      value={minDelay}
-                      onChange={(e) => setMinDelay(Math.max(1, parseInt(e.target.value) || 1))}
+                      max={maxDelay || undefined}
+                      value={minDelay === 0 ? '' : minDelay}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMinDelay(val === '' ? 0 : parseInt(val) || 0);
+                      }}
+                      onBlur={() => { if (minDelay < 1) setMinDelay(1); }}
                       disabled={isSending}
                       className="h-7 w-16 text-xs"
                     />
@@ -856,9 +860,13 @@ export function PaymentReminders() {
                     <span className="text-xs text-muted-foreground">Max</span>
                     <Input
                       type="number"
-                      min={minDelay}
-                      value={maxDelay}
-                      onChange={(e) => setMaxDelay(Math.max(minDelay, parseInt(e.target.value) || minDelay))}
+                      min={minDelay || 1}
+                      value={maxDelay === 0 ? '' : maxDelay}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMaxDelay(val === '' ? 0 : parseInt(val) || 0);
+                      }}
+                      onBlur={() => { if (maxDelay < (minDelay || 1)) setMaxDelay(minDelay || 1); }}
                       disabled={isSending}
                       className="h-7 w-16 text-xs"
                     />
