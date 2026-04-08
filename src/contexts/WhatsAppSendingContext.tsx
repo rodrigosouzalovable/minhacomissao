@@ -37,7 +37,7 @@ interface EnvioProgressItem {
 interface SendingOptions {
   minDelayMin: number;
   maxDelayMin: number;
-  tipoEnvio: 'texto' | 'audio';
+  tipoEnvio: 'texto' | 'audio' | 'audio_botoes';
 }
 
 interface WhatsAppSendingContextType {
@@ -186,8 +186,8 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
     options?: SendingOptions
   ) => {
     if (sendingRef.current || !user || items.length === 0 || instances.length === 0) return;
-    const minDelayMs = (options?.minDelayMin ?? 5) * 60 * 1000;
-    const maxDelayMs = (options?.maxDelayMin ?? 15) * 60 * 1000;
+    const minDelayMs = (options?.minDelayMin ?? 5) * 1000;
+    const maxDelayMs = (options?.maxDelayMin ?? 15) * 1000;
     const tipoEnvio = options?.tipoEnvio ?? 'texto';
 
     sendingRef.current = true;
@@ -296,8 +296,8 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
         // Wait randomized delay before next (skip on last or cancel)
         if (i < items.length - 1 && !cancelRef.current) {
           const delay = minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
-          const delayMinutes = Math.round(delay / 60000);
-          toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
+          const delaySeconds = Math.round(delay / 1000);
+          toast.info(`Próximo envio em ~${delaySeconds} segundos...`);
           await new Promise<void>(resolve => {
             delayResolveRef.current = resolve;
             delayTimerRef.current = setTimeout(() => {

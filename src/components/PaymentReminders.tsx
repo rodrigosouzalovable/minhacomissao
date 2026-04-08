@@ -60,7 +60,7 @@ export function PaymentReminders() {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [minDelay, setMinDelay] = useState(5);
   const [maxDelay, setMaxDelay] = useState(15);
-  const [tipoEnvio, setTipoEnvio] = useState<'texto' | 'audio'>('texto');
+  const [tipoEnvio, setTipoEnvio] = useState<'texto' | 'audio' | 'audio_botoes'>('texto');
 
   // WhatsApp instances
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
@@ -811,7 +811,7 @@ export function PaymentReminders() {
                   <span className="text-xs font-medium text-muted-foreground">Tipo de envio:</span>
                   <RadioGroup
                     value={tipoEnvio}
-                    onValueChange={(v) => setTipoEnvio(v as 'texto' | 'audio')}
+                    onValueChange={(v) => setTipoEnvio(v as 'texto' | 'audio' | 'audio_botoes')}
                     className="flex gap-4"
                     disabled={isSending}
                   >
@@ -825,6 +825,12 @@ export function PaymentReminders() {
                       <RadioGroupItem value="audio" id="tipo-audio" />
                       <Label htmlFor="tipo-audio" className="text-xs cursor-pointer flex items-center gap-1">
                         <Volume2 className="h-3 w-3" /> Áudio
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <RadioGroupItem value="audio_botoes" id="tipo-audio-botoes" />
+                      <Label htmlFor="tipo-audio-botoes" className="text-xs cursor-pointer flex items-center gap-1">
+                        <Volume2 className="h-3 w-3" /> Áudio + Botões
                       </Label>
                     </div>
                   </RadioGroup>
@@ -844,7 +850,7 @@ export function PaymentReminders() {
                       disabled={isSending}
                       className="h-7 w-16 text-xs"
                     />
-                    <span className="text-xs text-muted-foreground">min</span>
+                    <span className="text-xs text-muted-foreground">seg</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Max</span>
@@ -856,7 +862,7 @@ export function PaymentReminders() {
                       disabled={isSending}
                       className="h-7 w-16 text-xs"
                     />
-                    <span className="text-xs text-muted-foreground">min</span>
+                    <span className="text-xs text-muted-foreground">seg</span>
                   </div>
                 </div>
               </div>
