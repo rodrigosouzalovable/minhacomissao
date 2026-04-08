@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { PlusCircle, FileText, DollarSign, Clock, CheckCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { format } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfDay, min } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
+import { ComparativoMensal } from '@/components/ComparativoMensal';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -22,9 +23,27 @@ export default function Dashboard() {
     queryFn: async () => {
       if (!user) throw new Error('No user');
 
-      const [acordosRes, pagamentosRes] = await Promise.all([
+      const agora = new Date();
+      const inicioMesAtual = startOfMonth(agora);
+      const inicioMesAnterior = startOfMonth(subMonths(agora, 1));
+      const mesmoDiaMesAnterior = subMonths(agora, 1);
+
+      const inicioAtualISO = inicioMesAtual.toISOString();
+      const agoraISO = agora.toISOString();
+      const inicioAnteriorISO = inicioMesAnterior.toISOString();
+      const mesmoDiaAnteriorISO = mesmoDiaMesAnterior.toISOString();
+
+      const [acordosRes, pagamentosRes, acordosAtualRes, acordosAnteriorRes, pgRecAtualRes, pgRecAnteriorRes] = await Promise.all([
         supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', { ascending: false }),
         supabase.from('pagamentos').select('*, acordos!inner(user_id)').eq('acordos.user_id', user.id),
+        // Acordos mês atual
+        supabase.from('acordos').select('id, valor_total').eq('user_id', user.id).gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO),
+        // Acordos mês anterior (mesmo intervalo de dias)
+        supabase.from('acordos').select('id, valor_total').eq('user_id', user.id).gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO),
+        // Pagamentos recebidos mês atual
+        supabase.from('pagamentos').select('id, valor_parcela, acordos!inner(user_id)').eq('acordos.user_id', user.id).eq('status', 'pago').gte('data_paga', inicioAtualISO.slice(0, 10)).lte('data_paga', agoraISO.slice(0, 10)),
+        // Pagamentos recebidos mês anterior
+        supabase.from('pagamentos').select('id, valor_parcela, acordos!inner(user_id)').eq('acordos.user_id', user.id).eq('status', 'pago').gte('data_paga', inicioAnteriorISO.slice(0, 10)).lte('data_paga', mesmoDiaAnteriorISO.slice(0, 10)),
       ]);
 
       const acordos = acordosRes.data || [];
@@ -44,6 +63,22 @@ export default function Dashboard() {
         }
       });
 
+      const acAtual = acordosAtualRes.data || [];
+      const acAnterior = acordosAnteriorRes.data || [];
+      const pgAtual = pgRecAtualRes.data || [];
+      const pgAnterior = pgRecAnteriorRes.data || [];
+
+      const comparativo = {
+        acordosCriados: acAtual.length,
+        acordosCriadosAnterior: acAnterior.length,
+        valorAcordos: acAtual.reduce((s, a) => s + Number(a.valor_total), 0),
+        valorAcordosAnterior: acAnterior.reduce((s, a) => s + Number(a.valor_total), 0),
+        pagamentosRecebidos: pgAtual.length,
+        pagamentosRecebidosAnterior: pgAnterior.length,
+        valorRecebido: pgAtual.reduce((s, p) => s + Number(p.valor_parcela), 0),
+        valorRecebidoAnterior: pgAnterior.reduce((s, p) => s + Number(p.valor_parcela), 0),
+      };
+
       return {
         totalAcordos: acordos.length,
         acordosAtivos,
@@ -51,6 +86,8 @@ export default function Dashboard() {
         comissaoRecebida,
         ultimosAcordos: acordos.slice(0, 5),
         comissoesPorMes: Object.entries(comissoesPorMes).map(([mes, valor]) => ({ mes, valor })),
+        comparativo,
+        diaAtual: agora.getDate(),
       };
     },
     enabled: !!user,
@@ -82,6 +119,10 @@ export default function Dashboard() {
 
         {isAdmin && (
           <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />
+        )}
+
+        {data?.comparativo && (
+          <ComparativoMensal data={data.comparativo} diaAtual={data.diaAtual} />
         )}
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
