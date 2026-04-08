@@ -123,7 +123,10 @@ export function PaymentReminders() {
           return filtered;
         });
       }
-      if (tplRes.data) setTemplates(tplRes.data);
+      if (tplRes.data) setTemplates(tplRes.data.map((t: any) => ({
+        ...t,
+        botoes_choices: Array.isArray(t.botoes_choices) ? t.botoes_choices as string[] : null,
+      })));
       if (profileRes.data) {
         const primeiro = profileRes.data.nome?.split(' ')[0] || '';
         setOperadorNome(primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase());
