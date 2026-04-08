@@ -104,7 +104,7 @@ export function PaymentReminders() {
           .eq('ativo', true),
         supabase
           .from('lembrete_mensagens_templates')
-          .select('tipo_lembrete, mensagem, audio_url')
+          .select('tipo_lembrete, mensagem, audio_url, botoes_texto, botoes_choices')
           .eq('user_id', user.id)
           .eq('ativo', true),
         supabase
