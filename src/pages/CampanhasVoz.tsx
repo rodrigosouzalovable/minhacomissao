@@ -723,8 +723,8 @@ export default function CampanhasVoz() {
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
-                          min={0.1}
-                          step={0.5}
+                          min={1}
+                          step={1}
                           value={delayMin}
                           onChange={(e) => setDelayMin(Number(e.target.value))}
                           className="w-20 h-8 text-xs"
@@ -733,14 +733,14 @@ export default function CampanhasVoz() {
                         <span className="text-xs text-muted-foreground">a</span>
                         <Input
                           type="number"
-                          min={0.1}
-                          step={0.5}
+                          min={1}
+                          step={1}
                           value={delayMax}
                           onChange={(e) => setDelayMax(Number(e.target.value))}
                           className="w-20 h-8 text-xs"
                           placeholder="Max"
                         />
-                        <span className="text-xs text-muted-foreground">min</span>
+                        <span className="text-xs text-muted-foreground">seg</span>
                       </div>
                       <Button
                         onClick={() => handleStartCampaign(selectedCampaign)}
@@ -913,6 +913,44 @@ export default function CampanhasVoz() {
           </Card>
         )}
       </div>
+
+      {/* Floating sending indicator */}
+      {sendingCampaignId && sendingProgress && (
+        <div className="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg p-4 max-w-sm w-80 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm font-semibold">Campanha em andamento</span>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {sendingProgress.sent + sendingProgress.errors}/{sendingProgress.total}
+            </Badge>
+          </div>
+
+          {sendingProgress.lastSentContact && (
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              <p>
+                ✅ Áudio enviado para <span className="font-medium text-foreground">{sendingProgress.lastSentContact}</span>
+              </p>
+              <p>
+                📱 Pelo número <span className="font-medium text-foreground">{sendingProgress.lastSentInstance}</span>
+              </p>
+            </div>
+          )}
+
+          {sendingProgress.countdownSec !== null && sendingProgress.countdownSec > 0 && (
+            <div className="text-xs bg-muted rounded px-2 py-1.5 text-center">
+              ⏳ Próximo envio em <span className="font-bold text-primary">{sendingProgress.countdownSec}s</span>
+            </div>
+          )}
+
+          {sendingProgress.currentContact && sendingProgress.countdownSec === null && (
+            <div className="text-xs text-muted-foreground">
+              📤 Enviando para <span className="font-medium text-foreground">{sendingProgress.currentContact}</span>...
+            </div>
+          )}
+        </div>
+      )}
     </AppLayout>
   );
 }
