@@ -24,6 +24,8 @@ interface LembreteTemplate {
   tipo_lembrete: string;
   mensagem: string;
   audio_url?: string | null;
+  botoes_texto?: string | null;
+  botoes_choices?: string[] | null;
 }
 
 interface EnvioProgressItem {
@@ -37,7 +39,7 @@ interface EnvioProgressItem {
 interface SendingOptions {
   minDelayMin: number;
   maxDelayMin: number;
-  tipoEnvio: 'texto' | 'audio';
+  tipoEnvio: 'texto' | 'audio' | 'audio_botoes';
 }
 
 interface WhatsAppSendingContextType {
@@ -186,8 +188,8 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
     options?: SendingOptions
   ) => {
     if (sendingRef.current || !user || items.length === 0 || instances.length === 0) return;
-    const minDelayMs = (options?.minDelayMin ?? 5) * 60 * 1000;
-    const maxDelayMs = (options?.maxDelayMin ?? 15) * 60 * 1000;
+    const minDelayMs = (options?.minDelayMin ?? 5) * 1000;
+    const maxDelayMs = (options?.maxDelayMin ?? 15) * 1000;
     const tipoEnvio = options?.tipoEnvio ?? 'texto';
 
     sendingRef.current = true;
@@ -209,23 +211,24 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
         let erroMsg: string | null = null;
 
         try {
-          // Determine if we should send audio
+          // Determine template for this reminder type
+          const hoje = new Date();
+          const venc = new Date((lembrete.data_prevista || '') + 'T00:00:00');
+          const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
+          let tipoKey = '';
+          if (lembrete.tipo === 'vencido') tipoKey = `vencido_d${diasAtraso}`;
+          else if (lembrete.tipo === 'hoje') tipoKey = 'dia_vencimento';
+          else tipoKey = '3_dias';
+
+          let tpl = templates.find(t => t.tipo_lembrete === tipoKey);
+          if (!tpl && lembrete.tipo === 'vencido') {
+            tpl = templates.find(t => t.tipo_lembrete === 'vencido_generico');
+          }
+
           let sentAsAudio = false;
-          if (tipoEnvio === 'audio') {
-            // Find audio_url for this reminder type
-            const hoje = new Date();
-            const venc = new Date((lembrete.data_prevista || '') + 'T00:00:00');
-            const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)));
-            let tipoKey = '';
-            if (lembrete.tipo === 'vencido') tipoKey = `vencido_d${diasAtraso}`;
-            else if (lembrete.tipo === 'hoje') tipoKey = 'dia_vencimento';
-            else tipoKey = '3_dias';
 
-            let tpl = templates.find(t => t.tipo_lembrete === tipoKey);
-            if (!tpl && lembrete.tipo === 'vencido') {
-              tpl = templates.find(t => t.tipo_lembrete === 'vencido_generico');
-            }
-
+          // Send audio for 'audio' or 'audio_botoes'
+          if (tipoEnvio === 'audio' || tipoEnvio === 'audio_botoes') {
             if (tpl?.audio_url) {
               sentAsAudio = true;
               const { data, error } = await supabase.functions.invoke('send-whatsapp-audio', {
@@ -246,8 +249,42 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
             }
           }
 
+          // Send buttons after audio for 'audio_botoes'
+          if (tipoEnvio === 'audio_botoes' && sentAsAudio && status === 'enviado') {
+            if (tpl?.botoes_texto && tpl?.botoes_choices && tpl.botoes_choices.length > 0) {
+              await new Promise(r => setTimeout(r, 3000));
+
+              const primeiroNome = lembrete.cliente_nome?.split(' ')[0] || '';
+              const nomeFormatado = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
+              const nomeCompleto = toTitleCase(lembrete.cliente_nome || '');
+              const textoFinal = substituirVariaveis(tpl.botoes_texto, {
+                nome_cliente: nomeCompleto,
+                primeiro_nome: nomeFormatado,
+                nome_operador: operadorNome,
+                valor: formatCurrency(lembrete.valor_parcela || 0),
+                data_vencimento: venc.toLocaleDateString('pt-BR'),
+                dias_atraso: diasAtraso,
+              });
+
+              const { data: btnData, error: btnError } = await supabase.functions.invoke('send-whatsapp-buttons', {
+                body: {
+                  telefone: lembrete.cliente_telefone,
+                  texto: textoFinal,
+                  choices: tpl.botoes_choices,
+                  footerText: 'Escolha uma opção',
+                  uazapi_server_url: instance.server_url,
+                  uazapi_instance_token: instance.instance_token,
+                  instancia_id: instance.id,
+                },
+              });
+              if (btnError || !btnData?.success) {
+                erroMsg = 'Áudio ok, erro nos botões: ' + (btnError?.message || btnData?.error || '');
+              }
+            }
+          }
+
           // Send as text if tipo is texto, or audio fallback (no audio_url found)
-          if (tipoEnvio === 'texto' || !sentAsAudio) {
+          if (tipoEnvio === 'texto' || (!sentAsAudio && tipoEnvio !== 'audio_botoes')) {
             const mensagem = gerarMensagem(lembrete, templates, operadorNome);
             const { data, error } = await supabase.functions.invoke('send-whatsapp', {
               body: {
@@ -296,8 +333,8 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
         // Wait randomized delay before next (skip on last or cancel)
         if (i < items.length - 1 && !cancelRef.current) {
           const delay = minDelayMs + Math.random() * (maxDelayMs - minDelayMs);
-          const delayMinutes = Math.round(delay / 60000);
-          toast.info(`Próximo envio em ~${delayMinutes} minutos...`);
+          const delaySeconds = Math.round(delay / 1000);
+          toast.info(`Próximo envio em ~${delaySeconds} segundos...`);
           await new Promise<void>(resolve => {
             delayResolveRef.current = resolve;
             delayTimerRef.current = setTimeout(() => {
