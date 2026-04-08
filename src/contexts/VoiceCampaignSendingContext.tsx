@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -37,6 +37,10 @@ interface SendingProgress {
   errors: number;
   total: number;
   currentContact: string | null;
+  lastSentContact: string | null;
+  lastSentInstance: string | null;
+  nextDelaySec: number | null;
+  countdownSec: number | null;
 }
 
 interface VoiceCampaignSendingContextType {
@@ -56,6 +60,30 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
   const sendingRef = useRef(false);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const delayResolveRef = useRef<(() => void) | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Countdown timer effect
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
+
+  const startCountdown = useCallback((seconds: number) => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    let remaining = seconds;
+    setSendingProgress(prev => prev ? { ...prev, countdownSec: remaining } : null);
+    countdownRef.current = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        setSendingProgress(prev => prev ? { ...prev, countdownSec: null } : null);
+      } else {
+        setSendingProgress(prev => prev ? { ...prev, countdownSec: remaining } : null);
+      }
+    }, 1000);
+  }, []);
 
   const startCampaign = useCallback((params: StartCampaignParams) => {
     if (sendingRef.current) {
@@ -73,6 +101,10 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
       errors: initialErrors,
       total: initialSent + initialErrors + pendingContacts.length,
       currentContact: null,
+      lastSentContact: null,
+      lastSentInstance: null,
+      nextDelaySec: null,
+      countdownSec: null,
     });
 
     (async () => {
@@ -97,8 +129,11 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
         setSendingProgress(prev => prev ? {
           ...prev,
           currentContact: contact.nome || contact.telefone,
+          countdownSec: null,
+          nextDelaySec: null,
         } : null);
 
+        let success = false;
         try {
           const { data, error: fnError } = await supabase.functions.invoke('send-whatsapp-audio', {
             body: {
@@ -117,16 +152,22 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
           } else {
             await supabase.from('voice_campaign_contacts').update({ status: 'enviado', enviado_em: new Date().toISOString() } as any).eq('id', contact.id);
             sent++;
+            success = true;
           }
         } catch (err: any) {
           await supabase.from('voice_campaign_contacts').update({ status: 'erro', erro_mensagem: err.message } as any).eq('id', contact.id);
           errors++;
         }
 
+        const contactLabel = contact.nome || contact.telefone;
+        const instanceLabel = instance.nome || instance.id.slice(0, 8);
+
         setSendingProgress(prev => prev ? {
           ...prev,
           sent,
           errors,
+          lastSentContact: contactLabel,
+          lastSentInstance: instanceLabel,
         } : null);
 
         await supabase.from('voice_campaigns').update({ total_sent: sent, total_errors: errors } as any).eq('id', campaignId);
@@ -142,7 +183,14 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
           } while (i > 0 && delaySec === lastDelaySec);
           lastDelaySec = delaySec;
           const delay = delaySec * 1000;
-          toast.info(`Próximo envio em ~${delaySec} segundo(s)...`);
+
+          setSendingProgress(prev => prev ? {
+            ...prev,
+            nextDelaySec: delaySec,
+          } : null);
+
+          startCountdown(delaySec);
+
           await new Promise<void>(resolve => {
             delayResolveRef.current = resolve;
             delayTimerRef.current = setTimeout(() => {
@@ -152,6 +200,11 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
             }, delay);
           });
         }
+      }
+
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
       }
 
       const finalStatus = cancelRef.current ? 'cancelado' : 'concluido';
@@ -169,10 +222,14 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
       queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaignId] });
       toast.success(cancelRef.current ? 'Campanha cancelada' : 'Campanha finalizada!');
     })();
-  }, [queryClient]);
+  }, [queryClient, startCountdown]);
 
   const cancelCampaign = useCallback(() => {
     cancelRef.current = true;
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
     if (delayResolveRef.current) {
       if (delayTimerRef.current) {
         clearTimeout(delayTimerRef.current);

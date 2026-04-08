@@ -723,8 +723,8 @@ export default function CampanhasVoz() {
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
-                          min={0.1}
-                          step={0.5}
+                          min={1}
+                          step={1}
                           value={delayMin}
                           onChange={(e) => setDelayMin(Number(e.target.value))}
                           className="w-20 h-8 text-xs"
@@ -733,14 +733,14 @@ export default function CampanhasVoz() {
                         <span className="text-xs text-muted-foreground">a</span>
                         <Input
                           type="number"
-                          min={0.1}
-                          step={0.5}
+                          min={1}
+                          step={1}
                           value={delayMax}
                           onChange={(e) => setDelayMax(Number(e.target.value))}
                           className="w-20 h-8 text-xs"
                           placeholder="Max"
                         />
-                        <span className="text-xs text-muted-foreground">min</span>
+                        <span className="text-xs text-muted-foreground">seg</span>
                       </div>
                       <Button
                         onClick={() => handleStartCampaign(selectedCampaign)}
