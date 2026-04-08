@@ -118,7 +118,8 @@ export default function CampanhasVoz() {
         .from('voice_campaign_contacts')
         .select('*')
         .eq('campaign_id', selectedCampaignId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
       if (error) throw error;
       return data as CampaignContact[];
     },
@@ -416,7 +417,8 @@ export default function CampanhasVoz() {
       .select('*')
       .eq('campaign_id', campaign.id)
       .eq('status', 'pendente')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
     if (error || !pendingContacts?.length) {
       toast.error('Nenhum contato pendente para enviar');
       return;
