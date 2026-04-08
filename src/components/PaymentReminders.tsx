@@ -870,7 +870,6 @@ export function PaymentReminders() {
                       disabled={isSending}
                       className="h-7 w-16 text-xs"
                     />
-                    />
                     <span className="text-xs text-muted-foreground">seg</span>
                   </div>
                 </div>
