@@ -476,6 +476,9 @@ export default function WhatsAppInbox() {
       return new Date(b.ultima_mensagem_em || 0).getTime() - new Date(a.ultima_mensagem_em || 0).getTime();
     });
 
+  const isCertificadora = (nome: string | null | undefined) =>
+    nome?.toUpperCase().includes('CERTIFICADORA') ?? false;
+
   const getInstanciaNome = (instanciaId: string, instanciaNomeContato?: string | null) => {
     if (instanciaNomeContato) return instanciaNomeContato;
     const inst = instancias.find(i => i.id === instanciaId);
@@ -783,7 +786,12 @@ export default function WhatsAppInbox() {
                           </div>
                         )}
                         {getInstanciaNome(contato.instancia_id, contato.instancia_nome) && (
-                          <span className="text-[10px] text-muted-foreground/60 mt-0.5 block truncate">
+                          <span className={cn(
+                            "text-[10px] mt-0.5 block truncate",
+                            isCertificadora(getInstanciaNome(contato.instancia_id, contato.instancia_nome))
+                              ? "text-amber-500 font-semibold"
+                              : "text-muted-foreground/60"
+                          )}>
                             {getInstanciaNome(contato.instancia_id, contato.instancia_nome)}
                           </span>
                         )}
@@ -821,7 +829,14 @@ export default function WhatsAppInbox() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {formatTelefone(contatoAtivo.telefone)}
-                    {getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome) && ` · ${getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome)}`}
+                    {getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome) && (
+                      <>
+                        {' · '}
+                        <span className={isCertificadora(getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome)) ? "text-amber-500 font-semibold" : ""}>
+                          {getInstanciaNome(contatoAtivo.instancia_id, contatoAtivo.instancia_nome)}
+                        </span>
+                      </>
+                    )}
                   </p>
                 </div>
                 <Button
