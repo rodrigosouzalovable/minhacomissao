@@ -412,6 +412,106 @@ export function PaymentReminders() {
               >
                 <Volume2 className="h-4 w-4" />
                 Enviar áudio
+               </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!lembrete.cliente_telefone) {
+                    toast.error('Cliente sem telefone cadastrado');
+                    return;
+                  }
+                  if (selectedInstances.length === 0) {
+                    toast.error('Selecione uma instância WhatsApp primeiro');
+                    return;
+                  }
+                  const tipoKey = lembrete.tipo === 'hoje' ? 'dia_vencimento'
+                    : lembrete.tipo === 'tres_dias' ? '3_dias'
+                    : (() => {
+                        const hoje = new Date();
+                        const vencimento = new Date(lembrete.data_prevista + 'T00:00:00');
+                        const diffDays = Math.floor((hoje.getTime() - vencimento.getTime()) / (1000 * 60 * 60 * 24));
+                        return `vencido_d${diffDays}`;
+                      })();
+                  const tpl = templates.find(t => t.tipo_lembrete === tipoKey)
+                    || (tipoKey.startsWith('vencido_d') ? templates.find(t => t.tipo_lembrete === 'vencido_generico') : undefined);
+                  if (!tpl?.audio_url) {
+                    toast.error('Nenhum áudio configurado para este tipo de lembrete');
+                    return;
+                  }
+                  if (!tpl?.botoes_texto || !tpl?.botoes_choices || tpl.botoes_choices.length === 0) {
+                    toast.error('Nenhum botão configurado para este tipo de lembrete');
+                    return;
+                  }
+                  const instance = selectedInstances[roundRobinRef.current % selectedInstances.length];
+                  roundRobinRef.current += 1;
+                  (async () => {
+                    try {
+                      // 1. Send audio
+                      const audioRes = await supabase.functions.invoke('send-whatsapp-audio', {
+                        body: {
+                          telefone: lembrete.cliente_telefone,
+                          audio_url: tpl.audio_url,
+                          uazapi_server_url: instance.server_url,
+                          uazapi_instance_token: instance.instance_token,
+                          instancia_id: instance.id,
+                        },
+                      });
+                      if (audioRes.error) throw audioRes.error;
+                      if (audioRes.data && !audioRes.data.success) {
+                        const msg = audioRes.data.error || 'Erro desconhecido';
+                        toast.error(msg.includes('not on WhatsApp') ? 'Este número não possui WhatsApp registrado' : msg);
+                        return;
+                      }
+
+                      // 2. Wait 3 seconds
+                      await new Promise(r => setTimeout(r, 3000));
+
+                      // 3. Replace variables in botoes_texto
+                      const primeiroNome = lembrete.cliente_nome?.split(' ')[0] || '';
+                      const nomeFormatado = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
+                      const nomeCompleto = (lembrete.cliente_nome || '').split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                      const hoje = new Date();
+                      const vencimento = new Date(lembrete.data_prevista + 'T00:00:00');
+                      const diasAtraso = Math.max(0, Math.floor((hoje.getTime() - vencimento.getTime()) / (1000 * 60 * 60 * 24)));
+                      const textoFinal = (tpl.botoes_texto || '')
+                        .replace(/{nome_cliente}/g, nomeCompleto)
+                        .replace(/{primeiro_nome}/g, nomeFormatado)
+                        .replace(/{nome_operador}/g, operadorNome)
+                        .replace(/{valor}/g, `R$ ${Number(lembrete.valor_parcela).toFixed(2).replace('.', ',')}`)
+                        .replace(/{data_vencimento}/g, new Date(lembrete.data_prevista + 'T00:00:00').toLocaleDateString('pt-BR'))
+                        .replace(/{dias_atraso}/g, String(diasAtraso));
+
+                      // 4. Send buttons
+                      const btnRes = await supabase.functions.invoke('send-whatsapp-buttons', {
+                        body: {
+                          telefone: lembrete.cliente_telefone,
+                          texto: textoFinal,
+                          choices: tpl.botoes_choices,
+                          footerText: 'Escolha uma opção',
+                          uazapi_server_url: instance.server_url,
+                          uazapi_instance_token: instance.instance_token,
+                          instancia_id: instance.id,
+                        },
+                      });
+                      if (btnRes.error) throw btnRes.error;
+                      if (btnRes.data && !btnRes.data.success) {
+                        toast.error('Áudio enviado, mas erro nos botões: ' + (btnRes.data.error || ''));
+                        return;
+                      }
+
+                      markAsEnviado(lembrete.id, lembrete.cliente_nome, lembrete.cliente_telefone || '');
+                      const instNome = instance.nome || instance.server_url?.replace(/https?:\/\//, '').split('.')[0] || 'instância';
+                      toast.success(`Áudio + botões enviados para ${lembrete.cliente_nome} pelo número ${instNome}`);
+                    } catch (err: any) {
+                      const msg = err.message || '';
+                      toast.error(msg.includes('not on WhatsApp') ? 'Este número não possui WhatsApp registrado' : `Erro ao enviar: ${msg}`);
+                    }
+                  })();
+                }}
+              >
+                <Volume2 className="h-4 w-4" />
+                Áudio + Botões
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="gap-2 cursor-pointer"
