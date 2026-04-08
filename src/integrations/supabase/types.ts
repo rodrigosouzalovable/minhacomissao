@@ -2199,6 +2199,15 @@ export type Database = {
         Args: { p_telefone: string; p_texto: string; p_timestamp: string }
         Returns: undefined
       }
+      comparativo_mensal_global: {
+        Args: {
+          p_fim_anterior: string
+          p_fim_atual: string
+          p_inicio_anterior: string
+          p_inicio_atual: string
+        }
+        Returns: Json
+      }
       consultar_acordo_ativo_por_cpf: {
         Args: { p_cpf: string }
         Returns: {
