@@ -912,6 +912,7 @@ export default function WhatsAppInbox() {
                             formatMsgTime={formatMsgTime}
                             onApagarParaMim={handleApagarParaMim}
                             onApagarParaTodos={handleApagarParaTodos}
+                            onEditar={handleEditarMensagem}
                           />
                         </div>
                       );
@@ -1006,6 +1007,34 @@ export default function WhatsAppInbox() {
             >
               {enviandoNova ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : 'Iniciar conversa'}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editandoMsg !== null} onOpenChange={(open) => !open && setEditandoMsg(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              Editar mensagem
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={editTexto}
+              onChange={(e) => setEditTexto(e.target.value)}
+              rows={4}
+              className="resize-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditandoMsg(null)}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={handleSalvarEdicao} disabled={!editTexto.trim()}>
+                Salvar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
