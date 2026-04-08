@@ -25,6 +25,8 @@ interface TemplateRow {
   ativo: boolean;
   ordem: number;
   audio_url?: string | null;
+  botoes_texto?: string | null;
+  botoes_choices?: string[] | null;
 }
 
 interface TipoLembrete {
