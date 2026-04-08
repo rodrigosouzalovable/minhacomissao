@@ -1,79 +1,49 @@
 
 
-# Botões Interativos no WhatsApp — Lembretes
+## Comparativo Mensal no Dashboard
 
-## Visão Geral
+Adicionar uma seção de comparativo mês atual vs. mesmo período do mês anterior, mostrando indicadores de produtividade com variação percentual.
 
-Adicionar suporte a botões interativos do WhatsApp nas mensagens de lembrete, usando o endpoint UAZAPI `POST /send/menu` com `type: "button"`. Três mudanças principais:
+### O que será exibido
 
-1. **Configuração de botões** no dialog de Mensagens de Lembrete (LembreteMensagensDialog)
-2. **Nova opção "Áudio + Botões"** no dropdown de envio individual (PaymentReminders)
-3. **Nova Edge Function** para enviar mensagens com botões via UAZAPI
+Um novo card "Comparativo com Mês Anterior" abaixo dos cards de resumo, com 4 métricas lado a lado:
 
----
+1. **Acordos criados** - Quantidade de acordos criados do dia 1 até o dia atual do mês vs. o mesmo intervalo no mês anterior
+2. **Valor total acordos** - Soma dos valores dos acordos no período
+3. **Pagamentos recebidos** - Quantidade de pagamentos com status "pago" no período
+4. **Valor recebido** - Soma dos valores dos pagamentos pagos no período
 
-## Mudanças
+Cada métrica mostrará:
+- Valor do mês atual
+- Valor do mês anterior (mesmo intervalo de dias)
+- Variação percentual com seta verde (subiu), vermelha (caiu) ou amarela (igual)
 
-### 1. Migração: adicionar colunas de botões na tabela `lembrete_mensagens_templates`
+### Exemplo visual
 
-```sql
-ALTER TABLE lembrete_mensagens_templates 
-  ADD COLUMN botoes_texto TEXT DEFAULT NULL,
-  ADD COLUMN botoes_choices JSONB DEFAULT NULL;
+```text
+┌─────────────────────────────────────────────────────┐
+│  📊 Comparativo com Mês Anterior (até dia 08)       │
+├────────────┬────────────┬────────────┬──────────────┤
+│ Acordos    │ Valor Ac.  │ Pgtos Rec. │ Valor Rec.   │
+│ 12         │ R$ 45.000  │ 8          │ R$ 22.000    │
+│ Ant: 10    │ Ant: 40k   │ Ant: 6     │ Ant: 18k     │
+│ ▲ +20%     │ ▲ +12.5%   │ ▲ +33%     │ ▲ +22%       │
+└────────────┴────────────┴────────────┴──────────────┘
 ```
 
-- `botoes_texto`: mensagem que acompanha os botões (pode usar as mesmas variáveis)
-- `botoes_choices`: array JSON de strings no formato UAZAPI, ex: `["Sim, já paguei|paguei", "Preciso do boleto|boleto", "Falar com atendente|atendente"]`
+### Implementação técnica
 
-### 2. Edge Function: `send-whatsapp-buttons`
+**Arquivo**: `src/pages/Dashboard.tsx`
 
-Nova função que:
-- Recebe `telefone`, `texto`, `choices`, `footerText`, credenciais UAZAPI e `instancia_id`
-- Envia via `POST /send/menu` com `type: "button"`
-- Salva no inbox (padrão existente de contact matching por sufixo)
-- Payload UAZAPI:
-```json
-{
-  "number": "5511...",
-  "type": "button",
-  "text": "Mensagem com botões",
-  "choices": ["Opção 1|op1", "Opção 2|op2"],
-  "footerText": "Escolha uma opção"
-}
-```
+1. **Calcular datas de comparação**: Usar `subMonths` do date-fns para obter o início do mês anterior e limitar ao mesmo dia atual (ex: se hoje é 08/04, comparar 01/04-08/04 vs 01/03-08/03)
 
-### 3. UI: Configuração de botões no `LembreteMensagensDialog`
+2. **Nova query paralela**: Buscar acordos e pagamentos do mês anterior no mesmo `queryFn`, adicionando duas queries filtradas por data:
+   - Acordos criados entre `inicioMesAnterior` e `mesmoDiaMesAnterior`
+   - Pagamentos pagos no mesmo intervalo
 
-Abaixo da seção de áudio, adicionar uma nova seção "Botões interativos":
-- Textarea para a mensagem dos botões (com suporte a variáveis)
-- Até 3 campos de input para o texto de cada botão (limite do WhatsApp)
-- Botão para adicionar/remover botões
-- Os dados são salvos nos novos campos `botoes_texto` e `botoes_choices`
+3. **Novo componente inline**: Card com grid 2x2 ou 4 colunas mostrando cada métrica com Badge de variação
 
-### 4. UI: Nova opção no dropdown do PaymentReminders
+4. **Cálculo de variação**: `((atual - anterior) / anterior) * 100`, com tratamento para divisão por zero
 
-No `DropdownMenu` de envio individual (linhas 316-422), adicionar entre "Enviar áudio" e "Marcar como enviado":
-
-- **"Áudio + Botões"** (ícone: Volume2 + botão)
-- Ao clicar:
-  1. Envia o áudio (lógica existente via `send-whatsapp-audio`)
-  2. Aguarda 2-3 segundos
-  3. Envia a mensagem com botões via `send-whatsapp-buttons` usando `botoes_texto` e `botoes_choices` do template
-  4. Se não houver botões configurados para o tipo, exibe toast de erro
-  5. Marca como enviado após ambos os envios
-
-### 5. Carregar dados de botões nos templates
-
-Atualizar a interface `TemplateRow` e `LembreteTemplate` para incluir `botoes_texto` e `botoes_choices`. Carregar e salvar esses campos junto com os templates existentes.
-
----
-
-## Arquivos
-
-| Arquivo | Mudança |
-|---------|---------|
-| Migração SQL | Adicionar `botoes_texto` e `botoes_choices` em `lembrete_mensagens_templates` |
-| `supabase/functions/send-whatsapp-buttons/index.ts` | Nova Edge Function para enviar botões via UAZAPI |
-| `src/components/LembreteMensagensDialog.tsx` | Seção de configuração de botões por tipo de lembrete |
-| `src/components/PaymentReminders.tsx` | Nova opção "Áudio + Botões" no dropdown + carregar campos de botões |
+Nenhuma alteração no banco de dados é necessária - os dados já existem nas tabelas `acordos` e `pagamentos`.
 
