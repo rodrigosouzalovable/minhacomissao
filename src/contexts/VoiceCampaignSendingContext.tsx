@@ -87,6 +87,7 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
       let sent = initialSent;
       let errors = initialErrors;
 
+      let lastDelaySec = -1;
       for (let i = 0; i < pendingContacts.length; i++) {
         if (cancelRef.current) break;
         const contact = pendingContacts[i];
