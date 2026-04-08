@@ -113,7 +113,13 @@ export function PaymentReminders() {
       ]);
       if (instRes.data) {
         setInstances(instRes.data);
-        if (instRes.data.length === 1) setSelectedInstanceIds([instRes.data[0].id]);
+        const activeIds = new Set(instRes.data.map((i: any) => i.id));
+        setSelectedInstanceIds(prev => {
+          const filtered = prev.filter(id => activeIds.has(id));
+          localStorage.setItem('lembretes-selected-instances', JSON.stringify(filtered));
+          if (instRes.data.length === 1) return [instRes.data[0].id];
+          return filtered;
+        });
       }
       if (tplRes.data) setTemplates(tplRes.data);
       if (profileRes.data) {
