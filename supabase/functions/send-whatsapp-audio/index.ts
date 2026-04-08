@@ -5,6 +5,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const FALLBACK_PATTERNS = [
+  'not on whatsapp',
+  'failed to send usync query',
+  'info query timed out',
+  'error verifying whatsapp number',
+  'timeout',
+];
+
+function normalizeErrorMessage(data: any, status?: number) {
+  return data?.message || data?.error || (status ? `HTTP ${status}` : 'Erro desconhecido');
+}
+
+function shouldReturnSoftError(message: string, status?: number) {
+  const normalized = message.toLowerCase();
+  return status === 400 || status === 404 || status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+    || FALLBACK_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
+function buildSoftErrorResponse(message: string, extra: Record<string, unknown> = {}) {
+  return new Response(JSON.stringify({
+    success: false,
+    error: message,
+    fallback: true,
+    ...extra,
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -47,10 +76,15 @@ Deno.serve(async (req) => {
     console.log(`Resposta (${response.status}):`, JSON.stringify(data));
 
     if (!response.ok) {
-      throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
+      const errorMessage = normalizeErrorMessage(data, response.status);
+      if (shouldReturnSoftError(errorMessage, response.status)) {
+        console.warn(`Falha externa tratada em send-whatsapp-audio: ${errorMessage}`);
+        return buildSoftErrorResponse(errorMessage, { status: response.status });
+      }
+
+      throw new Error(errorMessage);
     }
 
-    // --- INBOX: Save outgoing audio message ---
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -58,7 +92,6 @@ Deno.serve(async (req) => {
 
       let resolvedInstanciaId = instancia_id;
 
-      // If no instancia_id provided, look it up
       if (!resolvedInstanciaId && serverUrl && instanceToken) {
         const { data: inst } = await supabase
           .from('user_whatsapp_instances')
@@ -72,8 +105,6 @@ Deno.serve(async (req) => {
 
       if (resolvedInstanciaId) {
         const agora = new Date().toISOString();
-
-        // Find existing contact to use the correct phone format
         const suffix = telefoneCompleto.slice(-8);
         const { data: existingContact } = await supabase
           .from('whatsapp_contatos')
@@ -122,6 +153,12 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Erro send-whatsapp-audio:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+
+    if (shouldReturnSoftError(errorMessage)) {
+      console.warn(`Erro tratado sem 500 em send-whatsapp-audio: ${errorMessage}`);
+      return buildSoftErrorResponse(errorMessage);
+    }
+
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
