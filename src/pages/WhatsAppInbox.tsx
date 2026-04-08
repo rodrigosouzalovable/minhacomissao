@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -96,6 +96,8 @@ export default function WhatsAppInbox() {
   const [novaMensagem, setNovaMensagem] = useState('');
   const [enviandoNova, setEnviandoNova] = useState(false);
   const [instanciaComboOpen, setInstanciaComboOpen] = useState(false);
+  const [editandoMsg, setEditandoMsg] = useState<{ id: string; conteudo: string } | null>(null);
+  const [editTexto, setEditTexto] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -517,6 +519,25 @@ export default function WhatsAppInbox() {
     toast({ title: 'Mensagem apagada para todos' });
   };
 
+  const handleEditarMensagem = (msgId: string, conteudoAtual: string) => {
+    setEditandoMsg({ id: msgId, conteudo: conteudoAtual });
+    setEditTexto(conteudoAtual);
+  };
+
+  const handleSalvarEdicao = async () => {
+    if (!editandoMsg || !editTexto.trim()) return;
+    await supabase
+      .from('whatsapp_mensagens')
+      .update({ conteudo: editTexto.trim() } as any)
+      .eq('id', editandoMsg.id);
+    setMensagens(prev =>
+      prev.map(m => m.id === editandoMsg.id ? { ...m, conteudo: editTexto.trim() } : m)
+    );
+    setEditandoMsg(null);
+    setEditTexto('');
+    toast({ title: 'Mensagem editada' });
+  };
+
   const handleFixarToggle = async (contatoId: string, fixado: boolean) => {
     await supabase.from('whatsapp_contatos').update({ fixado } as any).eq('id', contatoId);
     setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
@@ -891,6 +912,7 @@ export default function WhatsAppInbox() {
                             formatMsgTime={formatMsgTime}
                             onApagarParaMim={handleApagarParaMim}
                             onApagarParaTodos={handleApagarParaTodos}
+                            onEditar={handleEditarMensagem}
                           />
                         </div>
                       );
@@ -985,6 +1007,34 @@ export default function WhatsAppInbox() {
             >
               {enviandoNova ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : 'Iniciar conversa'}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editandoMsg !== null} onOpenChange={(open) => !open && setEditandoMsg(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              Editar mensagem
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={editTexto}
+              onChange={(e) => setEditTexto(e.target.value)}
+              rows={4}
+              className="resize-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditandoMsg(null)}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={handleSalvarEdicao} disabled={!editTexto.trim()}>
+                Salvar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
