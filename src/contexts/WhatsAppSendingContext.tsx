@@ -24,6 +24,8 @@ interface LembreteTemplate {
   tipo_lembrete: string;
   mensagem: string;
   audio_url?: string | null;
+  botoes_texto?: string | null;
+  botoes_choices?: string[] | null;
 }
 
 interface EnvioProgressItem {
