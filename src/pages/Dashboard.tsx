@@ -33,17 +33,10 @@ export default function Dashboard() {
       const inicioAnteriorISO = inicioMesAnterior.toISOString();
       const mesmoDiaAnteriorISO = mesmoDiaMesAnterior.toISOString();
 
-      const [acordosRes, pagamentosRes, acordosAtualRes, acordosAnteriorRes, pgRecAtualRes, pgRecAnteriorRes] = await Promise.all([
+      // Personal data queries
+      const [acordosRes, pagamentosRes] = await Promise.all([
         supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', { ascending: false }),
         supabase.from('pagamentos').select('*, acordos!inner(user_id)').eq('acordos.user_id', user.id),
-        // Acordos mês atual (todos os usuários)
-        supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO),
-        // Acordos mês anterior (mesmo intervalo de dias, todos os usuários)
-        supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO),
-        // Pagamentos recebidos mês atual (todos os usuários)
-        supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAtualISO.slice(0, 10)).lte('data_paga', agoraISO.slice(0, 10)),
-        // Pagamentos recebidos mês anterior (todos os usuários)
-        supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAnteriorISO.slice(0, 10)).lte('data_paga', mesmoDiaAnteriorISO.slice(0, 10)),
       ]);
 
       const acordos = acordosRes.data || [];
@@ -63,21 +56,49 @@ export default function Dashboard() {
         }
       });
 
-      const acAtual = acordosAtualRes.data || [];
-      const acAnterior = acordosAnteriorRes.data || [];
-      const pgAtual = pgRecAtualRes.data || [];
-      const pgAnterior = pgRecAnteriorRes.data || [];
-
-      const comparativo = {
-        acordosCriados: acAtual.length,
-        acordosCriadosAnterior: acAnterior.length,
-        valorAcordos: acAtual.reduce((s, a) => s + Number(a.valor_total), 0),
-        valorAcordosAnterior: acAnterior.reduce((s, a) => s + Number(a.valor_total), 0),
-        pagamentosRecebidos: pgAtual.length,
-        pagamentosRecebidosAnterior: pgAnterior.length,
-        valorRecebido: pgAtual.reduce((s, p) => s + Number(p.valor_parcela), 0),
-        valorRecebidoAnterior: pgAnterior.reduce((s, p) => s + Number(p.valor_parcela), 0),
-      };
+      // Comparativo: admin usa RPC global, outros usam queries normais (filtradas por RLS)
+      let comparativo;
+      if (isAdmin) {
+        const { data: globalData, error } = await supabase.rpc('comparativo_mensal_global', {
+          p_inicio_atual: inicioAtualISO,
+          p_fim_atual: agoraISO,
+          p_inicio_anterior: inicioAnteriorISO,
+          p_fim_anterior: mesmoDiaAnteriorISO,
+        });
+        if (error) throw error;
+        const g = globalData as any;
+        comparativo = {
+          acordosCriados: Number(g.acordos_atual_qtd),
+          acordosCriadosAnterior: Number(g.acordos_anterior_qtd),
+          valorAcordos: Number(g.acordos_atual_valor),
+          valorAcordosAnterior: Number(g.acordos_anterior_valor),
+          pagamentosRecebidos: Number(g.pgtos_atual_qtd),
+          pagamentosRecebidosAnterior: Number(g.pgtos_anterior_qtd),
+          valorRecebido: Number(g.pgtos_atual_valor),
+          valorRecebidoAnterior: Number(g.pgtos_anterior_valor),
+        };
+      } else {
+        const [acordosAtualRes, acordosAnteriorRes, pgRecAtualRes, pgRecAnteriorRes] = await Promise.all([
+          supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO),
+          supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO),
+          supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAtualISO.slice(0, 10)).lte('data_paga', agoraISO.slice(0, 10)),
+          supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAnteriorISO.slice(0, 10)).lte('data_paga', mesmoDiaAnteriorISO.slice(0, 10)),
+        ]);
+        const acAtual = acordosAtualRes.data || [];
+        const acAnterior = acordosAnteriorRes.data || [];
+        const pgAtual = pgRecAtualRes.data || [];
+        const pgAnterior = pgRecAnteriorRes.data || [];
+        comparativo = {
+          acordosCriados: acAtual.length,
+          acordosCriadosAnterior: acAnterior.length,
+          valorAcordos: acAtual.reduce((s, a) => s + Number(a.valor_total), 0),
+          valorAcordosAnterior: acAnterior.reduce((s, a) => s + Number(a.valor_total), 0),
+          pagamentosRecebidos: pgAtual.length,
+          pagamentosRecebidosAnterior: pgAnterior.length,
+          valorRecebido: pgAtual.reduce((s, p) => s + Number(p.valor_parcela), 0),
+          valorRecebidoAnterior: pgAnterior.reduce((s, p) => s + Number(p.valor_parcela), 0),
+        };
+      }
 
       return {
         totalAcordos: acordos.length,
