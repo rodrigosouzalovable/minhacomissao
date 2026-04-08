@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { MessageCircle, Save, Loader2, Plus, Trash2, RotateCcw, Upload, Volume2 } from 'lucide-react';
+import { MessageCircle, Save, Loader2, Plus, Trash2, RotateCcw, Upload, Volume2, MousePointerClick } from 'lucide-react';
 
 interface Props {
   open: boolean;
