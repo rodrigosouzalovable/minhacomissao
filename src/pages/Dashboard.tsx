@@ -19,7 +19,7 @@ export default function Dashboard() {
   const { isAdmin } = useUserRole();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard', user?.id],
+    queryKey: ['dashboard', user?.id, isAdmin],
     queryFn: async () => {
       if (!user) throw new Error('No user');
 
