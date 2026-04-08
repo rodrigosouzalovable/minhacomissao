@@ -1,26 +1,31 @@
 
 
-# Inserir Configurações Anti-Ban no Banco de Dados
+# Desmarcar instâncias desconectadas do dialog de Lembretes
 
-## Contexto
+## Problema
+Quando uma instância WhatsApp desconecta (campo `ativo` vira `false`), ela deixa de aparecer na lista do dialog, mas seu ID permanece salvo no `localStorage` (`lembretes-selected-instances`). Isso causa inconsistência — a instância fica "selecionada" mas invisível.
 
-A tabela `whatsapp_aquecimento_config` precisa de 2 novas chaves (`pausa_almoco`, `reducao_fim_semana`) para que o painel funcione corretamente. Além disso, a chave `limites_por_fase` existente tem valores antigos (`{fase1:10, fase2:15, fase3:25, fase4:30, aquecido:30}`) que precisam ser atualizados para `{fase1:1, fase2:3, fase3:7, fase4:15, aquecido:25}`.
+## Solução
+No `useEffect` que carrega as instâncias (linha ~114 de `PaymentReminders.tsx`), após receber a lista de instâncias ativas, filtrar o `selectedInstanceIds` para manter apenas IDs que existem na lista retornada. Atualizar tanto o state quanto o `localStorage`.
 
-## Ações
+## Mudança
 
-### 1. Inserir `pausa_almoco`
-- Chave: `pausa_almoco`
-- Valor: `true`
-- Descrição: "Ativar pausa de almoço entre 12h e 14h"
+**Arquivo:** `src/components/PaymentReminders.tsx`
 
-### 2. Inserir `reducao_fim_semana`
-- Chave: `reducao_fim_semana`
-- Valor: `{"sabado": 60, "domingo": 40}`
-- Descrição: "Percentual do limite em sábados e domingos"
+Na linha ~114-117, após `setInstances(instRes.data)`, adicionar lógica para limpar IDs selecionados que não estão mais na lista de instâncias ativas:
 
-### 3. Atualizar `limites_por_fase`
-- De: `{fase1:10, fase2:15, fase3:25, fase4:30, aquecido:30}`
-- Para: `{fase1:1, fase2:3, fase3:7, fase4:15, aquecido:25}`
+```typescript
+if (instRes.data) {
+  setInstances(instRes.data);
+  const activeIds = new Set(instRes.data.map((i: any) => i.id));
+  setSelectedInstanceIds(prev => {
+    const filtered = prev.filter(id => activeIds.has(id));
+    localStorage.setItem('lembretes-selected-instances', JSON.stringify(filtered));
+    if (instRes.data.length === 1) return [instRes.data[0].id];
+    return filtered;
+  });
+}
+```
 
-Essas operações serão feitas via SQL INSERT/UPDATE diretamente no banco. Nenhuma mudança de código é necessária.
+Uma única mudança de ~6 linhas em um arquivo.
 
