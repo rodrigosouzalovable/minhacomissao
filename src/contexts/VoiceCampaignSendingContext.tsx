@@ -131,13 +131,17 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
         await supabase.from('voice_campaigns').update({ total_sent: sent, total_errors: errors } as any).eq('id', campaignId);
         queryClient.invalidateQueries({ queryKey: ['voice-campaign-contacts', campaignId] });
 
-        // Random delay between sends
+        // Random delay between sends (in seconds, never same as previous)
         if (i < pendingContacts.length - 1 && !cancelRef.current) {
-          const min = Math.max(0.1, delayMin);
-          const max = Math.max(min, delayMax);
-          const delay = (min + Math.random() * (max - min)) * 60 * 1000;
-          const mins = Math.round(delay / 60000);
-          toast.info(`Próximo envio em ~${mins} minuto(s)...`);
+          const min = Math.max(1, Math.round(delayMin));
+          const max = Math.max(min + 1, Math.round(delayMax));
+          let delaySec: number;
+          do {
+            delaySec = min + Math.floor(Math.random() * (max - min + 1));
+          } while (i > 0 && delaySec === lastDelaySec);
+          lastDelaySec = delaySec;
+          const delay = delaySec * 1000;
+          toast.info(`Próximo envio em ~${delaySec} segundo(s)...`);
           await new Promise<void>(resolve => {
             delayResolveRef.current = resolve;
             delayTimerRef.current = setTimeout(() => {
