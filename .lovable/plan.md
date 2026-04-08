@@ -1,65 +1,40 @@
 
 
-## Correção do Comparativo Mensal - Dados Globais da Equipe
+## Destacar Instância "CERTIFICADORA CNPJ" no Inbox
 
-### Diagnóstico
+Alteração simples em `src/pages/WhatsAppInbox.tsx` para aplicar uma cor diferenciada ao nome da instância quando ela for a "62982458447 CERTIFICADORA CNPJ".
 
-Confirmei no banco de dados os valores reais:
+### O que muda
 
-| Métrica | Mês Atual (até dia 8) | Mês Anterior (até dia 8) |
-|---|---|---|
-| Acordos Criados | **88** | 91 |
-| Valor Acordos | **R$ 56.406,64** | R$ 86.464,73 |
-| Pagamentos Recebidos | **56** | 95 |
-| Valor Recebido | **R$ 14.057,65** | R$ 23.522,34 |
+1. **Na lista de contatos** (linha ~786): o `<span>` que exibe o nome da instância receberá uma classe de cor especial (ex: `text-amber-500 font-semibold`) quando o nome contiver "CERTIFICADORA" — em vez do cinza padrão `text-muted-foreground/60`.
 
-O dashboard está mostrando apenas os dados do seu usuário (42 pagamentos / R$ 9.415,59) porque, mesmo sendo admin, as queries do Supabase passam por RLS e algo está impedindo a visão global. A solução é criar uma função no banco que busca os totais diretamente, sem restrição de RLS.
+2. **No cabeçalho do chat** (linha ~824): o trecho que exibe `· nome_instancia` também será destacado com a mesma cor quando for a instância certificadora.
 
-### Plano
+### Implementação
 
-1. **Criar função no banco** (`comparativo_mensal_global`) com `SECURITY DEFINER` que recebe as datas de início/fim dos dois períodos e retorna os 8 valores agregados (acordos e pagamentos de ambos os meses). Só pode ser chamada por admins.
+Adicionar uma função auxiliar simples:
 
-2. **Alterar `Dashboard.tsx`**: quando o usuário for admin, chamar `supabase.rpc('comparativo_mensal_global', {...})` em vez das 4 queries individuais que passam por RLS. Isso garante que os totais reflitam toda a equipe.
-
-3. **Manter comportamento para não-admins**: funcionários comuns continuam vendo apenas seus próprios dados normalmente.
-
-### Detalhes técnicos
-
-**Migração SQL:**
-```sql
-CREATE OR REPLACE FUNCTION public.comparativo_mensal_global(
-  p_inicio_atual timestamptz,
-  p_fim_atual timestamptz,
-  p_inicio_anterior timestamptz,
-  p_fim_anterior timestamptz
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-STABLE SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NOT is_admin_user(auth.uid()) THEN
-    RAISE EXCEPTION 'Acesso negado';
-  END IF;
-
-  RETURN jsonb_build_object(
-    'acordos_atual_qtd', (SELECT count(*) FROM acordos WHERE criado_em >= p_inicio_atual AND criado_em <= p_fim_atual),
-    'acordos_atual_valor', (SELECT coalesce(sum(valor_total),0) FROM acordos WHERE criado_em >= p_inicio_atual AND criado_em <= p_fim_atual),
-    'acordos_anterior_qtd', (SELECT count(*) FROM acordos WHERE criado_em >= p_inicio_anterior AND criado_em <= p_fim_anterior),
-    'acordos_anterior_valor', (SELECT coalesce(sum(valor_total),0) FROM acordos WHERE criado_em >= p_inicio_anterior AND criado_em <= p_fim_anterior),
-    'pgtos_atual_qtd', (SELECT count(*) FROM pagamentos WHERE status='pago' AND data_paga >= p_inicio_atual::date AND data_paga <= p_fim_atual::date),
-    'pgtos_atual_valor', (SELECT coalesce(sum(valor_parcela),0) FROM pagamentos WHERE status='pago' AND data_paga >= p_inicio_atual::date AND data_paga <= p_fim_atual::date),
-    'pgtos_anterior_qtd', (SELECT count(*) FROM pagamentos WHERE status='pago' AND data_paga >= p_inicio_anterior::date AND data_paga <= p_fim_anterior::date),
-    'pgtos_anterior_valor', (SELECT coalesce(sum(valor_parcela),0) FROM pagamentos WHERE status='pago' AND data_paga >= p_inicio_anterior::date AND data_paga <= p_fim_anterior::date)
-  );
-END;
-$$;
+```typescript
+const isCertificadora = (nome: string | null) => 
+  nome?.toUpperCase().includes('CERTIFICADORA') ?? false;
 ```
 
-**Dashboard.tsx:** Substituir as 4 queries do comparativo por uma única chamada RPC quando `isAdmin`, mantendo as queries atuais como fallback para não-admins.
+E aplicar condicionalmente as classes nos dois pontos de exibição:
 
-### Arquivos alterados
-- **Migração SQL** (nova função `comparativo_mensal_global`)
-- **`src/pages/Dashboard.tsx`** (usar RPC para dados globais)
+```tsx
+// Lista de contatos
+<span className={cn(
+  "text-[10px] mt-0.5 block truncate",
+  isCertificadora(nomeInst)
+    ? "text-amber-500 font-semibold"
+    : "text-muted-foreground/60"
+)}>
+
+// Cabeçalho do chat - mesmo destaque
+```
+
+### Arquivo alterado
+- `src/pages/WhatsAppInbox.tsx`
+
+Nenhuma alteração no banco de dados.
 
