@@ -996,6 +996,8 @@ export type Database = {
         Row: {
           ativo: boolean | null
           audio_url: string | null
+          botoes_choices: Json | null
+          botoes_texto: string | null
           created_at: string | null
           id: string
           mensagem: string
@@ -1006,6 +1008,8 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           audio_url?: string | null
+          botoes_choices?: Json | null
+          botoes_texto?: string | null
           created_at?: string | null
           id?: string
           mensagem: string
@@ -1016,6 +1020,8 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           audio_url?: string | null
+          botoes_choices?: Json | null
+          botoes_texto?: string | null
           created_at?: string | null
           id?: string
           mensagem?: string

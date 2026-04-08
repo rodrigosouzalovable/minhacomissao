@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { MessageCircle, Save, Loader2, Plus, Trash2, RotateCcw, Upload, Volume2 } from 'lucide-react';
+import { MessageCircle, Save, Loader2, Plus, Trash2, RotateCcw, Upload, Volume2, MousePointerClick } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -25,6 +25,8 @@ interface TemplateRow {
   ativo: boolean;
   ordem: number;
   audio_url?: string | null;
+  botoes_texto?: string | null;
+  botoes_choices?: string[] | null;
 }
 
 interface TipoLembrete {
@@ -132,6 +134,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
             ativo: existing.ativo ?? true,
             ordem: existing.ordem ?? 0,
             audio_url: existing.audio_url || null,
+            botoes_texto: existing.botoes_texto || null,
+            botoes_choices: Array.isArray(existing.botoes_choices) ? existing.botoes_choices as string[] : null,
           });
         } else {
           const match = tipo.key.match(/^vencido_d(\d+)$/);
@@ -142,6 +146,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
             ativo: true,
             ordem: 0,
             audio_url: null,
+            botoes_texto: null,
+            botoes_choices: null,
           });
         }
       }
@@ -170,6 +176,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
         ativo: t.ativo,
         ordem: t.ordem,
         audio_url: t.audio_url || null,
+        botoes_texto: t.botoes_texto || null,
+        botoes_choices: t.botoes_choices && t.botoes_choices.length > 0 ? t.botoes_choices : null,
       }));
 
       if (rows.length > 0) {
@@ -296,6 +304,8 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
       ativo: true,
       ordem: 0,
       audio_url: null,
+      botoes_texto: null,
+      botoes_choices: null,
     }]);
 
     setActiveTipo(key);
@@ -498,6 +508,68 @@ export default function LembreteMensagensDialog({ open, onOpenChange }: Props) {
                           className="hidden"
                           onChange={handleAudioUpload}
                         />
+                      </div>
+
+                      {/* Buttons section */}
+                      <div className="border rounded-md p-3 space-y-2">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MousePointerClick className="h-3.5 w-3.5" />
+                          Botões interativos (máx. 3)
+                        </Label>
+                        <Textarea
+                          placeholder="Mensagem que acompanha os botões (suporta variáveis)"
+                          value={currentTemplate.botoes_texto || ''}
+                          onChange={(e) => updateCurrentTemplate('botoes_texto', e.target.value || null)}
+                          rows={3}
+                          className="text-sm"
+                        />
+                        <div className="space-y-1.5">
+                          {(currentTemplate.botoes_choices || []).map((choice, idx) => {
+                            const label = choice.split('|')[0] || '';
+                            return (
+                              <div key={idx} className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
+                                <Input
+                                  value={label}
+                                  onChange={(e) => {
+                                    const newLabel = e.target.value;
+                                    const newId = newLabel.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
+                                    const newChoices = [...(currentTemplate.botoes_choices || [])];
+                                    newChoices[idx] = `${newLabel}|${newId}`;
+                                    updateCurrentTemplate('botoes_choices', newChoices);
+                                  }}
+                                  placeholder={`Texto do botão ${idx + 1}`}
+                                  className="h-8 text-sm flex-1"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0 text-destructive"
+                                  onClick={() => {
+                                    const newChoices = (currentTemplate.botoes_choices || []).filter((_, i) => i !== idx);
+                                    updateCurrentTemplate('botoes_choices', newChoices.length > 0 ? newChoices : null);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                          {(currentTemplate.botoes_choices || []).length < 3 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                const current = currentTemplate.botoes_choices || [];
+                                updateCurrentTemplate('botoes_choices', [...current, `Botão ${current.length + 1}|botao_${current.length + 1}`]);
+                              }}
+                            >
+                              <Plus className="h-3.5 w-3.5 mr-1" />
+                              Adicionar botão
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </>
                   )}
