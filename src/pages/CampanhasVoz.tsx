@@ -600,28 +600,28 @@ export default function CampanhasVoz() {
               {/* Delay config */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Delay mínimo (minutos)</Label>
+                  <Label>Delay mínimo (segundos)</Label>
                   <Input
                     type="number"
-                    min={0.1}
-                    step={0.5}
+                    min={1}
+                    step={1}
                     value={delayMin}
                     onChange={(e) => setDelayMin(Number(e.target.value))}
                   />
                 </div>
                 <div>
-                  <Label>Delay máximo (minutos)</Label>
+                  <Label>Delay máximo (segundos)</Label>
                   <Input
                     type="number"
-                    min={0.1}
-                    step={0.5}
+                    min={1}
+                    step={1}
                     value={delayMax}
                     onChange={(e) => setDelayMax(Number(e.target.value))}
                   />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                O intervalo entre cada envio será aleatório entre {delayMin} e {delayMax} minuto(s)
+                O intervalo entre cada envio será aleatório entre {delayMin} e {delayMax} segundo(s)
               </p>
 
               {/* Excel import in creation */}
