@@ -2025,6 +2025,57 @@ export type Database = {
           },
         ]
       }
+      whatsapp_conversas_ia: {
+        Row: {
+          historico: Json
+          id: string
+          inicio_em: string
+          instancia_destino_id: string | null
+          instancia_origem_id: string | null
+          max_trocas: number
+          status: string
+          total_trocas: number
+          ultima_msg_em: string
+        }
+        Insert: {
+          historico?: Json
+          id?: string
+          inicio_em?: string
+          instancia_destino_id?: string | null
+          instancia_origem_id?: string | null
+          max_trocas?: number
+          status?: string
+          total_trocas?: number
+          ultima_msg_em?: string
+        }
+        Update: {
+          historico?: Json
+          id?: string
+          inicio_em?: string
+          instancia_destino_id?: string | null
+          instancia_origem_id?: string | null
+          max_trocas?: number
+          status?: string
+          total_trocas?: number
+          ultima_msg_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversas_ia_instancia_destino_id_fkey"
+            columns: ["instancia_destino_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversas_ia_instancia_origem_id_fkey"
+            columns: ["instancia_origem_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_etiquetas: {
         Row: {
           cor: string
