@@ -166,6 +166,24 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Auto-reconfigure webhook for each instance (remove wasSentByApi filter)
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
+      for (const inst of whatsappInsts) {
+        const cleanBase = inst.server_url.replace(/\/+$/, "");
+        const whPayload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
+        try {
+          const whRes = await fetch(`${cleanBase}/webhook/${inst.instance_token}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: whPayload,
+          });
+          console.log(`[AQUECIMENTO-MANUAL] Webhook reconfigurado para ${inst.nome}: ${whRes.status}`);
+        } catch (e) {
+          console.warn(`[AQUECIMENTO-MANUAL] Falha ao reconfigurar webhook de ${inst.nome}:`, e);
+        }
+      }
+
       // Get dialogues pool
       const { data: dialogos } = await supabase
         .from("whatsapp_aquecimento_dialogos")

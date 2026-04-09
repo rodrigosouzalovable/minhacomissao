@@ -39,10 +39,10 @@ function getSupabaseAdmin() {
   );
 }
 
-async function chamarOllama(mensagem: string, historico: string, fase: number): Promise<string> {
-  const ollamaUrl = Deno.env.get("OLLAMA_NGROK_URL");
-  if (!ollamaUrl) {
-    console.warn("[IA] OLLAMA_NGROK_URL não configurado, usando fallback");
+async function chamarIA(mensagem: string, historico: string, fase: number): Promise<string> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    console.warn("[IA] LOVABLE_API_KEY não configurado, usando fallback");
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
   }
 
@@ -52,32 +52,38 @@ async function chamarOllama(mensagem: string, historico: string, fase: number): 
     ? "Responda com 1 a 2 frases curtas."
     : "Responda com até 2 frases.";
 
-  const prompt = `Você é um brasileiro comum conversando no WhatsApp com um amigo/conhecido.
+  const systemPrompt = `Você é um brasileiro comum conversando no WhatsApp com um amigo/conhecido.
 Responda de forma natural, informal e curta.
 Use gírias brasileiras ocasionalmente (tipo "kkk", "massa", "show", "tmj").
 Use emojis ocasionalmente (👍, 😂, 🙏, 😄, 🔥) mas não em toda mensagem.
 ${tamanhoInstrucao}
 NÃO use formatação markdown. NÃO se apresente. NÃO seja formal.
-Apenas continue a conversa de forma natural como se fosse um amigo.
+Apenas continue a conversa de forma natural como se fosse um amigo.`;
 
-${historico ? `Histórico recente:\n${historico}\n\n` : ""}Mensagem recebida: "${mensagem}"
+  const messages: { role: string; content: string }[] = [
+    { role: "system", content: systemPrompt },
+  ];
 
-Sua resposta:`;
+  if (historico) {
+    messages.push({ role: "user", content: `Histórico recente da conversa:\n${historico}` });
+    messages.push({ role: "assistant", content: "Ok, entendi o contexto." });
+  }
+
+  messages.push({ role: "user", content: mensagem });
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 20000);
 
-    const response = await fetch(`${ollamaUrl.replace(/\/+$/, "")}/api/generate`, {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "ngrok-skip-browser-warning": "true",
       },
       body: JSON.stringify({
-        model: "gemma4:e4b",
-        prompt,
-        options: { temperature: 0.9, num_predict: 100, top_p: 0.95 },
+        model: "google/gemini-2.5-flash-lite",
+        messages,
         stream: false,
       }),
       signal: controller.signal,
@@ -87,12 +93,12 @@ Sua resposta:`;
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[IA] Ollama retornou ${response.status}: ${errText.substring(0, 200)}`);
+      console.error(`[IA] Gateway retornou ${response.status}: ${errText.substring(0, 200)}`);
       return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
     }
 
     const data = await response.json();
-    let resposta = (data.response || "").trim();
+    let resposta = (data.choices?.[0]?.message?.content || "").trim();
 
     resposta = resposta.replace(/^["']|["']$/g, "").trim();
     if (!resposta || resposta.length < 2) {
@@ -103,10 +109,10 @@ Sua resposta:`;
       resposta = resposta.substring(0, 200).replace(/\s\S*$/, "");
     }
 
-    console.log(`[IA] Resposta gerada: "${resposta}"`);
+    console.log(`[IA] Resposta gerada via Lovable AI: "${resposta}"`);
     return resposta;
   } catch (err) {
-    console.error("[IA] Erro ao chamar Ollama:", err);
+    console.error("[IA] Erro ao chamar Lovable AI Gateway:", err);
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
   }
 }
@@ -138,7 +144,6 @@ async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, nu
 
 async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, texto: string) {
   try {
-    // Find the instance to get its ID
     const { data: inst } = await sb
       .from("user_whatsapp_instances")
       .select("id")
@@ -147,7 +152,6 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
 
     if (!inst) return;
 
-    // Format phone for inbox
     const phoneSuffix = telefoneRemoto.replace(/^55/, "");
 
     await sb.from("whatsapp_mensagens").insert({
@@ -159,7 +163,6 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
       timestamp_msg: new Date().toISOString(),
     });
 
-    // Update contact's last message
     const { data: contato } = await sb
       .from("whatsapp_contatos")
       .select("id")
@@ -207,14 +210,12 @@ Deno.serve(async (req) => {
       const sb = getSupabaseAdmin();
       const faseNum = fase || 1;
 
-      // Apply delay before generating response (simulates human reading time)
       const delayMs = delay_ms || 0;
       if (delayMs > 0) {
         console.log(`[IA] Aguardando ${Math.round(delayMs / 1000)}s antes de responder...`);
         await new Promise((r) => setTimeout(r, delayMs));
       }
 
-      // Verificar/criar conversa IA
       const conversa = await getOrCreateConversa(sb, instancia_origem_id, instancia_destino_id);
 
       if (!conversa) {
@@ -225,12 +226,10 @@ Deno.serve(async (req) => {
         return json({ responded: false, reason: conversa.status });
       }
 
-      // Verificar se atingiu limite de trocas
       if (conversa.total_trocas >= conversa.max_trocas) {
         const fraseEncerramento = FRASES_ENCERRAMENTO[Math.floor(Math.random() * FRASES_ENCERRAMENTO.length)];
         await finalizarConversa(sb, conversa.id, mensagem, fraseEncerramento);
 
-        // Send the closing message if we have send params
         if (server_url && instance_token && numero_destino) {
           await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento);
           await logToInbox(sb, instancia_origem_id, numero_destino, fraseEncerramento);
@@ -239,17 +238,14 @@ Deno.serve(async (req) => {
         return json({ responded: true, resposta: fraseEncerramento, finalizada: true });
       }
 
-      // Montar histórico da conversa
       const historicoArr = (conversa.historico || []) as Array<{ role: string; content: string }>;
       const historicoTexto = historicoArr
         .slice(-6)
         .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`)
         .join("\n");
 
-      // Gerar resposta via Ollama
-      const resposta = await chamarOllama(mensagem, historicoTexto, faseNum);
+      const resposta = await chamarIA(mensagem, historicoTexto, faseNum);
 
-      // Atualizar conversa
       const novoHistorico = [
         ...historicoArr,
         { role: "recebida", content: mensagem, ts: new Date().toISOString() },
@@ -262,7 +258,6 @@ Deno.serve(async (req) => {
         historico: novoHistorico,
       }).eq("id", conversa.id);
 
-      // Send the message via UAZAPI if we have send params
       if (server_url && instance_token && numero_destino) {
         const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
         if (sent) {
