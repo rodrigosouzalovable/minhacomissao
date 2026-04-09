@@ -1235,10 +1235,12 @@ serve(async (req) => {
     if (!isFromMe && inboxTelefone) {
       try {
         // Check if the sender phone belongs to one of our warming instances
+        // Try matching with and without 55 prefix to handle both formats
+        const phoneSuffix = inboxTelefone.startsWith('55') ? inboxTelefone.slice(2) : inboxTelefone;
         const { data: senderInstance } = await supabase
           .from('user_whatsapp_instances')
           .select('id')
-          .or(`nome.ilike.%${inboxTelefone}%`)
+          .or(`nome.ilike.%${inboxTelefone}%,nome.ilike.%${phoneSuffix}%`)
           .eq('ativo', true)
           .limit(1)
           .maybeSingle();
@@ -1320,9 +1322,13 @@ serve(async (req) => {
                   .single();
 
                 if (recvInstance) {
-                  // Call whatsapp-ia-responder edge function
+                  // Call whatsapp-ia-responder edge function with delay and send params
                   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
                   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+                  // Delay aleatório de 15-90s para simular leitura humana
+                  const delay = 15000 + Math.random() * 75000;
+                  console.log(`[IA-AQUEC] Fase ${fase}, prob ${probabilidade}, rng ${rng.toFixed(2)} → RESPONDENDO em ${Math.round(delay/1000)}s`);
 
                   const iaPayload = {
                     action: 'gerar-resposta',
@@ -1330,60 +1336,28 @@ serve(async (req) => {
                     fase,
                     instancia_origem_id: instanciaId, // the one that will reply
                     instancia_destino_id: senderInstance.id, // the one that sent this message
+                    delay_ms: delay,
+                    server_url: recvInstance.server_url,
+                    instance_token: recvInstance.instance_token,
+                    numero_destino: inboxTelefone,
                   };
 
-                  // Delay aleatório de 15-90s para simular leitura humana
-                  const delay = 15000 + Math.random() * 75000;
-                  console.log(`[IA-AQUEC] Fase ${fase}, prob ${probabilidade}, rng ${rng.toFixed(2)} → RESPONDENDO em ${Math.round(delay/1000)}s`);
+                  // Call ia-responder - it will handle the delay and sending internally
+                  try {
+                    const iaResp = await fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseKey}`,
+                      },
+                      body: JSON.stringify(iaPayload),
+                    });
 
-                  // Fire and forget with delay (edge function will timeout if we await too long)
-                  setTimeout(async () => {
-                    try {
-                      const iaResp = await fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${supabaseKey}`,
-                        },
-                        body: JSON.stringify(iaPayload),
-                      });
-
-                      const iaData = await iaResp.json();
-                      console.log(`[IA-AQUEC] Resposta da IA:`, JSON.stringify(iaData).substring(0, 200));
-
-                      if (iaData.responded && iaData.resposta) {
-                        // Send the IA response from receiving instance back to sender's phone
-                        const cleanUrl = recvInstance.server_url.replace(/\/+$/, '');
-                        const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
-                        let sent = false;
-
-                        for (const url of endpoints) {
-                          try {
-                            const sendRes = await fetch(url, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json', 'token': recvInstance.instance_token },
-                              body: JSON.stringify({ number: inboxTelefone, text: iaData.resposta }),
-                            });
-                            if (sendRes.ok) {
-                              await sendRes.text();
-                              console.log(`[IA-AQUEC] ✅ Mensagem IA enviada para ${inboxTelefone}: "${iaData.resposta}"`);
-                              sent = true;
-                              break;
-                            }
-                            await sendRes.text();
-                          } catch (e) {
-                            console.warn(`[IA-AQUEC] Endpoint ${url} falhou:`, e);
-                          }
-                        }
-
-                        if (!sent) {
-                          console.error(`[IA-AQUEC] ❌ Falha ao enviar resposta IA para ${inboxTelefone}`);
-                        }
-                      }
-                    } catch (iaErr) {
-                      console.error('[IA-AQUEC] Erro no fluxo de resposta IA:', iaErr);
-                    }
-                  }, delay);
+                    const iaData = await iaResp.json();
+                    console.log(`[IA-AQUEC] Resposta da IA:`, JSON.stringify(iaData).substring(0, 200));
+                  } catch (iaErr) {
+                    console.error('[IA-AQUEC] Erro no fluxo de resposta IA:', iaErr);
+                  }
                 }
               } else {
                 console.log(`[IA-AQUEC] Fase ${fase}, prob ${probabilidade}, rng ${rng.toFixed(2)} → NÃO respondendo`);
