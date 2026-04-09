@@ -1,51 +1,46 @@
 
 
-## Problema Identificado
+## Problema
 
-O cliente com vencimento em 06/04/2026, hoje sendo 09/04/2026, está **3 dias** em atraso. O sistema calcula `vencido_d3` como chave de template, mas **não existe template configurado para D+3**. Seus templates configurados com botões são: D+1, D+2, D+10, D+11, D+20, D+30.
+A tabela `lembretes_lidos` armazena permanentemente os IDs dos lembretes marcados como "visto". Uma vez marcado, o lembrete nunca mais aparece — mesmo que a parcela continue pendente dias depois.
 
-O fallback atual pula direto para `vencido_generico`, que **não tem botões configurados** — daí o erro "Nenhum botão configurado".
+## Solução
 
-## Correção
+Adicionar uma coluna `criado_em_date` (ou usar a existente `criado_em`) para filtrar apenas lembretes marcados como lidos **no dia atual**. No dia seguinte, se a parcela ainda estiver pendente, o lembrete reaparece automaticamente.
 
-Modificar a lógica de busca de template em `PaymentReminders.tsx` (e também em `WhatsAppSendingContext.tsx` para envios em lote) para implementar um **fallback em cascata**:
+### Mudanças
 
-1. Buscar template exato (`vencido_d3`)
-2. Se não encontrar, buscar o **template configurado mais próximo com dias menores** (ex: `vencido_d2`)
-3. Se não encontrar nenhum, usar `vencido_generico`
+**1. Hook `usePaymentReminders.tsx`** — Filtrar lembretes lidos apenas do dia atual
 
-### Mudança no código (linha ~436 de PaymentReminders.tsx)
+Na query de `lembretes-lidos`, adicionar filtro `.gte('criado_em', hojeInicio)` para buscar apenas registros criados hoje. Assim, marcações de dias anteriores são ignoradas e o lembrete reaparece.
 
-**Antes:**
 ```typescript
-const tpl = templates.find(t => t.tipo_lembrete === tipoKey)
-  || (tipoKey.startsWith('vencido_d') 
-    ? templates.find(t => t.tipo_lembrete === 'vencido_generico') 
-    : undefined);
+// Antes: busca TODOS os lembretes lidos (permanente)
+const { data } = await supabase
+  .from('lembretes_lidos')
+  .select('pagamento_id')
+  .eq('user_id', user.id);
+
+// Depois: busca apenas os lidos HOJE
+const hojeInicio = format(new Date(), 'yyyy-MM-dd') + 'T00:00:00';
+const { data } = await supabase
+  .from('lembretes_lidos')
+  .select('pagamento_id')
+  .eq('user_id', user.id)
+  .gte('criado_em', hojeInicio);
 ```
 
-**Depois:**
-```typescript
-const tpl = templates.find(t => t.tipo_lembrete === tipoKey)
-  || (() => {
-    if (!tipoKey.startsWith('vencido_d')) return undefined;
-    const dias = parseInt(tipoKey.replace('vencido_d', ''));
-    // Buscar o template vencido mais próximo (dias menores)
-    const vencidoTemplates = templates
-      .filter(t => t.tipo_lembrete.startsWith('vencido_d') && t.tipo_lembrete !== 'vencido_generico')
-      .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', '')) }))
-      .filter(t => t.dias <= dias)
-      .sort((a, b) => b.dias - a.dias);
-    return vencidoTemplates[0] || templates.find(t => t.tipo_lembrete === 'vencido_generico');
-  })();
+**2. Limpar registros antigos** — Migration SQL
+
+Deletar todos os registros de `lembretes_lidos` com `criado_em` anterior a hoje, fazendo com que todos os clientes com parcelas pendentes reapareçam imediatamente nos lembretes.
+
+```sql
+DELETE FROM lembretes_lidos WHERE criado_em < CURRENT_DATE;
 ```
 
-Esta mesma lógica será aplicada em **3 locais**:
-1. **PaymentReminders.tsx** — menu individual de "Áudio + Botões" (~linha 436)
-2. **PaymentReminders.tsx** — menu individual de "Enviar áudio" (se usar a mesma busca)
-3. **WhatsAppSendingContext.tsx** — envio em lote
+### Resultado
 
-### Arquivos a modificar
-- `src/components/PaymentReminders.tsx`
-- `src/contexts/WhatsAppSendingContext.tsx`
+- "Marcar como visto" esconde o lembrete **apenas pelo resto do dia**
+- No dia seguinte, se a parcela ainda estiver pendente, o cliente reaparece
+- Os 133 registros antigos serão limpos, fazendo todos os pendentes reaparecerem agora
 
