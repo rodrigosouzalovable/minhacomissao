@@ -168,19 +168,29 @@ Deno.serve(async (req) => {
 
       // Auto-reconfigure webhook for each instance (remove wasSentByApi filter)
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
       const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
       for (const inst of whatsappInsts) {
         const cleanBase = inst.server_url.replace(/\/+$/, "");
-        const whPayload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
-        try {
-          const whRes = await fetch(`${cleanBase}/webhook/${inst.instance_token}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: whPayload,
-          });
-          console.log(`[AQUECIMENTO-MANUAL] Webhook reconfigurado para ${inst.nome}: ${whRes.status}`);
-        } catch (e) {
-          console.warn(`[AQUECIMENTO-MANUAL] Falha ao reconfigurar webhook de ${inst.nome}:`, e);
+        const whPayload = JSON.stringify({ url: webhookUrl, enabled: true, events: ["messages"], excludeMessages: [] });
+        const attempts = [
+          { url: `${cleanBase}/webhook/${inst.instance_token}`, headers: { "Content-Type": "application/json" } as Record<string, string> },
+          { url: `${cleanBase}/webhook`, headers: { "Content-Type": "application/json", token: inst.instance_token } as Record<string, string> },
+          { url: `${cleanBase}/globalwebhook`, headers: { "Content-Type": "application/json", admintoken: adminToken } as Record<string, string> },
+        ];
+        let webhookOk = false;
+        for (const attempt of attempts) {
+          try {
+            const whRes = await fetch(attempt.url, { method: "POST", headers: attempt.headers, body: whPayload });
+            const whText = await whRes.text();
+            console.log(`[AQUECIMENTO-MANUAL] Webhook ${attempt.url} para ${inst.nome}: ${whRes.status} - ${whText.substring(0, 200)}`);
+            if (whRes.ok) { webhookOk = true; break; }
+          } catch (e) {
+            console.warn(`[AQUECIMENTO-MANUAL] Erro webhook ${attempt.url}:`, e.message);
+          }
+        }
+        if (!webhookOk) {
+          console.error(`[AQUECIMENTO-MANUAL] FALHA ao reconfigurar webhook de ${inst.nome} - nenhum endpoint respondeu OK`);
         }
       }
 
