@@ -722,6 +722,9 @@ export default function CampanhasVoz() {
                           </label>
                         ))}
                       </div>
+                      <Badge variant="outline" className="text-xs whitespace-nowrap">
+                        {selectedInstanceIds.length} de {instances.length} selecionada{instances.length !== 1 ? 's' : ''}
+                      </Badge>
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
