@@ -248,7 +248,45 @@ Deno.serve(async (req) => {
             tipo_interacao: "mensagem",
           });
 
-          if (sendRes.ok) enviados++;
+          if (sendRes.ok) {
+            enviados++;
+
+            // Direct IA call: B responds to A (bypass webhook dependency)
+            const fromPhone = from.nome?.match(/^\d+/)?.[0] || "";
+            if (fromPhone) {
+              const { data: toAquec } = await supabase
+                .from("whatsapp_aquecimento_instancias")
+                .select("fase")
+                .eq("instancia_id", to.id)
+                .maybeSingle();
+              const fase = toAquec?.fase || 1;
+              const probMap: Record<number, number> = { 1: 0.30, 2: 0.60 };
+              const probabilidade = probMap[fase] ?? 0.90;
+              if (Math.random() <= probabilidade) {
+                const delay = 15000 + Math.random() * 75000;
+                console.log(`[AQUECIMENTO-MANUAL] IA: ${to.nome} responderá a ${from.nome} em ${Math.round(delay / 1000)}s`);
+                const iaPayload = {
+                  action: "gerar-resposta",
+                  mensagem: texto,
+                  fase,
+                  instancia_origem_id: to.id,
+                  instancia_destino_id: from.id,
+                  delay_ms: delay,
+                  server_url: to.server_url,
+                  instance_token: to.instance_token,
+                  numero_destino: `55${fromPhone}@s.whatsapp.net`,
+                };
+                // Fire-and-forget: don't await (would block the loop)
+                fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+                  body: JSON.stringify(iaPayload),
+                }).then(r => r.text()).catch(e => console.error("[AQUECIMENTO-MANUAL] IA call error:", e));
+              } else {
+                console.log(`[AQUECIMENTO-MANUAL] IA: ${to.nome} não respondeu (prob ${probabilidade})`);
+              }
+            }
+          }
           results.push({ from: from.nome, to: to.nome, status, texto });
           console.log(`[AQUECIMENTO-MANUAL] ${from.nome} → ${to.nome}: ${status}`);
         } catch (err) {
@@ -736,6 +774,36 @@ Deno.serve(async (req) => {
                 ultima_interacao: new Date().toISOString(),
               })
               .eq("id", inst.id);
+
+            // Direct IA call: destination responds to origin (bypass webhook dependency)
+            const originPhone = instDetails.nome?.match(/^\d+/)?.[0] || "";
+            if (originPhone && dialogo.tipo === "texto") {
+              const destFase = destino.fase || 1;
+              const probMap: Record<number, number> = { 1: 0.30, 2: 0.60 };
+              const probabilidade = probMap[destFase] ?? 0.90;
+              if (Math.random() <= probabilidade) {
+                const delay = 15000 + Math.random() * 75000;
+                console.log(`[AQUECIMENTO-AUTO] IA: ${destinoDetails.nome} responderá a ${instDetails.nome} em ${Math.round(delay / 1000)}s`);
+                const iaPayload = {
+                  action: "gerar-resposta",
+                  mensagem: dialogo.conteudo,
+                  fase: destFase,
+                  instancia_origem_id: destino.instancia_id,
+                  instancia_destino_id: inst.instancia_id,
+                  delay_ms: delay,
+                  server_url: destinoDetails.server_url,
+                  instance_token: destinoDetails.instance_token,
+                  numero_destino: `55${originPhone}@s.whatsapp.net`,
+                };
+                fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+                  body: JSON.stringify(iaPayload),
+                }).then(r => r.text()).catch(e => console.error("[AQUECIMENTO-AUTO] IA call error:", e));
+              } else {
+                console.log(`[AQUECIMENTO-AUTO] IA: ${destinoDetails.nome} não respondeu (prob ${probabilidade})`);
+              }
+            }
           }
 
           // Burst delay: 30-60s between burst messages
