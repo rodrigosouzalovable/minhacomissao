@@ -1,43 +1,47 @@
 
 
-## Aquecimento Manual — Teste de IA Conversacional
+## Diagnóstico: Por que a IA não está respondendo
 
-### O que será feito
+Encontrei **2 problemas críticos** no fluxo atual:
 
-Adicionar um botão "🧪 Teste IA Manual" no header da página de Aquecimento que abre um dialog onde o usuário pode:
+### Problema 1: Busca de instância interna falha (phone mismatch)
 
-1. Selecionar 2 ou mais instâncias da lista de números em aquecimento (com checkboxes)
-2. Clicar em "Iniciar Teste" para disparar mensagens entre os pares selecionados
-3. Ver o resultado em tempo real (toast de sucesso/erro)
+O `inboxTelefone` extraído do webhook tem prefixo `55` (ex: `5562982115479`), mas o campo `nome` da instância armazena sem o `55` (ex: `62982115479 MEMU 37 03/04`). A query `nome.ilike.%5562982115479%` **nunca encontra** a instância, então o bloco de aquecimento inteiro é ignorado silenciosamente.
 
-### Como funciona
+**Correção**: Tentar match também com o telefone sem o prefixo `55`:
+```typescript
+const phoneSuffix = inboxTelefone.startsWith('55') ? inboxTelefone.slice(2) : inboxTelefone;
+const { data: senderInstance } = await supabase
+  .from('user_whatsapp_instances')
+  .select('id')
+  .or(`nome.ilike.%${inboxTelefone}%,nome.ilike.%${phoneSuffix}%`)
+  .eq('ativo', true)
+  .limit(1)
+  .maybeSingle();
+```
 
-Ao clicar "Iniciar Teste":
-- O frontend chama a Edge Function `whatsapp-aquecimento` com um novo action `manual-test` passando os IDs das instâncias selecionadas
-- A function envia uma mensagem aleatória de cada instância para outra do grupo selecionado (round-robin)
-- Registra na tabela `whatsapp_aquecimento_interacoes` normalmente
-- O webhook `whatsapp-chatbot` detectará as respostas e acionará a IA automaticamente
+### Problema 2: `setTimeout` não funciona em Edge Functions
+
+O código usa `setTimeout` com delay de 15-90s para simular leitura humana, mas Edge Functions encerram o processo assim que retornam a Response (linha 1395). O callback do `setTimeout` **nunca executa**.
+
+**Correção**: Em vez de `setTimeout`, chamar a edge function `whatsapp-ia-responder` passando o delay desejado, e mover o delay para dentro da `whatsapp-ia-responder` (que aguarda antes de gerar e enviar a resposta). Ou, mais simples: durante o teste manual, usar delay zero e chamar diretamente sem `setTimeout` (aguardar inline com `await`). Para produção, a `whatsapp-ia-responder` deve receber os dados da instância e fazer o envio ela mesma após o delay.
+
+### Plano de implementação
+
+**Arquivo: `supabase/functions/whatsapp-chatbot/index.ts`**
+- Corrigir a busca de `senderInstance` para tentar match com e sem prefixo `55`
+- Remover o `setTimeout` e em vez disso enviar o delay desejado como parâmetro para `whatsapp-ia-responder`
+- Passar `server_url`, `instance_token` e `numero_destino` no payload da IA para que ela faça o envio
+
+**Arquivo: `supabase/functions/whatsapp-ia-responder/index.ts`**
+- Receber parâmetros extras: `delay_ms`, `server_url`, `instance_token`, `numero_destino`
+- Aguardar `delay_ms` com `await new Promise(r => setTimeout(r, delay_ms))` (funciona dentro da mesma request)
+- Após gerar a resposta da IA, enviar a mensagem via UAZAPI diretamente
+- Retornar o resultado
+
+Isso resolve ambos os problemas: a instância interna será encontrada corretamente e o delay será executado dentro da function que está processando a request (não em fire-and-forget).
 
 ### Arquivos alterados
-
-**`src/pages/Aquecimento.tsx`**
-- Novo botão "🧪 Teste IA Manual" no header
-- Dialog com lista de instâncias em aquecimento (checkboxes para seleção múltipla)
-- Botão "Iniciar Teste" que chama a edge function
-- Feedback via toast
-
-**`supabase/functions/whatsapp-aquecimento/index.ts`**
-- Novo handler para `action: "manual-test"` que recebe `instance_ids: string[]`
-- Envia uma mensagem de texto simples entre cada par de instâncias selecionadas
-- Reutiliza o pool de frases de diálogo existente
-- Retorna quantas mensagens foram enviadas
-
-### Fluxo de teste
-
-1. Abra a aba Aquecimento → clique em "🧪 Teste IA Manual"
-2. Selecione 2+ instâncias → clique "Iniciar Teste"
-3. Instância A envia mensagem para B (e vice-versa)
-4. O webhook detecta a mensagem e aciona a IA (Gemma 4)
-5. A IA responde automaticamente após 15-90s
-6. Verifique no Log de Interações e no Inbox
+- `supabase/functions/whatsapp-chatbot/index.ts`
+- `supabase/functions/whatsapp-ia-responder/index.ts`
 
