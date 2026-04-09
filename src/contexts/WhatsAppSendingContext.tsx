@@ -222,7 +222,13 @@ export function WhatsAppSendingProvider({ children }: { children: ReactNode }) {
 
           let tpl = templates.find(t => t.tipo_lembrete === tipoKey);
           if (!tpl && lembrete.tipo === 'vencido') {
-            tpl = templates.find(t => t.tipo_lembrete === 'vencido_generico');
+            // Fallback em cascata: buscar template mais próximo com dias menores
+            const vencidoTemplates = templates
+              .filter(t => t.tipo_lembrete.startsWith('vencido_d') && t.tipo_lembrete !== 'vencido_generico')
+              .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', '')) }))
+              .filter(t => !isNaN(t.dias) && t.dias <= diasAtraso)
+              .sort((a, b) => b.dias - a.dias);
+            tpl = vencidoTemplates[0] || templates.find(t => t.tipo_lembrete === 'vencido_generico');
           }
 
           let sentAsAudio = false;

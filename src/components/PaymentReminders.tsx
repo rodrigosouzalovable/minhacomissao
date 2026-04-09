@@ -374,7 +374,16 @@ export function PaymentReminders() {
                         return `vencido_d${diffDays}`;
                       })();
                    const tpl = templates.find(t => t.tipo_lembrete === tipoKey)
-                     || (tipoKey.startsWith('vencido_d') ? templates.find(t => t.tipo_lembrete === 'vencido_generico') : undefined);
+                     || (() => {
+                       if (!tipoKey.startsWith('vencido_d')) return undefined;
+                       const dias = parseInt(tipoKey.replace('vencido_d', ''));
+                       const vencidoTemplates = templates
+                         .filter(t => t.tipo_lembrete.startsWith('vencido_d') && t.tipo_lembrete !== 'vencido_generico')
+                         .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', '')) }))
+                         .filter(t => !isNaN(t.dias) && t.dias <= dias)
+                         .sort((a, b) => b.dias - a.dias);
+                       return vencidoTemplates[0] || templates.find(t => t.tipo_lembrete === 'vencido_generico');
+                     })();
                    if (!tpl?.audio_url) {
                      toast.error('Nenhum áudio configurado para este tipo de lembrete');
                      return;
@@ -434,7 +443,16 @@ export function PaymentReminders() {
                         return `vencido_d${diffDays}`;
                       })();
                   const tpl = templates.find(t => t.tipo_lembrete === tipoKey)
-                    || (tipoKey.startsWith('vencido_d') ? templates.find(t => t.tipo_lembrete === 'vencido_generico') : undefined);
+                    || (() => {
+                      if (!tipoKey.startsWith('vencido_d')) return undefined;
+                      const dias = parseInt(tipoKey.replace('vencido_d', ''));
+                      const vencidoTemplates = templates
+                        .filter(t => t.tipo_lembrete.startsWith('vencido_d') && t.tipo_lembrete !== 'vencido_generico')
+                        .map(t => ({ ...t, dias: parseInt(t.tipo_lembrete.replace('vencido_d', '')) }))
+                        .filter(t => !isNaN(t.dias) && t.dias <= dias)
+                        .sort((a, b) => b.dias - a.dias);
+                      return vencidoTemplates[0] || templates.find(t => t.tipo_lembrete === 'vencido_generico');
+                    })();
                   if (!tpl?.audio_url) {
                     toast.error('Nenhum áudio configurado para este tipo de lembrete');
                     return;
