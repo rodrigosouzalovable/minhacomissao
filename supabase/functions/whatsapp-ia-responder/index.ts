@@ -94,13 +94,11 @@ Sua resposta:`;
     const data = await response.json();
     let resposta = (data.response || "").trim();
 
-    // Limpar possíveis artefatos
     resposta = resposta.replace(/^["']|["']$/g, "").trim();
     if (!resposta || resposta.length < 2) {
       return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
     }
 
-    // Limitar tamanho
     if (resposta.length > 200) {
       resposta = resposta.substring(0, 200).replace(/\s\S*$/, "");
     }
@@ -110,6 +108,73 @@ Sua resposta:`;
   } catch (err) {
     console.error("[IA] Erro ao chamar Ollama:", err);
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
+  }
+}
+
+async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, texto: string): Promise<boolean> {
+  const cleanUrl = serverUrl.replace(/\/+$/, "");
+  const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: instanceToken },
+        body: JSON.stringify({ number: numero, text: texto }),
+      });
+      if (res.ok) {
+        await res.text();
+        console.log(`[IA] ✅ Mensagem enviada para ${numero}: "${texto}"`);
+        return true;
+      }
+      await res.text();
+    } catch (e) {
+      console.warn(`[IA] Endpoint ${url} falhou:`, e);
+    }
+  }
+  console.error(`[IA] ❌ Falha ao enviar mensagem para ${numero}`);
+  return false;
+}
+
+async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, texto: string) {
+  try {
+    // Find the instance to get its ID
+    const { data: inst } = await sb
+      .from("user_whatsapp_instances")
+      .select("id")
+      .eq("id", instanciaId)
+      .single();
+
+    if (!inst) return;
+
+    // Format phone for inbox
+    const phoneSuffix = telefoneRemoto.replace(/^55/, "");
+
+    await sb.from("whatsapp_mensagens").insert({
+      instancia_id: inst.id,
+      telefone_remoto: telefoneRemoto,
+      conteudo: texto,
+      direcao: "saida",
+      tipo_conteudo: "texto",
+      timestamp_msg: new Date().toISOString(),
+    });
+
+    // Update contact's last message
+    const { data: contato } = await sb
+      .from("whatsapp_contatos")
+      .select("id")
+      .eq("instancia_id", inst.id)
+      .or(`telefone.eq.${telefoneRemoto},telefone.ilike.%${phoneSuffix}`)
+      .maybeSingle();
+
+    if (contato) {
+      await sb.from("whatsapp_contatos").update({
+        ultima_mensagem: texto.slice(0, 200),
+        ultima_mensagem_em: new Date().toISOString(),
+      }).eq("id", contato.id);
+    }
+  } catch (e) {
+    console.warn("[IA] Erro ao logar no inbox:", e);
   }
 }
 
@@ -123,7 +188,17 @@ Deno.serve(async (req) => {
     const { action } = body;
 
     if (action === "gerar-resposta") {
-      const { mensagem, historico, fase, instancia_origem_id, instancia_destino_id } = body;
+      const {
+        mensagem,
+        historico,
+        fase,
+        instancia_origem_id,
+        instancia_destino_id,
+        delay_ms,
+        server_url,
+        instance_token,
+        numero_destino,
+      } = body;
 
       if (!mensagem || !instancia_origem_id || !instancia_destino_id) {
         return json({ error: "mensagem, instancia_origem_id e instancia_destino_id são obrigatórios" }, 400);
@@ -131,6 +206,13 @@ Deno.serve(async (req) => {
 
       const sb = getSupabaseAdmin();
       const faseNum = fase || 1;
+
+      // Apply delay before generating response (simulates human reading time)
+      const delayMs = delay_ms || 0;
+      if (delayMs > 0) {
+        console.log(`[IA] Aguardando ${Math.round(delayMs / 1000)}s antes de responder...`);
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
 
       // Verificar/criar conversa IA
       const conversa = await getOrCreateConversa(sb, instancia_origem_id, instancia_destino_id);
@@ -145,9 +227,15 @@ Deno.serve(async (req) => {
 
       // Verificar se atingiu limite de trocas
       if (conversa.total_trocas >= conversa.max_trocas) {
-        // Enviar frase de encerramento e finalizar
         const fraseEncerramento = FRASES_ENCERRAMENTO[Math.floor(Math.random() * FRASES_ENCERRAMENTO.length)];
         await finalizarConversa(sb, conversa.id, mensagem, fraseEncerramento);
+
+        // Send the closing message if we have send params
+        if (server_url && instance_token && numero_destino) {
+          await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento);
+          await logToInbox(sb, instancia_origem_id, numero_destino, fraseEncerramento);
+        }
+
         return json({ responded: true, resposta: fraseEncerramento, finalizada: true });
       }
 
@@ -174,6 +262,14 @@ Deno.serve(async (req) => {
         historico: novoHistorico,
       }).eq("id", conversa.id);
 
+      // Send the message via UAZAPI if we have send params
+      if (server_url && instance_token && numero_destino) {
+        const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
+        if (sent) {
+          await logToInbox(sb, instancia_origem_id, numero_destino, resposta);
+        }
+      }
+
       return json({ responded: true, resposta });
     }
 
@@ -192,7 +288,6 @@ function json(data: any, status = 200) {
 }
 
 async function getOrCreateConversa(sb: any, origemId: string, destinoId: string) {
-  // Procurar conversa ativa (em qualquer direção do par)
   const { data: existente } = await sb
     .from("whatsapp_conversas_ia")
     .select("*")
@@ -204,7 +299,6 @@ async function getOrCreateConversa(sb: any, origemId: string, destinoId: string)
 
   if (existente) return existente;
 
-  // Verificar cooldown (4h) - buscar última conversa finalizada entre este par
   const quatroHorasAtras = new Date(Date.now() - 4 * 3600000).toISOString();
   const { data: recente } = await sb
     .from("whatsapp_conversas_ia")
@@ -220,7 +314,6 @@ async function getOrCreateConversa(sb: any, origemId: string, destinoId: string)
     return null;
   }
 
-  // Criar nova conversa com max_trocas aleatório entre 5-7
   const maxTrocas = 5 + Math.floor(Math.random() * 3);
   const { data: nova, error } = await sb
     .from("whatsapp_conversas_ia")
