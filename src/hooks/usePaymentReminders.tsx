@@ -26,10 +26,13 @@ export function usePaymentReminders() {
     queryFn: async () => {
       if (!user) return [];
 
+      const hojeInicio = format(new Date(), 'yyyy-MM-dd') + 'T00:00:00';
+
       const { data, error } = await supabase
         .from('lembretes_lidos')
         .select('pagamento_id')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .gte('criado_em', hojeInicio);
 
       if (error) {
         console.error('Erro ao buscar lembretes lidos:', error);
