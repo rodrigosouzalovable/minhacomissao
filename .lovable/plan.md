@@ -1,34 +1,73 @@
 
 
-## Diagnóstico Completo do Aquecimento
+## Conversa Natural e Fluida entre Instâncias
 
-### Problemas Identificados
+### Problema Atual
+O fluxo é unidirecional por ciclo: A envia uma mensagem do pool de diálogos, B responde UMA vez via IA, e a conversa morre. No próximo ciclo (15 min depois), outro par é escolhido. Resultado: conversas robóticas de 1 mensagem cada.
 
-**Problema 1: Webhooks não reconfigurados no modo automático**
-A reconfiguração dos webhooks (removendo o filtro `wasSentByApi`) só acontece no **teste manual** (linhas 169-195 do `whatsapp-aquecimento`). No modo automático (cron), os webhooks permanecem com o filtro ativo. Quando a instância A envia uma mensagem via API para B, o UAZAPI de B ignora essa mensagem porque `wasSentByApi: true` está nos `excludeMessages`. Resultado: o `whatsapp-chatbot` nunca recebe o webhook e a IA nunca é acionada.
+### Solução: Conversa em Cadeia (Ping-Pong Contínuo)
 
-**Problema 2: Query de detecção invertida no chatbot**
-No `whatsapp-chatbot` (linha 1274-1282), a query busca `instancia_destino_id = senderInstance.id`. Mas quando A envia para B, o registro tem `instancia_destino_id = B`. Quando B recebe e o webhook dispara, `senderInstance` = A. A query busca `destino = A`, mas o registro tem `destino = B`. Nunca encontra match.
+Quando o `whatsapp-ia-responder` envia uma resposta de B para A, ele automaticamente dispara uma nova chamada para que A responda de volta a B (com delay humanizado). Isso cria uma cadeia:
 
-**Problema 3: Ausência de status postados**
-O sistema postou 0 status hoje, provavelmente porque a função `shouldPostStatus` usa probabilidades muito baixas (1-3.5% por ciclo) e cada ciclo processa apenas 1 instância aleatória, combinado com o jitter de 0-180s.
+```text
+A envia msg inicial (do pool de diálogos)
+  └─ B responde via IA (delay 15-60s)
+      └─ A responde via IA (delay 20-90s)  ← NOVO
+          └─ B responde via IA (delay 15-60s)  ← NOVO
+              └─ ... até atingir 10-15 trocas
+                  └─ Quem atingir o limite encerra naturalmente
+```
 
-### Plano de Correção
+### Mudanças
 
-**1. Reconfigurar webhooks automaticamente (whatsapp-aquecimento)**
-- Antes de enviar mensagens no modo automático, verificar se o webhook da instância destino já foi configurado hoje
-- Usar uma flag em `whatsapp_aquecimento_instancias` (ex: `webhook_configurado_em`) ou simplesmente reconfigurar o webhook da instância destino antes de cada envio
-- Reutilizar a mesma lógica do teste manual (3 endpoints fallback)
+**1. whatsapp-ia-responder/index.ts — Cadeia de respostas**
+- Aumentar `max_trocas` de `5-7` para `10-15` (linha 312: `10 + Math.floor(Math.random() * 6)`)
+- Após enviar a resposta, o responder busca os dados da instância que RECEBEU a mensagem e dispara uma nova chamada fire-and-forget para que ela responda de volta (invertendo origem/destino)
+- Delay humanizado variável: 20-120s entre respostas, com variação para parecer natural
+- Passar `server_url` e `instance_token` da instância que vai responder na próxima rodada
+- Aumentar histórico de contexto de 6 para 10 mensagens para a IA manter coerência
 
-**2. Corrigir query de detecção no whatsapp-chatbot**
-- Linha 1277: trocar de `instancia_destino_id = senderInstance.id` para buscar a interação correta:
-  - Buscar onde `instancia_origem_id = senderInstance.id` (A enviou) E `instancia_destino_id = instanciaId` (B recebeu)
-  - OU simplesmente `instancia_destino_id = instanciaId` (a instância que está no webhook é a que recebeu)
+**2. whatsapp-ia-responder/index.ts — Prompt mais conversacional**
+- Melhorar o system prompt para instruir a IA a fazer perguntas, mudar de assunto, reagir com curiosidade
+- Variar o tamanho das respostas (às vezes 1 palavra "kkk", às vezes 2 frases)
+- Adicionar instrução para ocasionalmente enviar mensagens curtas tipo "e aí?", "conta mais", "sério?"
 
-**3. Aumentar probabilidade de status**
-- Aumentar `shouldPostStatus` de 1-3.5% para 5-8% para garantir ao menos 1 status por instância por dia
+**3. whatsapp-ia-responder/index.ts — Encerramento natural**
+- Nas últimas 2-3 trocas antes do limite, instruir a IA a ir "finalizando" naturalmente (ex: "bom, vou nessa")
+- Não encerrar abruptamente com frase fixa — deixar a IA gerar o encerramento baseado no contexto
+
+**4. Áudio (fase futura)**
+- Áudio entre instâncias requer gravação/síntese de voz (TTS), que não está implementado no UAZAPI nem no sistema atual
+- Por enquanto, as conversas serão 100% texto, que já é o formato mais comum no WhatsApp
+- Podemos adicionar áudio depois com um serviço de TTS se necessário
+
+### Fluxo Técnico Detalhado
+
+```text
+whatsapp-aquecimento (cron 15min)
+  │ Envia msg do pool: A → B
+  │ Chama whatsapp-ia-responder (B responde a A)
+  │
+  └─ whatsapp-ia-responder:
+      1. Delay 15-60s
+      2. Gera resposta via Gemini Flash Lite
+      3. Envia resposta B → A via UAZAPI
+      4. Salva no histórico
+      5. SE total_trocas < max_trocas:
+         └─ Busca dados da instância A no banco
+         └─ Delay 20-120s (fire-and-forget)
+         └─ Chama whatsapp-ia-responder novamente
+            (agora A responde a B)
+            └─ Repete do passo 1 (agora invertido)
+      6. SE total_trocas >= max_trocas - 2:
+         └─ Prompt com instrução de encerramento gradual
+      7. SE total_trocas >= max_trocas:
+         └─ Finaliza conversa
+```
 
 ### Arquivos Afetados
-- `supabase/functions/whatsapp-aquecimento/index.ts` — adicionar reconfiguração de webhook no modo automático
-- `supabase/functions/whatsapp-chatbot/index.ts` — corrigir query de detecção de interações de aquecimento
+- `supabase/functions/whatsapp-ia-responder/index.ts` — toda a lógica de cadeia, prompt melhorado, max_trocas 10-15
+
+### Resultado Esperado
+Cada conversa terá entre 10 e 15 trocas totais (cada lado manda 5-8 mensagens), com delays variáveis de 15s a 2min entre cada mensagem, durando entre 5 e 20 minutos no total. As conversas serão naturais, com mudanças de assunto, perguntas, reações curtas e encerramentos orgânicos.
 
