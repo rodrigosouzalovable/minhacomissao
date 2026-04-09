@@ -141,6 +141,99 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
+    // ========== MANUAL TEST MODE ==========
+    let body: any = {};
+    try { body = await req.json(); } catch (_) { /* no body = auto mode */ }
+
+    if (body?.action === "manual-test") {
+      const instanceIds: string[] = body.instance_ids || [];
+      if (instanceIds.length < 2) {
+        return new Response(JSON.stringify({ error: "Selecione pelo menos 2 instâncias" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log(`[AQUECIMENTO-MANUAL] Teste manual com ${instanceIds.length} instâncias`);
+
+      const { data: whatsappInsts } = await supabase
+        .from("user_whatsapp_instances")
+        .select("id, nome, server_url, instance_token")
+        .in("id", instanceIds);
+
+      if (!whatsappInsts || whatsappInsts.length < 2) {
+        return new Response(JSON.stringify({ error: "Instâncias não encontradas" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Get dialogues pool
+      const { data: dialogos } = await supabase
+        .from("whatsapp_aquecimento_dialogos")
+        .select("*")
+        .eq("ativo", true)
+        .eq("tipo", "texto");
+
+      const fallbackTexts = [
+        "Oi, tudo bem? 😊", "Bom dia! Como vai? ☀️", "E aí, como está?",
+        "Boa tarde! Tudo certo? 🙂", "Oi! Quanto tempo! 👋",
+      ];
+
+      let enviados = 0;
+      const results: any[] = [];
+
+      // Round-robin: each instance sends to the next one
+      for (let i = 0; i < whatsappInsts.length; i++) {
+        const from = whatsappInsts[i];
+        const to = whatsappInsts[(i + 1) % whatsappInsts.length];
+
+        const toPhone = to.nome?.match(/^\d+/)?.[0] || "";
+        if (!toPhone) {
+          results.push({ from: from.nome, to: to.nome, status: "ERRO", motivo: "Sem telefone" });
+          continue;
+        }
+
+        const texto = dialogos && dialogos.length > 0
+          ? dialogos[Math.floor(Math.random() * dialogos.length)].conteudo
+          : fallbackTexts[Math.floor(Math.random() * fallbackTexts.length)];
+
+        const cleanUrl = from.server_url.replace(/\/+$/, "");
+        const destNum = `55${toPhone}@s.whatsapp.net`;
+
+        try {
+          const sendRes = await fetch(`${cleanUrl}/send/text`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token: from.instance_token },
+            body: JSON.stringify({ number: destNum, text: texto }),
+          });
+
+          const sendData = await sendRes.json().catch(() => ({}));
+          const status = sendRes.ok ? "ENVIADO" : "FALHOU";
+
+          await supabase.from("whatsapp_aquecimento_interacoes").insert({
+            instancia_origem_id: from.id,
+            instancia_destino_id: to.id,
+            tipo: "texto",
+            conteudo: texto,
+            status,
+            mensagem_id: sendData?.key?.id || null,
+            enviado_em: new Date().toISOString(),
+            tipo_interacao: "mensagem",
+          });
+
+          if (sendRes.ok) enviados++;
+          results.push({ from: from.nome, to: to.nome, status, texto });
+          console.log(`[AQUECIMENTO-MANUAL] ${from.nome} → ${to.nome}: ${status}`);
+        } catch (err) {
+          results.push({ from: from.nome, to: to.nome, status: "ERRO", motivo: String(err) });
+          console.error(`[AQUECIMENTO-MANUAL] Erro: ${err}`);
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, enviados, results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ========== ANTI-BAN: Jitter 0-180 seconds ==========
     const jitterSeconds = Math.floor(Math.random() * 180);
     console.log(`[AQUECIMENTO-AUTO] Jitter de ${jitterSeconds}s antes de iniciar...`);

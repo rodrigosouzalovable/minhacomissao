@@ -7,9 +7,11 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import { format } from 'date-fns';
@@ -64,6 +66,9 @@ export default function Aquecimento() {
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
+  const [manualTestOpen, setManualTestOpen] = useState(false);
+  const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
+  const [testLoading, setTestLoading] = useState(false);
 
   useEffect(() => {
     loadAll();
@@ -166,21 +171,46 @@ export default function Aquecimento() {
 
   async function pausarAquecimento(id: string) {
     await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'PAUSADO' } as any).eq('id', id);
-    toast({ title: 'Aquecimento pausado' });
+    toast.success('Aquecimento pausado');
     await loadAll();
   }
 
   async function retomarAquecimento(id: string) {
     await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'EM_AQUECIMENTO' } as any).eq('id', id);
-    toast({ title: 'Aquecimento retomado' });
+    toast.success('Aquecimento retomado');
     await loadAll();
   }
 
   async function forcarReinicio() {
-    // Reset all PAUSADO to EM_AQUECIMENTO
     await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'EM_AQUECIMENTO' } as any).eq('status', 'PAUSADO');
-    toast({ title: 'Todos os números pausados foram reiniciados' });
+    toast.success('Todos os números pausados foram reiniciados');
     await loadAll();
+  }
+
+  function toggleTestId(id: string) {
+    setSelectedTestIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  async function iniciarTesteManual() {
+    if (selectedTestIds.length < 2) {
+      toast.error('Selecione pelo menos 2 instâncias');
+      return;
+    }
+    setTestLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-aquecimento', {
+        body: { action: 'manual-test', instance_ids: selectedTestIds },
+      });
+      if (error) throw error;
+      toast.success(`Teste iniciado! ${data?.enviados || 0} mensagem(ns) enviada(s)`);
+      setManualTestOpen(false);
+      setSelectedTestIds([]);
+      await loadAll();
+    } catch (err: any) {
+      toast.error('Erro ao iniciar teste: ' + (err.message || err));
+    } finally {
+      setTestLoading(false);
+    }
   }
 
   const statusBadge = (status: string) => {
@@ -218,6 +248,9 @@ export default function Aquecimento() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setManualTestOpen(true)} className="gap-1">
+              <FlaskConical className="h-4 w-4" /> Teste IA Manual
             </Button>
             {pausadoInstances.length > 0 && (
               <AlertDialog>
@@ -558,6 +591,43 @@ export default function Aquecimento() {
           </Card>
         )}
       </div>
+
+      {/* Dialog Teste IA Manual */}
+      <Dialog open={manualTestOpen} onOpenChange={setManualTestOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5" /> Teste IA Manual
+            </DialogTitle>
+            <DialogDescription>
+              Selecione 2+ instâncias para enviar mensagens de teste entre elas. A IA responderá automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            {instancias.map(inst => (
+              <label key={inst.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent cursor-pointer">
+                <Checkbox
+                  checked={selectedTestIds.includes(inst.instancia_id)}
+                  onCheckedChange={() => toggleTestId(inst.instancia_id)}
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium">📱 {inst.instance_name}</span>
+                  <span className="text-xs text-muted-foreground ml-2">Fase {inst.fase} · {inst.status}</span>
+                </div>
+              </label>
+            ))}
+            {instancias.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância em aquecimento</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualTestOpen(false)}>Cancelar</Button>
+            <Button onClick={iniciarTesteManual} disabled={testLoading || selectedTestIds.length < 2}>
+              {testLoading ? 'Enviando...' : `Iniciar Teste (${selectedTestIds.length})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
