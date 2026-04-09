@@ -591,6 +591,43 @@ export default function Aquecimento() {
           </Card>
         )}
       </div>
+
+      {/* Dialog Teste IA Manual */}
+      <Dialog open={manualTestOpen} onOpenChange={setManualTestOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5" /> Teste IA Manual
+            </DialogTitle>
+            <DialogDescription>
+              Selecione 2+ instâncias para enviar mensagens de teste entre elas. A IA responderá automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            {instancias.map(inst => (
+              <label key={inst.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent cursor-pointer">
+                <Checkbox
+                  checked={selectedTestIds.includes(inst.instancia_id)}
+                  onCheckedChange={() => toggleTestId(inst.instancia_id)}
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium">📱 {inst.instance_name}</span>
+                  <span className="text-xs text-muted-foreground ml-2">Fase {inst.fase} · {inst.status}</span>
+                </div>
+              </label>
+            ))}
+            {instancias.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância em aquecimento</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualTestOpen(false)}>Cancelar</Button>
+            <Button onClick={iniciarTesteManual} disabled={testLoading || selectedTestIds.length < 2}>
+              {testLoading ? 'Enviando...' : `Iniciar Teste (${selectedTestIds.length})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
