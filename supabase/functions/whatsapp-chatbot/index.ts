@@ -1235,10 +1235,12 @@ serve(async (req) => {
     if (!isFromMe && inboxTelefone) {
       try {
         // Check if the sender phone belongs to one of our warming instances
+        // Try matching with and without 55 prefix to handle both formats
+        const phoneSuffix = inboxTelefone.startsWith('55') ? inboxTelefone.slice(2) : inboxTelefone;
         const { data: senderInstance } = await supabase
           .from('user_whatsapp_instances')
           .select('id')
-          .or(`nome.ilike.%${inboxTelefone}%`)
+          .or(`nome.ilike.%${inboxTelefone}%,nome.ilike.%${phoneSuffix}%`)
           .eq('ativo', true)
           .limit(1)
           .maybeSingle();
