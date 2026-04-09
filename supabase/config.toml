@@ -93,5 +93,8 @@ verify_jwt = false
 [functions.daily-report-aquecimento]
 verify_jwt = false
 
+[functions.whatsapp-ia-responder]
+verify_jwt = false
+
 [functions.process-acionamento-agendado]
 verify_jwt = false
