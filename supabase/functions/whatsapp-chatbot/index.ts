@@ -1261,20 +1261,17 @@ serve(async (req) => {
           }
         }
 
-        // Also try matching by phone extracted from nome field
+        // Detect warming interaction: senderInstance sent a message TO instanciaId (this webhook's instance)
+        // The warming function records: instancia_origem_id = sender, instancia_destino_id = receiver
+        // When receiver gets the message, webhook fires on instanciaId. The phone that sent = senderInstance.
+        // So we need: instancia_origem_id = senderInstance.id AND instancia_destino_id = instanciaId
         if (senderInstance && instanciaId) {
           const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
-          // Find a recent ENVIADO interaction where:
-          // - instancia_origem_id = the instance that SENT the warming message (receiving instance in webhook)
-          // - instancia_destino_id = the instance that should RESPOND (sender instance = senderInstance)
-          // Actually: the warming function sends FROM instancia_origem TO instancia_destino
-          // So when destino responds, the webhook fires on the ORIGEM instance
-          // instancia_origem_id = some instance that sent TO senderInstance
-          // instancia_destino_id = senderInstance.id (the one responding now)
           const { data: warmingInteraction } = await supabase
             .from('whatsapp_aquecimento_interacoes')
             .select('id, instancia_origem_id, enviado_em')
-            .eq('instancia_destino_id', senderInstance.id)
+            .eq('instancia_origem_id', senderInstance.id)
+            .eq('instancia_destino_id', instanciaId)
             .eq('status', 'ENVIADO')
             .gte('enviado_em', twoHoursAgo)
             .order('enviado_em', { ascending: false })
