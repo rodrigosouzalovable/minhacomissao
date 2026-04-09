@@ -120,10 +120,10 @@ function isWithinStatusHours(hour: number): boolean {
 function shouldPostStatus(hour: number): boolean {
   if (!isWithinStatusHours(hour)) return false;
   const rand = Math.random();
-  if (hour >= 8 && hour < 12) return rand < 0.035;
-  if (hour >= 12 && hour < 18) return rand < 0.035;
-  if (hour >= 18 && hour < 21) return rand < 0.02;
-  return rand < 0.01;
+  if (hour >= 8 && hour < 12) return rand < 0.08;
+  if (hour >= 12 && hour < 18) return rand < 0.07;
+  if (hour >= 18 && hour < 21) return rand < 0.05;
+  return rand < 0.03;
 }
 
 // Deterministic "silent day" check: 20% chance per instance per day
@@ -664,6 +664,29 @@ Deno.serve(async (req) => {
         if (!destinoPhone) {
           console.log(`[AQUECIMENTO-AUTO] Não extrair telefone de ${destinoDetails.nome}`);
           continue;
+        }
+
+        // ========== AUTO-RECONFIGURE WEBHOOK on destination (remove wasSentByApi filter) ==========
+        try {
+          const destCleanBase = destinoDetails.server_url.replace(/\/+$/, "");
+          const whPayload = JSON.stringify({ url: `${supabaseUrl}/functions/v1/whatsapp-chatbot`, enabled: true, events: ["messages"], excludeMessages: [] });
+          const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+          const whAttempts = [
+            { url: `${destCleanBase}/webhook/${destinoDetails.instance_token}`, headers: { "Content-Type": "application/json" } as Record<string, string> },
+            { url: `${destCleanBase}/webhook`, headers: { "Content-Type": "application/json", token: destinoDetails.instance_token } as Record<string, string> },
+            { url: `${destCleanBase}/globalwebhook`, headers: { "Content-Type": "application/json", admintoken: adminToken } as Record<string, string> },
+          ];
+          let whOk = false;
+          for (const attempt of whAttempts) {
+            try {
+              const whRes = await fetch(attempt.url, { method: "POST", headers: attempt.headers, body: whPayload });
+              if (whRes.ok) { whOk = true; console.log(`[AQUECIMENTO-AUTO] Webhook reconfigurado para ${destinoDetails.nome}`); break; }
+              await whRes.text();
+            } catch (_) { /* fallback */ }
+          }
+          if (!whOk) console.warn(`[AQUECIMENTO-AUTO] Falha ao reconfigurar webhook de ${destinoDetails.nome}`);
+        } catch (whErr) {
+          console.warn(`[AQUECIMENTO-AUTO] Erro webhook reconfig: ${whErr}`);
         }
 
         const serverUrl = instDetails.server_url;
