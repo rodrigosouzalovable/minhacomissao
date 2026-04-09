@@ -171,21 +171,46 @@ export default function Aquecimento() {
 
   async function pausarAquecimento(id: string) {
     await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'PAUSADO' } as any).eq('id', id);
-    toast({ title: 'Aquecimento pausado' });
+    toast.success('Aquecimento pausado');
     await loadAll();
   }
 
   async function retomarAquecimento(id: string) {
     await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'EM_AQUECIMENTO' } as any).eq('id', id);
-    toast({ title: 'Aquecimento retomado' });
+    toast.success('Aquecimento retomado');
     await loadAll();
   }
 
   async function forcarReinicio() {
-    // Reset all PAUSADO to EM_AQUECIMENTO
     await supabase.from('whatsapp_aquecimento_instancias' as any).update({ status: 'EM_AQUECIMENTO' } as any).eq('status', 'PAUSADO');
-    toast({ title: 'Todos os números pausados foram reiniciados' });
+    toast.success('Todos os números pausados foram reiniciados');
     await loadAll();
+  }
+
+  function toggleTestId(id: string) {
+    setSelectedTestIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  async function iniciarTesteManual() {
+    if (selectedTestIds.length < 2) {
+      toast.error('Selecione pelo menos 2 instâncias');
+      return;
+    }
+    setTestLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-aquecimento', {
+        body: { action: 'manual-test', instance_ids: selectedTestIds },
+      });
+      if (error) throw error;
+      toast.success(`Teste iniciado! ${data?.enviados || 0} mensagem(ns) enviada(s)`);
+      setManualTestOpen(false);
+      setSelectedTestIds([]);
+      await loadAll();
+    } catch (err: any) {
+      toast.error('Erro ao iniciar teste: ' + (err.message || err));
+    } finally {
+      setTestLoading(false);
+    }
   }
 
   const statusBadge = (status: string) => {
