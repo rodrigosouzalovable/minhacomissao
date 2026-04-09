@@ -1,47 +1,71 @@
 
+Diagnóstico confirmado: o teste manual realmente disparou as 2 mensagens entre essas instâncias, mas a IA não entrou no fluxo.
 
-## Diagnóstico: Por que a IA não está respondendo
+O que encontrei:
+- `whatsapp-aquecimento` enviou com sucesso:
+  - `62982197615 10 B1 03/04 → 62982115479 MEMU 37 03/04`
+  - `62982115479 MEMU 37 03/04 → 62982197615 10 B1 03/04`
+- As duas mensagens chegaram ao Inbox e foram salvas como `entrada`.
+- Mesmo assim, não houve criação de registros em `whatsapp_conversas_ia`.
+- Também não houve logs do `whatsapp-ia-responder`, então o `whatsapp-chatbot` nem chegou a chamar a IA.
 
-Encontrei **2 problemas críticos** no fluxo atual:
+Causa raiz
+- O webhook está recebendo os números como:
+  - `556282197615`
+  - `556282115479`
+- Mas as instâncias estão cadastradas como:
+  - `62982197615 10 B1 03/04`
+  - `62982115479 MEMU 37 03/04`
+- Ou seja: o webhook trouxe um formato sem o nono dígito, enquanto a detecção da instância interna hoje depende de `nome.ilike` com o telefone completo.
+- Resultado: o `senderInstance` não é encontrado, então a lógica de aquecimento/IA é ignorada.
 
-### Problema 1: Busca de instância interna falha (phone mismatch)
+Plano de correção
+1. Fortalecer a identificação da instância interna em `whatsapp-chatbot`
+- Parar de depender só de `nome.ilike`.
+- Extrair e normalizar o bloco inicial numérico do `nome` da instância.
+- Comparar números em formatos equivalentes:
+  - com e sem `55`
+  - com e sem o nono dígito
+- Objetivo: mapear corretamente `556282115479` para `62982115479...` e `556282197615` para `62982197615...`.
 
-O `inboxTelefone` extraído do webhook tem prefixo `55` (ex: `5562982115479`), mas o campo `nome` da instância armazena sem o `55` (ex: `62982115479 MEMU 37 03/04`). A query `nome.ilike.%5562982115479%` **nunca encontra** a instância, então o bloco de aquecimento inteiro é ignorado silenciosamente.
+2. Criar uma função única de normalização de telefone
+- Centralizar a lógica para evitar divergência entre:
+  - `whatsapp-aquecimento`
+  - `whatsapp-chatbot`
+  - `whatsapp-ia-responder`
+- Essa função vai gerar chaves comparáveis para matching interno e para salvar no Inbox.
 
-**Correção**: Tentar match também com o telefone sem o prefixo `55`:
-```typescript
-const phoneSuffix = inboxTelefone.startsWith('55') ? inboxTelefone.slice(2) : inboxTelefone;
-const { data: senderInstance } = await supabase
-  .from('user_whatsapp_instances')
-  .select('id')
-  .or(`nome.ilike.%${inboxTelefone}%,nome.ilike.%${phoneSuffix}%`)
-  .eq('ativo', true)
-  .limit(1)
-  .maybeSingle();
-```
+3. Ajustar o teste manual para usar o telefone normalizado do destino
+- Hoje ele extrai o destino via regex simples do `nome`.
+- Vou trocar por extração/normalização consistente, para reduzir variações no número enviado ao provedor.
 
-### Problema 2: `setTimeout` não funciona em Edge Functions
+4. Melhorar logs de diagnóstico
+- Adicionar logs claros no `whatsapp-chatbot` para mostrar:
+  - número recebido do webhook
+  - candidatos internos encontrados
+  - instância casada
+  - motivo caso nenhuma seja encontrada
+- Isso evita novo “silêncio” se algum formato diferente voltar a acontecer.
 
-O código usa `setTimeout` com delay de 15-90s para simular leitura humana, mas Edge Functions encerram o processo assim que retornam a Response (linha 1395). O callback do `setTimeout` **nunca executa**.
+5. Validar o fluxo completo esperado
+- Mensagem manual é enviada
+- Webhook reconhece o remetente como instância interna
+- `whatsapp_aquecimento_interacoes` vira `RESPONDIDO`
+- `whatsapp-ia-responder` é chamado
+- `whatsapp_conversas_ia` passa a registrar a conversa
+- Resposta aparece também no Inbox
 
-**Correção**: Em vez de `setTimeout`, chamar a edge function `whatsapp-ia-responder` passando o delay desejado, e mover o delay para dentro da `whatsapp-ia-responder` (que aguarda antes de gerar e enviar a resposta). Ou, mais simples: durante o teste manual, usar delay zero e chamar diretamente sem `setTimeout` (aguardar inline com `await`). Para produção, a `whatsapp-ia-responder` deve receber os dados da instância e fazer o envio ela mesma após o delay.
-
-### Plano de implementação
-
-**Arquivo: `supabase/functions/whatsapp-chatbot/index.ts`**
-- Corrigir a busca de `senderInstance` para tentar match com e sem prefixo `55`
-- Remover o `setTimeout` e em vez disso enviar o delay desejado como parâmetro para `whatsapp-ia-responder`
-- Passar `server_url`, `instance_token` e `numero_destino` no payload da IA para que ela faça o envio
-
-**Arquivo: `supabase/functions/whatsapp-ia-responder/index.ts`**
-- Receber parâmetros extras: `delay_ms`, `server_url`, `instance_token`, `numero_destino`
-- Aguardar `delay_ms` com `await new Promise(r => setTimeout(r, delay_ms))` (funciona dentro da mesma request)
-- Após gerar a resposta da IA, enviar a mensagem via UAZAPI diretamente
-- Retornar o resultado
-
-Isso resolve ambos os problemas: a instância interna será encontrada corretamente e o delay será executado dentro da function que está processando a request (não em fire-and-forget).
-
-### Arquivos alterados
+Arquivos a ajustar
 - `supabase/functions/whatsapp-chatbot/index.ts`
-- `supabase/functions/whatsapp-ia-responder/index.ts`
+- `supabase/functions/whatsapp-aquecimento/index.ts`
+- possivelmente `supabase/functions/whatsapp-ia-responder/index.ts` apenas se eu precisar alinhar a mesma normalização no log/salvamento
 
+Detalhe técnico
+- O problema não é mais o disparo manual.
+- O problema agora está na camada de reconhecimento do “número interno” após o webhook.
+- O padrão atual baseado em string parcial no campo `nome` é frágil para diferenças de formatação de telefone, especialmente quando o provedor devolve números sem o nono dígito.
+
+Resultado esperado após a correção
+- Essas mesmas duas instâncias passarão a se reconhecer como internas mesmo com formatação divergente.
+- A IA deverá responder no intervalo configurado.
+- A conversa deverá ficar visível no Inbox e também em `whatsapp_conversas_ia`.
