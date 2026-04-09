@@ -1294,6 +1294,104 @@ serve(async (req) => {
             }
 
             console.log(`[AQUECIMENTO] Resposta detectada de ${inboxTelefone}, interação ${warmingInteraction.id} marcada como RESPONDIDO (${tempoRespostaSeg}s)`);
+
+            // --- IA CONVERSACIONAL: Gerar resposta automática via Ollama ---
+            try {
+              // Get the receiving instance's (instanciaId) aquecimento data for phase info
+              const { data: recvAquec } = await supabase
+                .from('whatsapp_aquecimento_instancias')
+                .select('fase')
+                .eq('instancia_id', instanciaId)
+                .maybeSingle();
+
+              const fase = recvAquec?.fase || 1;
+
+              // Probabilidade de responder por fase
+              const probMap: Record<number, number> = { 1: 0.30, 2: 0.60 };
+              const probabilidade = probMap[fase] ?? 0.90;
+              const rng = Math.random();
+
+              if (rng <= probabilidade) {
+                // Get the receiving instance's connection details to send reply
+                const { data: recvInstance } = await supabase
+                  .from('user_whatsapp_instances')
+                  .select('server_url, instance_token')
+                  .eq('id', instanciaId)
+                  .single();
+
+                if (recvInstance) {
+                  // Call whatsapp-ia-responder edge function
+                  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+                  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+                  const iaPayload = {
+                    action: 'gerar-resposta',
+                    mensagem: inboxTexto || 'Olá',
+                    fase,
+                    instancia_origem_id: instanciaId, // the one that will reply
+                    instancia_destino_id: senderInstance.id, // the one that sent this message
+                  };
+
+                  // Delay aleatório de 15-90s para simular leitura humana
+                  const delay = 15000 + Math.random() * 75000;
+                  console.log(`[IA-AQUEC] Fase ${fase}, prob ${probabilidade}, rng ${rng.toFixed(2)} → RESPONDENDO em ${Math.round(delay/1000)}s`);
+
+                  // Fire and forget with delay (edge function will timeout if we await too long)
+                  setTimeout(async () => {
+                    try {
+                      const iaResp = await fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${supabaseKey}`,
+                        },
+                        body: JSON.stringify(iaPayload),
+                      });
+
+                      const iaData = await iaResp.json();
+                      console.log(`[IA-AQUEC] Resposta da IA:`, JSON.stringify(iaData).substring(0, 200));
+
+                      if (iaData.responded && iaData.resposta) {
+                        // Send the IA response from receiving instance back to sender's phone
+                        const cleanUrl = recvInstance.server_url.replace(/\/+$/, '');
+                        const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+                        let sent = false;
+
+                        for (const url of endpoints) {
+                          try {
+                            const sendRes = await fetch(url, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', 'token': recvInstance.instance_token },
+                              body: JSON.stringify({ number: inboxTelefone, text: iaData.resposta }),
+                            });
+                            if (sendRes.ok) {
+                              await sendRes.text();
+                              console.log(`[IA-AQUEC] ✅ Mensagem IA enviada para ${inboxTelefone}: "${iaData.resposta}"`);
+                              sent = true;
+                              break;
+                            }
+                            await sendRes.text();
+                          } catch (e) {
+                            console.warn(`[IA-AQUEC] Endpoint ${url} falhou:`, e);
+                          }
+                        }
+
+                        if (!sent) {
+                          console.error(`[IA-AQUEC] ❌ Falha ao enviar resposta IA para ${inboxTelefone}`);
+                        }
+                      }
+                    } catch (iaErr) {
+                      console.error('[IA-AQUEC] Erro no fluxo de resposta IA:', iaErr);
+                    }
+                  }, delay);
+                }
+              } else {
+                console.log(`[IA-AQUEC] Fase ${fase}, prob ${probabilidade}, rng ${rng.toFixed(2)} → NÃO respondendo`);
+              }
+            } catch (iaFlowErr) {
+              console.error('[IA-AQUEC] Erro ao iniciar fluxo IA:', iaFlowErr);
+            }
+
             return new Response(JSON.stringify({ success: true, aquecimento_response: true }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
