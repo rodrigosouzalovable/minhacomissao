@@ -1234,16 +1234,32 @@ serve(async (req) => {
     // --- AQUECIMENTO: Detectar respostas de aquecimento ---
     if (!isFromMe && inboxTelefone) {
       try {
-        // Check if the sender phone belongs to one of our warming instances
-        // Try matching with and without 55 prefix to handle both formats
-        const phoneSuffix = inboxTelefone.startsWith('55') ? inboxTelefone.slice(2) : inboxTelefone;
-        const { data: senderInstance } = await supabase
+        // Robust phone matching: extract last 8 digits to compare
+        // This handles all variations: with/without 55 prefix, with/without 9th digit
+        const webhookLast8 = inboxTelefone.replace(/\D/g, '').slice(-8);
+        console.log(`[AQUECIMENTO] Verificando se ${inboxTelefone} (last8: ${webhookLast8}) é instância interna...`);
+
+        // Fetch all active instances and match by extracting phone from nome
+        const { data: allInstances } = await supabase
           .from('user_whatsapp_instances')
-          .select('id')
-          .or(`nome.ilike.%${inboxTelefone}%,nome.ilike.%${phoneSuffix}%`)
-          .eq('ativo', true)
-          .limit(1)
-          .maybeSingle();
+          .select('id, nome')
+          .eq('ativo', true);
+
+        let senderInstance: { id: string } | null = null;
+        if (allInstances) {
+          for (const inst of allInstances) {
+            const phoneFromName = (inst.nome || '').match(/^(\d+)/)?.[1] || '';
+            const instLast8 = phoneFromName.slice(-8);
+            if (instLast8.length >= 8 && instLast8 === webhookLast8) {
+              senderInstance = { id: inst.id };
+              console.log(`[AQUECIMENTO] ✅ Match encontrado: ${inst.nome} (phone: ${phoneFromName}, last8: ${instLast8})`);
+              break;
+            }
+          }
+          if (!senderInstance) {
+            console.log(`[AQUECIMENTO] Nenhuma instância interna encontrou match para ${inboxTelefone}`);
+          }
+        }
 
         // Also try matching by phone extracted from nome field
         if (senderInstance && instanciaId) {
