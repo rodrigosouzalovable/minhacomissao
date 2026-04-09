@@ -290,7 +290,7 @@ async function setupWebhook(instanceId: string) {
   const token = instance.instance_token;
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
-  const payload = JSON.stringify({ url: webhookUrl, events: ["messages"], excludeMessages: ["wasSentByApi"] });
+  const payload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
 
   const attempts = [
     { url: `${base}/webhook/${token}`, headers: { "Content-Type": "application/json" } },
