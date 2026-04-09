@@ -3,6 +3,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -12,10 +18,7 @@ Deno.serve(async (req) => {
     const { server_url, instance_token } = await req.json();
 
     if (!server_url || !instance_token) {
-      return new Response(JSON.stringify({ error: 'server_url e instance_token são obrigatórios' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'server_url e instance_token são obrigatórios' }, 400);
     }
 
     const cleanUrl = server_url.replace(/\/+$/, '');
@@ -51,16 +54,15 @@ Deno.serve(async (req) => {
         console.log(`Resposta de ${endpoint}: status=${response.status}, data=${JSON.stringify(parsed)}`);
 
         if (response.ok) {
-          return new Response(JSON.stringify({ ok: true, status: response.status, data: parsed, endpoint }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          return jsonResponse({ ok: true, status: response.status, data: parsed, endpoint });
         }
 
         lastResponse = response;
         lastData = parsed;
       } catch (e) {
-        console.log(`Erro ao tentar ${endpoint}: ${e.message}`);
-        lastData = { error: e.message };
+        const message = e instanceof Error ? e.message : 'Erro desconhecido';
+        console.log(`Erro ao tentar ${endpoint}: ${message}`);
+        lastData = { error: message };
       }
     }
 
@@ -79,20 +81,15 @@ Deno.serve(async (req) => {
 
       console.log(`Resposta legada: status=${response.status}, data=${JSON.stringify(parsed)}`);
 
-      return new Response(JSON.stringify({ ok: response.ok, status: response.status, data: parsed, endpoint: legacyEndpoint }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ ok: response.ok, status: response.status, data: parsed, endpoint: legacyEndpoint });
     } catch (e) {
-      console.log(`Erro no endpoint legado: ${e.message}`);
+      const message = e instanceof Error ? e.message : 'Erro desconhecido';
+      console.log(`Erro no endpoint legado: ${message}`);
     }
 
-    return new Response(JSON.stringify({ ok: false, status: lastResponse?.status || 0, data: lastData, error: 'Nenhum endpoint respondeu com sucesso' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ ok: false, status: lastResponse?.status || 0, data: lastData, error: 'Nenhum endpoint respondeu com sucesso' });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    return jsonResponse({ error: message }, 500);
   }
 });
