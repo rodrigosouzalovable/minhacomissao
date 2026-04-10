@@ -19,7 +19,12 @@ interface PaymentReminder {
 
 export function usePaymentReminders() {
   const { user } = useAuth();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const queryClient = useQueryClient();
+
+  // ID do admin cujos lembretes também devem ser exibidos
+  const adminId = acordosCompartilhados && concedidoPor ? concedidoPor : null;
+  const userIds = adminId ? [user?.id, adminId].filter(Boolean) as string[] : user ? [user.id] : [];
 
   // Buscar IDs de lembretes já lidos
   const { data: lembretesLidos = [] } = useQuery({
