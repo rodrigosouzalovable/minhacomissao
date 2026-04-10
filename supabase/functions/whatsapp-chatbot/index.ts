@@ -1129,6 +1129,17 @@ serve(async (req) => {
         if (instanciaId) {
           const agora = new Date().toISOString();
 
+          // Suffix matching: find existing contact by last 8 digits to unify phone formats
+          const phoneSuffix = inboxTelefone.replace(/\D/g, '').slice(-8);
+          const { data: matchedContact } = await supabase
+            .from('whatsapp_contatos')
+            .select('id, telefone, nao_lido')
+            .eq('instancia_id', instanciaId)
+            .like('telefone', `%${phoneSuffix}`)
+            .maybeSingle();
+
+          // Use the contact's stored phone format if found, otherwise use webhook phone
+          const telefoneParaSalvar = matchedContact?.telefone || inboxTelefone;
 
           if (isFromMe) {
             // For fromMe: check if send-whatsapp already saved this message (dedup within 30s)
@@ -1137,19 +1148,19 @@ serve(async (req) => {
               .from('whatsapp_mensagens')
               .select('id')
               .eq('instancia_id', instanciaId)
-              .eq('telefone_remoto', inboxTelefone)
+              .like('telefone_remoto', `%${phoneSuffix}`)
               .eq('direcao', 'saida')
               .gte('timestamp_msg', thirtySecsAgo)
               .limit(1)
               .maybeSingle();
 
             if (existing) {
-              console.log(`[INBOX] fromMe duplicado (já salvo por send-whatsapp): ${inboxTelefone}`);
+              console.log(`[INBOX] fromMe duplicado (já salvo por send-whatsapp): ${telefoneParaSalvar}`);
             } else {
               // Manual send from WhatsApp app — save it
               await supabase.from('whatsapp_mensagens').insert({
                 instancia_id: instanciaId,
-                telefone_remoto: inboxTelefone,
+                telefone_remoto: telefoneParaSalvar,
                 nome_contato: inboxNomeContato,
                 conteudo: inboxConteudo,
                 direcao: 'saida',
@@ -1159,25 +1170,18 @@ serve(async (req) => {
                 media_url: finalMediaUrl,
                 whatsapp_msg_id: rawMessageId || null,
               });
-              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${inboxTelefone} tipo=${inboxTipoConteudo}`);
+              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo}`);
 
-              // Update contact for manual fromMe
-              const { data: contactFM } = await supabase
-                .from('whatsapp_contatos')
-                .select('id')
-                .eq('instancia_id', instanciaId)
-                .eq('telefone', inboxTelefone)
-                .maybeSingle();
-
-              if (contactFM) {
+              // Update or create contact for manual fromMe
+              if (matchedContact) {
                 await supabase.from('whatsapp_contatos').update({
                   ultima_mensagem: inboxConteudo.slice(0, 200),
                   ultima_mensagem_em: agora,
-                }).eq('id', contactFM.id);
+                }).eq('id', matchedContact.id);
               } else {
                 await supabase.from('whatsapp_contatos').insert({
                   instancia_id: instanciaId,
-                  telefone: inboxTelefone,
+                  telefone: telefoneParaSalvar,
                   nome: inboxNomeContato,
                   ultima_mensagem: inboxConteudo.slice(0, 200),
                   ultima_mensagem_em: agora,
@@ -1189,7 +1193,7 @@ serve(async (req) => {
             // Incoming message — always save
             await supabase.from('whatsapp_mensagens').insert({
               instancia_id: instanciaId,
-              telefone_remoto: inboxTelefone,
+              telefone_remoto: telefoneParaSalvar,
               nome_contato: inboxNomeContato,
               conteudo: inboxConteudo,
               direcao: 'entrada',
@@ -1200,24 +1204,17 @@ serve(async (req) => {
               whatsapp_msg_id: rawMessageId || null,
             });
 
-            const { data: existingContact } = await supabase
-              .from('whatsapp_contatos')
-              .select('id, nao_lido')
-              .eq('instancia_id', instanciaId)
-              .eq('telefone', inboxTelefone)
-              .maybeSingle();
-
-            if (existingContact) {
+            if (matchedContact) {
               await supabase.from('whatsapp_contatos').update({
                 nome: inboxNomeContato || undefined,
                 ultima_mensagem: inboxConteudo.slice(0, 200),
                 ultima_mensagem_em: agora,
-                nao_lido: existingContact.nao_lido + 1,
-              }).eq('id', existingContact.id);
+                nao_lido: (matchedContact.nao_lido || 0) + 1,
+              }).eq('id', matchedContact.id);
             } else {
               await supabase.from('whatsapp_contatos').insert({
                 instancia_id: instanciaId,
-                telefone: inboxTelefone,
+                telefone: telefoneParaSalvar,
                 nome: inboxNomeContato,
                 ultima_mensagem: inboxConteudo.slice(0, 200),
                 ultima_mensagem_em: agora,
@@ -1225,7 +1222,7 @@ serve(async (req) => {
               });
             }
 
-            console.log(`[INBOX] Mensagem entrada salva: ${inboxTelefone} tipo=${inboxTipoConteudo} (instancia: ${instanciaId})`);
+            console.log(`[INBOX] Mensagem entrada salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo} (instancia: ${instanciaId})`);
           }
         }
       } catch (inboxErr) {
