@@ -831,7 +831,7 @@ export default function AcordoDetalhe() {
                         ) : (
                           <span className="flex items-center gap-1">
                             <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
-                            {(isOwner || isAdmin) && (
+                            {canEdit && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -881,7 +881,7 @@ export default function AcordoDetalhe() {
                             ) : (
                               <span className="flex items-center gap-1">
                                 <span>Pago em: {formatarData(pagamento.data_paga)}</span>
-                                {(isOwner || isAdmin) && (
+                                {canEdit && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -997,7 +997,7 @@ export default function AcordoDetalhe() {
                         <MessageCircle className="h-4 w-4" />
                       </Button>
                     )}
-                    {pagamento.status === 'pendente' && (isOwner || isAdmin) && (
+                    {pagamento.status === 'pendente' && canEdit && (
                       <Button
                         size="sm"
                         onClick={() => marcarComoPago(pagamento.id)}
@@ -1005,7 +1005,7 @@ export default function AcordoDetalhe() {
                         Marcar Pago
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && (isOwner || isAdmin) && (
+                    {pagamento.status === 'pago' && canEdit && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1016,7 +1016,7 @@ export default function AcordoDetalhe() {
                         Desmarcar
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && !isOwner && !isAdmin && (
+                    {pagamento.status === 'pago' && !canEdit && (
                       <Badge variant="secondary">Pago</Badge>
                     )}
                   </div>
