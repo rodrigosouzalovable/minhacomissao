@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp } from 'lucide-react';
+import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DashboardMetrics {
@@ -50,10 +50,14 @@ interface Props {
   metrics: DashboardMetrics;
 }
 
-function getNextCronSlot(horaInicio: number, horaFim: number, diasAtivos: number[]): { time: string; isActive: boolean; isToday: boolean } {
+function getBrasiliaTime() {
   const now = new Date();
   const brOffset = -3;
-  const brNow = new Date(now.getTime() + (brOffset * 60 + now.getTimezoneOffset()) * 60000);
+  return new Date(now.getTime() + (brOffset * 60 + now.getTimezoneOffset()) * 60000);
+}
+
+function getNextCronSlot(horaInicio: number, horaFim: number, diasAtivos: number[]): { time: string; isActive: boolean; isToday: boolean; nextDate: Date | null } {
+  const brNow = getBrasiliaTime();
   const currentHour = brNow.getHours();
   const currentMin = brNow.getMinutes();
   const currentDay = brNow.getDay();
@@ -62,33 +66,66 @@ function getNextCronSlot(horaInicio: number, horaFim: number, diasAtivos: number
 
   if (isActiveDay && (currentHour < horaFim || (currentHour === horaFim && currentMin === 0))) {
     if (currentHour >= horaInicio) {
-      // Within business hours - next 30min slot
       let nextMin = currentMin < 30 ? 30 : 0;
       let nextHour = currentMin < 30 ? currentHour : currentHour + 1;
       if (nextHour > horaFim || (nextHour === horaFim && nextMin > 0)) {
-        // Past end - find next active day
         return findNextActiveDay(diasAtivos, horaInicio, brNow);
       }
-      return { time: `${String(nextHour).padStart(2, '0')}:${String(nextMin).padStart(2, '0')}`, isActive: true, isToday: true };
+      const nextDate = new Date(brNow);
+      nextDate.setHours(nextHour, nextMin, 0, 0);
+      return { time: `${String(nextHour).padStart(2, '0')}:${String(nextMin).padStart(2, '0')}`, isActive: true, isToday: true, nextDate };
     } else {
-      // Before business hours today
-      return { time: `${String(horaInicio).padStart(2, '0')}:00`, isActive: false, isToday: true };
+      const nextDate = new Date(brNow);
+      nextDate.setHours(horaInicio, 0, 0, 0);
+      return { time: `${String(horaInicio).padStart(2, '0')}:00`, isActive: false, isToday: true, nextDate };
     }
   }
 
   return findNextActiveDay(diasAtivos, horaInicio, brNow);
 }
 
-function findNextActiveDay(diasAtivos: number[], horaInicio: number, brNow: Date): { time: string; isActive: boolean; isToday: boolean } {
+function findNextActiveDay(diasAtivos: number[], horaInicio: number, brNow: Date): { time: string; isActive: boolean; isToday: boolean; nextDate: Date | null } {
   const currentDay = brNow.getDay();
   for (let i = 1; i <= 7; i++) {
     const nextDay = (currentDay + i) % 7;
     if (diasAtivos.includes(nextDay)) {
       const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-      return { time: `${dayNames[nextDay]} às ${String(horaInicio).padStart(2, '0')}:00`, isActive: false, isToday: false };
+      const nextDate = new Date(brNow);
+      nextDate.setDate(nextDate.getDate() + i);
+      nextDate.setHours(horaInicio, 0, 0, 0);
+      return { time: `${dayNames[nextDay]} às ${String(horaInicio).padStart(2, '0')}:00`, isActive: false, isToday: false, nextDate };
     }
   }
-  return { time: 'Não configurado', isActive: false, isToday: false };
+  return { time: 'Não configurado', isActive: false, isToday: false, nextDate: null };
+}
+
+function CountdownTimer({ targetDate }: { targetDate: Date | null }) {
+  const [remaining, setRemaining] = useState('');
+
+  useEffect(() => {
+    if (!targetDate) { setRemaining('--'); return; }
+    const tick = () => {
+      const now = getBrasiliaTime();
+      const diff = targetDate.getTime() - now.getTime();
+      if (diff <= 0) { setRemaining('Agora!'); return; }
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      if (mins >= 60) {
+        const hrs = Math.floor(mins / 60);
+        const m = mins % 60;
+        setRemaining(`${hrs}h ${String(m).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`);
+      } else {
+        setRemaining(`${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  return (
+    <span className="font-mono text-sm font-bold text-orange-500">{remaining}</span>
+  );
 }
 
 function tipoIcon(tipo: string, tipoInteracao?: string) {
@@ -116,24 +153,32 @@ function statusIcon(status: string) {
 export default function AquecimentoDashboard({ metrics }: Props) {
   const [activeInstances, setActiveInstances] = useState<ActiveInstance[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
-  const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean }>({ time: '', isActive: false, isToday: false });
+  const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadDashboardData();
   }, [metrics.emAquecimento]);
 
+  // Refresh nextCron every 30 seconds so countdown stays accurate across slot boundaries
+  const [horaConfig, setHoraConfig] = useState<{ inicio: number; fim: number; dias: number[] } | null>(null);
+  useEffect(() => {
+    if (!horaConfig) return;
+    const interval = setInterval(() => {
+      setNextCron(getNextCronSlot(horaConfig.inicio, horaConfig.fim, horaConfig.dias));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [horaConfig]);
+
   async function loadDashboardData() {
     setLoading(true);
 
-    // Load config, active instances, agendamentos, and recent interactions in parallel
     const [configRes, instancesRes, allInstancesRes] = await Promise.all([
       supabase.from('whatsapp_aquecimento_config' as any).select('chave, valor'),
       supabase.from('whatsapp_aquecimento_instancias' as any).select('*').eq('status', 'EM_AQUECIMENTO'),
       supabase.from('user_whatsapp_instances').select('id, nome, criado_em'),
     ]);
 
-    // Parse config
     const configs = (configRes.data as any[]) || [];
     const getConfigVal = (key: string, def: any) => {
       const found = configs.find((c: any) => c.chave === key);
@@ -142,9 +187,11 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     const horarioComercial = getConfigVal('horario_comercial', { inicio: '08:00', fim: '18:00' });
     const diasAtivos = getConfigVal('dias_ativos', [1, 2, 3, 4, 5, 6]);
 
-    // Parse hours from string format "HH:MM" or number
     const parseHour = (val: any) => typeof val === 'string' ? parseInt(val.split(':')[0], 10) : Number(val);
-    setNextCron(getNextCronSlot(parseHour(horarioComercial.inicio), parseHour(horarioComercial.fim), diasAtivos));
+    const hInicio = parseHour(horarioComercial.inicio);
+    const hFim = parseHour(horarioComercial.fim);
+    setHoraConfig({ inicio: hInicio, fim: hFim, dias: diasAtivos });
+    setNextCron(getNextCronSlot(hInicio, hFim, diasAtivos));
 
     const instanceNameMap = new Map((allInstancesRes.data || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
     const activeData = (instancesRes.data as any[]) || [];
@@ -158,7 +205,6 @@ export default function AquecimentoDashboard({ metrics }: Props) {
 
     const activeIds = activeData.map((a: any) => a.instancia_id);
 
-    // Load latest interactions and next agendamentos for active instances
     const today = new Date().toISOString().split('T')[0];
     const [interacoesRes, agendamentosRes] = await Promise.all([
       supabase
@@ -180,15 +226,20 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     const interacoes = (interacoesRes.data as any[]) || [];
     const agendamentos = (agendamentosRes.data as any[]) || [];
 
-    // Build active instance cards
-    // Load instance creation dates for grace period check
     const instanceCreatedMap = new Map((allInstancesRes.data || []).map((i: any) => [i.id, i.criado_em]));
 
-    const mapped: ActiveInstance[] = activeData.map((inst: any) => {
+    // Build list of possible targets (other active instances) for each instance
+    const mapped: ActiveInstance[] = activeData.map((inst: any, idx: number) => {
       const lastInteraction = interacoes.find((i: any) => i.instancia_origem_id === inst.instancia_id);
       const nextSchedule = agendamentos.find((a: any) => a.instancia_origem_id === inst.instancia_id);
       const criado_em = instanceCreatedMap.get(inst.instancia_id);
       const diasConectado = criado_em ? Math.floor((Date.now() - new Date(criado_em).getTime()) / 86400000) : 999;
+
+      // Estimate target: the next active instance in the list (round-robin)
+      const otherActive = activeData.filter((a: any) => a.instancia_id !== inst.instancia_id);
+      const estimatedTarget = otherActive.length > 0
+        ? instanceNameMap.get(otherActive[idx % otherActive.length]?.instancia_id) || null
+        : null;
 
       return {
         id: inst.id,
@@ -205,12 +256,12 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         proximo_agendamento: nextSchedule?.agendado_para || null,
         em_carencia: diasConectado < 2,
         dias_conectado: diasConectado,
-      };
+        estimatedTarget,
+      } as ActiveInstance & { estimatedTarget: string | null };
     });
 
     setActiveInstances(mapped);
 
-    // Build timeline (last 5 interactions of today)
     const timelineData: TimelineItem[] = interacoes.slice(0, 10).map((i: any) => ({
       id: i.id,
       tipo: i.tipo,
@@ -256,17 +307,21 @@ export default function AquecimentoDashboard({ metrics }: Props) {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                 </span>
-                <div>
+                <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-semibold text-green-600 dark:text-green-400">Sistema Ativo</span>
-                  <span className="text-muted-foreground ml-2">— próxima execução às <strong>{nextCron.time}</strong></span>
+                  <span className="text-muted-foreground">— próxima execução em</span>
+                  <CountdownTimer targetDate={nextCron.nextDate} />
+                  <span className="text-muted-foreground text-sm">(às {nextCron.time})</span>
                 </div>
               </>
             ) : (
               <>
                 <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                <div>
+                <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-semibold text-yellow-600 dark:text-yellow-400">Fora do horário comercial</span>
-                  <span className="text-muted-foreground ml-2">— próxima execução: <strong>{nextCron.time}</strong></span>
+                  <span className="text-muted-foreground">— próxima execução em</span>
+                  <CountdownTimer targetDate={nextCron.nextDate} />
+                  <span className="text-muted-foreground text-sm">({nextCron.time})</span>
                 </div>
               </>
             )}
@@ -288,8 +343,10 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {activeInstances.map(inst => {
             const progressPct = inst.limite_diario > 0 ? Math.round((inst.interacoes_hoje / inst.limite_diario) * 100) : 0;
+            const limitReached = inst.interacoes_hoje >= inst.limite_diario;
+            const estimatedTarget = (inst as any).estimatedTarget as string | null;
             return (
-              <Card key={inst.id}>
+              <Card key={inst.id} className={limitReached ? 'border-green-500/30' : ''}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-semibold">{inst.instance_name}</CardTitle>
@@ -332,27 +389,48 @@ export default function AquecimentoDashboard({ metrics }: Props) {
                       </div>
                     )}
 
-                    {/* Next estimated message */}
-                    {inst.proximo_agendamento ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-                        <span>
-                          Próxima msg: <strong>{format(new Date(inst.proximo_agendamento), 'HH:mm')}</strong>
-                        </span>
-                      </div>
-                    ) : nextCron.isActive && inst.interacoes_hoje < inst.limite_diario ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-                        <span>
-                          Próxima msg estimada: <strong>~{nextCron.time}</strong>
-                        </span>
-                      </div>
-                    ) : inst.interacoes_hoje >= inst.limite_diario ? (
+                    {/* Countdown timer with target */}
+                    {limitReached ? (
                       <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                         <CheckCircle className="h-3.5 w-3.5 shrink-0" />
                         <span className="text-xs font-medium">Limite diário atingido ✓</span>
                       </div>
-                    ) : null}
+                    ) : inst.proximo_agendamento ? (
+                      <div className="flex items-center gap-2 p-2 rounded-md bg-orange-500/5 border border-orange-500/20">
+                        <Timer className="h-4 w-4 text-orange-500 shrink-0" />
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Próxima msg em</span>
+                            <CountdownTimer targetDate={new Date(inst.proximo_agendamento)} />
+                          </div>
+                          {estimatedTarget && (
+                            <span className="text-[11px] text-muted-foreground">
+                              → para <strong>{estimatedTarget}</strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : nextCron.isActive ? (
+                      <div className="flex items-center gap-2 p-2 rounded-md bg-orange-500/5 border border-orange-500/20">
+                        <Timer className="h-4 w-4 text-orange-500 shrink-0" />
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Próxima msg em</span>
+                            <CountdownTimer targetDate={nextCron.nextDate} />
+                          </div>
+                          {estimatedTarget && (
+                            <span className="text-[11px] text-muted-foreground">
+                              → para <strong>{estimatedTarget}</strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        <span className="text-xs">Fora do horário — retoma {nextCron.time}</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
