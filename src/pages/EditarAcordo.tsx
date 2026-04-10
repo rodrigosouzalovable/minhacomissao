@@ -56,6 +56,7 @@ export default function EditarAcordo() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin, loading: loadingRole } = useUserRole();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
