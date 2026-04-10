@@ -1907,6 +1907,10 @@ export default function Acionamento() {
                     IA
                   </Button>
                 )}
+                <Badge variant={activeInstances.length > 0 ? 'secondary' : 'destructive'} className="ml-auto flex items-center gap-1">
+                  <Smartphone className="h-3 w-3" />
+                  {activeInstances.length} robô{activeInstances.length !== 1 ? 's' : ''} ativo{activeInstances.length !== 1 ? 's' : ''}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
