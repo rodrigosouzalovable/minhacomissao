@@ -1,73 +1,37 @@
 
 
-## Conversa Natural e Fluida entre Instâncias
+## Acordos Compartilhados — Plano
 
-### Problema Atual
-O fluxo é unidirecional por ciclo: A envia uma mensagem do pool de diálogos, B responde UMA vez via IA, e a conversa morre. No próximo ciclo (15 min depois), outro par é escolhido. Resultado: conversas robóticas de 1 mensagem cada.
-
-### Solução: Conversa em Cadeia (Ping-Pong Contínuo)
-
-Quando o `whatsapp-ia-responder` envia uma resposta de B para A, ele automaticamente dispara uma nova chamada para que A responda de volta a B (com delay humanizado). Isso cria uma cadeia:
-
-```text
-A envia msg inicial (do pool de diálogos)
-  └─ B responde via IA (delay 15-60s)
-      └─ A responde via IA (delay 20-90s)  ← NOVO
-          └─ B responde via IA (delay 15-60s)  ← NOVO
-              └─ ... até atingir 10-15 trocas
-                  └─ Quem atingir o limite encerra naturalmente
-```
+### O que será feito
+Adicionar um toggle "Acordos Compartilhados" nas permissões do usuário. Quando ativado, o funcionário poderá ver todos os acordos do administrador que concedeu o acesso (usando `concedido_por`), além dos seus próprios. O funcionário também terá acesso a todas as instâncias WhatsApp do admin (reaproveitando a lógica de `concedido_por` já existente).
 
 ### Mudanças
 
-**1. whatsapp-ia-responder/index.ts — Cadeia de respostas**
-- Aumentar `max_trocas` de `5-7` para `10-15` (linha 312: `10 + Math.floor(Math.random() * 6)`)
-- Após enviar a resposta, o responder busca os dados da instância que RECEBEU a mensagem e dispara uma nova chamada fire-and-forget para que ela responda de volta (invertendo origem/destino)
-- Delay humanizado variável: 20-120s entre respostas, com variação para parecer natural
-- Passar `server_url` e `instance_token` da instância que vai responder na próxima rodada
-- Aumentar histórico de contexto de 6 para 10 mensagens para a IA manter coerência
+**1. Migração — Adicionar coluna `acordos_compartilhados`**
+- Adicionar `acordos_compartilhados boolean default false` na tabela `user_permissions`
+- Adicionar RLS policy para que usuários com `acordos_compartilhados = true` possam ver os acordos do admin que concedeu acesso (`concedido_por`)
 
-**2. whatsapp-ia-responder/index.ts — Prompt mais conversacional**
-- Melhorar o system prompt para instruir a IA a fazer perguntas, mudar de assunto, reagir com curiosidade
-- Variar o tamanho das respostas (às vezes 1 palavra "kkk", às vezes 2 frases)
-- Adicionar instrução para ocasionalmente enviar mensagens curtas tipo "e aí?", "conta mais", "sério?"
+**2. EditPermissionsDialog.tsx — Novo toggle**
+- Adicionar estado `acordosCompartilhados` (boolean)
+- Adicionar toggle abaixo de "Inbox Compartilhado" com label "Acordos Compartilhados" e descrição "Permite ver todos os acordos e instâncias WhatsApp do seu login"
+- Incluir no payload de save
+- Quando `acordosCompartilhados` é ativado, também setar `concedido_por` (já é feito quando inbox é ativo — ajustar para setar se qualquer um dos dois estiver ativo)
 
-**3. whatsapp-ia-responder/index.ts — Encerramento natural**
-- Nas últimas 2-3 trocas antes do limite, instruir a IA a ir "finalizando" naturalmente (ex: "bom, vou nessa")
-- Não encerrar abruptamente com frase fixa — deixar a IA gerar o encerramento baseado no contexto
+**3. useUserPermissions.tsx — Expor novo campo**
+- Retornar `acordosCompartilhados` do hook
 
-**4. Áudio (fase futura)**
-- Áudio entre instâncias requer gravação/síntese de voz (TTS), que não está implementado no UAZAPI nem no sistema atual
-- Por enquanto, as conversas serão 100% texto, que já é o formato mais comum no WhatsApp
-- Podemos adicionar áudio depois com um serviço de TTS se necessário
+**4. Acordos.tsx — Query compartilhada**
+- Quando `acordosCompartilhados` estiver ativo, buscar `concedido_por` das permissões e fazer query adicional dos acordos do admin
+- Combinar acordos próprios + acordos do admin, marcando visualmente os do admin
 
-### Fluxo Técnico Detalhado
+**5. WhatsAppInbox.tsx / AppLayout.tsx — Acesso às instâncias**
+- Ajustar a lógica de `fetchInstancias` para também considerar `acordos_compartilhados` (não só `inbox_compartilhado`) ao mostrar instâncias do admin
 
-```text
-whatsapp-aquecimento (cron 15min)
-  │ Envia msg do pool: A → B
-  │ Chama whatsapp-ia-responder (B responde a A)
-  │
-  └─ whatsapp-ia-responder:
-      1. Delay 15-60s
-      2. Gera resposta via Gemini Flash Lite
-      3. Envia resposta B → A via UAZAPI
-      4. Salva no histórico
-      5. SE total_trocas < max_trocas:
-         └─ Busca dados da instância A no banco
-         └─ Delay 20-120s (fire-and-forget)
-         └─ Chama whatsapp-ia-responder novamente
-            (agora A responde a B)
-            └─ Repete do passo 1 (agora invertido)
-      6. SE total_trocas >= max_trocas - 2:
-         └─ Prompt com instrução de encerramento gradual
-      7. SE total_trocas >= max_trocas:
-         └─ Finaliza conversa
-```
-
-### Arquivos Afetados
-- `supabase/functions/whatsapp-ia-responder/index.ts` — toda a lógica de cadeia, prompt melhorado, max_trocas 10-15
-
-### Resultado Esperado
-Cada conversa terá entre 10 e 15 trocas totais (cada lado manda 5-8 mensagens), com delays variáveis de 15s a 2min entre cada mensagem, durando entre 5 e 20 minutos no total. As conversas serão naturais, com mudanças de assunto, perguntas, reações curtas e encerramentos orgânicos.
+### Arquivos afetados
+- Migração SQL (nova coluna + RLS policy)
+- `src/components/EditPermissionsDialog.tsx`
+- `src/hooks/useUserPermissions.tsx`
+- `src/pages/Acordos.tsx`
+- `src/pages/WhatsAppInbox.tsx` (opcional, se inbox_compartilhado já cobre)
+- `src/components/layout/AppLayout.tsx` (badge unread)
 
