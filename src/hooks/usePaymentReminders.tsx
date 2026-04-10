@@ -52,9 +52,9 @@ export function usePaymentReminders() {
 
   // Buscar pagamentos pendentes (hoje e 3 dias)
   const { data: pagamentos = [], isLoading: isLoadingPagamentos } = useQuery({
-    queryKey: ['payment-reminders', user?.id],
+    queryKey: ['payment-reminders', user?.id, adminId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
@@ -70,7 +70,7 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .eq('acordos.user_id', user.id)
+        .in('acordos.user_id', userIds)
         .or(`data_prevista.eq.${hoje},data_prevista.eq.${tresDias}`);
 
       if (error) {
@@ -96,9 +96,9 @@ export function usePaymentReminders() {
 
   // Buscar parcelas vencidas (data_prevista < hoje)
   const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
-    queryKey: ['overdue-reminders', user?.id],
+    queryKey: ['overdue-reminders', user?.id, adminId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
 
@@ -113,7 +113,7 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .eq('acordos.user_id', user.id)
+        .in('acordos.user_id', userIds)
         .lt('data_prevista', hoje);
 
       if (error) {
