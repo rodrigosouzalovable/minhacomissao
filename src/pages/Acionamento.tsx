@@ -977,6 +977,7 @@ export default function Acionamento() {
           const info = infoData?.data || infoData;
           const infoPhoto = info?.profilePictureUrl || info?.imgUrl || info?.picture || info?.photo || info?.profilePicUrl || '';
           if (infoPhoto) setCurrentProfilePhotoUrl(infoPhoto);
+          setProfileName(prev => prev || info?.pushName || info?.name || info?.profileName || '');
         }
       } catch (e) {
         console.log('[WhatsApp Profile] /instance/info error:', e);
