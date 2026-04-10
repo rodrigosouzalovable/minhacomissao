@@ -110,6 +110,9 @@ serve(async (req) => {
 
         const telefoneParaSalvar = existingContact?.telefone || telefoneCompleto;
 
+        // Extract WhatsApp message ID from UAZAPI response
+        const whatsappMsgId = data?.key?.id || data?.id || data?.messageId || data?.message?.id || null;
+
         await supabase.from('whatsapp_mensagens').insert({
           instancia_id: resolvedId,
           telefone_remoto: telefoneParaSalvar,
@@ -117,6 +120,7 @@ serve(async (req) => {
           direcao: 'saida',
           timestamp_msg: agora,
           lida: true,
+          whatsapp_msg_id: whatsappMsgId,
         });
 
         if (existingContact) {

@@ -529,10 +529,23 @@ export default function WhatsAppInbox() {
   const handleApagarParaTodos = async (msgId: string) => {
     const msg = mensagens.find(m => m.id === msgId);
     if (!msg) return;
-    // Remove from local DB
-    await supabase.from('whatsapp_mensagens').delete().eq('id', msgId);
-    setMensagens(prev => prev.filter(m => m.id !== msgId));
-    toast({ title: 'Mensagem apagada para todos' });
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-whatsapp-message', {
+        body: { mensagem_id: msgId },
+      });
+      if (error) throw error;
+      setMensagens(prev => prev.filter(m => m.id !== msgId));
+      if (data?.deleted_on_whatsapp) {
+        toast({ title: 'Mensagem apagada para todos' });
+      } else if (!data?.had_whatsapp_id) {
+        toast({ title: 'Mensagem removida', description: 'Não foi possível apagar no WhatsApp (ID da mensagem não disponível)' });
+      } else {
+        toast({ title: 'Mensagem removida do sistema', description: 'Não foi possível apagar no WhatsApp' });
+      }
+    } catch (err) {
+      console.error('Erro ao apagar mensagem:', err);
+      toast({ title: 'Erro ao apagar mensagem', variant: 'destructive' });
+    }
   };
 
   const handleEditarMensagem = (msgId: string, conteudoAtual: string) => {
