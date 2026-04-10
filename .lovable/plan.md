@@ -1,36 +1,27 @@
 
 
-## Problema
-Mensagens enviadas pelo Acionamento (e outras páginas como Retornos, AcordoDetalhe) não aparecem no Inbox porque o `instancia_id` não é enviado para a Edge Function `send-whatsapp`. Sem esse ID, a função não consegue salvar a mensagem na tabela `whatsapp_mensagens`.
+## Lembretes compartilhados para usuários com "Acordos Compartilhados"
 
-### Páginas afetadas
-- **Acionamento** — passa `server_url` e `instance_token` mas **não** passa `instancia_id`
-- **Retornos** — não passa nenhuma credencial nem `instancia_id`
-- **AcordoDetalhe** — não passa credenciais nem `instancia_id`
-- **Acordos** — passa credenciais mas **não** `instancia_id`
-- **useAutoSend** — passa credenciais mas **não** `instancia_id`
-- **PaymentReminders** — precisa verificar
+### Problema
+Quando um funcionário tem "Acordos Compartilhados" ativado, ele vê os acordos do admin, mas os **lembretes de pagamento** (sino) só mostram os lembretes dos acordos próprios. O funcionário precisa ver também os lembretes do admin.
 
-### Correção
+### Solução
+Modificar o hook `usePaymentReminders` para, quando o usuário tiver `acordos_compartilhados = true`, buscar também os lembretes dos acordos do admin (`concedido_por`).
 
-1. **Acionamento (`src/pages/Acionamento.tsx`)**:
-   - Alterar `getFirstActiveConfig` para incluir o `id` da instância
-   - Passar `instancia_id` no body de todas as chamadas `send-whatsapp`
+### Alterações
 
-2. **Acordos (`src/pages/Acordos.tsx`)**:
-   - Incluir `instancia_id` na chamada (já tem a instância com `id` disponível)
+**`src/hooks/usePaymentReminders.tsx`**:
+1. Importar `supabase` para buscar permissões do usuário
+2. Adicionar query para buscar `acordos_compartilhados` e `concedido_por` do `user_permissions`
+3. Nas 3 queries de pagamentos (hoje/3dias, vencidos, retornos):
+   - Remover o filtro `.eq('acordos.user_id', user.id)` 
+   - Substituir por filtro `.in('acordos.user_id', [user.id, adminId])` quando houver compartilhamento
+   - Para retornos: `.in('user_id', [user.id, adminId])`
+4. Ajustar as query keys para incluir o `adminId` (cache correto)
 
-3. **Retornos (`src/pages/Retornos.tsx`)**:
-   - Buscar a instância ativa do usuário e passar `instancia_id` + credenciais
-
-4. **AcordoDetalhe (`src/pages/AcordoDetalhe.tsx`)**:
-   - Buscar a instância ativa do usuário e passar `instancia_id` + credenciais
-
-5. **useAutoSend (`src/hooks/useAutoSend.tsx`)**:
-   - Incluir `instancia_id` na chamada (já tem referência à instância)
-
-6. **PaymentReminders** — verificar e corrigir se necessário
+**`src/components/PaymentReminders.tsx`**:
+1. Ao abrir o dialog de envio em lote, buscar instâncias do admin também (quando compartilhado), para que as instâncias do admin fiquem disponíveis para envio
 
 ### Resultado
-Toda mensagem enviada por qualquer parte do sistema será salva no inbox e aparecerá na conversa, mesmo que o cliente não responda.
+Funcionária com "Acordos Compartilhados" verá todos os lembretes do admin no sino, podendo expandir e visualizar exatamente como o admin vê.
 
