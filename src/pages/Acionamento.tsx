@@ -545,18 +545,42 @@ export default function Acionamento() {
       const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
       const parsed: ClienteData[] = [];
+
+      // Detect layout: if first data row has only 2 columns or header matches Nome/Telefone
+      const headerRow = rows[0] ?? [];
+      const firstDataRow = rows[1] ?? [];
+      const isSimpleLayout = (
+        (headerRow.length === 2) ||
+        (firstDataRow.length >= 2 && firstDataRow.length < 5) ||
+        (String(headerRow[0] ?? '').toLowerCase().includes('nome') && String(headerRow[1] ?? '').toLowerCase().includes('tel'))
+      );
+
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (!row || row.length < 5) continue;
-        const telefone = String(row[2] ?? '').replace(/\D/g, '');
-        if (!telefone) continue;
-        parsed.push({
-          cpf: String(row[0] ?? ''),
-          nome: String(row[1] ?? ''),
-          telefone,
-          atraso: String(row[3] ?? ''),
-          saldo: Number(row[4]) || 0,
-        });
+        if (!row || row.length < 2) continue;
+
+        if (isSimpleLayout) {
+          const telefone = String(row[1] ?? '').replace(/\D/g, '');
+          if (!telefone) continue;
+          parsed.push({
+            cpf: '',
+            nome: String(row[0] ?? ''),
+            telefone,
+            atraso: '',
+            saldo: 0,
+          });
+        } else {
+          if (row.length < 5) continue;
+          const telefone = String(row[2] ?? '').replace(/\D/g, '');
+          if (!telefone) continue;
+          parsed.push({
+            cpf: String(row[0] ?? ''),
+            nome: String(row[1] ?? ''),
+            telefone,
+            atraso: String(row[3] ?? ''),
+            saldo: Number(row[4]) || 0,
+          });
+        }
       }
 
       setClientes(parsed);
