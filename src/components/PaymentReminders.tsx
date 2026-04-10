@@ -4,6 +4,7 @@ import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCi
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useWhatsAppSending } from '@/contexts/WhatsAppSendingContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +55,7 @@ interface LembreteTemplate {
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const { user } = useAuth();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const { isSending, currentSendingId, statusMap, envioProgresso, startSending, cancelSending, loadSavedProgress, markAsEnviado, sendSingleMessage } = useWhatsAppSending();
   const [activeTab, setActiveTab] = useState('pendentes');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -95,12 +97,14 @@ export function PaymentReminders() {
   // Fetch instances, templates, operator name when dialog opens
   useEffect(() => {
     if (!dialogOpen || !user) return;
+    const adminId = acordosCompartilhados && concedidoPor ? concedidoPor : null;
+    const fetchUserIds = adminId ? [user.id, adminId] : [user.id];
     (async () => {
       const [instRes, tplRes, profileRes] = await Promise.all([
         supabase
           .from('user_whatsapp_instances')
           .select('id, nome, server_url, instance_token, ativo')
-          .eq('user_id', user.id)
+          .in('user_id', fetchUserIds)
           .eq('ativo', true),
         supabase
           .from('lembrete_mensagens_templates')

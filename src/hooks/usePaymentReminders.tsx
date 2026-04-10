@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { format, addDays } from 'date-fns';
 
 interface PaymentReminder {
@@ -18,7 +19,12 @@ interface PaymentReminder {
 
 export function usePaymentReminders() {
   const { user } = useAuth();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const queryClient = useQueryClient();
+
+  // ID do admin cujos lembretes também devem ser exibidos
+  const adminId = acordosCompartilhados && concedidoPor ? concedidoPor : null;
+  const userIds = adminId ? [user?.id, adminId].filter(Boolean) as string[] : user ? [user.id] : [];
 
   // Buscar IDs de lembretes já lidos
   const { data: lembretesLidos = [] } = useQuery({
@@ -46,9 +52,9 @@ export function usePaymentReminders() {
 
   // Buscar pagamentos pendentes (hoje e 3 dias)
   const { data: pagamentos = [], isLoading: isLoadingPagamentos } = useQuery({
-    queryKey: ['payment-reminders', user?.id],
+    queryKey: ['payment-reminders', user?.id, adminId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
@@ -64,7 +70,7 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .eq('acordos.user_id', user.id)
+        .in('acordos.user_id', userIds)
         .or(`data_prevista.eq.${hoje},data_prevista.eq.${tresDias}`);
 
       if (error) {
@@ -90,9 +96,9 @@ export function usePaymentReminders() {
 
   // Buscar parcelas vencidas (data_prevista < hoje)
   const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
-    queryKey: ['overdue-reminders', user?.id],
+    queryKey: ['overdue-reminders', user?.id, adminId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
 
@@ -107,7 +113,7 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .eq('acordos.user_id', user.id)
+        .in('acordos.user_id', userIds)
         .lt('data_prevista', hoje);
 
       if (error) {
@@ -133,9 +139,9 @@ export function usePaymentReminders() {
 
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
-    queryKey: ['retorno-reminders', user?.id],
+    queryKey: ['retorno-reminders', user?.id, adminId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
@@ -143,7 +149,7 @@ export function usePaymentReminders() {
       const { data, error } = await supabase
         .from('retornos')
         .select('*')
-        .eq('user_id', user.id)
+        .in('user_id', userIds)
         .eq('status', 'pendente')
         .or(`data_retorno.eq.${hoje},data_retorno.eq.${tresDias}`);
 
@@ -192,9 +198,9 @@ export function usePaymentReminders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['overdue-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
     },
     onError: (error) => {
       console.error('Erro ao marcar lembrete como visto:', error);
@@ -216,9 +222,9 @@ export function usePaymentReminders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['overdue-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
     },
     onError: (error) => {
       console.error('Erro ao desmarcar lembrete como visto:', error);
