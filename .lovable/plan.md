@@ -1,30 +1,31 @@
 
 
-## Integrar contadores de tempo e destino na tabela "Em Aquecimento"
+## Liberar edição de acordos para Anna Flavia (usuários com Acordos Compartilhados)
 
 ### Problema
-O componente `AquecimentoDashboard` com os contadores de tempo (CountdownTimer) e estimativa de destino existe no código (`src/components/aquecimento/AquecimentoDashboard.tsx`), mas **nunca é importado** na página `Aquecimento.tsx`. A página renderiza sua própria tabela simples sem esses indicadores.
+Atualmente, apenas o **dono do acordo** (`isOwner`) e **administradores** (`isAdmin`) podem editar acordos — marcar como pago, editar datas, enviar boleto, etc. Usuários com a permissão "Acordos Compartilhados" (como Anna Flavia) conseguem **ver** os acordos, mas ficam em modo "Somente Leitura".
 
 ### Solução
-Em vez de substituir o layout inteiro (que o usuário já conhece), vou **adicionar os contadores diretamente na tabela existente** "Em Aquecimento" da página `Aquecimento.tsx`:
+Modificar a página `AcordoDetalhe.tsx` para tratar usuários com `acordos_compartilhados = true` como tendo permissão de edição nos acordos compartilhados.
 
-### Arquivo: `src/pages/Aquecimento.tsx`
+### Arquivo: `src/pages/AcordoDetalhe.tsx`
 
-1. **Importar/copiar as funções auxiliares** (`getBrasiliaTime`, `getNextCronSlot`, `findNextActiveDay`, `CountdownTimer`) do `AquecimentoDashboard.tsx`
+1. **Importar `useUserPermissions`** e buscar `acordosCompartilhados` e `concedidoPor`
 
-2. **Buscar agendamentos e config** no `loadAll()`:
-   - Carregar `whatsapp_aquecimento_config` (horário comercial, dias ativos)
-   - Carregar `whatsapp_aquecimento_agendamentos` com status `AGENDADO`
-   - Calcular o próximo slot do cron
+2. **Criar variável `canEdit`** que será `true` quando:
+   - O usuário é o dono (`isOwner`), OU
+   - O usuário é admin (`isAdmin`), OU
+   - O usuário tem `acordosCompartilhados === true` E o acordo pertence ao admin que concedeu a permissão (`acordo.user_id === concedidoPor`)
 
-3. **Adicionar banner de status** (Sistema Ativo / Fora do horário) com countdown global, logo acima da tabela "Em Aquecimento"
+3. **Substituir todas as verificações `(isOwner || isAdmin)`** por `canEdit` (~10 ocorrências):
+   - Botões de editar acordo
+   - Marcar como pago / desmarcar
+   - Editar data de vencimento / pagamento
+   - Marcar boleto como enviado
+   - Quebrar acordo / excluir
 
-4. **Adicionar coluna "Próxima Msg"** na tabela "Em Aquecimento" com:
-   - CountdownTimer mostrando tempo restante
-   - Nome da instância destino estimada (round-robin)
-   - "Limite atingido ✓" quando `interacoes_hoje >= limite_diario`
-   - "Fora do horário" quando aplicável
+4. **Atualizar o badge "Somente Leitura"** para aparecer apenas quando `!canEdit`
 
 ### Resultado
-O usuário verá na mesma tela que já conhece: a tabela com uma coluna extra mostrando quando será a próxima mensagem e para quem, com contador regressivo em tempo real.
+Anna Flavia (e qualquer funcionário com "Acordos Compartilhados" ativo) poderá editar, marcar como pago, enviar boleto — exatamente como o administrador que concedeu a permissão.
 
