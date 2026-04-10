@@ -2418,7 +2418,18 @@ export default function Acionamento() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7"
-                                    onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
+                                    onClick={() => {
+                                      const cached = inst as any;
+                                      setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token, whatsapp_profile_name: cached.whatsapp_profile_name, whatsapp_profile_photo_url: cached.whatsapp_profile_photo_url, whatsapp_profile_description: cached.whatsapp_profile_description, whatsapp_profile_address: cached.whatsapp_profile_address, whatsapp_profile_email: cached.whatsapp_profile_email });
+                                      // Rehydrate profile fields from cache
+                                      setProfileName(cached.whatsapp_profile_name || '');
+                                      setCurrentProfilePhotoUrl(cached.whatsapp_profile_photo_url || '');
+                                      setProfilePhotoFile(null);
+                                      setProfilePhotoPreview('');
+                                      setProfileDescription(cached.whatsapp_profile_description || '');
+                                      setProfileAddress(cached.whatsapp_profile_address || '');
+                                      setProfileEmail(cached.whatsapp_profile_email || '');
+                                    }}
                                     title="Editar"
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
