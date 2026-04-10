@@ -619,7 +619,7 @@ export default function AcordoDetalhe() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            {!isOwner && !isAdmin && (
+            {!canEdit && (
               <Badge variant="outline" className="text-sm">
                 Somente Leitura
               </Badge>
