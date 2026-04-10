@@ -198,9 +198,9 @@ export function usePaymentReminders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['overdue-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
     },
     onError: (error) => {
       console.error('Erro ao marcar lembrete como visto:', error);
@@ -222,9 +222,9 @@ export function usePaymentReminders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['payment-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['retorno-reminders', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['overdue-reminders', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
+      queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
     },
     onError: (error) => {
       console.error('Erro ao desmarcar lembrete como visto:', error);
