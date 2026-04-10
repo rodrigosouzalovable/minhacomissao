@@ -57,6 +57,78 @@ const PHASE_LABELS: Record<number, string> = {
 
 const PHASE_DAYS: Record<number, number> = { 1: 7, 2: 14, 3: 21, 4: 28, 5: 28 };
 
+// === Helper functions for countdown ===
+function getBrasiliaTime(): Date {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc - 3 * 3600000);
+}
+
+function getNextCronSlot(horaInicio: number, horaFim: number, diasAtivos: number[]): Date | null {
+  const brasilia = getBrasiliaTime();
+  const h = brasilia.getHours();
+  const m = brasilia.getMinutes();
+  const dow = brasilia.getDay(); // 0=Sun
+
+  // Check if today is active
+  if (diasAtivos.includes(dow) && (h < horaFim || (h === horaFim && m === 0))) {
+    // Still within today's window
+    let nextH = h;
+    let nextM = m < 30 ? 30 : 0;
+    if (m >= 30) nextH++;
+
+    if (nextH < horaInicio) {
+      nextH = horaInicio;
+      nextM = 0;
+    }
+    if (nextH < horaFim || (nextH === horaFim && nextM === 0)) {
+      const target = new Date(brasilia);
+      target.setHours(nextH, nextM, 0, 0);
+      // Convert back to local time
+      const utcTarget = target.getTime() + 3 * 3600000;
+      return new Date(utcTarget - new Date().getTimezoneOffset() * 60000);
+    }
+  }
+
+  // Find next active day
+  for (let d = 1; d <= 7; d++) {
+    const nextDow = (dow + d) % 7;
+    if (diasAtivos.includes(nextDow)) {
+      const target = new Date(brasilia);
+      target.setDate(target.getDate() + d);
+      target.setHours(horaInicio, 0, 0, 0);
+      const utcTarget = target.getTime() + 3 * 3600000;
+      return new Date(utcTarget - new Date().getTimezoneOffset() * 60000);
+    }
+  }
+  return null;
+}
+
+function CountdownTimer({ targetDate }: { targetDate: Date | null }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    if (!targetDate) return;
+    const tick = () => {
+      const diff = targetDate.getTime() - Date.now();
+      if (diff <= 0) {
+        setTimeLeft('Agora!');
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  if (!targetDate) return <span className="text-xs text-muted-foreground">—</span>;
+  return <span className="text-xs font-mono font-semibold text-orange-400">{timeLeft}</span>;
+}
+
 export default function Aquecimento() {
   const [instancias, setInstancias] = useState<AquecimentoInstancia[]>([]);
   const [allInstances, setAllInstances] = useState<any[]>([]);
