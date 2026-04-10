@@ -24,6 +24,8 @@ export function useUserPermissions() {
     credores: permissions?.credores ?? null,
     visivelRanking: permissions?.visivel_ranking ?? true,
     inboxCompartilhado: permissions?.inbox_compartilhado ?? false,
+    acordosCompartilhados: permissions?.acordos_compartilhados ?? false,
+    concedidoPor: permissions?.concedido_por ?? null,
     isLoading,
   };
 }
