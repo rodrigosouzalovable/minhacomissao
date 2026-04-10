@@ -72,6 +72,53 @@ const MEDIA_HKDF_INFO: Record<string, string> = {
   'documento': 'WhatsApp Document Keys',
 };
 
+// Extract text from all message types including button/list responses
+function extractTextFromPayload(payload: any): string {
+  // Standard text fields
+  const standardText = (
+    payload?.message?.text ||
+    payload?.body ||
+    payload?.text ||
+    payload?.message?.body ||
+    payload?.message?.conversation ||
+    payload?.message?.extendedTextMessage?.text ||
+    payload?.message?.content?.text ||
+    ''
+  ).toString().trim();
+  if (standardText) return standardText;
+
+  // Button response (when client clicks an interactive button)
+  const buttonsResponse = payload?.message?.buttonsResponseMessage;
+  if (buttonsResponse) {
+    return (buttonsResponse.selectedDisplayText || buttonsResponse.selectedButtonId || '').trim();
+  }
+
+  // List response (when client selects from a list)
+  const listResponse = payload?.message?.listResponseMessage;
+  if (listResponse) {
+    return (listResponse.title || listResponse.description || listResponse.singleSelectReply?.selectedRowId || '').trim();
+  }
+
+  // Template button reply
+  const templateReply = payload?.message?.templateButtonReplyMessage;
+  if (templateReply) {
+    return (templateReply.selectedDisplayText || templateReply.selectedId || '').trim();
+  }
+
+  // Interactive response (newer WhatsApp format)
+  const interactiveResponse = payload?.message?.interactiveResponseMessage;
+  if (interactiveResponse) {
+    try {
+      const body = JSON.parse(interactiveResponse.nativeFlowResponseMessage?.paramsJson || '{}');
+      return (body?.id || interactiveResponse.body?.text || '').trim();
+    } catch {
+      return (interactiveResponse.body?.text || '').trim();
+    }
+  }
+
+  return '';
+}
+
 function extractMediaMetadata(payload: any) {
   const content = payload?.message?.content || {};
   const imageMsg = payload?.message?.imageMessage || {};
