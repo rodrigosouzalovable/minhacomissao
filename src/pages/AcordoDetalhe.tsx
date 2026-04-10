@@ -461,11 +461,25 @@ export default function AcordoDetalhe() {
       
       const mensagem = `Olá ${primeiroNome}, meu nome é Rodrigo e sou do departamento de acordos das Lojas Novo Mundo. Estou entrando em contato para informar que a ${numeroParcela} parcela no valor de ${valorFormatado} vence no dia ${dataVencimento}. Você já possui o boleto ou gostaria que enviássemos novamente?`;
 
+      // Fetch active instance for credentials
+      const { data: instData } = await supabase
+        .from('user_whatsapp_instances')
+        .select('id, server_url, instance_token')
+        .eq('user_id', user!.id)
+        .eq('ativo', true)
+        .eq('apenas_lembretes', false)
+        .limit(1)
+        .maybeSingle();
+
+      const sendBody: any = { telefone: acordo.cliente_telefone, mensagem };
+      if (instData) {
+        sendBody.uazapi_server_url = instData.server_url;
+        sendBody.uazapi_instance_token = instData.instance_token;
+        sendBody.instancia_id = instData.id;
+      }
+
       const { error } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          telefone: acordo.cliente_telefone,
-          mensagem
-        }
+        body: sendBody,
       });
 
       if (error) throw error;

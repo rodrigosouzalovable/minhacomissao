@@ -674,7 +674,7 @@ export default function Acionamento() {
 
   const getFirstActiveConfig = (): UazapiInstance | null => {
     if (activeInstances.length > 0) {
-      return { server_url: activeInstances[0].server_url, instance_token: activeInstances[0].instance_token, nome: activeInstances[0].nome };
+      return { id: activeInstances[0].id, server_url: activeInstances[0].server_url, instance_token: activeInstances[0].instance_token, nome: activeInstances[0].nome };
     }
     return null;
   };
@@ -700,6 +700,7 @@ export default function Acionamento() {
       if (config) {
         body.uazapi_server_url = config.server_url;
         body.uazapi_instance_token = config.instance_token;
+        if (config.id) body.instancia_id = config.id;
       }
       const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
 
@@ -775,6 +776,7 @@ export default function Acionamento() {
 
     // Build configs array from active instances
     const configs: UazapiInstance[] = activeInstances.map(i => ({
+      id: i.id,
       server_url: i.server_url,
       instance_token: i.instance_token,
       nome: i.nome,
@@ -1678,6 +1680,7 @@ export default function Acionamento() {
       if (config) {
         body.uazapi_server_url = config.server_url;
         body.uazapi_instance_token = config.instance_token;
+        if (config.id) body.instancia_id = config.id;
       }
       const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
       if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro ao enviar');
