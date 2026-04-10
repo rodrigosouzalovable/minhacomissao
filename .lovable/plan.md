@@ -1,53 +1,30 @@
 
 
-## Corrigir mensagens enviadas que não aparecem no WhatsApp Inbox
+## Integrar contadores de tempo e destino na tabela "Em Aquecimento"
 
-### Causa raiz
-O webhook (`whatsapp-chatbot`) salva mensagens usando o telefone **exato** que vem do payload UAZAPI (ex: `556281035295`), mas o contato no banco pode estar salvo com formato diferente (ex: `6281035295` ou `5562981035295`). Como a busca é por igualdade exata (`eq('telefone', inboxTelefone)`), a mensagem é salva com um telefone "diferente" e não aparece na conversa.
-
-O mesmo problema afeta:
-- **Mensagens `fromMe`** (enviadas pelo WhatsApp app): salvas com telefone diferente do contato
-- **Dedup de `fromMe`**: busca por telefone exato, não encontra a mensagem salva pelo `send-whatsapp` (que usa o telefone do contato), e salva duplicata com formato diferente
-- **Mensagens de entrada**: mesma lógica — busca contato por telefone exato
+### Problema
+O componente `AquecimentoDashboard` com os contadores de tempo (CountdownTimer) e estimativa de destino existe no código (`src/components/aquecimento/AquecimentoDashboard.tsx`), mas **nunca é importado** na página `Aquecimento.tsx`. A página renderiza sua própria tabela simples sem esses indicadores.
 
 ### Solução
-Aplicar **matching por sufixo (últimos 8 dígitos)** em TODA a lógica de inbox do webhook, igual ao que `send-whatsapp` já faz:
+Em vez de substituir o layout inteiro (que o usuário já conhece), vou **adicionar os contadores diretamente na tabela existente** "Em Aquecimento" da página `Aquecimento.tsx`:
 
-### Arquivo: `supabase/functions/whatsapp-chatbot/index.ts`
+### Arquivo: `src/pages/Aquecimento.tsx`
 
-**1. Após resolver o `instanciaId` (linha ~1129), buscar o contato existente por sufixo:**
-```typescript
-const suffix = inboxTelefone.slice(-8);
-const { data: existingContact } = await supabase
-  .from('whatsapp_contatos')
-  .select('id, telefone, nao_lido')
-  .eq('instancia_id', instanciaId)
-  .like('telefone', `%${suffix}`)
-  .maybeSingle();
+1. **Importar/copiar as funções auxiliares** (`getBrasiliaTime`, `getNextCronSlot`, `findNextActiveDay`, `CountdownTimer`) do `AquecimentoDashboard.tsx`
 
-const telefoneParaSalvar = existingContact?.telefone || inboxTelefone;
-```
+2. **Buscar agendamentos e config** no `loadAll()`:
+   - Carregar `whatsapp_aquecimento_config` (horário comercial, dias ativos)
+   - Carregar `whatsapp_aquecimento_agendamentos` com status `AGENDADO`
+   - Calcular o próximo slot do cron
 
-**2. Usar `telefoneParaSalvar` em TODOS os inserts de `whatsapp_mensagens`** (tanto `fromMe` quanto entrada)
+3. **Adicionar banner de status** (Sistema Ativo / Fora do horário) com countdown global, logo acima da tabela "Em Aquecimento"
 
-**3. Atualizar a dedup de `fromMe`** para usar suffix matching:
-```typescript
-const { data: existing } = await supabase
-  .from('whatsapp_mensagens')
-  .select('id')
-  .eq('instancia_id', instanciaId)
-  .like('telefone_remoto', `%${suffix}`)
-  .eq('direcao', 'saida')
-  .gte('timestamp_msg', thirtySecsAgo)
-  .limit(1)
-  .maybeSingle();
-```
-
-**4. Atualizar as buscas de contato** (tanto para `fromMe` quanto entrada) para usar o contato já encontrado por sufixo, evitando buscas duplicadas
+4. **Adicionar coluna "Próxima Msg"** na tabela "Em Aquecimento" com:
+   - CountdownTimer mostrando tempo restante
+   - Nome da instância destino estimada (round-robin)
+   - "Limite atingido ✓" quando `interacoes_hoje >= limite_diario`
+   - "Fora do horário" quando aplicável
 
 ### Resultado
-- Toda mensagem (texto, áudio, imagem) será salva com o formato de telefone correto do contato
-- Mensagens enviadas pelo WhatsApp app aparecerão na conversa
-- Mensagens enviadas pelo Inbox não serão duplicadas
-- Mensagens recebidas continuarão funcionando normalmente
+O usuário verá na mesma tela que já conhece: a tabela com uma coluna extra mostrando quando será a próxima mensagem e para quem, com contador regressivo em tempo real.
 
