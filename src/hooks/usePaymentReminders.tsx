@@ -198,7 +198,7 @@ export function usePaymentReminders() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id, adminId] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
@@ -222,7 +222,7 @@ export function usePaymentReminders() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id, adminId] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
