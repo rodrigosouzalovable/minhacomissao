@@ -149,6 +149,51 @@ export default function Aquecimento() {
     loadAll();
   }, []);
 
+  // Load aquecimento config and compute next cron slot
+  useEffect(() => {
+    async function loadCronConfig() {
+      const { data: configs } = await supabase
+        .from('whatsapp_aquecimento_config' as any)
+        .select('chave, valor');
+      
+      let horaInicio = 6, horaFim = 18, diasAtivos = [1, 2, 3, 4, 5, 6];
+      if (configs) {
+        for (const c of configs as any[]) {
+          if (c.chave === 'hora_inicio') horaInicio = Number(c.valor) || 6;
+          if (c.chave === 'hora_fim') horaFim = Number(c.valor) || 18;
+          if (c.chave === 'dias_ativos') diasAtivos = Array.isArray(c.valor) ? c.valor : [1,2,3,4,5,6];
+        }
+      }
+
+      const brasilia = getBrasiliaTime();
+      const h = brasilia.getHours();
+      const dow = brasilia.getDay();
+      const within = diasAtivos.includes(dow) && h >= horaInicio && h < horaFim;
+      setIsWithinHours(within);
+
+      const slot = getNextCronSlot(horaInicio, horaFim, diasAtivos);
+      setNextCronSlot(slot);
+    }
+    loadCronConfig();
+    const interval = setInterval(() => loadCronConfig(), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Estimate round-robin targets
+  useEffect(() => {
+    const active = instancias.filter(i => i.status === 'EM_AQUECIMENTO' && i.interacoes_hoje < i.limite_diario);
+    if (active.length < 2) {
+      setEstimatedTargets({});
+      return;
+    }
+    const targets: Record<string, string> = {};
+    for (let idx = 0; idx < active.length; idx++) {
+      const destIdx = (idx + 1) % active.length;
+      targets[active[idx].instancia_id] = active[destIdx].instance_name || '?';
+    }
+    setEstimatedTargets(targets);
+  }, [instancias]);
+
   async function loadAll() {
     setLoading(true);
     await Promise.all([loadInstancias(), loadInteracoes(), loadMetrics()]);
