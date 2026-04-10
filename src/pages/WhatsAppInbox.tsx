@@ -112,11 +112,11 @@ export default function WhatsAppInbox() {
       // Check if user has inbox_compartilhado permission
       const { data: perms } = await supabase
         .from('user_permissions')
-        .select('inbox_compartilhado, concedido_por')
+        .select('inbox_compartilhado, acordos_compartilhados, concedido_por')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      const compartilhado = (perms as any)?.inbox_compartilhado === true;
+      const compartilhado = (perms as any)?.inbox_compartilhado === true || (perms as any)?.acordos_compartilhados === true;
       const concedidoPor = (perms as any)?.concedido_por as string | null;
 
       let query = supabase
