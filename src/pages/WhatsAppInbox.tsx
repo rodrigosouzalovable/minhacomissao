@@ -163,7 +163,17 @@ export default function WhatsAppInbox() {
     }
   }, []);
 
-  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); }, [fetchEtiquetas, fetchContatoEtiquetas]);
+  const fetchMensagensRapidas = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('whatsapp_mensagens_rapidas')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('ordem', { ascending: true });
+    setMensagensRapidas((data as MensagemRapida[]) ?? []);
+  }, [user]);
+
+  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMensagensRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMensagensRapidas]);
 
   const handleEtiquetaToggle = (contatoId: string, etiquetaId: string, ativo: boolean) => {
     setContatoEtiquetas(prev => {
