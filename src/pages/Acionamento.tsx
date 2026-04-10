@@ -149,6 +149,11 @@ interface InstanceFormData {
   nome: string;
   server_url: string;
   instance_token: string;
+  whatsapp_profile_name?: string;
+  whatsapp_profile_photo_url?: string;
+  whatsapp_profile_description?: string;
+  whatsapp_profile_address?: string;
+  whatsapp_profile_email?: string;
 }
 
 function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
@@ -199,7 +204,7 @@ export default function Acionamento() {
   const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -305,7 +310,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email')
         .eq('user_id', user.id)
         .order('ordem' as any, { ascending: true })
         .order('criado_em', { ascending: false });
