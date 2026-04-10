@@ -183,52 +183,73 @@ export function ChatInputBar({
   }
 
   return (
-    <div className="p-3 border-t border-border bg-card flex gap-2">
-      <input
-        type="file"
-        ref={fileInputRef}
-        className="hidden"
-        accept="image/*,.pdf"
-        onChange={handleFileChange}
-      />
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={isLoading}
-        className="shrink-0"
-      >
-        {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-      </Button>
-      <Input
-        placeholder="Digite uma mensagem..."
-        value={textoMensagem}
-        onChange={e => setTextoMensagem(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleEnviarTexto();
-          }
-        }}
-        onPaste={handlePaste}
-        disabled={isLoading}
-        className="flex-1"
-      />
-      {textoMensagem.trim() ? (
-        <Button onClick={handleEnviarTexto} disabled={isLoading} size="icon" className="shrink-0">
-          {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
-      ) : (
+    <div className="border-t border-border bg-card">
+      {mensagensRapidas && mensagensRapidas.length > 0 && (
+        <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto scrollbar-none">
+          {mensagensRapidas.map(atalho => (
+            <Button
+              key={atalho.id}
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-xs h-7 px-2.5"
+              disabled={isLoading || !!enviandoAtalho}
+              onClick={() => handleAtalhoClick(atalho)}
+            >
+              {enviandoAtalho === atalho.id ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : null}
+              {atalho.titulo}
+            </Button>
+          ))}
+        </div>
+      )}
+      <div className="p-3 flex gap-2">
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept="image/*,.pdf"
+          onChange={handleFileChange}
+        />
         <Button
           variant="ghost"
           size="icon"
-          onClick={iniciarGravacao}
+          onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
           className="shrink-0"
         >
-          <Mic className="h-4 w-4" />
+          {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
         </Button>
-      )}
+        <Input
+          placeholder="Digite uma mensagem..."
+          value={textoMensagem}
+          onChange={e => setTextoMensagem(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleEnviarTexto();
+            }
+          }}
+          onPaste={handlePaste}
+          disabled={isLoading}
+          className="flex-1"
+        />
+        {textoMensagem.trim() ? (
+          <Button onClick={handleEnviarTexto} disabled={isLoading} size="icon" className="shrink-0">
+            {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={iniciarGravacao}
+            disabled={isLoading}
+            className="shrink-0"
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
