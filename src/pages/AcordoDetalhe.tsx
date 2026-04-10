@@ -564,7 +564,7 @@ export default function AcordoDetalhe() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {isOwner && acordo.status === 'ativo' && (
+            {canEdit && acordo.status === 'ativo' && (
               <>
                 <Button
                   variant={acordo.boleto_enviado ? "secondary" : "outline"}
@@ -592,17 +592,6 @@ export default function AcordoDetalhe() {
                   Editar
                 </Button>
               </>
-            )}
-            {/* Admin pode editar qualquer acordo */}
-            {!isOwner && isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
-              >
-                <Pencil className="h-4 w-4 mr-1" />
-                Editar
-              </Button>
             )}
             {/* Botão de excluir apenas para Admin */}
             {isAdmin && (
