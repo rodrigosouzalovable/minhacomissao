@@ -1,27 +1,26 @@
 
 
-## Lembretes compartilhados para usuários com "Acordos Compartilhados"
+## Duas correções para o Acionamento
 
-### Problema
-Quando um funcionário tem "Acordos Compartilhados" ativado, ele vê os acordos do admin, mas os **lembretes de pagamento** (sino) só mostram os lembretes dos acordos próprios. O funcionário precisa ver também os lembretes do admin.
+### Problema 1: Mensagens não aparecem no Inbox
+O envio automático pelo Acionamento usa o hook `useAutoSend`, que já passa `instancia_id` corretamente para `send-whatsapp`. Porém, os **agendamentos offline** (`process-acionamento-agendado`) salvam no inbox usando `server_url`/`instance_token` para resolver o `instancia_id`, mas não passam o `instancia_id` da tabela `user_whatsapp_instances` diretamente. Além disso, o contato pode não ser encontrado porque a Edge Function não faz matching por sufixo (últimos 8 dígitos) — ela salva com o telefone formatado completo, que pode divergir do formato do contato existente.
 
-### Solução
-Modificar o hook `usePaymentReminders` para, quando o usuário tiver `acordos_compartilhados = true`, buscar também os lembretes dos acordos do admin (`concedido_por`).
+**Correção**: Na Edge Function `process-acionamento-agendado`, ao salvar no inbox, usar matching por sufixo (últimos 8 dígitos) para localizar o contato correto e salvar com o formato exato do telefone dele — mesma lógica que `send-whatsapp` já implementa. Também atualizar o contato (`ultima_mensagem`, `ultima_mensagem_em`) ou criar um novo se não existir.
 
-### Alterações
+### Problema 2: Indicador de progresso no sidebar
+Atualmente, o `useAutoSend` já expõe `autoProgress` com `{ current, total }`, mas o `AppLayout` não o consome. O padrão já existe para Campanhas de Voz via `statusBadge` no `SortableNavItem`.
 
-**`src/hooks/usePaymentReminders.tsx`**:
-1. Importar `supabase` para buscar permissões do usuário
-2. Adicionar query para buscar `acordos_compartilhados` e `concedido_por` do `user_permissions`
-3. Nas 3 queries de pagamentos (hoje/3dias, vencidos, retornos):
-   - Remover o filtro `.eq('acordos.user_id', user.id)` 
-   - Substituir por filtro `.in('acordos.user_id', [user.id, adminId])` quando houver compartilhamento
-   - Para retornos: `.in('user_id', [user.id, adminId])`
-4. Ajustar as query keys para incluir o `adminId` (cache correto)
+**Correção**: No `AppLayout`, importar `useAutoSend` e adicionar o `statusBadge` no item `/acionamento` mostrando `current/total` quando `autoSending` estiver ativo.
 
-**`src/components/PaymentReminders.tsx`**:
-1. Ao abrir o dialog de envio em lote, buscar instâncias do admin também (quando compartilhado), para que as instâncias do admin fiquem disponíveis para envio
+### Arquivos a modificar
 
-### Resultado
-Funcionária com "Acordos Compartilhados" verá todos os lembretes do admin no sino, podendo expandir e visualizar exatamente como o admin vê.
+1. **`src/components/layout/AppLayout.tsx`**
+   - Importar `useAutoSend`
+   - Adicionar `statusBadge` para `/acionamento` quando `autoSending && autoProgress`
+   - Formato: `${autoProgress.current}/${autoProgress.total}`
+
+2. **`supabase/functions/process-acionamento-agendado/index.ts`**
+   - Ao salvar mensagem no inbox, adicionar matching por sufixo (últimos 8 dígitos) para localizar contato existente
+   - Usar o formato de telefone exato do contato encontrado
+   - Criar/atualizar contato na tabela `whatsapp_contatos`
 
