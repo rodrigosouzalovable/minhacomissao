@@ -1408,6 +1408,7 @@ export type Database = {
       user_permissions: {
         Row: {
           abas_permitidas: string[]
+          acordos_compartilhados: boolean
           atualizado_em: string
           concedido_por: string | null
           credores: string[]
@@ -1419,6 +1420,7 @@ export type Database = {
         }
         Insert: {
           abas_permitidas?: string[]
+          acordos_compartilhados?: boolean
           atualizado_em?: string
           concedido_por?: string | null
           credores?: string[]
@@ -1430,6 +1432,7 @@ export type Database = {
         }
         Update: {
           abas_permitidas?: string[]
+          acordos_compartilhados?: boolean
           atualizado_em?: string
           concedido_por?: string | null
           credores?: string[]
@@ -2304,6 +2307,10 @@ export type Database = {
       delete_acordo_atomico: {
         Args: { p_acordo_id: string }
         Returns: undefined
+      }
+      get_acordos_compartilhados_admin: {
+        Args: { _user_id: string }
+        Returns: string
       }
       has_inbox_compartilhado: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
