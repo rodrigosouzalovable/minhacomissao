@@ -2259,6 +2259,45 @@ export type Database = {
           },
         ]
       }
+      whatsapp_mensagens_rapidas: {
+        Row: {
+          audio_url: string | null
+          botoes_choices: Json | null
+          botoes_texto: string | null
+          conteudo: string | null
+          criado_em: string
+          id: string
+          ordem: number | null
+          tipo: string
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          audio_url?: string | null
+          botoes_choices?: Json | null
+          botoes_texto?: string | null
+          conteudo?: string | null
+          criado_em?: string
+          id?: string
+          ordem?: number | null
+          tipo?: string
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          audio_url?: string | null
+          botoes_choices?: Json | null
+          botoes_texto?: string | null
+          conteudo?: string | null
+          criado_em?: string
+          id?: string
+          ordem?: number | null
+          tipo?: string
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
