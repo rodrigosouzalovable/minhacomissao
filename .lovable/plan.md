@@ -1,76 +1,50 @@
 
-Corrigir isso exige persistência local no banco, não só releitura da API.
 
-### O problema exato
-Hoje o painel de perfil faz isso ao reabrir o editar da instância:
+## Atualização em Massa de Perfil WhatsApp — Gradativa e Anti-Ban
 
-1. limpa `foto`, `nome`, `descrição`, `endereço` e `email`
-2. tenta buscar da UAZAPI
-3. a busca principal chama `POST /business/get/profile` com `{"jid":""}` e está voltando `400 Could not parse Phone`
-4. o fallback `GET /instance/info` para essa instância está voltando `404`
-5. como não existe cache desses dados em `user_whatsapp_instances`, o formulário fica vazio de novo
+### O que será feito
+Criar um recurso de "Aplicar perfil em todas as instâncias" que atualiza nome e/ou foto de todas as instâncias conectadas, uma por vez, com intervalos aleatórios entre cada atualização para simular comportamento humano.
 
-Também confirmei no replay que o nome digitado aparece, o loading roda, e depois o input volta vazio.
+### Como funciona
 
-### O que vou implementar
+**Fluxo do usuário:**
+1. No diálogo de edição de uma instância, após definir nome e foto, aparece um botão "Aplicar a todas as instâncias"
+2. O sistema mostra um diálogo de confirmação com:
+   - Quantas instâncias conectadas serão atualizadas
+   - Opção de aplicar só nome, só foto, ou ambos
+   - Estimativa de tempo total (ex: "~15 a 30 minutos para 10 instâncias")
+3. Ao confirmar, o processo roda em segundo plano com barra de progresso
 
-#### 1. Persistir os dados do perfil na tabela da instância
-Adicionar colunas em `user_whatsapp_instances` para guardar:
-- `whatsapp_profile_name`
-- `whatsapp_profile_photo_url`
-- `whatsapp_profile_description`
-- `whatsapp_profile_address`
-- `whatsapp_profile_email`
+**Estratégias anti-ban implementadas:**
+- **Intervalo aleatório entre instâncias**: 60 a 180 segundos (1-3 min) entre cada atualização
+- **Jitter adicional**: variação de ±30% no intervalo para parecer orgânico
+- **Ordem aleatória**: as instâncias são embaralhadas (não seguem ordem fixa)
+- **Separação nome/foto**: quando ambos são alterados, o nome é atualizado primeiro, depois uma pausa extra de 30-90s antes da foto
+- **Pausa se erro**: se uma instância falhar, pausa de 5 minutos antes de continuar
+- **Horário comercial**: aviso se estiver fora do horário 8h-20h (opcional, apenas informativo)
 
-Isso vai permitir reabrir o editar com os últimos valores salvos, mesmo se a API externa falhar.
+### Alterações técnicas
 
-#### 2. Reidratar o formulário a partir do banco antes de chamar a API
-Em `src/pages/Acionamento.tsx`:
-- incluir esses campos no `select` das instâncias
-- ao clicar em editar, passar esses valores para `editingInstance`
-- preencher o estado do formulário imediatamente com o cache salvo
-- evitar limpar tudo logo no início de `loadWhatsAppProfile`
+**Arquivo: `src/pages/Acionamento.tsx`**
+1. Adicionar estado para controle do processo em lote (`bulkUpdateRunning`, `bulkUpdateProgress`, `bulkUpdateLog`)
+2. Criar função `handleBulkProfileUpdate` que:
+   - Filtra instâncias conectadas
+   - Embaralha a ordem
+   - Itera uma a uma com `await sleep(randomDelay)`
+   - Atualiza nome via `/profile/name` e foto via `/profile/image`
+   - Salva cache no banco após cada sucesso
+   - Registra log de progresso para o usuário acompanhar
+3. Adicionar diálogo de confirmação e progresso com lista mostrando status de cada instância (✓ concluído, ⏳ aguardando, ✗ erro)
+4. Botão "Cancelar" para interromper o processo a qualquer momento
 
-#### 3. Atualizar o cache ao salvar nome, foto e dados comerciais
-Depois de:
-- `handleSaveProfileName`
-- `handleSaveProfilePhoto`
-- `handleSaveProfileBusiness`
-
-também salvar os mesmos valores em `user_whatsapp_instances`, para que permaneçam visíveis ao voltar ao diálogo.
-
-#### 4. Melhorar a leitura da API sem apagar o que já existe
-Ajustar `loadWhatsAppProfile` para:
-- usar resposta da API apenas para complementar/substituir quando vier valor válido
-- não sobrescrever com vazio
-- não depender de `jid: ''` como fonte única de verdade
-- manter a foto/nome já salvos se a UAZAPI responder erro
-
-#### 5. Sincronizar a lista local após salvar
-Atualizar `instances` e `editingInstance` em memória após cada save, para o usuário ver persistência imediata sem depender de nova busca.
-
-### Arquivos afetados
-- `src/pages/Acionamento.tsx`
-- nova migration SQL em `supabase/migrations/...`
+### Riscos
+- O risco de banimento por alterar perfil é **muito baixo** — o WhatsApp permite alterações de nome e foto normalmente
+- O risco aumenta apenas com alterações em massa simultâneas no mesmo segundo, que é exatamente o que estamos evitando
+- Os intervalos de 1-3 minutos entre instâncias são conservadores e seguros
 
 ### Resultado esperado
-Ao importar a foto, definir o nome e salvar:
-- fechar e reabrir o editar da instância manterá foto e nome
-- descrição, endereço e email também permanecerão
-- se a API da UAZAPI falhar, o painel continuará mostrando os últimos dados salvos
+- Definir foto e nome em uma instância e aplicar a todas as outras com um clique
+- Processo gradual com delays aleatórios, sem padrão detectável
+- Progresso visual em tempo real
+- Possibilidade de cancelar a qualquer momento
 
-### Detalhe técnico
-A causa não é só “leitura do nome”. O problema estrutural é:
-```text
-UI limpa estado
-→ UAZAPI falha (/business/get/profile 400, /instance/info 404)
-→ sem cache no banco
-→ formulário volta vazio
-```
-
-A correção robusta é:
-```text
-Salvar em user_whatsapp_instances
-→ reidratar do banco ao abrir
-→ tentar sincronizar com UAZAPI sem apagar cache existente
-```
