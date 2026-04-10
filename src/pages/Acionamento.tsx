@@ -1112,7 +1112,129 @@ export default function Acionamento() {
     }
   };
 
-  // Instance management
+  // Bulk profile update — gradual with anti-ban delays
+  const handleBulkProfileUpdate = async () => {
+    setBulkUpdateConfirmOpen(false);
+    bulkCancelRef.current = false;
+
+    // Get connected instances excluding the current one
+    const connectedOthers = instances.filter(
+      i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected'
+    );
+
+    if (connectedOthers.length === 0) {
+      toast.error('Nenhuma outra instância conectada encontrada');
+      return;
+    }
+
+    // Shuffle for randomized order
+    const shuffled = [...connectedOthers].sort(() => Math.random() - 0.5);
+
+    const log = shuffled.map(i => ({ id: i.id, nome: i.nome || 'Sem nome', status: 'pending' as const }));
+    setBulkUpdateLog(log);
+    setBulkUpdateRunning(true);
+    setBulkUpdateProgress({ current: 0, total: shuffled.length });
+
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const randomDelay = (min: number, max: number) => {
+      const base = min + Math.random() * (max - min);
+      const jitter = base * (0.7 + Math.random() * 0.6); // ±30%
+      return Math.round(jitter);
+    };
+
+    for (let idx = 0; idx < shuffled.length; idx++) {
+      if (bulkCancelRef.current) break;
+
+      const inst = shuffled[idx];
+      setBulkUpdateLog(prev => prev.map(l => l.id === inst.id ? { ...l, status: 'running' } : l));
+      setBulkUpdateProgress({ current: idx + 1, total: shuffled.length });
+
+      try {
+        const cleanUrl = inst.server_url.replace(/\/+$/, '');
+
+        // Update name
+        if (bulkUpdateApplyName && profileName.trim()) {
+          const nameRes = await fetch(`${cleanUrl}/profile/name`, {
+            method: 'POST',
+            headers: { 'token': inst.instance_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: profileName }),
+          });
+          if (!nameRes.ok) throw new Error('Falha ao alterar nome');
+          // Cache in DB
+          await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_name: profileName } as any).eq('id', inst.id);
+          setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, whatsapp_profile_name: profileName } : i));
+        }
+
+        // Pause between name and photo
+        if (bulkUpdateApplyName && bulkUpdateApplyPhoto && profileName.trim()) {
+          await sleep(randomDelay(30000, 90000));
+          if (bulkCancelRef.current) break;
+        }
+
+        // Update photo
+        if (bulkUpdateApplyPhoto && currentProfilePhotoUrl) {
+          // Need to get photo as base64 — use the cached preview or fetch from URL
+          let base64Image = '';
+          if (profilePhotoPreview) {
+            base64Image = profilePhotoPreview.includes(',') ? profilePhotoPreview.split(',')[1] : profilePhotoPreview;
+          } else if (currentProfilePhotoUrl.startsWith('data:')) {
+            base64Image = currentProfilePhotoUrl.split(',')[1];
+          } else {
+            // Fetch the URL and convert to base64
+            try {
+              const imgRes = await fetch(currentProfilePhotoUrl);
+              const blob = await imgRes.blob();
+              const reader = new FileReader();
+              base64Image = await new Promise<string>((resolve) => {
+                reader.onloadend = () => {
+                  const result = reader.result as string;
+                  resolve(result.includes(',') ? result.split(',')[1] : result);
+                };
+                reader.readAsDataURL(blob);
+              });
+            } catch {
+              throw new Error('Não foi possível obter a imagem para enviar');
+            }
+          }
+          base64Image = base64Image.replace(/\s/g, '');
+
+          const photoRes = await fetch(`${cleanUrl}/profile/image`, {
+            method: 'POST',
+            headers: { 'token': inst.instance_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64Image }),
+          });
+          if (!photoRes.ok) throw new Error('Falha ao alterar foto');
+          // Cache in DB
+          await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_photo_url: currentProfilePhotoUrl } as any).eq('id', inst.id);
+          setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, whatsapp_profile_photo_url: currentProfilePhotoUrl } : i));
+        }
+
+        setBulkUpdateLog(prev => prev.map(l => l.id === inst.id ? { ...l, status: 'success' } : l));
+      } catch (err: any) {
+        setBulkUpdateLog(prev => prev.map(l => l.id === inst.id ? { ...l, status: 'error', message: err.message } : l));
+        // Pause 5 min on error
+        if (idx < shuffled.length - 1 && !bulkCancelRef.current) {
+          await sleep(300000);
+        }
+        continue;
+      }
+
+      // Delay before next instance (60-180s)
+      if (idx < shuffled.length - 1 && !bulkCancelRef.current) {
+        await sleep(randomDelay(60000, 180000));
+      }
+    }
+
+    setBulkUpdateRunning(false);
+    if (bulkCancelRef.current) {
+      toast.info('Atualização em massa cancelada');
+    } else {
+      const successCount = bulkUpdateLog.filter(l => l.status === 'success').length;
+      toast.success(`Perfil atualizado em ${successCount} instância(s)`);
+    }
+  };
+
+
   const handleSaveInstance = async () => {
     if (!user || !editingInstance) return;
     if (!editingInstance.server_url.trim() || !editingInstance.instance_token.trim()) {
