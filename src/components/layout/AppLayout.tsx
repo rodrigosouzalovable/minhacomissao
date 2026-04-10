@@ -142,11 +142,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       // Check if user has shared inbox access
       const { data: perms } = await supabase
         .from('user_permissions')
-        .select('inbox_compartilhado, concedido_por')
+        .select('inbox_compartilhado, acordos_compartilhados, concedido_por')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      const shared = (perms as any)?.inbox_compartilhado;
+      const shared = (perms as any)?.inbox_compartilhado || (perms as any)?.acordos_compartilhados;
       const concedidoPor = (perms as any)?.concedido_por as string | null;
 
       if (isAdmin) {
