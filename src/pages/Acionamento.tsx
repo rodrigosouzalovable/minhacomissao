@@ -1059,15 +1059,15 @@ export default function Acionamento() {
       console.log('[UAZAPI] profile/image response:', res.status, resData);
       if (!res.ok) throw new Error(resData?.error || 'Falha ao alterar foto');
       toast.success(remove ? 'Foto removida!' : 'Foto do perfil atualizada!');
-      if (remove) {
-        setCurrentProfilePhotoUrl('');
-        setProfilePhotoFile(null);
-        setProfilePhotoPreview('');
-      } else {
-        setCurrentProfilePhotoUrl(profilePhotoPreview);
-        setProfilePhotoFile(null);
-        setProfilePhotoPreview('');
+      const newPhotoUrl = remove ? '' : profilePhotoPreview;
+      // Persist to DB cache
+      if (editingInstance.id) {
+        await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_photo_url: newPhotoUrl } as any).eq('id', editingInstance.id);
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, whatsapp_profile_photo_url: newPhotoUrl } : i));
       }
+      setCurrentProfilePhotoUrl(newPhotoUrl);
+      setProfilePhotoFile(null);
+      setProfilePhotoPreview('');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao alterar foto');
     } finally {
@@ -1086,6 +1086,15 @@ export default function Acionamento() {
         body: JSON.stringify({ description: profileDescription, address: profileAddress, email: profileEmail }),
       });
       if (!res.ok) throw new Error('Falha ao atualizar dados comerciais');
+      // Persist to DB cache
+      if (editingInstance.id) {
+        await supabase.from('user_whatsapp_instances' as any).update({
+          whatsapp_profile_description: profileDescription,
+          whatsapp_profile_address: profileAddress,
+          whatsapp_profile_email: profileEmail,
+        } as any).eq('id', editingInstance.id);
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, whatsapp_profile_description: profileDescription, whatsapp_profile_address: profileAddress, whatsapp_profile_email: profileEmail } : i));
+      }
       toast.success('Dados comerciais atualizados!');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao salvar dados comerciais');
