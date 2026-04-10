@@ -2473,6 +2473,130 @@ export default function Acionamento() {
                               Salvar dados comerciais
                             </Button>
                           </div>
+
+                          {/* Bulk update button */}
+                          <Separator />
+                          <div className="space-y-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs w-full"
+                              onClick={() => setBulkUpdateConfirmOpen(true)}
+                              disabled={bulkUpdateRunning || (!profileName.trim() && !currentProfilePhotoUrl)}
+                            >
+                              <Copy className="h-3 w-3 mr-1" />
+                              Aplicar perfil em todas as instâncias
+                            </Button>
+                            <p className="text-[10px] text-muted-foreground text-center">
+                              Atualiza nome e/ou foto gradativamente, uma instância por vez (1-3 min entre cada)
+                            </p>
+                          </div>
+
+                          {/* Bulk update confirmation dialog */}
+                          <Dialog open={bulkUpdateConfirmOpen} onOpenChange={setBulkUpdateConfirmOpen}>
+                            <DialogContent className="max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Aplicar perfil em massa</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                  O perfil será aplicado gradualmente em {instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length} instância(s) conectada(s), com intervalos aleatórios para segurança.
+                                </p>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox
+                                      id="bulk-name"
+                                      checked={bulkUpdateApplyName}
+                                      onCheckedChange={(c) => setBulkUpdateApplyName(!!c)}
+                                    />
+                                    <Label htmlFor="bulk-name" className="text-sm">Aplicar nome: <strong>{profileName || '(vazio)'}</strong></Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox
+                                      id="bulk-photo"
+                                      checked={bulkUpdateApplyPhoto}
+                                      onCheckedChange={(c) => setBulkUpdateApplyPhoto(!!c)}
+                                    />
+                                    <Label htmlFor="bulk-photo" className="text-sm">Aplicar foto</Label>
+                                  </div>
+                                </div>
+                                {(() => {
+                                  const count = instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length;
+                                  const minMin = Math.ceil(count * 1);
+                                  const maxMin = Math.ceil(count * 3);
+                                  return (
+                                    <p className="text-xs text-muted-foreground">
+                                      ⏱ Tempo estimado: ~{minMin} a {maxMin} minutos
+                                    </p>
+                                  );
+                                })()}
+                                <div className="flex gap-2 justify-end">
+                                  <Button variant="outline" size="sm" onClick={() => setBulkUpdateConfirmOpen(false)}>Cancelar</Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={handleBulkProfileUpdate}
+                                    disabled={!bulkUpdateApplyName && !bulkUpdateApplyPhoto}
+                                  >
+                                    <Play className="h-3 w-3 mr-1" /> Iniciar
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+
+                          {/* Bulk update progress */}
+                          {bulkUpdateRunning && (
+                            <div className="space-y-2 rounded-md border p-3 bg-accent/30">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold">Atualizando perfis... ({bulkUpdateProgress?.current}/{bulkUpdateProgress?.total})</p>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="h-6 text-[10px] px-2"
+                                  onClick={() => { bulkCancelRef.current = true; }}
+                                >
+                                  <Square className="h-3 w-3 mr-1" /> Cancelar
+                                </Button>
+                              </div>
+                              <div className="space-y-1 max-h-40 overflow-y-auto">
+                                {bulkUpdateLog.map(l => (
+                                  <div key={l.id} className="flex items-center gap-2 text-[11px]">
+                                    {l.status === 'pending' && <span className="text-muted-foreground">⏳</span>}
+                                    {l.status === 'running' && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                                    {l.status === 'success' && <span className="text-green-600">✓</span>}
+                                    {l.status === 'error' && <span className="text-destructive">✗</span>}
+                                    <span className={l.status === 'error' ? 'text-destructive' : ''}>{l.nome}</span>
+                                    {l.message && <span className="text-muted-foreground">— {l.message}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bulk update results (after completion) */}
+                          {!bulkUpdateRunning && bulkUpdateLog.length > 0 && (
+                            <div className="space-y-2 rounded-md border p-3 bg-accent/20">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold">
+                                  Resultado: {bulkUpdateLog.filter(l => l.status === 'success').length} sucesso, {bulkUpdateLog.filter(l => l.status === 'error').length} erro(s)
+                                </p>
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setBulkUpdateLog([])}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {bulkUpdateLog.map(l => (
+                                  <div key={l.id} className="flex items-center gap-2 text-[11px]">
+                                    {l.status === 'success' && <span className="text-green-600">✓</span>}
+                                    {l.status === 'error' && <span className="text-destructive">✗</span>}
+                                    {l.status === 'pending' && <span className="text-muted-foreground">—</span>}
+                                    <span>{l.nome}</span>
+                                    {l.message && <span className="text-muted-foreground">— {l.message}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
