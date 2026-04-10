@@ -72,6 +72,53 @@ const MEDIA_HKDF_INFO: Record<string, string> = {
   'documento': 'WhatsApp Document Keys',
 };
 
+// Extract text from all message types including button/list responses
+function extractTextFromPayload(payload: any): string {
+  // Standard text fields
+  const standardText = (
+    payload?.message?.text ||
+    payload?.body ||
+    payload?.text ||
+    payload?.message?.body ||
+    payload?.message?.conversation ||
+    payload?.message?.extendedTextMessage?.text ||
+    payload?.message?.content?.text ||
+    ''
+  ).toString().trim();
+  if (standardText) return standardText;
+
+  // Button response (when client clicks an interactive button)
+  const buttonsResponse = payload?.message?.buttonsResponseMessage;
+  if (buttonsResponse) {
+    return (buttonsResponse.selectedDisplayText || buttonsResponse.selectedButtonId || '').trim();
+  }
+
+  // List response (when client selects from a list)
+  const listResponse = payload?.message?.listResponseMessage;
+  if (listResponse) {
+    return (listResponse.title || listResponse.description || listResponse.singleSelectReply?.selectedRowId || '').trim();
+  }
+
+  // Template button reply
+  const templateReply = payload?.message?.templateButtonReplyMessage;
+  if (templateReply) {
+    return (templateReply.selectedDisplayText || templateReply.selectedId || '').trim();
+  }
+
+  // Interactive response (newer WhatsApp format)
+  const interactiveResponse = payload?.message?.interactiveResponseMessage;
+  if (interactiveResponse) {
+    try {
+      const body = JSON.parse(interactiveResponse.nativeFlowResponseMessage?.paramsJson || '{}');
+      return (body?.id || interactiveResponse.body?.text || '').trim();
+    } catch {
+      return (interactiveResponse.body?.text || '').trim();
+    }
+  }
+
+  return '';
+}
+
 function extractMediaMetadata(payload: any) {
   const content = payload?.message?.content || {};
   const imageMsg = payload?.message?.imageMessage || {};
@@ -796,7 +843,7 @@ serve(async (req) => {
 
     // --- INBOX: Salvar mensagem no histórico ---
     const inboxTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    const inboxTexto = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+    const inboxTexto = extractTextFromPayload(payload);
     const inboxNomeContato = payload?.message?.senderName || payload?.pushName || payload?.senderName || payload?.message?.pushName || null;
     const inboxServerUrl = payload?.BaseUrl?.replace(/\/+$/, '') || '';
     const inboxInstanceToken = payload?.token || '';
@@ -1399,7 +1446,7 @@ serve(async (req) => {
 
     // --- Track fromMe messages (outbound proposals) ---
     if (isFromMe) {
-      const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+      const textoFromMe = extractTextFromPayload(payload);
       const textoFromMeLower = textoFromMe.toLowerCase();
       const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
@@ -1569,7 +1616,7 @@ serve(async (req) => {
     }
 
     const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    let texto = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+    let texto = extractTextFromPayload(payload);
 
     // Se não tem texto, verificar se é áudio e transcrever
     if (!texto) {
