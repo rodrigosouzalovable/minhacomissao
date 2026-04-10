@@ -529,8 +529,25 @@ export default function Retornos() {
         mensagem = `Olá ${primeiroNome}, tudo bem? Sou do departamento de confirmação de acordos das Lojas Novo Mundo, e estou entrando em contato para finalizamos o acordo que negociamos no valor de ${formatCurrencyDisplay(retorno.valor_primeira_parcela)} para o dia ${dataPagamentoFormatada} e o restante em ${parcelasRestantes} DE ${formatCurrencyDisplay(retorno.valor_demais_parcelas)} para o dia ${dataPagamentoFormatada}. Gostaria de alterar essa negociação ou posso enviar o boleto para pagamento?`;
       }
 
+      // Fetch active instance for credentials
+      const { data: instData } = await supabase
+        .from('user_whatsapp_instances')
+        .select('id, server_url, instance_token')
+        .eq('user_id', user!.id)
+        .eq('ativo', true)
+        .eq('apenas_lembretes', false)
+        .limit(1)
+        .maybeSingle();
+
+      const sendBody: any = { telefone: retorno.cliente_telefone, mensagem };
+      if (instData) {
+        sendBody.uazapi_server_url = instData.server_url;
+        sendBody.uazapi_instance_token = instData.instance_token;
+        sendBody.instancia_id = instData.id;
+      }
+
       const { error } = await supabase.functions.invoke('send-whatsapp', {
-        body: { telefone: retorno.cliente_telefone, mensagem },
+        body: sendBody,
       });
 
       if (error) throw error;

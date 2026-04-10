@@ -11,6 +11,7 @@ interface ClienteData {
 }
 
 export interface UazapiInstance {
+  id?: string;
   server_url: string;
   instance_token: string;
   nome?: string;
@@ -128,6 +129,7 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
       if (uazapiConfig) {
         body.uazapi_server_url = uazapiConfig.server_url;
         body.uazapi_instance_token = uazapiConfig.instance_token;
+        if (uazapiConfig.id) body.instancia_id = uazapiConfig.id;
       }
       const { data, error } = await supabase.functions.invoke('send-whatsapp', { body });
       if (error || !data?.success) throw new Error(error?.message || data?.error || 'Erro');
