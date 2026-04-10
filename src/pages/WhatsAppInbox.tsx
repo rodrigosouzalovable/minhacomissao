@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X, Pencil } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X, Pencil, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { MensagensRapidasDialog, type MensagemRapida } from '@/components/inbox/MensagensRapidasDialog';
 interface Etiqueta {
   id: string;
   nome: string;
@@ -98,6 +99,8 @@ export default function WhatsAppInbox() {
   const [instanciaComboOpen, setInstanciaComboOpen] = useState(false);
   const [editandoMsg, setEditandoMsg] = useState<{ id: string; conteudo: string } | null>(null);
   const [editTexto, setEditTexto] = useState('');
+  const [mensagensRapidasOpen, setMensagensRapidasOpen] = useState(false);
+  const [mensagensRapidas, setMensagensRapidas] = useState<MensagemRapida[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -160,7 +163,17 @@ export default function WhatsAppInbox() {
     }
   }, []);
 
-  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); }, [fetchEtiquetas, fetchContatoEtiquetas]);
+  const fetchMensagensRapidas = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('whatsapp_mensagens_rapidas')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('ordem', { ascending: true });
+    setMensagensRapidas((data as MensagemRapida[]) ?? []);
+  }, [user]);
+
+  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMensagensRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMensagensRapidas]);
 
   const handleEtiquetaToggle = (contatoId: string, etiquetaId: string, ativo: boolean) => {
     setContatoEtiquetas(prev => {
@@ -695,6 +708,15 @@ export default function WhatsAppInbox() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
+                onClick={() => setMensagensRapidasOpen(true)}
+                title="Mensagens rápidas"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
                 onClick={() => setNovaConversaOpen(true)}
                 title="Nova conversa"
               >
@@ -948,6 +970,7 @@ export default function WhatsAppInbox() {
                   enviando={enviando}
                   externalFile={droppedFile}
                   onExternalFileHandled={() => setDroppedFile(null)}
+                  mensagensRapidas={mensagensRapidas}
                 />
               )}
             </>
@@ -1053,6 +1076,15 @@ export default function WhatsAppInbox() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {user && (
+        <MensagensRapidasDialog
+          open={mensagensRapidasOpen}
+          onOpenChange={setMensagensRapidasOpen}
+          userId={user.id}
+          onUpdated={fetchMensagensRapidas}
+        />
+      )}
     </AppLayout>
   );
 }
