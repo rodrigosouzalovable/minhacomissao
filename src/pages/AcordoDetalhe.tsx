@@ -52,6 +52,7 @@ export default function AcordoDetalhe() {
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
+  const canEdit = isOwner || isAdmin || (acordosCompartilhados && acordo?.user_id === concedidoPor);
 
   useEffect(() => {
     async function loadAcordo() {
