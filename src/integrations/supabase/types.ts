@@ -2222,6 +2222,7 @@ export type Database = {
           telefone_remoto: string
           timestamp_msg: string
           tipo_conteudo: string
+          whatsapp_msg_id: string | null
         }
         Insert: {
           conteudo?: string
@@ -2235,6 +2236,7 @@ export type Database = {
           telefone_remoto: string
           timestamp_msg?: string
           tipo_conteudo?: string
+          whatsapp_msg_id?: string | null
         }
         Update: {
           conteudo?: string
@@ -2248,6 +2250,7 @@ export type Database = {
           telefone_remoto?: string
           timestamp_msg?: string
           tipo_conteudo?: string
+          whatsapp_msg_id?: string | null
         }
         Relationships: [
           {

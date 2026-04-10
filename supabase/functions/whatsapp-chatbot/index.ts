@@ -1157,6 +1157,7 @@ serve(async (req) => {
                 lida: true,
                 tipo_conteudo: inboxTipoConteudo,
                 media_url: finalMediaUrl,
+                whatsapp_msg_id: rawMessageId || null,
               });
               console.log(`[INBOX] Mensagem manual (fromMe) salva: ${inboxTelefone} tipo=${inboxTipoConteudo}`);
 
@@ -1196,6 +1197,7 @@ serve(async (req) => {
               lida: false,
               tipo_conteudo: inboxTipoConteudo,
               media_url: finalMediaUrl,
+              whatsapp_msg_id: rawMessageId || null,
             });
 
             const { data: existingContact } = await supabase
