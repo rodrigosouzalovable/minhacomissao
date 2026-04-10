@@ -141,6 +141,9 @@ export default function Aquecimento() {
   const [manualTestOpen, setManualTestOpen] = useState(false);
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
   const [testLoading, setTestLoading] = useState(false);
+  const [nextCronSlot, setNextCronSlot] = useState<Date | null>(null);
+  const [isWithinHours, setIsWithinHours] = useState(false);
+  const [estimatedTargets, setEstimatedTargets] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadAll();
