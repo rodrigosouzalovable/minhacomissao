@@ -4,6 +4,7 @@ import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCi
 import { CopyButton } from '@/components/CopyButton';
 import { usePaymentReminders } from '@/hooks/usePaymentReminders';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useWhatsAppSending } from '@/contexts/WhatsAppSendingContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
