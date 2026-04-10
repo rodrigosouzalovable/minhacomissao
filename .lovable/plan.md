@@ -1,20 +1,76 @@
 
+Corrigir isso exige persistência local no banco, não só releitura da API.
 
-## Persistir Dados do Perfil WhatsApp ao Reabrir
+### O problema exato
+Hoje o painel de perfil faz isso ao reabrir o editar da instância:
 
-### Problema
-A função `loadWhatsAppProfile` (linha 921) reseta todos os campos e busca dados comerciais via `/business/get/profile`, mas **não extrai o nome do perfil** da resposta da API. O nome está disponível no endpoint `/instance/info` (já chamado como fallback na linha 968), mas nunca é extraído de lá.
+1. limpa `foto`, `nome`, `descrição`, `endereço` e `email`
+2. tenta buscar da UAZAPI
+3. a busca principal chama `POST /business/get/profile` com `{"jid":""}` e está voltando `400 Could not parse Phone`
+4. o fallback `GET /instance/info` para essa instância está voltando `404`
+5. como não existe cache desses dados em `user_whatsapp_instances`, o formulário fica vazio de novo
 
-### Solução
+Também confirmei no replay que o nome digitado aparece, o loading roda, e depois o input volta vazio.
 
-**Arquivo: `src/pages/Acionamento.tsx`**
+### O que vou implementar
 
-1. **Extrair nome do perfil de `/business/get/profile`** (linha ~941): adicionar `setProfileName(profile?.name || profile?.pushName || '')` após extrair description/address/email
+#### 1. Persistir os dados do perfil na tabela da instância
+Adicionar colunas em `user_whatsapp_instances` para guardar:
+- `whatsapp_profile_name`
+- `whatsapp_profile_photo_url`
+- `whatsapp_profile_description`
+- `whatsapp_profile_address`
+- `whatsapp_profile_email`
 
-2. **Extrair nome do perfil de `/instance/info`** (linha ~976): adicionar `setProfileName(prev => prev || info?.pushName || info?.name || info?.profileName || '')` como fallback, apenas se ainda não foi preenchido
+Isso vai permitir reabrir o editar com os últimos valores salvos, mesmo se a API externa falhar.
 
-Essas duas mudanças garantem que ao abrir a edição de uma instância conectada, o nome do perfil, foto, descrição, endereço e email serão carregados da API UAZAPI e exibidos nos campos.
+#### 2. Reidratar o formulário a partir do banco antes de chamar a API
+Em `src/pages/Acionamento.tsx`:
+- incluir esses campos no `select` das instâncias
+- ao clicar em editar, passar esses valores para `editingInstance`
+- preencher o estado do formulário imediatamente com o cache salvo
+- evitar limpar tudo logo no início de `loadWhatsAppProfile`
 
-### Nota
-Os dados já são salvos corretamente na UAZAPI (endpoints `/profile/name`, `/profile/image`, `/business/update/profile`). O problema é apenas de **leitura** ao reabrir o painel.
+#### 3. Atualizar o cache ao salvar nome, foto e dados comerciais
+Depois de:
+- `handleSaveProfileName`
+- `handleSaveProfilePhoto`
+- `handleSaveProfileBusiness`
 
+também salvar os mesmos valores em `user_whatsapp_instances`, para que permaneçam visíveis ao voltar ao diálogo.
+
+#### 4. Melhorar a leitura da API sem apagar o que já existe
+Ajustar `loadWhatsAppProfile` para:
+- usar resposta da API apenas para complementar/substituir quando vier valor válido
+- não sobrescrever com vazio
+- não depender de `jid: ''` como fonte única de verdade
+- manter a foto/nome já salvos se a UAZAPI responder erro
+
+#### 5. Sincronizar a lista local após salvar
+Atualizar `instances` e `editingInstance` em memória após cada save, para o usuário ver persistência imediata sem depender de nova busca.
+
+### Arquivos afetados
+- `src/pages/Acionamento.tsx`
+- nova migration SQL em `supabase/migrations/...`
+
+### Resultado esperado
+Ao importar a foto, definir o nome e salvar:
+- fechar e reabrir o editar da instância manterá foto e nome
+- descrição, endereço e email também permanecerão
+- se a API da UAZAPI falhar, o painel continuará mostrando os últimos dados salvos
+
+### Detalhe técnico
+A causa não é só “leitura do nome”. O problema estrutural é:
+```text
+UI limpa estado
+→ UAZAPI falha (/business/get/profile 400, /instance/info 404)
+→ sem cache no banco
+→ formulário volta vazio
+```
+
+A correção robusta é:
+```text
+Salvar em user_whatsapp_instances
+→ reidratar do banco ao abrir
+→ tentar sincronizar com UAZAPI sem apagar cache existente
+```
