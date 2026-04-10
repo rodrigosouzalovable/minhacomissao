@@ -1135,7 +1135,31 @@ ${bodyContent}
                                 {contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </span>
                             </div>
-                            <div className="shrink-0">
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                title="Excluir parcela"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Excluir parcela ${contrato.contrato || 'S/N'} - ${contrato.valor_atualizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?`)) return;
+                                  const { error } = await supabase
+                                    .from('devedores')
+                                    .update({ ativo: false })
+                                    .eq('id', contrato.id);
+                                  if (error) {
+                                    toast.error('Erro ao excluir: ' + error.message);
+                                  } else {
+                                    toast.success('Parcela excluída');
+                                    setContratos(prev => prev.filter(c => c.id !== contrato.id));
+                                    if (devedor?.id === contrato.id) {
+                                      navigate('/clientes');
+                                    }
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
                               {openContratos[contrato.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </div>
                           </div>
