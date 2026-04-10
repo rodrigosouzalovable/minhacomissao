@@ -544,7 +544,7 @@ export default function Acordos() {
     async function loadAcordos() {
       if (!user) return;
       try {
-        // Carregar acordos
+        // Carregar acordos próprios
         const {
           data: acordosData,
           error: acordosError
@@ -552,7 +552,34 @@ export default function Acordos() {
           ascending: false
         });
         if (acordosError) throw acordosError;
-        setAcordos(acordosData || []);
+        
+        // Verificar se tem acordos compartilhados
+        const { data: perms } = await supabase
+          .from('user_permissions')
+          .select('acordos_compartilhados, concedido_por')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        const temCompartilhados = (perms as any)?.acordos_compartilhados === true;
+        const adminId = (perms as any)?.concedido_por as string | null;
+        
+        let todosAcordos = acordosData || [];
+        
+        if (temCompartilhados && adminId) {
+          const { data: acordosAdmin } = await supabase
+            .from('acordos')
+            .select('*')
+            .eq('user_id', adminId)
+            .order('criado_em', { ascending: false });
+          if (acordosAdmin) {
+            // Marcar acordos do admin e combinar (sem duplicatas)
+            const idsExistentes = new Set(todosAcordos.map(a => a.id));
+            const novos = acordosAdmin.filter(a => !idsExistentes.has(a.id));
+            todosAcordos = [...todosAcordos, ...novos];
+          }
+        }
+        
+        setAcordos(todosAcordos);
 
         // Carregar IDs de acordos que têm parcelas pagas
         const {
