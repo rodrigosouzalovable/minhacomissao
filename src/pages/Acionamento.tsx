@@ -925,13 +925,7 @@ export default function Acionamento() {
   // WhatsApp profile management
   const loadWhatsAppProfile = useCallback(async (serverUrl: string, token: string) => {
     setLoadingProfile(true);
-    setCurrentProfilePhotoUrl('');
-    setProfilePhotoFile(null);
-    setProfilePhotoPreview('');
-    setProfileName('');
-    setProfileDescription('');
-    setProfileAddress('');
-    setProfileEmail('');
+    // Don't clear fields — keep cached values from DB
     try {
       const cleanUrl = serverUrl.replace(/\/+$/, '');
       // Fetch business profile
@@ -944,10 +938,10 @@ export default function Acionamento() {
         const data = await res.json();
         console.log('[WhatsApp Profile] /business/get/profile response:', JSON.stringify(data));
         const profile = data?.data || data?.profile || data;
-        setProfileDescription(profile?.description || '');
-        setProfileAddress(profile?.address || '');
-        setProfileEmail(profile?.email || '');
-        setProfileName(profile?.name || profile?.pushName || '');
+        if (profile?.description) setProfileDescription(profile.description);
+        if (profile?.address) setProfileAddress(profile.address);
+        if (profile?.email) setProfileEmail(profile.email);
+        if (profile?.name || profile?.pushName) setProfileName(profile.name || profile.pushName);
         // Try multiple photo fields
         const photoFromProfile = profile?.profilePictureUrl || profile?.imgUrl || profile?.picture || profile?.photo || profile?.profilePicUrl || '';
         if (photoFromProfile) setCurrentProfilePhotoUrl(photoFromProfile);
