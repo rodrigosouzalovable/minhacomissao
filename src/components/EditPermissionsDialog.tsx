@@ -64,6 +64,7 @@ export function EditPermissionsDialog({
   const [credores, setCredores] = useState<string[]>(['ume_novo_mundo']);
   const [visivelRanking, setVisivelRanking] = useState(true);
   const [inboxCompartilhado, setInboxCompartilhado] = useState(false);
+  const [acordosCompartilhados, setAcordosCompartilhados] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -85,11 +86,13 @@ export function EditPermissionsDialog({
       setCredores((permissions as any).credores ?? ['ume_novo_mundo']);
       setVisivelRanking((permissions as any).visivel_ranking ?? true);
       setInboxCompartilhado((permissions as any).inbox_compartilhado ?? false);
+      setAcordosCompartilhados((permissions as any).acordos_compartilhados ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
       setVisivelRanking(true);
       setInboxCompartilhado(false);
+      setAcordosCompartilhados(false);
     }
   }, [permissions, open]);
 
@@ -102,7 +105,8 @@ export function EditPermissionsDialog({
             credores,
             visivel_ranking: visivelRanking,
             inbox_compartilhado: inboxCompartilhado,
-            concedido_por: inboxCompartilhado ? currentUser?.id : null,
+            acordos_compartilhados: acordosCompartilhados,
+            concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
         const { error } = await supabase
@@ -206,6 +210,17 @@ export function EditPermissionsDialog({
               <Switch
                 checked={inboxCompartilhado}
                 onCheckedChange={setInboxCompartilhado}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Acordos Compartilhados</Label>
+                <p className="text-xs text-muted-foreground">Permite ver todos os acordos e instâncias WhatsApp do seu login</p>
+              </div>
+              <Switch
+                checked={acordosCompartilhados}
+                onCheckedChange={setAcordosCompartilhados}
               />
             </div>
           </div>
