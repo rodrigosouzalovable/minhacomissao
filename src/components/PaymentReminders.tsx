@@ -55,6 +55,7 @@ interface LembreteTemplate {
 export function PaymentReminders() {
   const { lembretesVencidos, lembretesHoje, lembretesTresDias, lembretesJaLidos, temLembretes, isLoading, marcarComoLido, desmarcarLido } = usePaymentReminders();
   const { user } = useAuth();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const { isSending, currentSendingId, statusMap, envioProgresso, startSending, cancelSending, loadSavedProgress, markAsEnviado, sendSingleMessage } = useWhatsAppSending();
   const [activeTab, setActiveTab] = useState('pendentes');
   const [dialogOpen, setDialogOpen] = useState(false);
