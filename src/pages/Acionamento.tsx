@@ -233,6 +233,19 @@ export default function Acionamento() {
   const [bulkUpdateProgress, setBulkUpdateProgress] = useState<{ current: number; total: number } | null>(null);
   const [bulkUpdateLog, setBulkUpdateLog] = useState<Array<{ id: string; nome: string; status: 'pending' | 'running' | 'success' | 'error'; message?: string }>>([]);
   const bulkCancelRef = useRef(false);
+  const editFormRef = useRef<HTMLDivElement>(null);
+  const editScrolledRef = useRef<string | null>(null);
+
+  // Scroll to edit form only once when editing instance changes
+  useEffect(() => {
+    if (editingInstance?.id && editFormRef.current && editScrolledRef.current !== editingInstance.id) {
+      editScrolledRef.current = editingInstance.id;
+      editFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (!editingInstance?.id) {
+      editScrolledRef.current = null;
+    }
+  }, [editingInstance?.id]);
 
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
@@ -2247,7 +2260,7 @@ export default function Acionamento() {
 
                    {/* Manual instance form (add/edit) */}
                   {(qrStep === 'manual' || (editingInstance && editingInstance.id)) && editingInstance && (
-                    <div className="rounded-md border p-4 space-y-3 bg-muted/20" ref={(el) => { if (el && editingInstance.id) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>
+                    <div className="rounded-md border p-4 space-y-3 bg-muted/20" ref={editFormRef}>
                       <h4 className="text-sm font-semibold">{editingInstance.id ? 'Editar instância' : 'Nova instância (manual)'}</h4>
                       <div className="space-y-2">
                         <Label>Nome (opcional)</Label>
