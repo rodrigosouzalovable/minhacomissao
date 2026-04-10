@@ -942,6 +942,7 @@ export default function Acionamento() {
         setProfileDescription(profile?.description || '');
         setProfileAddress(profile?.address || '');
         setProfileEmail(profile?.email || '');
+        setProfileName(profile?.name || profile?.pushName || '');
         // Try multiple photo fields
         const photoFromProfile = profile?.profilePictureUrl || profile?.imgUrl || profile?.picture || profile?.photo || profile?.profilePicUrl || '';
         if (photoFromProfile) setCurrentProfilePhotoUrl(photoFromProfile);
