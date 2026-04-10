@@ -139,9 +139,9 @@ export function usePaymentReminders() {
 
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
-    queryKey: ['retorno-reminders', user?.id],
+    queryKey: ['retorno-reminders', user?.id, adminId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
@@ -149,7 +149,7 @@ export function usePaymentReminders() {
       const { data, error } = await supabase
         .from('retornos')
         .select('*')
-        .eq('user_id', user.id)
+        .in('user_id', userIds)
         .eq('status', 'pendente')
         .or(`data_retorno.eq.${hoje},data_retorno.eq.${tresDias}`);
 
