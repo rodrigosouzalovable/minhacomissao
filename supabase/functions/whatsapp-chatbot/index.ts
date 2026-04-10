@@ -843,7 +843,7 @@ serve(async (req) => {
 
     // --- INBOX: Salvar mensagem no histórico ---
     const inboxTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    const inboxTexto = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+    const inboxTexto = extractTextFromPayload(payload);
     const inboxNomeContato = payload?.message?.senderName || payload?.pushName || payload?.senderName || payload?.message?.pushName || null;
     const inboxServerUrl = payload?.BaseUrl?.replace(/\/+$/, '') || '';
     const inboxInstanceToken = payload?.token || '';
@@ -1446,7 +1446,7 @@ serve(async (req) => {
 
     // --- Track fromMe messages (outbound proposals) ---
     if (isFromMe) {
-      const textoFromMe = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+      const textoFromMe = extractTextFromPayload(payload);
       const textoFromMeLower = textoFromMe.toLowerCase();
       const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
@@ -1616,7 +1616,7 @@ serve(async (req) => {
     }
 
     const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    let texto = (payload?.message?.text || payload?.body || payload?.text || payload?.message?.body || payload?.message?.conversation || payload?.message?.extendedTextMessage?.text || payload?.message?.content?.text || '').trim();
+    let texto = extractTextFromPayload(payload);
 
     // Se não tem texto, verificar se é áudio e transcrever
     if (!texto) {
