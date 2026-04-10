@@ -1509,6 +1509,11 @@ export type Database = {
           server_url: string
           tipo: string | null
           user_id: string
+          whatsapp_profile_address: string | null
+          whatsapp_profile_description: string | null
+          whatsapp_profile_email: string | null
+          whatsapp_profile_name: string | null
+          whatsapp_profile_photo_url: string | null
         }
         Insert: {
           apenas_lembretes?: boolean
@@ -1523,6 +1528,11 @@ export type Database = {
           server_url: string
           tipo?: string | null
           user_id: string
+          whatsapp_profile_address?: string | null
+          whatsapp_profile_description?: string | null
+          whatsapp_profile_email?: string | null
+          whatsapp_profile_name?: string | null
+          whatsapp_profile_photo_url?: string | null
         }
         Update: {
           apenas_lembretes?: boolean
@@ -1537,6 +1547,11 @@ export type Database = {
           server_url?: string
           tipo?: string | null
           user_id?: string
+          whatsapp_profile_address?: string | null
+          whatsapp_profile_description?: string | null
+          whatsapp_profile_email?: string | null
+          whatsapp_profile_name?: string | null
+          whatsapp_profile_photo_url?: string | null
         }
         Relationships: []
       }
