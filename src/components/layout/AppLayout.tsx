@@ -33,6 +33,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import acordosIcon from '@/assets/acordos-icon.png';
 import { supabase } from '@/integrations/supabase/client';
 import { useVoiceCampaignSending } from '@/contexts/VoiceCampaignSendingContext';
+import { useAutoSend } from '@/hooks/useAutoSend';
 import {
   DndContext,
   closestCenter,
@@ -118,6 +119,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { sendingCampaignId, sendingProgress } = useVoiceCampaignSending();
+  const { autoSending, autoProgress } = useAutoSend();
 
   // Load sidebar order from profile
   useEffect(() => {
@@ -337,9 +339,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                       isActive={location.pathname === item.href}
                       onClick={() => setMobileMenuOpen(false)}
                       badge={item.href === '/inbox' ? inboxUnreadCount : undefined}
-                      statusBadge={item.href === '/campanhas-voz' && sendingCampaignId && sendingProgress
-                        ? `${sendingProgress.sent + sendingProgress.errors}/${sendingProgress.total}`
-                        : undefined}
+                      statusBadge={
+                        item.href === '/campanhas-voz' && sendingCampaignId && sendingProgress
+                          ? `${sendingProgress.sent + sendingProgress.errors}/${sendingProgress.total}`
+                          : item.href === '/admin/acionamento' && autoSending && autoProgress
+                            ? `${autoProgress.current}/${autoProgress.total}`
+                            : undefined
+                      }
                     />
                   ))}
                 </SortableContext>

@@ -70,6 +70,57 @@ async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone:
   throw new Error(lastError?.message || lastError?.error || 'Nenhum endpoint UAZAPI funcionou');
 }
 
+// Find contact by suffix matching (last 8 digits)
+async function findContactBySuffix(supabase: any, instanciaId: string, telefone: string) {
+  const suffix = telefone.replace(/\D/g, '').slice(-8);
+  const { data: contatos } = await supabase
+    .from('whatsapp_contatos')
+    .select('id, telefone')
+    .eq('instancia_id', instanciaId)
+    .like('telefone', `%${suffix}`);
+  return contatos?.[0] || null;
+}
+
+// Save message to inbox with contact upsert
+async function saveToInbox(supabase: any, instanciaId: string, telefoneOriginal: string, msg: string) {
+  const cleanPhone = telefoneOriginal.replace(/\D/g, '');
+  const phoneFull = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+
+  // Find existing contact by suffix
+  const existingContact = await findContactBySuffix(supabase, instanciaId, phoneFull);
+  const phoneToUse = existingContact?.telefone || phoneFull;
+
+  // Upsert contact
+  if (existingContact) {
+    await supabase
+      .from('whatsapp_contatos')
+      .update({
+        ultima_mensagem: msg.substring(0, 200),
+        ultima_mensagem_em: new Date().toISOString(),
+      })
+      .eq('id', existingContact.id);
+  } else {
+    await supabase.from('whatsapp_contatos').upsert({
+      instancia_id: instanciaId,
+      telefone: phoneToUse,
+      nome: phoneToUse,
+      ultima_mensagem: msg.substring(0, 200),
+      ultima_mensagem_em: new Date().toISOString(),
+      nao_lido: 0,
+    }, { onConflict: 'instancia_id,telefone' });
+  }
+
+  // Save message
+  await supabase.from('whatsapp_mensagens').insert({
+    instancia_id: instanciaId,
+    telefone_remoto: phoneToUse,
+    conteudo: msg,
+    direcao: 'saida',
+    timestamp_msg: new Date().toISOString(),
+    lida: true,
+  });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -80,7 +131,6 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    // Find pending schedules that are due
     const { data: agendamentos, error: fetchErr } = await supabase
       .from('acionamento_agendamentos')
       .select('*')
@@ -98,7 +148,6 @@ serve(async (req) => {
     const agendamento = agendamentos[0];
     const { id, user_id, historico_data, min_sec, max_sec } = agendamento;
 
-    // Mark as executing
     await supabase
       .from('acionamento_agendamentos')
       .update({ status: 'executando' })
@@ -106,7 +155,6 @@ serve(async (req) => {
 
     const { clientes, mensagens } = historico_data as { clientes: ClienteData[]; mensagens: string[] };
 
-    // Get user's active robot instances
     const { data: instancesData } = await supabase
       .from('user_whatsapp_instances')
       .select('id, server_url, instance_token, nome')
@@ -141,15 +189,13 @@ serve(async (req) => {
     let rrCounter = 0;
     const consecutiveErrors: Record<string, number> = {};
 
-    // ========== DAILY CAP PER INSTANCE ==========
-    // Track how many messages each instance has sent today (across all schedules)
+    // Daily cap per instance
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayISO = todayStart.toISOString();
 
     const instanceDailyCount: Record<string, number> = {};
     for (const inst of activeInstances) {
-      // Count messages sent today by this instance via inbox log
       const { count } = await supabase
         .from('whatsapp_mensagens')
         .select('id', { count: 'exact', head: true })
@@ -186,13 +232,13 @@ serve(async (req) => {
       lastMsgIndex = msgIndex;
       const msg = replaceVariables(mensagens[msgIndex], cliente);
 
-      // Round-robin instance selection (skip disabled ones AND those over daily cap)
+      // Round-robin instance selection
       const availableInstances = activeInstances.filter(inst => 
         (consecutiveErrors[inst.id] || 0) < 3 &&
         (instanceDailyCount[inst.id] || 0) < MAX_MSGS_PER_INSTANCE_PER_DAY
       );
       if (availableInstances.length === 0) {
-        console.error('[Agendamento] Todas as instâncias indisponíveis (falhas ou limite diário atingido)');
+        console.error('[Agendamento] Todas as instâncias indisponíveis');
         break;
       }
       const instance = availableInstances[rrCounter % availableInstances.length];
@@ -205,26 +251,9 @@ serve(async (req) => {
         instanceDailyCount[instance.id] = (instanceDailyCount[instance.id] || 0) + 1;
         console.log(`[Agendamento] Enviado para ${telefoneCompleto} via ${instance.nome || instance.id} (${instanceDailyCount[instance.id]}/${MAX_MSGS_PER_INSTANCE_PER_DAY} hoje)`);
 
-        // Save to inbox
+        // Save to inbox with suffix matching
         try {
-          const { data: inst } = await supabase
-            .from('user_whatsapp_instances')
-            .select('id')
-            .eq('server_url', instance.server_url)
-            .eq('instance_token', instance.instance_token)
-            .limit(1)
-            .maybeSingle();
-
-          if (inst?.id) {
-            await supabase.from('whatsapp_mensagens').insert({
-              instancia_id: inst.id,
-              telefone_remoto: telefoneCompleto,
-              conteudo: msg,
-              direcao: 'saida',
-              timestamp_msg: new Date().toISOString(),
-              lida: true,
-            });
-          }
+          await saveToInbox(supabase, instance.id, telefoneCompleto, msg);
         } catch (e) {
           console.error('[Agendamento] Erro ao salvar inbox:', e);
         }
@@ -242,14 +271,13 @@ serve(async (req) => {
           .eq('id', id);
       }
 
-      // Random delay between messages
+      // Random delay
       if (i < uniqueClientes.length - 1) {
         const delay = Math.floor(Math.random() * (max_sec - min_sec + 1)) + min_sec;
         await new Promise(resolve => setTimeout(resolve, delay * 1000));
       }
     }
 
-    // Mark as completed
     await supabase
       .from('acionamento_agendamentos')
       .update({ status: 'concluido', total_enviados: totalEnviados, total_erros: totalErros })
