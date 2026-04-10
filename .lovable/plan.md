@@ -1,33 +1,36 @@
 
 
-## Mensagens Rápidas (Atalhos) no WhatsApp Inbox
+## Problema
+Mensagens enviadas pelo Acionamento (e outras páginas como Retornos, AcordoDetalhe) não aparecem no Inbox porque o `instancia_id` não é enviado para a Edge Function `send-whatsapp`. Sem esse ID, a função não consegue salvar a mensagem na tabela `whatsapp_mensagens`.
 
-### O que será feito
-1. **Criar tabela `whatsapp_mensagens_rapidas`** para armazenar os atalhos configurados pelo usuário, com campos: `id`, `user_id`, `titulo`, `tipo` (texto/audio/botoes), `conteudo` (texto da mensagem), `audio_url`, `botoes_texto`, `botoes_choices`, `ordem`, `criado_em`
+### Páginas afetadas
+- **Acionamento** — passa `server_url` e `instance_token` mas **não** passa `instancia_id`
+- **Retornos** — não passa nenhuma credencial nem `instancia_id`
+- **AcordoDetalhe** — não passa credenciais nem `instancia_id`
+- **Acordos** — passa credenciais mas **não** `instancia_id`
+- **useAutoSend** — passa credenciais mas **não** `instancia_id`
+- **PaymentReminders** — precisa verificar
 
-2. **Ícone de engrenagem** ao lado do ícone de etiqueta no header do Inbox, abrindo um Dialog de configuração
+### Correção
 
-3. **Dialog de configuração** com:
-   - Lista das mensagens rápidas já cadastradas (com opção de editar/excluir)
-   - Botão "Adicionar" com seleção de tipo: Texto, Áudio, Botões
-   - Campo "Título" (obrigatório) — será o nome exibido no botão
-   - Campo de conteúdo conforme o tipo:
-     - **Texto**: textarea para a mensagem
-     - **Áudio**: upload de arquivo de áudio (salvo no bucket `inbox-media`)
-     - **Botões**: texto da mensagem + até 3 botões (choices)
+1. **Acionamento (`src/pages/Acionamento.tsx`)**:
+   - Alterar `getFirstActiveConfig` para incluir o `id` da instância
+   - Passar `instancia_id` no body de todas as chamadas `send-whatsapp`
 
-4. **Botões de atalho acima do campo de digitação** (`ChatInputBar`):
-   - Barra horizontal com scroll com os botões nomeados pelo título
-   - Ao clicar, envia automaticamente a mensagem na conversa ativa usando as funções existentes (`send-whatsapp`, `send-whatsapp-audio`, `send-whatsapp-buttons`)
+2. **Acordos (`src/pages/Acordos.tsx`)**:
+   - Incluir `instancia_id` na chamada (já tem a instância com `id` disponível)
 
-### Arquivos modificados
-- **Migration SQL**: criar tabela `whatsapp_mensagens_rapidas` com RLS (user_id = auth.uid())
-- **`src/pages/WhatsAppInbox.tsx`**: adicionar ícone engrenagem, estado do dialog, fetch dos atalhos, passar atalhos para ChatInputBar
-- **`src/components/inbox/ChatInputBar.tsx`**: receber lista de atalhos, renderizar botões acima do input, executar envio ao clicar
-- **Novo: `src/components/inbox/MensagensRapidasDialog.tsx`**: Dialog completo de CRUD dos atalhos
+3. **Retornos (`src/pages/Retornos.tsx`)**:
+   - Buscar a instância ativa do usuário e passar `instancia_id` + credenciais
 
-### Fluxo de envio ao clicar no atalho
-- **Texto**: chama `onTextSent(conteudo)` diretamente
-- **Áudio**: invoca `send-whatsapp-audio` com a `audio_url` salva
-- **Botões**: invoca `send-whatsapp-buttons` com texto e choices salvos
+4. **AcordoDetalhe (`src/pages/AcordoDetalhe.tsx`)**:
+   - Buscar a instância ativa do usuário e passar `instancia_id` + credenciais
+
+5. **useAutoSend (`src/hooks/useAutoSend.tsx`)**:
+   - Incluir `instancia_id` na chamada (já tem referência à instância)
+
+6. **PaymentReminders** — verificar e corrigir se necessário
+
+### Resultado
+Toda mensagem enviada por qualquer parte do sistema será salva no inbox e aparecerá na conversa, mesmo que o cliente não responda.
 
