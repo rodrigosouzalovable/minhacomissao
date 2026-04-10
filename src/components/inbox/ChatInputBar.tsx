@@ -135,6 +135,35 @@ export function ChatInputBar({
   };
 
   const isLoading = enviando || enviandoAudio || enviandoArquivo;
+  const [enviandoAtalho, setEnviandoAtalho] = useState<string | null>(null);
+
+  const handleAtalhoClick = async (atalho: MensagemRapida) => {
+    if (isLoading || enviandoAtalho) return;
+    setEnviandoAtalho(atalho.id);
+    try {
+      if (atalho.tipo === 'texto' && atalho.conteudo) {
+        await onTextSent(atalho.conteudo);
+      } else if (atalho.tipo === 'audio' && atalho.audio_url) {
+        const { data, error } = await supabase.functions.invoke('send-whatsapp-audio', {
+          body: { telefone, audio_url: atalho.audio_url, uazapi_server_url: serverUrl, uazapi_instance_token: instanceToken, instancia_id: instanciaId },
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Falha ao enviar áudio');
+        onMediaSent();
+      } else if (atalho.tipo === 'botoes' && atalho.botoes_texto) {
+        const { data, error } = await supabase.functions.invoke('send-whatsapp-buttons', {
+          body: { telefone, text: atalho.botoes_texto, choices: atalho.botoes_choices || [], uazapi_server_url: serverUrl, uazapi_instance_token: instanceToken, instancia_id: instanciaId },
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Falha ao enviar botões');
+        onMediaSent();
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar atalho', description: err.message, variant: 'destructive' });
+    } finally {
+      setEnviandoAtalho(null);
+    }
+  };
 
   if (gravando) {
     return (
