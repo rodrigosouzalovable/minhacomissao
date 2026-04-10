@@ -5,6 +5,7 @@ import { Send, Mic, Paperclip, X, Loader2 } from 'lucide-react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import type { MensagemRapida } from './MensagensRapidasDialog';
 
 interface MediaSentPayload {
   conteudo: string;
@@ -22,12 +23,14 @@ interface ChatInputBarProps {
   enviando: boolean;
   externalFile?: File | null;
   onExternalFileHandled?: () => void;
+  mensagensRapidas?: MensagemRapida[];
 }
 
 export function ChatInputBar({
   instanciaId, telefone, serverUrl, instanceToken,
   onTextSent, onMediaSent, enviando,
   externalFile, onExternalFileHandled,
+  mensagensRapidas,
 }: ChatInputBarProps) {
   const { toast } = useToast();
   const [textoMensagem, setTextoMensagem] = useState('');
