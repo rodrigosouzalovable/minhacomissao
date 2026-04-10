@@ -225,6 +225,15 @@ export default function Acionamento() {
   const [savingProfilePhoto, setSavingProfilePhoto] = useState(false);
   const [savingProfileBusiness, setSavingProfileBusiness] = useState(false);
 
+  // Bulk profile update state
+  const [bulkUpdateConfirmOpen, setBulkUpdateConfirmOpen] = useState(false);
+  const [bulkUpdateApplyName, setBulkUpdateApplyName] = useState(true);
+  const [bulkUpdateApplyPhoto, setBulkUpdateApplyPhoto] = useState(true);
+  const [bulkUpdateRunning, setBulkUpdateRunning] = useState(false);
+  const [bulkUpdateProgress, setBulkUpdateProgress] = useState<{ current: number; total: number } | null>(null);
+  const [bulkUpdateLog, setBulkUpdateLog] = useState<Array<{ id: string; nome: string; status: 'pending' | 'running' | 'success' | 'error'; message?: string }>>([]);
+  const bulkCancelRef = useRef(false);
+
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
@@ -1103,7 +1112,129 @@ export default function Acionamento() {
     }
   };
 
-  // Instance management
+  // Bulk profile update — gradual with anti-ban delays
+  const handleBulkProfileUpdate = async () => {
+    setBulkUpdateConfirmOpen(false);
+    bulkCancelRef.current = false;
+
+    // Get connected instances excluding the current one
+    const connectedOthers = instances.filter(
+      i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected'
+    );
+
+    if (connectedOthers.length === 0) {
+      toast.error('Nenhuma outra instância conectada encontrada');
+      return;
+    }
+
+    // Shuffle for randomized order
+    const shuffled = [...connectedOthers].sort(() => Math.random() - 0.5);
+
+    const log = shuffled.map(i => ({ id: i.id, nome: i.nome || 'Sem nome', status: 'pending' as const }));
+    setBulkUpdateLog(log);
+    setBulkUpdateRunning(true);
+    setBulkUpdateProgress({ current: 0, total: shuffled.length });
+
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const randomDelay = (min: number, max: number) => {
+      const base = min + Math.random() * (max - min);
+      const jitter = base * (0.7 + Math.random() * 0.6); // ±30%
+      return Math.round(jitter);
+    };
+
+    for (let idx = 0; idx < shuffled.length; idx++) {
+      if (bulkCancelRef.current) break;
+
+      const inst = shuffled[idx];
+      setBulkUpdateLog(prev => prev.map(l => l.id === inst.id ? { ...l, status: 'running' } : l));
+      setBulkUpdateProgress({ current: idx + 1, total: shuffled.length });
+
+      try {
+        const cleanUrl = inst.server_url.replace(/\/+$/, '');
+
+        // Update name
+        if (bulkUpdateApplyName && profileName.trim()) {
+          const nameRes = await fetch(`${cleanUrl}/profile/name`, {
+            method: 'POST',
+            headers: { 'token': inst.instance_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: profileName }),
+          });
+          if (!nameRes.ok) throw new Error('Falha ao alterar nome');
+          // Cache in DB
+          await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_name: profileName } as any).eq('id', inst.id);
+          setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, whatsapp_profile_name: profileName } : i));
+        }
+
+        // Pause between name and photo
+        if (bulkUpdateApplyName && bulkUpdateApplyPhoto && profileName.trim()) {
+          await sleep(randomDelay(30000, 90000));
+          if (bulkCancelRef.current) break;
+        }
+
+        // Update photo
+        if (bulkUpdateApplyPhoto && currentProfilePhotoUrl) {
+          // Need to get photo as base64 — use the cached preview or fetch from URL
+          let base64Image = '';
+          if (profilePhotoPreview) {
+            base64Image = profilePhotoPreview.includes(',') ? profilePhotoPreview.split(',')[1] : profilePhotoPreview;
+          } else if (currentProfilePhotoUrl.startsWith('data:')) {
+            base64Image = currentProfilePhotoUrl.split(',')[1];
+          } else {
+            // Fetch the URL and convert to base64
+            try {
+              const imgRes = await fetch(currentProfilePhotoUrl);
+              const blob = await imgRes.blob();
+              const reader = new FileReader();
+              base64Image = await new Promise<string>((resolve) => {
+                reader.onloadend = () => {
+                  const result = reader.result as string;
+                  resolve(result.includes(',') ? result.split(',')[1] : result);
+                };
+                reader.readAsDataURL(blob);
+              });
+            } catch {
+              throw new Error('Não foi possível obter a imagem para enviar');
+            }
+          }
+          base64Image = base64Image.replace(/\s/g, '');
+
+          const photoRes = await fetch(`${cleanUrl}/profile/image`, {
+            method: 'POST',
+            headers: { 'token': inst.instance_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64Image }),
+          });
+          if (!photoRes.ok) throw new Error('Falha ao alterar foto');
+          // Cache in DB
+          await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_photo_url: currentProfilePhotoUrl } as any).eq('id', inst.id);
+          setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, whatsapp_profile_photo_url: currentProfilePhotoUrl } : i));
+        }
+
+        setBulkUpdateLog(prev => prev.map(l => l.id === inst.id ? { ...l, status: 'success' } : l));
+      } catch (err: any) {
+        setBulkUpdateLog(prev => prev.map(l => l.id === inst.id ? { ...l, status: 'error', message: err.message } : l));
+        // Pause 5 min on error
+        if (idx < shuffled.length - 1 && !bulkCancelRef.current) {
+          await sleep(300000);
+        }
+        continue;
+      }
+
+      // Delay before next instance (60-180s)
+      if (idx < shuffled.length - 1 && !bulkCancelRef.current) {
+        await sleep(randomDelay(60000, 180000));
+      }
+    }
+
+    setBulkUpdateRunning(false);
+    if (bulkCancelRef.current) {
+      toast.info('Atualização em massa cancelada');
+    } else {
+      const successCount = bulkUpdateLog.filter(l => l.status === 'success').length;
+      toast.success(`Perfil atualizado em ${successCount} instância(s)`);
+    }
+  };
+
+
   const handleSaveInstance = async () => {
     if (!user || !editingInstance) return;
     if (!editingInstance.server_url.trim() || !editingInstance.instance_token.trim()) {
@@ -2342,6 +2473,130 @@ export default function Acionamento() {
                               Salvar dados comerciais
                             </Button>
                           </div>
+
+                          {/* Bulk update button */}
+                          <Separator />
+                          <div className="space-y-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs w-full"
+                              onClick={() => setBulkUpdateConfirmOpen(true)}
+                              disabled={bulkUpdateRunning || (!profileName.trim() && !currentProfilePhotoUrl)}
+                            >
+                              <Copy className="h-3 w-3 mr-1" />
+                              Aplicar perfil em todas as instâncias
+                            </Button>
+                            <p className="text-[10px] text-muted-foreground text-center">
+                              Atualiza nome e/ou foto gradativamente, uma instância por vez (1-3 min entre cada)
+                            </p>
+                          </div>
+
+                          {/* Bulk update confirmation dialog */}
+                          <Dialog open={bulkUpdateConfirmOpen} onOpenChange={setBulkUpdateConfirmOpen}>
+                            <DialogContent className="max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Aplicar perfil em massa</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                  O perfil será aplicado gradualmente em {instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length} instância(s) conectada(s), com intervalos aleatórios para segurança.
+                                </p>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox
+                                      id="bulk-name"
+                                      checked={bulkUpdateApplyName}
+                                      onCheckedChange={(c) => setBulkUpdateApplyName(!!c)}
+                                    />
+                                    <Label htmlFor="bulk-name" className="text-sm">Aplicar nome: <strong>{profileName || '(vazio)'}</strong></Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox
+                                      id="bulk-photo"
+                                      checked={bulkUpdateApplyPhoto}
+                                      onCheckedChange={(c) => setBulkUpdateApplyPhoto(!!c)}
+                                    />
+                                    <Label htmlFor="bulk-photo" className="text-sm">Aplicar foto</Label>
+                                  </div>
+                                </div>
+                                {(() => {
+                                  const count = instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length;
+                                  const minMin = Math.ceil(count * 1);
+                                  const maxMin = Math.ceil(count * 3);
+                                  return (
+                                    <p className="text-xs text-muted-foreground">
+                                      ⏱ Tempo estimado: ~{minMin} a {maxMin} minutos
+                                    </p>
+                                  );
+                                })()}
+                                <div className="flex gap-2 justify-end">
+                                  <Button variant="outline" size="sm" onClick={() => setBulkUpdateConfirmOpen(false)}>Cancelar</Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={handleBulkProfileUpdate}
+                                    disabled={!bulkUpdateApplyName && !bulkUpdateApplyPhoto}
+                                  >
+                                    <Play className="h-3 w-3 mr-1" /> Iniciar
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+
+                          {/* Bulk update progress */}
+                          {bulkUpdateRunning && (
+                            <div className="space-y-2 rounded-md border p-3 bg-accent/30">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold">Atualizando perfis... ({bulkUpdateProgress?.current}/{bulkUpdateProgress?.total})</p>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="h-6 text-[10px] px-2"
+                                  onClick={() => { bulkCancelRef.current = true; }}
+                                >
+                                  <Square className="h-3 w-3 mr-1" /> Cancelar
+                                </Button>
+                              </div>
+                              <div className="space-y-1 max-h-40 overflow-y-auto">
+                                {bulkUpdateLog.map(l => (
+                                  <div key={l.id} className="flex items-center gap-2 text-[11px]">
+                                    {l.status === 'pending' && <span className="text-muted-foreground">⏳</span>}
+                                    {l.status === 'running' && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                                    {l.status === 'success' && <span className="text-green-600">✓</span>}
+                                    {l.status === 'error' && <span className="text-destructive">✗</span>}
+                                    <span className={l.status === 'error' ? 'text-destructive' : ''}>{l.nome}</span>
+                                    {l.message && <span className="text-muted-foreground">— {l.message}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bulk update results (after completion) */}
+                          {!bulkUpdateRunning && bulkUpdateLog.length > 0 && (
+                            <div className="space-y-2 rounded-md border p-3 bg-accent/20">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold">
+                                  Resultado: {bulkUpdateLog.filter(l => l.status === 'success').length} sucesso, {bulkUpdateLog.filter(l => l.status === 'error').length} erro(s)
+                                </p>
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setBulkUpdateLog([])}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {bulkUpdateLog.map(l => (
+                                  <div key={l.id} className="flex items-center gap-2 text-[11px]">
+                                    {l.status === 'success' && <span className="text-green-600">✓</span>}
+                                    {l.status === 'error' && <span className="text-destructive">✗</span>}
+                                    {l.status === 'pending' && <span className="text-muted-foreground">—</span>}
+                                    <span>{l.nome}</span>
+                                    {l.message && <span className="text-muted-foreground">— {l.message}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
