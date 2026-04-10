@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import { format } from 'date-fns';
@@ -57,6 +57,78 @@ const PHASE_LABELS: Record<number, string> = {
 
 const PHASE_DAYS: Record<number, number> = { 1: 7, 2: 14, 3: 21, 4: 28, 5: 28 };
 
+// === Helper functions for countdown ===
+function getBrasiliaTime(): Date {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc - 3 * 3600000);
+}
+
+function getNextCronSlot(horaInicio: number, horaFim: number, diasAtivos: number[]): Date | null {
+  const brasilia = getBrasiliaTime();
+  const h = brasilia.getHours();
+  const m = brasilia.getMinutes();
+  const dow = brasilia.getDay(); // 0=Sun
+
+  // Check if today is active
+  if (diasAtivos.includes(dow) && (h < horaFim || (h === horaFim && m === 0))) {
+    // Still within today's window
+    let nextH = h;
+    let nextM = m < 30 ? 30 : 0;
+    if (m >= 30) nextH++;
+
+    if (nextH < horaInicio) {
+      nextH = horaInicio;
+      nextM = 0;
+    }
+    if (nextH < horaFim || (nextH === horaFim && nextM === 0)) {
+      const target = new Date(brasilia);
+      target.setHours(nextH, nextM, 0, 0);
+      // Convert back to local time
+      const utcTarget = target.getTime() + 3 * 3600000;
+      return new Date(utcTarget - new Date().getTimezoneOffset() * 60000);
+    }
+  }
+
+  // Find next active day
+  for (let d = 1; d <= 7; d++) {
+    const nextDow = (dow + d) % 7;
+    if (diasAtivos.includes(nextDow)) {
+      const target = new Date(brasilia);
+      target.setDate(target.getDate() + d);
+      target.setHours(horaInicio, 0, 0, 0);
+      const utcTarget = target.getTime() + 3 * 3600000;
+      return new Date(utcTarget - new Date().getTimezoneOffset() * 60000);
+    }
+  }
+  return null;
+}
+
+function CountdownTimer({ targetDate }: { targetDate: Date | null }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    if (!targetDate) return;
+    const tick = () => {
+      const diff = targetDate.getTime() - Date.now();
+      if (diff <= 0) {
+        setTimeLeft('Agora!');
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  if (!targetDate) return <span className="text-xs text-muted-foreground">—</span>;
+  return <span className="text-xs font-mono font-semibold text-orange-400">{timeLeft}</span>;
+}
+
 export default function Aquecimento() {
   const [instancias, setInstancias] = useState<AquecimentoInstancia[]>([]);
   const [allInstances, setAllInstances] = useState<any[]>([]);
@@ -69,10 +141,58 @@ export default function Aquecimento() {
   const [manualTestOpen, setManualTestOpen] = useState(false);
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
   const [testLoading, setTestLoading] = useState(false);
+  const [nextCronSlot, setNextCronSlot] = useState<Date | null>(null);
+  const [isWithinHours, setIsWithinHours] = useState(false);
+  const [estimatedTargets, setEstimatedTargets] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadAll();
   }, []);
+
+  // Load aquecimento config and compute next cron slot
+  useEffect(() => {
+    async function loadCronConfig() {
+      const { data: configs } = await supabase
+        .from('whatsapp_aquecimento_config' as any)
+        .select('chave, valor');
+      
+      let horaInicio = 6, horaFim = 18, diasAtivos = [1, 2, 3, 4, 5, 6];
+      if (configs) {
+        for (const c of configs as any[]) {
+          if (c.chave === 'hora_inicio') horaInicio = Number(c.valor) || 6;
+          if (c.chave === 'hora_fim') horaFim = Number(c.valor) || 18;
+          if (c.chave === 'dias_ativos') diasAtivos = Array.isArray(c.valor) ? c.valor : [1,2,3,4,5,6];
+        }
+      }
+
+      const brasilia = getBrasiliaTime();
+      const h = brasilia.getHours();
+      const dow = brasilia.getDay();
+      const within = diasAtivos.includes(dow) && h >= horaInicio && h < horaFim;
+      setIsWithinHours(within);
+
+      const slot = getNextCronSlot(horaInicio, horaFim, diasAtivos);
+      setNextCronSlot(slot);
+    }
+    loadCronConfig();
+    const interval = setInterval(() => loadCronConfig(), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Estimate round-robin targets
+  useEffect(() => {
+    const active = instancias.filter(i => i.status === 'EM_AQUECIMENTO' && i.interacoes_hoje < i.limite_diario);
+    if (active.length < 2) {
+      setEstimatedTargets({});
+      return;
+    }
+    const targets: Record<string, string> = {};
+    for (let idx = 0; idx < active.length; idx++) {
+      const destIdx = (idx + 1) % active.length;
+      targets[active[idx].instancia_id] = active[destIdx].instance_name || '?';
+    }
+    setEstimatedTargets(targets);
+  }, [instancias]);
 
   async function loadAll() {
     setLoading(true);
@@ -401,6 +521,24 @@ export default function Aquecimento() {
                   </Card>
                 )}
 
+                {/* Status Banner */}
+                {emAquecimentoInstances.length > 0 && (
+                  <Card className={`border ${isWithinHours ? 'border-green-500/30 bg-green-500/5' : 'border-yellow-500/30 bg-yellow-500/5'}`}>
+                    <CardContent className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Timer className={`h-4 w-4 ${isWithinHours ? 'text-green-400' : 'text-yellow-400'}`} />
+                        <span className="text-sm font-medium">
+                          {isWithinHours ? '🟢 Sistema Ativo' : '🟡 Fora do Horário'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Próximo ciclo:</span>
+                        <CountdownTimer targetDate={nextCronSlot} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Em Aquecimento */}
                 {emAquecimentoInstances.length > 0 && (
                   <Card>
@@ -415,27 +553,46 @@ export default function Aquecimento() {
                             <TableHead>Fase</TableHead>
                             <TableHead>Dias</TableHead>
                             <TableHead>Hoje</TableHead>
+                            <TableHead>Próxima Msg</TableHead>
                             <TableHead>Total</TableHead>
                             <TableHead>Ação</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {emAquecimentoInstances.map(inst => (
-                            <TableRow key={inst.id}>
-                              <TableCell className="font-medium text-sm">📱 {inst.instance_name}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">{PHASE_LABELS[inst.fase] || `Fase ${inst.fase}`}</Badge>
-                              </TableCell>
-                              <TableCell className="text-sm">{inst.dias_conectado}d</TableCell>
-                              <TableCell className="text-sm">{inst.interacoes_hoje}/{inst.limite_diario}</TableCell>
-                              <TableCell className="text-sm">{inst.interacoes_total}</TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="ghost" onClick={() => pausarAquecimento(inst.id)}>
-                                  <Pause className="h-3 w-3" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {emAquecimentoInstances.map(inst => {
+                            const limitReached = inst.interacoes_hoje >= inst.limite_diario;
+                            const target = estimatedTargets[inst.instancia_id];
+                            return (
+                              <TableRow key={inst.id}>
+                                <TableCell className="font-medium text-sm">📱 {inst.instance_name}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">{PHASE_LABELS[inst.fase] || `Fase ${inst.fase}`}</Badge>
+                                </TableCell>
+                                <TableCell className="text-sm">{inst.dias_conectado}d</TableCell>
+                                <TableCell className="text-sm">{inst.interacoes_hoje}/{inst.limite_diario}</TableCell>
+                                <TableCell>
+                                  {limitReached ? (
+                                    <span className="text-xs text-green-400">✅ Limite atingido</span>
+                                  ) : !isWithinHours ? (
+                                    <span className="text-xs text-yellow-400">⏸ Fora do horário</span>
+                                  ) : (
+                                    <div className="flex flex-col gap-0.5">
+                                      <CountdownTimer targetDate={nextCronSlot} />
+                                      {target && (
+                                        <span className="text-[11px] text-muted-foreground">→ para <strong>{target}</strong></span>
+                                      )}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-sm">{inst.interacoes_total}</TableCell>
+                                <TableCell>
+                                  <Button size="sm" variant="ghost" onClick={() => pausarAquecimento(inst.id)}>
+                                    <Pause className="h-3 w-3" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </CardContent>
