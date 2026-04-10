@@ -970,6 +970,7 @@ export default function WhatsAppInbox() {
                   enviando={enviando}
                   externalFile={droppedFile}
                   onExternalFileHandled={() => setDroppedFile(null)}
+                  mensagensRapidas={mensagensRapidas}
                 />
               )}
             </>
@@ -1075,6 +1076,15 @@ export default function WhatsAppInbox() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {user && (
+        <MensagensRapidasDialog
+          open={mensagensRapidasOpen}
+          onOpenChange={setMensagensRapidasOpen}
+          userId={user.id}
+          onUpdated={fetchMensagensRapidas}
+        />
+      )}
     </AppLayout>
   );
 }
