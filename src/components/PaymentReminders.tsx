@@ -97,12 +97,14 @@ export function PaymentReminders() {
   // Fetch instances, templates, operator name when dialog opens
   useEffect(() => {
     if (!dialogOpen || !user) return;
+    const adminId = acordosCompartilhados && concedidoPor ? concedidoPor : null;
+    const fetchUserIds = adminId ? [user.id, adminId] : [user.id];
     (async () => {
       const [instRes, tplRes, profileRes] = await Promise.all([
         supabase
           .from('user_whatsapp_instances')
           .select('id, nome, server_url, instance_token, ativo')
-          .eq('user_id', user.id)
+          .in('user_id', fetchUserIds)
           .eq('ativo', true),
         supabase
           .from('lembrete_mensagens_templates')
