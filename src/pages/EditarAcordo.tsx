@@ -83,13 +83,13 @@ export default function EditarAcordo() {
       if (!user || !id || loadingRole) return;
 
       try {
-        // Admin pode editar qualquer acordo, funcionário apenas os seus
+        // Admin e usuários com acordos compartilhados podem editar, funcionário apenas os seus
         let query = supabase
           .from('acordos')
           .select('*')
           .eq('id', id);
 
-        if (!isAdmin) {
+        if (!isAdmin && !acordosCompartilhados) {
           query = query.eq('user_id', user.id);
         }
 
@@ -185,7 +185,7 @@ export default function EditarAcordo() {
         })
         .eq('id', id);
 
-      if (!isAdmin) {
+      if (!isAdmin && !acordosCompartilhados) {
         updateQuery = updateQuery.eq('user_id', user.id);
       }
 
