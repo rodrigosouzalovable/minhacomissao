@@ -149,6 +149,11 @@ interface InstanceFormData {
   nome: string;
   server_url: string;
   instance_token: string;
+  whatsapp_profile_name?: string;
+  whatsapp_profile_photo_url?: string;
+  whatsapp_profile_description?: string;
+  whatsapp_profile_address?: string;
+  whatsapp_profile_email?: string;
 }
 
 function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
@@ -199,7 +204,7 @@ export default function Acionamento() {
   const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -305,7 +310,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email')
         .eq('user_id', user.id)
         .order('ordem' as any, { ascending: true })
         .order('criado_em', { ascending: false });
@@ -920,13 +925,7 @@ export default function Acionamento() {
   // WhatsApp profile management
   const loadWhatsAppProfile = useCallback(async (serverUrl: string, token: string) => {
     setLoadingProfile(true);
-    setCurrentProfilePhotoUrl('');
-    setProfilePhotoFile(null);
-    setProfilePhotoPreview('');
-    setProfileName('');
-    setProfileDescription('');
-    setProfileAddress('');
-    setProfileEmail('');
+    // Don't clear fields — keep cached values from DB
     try {
       const cleanUrl = serverUrl.replace(/\/+$/, '');
       // Fetch business profile
@@ -939,10 +938,10 @@ export default function Acionamento() {
         const data = await res.json();
         console.log('[WhatsApp Profile] /business/get/profile response:', JSON.stringify(data));
         const profile = data?.data || data?.profile || data;
-        setProfileDescription(profile?.description || '');
-        setProfileAddress(profile?.address || '');
-        setProfileEmail(profile?.email || '');
-        setProfileName(profile?.name || profile?.pushName || '');
+        if (profile?.description) setProfileDescription(profile.description);
+        if (profile?.address) setProfileAddress(profile.address);
+        if (profile?.email) setProfileEmail(profile.email);
+        if (profile?.name || profile?.pushName) setProfileName(profile.name || profile.pushName);
         // Try multiple photo fields
         const photoFromProfile = profile?.profilePictureUrl || profile?.imgUrl || profile?.picture || profile?.photo || profile?.profilePicUrl || '';
         if (photoFromProfile) setCurrentProfilePhotoUrl(photoFromProfile);
@@ -1006,6 +1005,11 @@ export default function Acionamento() {
         body: JSON.stringify({ name: profileName }),
       });
       if (!res.ok) throw new Error('Falha ao alterar nome');
+      // Persist to DB cache
+      if (editingInstance.id) {
+        await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_name: profileName } as any).eq('id', editingInstance.id);
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, whatsapp_profile_name: profileName } : i));
+      }
       toast.success('Nome do perfil atualizado!');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao alterar nome');
@@ -1055,15 +1059,15 @@ export default function Acionamento() {
       console.log('[UAZAPI] profile/image response:', res.status, resData);
       if (!res.ok) throw new Error(resData?.error || 'Falha ao alterar foto');
       toast.success(remove ? 'Foto removida!' : 'Foto do perfil atualizada!');
-      if (remove) {
-        setCurrentProfilePhotoUrl('');
-        setProfilePhotoFile(null);
-        setProfilePhotoPreview('');
-      } else {
-        setCurrentProfilePhotoUrl(profilePhotoPreview);
-        setProfilePhotoFile(null);
-        setProfilePhotoPreview('');
+      const newPhotoUrl = remove ? '' : profilePhotoPreview;
+      // Persist to DB cache
+      if (editingInstance.id) {
+        await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_photo_url: newPhotoUrl } as any).eq('id', editingInstance.id);
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, whatsapp_profile_photo_url: newPhotoUrl } : i));
       }
+      setCurrentProfilePhotoUrl(newPhotoUrl);
+      setProfilePhotoFile(null);
+      setProfilePhotoPreview('');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao alterar foto');
     } finally {
@@ -1082,6 +1086,15 @@ export default function Acionamento() {
         body: JSON.stringify({ description: profileDescription, address: profileAddress, email: profileEmail }),
       });
       if (!res.ok) throw new Error('Falha ao atualizar dados comerciais');
+      // Persist to DB cache
+      if (editingInstance.id) {
+        await supabase.from('user_whatsapp_instances' as any).update({
+          whatsapp_profile_description: profileDescription,
+          whatsapp_profile_address: profileAddress,
+          whatsapp_profile_email: profileEmail,
+        } as any).eq('id', editingInstance.id);
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, whatsapp_profile_description: profileDescription, whatsapp_profile_address: profileAddress, whatsapp_profile_email: profileEmail } : i));
+      }
       toast.success('Dados comerciais atualizados!');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao salvar dados comerciais');
@@ -2419,7 +2432,18 @@ export default function Acionamento() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7"
-                                    onClick={() => setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token })}
+                                    onClick={() => {
+                                      const cached = inst as any;
+                                      setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token, whatsapp_profile_name: cached.whatsapp_profile_name, whatsapp_profile_photo_url: cached.whatsapp_profile_photo_url, whatsapp_profile_description: cached.whatsapp_profile_description, whatsapp_profile_address: cached.whatsapp_profile_address, whatsapp_profile_email: cached.whatsapp_profile_email });
+                                      // Rehydrate profile fields from cache
+                                      setProfileName(cached.whatsapp_profile_name || '');
+                                      setCurrentProfilePhotoUrl(cached.whatsapp_profile_photo_url || '');
+                                      setProfilePhotoFile(null);
+                                      setProfilePhotoPreview('');
+                                      setProfileDescription(cached.whatsapp_profile_description || '');
+                                      setProfileAddress(cached.whatsapp_profile_address || '');
+                                      setProfileEmail(cached.whatsapp_profile_email || '');
+                                    }}
                                     title="Editar"
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
