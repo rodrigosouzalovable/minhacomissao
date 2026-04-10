@@ -225,6 +225,15 @@ export default function Acionamento() {
   const [savingProfilePhoto, setSavingProfilePhoto] = useState(false);
   const [savingProfileBusiness, setSavingProfileBusiness] = useState(false);
 
+  // Bulk profile update state
+  const [bulkUpdateConfirmOpen, setBulkUpdateConfirmOpen] = useState(false);
+  const [bulkUpdateApplyName, setBulkUpdateApplyName] = useState(true);
+  const [bulkUpdateApplyPhoto, setBulkUpdateApplyPhoto] = useState(true);
+  const [bulkUpdateRunning, setBulkUpdateRunning] = useState(false);
+  const [bulkUpdateProgress, setBulkUpdateProgress] = useState<{ current: number; total: number } | null>(null);
+  const [bulkUpdateLog, setBulkUpdateLog] = useState<Array<{ id: string; nome: string; status: 'pending' | 'running' | 'success' | 'error'; message?: string }>>([]);
+  const bulkCancelRef = useRef(false);
+
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
