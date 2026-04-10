@@ -26,9 +26,9 @@ export function usePaymentReminders() {
   const adminId = acordosCompartilhados && concedidoPor ? concedidoPor : null;
   const userIds = adminId ? [user?.id, adminId].filter(Boolean) as string[] : user ? [user.id] : [];
 
-  // Buscar IDs de lembretes já lidos
+  // Buscar IDs de lembretes já lidos (próprios + admin compartilhado)
   const { data: lembretesLidos = [] } = useQuery({
-    queryKey: ['lembretes-lidos', user?.id],
+    queryKey: ['lembretes-lidos', user?.id, adminId],
     queryFn: async () => {
       if (!user) return [];
 
@@ -37,7 +37,7 @@ export function usePaymentReminders() {
       const { data, error } = await supabase
         .from('lembretes_lidos')
         .select('pagamento_id')
-        .eq('user_id', user.id)
+        .in('user_id', userIds)
         .gte('criado_em', hojeInicio);
 
       if (error) {
@@ -48,6 +48,7 @@ export function usePaymentReminders() {
       return data.map((l) => l.pagamento_id);
     },
     enabled: !!user,
+    refetchInterval: 30 * 1000,
   });
 
   // Buscar pagamentos pendentes (hoje e 3 dias)
@@ -91,7 +92,7 @@ export function usePaymentReminders() {
       })) as PaymentReminder[];
     },
     enabled: !!user,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: 30 * 1000,
   });
 
   // Buscar parcelas vencidas (data_prevista < hoje)
@@ -134,7 +135,7 @@ export function usePaymentReminders() {
       })) as PaymentReminder[];
     },
     enabled: !!user,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: 30 * 1000,
   });
 
   // Buscar retornos pendentes
@@ -169,7 +170,7 @@ export function usePaymentReminders() {
       })) as PaymentReminder[];
     },
     enabled: !!user,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: 30 * 1000,
   });
 
   const isLoading = isLoadingPagamentos || isLoadingRetornos || isLoadingVencidas;
@@ -197,7 +198,7 @@ export function usePaymentReminders() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id, adminId] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
@@ -221,7 +222,7 @@ export function usePaymentReminders() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['lembretes-lidos', user?.id, adminId] });
       queryClient.invalidateQueries({ queryKey: ['payment-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['retorno-reminders'] });
       queryClient.invalidateQueries({ queryKey: ['overdue-reminders'] });
