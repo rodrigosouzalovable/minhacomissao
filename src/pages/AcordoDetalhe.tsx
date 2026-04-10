@@ -34,6 +34,7 @@ export default function AcordoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [acordo, setAcordo] = useState<Acordo | null>(null);
