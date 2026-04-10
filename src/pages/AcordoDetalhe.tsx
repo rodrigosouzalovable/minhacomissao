@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import successSound from '@/assets/success-sound.mp3';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ export default function AcordoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [acordo, setAcordo] = useState<Acordo | null>(null);
@@ -50,6 +52,7 @@ export default function AcordoDetalhe() {
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
+  const canEdit = isOwner || isAdmin || (acordosCompartilhados && acordo?.user_id === concedidoPor);
 
   useEffect(() => {
     async function loadAcordo() {
@@ -561,7 +564,7 @@ export default function AcordoDetalhe() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {isOwner && acordo.status === 'ativo' && (
+            {canEdit && acordo.status === 'ativo' && (
               <>
                 <Button
                   variant={acordo.boleto_enviado ? "secondary" : "outline"}
@@ -590,17 +593,6 @@ export default function AcordoDetalhe() {
                 </Button>
               </>
             )}
-            {/* Admin pode editar qualquer acordo */}
-            {!isOwner && isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
-              >
-                <Pencil className="h-4 w-4 mr-1" />
-                Editar
-              </Button>
-            )}
             {/* Botão de excluir apenas para Admin */}
             {isAdmin && (
               <AlertDialog>
@@ -627,7 +619,7 @@ export default function AcordoDetalhe() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            {!isOwner && !isAdmin && (
+            {!canEdit && (
               <Badge variant="outline" className="text-sm">
                 Somente Leitura
               </Badge>
@@ -839,7 +831,7 @@ export default function AcordoDetalhe() {
                         ) : (
                           <span className="flex items-center gap-1">
                             <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
-                            {(isOwner || isAdmin) && (
+                            {canEdit && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -889,7 +881,7 @@ export default function AcordoDetalhe() {
                             ) : (
                               <span className="flex items-center gap-1">
                                 <span>Pago em: {formatarData(pagamento.data_paga)}</span>
-                                {(isOwner || isAdmin) && (
+                                {canEdit && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -1005,7 +997,7 @@ export default function AcordoDetalhe() {
                         <MessageCircle className="h-4 w-4" />
                       </Button>
                     )}
-                    {pagamento.status === 'pendente' && (isOwner || isAdmin) && (
+                    {pagamento.status === 'pendente' && canEdit && (
                       <Button
                         size="sm"
                         onClick={() => marcarComoPago(pagamento.id)}
@@ -1013,7 +1005,7 @@ export default function AcordoDetalhe() {
                         Marcar Pago
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && (isOwner || isAdmin) && (
+                    {pagamento.status === 'pago' && canEdit && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1024,7 +1016,7 @@ export default function AcordoDetalhe() {
                         Desmarcar
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && !isOwner && !isAdmin && (
+                    {pagamento.status === 'pago' && !canEdit && (
                       <Badge variant="secondary">Pago</Badge>
                     )}
                   </div>
