@@ -521,6 +521,24 @@ export default function Aquecimento() {
                   </Card>
                 )}
 
+                {/* Status Banner */}
+                {emAquecimentoInstances.length > 0 && (
+                  <Card className={`border ${isWithinHours ? 'border-green-500/30 bg-green-500/5' : 'border-yellow-500/30 bg-yellow-500/5'}`}>
+                    <CardContent className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Timer className={`h-4 w-4 ${isWithinHours ? 'text-green-400' : 'text-yellow-400'}`} />
+                        <span className="text-sm font-medium">
+                          {isWithinHours ? '🟢 Sistema Ativo' : '🟡 Fora do Horário'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Próximo ciclo:</span>
+                        <CountdownTimer targetDate={nextCronSlot} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Em Aquecimento */}
                 {emAquecimentoInstances.length > 0 && (
                   <Card>
@@ -535,27 +553,46 @@ export default function Aquecimento() {
                             <TableHead>Fase</TableHead>
                             <TableHead>Dias</TableHead>
                             <TableHead>Hoje</TableHead>
+                            <TableHead>Próxima Msg</TableHead>
                             <TableHead>Total</TableHead>
                             <TableHead>Ação</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {emAquecimentoInstances.map(inst => (
-                            <TableRow key={inst.id}>
-                              <TableCell className="font-medium text-sm">📱 {inst.instance_name}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">{PHASE_LABELS[inst.fase] || `Fase ${inst.fase}`}</Badge>
-                              </TableCell>
-                              <TableCell className="text-sm">{inst.dias_conectado}d</TableCell>
-                              <TableCell className="text-sm">{inst.interacoes_hoje}/{inst.limite_diario}</TableCell>
-                              <TableCell className="text-sm">{inst.interacoes_total}</TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="ghost" onClick={() => pausarAquecimento(inst.id)}>
-                                  <Pause className="h-3 w-3" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {emAquecimentoInstances.map(inst => {
+                            const limitReached = inst.interacoes_hoje >= inst.limite_diario;
+                            const target = estimatedTargets[inst.instancia_id];
+                            return (
+                              <TableRow key={inst.id}>
+                                <TableCell className="font-medium text-sm">📱 {inst.instance_name}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">{PHASE_LABELS[inst.fase] || `Fase ${inst.fase}`}</Badge>
+                                </TableCell>
+                                <TableCell className="text-sm">{inst.dias_conectado}d</TableCell>
+                                <TableCell className="text-sm">{inst.interacoes_hoje}/{inst.limite_diario}</TableCell>
+                                <TableCell>
+                                  {limitReached ? (
+                                    <span className="text-xs text-green-400">✅ Limite atingido</span>
+                                  ) : !isWithinHours ? (
+                                    <span className="text-xs text-yellow-400">⏸ Fora do horário</span>
+                                  ) : (
+                                    <div className="flex flex-col gap-0.5">
+                                      <CountdownTimer targetDate={nextCronSlot} />
+                                      {target && (
+                                        <span className="text-[11px] text-muted-foreground">→ para <strong>{target}</strong></span>
+                                      )}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-sm">{inst.interacoes_total}</TableCell>
+                                <TableCell>
+                                  <Button size="sm" variant="ghost" onClick={() => pausarAquecimento(inst.id)}>
+                                    <Pause className="h-3 w-3" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </CardContent>
