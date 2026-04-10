@@ -1005,6 +1005,11 @@ export default function Acionamento() {
         body: JSON.stringify({ name: profileName }),
       });
       if (!res.ok) throw new Error('Falha ao alterar nome');
+      // Persist to DB cache
+      if (editingInstance.id) {
+        await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_name: profileName } as any).eq('id', editingInstance.id);
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, whatsapp_profile_name: profileName } : i));
+      }
       toast.success('Nome do perfil atualizado!');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao alterar nome');
