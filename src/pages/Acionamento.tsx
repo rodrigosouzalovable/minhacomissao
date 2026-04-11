@@ -1206,7 +1206,7 @@ export default function Acionamento() {
 
         // Pause between name and photo
         if (bulkUpdateApplyName && bulkUpdateApplyPhoto && profileName.trim()) {
-          await sleep(randomDelay(30000, 90000));
+          await sleep(randomDelay(10000, 20000));
           if (bulkCancelRef.current) break;
         }
 
@@ -1260,7 +1260,7 @@ export default function Acionamento() {
 
       // Delay before next instance (60-180s)
       if (idx < shuffled.length - 1 && !bulkCancelRef.current) {
-        await sleep(randomDelay(60000, 180000));
+        await sleep(randomDelay(20000, 40000));
       }
     }
 
@@ -2532,7 +2532,7 @@ export default function Acionamento() {
                               Aplicar perfil em todas as instâncias
                             </Button>
                             <p className="text-[10px] text-muted-foreground text-center">
-                              Atualiza nome e/ou foto gradativamente, uma instância por vez (1-3 min entre cada)
+                              Atualiza nome e/ou foto gradativamente, uma instância por vez (Atualiza nome e/ou foto gradativamente, uma instância por vez (20-40s entre cada))
                             </p>
                           </div>
 
