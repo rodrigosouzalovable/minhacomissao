@@ -1,37 +1,26 @@
 
 
-## Diagnóstico e Correção do Aquecimento de WhatsApp
+## Corrigir ordem de envio dos lembretes
 
-### Problemas Identificados
+### Problema
+Atualmente a fila de envio é montada na ordem `[...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias]`, ou seja, parcelas vencidas são processadas primeiro. O usuário quer que comece por **Vence Hoje**, depois **Parcelas Vencidas**, e que itens já com tag "Enviado" sejam pulados.
 
-1. **Nenhuma mensagem está sendo trocada**: Os logs de hoje mostram que TODAS as instâncias estão sendo puladas por "dia silencioso" (20% chance), "dia somente-leitura" (15% chance), "em carência" ou "fora do horário". Combinado com o fato de que apenas 1 instância é selecionada por ciclo e ainda tem 30% de chance de ser pulada, o resultado é 0 mensagens trocadas.
+### Alteração: `src/components/PaymentReminders.tsx`
 
-2. **Mensagens de aquecimento NÃO aparecem no Inbox**: A função `whatsapp-aquecimento` salva as interações apenas na tabela `whatsapp_aquecimento_interacoes`, mas **não registra na tabela `whatsapp_mensagens`** (que alimenta o Inbox). Então mesmo quando mensagens são enviadas, elas não aparecem no Inbox.
+**Linha 95** — Reordenar `allPendingReminders`:
+```typescript
+// De:
+const allPendingReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias];
 
-3. **IA responder não está sendo chamada**: Como nenhuma mensagem é enviada, a função `whatsapp-ia-responder` (que gera respostas com IA) nunca é invocada. Ela tem zero logs recentes.
+// Para:
+const allPendingReminders = [...lembretesHoje, ...lembretesVencidos, ...lembretesTresDias];
+```
 
-### Correções Planejadas
+**Linha 205-209** — O filtro `handleStartEnvios` já pula itens com status diferente de `nao_enviado` (inclui "enviado"), então itens com tag ENVIADO já são ignorados. Nenhuma mudança necessária aqui.
 
-#### 1. Reduzir percentuais anti-ban (mais mensagens por dia)
-- **Silent day**: de 20% → **10%** (menos dias completamente silenciosos)
-- **Read-only day**: de 15% → **8%** (menos dias sem mensagens)
-- **Skip cycle**: de 30% → **15%** (menos ciclos pulados)
-- Processar **até 2 instâncias por ciclo** ao invés de apenas 1
-
-#### 2. Registrar mensagens de aquecimento no Inbox
-Na função `whatsapp-aquecimento`, após enviar uma mensagem com sucesso (linha ~766), inserir também na tabela `whatsapp_mensagens`:
-- Mensagem de saída (da instância que enviou)
-- Isso permite ver no Inbox quem enviou o quê
-
-#### 3. Garantir que a IA responder logue ambos os lados no Inbox
-A função `whatsapp-ia-responder` já tem `logToInbox` — verificar que está sendo chamada corretamente e que loga tanto a resposta enviada quanto a mensagem recebida.
-
-### Arquivos Modificados
-- `supabase/functions/whatsapp-aquecimento/index.ts` — reduzir percentuais, adicionar log ao Inbox, processar mais instâncias por ciclo
-- `supabase/functions/whatsapp-ia-responder/index.ts` — verificar e garantir log completo no Inbox
-
-### Resultado Esperado
-- Mais mensagens trocadas por dia entre os números
-- Todas as conversas de aquecimento visíveis no WhatsApp Inbox
-- IA respondendo e respostas também visíveis no Inbox
+### Resultado
+1. O envio começa pelos clientes de **Vence Hoje** (primeiro da lista)
+2. Após terminar, passa para **Parcelas Vencidas** (primeiro da lista)
+3. Por último, **Vence em 3 dias**
+4. Clientes já marcados como ENVIADO são automaticamente pulados
 
