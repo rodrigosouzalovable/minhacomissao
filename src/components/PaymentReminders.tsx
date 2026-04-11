@@ -92,7 +92,7 @@ export function PaymentReminders() {
   };
 
   const totalLembretes = lembretesVencidos.length + lembretesHoje.length + lembretesTresDias.length;
-  const allPendingReminders = [...lembretesVencidos, ...lembretesHoje, ...lembretesTresDias];
+  const allPendingReminders = [...lembretesHoje, ...lembretesVencidos, ...lembretesTresDias];
 
   // Fetch instances, templates, operator name when dialog opens
   useEffect(() => {
