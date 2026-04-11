@@ -1,31 +1,21 @@
 
 
-## Liberar edição de acordos para Anna Flavia (usuários com Acordos Compartilhados)
+## Reduzir delays do "Aplicar perfil em todas as instâncias"
 
-### Problema
-Atualmente, apenas o **dono do acordo** (`isOwner`) e **administradores** (`isAdmin`) podem editar acordos — marcar como pago, editar datas, enviar boleto, etc. Usuários com a permissão "Acordos Compartilhados" (como Anna Flavia) conseguem **ver** os acordos, mas ficam em modo "Somente Leitura".
+### Alterações em `src/pages/Acionamento.tsx`
 
-### Solução
-Modificar a página `AcordoDetalhe.tsx` para tratar usuários com `acordos_compartilhados = true` como tendo permissão de edição nos acordos compartilhados.
+1. **Linha 1209** — Delay entre nome e foto da mesma instância:
+   - De: `randomDelay(30000, 90000)` (30-90s)
+   - Para: `randomDelay(10000, 20000)` (10-20s)
 
-### Arquivo: `src/pages/AcordoDetalhe.tsx`
+2. **Linha 1263** — Delay entre instâncias:
+   - De: `randomDelay(60000, 180000)` (60-180s)
+   - Para: `randomDelay(20000, 40000)` (20-40s)
 
-1. **Importar `useUserPermissions`** e buscar `acordosCompartilhados` e `concedidoPor`
+3. **Linha 2535** — Atualizar texto descritivo:
+   - De: "1-3 min entre cada"
+   - Para: "20-40s entre cada"
 
-2. **Criar variável `canEdit`** que será `true` quando:
-   - O usuário é o dono (`isOwner`), OU
-   - O usuário é admin (`isAdmin`), OU
-   - O usuário tem `acordosCompartilhados === true` E o acordo pertence ao admin que concedeu a permissão (`acordo.user_id === concedidoPor`)
-
-3. **Substituir todas as verificações `(isOwner || isAdmin)`** por `canEdit` (~10 ocorrências):
-   - Botões de editar acordo
-   - Marcar como pago / desmarcar
-   - Editar data de vencimento / pagamento
-   - Marcar boleto como enviado
-   - Quebrar acordo / excluir
-
-4. **Atualizar o badge "Somente Leitura"** para aparecer apenas quando `!canEdit`
-
-### Resultado
-Anna Flavia (e qualquer funcionário com "Acordos Compartilhados" ativo) poderá editar, marcar como pago, enviar boleto — exatamente como o administrador que concedeu a permissão.
+### Risco de banimento
+Nenhum. Alterações de perfil são operações administrativas leves, não sujeitas às mesmas restrições que disparos de mensagens em massa.
 
