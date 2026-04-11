@@ -2668,7 +2668,13 @@ export default function Acionamento() {
                           <SortableInstanceCard key={inst.id} id={inst.id}>
                             <div className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <WhatsAppIcon />
+                                {inst.whatsapp_profile_photo_url ? (
+                                  <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 border">
+                                    <img src={inst.whatsapp_profile_photo_url} alt="" className="h-full w-full object-cover" />
+                                  </div>
+                                ) : (
+                                  <WhatsAppIcon />
+                                )}
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5">
                                     <span className="font-medium text-sm truncate">{inst.nome || 'Sem nome'}</span>
