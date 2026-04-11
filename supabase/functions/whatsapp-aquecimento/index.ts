@@ -32,9 +32,9 @@ function deterministicHash(seed: string): number {
   return Math.abs(hash);
 }
 
-// ========== ANTI-BAN: Read-only day (15% chance) — skips messages only, keeps status/contacts ==========
+// ========== ANTI-BAN: Read-only day (8% chance) — skips messages only, keeps status/contacts ==========
 function isReadOnlyDay(instanceId: string, dateStr: string): boolean {
-  return (deterministicHash(instanceId + "readonly" + dateStr) % 100) < 15;
+  return (deterministicHash(instanceId + "readonly" + dateStr) % 100) < 8;
 }
 
 // ========== ANTI-BAN: Burst morning (30% chance) — 2-3 fast messages between 8-9h ==========
@@ -42,9 +42,9 @@ function isBurstMorning(instanceId: string, dateStr: string): boolean {
   return (deterministicHash(instanceId + "burst" + dateStr) % 100) < 30;
 }
 
-// ========== ANTI-BAN: Random skip (30% chance per cycle) ==========
+// ========== ANTI-BAN: Random skip (15% chance per cycle) ==========
 function shouldSkipCycle(instanceId: string, minuteKey: string): boolean {
-  return (deterministicHash(instanceId + "skip" + minuteKey) % 100) < 30;
+  return (deterministicHash(instanceId + "skip" + minuteKey) % 100) < 15;
 }
 
 // ========== DYNAMIC IMAGE URL (per-instance per-day, no shared fingerprint) ==========
@@ -126,9 +126,9 @@ function shouldPostStatus(hour: number): boolean {
   return rand < 0.03;
 }
 
-// Deterministic "silent day" check: 20% chance per instance per day
+// Deterministic "silent day" check: 10% chance per instance per day
 function isSilentDay(instanceId: string, dateStr: string): boolean {
-  return (deterministicHash(instanceId + dateStr) % 100) < 20;
+  return (deterministicHash(instanceId + dateStr) % 100) < 10;
 }
 
 Deno.serve(async (req) => {
@@ -500,20 +500,17 @@ Deno.serve(async (req) => {
       return true;
     });
 
-    // Process only 1 random instance per cycle
-    const selectedInstance = eligibleInstances.length > 0
-      ? eligibleInstances[Math.floor(Math.random() * eligibleInstances.length)]
-      : null;
-
-    const instanciasToProcess = selectedInstance ? [selectedInstance] : [];
+    // Process up to 2 random instances per cycle
+    const shuffledEligible = [...eligibleInstances].sort(() => Math.random() - 0.5);
+    const instanciasToProcess = shuffledEligible.slice(0, Math.min(2, shuffledEligible.length));
 
     for (const inst of instanciasToProcess) {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) continue;
 
-      // ========== ANTI-BAN: 30% skip chance per cycle ==========
+      // ========== ANTI-BAN: 15% skip chance per cycle ==========
       if (shouldSkipCycle(inst.instancia_id, minuteKey)) {
-        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: skip aleatório (30%). Pulando.`);
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: skip aleatório (15%). Pulando.`);
         continue;
       }
 
