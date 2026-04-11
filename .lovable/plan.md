@@ -1,21 +1,26 @@
 
 
-## Reduzir delays do "Aplicar perfil em todas as instâncias"
+## Exibir foto de perfil do WhatsApp no card de cada instância
 
-### Alterações em `src/pages/Acionamento.tsx`
+### Contexto
+A coluna `whatsapp_profile_photo_url` já existe na tabela `user_whatsapp_instances` e já é carregada no estado. Basta exibir a imagem no card.
 
-1. **Linha 1209** — Delay entre nome e foto da mesma instância:
-   - De: `randomDelay(30000, 90000)` (30-90s)
-   - Para: `randomDelay(10000, 20000)` (10-20s)
+### Alteração: `src/pages/Acionamento.tsx`
 
-2. **Linha 1263** — Delay entre instâncias:
-   - De: `randomDelay(60000, 180000)` (60-180s)
-   - Para: `randomDelay(20000, 40000)` (20-40s)
+Na linha ~2671, onde aparece o `<WhatsAppIcon />`, substituir por uma lógica condicional:
+- Se `inst.whatsapp_profile_photo_url` existir, mostrar a foto como um avatar circular (32x32px) com `object-cover`
+- Se não existir, manter o `<WhatsAppIcon />` como fallback
 
-3. **Linha 2535** — Atualizar texto descritivo:
-   - De: "1-3 min entre cada"
-   - Para: "20-40s entre cada"
+```tsx
+{(inst as any).whatsapp_profile_photo_url ? (
+  <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 border">
+    <img src={(inst as any).whatsapp_profile_photo_url} alt="" className="h-full w-full object-cover" />
+  </div>
+) : (
+  <WhatsAppIcon />
+)}
+```
 
-### Risco de banimento
-Nenhum. Alterações de perfil são operações administrativas leves, não sujeitas às mesmas restrições que disparos de mensagens em massa.
+### Resultado
+Cada instância mostrará a foto do perfil do WhatsApp diretamente no card, sem precisar abrir a edição.
 
