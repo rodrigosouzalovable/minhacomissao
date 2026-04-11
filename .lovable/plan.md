@@ -1,26 +1,37 @@
 
 
-## Exibir foto de perfil do WhatsApp no card de cada instância
+## Diagnóstico e Correção do Aquecimento de WhatsApp
 
-### Contexto
-A coluna `whatsapp_profile_photo_url` já existe na tabela `user_whatsapp_instances` e já é carregada no estado. Basta exibir a imagem no card.
+### Problemas Identificados
 
-### Alteração: `src/pages/Acionamento.tsx`
+1. **Nenhuma mensagem está sendo trocada**: Os logs de hoje mostram que TODAS as instâncias estão sendo puladas por "dia silencioso" (20% chance), "dia somente-leitura" (15% chance), "em carência" ou "fora do horário". Combinado com o fato de que apenas 1 instância é selecionada por ciclo e ainda tem 30% de chance de ser pulada, o resultado é 0 mensagens trocadas.
 
-Na linha ~2671, onde aparece o `<WhatsAppIcon />`, substituir por uma lógica condicional:
-- Se `inst.whatsapp_profile_photo_url` existir, mostrar a foto como um avatar circular (32x32px) com `object-cover`
-- Se não existir, manter o `<WhatsAppIcon />` como fallback
+2. **Mensagens de aquecimento NÃO aparecem no Inbox**: A função `whatsapp-aquecimento` salva as interações apenas na tabela `whatsapp_aquecimento_interacoes`, mas **não registra na tabela `whatsapp_mensagens`** (que alimenta o Inbox). Então mesmo quando mensagens são enviadas, elas não aparecem no Inbox.
 
-```tsx
-{(inst as any).whatsapp_profile_photo_url ? (
-  <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 border">
-    <img src={(inst as any).whatsapp_profile_photo_url} alt="" className="h-full w-full object-cover" />
-  </div>
-) : (
-  <WhatsAppIcon />
-)}
-```
+3. **IA responder não está sendo chamada**: Como nenhuma mensagem é enviada, a função `whatsapp-ia-responder` (que gera respostas com IA) nunca é invocada. Ela tem zero logs recentes.
 
-### Resultado
-Cada instância mostrará a foto do perfil do WhatsApp diretamente no card, sem precisar abrir a edição.
+### Correções Planejadas
+
+#### 1. Reduzir percentuais anti-ban (mais mensagens por dia)
+- **Silent day**: de 20% → **10%** (menos dias completamente silenciosos)
+- **Read-only day**: de 15% → **8%** (menos dias sem mensagens)
+- **Skip cycle**: de 30% → **15%** (menos ciclos pulados)
+- Processar **até 2 instâncias por ciclo** ao invés de apenas 1
+
+#### 2. Registrar mensagens de aquecimento no Inbox
+Na função `whatsapp-aquecimento`, após enviar uma mensagem com sucesso (linha ~766), inserir também na tabela `whatsapp_mensagens`:
+- Mensagem de saída (da instância que enviou)
+- Isso permite ver no Inbox quem enviou o quê
+
+#### 3. Garantir que a IA responder logue ambos os lados no Inbox
+A função `whatsapp-ia-responder` já tem `logToInbox` — verificar que está sendo chamada corretamente e que loga tanto a resposta enviada quanto a mensagem recebida.
+
+### Arquivos Modificados
+- `supabase/functions/whatsapp-aquecimento/index.ts` — reduzir percentuais, adicionar log ao Inbox, processar mais instâncias por ciclo
+- `supabase/functions/whatsapp-ia-responder/index.ts` — verificar e garantir log completo no Inbox
+
+### Resultado Esperado
+- Mais mensagens trocadas por dia entre os números
+- Todas as conversas de aquecimento visíveis no WhatsApp Inbox
+- IA respondendo e respostas também visíveis no Inbox
 
