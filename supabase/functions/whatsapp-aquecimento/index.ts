@@ -251,7 +251,43 @@ Deno.serve(async (req) => {
           if (sendRes.ok) {
             enviados++;
 
-            // Direct IA call: B responds to A (bypass webhook dependency)
+            // Log manual test message to Inbox
+            try {
+              const toPhoneClean = `55${toPhone}`;
+              await supabase.from("whatsapp_mensagens").insert({
+                instancia_id: from.id,
+                telefone_remoto: toPhoneClean,
+                conteudo: texto,
+                direcao: "saida",
+                tipo_conteudo: "texto",
+                timestamp_msg: new Date().toISOString(),
+              });
+              const phoneSuffix8 = toPhone.slice(-8);
+              const { data: contato } = await supabase
+                .from("whatsapp_contatos")
+                .select("id")
+                .eq("instancia_id", from.id)
+                .or(`telefone.ilike.%${phoneSuffix8}`)
+                .maybeSingle();
+              if (contato) {
+                await supabase.from("whatsapp_contatos").update({
+                  ultima_mensagem: texto.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).eq("id", contato.id);
+              } else {
+                await supabase.from("whatsapp_contatos").insert({
+                  instancia_id: from.id,
+                  telefone: toPhoneClean,
+                  nome: to.nome || toPhoneClean,
+                  ultima_mensagem: texto.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).select().maybeSingle();
+              }
+            } catch (inboxErr) {
+              console.warn(`[AQUECIMENTO-MANUAL] Erro ao logar no Inbox:`, inboxErr);
+            }
+
+
             const fromPhone = from.nome?.match(/^\d+/)?.[0] || "";
             if (fromPhone) {
               const { data: toAquec } = await supabase
