@@ -171,11 +171,13 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
 
     if (!inst) return;
 
-    const phoneSuffix = telefoneRemoto.replace(/^55/, "");
+    // Clean phone number - remove @s.whatsapp.net if present
+    const cleanPhone = telefoneRemoto.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+    const phoneSuffix = cleanPhone.replace(/^55/, "").slice(-8);
 
     await sb.from("whatsapp_mensagens").insert({
       instancia_id: inst.id,
-      telefone_remoto: telefoneRemoto,
+      telefone_remoto: cleanPhone,
       conteudo: texto,
       direcao: "saida",
       tipo_conteudo: "texto",
@@ -186,7 +188,7 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
       .from("whatsapp_contatos")
       .select("id")
       .eq("instancia_id", inst.id)
-      .or(`telefone.eq.${telefoneRemoto},telefone.ilike.%${phoneSuffix}`)
+      .or(`telefone.eq.${cleanPhone},telefone.ilike.%${phoneSuffix}`)
       .maybeSingle();
 
     if (contato) {
@@ -383,6 +385,9 @@ Deno.serve(async (req) => {
         ultima_msg_em: new Date().toISOString(),
         historico: novoHistorico,
       }).eq("id", conversa.id);
+
+      // Log the RECEIVED message to inbox (on the destination instance)
+      await logToInbox(sb, instancia_destino_id, numero_destino?.replace("@s.whatsapp.net", "") || "", mensagem);
 
       if (server_url && instance_token && numero_destino) {
         const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);

@@ -32,9 +32,9 @@ function deterministicHash(seed: string): number {
   return Math.abs(hash);
 }
 
-// ========== ANTI-BAN: Read-only day (15% chance) — skips messages only, keeps status/contacts ==========
+// ========== ANTI-BAN: Read-only day (8% chance) — skips messages only, keeps status/contacts ==========
 function isReadOnlyDay(instanceId: string, dateStr: string): boolean {
-  return (deterministicHash(instanceId + "readonly" + dateStr) % 100) < 15;
+  return (deterministicHash(instanceId + "readonly" + dateStr) % 100) < 8;
 }
 
 // ========== ANTI-BAN: Burst morning (30% chance) — 2-3 fast messages between 8-9h ==========
@@ -42,9 +42,9 @@ function isBurstMorning(instanceId: string, dateStr: string): boolean {
   return (deterministicHash(instanceId + "burst" + dateStr) % 100) < 30;
 }
 
-// ========== ANTI-BAN: Random skip (30% chance per cycle) ==========
+// ========== ANTI-BAN: Random skip (15% chance per cycle) ==========
 function shouldSkipCycle(instanceId: string, minuteKey: string): boolean {
-  return (deterministicHash(instanceId + "skip" + minuteKey) % 100) < 30;
+  return (deterministicHash(instanceId + "skip" + minuteKey) % 100) < 15;
 }
 
 // ========== DYNAMIC IMAGE URL (per-instance per-day, no shared fingerprint) ==========
@@ -126,9 +126,9 @@ function shouldPostStatus(hour: number): boolean {
   return rand < 0.03;
 }
 
-// Deterministic "silent day" check: 20% chance per instance per day
+// Deterministic "silent day" check: 10% chance per instance per day
 function isSilentDay(instanceId: string, dateStr: string): boolean {
-  return (deterministicHash(instanceId + dateStr) % 100) < 20;
+  return (deterministicHash(instanceId + dateStr) % 100) < 10;
 }
 
 Deno.serve(async (req) => {
@@ -251,7 +251,43 @@ Deno.serve(async (req) => {
           if (sendRes.ok) {
             enviados++;
 
-            // Direct IA call: B responds to A (bypass webhook dependency)
+            // Log manual test message to Inbox
+            try {
+              const toPhoneClean = `55${toPhone}`;
+              await supabase.from("whatsapp_mensagens").insert({
+                instancia_id: from.id,
+                telefone_remoto: toPhoneClean,
+                conteudo: texto,
+                direcao: "saida",
+                tipo_conteudo: "texto",
+                timestamp_msg: new Date().toISOString(),
+              });
+              const phoneSuffix8 = toPhone.slice(-8);
+              const { data: contato } = await supabase
+                .from("whatsapp_contatos")
+                .select("id")
+                .eq("instancia_id", from.id)
+                .or(`telefone.ilike.%${phoneSuffix8}`)
+                .maybeSingle();
+              if (contato) {
+                await supabase.from("whatsapp_contatos").update({
+                  ultima_mensagem: texto.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).eq("id", contato.id);
+              } else {
+                await supabase.from("whatsapp_contatos").insert({
+                  instancia_id: from.id,
+                  telefone: toPhoneClean,
+                  nome: to.nome || toPhoneClean,
+                  ultima_mensagem: texto.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).select().maybeSingle();
+              }
+            } catch (inboxErr) {
+              console.warn(`[AQUECIMENTO-MANUAL] Erro ao logar no Inbox:`, inboxErr);
+            }
+
+
             const fromPhone = from.nome?.match(/^\d+/)?.[0] || "";
             if (fromPhone) {
               const { data: toAquec } = await supabase
@@ -500,20 +536,17 @@ Deno.serve(async (req) => {
       return true;
     });
 
-    // Process only 1 random instance per cycle
-    const selectedInstance = eligibleInstances.length > 0
-      ? eligibleInstances[Math.floor(Math.random() * eligibleInstances.length)]
-      : null;
-
-    const instanciasToProcess = selectedInstance ? [selectedInstance] : [];
+    // Process up to 2 random instances per cycle
+    const shuffledEligible = [...eligibleInstances].sort(() => Math.random() - 0.5);
+    const instanciasToProcess = shuffledEligible.slice(0, Math.min(2, shuffledEligible.length));
 
     for (const inst of instanciasToProcess) {
       const instDetails = instanceMap.get(inst.instancia_id);
       if (!instDetails) continue;
 
-      // ========== ANTI-BAN: 30% skip chance per cycle ==========
+      // ========== ANTI-BAN: 15% skip chance per cycle ==========
       if (shouldSkipCycle(inst.instancia_id, minuteKey)) {
-        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: skip aleatório (30%). Pulando.`);
+        console.log(`[AQUECIMENTO-AUTO] ${instDetails.nome}: skip aleatório (15%). Pulando.`);
         continue;
       }
 
@@ -775,7 +808,46 @@ Deno.serve(async (req) => {
               })
               .eq("id", inst.id);
 
-            // Direct IA call: destination responds to origin (bypass webhook dependency)
+            // ========== LOG TO INBOX (whatsapp_mensagens) ==========
+            try {
+              const destinoNumeroInbox = `55${destinoPhone}`;
+              await supabase.from("whatsapp_mensagens").insert({
+                instancia_id: inst.instancia_id,
+                telefone_remoto: destinoNumeroInbox,
+                conteudo: dialogo.conteudo,
+                direcao: "saida",
+                tipo_conteudo: dialogo.tipo === "audio" ? "audio" : "texto",
+                timestamp_msg: new Date().toISOString(),
+              });
+
+              const phoneSuffix = destinoPhone.slice(-8);
+              const { data: contato } = await supabase
+                .from("whatsapp_contatos")
+                .select("id")
+                .eq("instancia_id", inst.instancia_id)
+                .or(`telefone.ilike.%${phoneSuffix}`)
+                .maybeSingle();
+
+              if (contato) {
+                await supabase.from("whatsapp_contatos").update({
+                  ultima_mensagem: dialogo.conteudo.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).eq("id", contato.id);
+              } else {
+                await supabase.from("whatsapp_contatos").insert({
+                  instancia_id: inst.instancia_id,
+                  telefone: destinoNumeroInbox,
+                  nome: destinoDetails.nome || destinoNumeroInbox,
+                  ultima_mensagem: dialogo.conteudo.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).select().maybeSingle();
+              }
+              console.log(`[AQUECIMENTO-AUTO] ✅ Mensagem logada no Inbox: ${instDetails.nome} → ${destinoDetails.nome}`);
+            } catch (inboxErr) {
+              console.warn(`[AQUECIMENTO-AUTO] Erro ao logar no Inbox:`, inboxErr);
+            }
+
+
             const originPhone = instDetails.nome?.match(/^\d+/)?.[0] || "";
             if (originPhone && dialogo.tipo === "texto") {
               const destFase = destino.fase || 1;
