@@ -772,7 +772,46 @@ Deno.serve(async (req) => {
               })
               .eq("id", inst.id);
 
-            // Direct IA call: destination responds to origin (bypass webhook dependency)
+            // ========== LOG TO INBOX (whatsapp_mensagens) ==========
+            try {
+              const destinoNumeroInbox = `55${destinoPhone}`;
+              await supabase.from("whatsapp_mensagens").insert({
+                instancia_id: inst.instancia_id,
+                telefone_remoto: destinoNumeroInbox,
+                conteudo: dialogo.conteudo,
+                direcao: "saida",
+                tipo_conteudo: dialogo.tipo === "audio" ? "audio" : "texto",
+                timestamp_msg: new Date().toISOString(),
+              });
+
+              const phoneSuffix = destinoPhone.slice(-8);
+              const { data: contato } = await supabase
+                .from("whatsapp_contatos")
+                .select("id")
+                .eq("instancia_id", inst.instancia_id)
+                .or(`telefone.ilike.%${phoneSuffix}`)
+                .maybeSingle();
+
+              if (contato) {
+                await supabase.from("whatsapp_contatos").update({
+                  ultima_mensagem: dialogo.conteudo.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).eq("id", contato.id);
+              } else {
+                await supabase.from("whatsapp_contatos").insert({
+                  instancia_id: inst.instancia_id,
+                  telefone: destinoNumeroInbox,
+                  nome: destinoDetails.nome || destinoNumeroInbox,
+                  ultima_mensagem: dialogo.conteudo.slice(0, 200),
+                  ultima_mensagem_em: new Date().toISOString(),
+                }).select().maybeSingle();
+              }
+              console.log(`[AQUECIMENTO-AUTO] ✅ Mensagem logada no Inbox: ${instDetails.nome} → ${destinoDetails.nome}`);
+            } catch (inboxErr) {
+              console.warn(`[AQUECIMENTO-AUTO] Erro ao logar no Inbox:`, inboxErr);
+            }
+
+
             const originPhone = instDetails.nome?.match(/^\d+/)?.[0] || "";
             if (originPhone && dialogo.tipo === "texto") {
               const destFase = destino.fase || 1;
