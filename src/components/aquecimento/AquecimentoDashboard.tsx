@@ -471,7 +471,41 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         </div>
       )}
 
-      {/* Timeline */}
+      {/* Conversas de Hoje */}
+      {conversasHoje.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Conversas de Hoje ({conversasHoje.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {conversasHoje.map(conv => (
+                <div key={conv.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm font-medium truncate">
+                      <span className="truncate">{conv.origem_nome}</span>
+                      <span className="text-muted-foreground shrink-0">↔</span>
+                      <span className="truncate">{conv.destino_nome}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{format(new Date(conv.inicio_em), 'HH:mm')}</span>
+                      <span>•</span>
+                      <span>{conv.total_trocas}/{conv.max_trocas} trocas</span>
+                    </div>
+                  </div>
+                  <Badge variant={conv.status === 'FINALIZADA' ? 'default' : 'secondary'} className="text-[10px] shrink-0 ml-2">
+                    {conv.status === 'FINALIZADA' ? '✓ Finalizada' : '⏳ Ativa'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {timeline.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
