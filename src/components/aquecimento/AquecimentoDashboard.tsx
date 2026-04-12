@@ -291,7 +291,7 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     const { data: conversasData } = await supabase
       .from('whatsapp_conversas_ia' as any)
       .select('id, instancia_origem_id, instancia_destino_id, total_trocas, max_trocas, status, inicio_em')
-      .gte('inicio_em', today)
+      .gte('inicio_em', todayConv)
       .in('status', ['ATIVA', 'FINALIZADA'])
       .order('inicio_em', { ascending: false });
 
