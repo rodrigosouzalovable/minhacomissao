@@ -802,8 +802,18 @@ serve(async (req) => {
     }
     // --- END VOICE CALL EVENT HANDLING ---
 
+    // --- Filtros rápidos (ANTES de qualquer DB call para economizar) ---
+    const remoteJid = payload?.message?.chatid || payload?.chat?.wa_chatid || payload?.message?.sender_pn || payload?.key?.remoteJid || payload?.from || '';
+    const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? remoteJid.includes('@g.us') ?? false;
+    const uazapiMsgType = (payload?.message?.messageType || '').toLowerCase();
+
+    if (isGroup || uazapiMsgType === 'reactionmessage' || uazapiMsgType === 'protocolmessage') {
+      return new Response(JSON.stringify({ success: true, ignored: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // --- Deduplicação ---
-    // Prioritize messageid (clean ID without owner prefix) for UAZAPI /download-media
     const rawMessageId = payload?.message?.messageid || payload?.message?.id || payload?.key?.id || payload?.messageId || '';
     const messageId = rawMessageId.includes(':') ? rawMessageId.split(':').pop()! : rawMessageId;
     console.log(`[MEDIA-ID] messageid=${payload?.message?.messageid} message.id=${payload?.message?.id} key.id=${payload?.key?.id} -> cleaned=${messageId}`);
@@ -832,14 +842,6 @@ serve(async (req) => {
 
     // --- Filtros básicos ---
     const isFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? payload?.key?.fromMe ?? false;
-    const remoteJid = payload?.message?.chatid || payload?.chat?.wa_chatid || payload?.message?.sender_pn || payload?.key?.remoteJid || payload?.from || '';
-    const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? remoteJid.includes('@g.us') ?? false;
-
-    if (isGroup) {
-      return new Response(JSON.stringify({ success: true, ignored: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     // --- INBOX: Salvar mensagem no histórico ---
     const inboxTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
