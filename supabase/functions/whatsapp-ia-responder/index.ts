@@ -437,6 +437,29 @@ Deno.serve(async (req) => {
         await new Promise((r) => setTimeout(r, delayMs));
       }
 
+      // Check daily limit BEFORE responding
+      const LIMITE_DIARIO_REAL = 15;
+      const { data: instAquec } = await sb
+        .from("whatsapp_aquecimento_instancias")
+        .select("id, interacoes_hoje, interacoes_total")
+        .eq("instancia_id", instancia_origem_id)
+        .maybeSingle();
+
+      if (instAquec && instAquec.interacoes_hoje >= LIMITE_DIARIO_REAL) {
+        console.log(`[IA] 🛑 Instância ${instancia_origem_id} atingiu limite diário (${instAquec.interacoes_hoje}/${LIMITE_DIARIO_REAL}). Finalizando conversa.`);
+        // Find and finalize the conversation
+        const { data: convToFinish } = await sb
+          .from("whatsapp_conversas_ia")
+          .select("id")
+          .or(`and(instancia_origem_id.eq.${instancia_origem_id},instancia_destino_id.eq.${instancia_destino_id}),and(instancia_origem_id.eq.${instancia_destino_id},instancia_destino_id.eq.${instancia_origem_id})`)
+          .eq("status", "ATIVA")
+          .maybeSingle();
+        if (convToFinish) {
+          await sb.from("whatsapp_conversas_ia").update({ status: "FINALIZADA" }).eq("id", convToFinish.id);
+        }
+        return json({ responded: false, reason: "daily_limit_reached" });
+      }
+
       // Find active conversation
       const { data: conversa } = await sb
         .from("whatsapp_conversas_ia")
@@ -501,6 +524,15 @@ Deno.serve(async (req) => {
         ultima_msg_em: new Date().toISOString(),
         historico: novoHistorico,
       }).eq("id", conversa.id);
+
+      // Increment daily counter for this responding instance
+      if (instAquec) {
+        await sb.from("whatsapp_aquecimento_instancias").update({
+          interacoes_hoje: (instAquec.interacoes_hoje || 0) + 1,
+          interacoes_total: (instAquec.interacoes_total || 0) + 1,
+          ultima_interacao: new Date().toISOString(),
+        }).eq("id", instAquec.id);
+      }
 
       // Send message and log
       if (server_url && instance_token && numero_destino) {

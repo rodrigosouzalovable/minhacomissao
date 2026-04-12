@@ -30,7 +30,6 @@ Deno.serve(async (req) => {
     const hour = spTime.getHours();
     const dayOfWeek = spTime.getDay();
 
-    // Check business hours (7h-21h)
     if (hour < 7 || hour >= 21) {
       console.log(`[AQUECIMENTO] Fora do horário (${hour}h). Pulando.`);
       return json({ message: "Fora do horário" });
@@ -130,23 +129,11 @@ Deno.serve(async (req) => {
 
     const instanceMap = new Map((whatsappInstances || []).map((i: any) => [i.id, i]));
 
-    // Today's start for counting
-    const todayStart = new Date(spTime);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayStartISO = todayStart.toISOString();
-
     const TARGET_MESSAGES_PER_DAY = 15;
-    const HOURS_ACTIVE = 14; // 7h-21h
-    const MSGS_PER_CYCLE = Math.max(1, Math.ceil(TARGET_MESSAGES_PER_DAY / (HOURS_ACTIVE * 4))); // ~1 per 15min cycle
 
-    let totalEnviados = 0;
-
-    // Process ALL eligible instances each cycle
+    // ========== ROTATING PAIRS SYSTEM ==========
+    // Reset daily counters if new day
     for (const inst of instancias) {
-      const instDetails = instanceMap.get(inst.instancia_id);
-      if (!instDetails) continue;
-
-      // Reset daily counter if new day
       if (inst.ultima_interacao) {
         const lastDate = new Date(inst.ultima_interacao).toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" });
         const todayDate = spTime.toLocaleDateString("en-US");
@@ -156,14 +143,29 @@ Deno.serve(async (req) => {
           inst.interacoes_hoje = 0;
         }
       }
+    }
 
-      // Check daily limit
+    // Filter eligible instances (not at daily limit)
+    const eligible = instancias.filter((inst: any) => {
       if (inst.interacoes_hoje >= TARGET_MESSAGES_PER_DAY) {
-        console.log(`[AQUECIMENTO] ${instDetails.nome}: limite diário atingido (${inst.interacoes_hoje}/${TARGET_MESSAGES_PER_DAY})`);
-        continue;
+        const details = instanceMap.get(inst.instancia_id);
+        console.log(`[AQUECIMENTO] ${details?.nome}: limite diário atingido (${inst.interacoes_hoje}/${TARGET_MESSAGES_PER_DAY})`);
+        return false;
       }
+      return true;
+    });
 
-      // Health check
+    if (eligible.length < 2) {
+      console.log("[AQUECIMENTO] Menos de 2 instâncias elegíveis neste ciclo.");
+      return json({ message: "Menos de 2 instâncias elegíveis" });
+    }
+
+    // Health check all eligible instances
+    const healthyInstances: any[] = [];
+    for (const inst of eligible) {
+      const instDetails = instanceMap.get(inst.instancia_id);
+      if (!instDetails) continue;
+
       const connected = await checkInstanceHealth(instDetails);
       if (!connected) {
         console.log(`[AQUECIMENTO] ${instDetails.nome}: DESCONECTADO. Pausando.`);
@@ -175,64 +177,101 @@ Deno.serve(async (req) => {
         });
         continue;
       }
+      healthyInstances.push(inst);
+    }
 
-      // Pick a random destination (different from self)
-      const possibleDestinos = instancias.filter((d: any) => d.instancia_id !== inst.instancia_id);
-      if (possibleDestinos.length === 0) continue;
+    if (healthyInstances.length < 2) {
+      console.log("[AQUECIMENTO] Menos de 2 instâncias saudáveis.");
+      return json({ message: "Menos de 2 instâncias saudáveis" });
+    }
 
-      const destInst = possibleDestinos[Math.floor(Math.random() * possibleDestinos.length)];
-      const destDetails = instanceMap.get(destInst.instancia_id);
-      if (!destDetails) continue;
+    // Generate unique pairs using shuffle
+    const shuffled = [...healthyInstances].sort(() => Math.random() - 0.5);
+    const pairs: [any, any][] = [];
+    for (let i = 0; i + 1 < shuffled.length; i += 2) {
+      pairs.push([shuffled[i], shuffled[i + 1]]);
+    }
 
-      // Get phone number of destination
-      const destPhone = destDetails.nome?.match(/^\d+/)?.[0] || "";
-      if (!destPhone) {
-        console.log(`[AQUECIMENTO] ${destDetails.nome}: sem telefone no nome.`);
+    console.log(`[AQUECIMENTO] Gerados ${pairs.length} pares de ${healthyInstances.length} instâncias.`);
+
+    let totalEnviados = 0;
+
+    for (const [instA, instB] of pairs) {
+      const detailsA = instanceMap.get(instA.instancia_id);
+      const detailsB = instanceMap.get(instB.instancia_id);
+      if (!detailsA || !detailsB) continue;
+
+      // Check if same pair already had conversation today (avoid repeating)
+      const todayStart = new Date(spTime);
+      todayStart.setHours(0, 0, 0, 0);
+      const { data: conversaHoje } = await supabase
+        .from("whatsapp_conversas_ia")
+        .select("id")
+        .or(`and(instancia_origem_id.eq.${instA.instancia_id},instancia_destino_id.eq.${instB.instancia_id}),and(instancia_origem_id.eq.${instB.instancia_id},instancia_destino_id.eq.${instA.instancia_id})`)
+        .gte("inicio_em", todayStart.toISOString())
+        .limit(1)
+        .maybeSingle();
+
+      if (conversaHoje) {
+        console.log(`[AQUECIMENTO] Par ${detailsA.nome} ↔ ${detailsB.nome} já conversou hoje. Pulando.`);
         continue;
       }
 
-      const destNum = `55${destPhone}@s.whatsapp.net`;
+      // Get phone numbers
+      const phoneA = detailsA.nome?.match(/^\d+/)?.[0] || "";
+      const phoneB = detailsB.nome?.match(/^\d+/)?.[0] || "";
+      if (!phoneA || !phoneB) {
+        console.log(`[AQUECIMENTO] Par sem telefone: ${detailsA.nome} ↔ ${detailsB.nome}`);
+        continue;
+      }
 
-      // Initiate AI conversation via whatsapp-ia-responder
-      const fromPhone = instDetails.nome?.match(/^\d+/)?.[0] || "";
+      // A initiates conversation with B (B responds via chain)
+      const destNum = `55${phoneB}@s.whatsapp.net`;
+      const origNum = `55${phoneA}@s.whatsapp.net`;
 
-      console.log(`[AQUECIMENTO] Iniciando conversa IA: ${instDetails.nome} → ${destDetails.nome}`);
+      console.log(`[AQUECIMENTO] 🤝 Par: ${detailsA.nome} → ${detailsB.nome}`);
 
       const iaPayload = {
         action: "iniciar-conversa",
-        instancia_origem_id: inst.instancia_id,
-        instancia_destino_id: destInst.instancia_id,
-        server_url: instDetails.server_url,
-        instance_token: instDetails.instance_token,
+        instancia_origem_id: instA.instancia_id,
+        instancia_destino_id: instB.instancia_id,
+        server_url: detailsA.server_url,
+        instance_token: detailsA.instance_token,
         numero_destino: destNum,
-        numero_origem: fromPhone ? `55${fromPhone}@s.whatsapp.net` : "",
-        dest_server_url: destDetails.server_url,
-        dest_instance_token: destDetails.instance_token,
+        numero_origem: origNum,
+        dest_server_url: detailsB.server_url,
+        dest_instance_token: detailsB.instance_token,
       };
 
-      // Fire and forget - let IA responder handle the chain
+      // Fire and forget
       fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
         body: JSON.stringify(iaPayload),
-      }).then(r => r.text().then(t => console.log(`[AQUECIMENTO] IA response for ${instDetails.nome}: ${t.substring(0, 200)}`)))
+      }).then(r => r.text().then(t => console.log(`[AQUECIMENTO] IA response ${detailsA.nome}→${detailsB.nome}: ${t.substring(0, 200)}`)))
         .catch(e => console.error("[AQUECIMENTO] IA call error:", e));
 
-      // Update counters
+      // Update counters for the initiator
       await supabase.from("whatsapp_aquecimento_instancias").update({
-        interacoes_hoje: (inst.interacoes_hoje || 0) + 1,
-        interacoes_total: (inst.interacoes_total || 0) + 1,
+        interacoes_hoje: (instA.interacoes_hoje || 0) + 1,
+        interacoes_total: (instA.interacoes_total || 0) + 1,
         ultima_interacao: new Date().toISOString(),
-      }).eq("id", inst.id);
+        ultimo_parceiro_id: instB.instancia_id,
+      }).eq("id", instA.id);
+
+      // Update ultimo_parceiro for the responder too
+      await supabase.from("whatsapp_aquecimento_instancias").update({
+        ultimo_parceiro_id: instA.instancia_id,
+      }).eq("id", instB.id);
 
       totalEnviados++;
 
-      // Small delay between instances to avoid burst
+      // Small delay between pairs
       await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
     }
 
-    console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas.`);
-    return json({ success: true, conversas_iniciadas: totalEnviados });
+    console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas de ${pairs.length} pares.`);
+    return json({ success: true, conversas_iniciadas: totalEnviados, total_pares: pairs.length });
 
   } catch (err) {
     console.error("[AQUECIMENTO] Erro:", err);
@@ -274,22 +313,27 @@ async function handleManualTest(supabase: any, body: any, supabaseUrl: string, s
     return json({ error: "Instâncias não encontradas" }, 404);
   }
 
+  // Generate pairs instead of sequential loop
+  const shuffled = [...whatsappInsts].sort(() => Math.random() - 0.5);
+  const pairs: [any, any][] = [];
+  for (let i = 0; i + 1 < shuffled.length; i += 2) {
+    pairs.push([shuffled[i], shuffled[i + 1]]);
+  }
+
   let enviados = 0;
   const results: any[] = [];
 
-  for (let i = 0; i < whatsappInsts.length; i++) {
-    const from = whatsappInsts[i];
-    const to = whatsappInsts[(i + 1) % whatsappInsts.length];
+  for (const [from, to] of pairs) {
     const toPhone = to.nome?.match(/^\d+/)?.[0] || "";
-    if (!toPhone) {
+    const fromPhone = from.nome?.match(/^\d+/)?.[0] || "";
+    if (!toPhone || !fromPhone) {
       results.push({ from: from.nome, to: to.nome, status: "ERRO", motivo: "Sem telefone" });
       continue;
     }
 
-    const fromPhone = from.nome?.match(/^\d+/)?.[0] || "";
     const destNum = `55${toPhone}@s.whatsapp.net`;
+    const origNum = `55${fromPhone}@s.whatsapp.net`;
 
-    // Use IA to start conversation
     const iaPayload = {
       action: "iniciar-conversa",
       instancia_origem_id: from.id,
@@ -297,7 +341,7 @@ async function handleManualTest(supabase: any, body: any, supabaseUrl: string, s
       server_url: from.server_url,
       instance_token: from.instance_token,
       numero_destino: destNum,
-      numero_origem: fromPhone ? `55${fromPhone}@s.whatsapp.net` : "",
+      numero_origem: origNum,
       dest_server_url: to.server_url,
       dest_instance_token: to.instance_token,
     };
@@ -316,7 +360,7 @@ async function handleManualTest(supabase: any, body: any, supabaseUrl: string, s
     }
   }
 
-  return json({ success: true, enviados, results });
+  return json({ success: true, enviados, pares: pairs.length, results });
 }
 
 function json(data: any, status = 200) {

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer } from 'lucide-react';
+import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer, Users } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DashboardMetrics {
@@ -44,6 +44,16 @@ interface TimelineItem {
   enviado_em: string | null;
   origem_nome: string;
   destino_nome: string;
+}
+
+interface ConversaHoje {
+  id: string;
+  origem_nome: string;
+  destino_nome: string;
+  total_trocas: number;
+  max_trocas: number;
+  status: string;
+  inicio_em: string;
 }
 
 interface Props {
@@ -153,6 +163,7 @@ function statusIcon(status: string) {
 export default function AquecimentoDashboard({ metrics }: Props) {
   const [activeInstances, setActiveInstances] = useState<ActiveInstance[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [conversasHoje, setConversasHoje] = useState<ConversaHoje[]>([]);
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
   const [loading, setLoading] = useState(true);
 
@@ -274,6 +285,27 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     }));
 
     setTimeline(timelineData);
+
+    // Load today's AI conversations
+    const todayConv = new Date().toISOString().split('T')[0];
+    const { data: conversasData } = await supabase
+      .from('whatsapp_conversas_ia' as any)
+      .select('id, instancia_origem_id, instancia_destino_id, total_trocas, max_trocas, status, inicio_em')
+      .gte('inicio_em', todayConv)
+      .in('status', ['ATIVA', 'FINALIZADA'])
+      .order('inicio_em', { ascending: false });
+
+    const conversasMapped: ConversaHoje[] = (conversasData || []).map((c: any) => ({
+      id: c.id,
+      origem_nome: instanceNameMap.get(c.instancia_origem_id) || '?',
+      destino_nome: instanceNameMap.get(c.instancia_destino_id) || '?',
+      total_trocas: c.total_trocas,
+      max_trocas: c.max_trocas,
+      status: c.status,
+      inicio_em: c.inicio_em,
+    }));
+    setConversasHoje(conversasMapped);
+
     setLoading(false);
   }
 
@@ -439,7 +471,41 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         </div>
       )}
 
-      {/* Timeline */}
+      {/* Conversas de Hoje */}
+      {conversasHoje.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Conversas de Hoje ({conversasHoje.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {conversasHoje.map(conv => (
+                <div key={conv.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm font-medium truncate">
+                      <span className="truncate">{conv.origem_nome}</span>
+                      <span className="text-muted-foreground shrink-0">↔</span>
+                      <span className="truncate">{conv.destino_nome}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{format(new Date(conv.inicio_em), 'HH:mm')}</span>
+                      <span>•</span>
+                      <span>{conv.total_trocas}/{conv.max_trocas} trocas</span>
+                    </div>
+                  </div>
+                  <Badge variant={conv.status === 'FINALIZADA' ? 'default' : 'secondary'} className="text-[10px] shrink-0 ml-2">
+                    {conv.status === 'FINALIZADA' ? '✓ Finalizada' : '⏳ Ativa'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {timeline.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
