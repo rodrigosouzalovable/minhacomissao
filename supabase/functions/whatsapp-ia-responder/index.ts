@@ -525,6 +525,15 @@ Deno.serve(async (req) => {
         historico: novoHistorico,
       }).eq("id", conversa.id);
 
+      // Increment daily counter for this responding instance
+      if (instAquec) {
+        await sb.from("whatsapp_aquecimento_instancias").update({
+          interacoes_hoje: (instAquec.interacoes_hoje || 0) + 1,
+          interacoes_total: (instAquec.interacoes_total || 0) + 1,
+          ultima_interacao: new Date().toISOString(),
+        }).eq("id", instAquec.id);
+      }
+
       // Send message and log
       if (server_url && instance_token && numero_destino) {
         const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
