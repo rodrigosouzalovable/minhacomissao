@@ -1,43 +1,50 @@
 
 
-## Corrigir Aquecimento: Cadeia Ping-Pong Real com Delays de 30-60s
+## Corrigir mensagens enviadas não aparecendo no Inbox
 
-### Problemas Encontrados
+### Causa Raiz
+O `logToInbox` no `whatsapp-ia-responder` salva `telefone_remoto` como `5562981343083` (formato completo com DDD+9), mas o webhook salva o contato com telefone `556281343083` (sem o "9"). O Inbox faz **match exato** (`.eq('telefone_remoto', contatoAtivo.telefone)`), então as mensagens de saída não aparecem porque o telefone é diferente.
 
-1. **A cadeia ping-pong NÃO funciona**: O `gerar-resposta` faz `await sleep(delay)` dentro do handler (20-120s), mas edge functions têm timeout de ~150s. Com o delay + tempo de IA + envio, a execução estoura. Resultado: só a primeira mensagem é enviada, nunca há resposta.
+**Dados reais:**
+- Contato: `556281343083`
+- Mensagens `entrada`: `556281343083` ✓ aparecem
+- Mensagens `saida`: `5562981343083` ✗ não aparecem
 
-2. **5 de 10 instâncias estão PAUSADAS**: O health check falhou e elas nunca foram reativadas automaticamente.
+### Solução: Corrigir em 2 pontos
 
-3. **Só houve 1 conversa** (09/04) e parou em 1 troca — confirma que a cadeia quebra.
+#### 1. `logToInbox` no `whatsapp-ia-responder` — usar o telefone do contato existente
+Na função `logToInbox`, após encontrar o contato por sufixo, usar o telefone do contato para salvar a mensagem (em vez do telefone de entrada):
 
-### Solução
+```typescript
+// Buscar contato com sufixo (já faz isso)
+const { data: contato } = await sb.from("whatsapp_contatos")
+  .select("id, telefone")  // adicionar telefone
+  ...
 
-#### 1. Delay seguro na cadeia (`whatsapp-ia-responder`)
-- Reduzir delay para **30-60 segundos** (como pedido)
-- O delay já é feito antes de processar, então funciona dentro do timeout do edge function (~150s)
-- Ajustar na linha 304 (`iniciar-conversa`) e 447 (`gerar-resposta`):
-  - De: `randomDelay(20000, 90000)` e `randomDelay(20000, 120000)`
-  - Para: `randomDelay(30000, 60000)` em ambos
+// Usar contato.telefone para o insert da mensagem
+const phoneToStore = contato?.telefone || cleanPhone;
+await sb.from("whatsapp_mensagens").insert({
+  telefone_remoto: phoneToStore,  // usar formato do contato
+  ...
+});
+```
 
-#### 2. Auto-reativar instâncias pausadas (`whatsapp-aquecimento`)
-- Após o auto-enrollment, verificar instâncias com status `PAUSADO`
-- Fazer health check nelas
-- Se estiverem conectadas, mudar status para `EM_AQUECIMENTO`
+#### 2. Inbox query — usar suffix matching como fallback
+No `WhatsAppInbox.tsx`, trocar `.eq('telefone_remoto', contatoAtivo.telefone)` por um filtro de sufixo (últimos 8 dígitos) nos 3 locais:
+- Linha 265: query de mensagens
+- Linha 349: realtime filter
+- Linha 398: mark as read
 
-#### 3. Incluir domingo nos dias ativos
-- Adicionar dia 0 (domingo) à lista de dias ativos, para funcionar todos os dias
-- Ou manter config existente mas atualizar via SQL
+Usar `.or()` com ambos os formatos, ou `.ilike('%' + suffix)`.
 
-#### 4. Limpar conversas antigas travadas
-- Marcar a conversa de 09/04 (status ATIVA, 1 troca) como FINALIZADA para não bloquear o cooldown
+#### 3. Corrigir mensagens existentes no banco
+Executar SQL para normalizar os `telefone_remoto` das mensagens de saída que não batem com o contato.
 
 ### Arquivos Modificados
-- `supabase/functions/whatsapp-ia-responder/index.ts` — delays 30-60s
-- `supabase/functions/whatsapp-aquecimento/index.ts` — auto-reativar pausados
-- SQL para limpar conversa travada e atualizar dias_ativos
+- `supabase/functions/whatsapp-ia-responder/index.ts` — logToInbox usa telefone do contato
+- `src/pages/WhatsAppInbox.tsx` — suffix matching na query e no realtime
+- SQL para corrigir dados existentes
 
-### Resultado Esperado
-- Instância A envia mensagem → 30-60s → Instância B responde → 30-60s → A responde → ... até 12-18 trocas
-- Todo o diálogo visível no Inbox
-- Funciona todos os dias automaticamente
+### Resultado
+Todas as mensagens (enviadas e recebidas) aparecerão na conversa de cada instância no Inbox.
 
