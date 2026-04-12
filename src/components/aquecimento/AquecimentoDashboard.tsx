@@ -285,6 +285,27 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     }));
 
     setTimeline(timelineData);
+
+    // Load today's AI conversations
+    const today = new Date().toISOString().split('T')[0];
+    const { data: conversasData } = await supabase
+      .from('whatsapp_conversas_ia' as any)
+      .select('id, instancia_origem_id, instancia_destino_id, total_trocas, max_trocas, status, inicio_em')
+      .gte('inicio_em', today)
+      .in('status', ['ATIVA', 'FINALIZADA'])
+      .order('inicio_em', { ascending: false });
+
+    const conversasMapped: ConversaHoje[] = (conversasData || []).map((c: any) => ({
+      id: c.id,
+      origem_nome: instanceNameMap.get(c.instancia_origem_id) || '?',
+      destino_nome: instanceNameMap.get(c.instancia_destino_id) || '?',
+      total_trocas: c.total_trocas,
+      max_trocas: c.max_trocas,
+      status: c.status,
+      inicio_em: c.inicio_em,
+    }));
+    setConversasHoje(conversasMapped);
+
     setLoading(false);
   }
 
