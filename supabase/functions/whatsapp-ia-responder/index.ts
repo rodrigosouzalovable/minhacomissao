@@ -6,22 +6,32 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const TEMAS_CONVERSA = [
+  "futebol brasileiro, campeonato, jogos recentes",
+  "clima e tempo, calor, chuva, previsão",
+  "comida, receitas, restaurantes, o que almoçou",
+  "filmes e séries que assistiu ou quer assistir",
+  "trabalho, rotina, produtividade",
+  "fim de semana, planos, lazer",
+  "música, shows, festivais",
+  "tecnologia, celular, apps, internet",
+  "viagens, lugares que quer conhecer",
+  "notícias do dia, coisas que viu na internet",
+  "família, filhos, parentes",
+  "exercícios, academia, saúde",
+  "pets, animais de estimação",
+  "jogos, videogame, entretenimento",
+  "memes, coisas engraçadas que viu",
+  "compras, promoções, preços",
+  "carros, motos, trânsito",
+  "feriados, datas comemorativas",
+];
+
 const FALLBACK_RESPOSTAS = [
-  "Kkk verdade! 😂",
-  "Sim sim, com certeza 👍",
-  "Ah legal, massa!",
-  "Entendi haha",
-  "Boa! 🙏",
-  "Aham, concordo",
-  "Pois é né 😄",
-  "Haha boa!",
-  "Show de bola 👍",
-  "Tá certo!",
-  "Demais hein! 😁",
-  "Kkkkk",
-  "Verdade, penso igual",
-  "Ah sim, faz sentido",
-  "Top! 🔥",
+  "Kkk verdade! 😂", "Sim sim, com certeza 👍", "Ah legal, massa!",
+  "Entendi haha", "Boa! 🙏", "Aham, concordo", "Pois é né 😄",
+  "Haha boa!", "Show de bola 👍", "Tá certo!", "Demais hein! 😁",
+  "Kkkkk", "Verdade, penso igual", "Top! 🔥",
 ];
 
 function getSupabaseAdmin() {
@@ -35,50 +45,39 @@ function randomDelay(minMs: number, maxMs: number): number {
   return Math.floor(Math.random() * (maxMs - minMs)) + minMs;
 }
 
-function buildSystemPrompt(fase: number, totalTrocas: number, maxTrocas: number): string {
+function buildSystemPrompt(totalTrocas: number, maxTrocas: number): string {
   const trocasRestantes = maxTrocas - totalTrocas;
   const estaFinalizando = trocasRestantes <= 3;
-
-  let tamanhoInstrucao: string;
-  if (fase <= 1) {
-    tamanhoInstrucao = "Varie o tamanho: às vezes 1-3 palavras ('kkk', 'sério?', 'boa!'), às vezes 1 frase curta.";
-  } else if (fase === 2) {
-    tamanhoInstrucao = "Varie o tamanho: às vezes 1-3 palavras ('kkk', 'e aí?'), às vezes 1-2 frases curtas.";
-  } else {
-    tamanhoInstrucao = "Varie o tamanho BASTANTE: às vezes só 'kkk' ou 'sério??', às vezes 1-2 frases, raramente 3 frases.";
-  }
 
   let instrucaoEncerramento = "";
   if (estaFinalizando) {
     if (trocasRestantes <= 1) {
-      instrucaoEncerramento = `\nEsta é sua ÚLTIMA mensagem. Encerre a conversa de forma natural, como se tivesse que ir fazer algo. Exemplos: "bom, vou nessa, depois a gente se fala!", "tenho que resolver umas coisas aqui, tmj!", "vou almoçar, falo depois 👋". NÃO diga "tchau" formalmente.`;
+      instrucaoEncerramento = `\nEsta é sua ÚLTIMA mensagem. Encerre naturalmente, como se tivesse que ir. Ex: "bom, vou nessa, depois a gente se fala!", "tenho que resolver umas coisas, tmj!". NÃO diga "tchau" formalmente.`;
     } else {
-      instrucaoEncerramento = `\nA conversa está chegando ao fim naturalmente. Comece a dar sinais sutis de que vai sair, mas sem encerrar ainda. Exemplos: mencione que tem coisas pra fazer, diga "cara preciso ir daqui a pouco", "tô ficando sem bateria".`;
+      instrucaoEncerramento = `\nA conversa está acabando. Dê sinais sutis de que vai sair. Ex: "cara preciso ir daqui a pouco", "tô ficando sem bateria".`;
     }
   }
 
   return `Você é um brasileiro comum conversando no WhatsApp com um amigo/conhecido.
 Responda de forma natural, informal e curta como uma pessoa real.
-Use gírias brasileiras naturalmente (tipo "kkk", "kkkk", "massa", "show", "tmj", "mano", "cara", "bora", "top", "pô").
+Use gírias brasileiras (tipo "kkk", "kkkk", "massa", "show", "tmj", "mano", "cara", "bora", "top", "pô").
 Use emojis de vez em quando (👍, 😂, 🙏, 😄, 🔥, 😎, 🤣) mas NÃO em toda mensagem.
-${tamanhoInstrucao}
+Varie o tamanho BASTANTE: às vezes só "kkk" ou "sério??", às vezes 1-2 frases, raramente 3 frases.
 NÃO use formatação markdown. NÃO se apresente. NÃO seja formal. NÃO use pontuação perfeita.
-Cometa pequenos "erros" naturais: abreviações (vc, tb, pq, qd, blz, vlw, ngm, td), minúsculas, sem ponto final.
-Faça perguntas de vez em quando para manter a conversa fluindo ("e vc?", "e aí, como tá?", "sério? conta mais", "e o trabalho?").
-Mude de assunto naturalmente às vezes, como numa conversa real.
-Reaja com curiosidade ou humor ao que o outro diz.
-NUNCA repita a mesma estrutura de frase duas vezes seguidas.${instrucaoEncerramento}`;
+Cometa "erros" naturais: abreviações (vc, tb, pq, qd, blz, vlw, ngm, td), minúsculas, sem ponto final.
+Faça perguntas para manter a conversa ("e vc?", "sério? conta mais", "e o trabalho?").
+Mude de assunto naturalmente às vezes.
+NUNCA repita a mesma estrutura duas vezes seguidas.${instrucaoEncerramento}`;
 }
 
-async function chamarIA(mensagem: string, historico: string, fase: number, totalTrocas: number, maxTrocas: number): Promise<string> {
+async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number): Promise<string> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) {
     console.warn("[IA] LOVABLE_API_KEY não configurado, usando fallback");
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
   }
 
-  const systemPrompt = buildSystemPrompt(fase, totalTrocas, maxTrocas);
-
+  const systemPrompt = buildSystemPrompt(totalTrocas, maxTrocas);
   const messages: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt },
   ];
@@ -93,46 +92,80 @@ async function chamarIA(mensagem: string, historico: string, fase: number, total
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
-
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages,
-        stream: false,
-      }),
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "google/gemini-2.5-flash-lite", messages, stream: false }),
       signal: controller.signal,
     });
-
     clearTimeout(timeout);
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[IA] Gateway retornou ${response.status}: ${errText.substring(0, 200)}`);
+      console.error(`[IA] Gateway ${response.status}: ${errText.substring(0, 200)}`);
       return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
     }
 
     const data = await response.json();
     let resposta = (data.choices?.[0]?.message?.content || "").trim();
-
     resposta = resposta.replace(/^["']|["']$/g, "").trim();
     if (!resposta || resposta.length < 2) {
       return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
     }
-
     if (resposta.length > 200) {
       resposta = resposta.substring(0, 200).replace(/\s\S*$/, "");
     }
-
-    console.log(`[IA] Resposta gerada (troca ${totalTrocas + 1}/${maxTrocas}): "${resposta}"`);
+    console.log(`[IA] Resposta (troca ${totalTrocas + 1}/${maxTrocas}): "${resposta}"`);
     return resposta;
   } catch (err) {
-    console.error("[IA] Erro ao chamar Lovable AI Gateway:", err);
+    console.error("[IA] Erro:", err);
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
+  }
+}
+
+async function gerarMensagemInicial(): Promise<string> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const tema = TEMAS_CONVERSA[Math.floor(Math.random() * TEMAS_CONVERSA.length)];
+
+  if (!apiKey) {
+    return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [
+          {
+            role: "system",
+            content: `Você é um brasileiro comum no WhatsApp. Gere UMA mensagem curta e casual para iniciar uma conversa com um amigo sobre: ${tema}. 
+Seja informal, use gírias, abreviações. Pode usar emoji mas com moderação. 
+Exemplos de tom: "e aí mano, viu o jogo ontem?", "cara tô morrendo de calor hj", "vc viu aquele filme novo?", "mano q fome, oq vc almoçou?".
+Responda APENAS com a mensagem, sem explicações.`,
+          },
+          { role: "user", content: "Gere a mensagem inicial." },
+        ],
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
+
+    const data = await response.json();
+    let msg = (data.choices?.[0]?.message?.content || "").trim();
+    msg = msg.replace(/^["']|["']$/g, "").trim();
+    if (!msg || msg.length < 2) return "e aí, tudo bem? 😊";
+    if (msg.length > 150) msg = msg.substring(0, 150);
+    console.log(`[IA] Mensagem inicial gerada (tema: ${tema}): "${msg}"`);
+    return msg;
+  } catch {
+    return "e aí, tudo bem? 😊";
   }
 }
 
@@ -149,7 +182,7 @@ async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, nu
       });
       if (res.ok) {
         await res.text();
-        console.log(`[IA] ✅ Mensagem enviada para ${numero}: "${texto}"`);
+        console.log(`[IA] ✅ Enviada para ${numero}: "${texto}"`);
         return true;
       }
       await res.text();
@@ -157,29 +190,20 @@ async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, nu
       console.warn(`[IA] Endpoint ${url} falhou:`, e);
     }
   }
-  console.error(`[IA] ❌ Falha ao enviar mensagem para ${numero}`);
+  console.error(`[IA] ❌ Falha ao enviar para ${numero}`);
   return false;
 }
 
-async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, texto: string) {
+async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, texto: string, direcao: "saida" | "entrada" = "saida") {
   try {
-    const { data: inst } = await sb
-      .from("user_whatsapp_instances")
-      .select("id")
-      .eq("id", instanciaId)
-      .single();
-
-    if (!inst) return;
-
-    // Clean phone number - remove @s.whatsapp.net if present
     const cleanPhone = telefoneRemoto.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
     const phoneSuffix = cleanPhone.replace(/^55/, "").slice(-8);
 
     await sb.from("whatsapp_mensagens").insert({
-      instancia_id: inst.id,
+      instancia_id: instanciaId,
       telefone_remoto: cleanPhone,
       conteudo: texto,
-      direcao: "saida",
+      direcao,
       tipo_conteudo: "texto",
       timestamp_msg: new Date().toISOString(),
     });
@@ -187,7 +211,7 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
     const { data: contato } = await sb
       .from("whatsapp_contatos")
       .select("id")
-      .eq("instancia_id", inst.id)
+      .eq("instancia_id", instanciaId)
       .or(`telefone.eq.${cleanPhone},telefone.ilike.%${phoneSuffix}`)
       .maybeSingle();
 
@@ -202,103 +226,6 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
   }
 }
 
-async function dispararProximaResposta(
-  sb: any,
-  instanciaQueResponde: string,
-  instanciaQueRecebe: string,
-  resposta: string,
-  fase: number,
-) {
-  try {
-    const { data: instResp } = await sb
-      .from("user_whatsapp_instances")
-      .select("id, server_url, instance_token")
-      .eq("id", instanciaQueResponde)
-      .eq("ativo", true)
-      .single();
-
-    if (!instResp) {
-      console.log(`[IA] Instância ${instanciaQueResponde} não encontrada/inativa, cadeia encerrada`);
-      return;
-    }
-
-    const { data: instDest } = await sb
-      .from("user_whatsapp_instances")
-      .select("id, server_url, instance_token")
-      .eq("id", instanciaQueRecebe)
-      .single();
-
-    if (!instDest) {
-      console.log(`[IA] Instância destino ${instanciaQueRecebe} não encontrada, cadeia encerrada`);
-      return;
-    }
-
-    // Get phone number of the destination instance
-    const { data: statusData } = await fetch(
-      `${instDest.server_url.replace(/\/+$/, "")}/instance/status`,
-      { headers: { token: instDest.instance_token } }
-    ).then(r => r.json()).catch(() => null) || {};
-
-    let numeroDest = "";
-    if (statusData?.phoneNumber) {
-      numeroDest = statusData.phoneNumber;
-    } else if (statusData?.data?.phoneNumber) {
-      numeroDest = statusData.data.phoneNumber;
-    }
-
-    if (!numeroDest) {
-      // Fallback: try to find from recent interactions
-      const { data: recentInteraction } = await sb
-        .from("whatsapp_aquecimento_interacoes")
-        .select("conteudo")
-        .or(`instancia_origem_id.eq.${instanciaQueRecebe},instancia_destino_id.eq.${instanciaQueRecebe}`)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      console.log(`[IA] Não conseguiu obter telefone da instância ${instanciaQueRecebe}, cadeia encerrada`);
-      return;
-    }
-
-    // Format phone number
-    if (!numeroDest.includes("@")) {
-      numeroDest = numeroDest.replace(/\D/g, "");
-      if (!numeroDest.startsWith("55")) numeroDest = "55" + numeroDest;
-      numeroDest = numeroDest + "@s.whatsapp.net";
-    }
-
-    const delayMs = randomDelay(20000, 120000);
-    console.log(`[IA] 🔄 Cadeia: ${instanciaQueResponde} vai responder a ${instanciaQueRecebe} em ${Math.round(delayMs / 1000)}s`);
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Fire-and-forget: trigger the next response in the chain
-    fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({
-        action: "gerar-resposta",
-        mensagem: resposta,
-        fase,
-        instancia_origem_id: instanciaQueResponde,
-        instancia_destino_id: instanciaQueRecebe,
-        delay_ms: delayMs,
-        server_url: instResp.server_url,
-        instance_token: instResp.instance_token,
-        numero_destino: numeroDest,
-      }),
-    }).catch(err => {
-      console.error("[IA] Erro ao disparar próxima resposta na cadeia:", err);
-    });
-  } catch (e) {
-    console.error("[IA] Erro ao preparar próxima resposta:", e);
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -308,76 +235,174 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
+    const sb = getSupabaseAdmin();
+
+    // ========== NEW: Iniciar conversa com IA ==========
+    if (action === "iniciar-conversa") {
+      const {
+        instancia_origem_id, instancia_destino_id,
+        server_url, instance_token, numero_destino,
+        numero_origem, dest_server_url, dest_instance_token,
+      } = body;
+
+      if (!instancia_origem_id || !instancia_destino_id) {
+        return json({ error: "instancia_origem_id e instancia_destino_id obrigatórios" }, 400);
+      }
+
+      // Check cooldown - don't start if there's a recent conversation
+      const duasHorasAtras = new Date(Date.now() - 2 * 3600000).toISOString();
+      const { data: recente } = await sb
+        .from("whatsapp_conversas_ia")
+        .select("id")
+        .or(`and(instancia_origem_id.eq.${instancia_origem_id},instancia_destino_id.eq.${instancia_destino_id}),and(instancia_origem_id.eq.${instancia_destino_id},instancia_destino_id.eq.${instancia_origem_id})`)
+        .gte("ultima_msg_em", duasHorasAtras)
+        .limit(1)
+        .maybeSingle();
+
+      if (recente) {
+        console.log(`[IA] Cooldown ativo para par, pulando.`);
+        return json({ started: false, reason: "cooldown" });
+      }
+
+      // Generate initial message with AI
+      const mensagemInicial = await gerarMensagemInicial();
+
+      // Create conversation record
+      const maxTrocas = 12 + Math.floor(Math.random() * 7); // 12-18 trocas
+      const { data: conversa, error: convError } = await sb
+        .from("whatsapp_conversas_ia")
+        .insert({
+          instancia_origem_id, instancia_destino_id,
+          max_trocas: maxTrocas,
+          historico: [{ role: "enviada", content: mensagemInicial, ts: new Date().toISOString() }],
+          total_trocas: 1,
+          ultima_msg_em: new Date().toISOString(),
+        })
+        .select().single();
+
+      if (convError) {
+        console.error("[IA] Erro ao criar conversa:", convError);
+        return json({ error: "Erro ao criar conversa" }, 500);
+      }
+
+      // Send the initial message
+      if (server_url && instance_token && numero_destino) {
+        const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial);
+        if (sent) {
+          // Log outgoing message on sender's inbox
+          await logToInbox(sb, instancia_origem_id, numero_destino, mensagemInicial, "saida");
+
+          // Log interaction
+          await sb.from("whatsapp_aquecimento_interacoes").insert({
+            instancia_origem_id, instancia_destino_id,
+            tipo: "texto", conteudo: mensagemInicial,
+            status: "ENVIADO", enviado_em: new Date().toISOString(),
+            tipo_interacao: "mensagem",
+          });
+
+          // Schedule the other side to respond after delay
+          const delayMs = randomDelay(20000, 90000);
+          console.log(`[IA] 🔄 ${instancia_destino_id} responderá em ${Math.round(delayMs / 1000)}s`);
+
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+          fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+            body: JSON.stringify({
+              action: "gerar-resposta",
+              mensagem: mensagemInicial,
+              instancia_origem_id: instancia_destino_id,
+              instancia_destino_id: instancia_origem_id,
+              delay_ms: delayMs,
+              server_url: dest_server_url,
+              instance_token: dest_instance_token,
+              numero_destino: numero_origem,
+            }),
+          }).catch(err => console.error("[IA] Erro ao disparar resposta:", err));
+        }
+      }
+
+      console.log(`[IA] 🆕 Conversa iniciada: ${conversa.id} (max ${maxTrocas} trocas)`);
+      return json({ started: true, conversa_id: conversa.id, mensagem: mensagemInicial });
+    }
+
+    // ========== Gerar resposta (chain) ==========
     if (action === "gerar-resposta") {
       const {
-        mensagem,
-        historico,
-        fase,
-        instancia_origem_id,
-        instancia_destino_id,
-        delay_ms,
-        server_url,
-        instance_token,
-        numero_destino,
+        mensagem, instancia_origem_id, instancia_destino_id,
+        delay_ms, server_url, instance_token, numero_destino,
       } = body;
 
       if (!mensagem || !instancia_origem_id || !instancia_destino_id) {
-        return json({ error: "mensagem, instancia_origem_id e instancia_destino_id são obrigatórios" }, 400);
+        return json({ error: "campos obrigatórios faltando" }, 400);
       }
 
-      const sb = getSupabaseAdmin();
-      const faseNum = fase || 1;
-
+      // Wait delay
       const delayMs = delay_ms || 0;
       if (delayMs > 0) {
-        console.log(`[IA] Aguardando ${Math.round(delayMs / 1000)}s antes de responder...`);
+        console.log(`[IA] Aguardando ${Math.round(delayMs / 1000)}s...`);
         await new Promise((r) => setTimeout(r, delayMs));
       }
 
-      const conversa = await getOrCreateConversa(sb, instancia_origem_id, instancia_destino_id);
+      // Find active conversation
+      const { data: conversa } = await sb
+        .from("whatsapp_conversas_ia")
+        .select("*")
+        .or(`and(instancia_origem_id.eq.${instancia_origem_id},instancia_destino_id.eq.${instancia_destino_id}),and(instancia_origem_id.eq.${instancia_destino_id},instancia_destino_id.eq.${instancia_origem_id})`)
+        .eq("status", "ATIVA")
+        .order("inicio_em", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (!conversa) {
-        return json({ responded: false, reason: "cooldown" });
-      }
-
-      if (conversa.status !== "ATIVA") {
-        return json({ responded: false, reason: conversa.status });
+        console.log("[IA] Nenhuma conversa ativa encontrada.");
+        return json({ responded: false, reason: "no_conversation" });
       }
 
       if (conversa.total_trocas >= conversa.max_trocas) {
-        // Let the AI generate a natural closing instead of using a fixed phrase
-        const historicoArr = (conversa.historico || []) as Array<{ role: string; content: string }>;
-        const historicoTexto = historicoArr
-          .slice(-10)
-          .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`)
-          .join("\n");
+        // Generate closing message
+        const historicoArr = (conversa.historico || []) as any[];
+        const historicoTexto = historicoArr.slice(-10)
+          .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, faseNum, conversa.total_trocas, conversa.max_trocas);
-        await finalizarConversa(sb, conversa.id, mensagem, fraseEncerramento);
+        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas);
+
+        // Update conversation as finished
+        const novoHistorico = [
+          ...historicoArr,
+          { role: "recebida", content: mensagem, ts: new Date().toISOString() },
+          { role: "enviada", content: fraseEncerramento, ts: new Date().toISOString() },
+        ];
+        await sb.from("whatsapp_conversas_ia").update({
+          status: "FINALIZADA", total_trocas: conversa.total_trocas + 1,
+          ultima_msg_em: new Date().toISOString(), historico: novoHistorico,
+        }).eq("id", conversa.id);
 
         if (server_url && instance_token && numero_destino) {
-          await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento);
-          await logToInbox(sb, instancia_origem_id, numero_destino, fraseEncerramento);
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento);
+          if (sent) {
+            await logToInbox(sb, instancia_origem_id, numero_destino, fraseEncerramento, "saida");
+          }
         }
 
         console.log(`[IA] 🏁 Conversa ${conversa.id} finalizada após ${conversa.total_trocas + 1} trocas`);
         return json({ responded: true, resposta: fraseEncerramento, finalizada: true });
       }
 
-      const historicoArr = (conversa.historico || []) as Array<{ role: string; content: string }>;
-      const historicoTexto = historicoArr
-        .slice(-10)
-        .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`)
-        .join("\n");
+      // Generate response
+      const historicoArr = (conversa.historico || []) as any[];
+      const historicoTexto = historicoArr.slice(-10)
+        .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-      const resposta = await chamarIA(mensagem, historicoTexto, faseNum, conversa.total_trocas, conversa.max_trocas);
+      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas);
 
       const novoHistorico = [
         ...historicoArr,
         { role: "recebida", content: mensagem, ts: new Date().toISOString() },
         { role: "enviada", content: resposta, ts: new Date().toISOString() },
       ];
-
       const novaTroca = conversa.total_trocas + 1;
 
       await sb.from("whatsapp_conversas_ia").update({
@@ -386,27 +411,63 @@ Deno.serve(async (req) => {
         historico: novoHistorico,
       }).eq("id", conversa.id);
 
-      // Log the RECEIVED message to inbox (on the destination instance)
-      await logToInbox(sb, instancia_destino_id, numero_destino?.replace("@s.whatsapp.net", "") || "", mensagem);
-
+      // Send message and log
       if (server_url && instance_token && numero_destino) {
         const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
         if (sent) {
-          await logToInbox(sb, instancia_origem_id, numero_destino, resposta);
+          await logToInbox(sb, instancia_origem_id, numero_destino, resposta, "saida");
         }
       }
 
-      // Chain: if conversation is still active, trigger the other side to respond back
+      // Chain: trigger the other side to respond back
       if (novaTroca < conversa.max_trocas) {
-        await dispararProximaResposta(
-          sb,
-          instancia_destino_id,  // the one who received now responds
-          instancia_origem_id,   // back to the one who just sent
-          resposta,
-          faseNum,
-        );
+        // Need to get the other side's details to respond back
+        const outroLado = instancia_origem_id === conversa.instancia_origem_id
+          ? conversa.instancia_destino_id : conversa.instancia_origem_id;
+        const esteLado = instancia_origem_id;
+
+        const { data: outroInst } = await sb
+          .from("user_whatsapp_instances")
+          .select("id, server_url, instance_token, nome")
+          .eq("id", outroLado)
+          .eq("ativo", true)
+          .single();
+
+        if (outroInst) {
+          // Get phone of current side
+          const { data: esteInst } = await sb
+            .from("user_whatsapp_instances")
+            .select("nome")
+            .eq("id", esteLado)
+            .single();
+
+          const estePhone = esteInst?.nome?.match(/^\d+/)?.[0] || "";
+
+          if (estePhone) {
+            const delayNext = randomDelay(20000, 120000);
+            console.log(`[IA] 🔄 Cadeia: ${outroInst.nome} responderá em ${Math.round(delayNext / 1000)}s`);
+
+            const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+            const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+            fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+              body: JSON.stringify({
+                action: "gerar-resposta",
+                mensagem: resposta,
+                instancia_origem_id: outroLado,
+                instancia_destino_id: esteLado,
+                delay_ms: delayNext,
+                server_url: outroInst.server_url,
+                instance_token: outroInst.instance_token,
+                numero_destino: `55${estePhone}@s.whatsapp.net`,
+              }),
+            }).catch(err => console.error("[IA] Erro cadeia:", err));
+          }
+        }
       } else {
-        console.log(`[IA] 🏁 Conversa ${conversa.id} atingiu limite (${novaTroca}/${conversa.max_trocas}), sem próxima rodada`);
+        console.log(`[IA] 🏁 Conversa ${conversa.id} atingiu limite (${novaTroca}/${conversa.max_trocas})`);
       }
 
       return json({ responded: true, resposta, troca: novaTroca, maxTrocas: conversa.max_trocas });
@@ -424,75 +485,4 @@ function json(data: any, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-async function getOrCreateConversa(sb: any, origemId: string, destinoId: string) {
-  const { data: existente } = await sb
-    .from("whatsapp_conversas_ia")
-    .select("*")
-    .or(`and(instancia_origem_id.eq.${origemId},instancia_destino_id.eq.${destinoId}),and(instancia_origem_id.eq.${destinoId},instancia_destino_id.eq.${origemId})`)
-    .eq("status", "ATIVA")
-    .order("inicio_em", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existente) return existente;
-
-  const quatroHorasAtras = new Date(Date.now() - 4 * 3600000).toISOString();
-  const { data: recente } = await sb
-    .from("whatsapp_conversas_ia")
-    .select("id, ultima_msg_em")
-    .or(`and(instancia_origem_id.eq.${origemId},instancia_destino_id.eq.${destinoId}),and(instancia_origem_id.eq.${destinoId},instancia_destino_id.eq.${origemId})`)
-    .in("status", ["FINALIZADA", "COOLDOWN"])
-    .gte("ultima_msg_em", quatroHorasAtras)
-    .limit(1)
-    .maybeSingle();
-
-  if (recente) {
-    console.log(`[IA] Cooldown ativo para par ${origemId} <-> ${destinoId}`);
-    return null;
-  }
-
-  const maxTrocas = 10 + Math.floor(Math.random() * 6); // 10-15 trocas
-  const { data: nova, error } = await sb
-    .from("whatsapp_conversas_ia")
-    .insert({
-      instancia_origem_id: origemId,
-      instancia_destino_id: destinoId,
-      max_trocas: maxTrocas,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("[IA] Erro ao criar conversa:", error);
-    return null;
-  }
-
-  console.log(`[IA] Nova conversa criada: ${nova.id} (max ${maxTrocas} trocas)`);
-  return nova;
-}
-
-async function finalizarConversa(sb: any, conversaId: string, ultimaMsgRecebida: string, fraseEncerramento: string) {
-  const { data: conversa } = await sb
-    .from("whatsapp_conversas_ia")
-    .select("historico")
-    .eq("id", conversaId)
-    .single();
-
-  const historicoArr = (conversa?.historico || []) as any[];
-  const novoHistorico = [
-    ...historicoArr,
-    { role: "recebida", content: ultimaMsgRecebida, ts: new Date().toISOString() },
-    { role: "enviada", content: fraseEncerramento, ts: new Date().toISOString() },
-  ];
-
-  await sb.from("whatsapp_conversas_ia").update({
-    status: "FINALIZADA",
-    total_trocas: historicoArr.length / 2 + 1,
-    ultima_msg_em: new Date().toISOString(),
-    historico: novoHistorico,
-  }).eq("id", conversaId);
-
-  console.log(`[IA] Conversa ${conversaId} finalizada`);
 }
