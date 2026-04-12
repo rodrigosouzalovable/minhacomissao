@@ -302,6 +302,38 @@ Deno.serve(async (req) => {
         return json({ error: "Erro ao criar conversa" }, 500);
       }
 
+      // Ensure contacts exist on both sides
+      if (numero_destino && numero_origem) {
+        const cleanDest = numero_destino.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+        const cleanOrig = numero_origem.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+        const suffDest = cleanDest.replace(/^55/, "").slice(-8);
+        const suffOrig = cleanOrig.replace(/^55/, "").slice(-8);
+
+        // Contact of destino on origem's inbox
+        const { data: c1 } = await sb.from("whatsapp_contatos")
+          .select("id").eq("instancia_id", instancia_origem_id)
+          .or(`telefone.eq.${cleanDest},telefone.ilike.%${suffDest}`)
+          .maybeSingle();
+        if (!c1) {
+          await sb.from("whatsapp_contatos").insert({
+            instancia_id: instancia_origem_id, telefone: cleanDest, nome: cleanDest,
+          });
+          console.log(`[IA] 📇 Contato ${cleanDest} criado na instância origem`);
+        }
+
+        // Contact of origem on destino's inbox
+        const { data: c2 } = await sb.from("whatsapp_contatos")
+          .select("id").eq("instancia_id", instancia_destino_id)
+          .or(`telefone.eq.${cleanOrig},telefone.ilike.%${suffOrig}`)
+          .maybeSingle();
+        if (!c2) {
+          await sb.from("whatsapp_contatos").insert({
+            instancia_id: instancia_destino_id, telefone: cleanOrig, nome: cleanOrig,
+          });
+          console.log(`[IA] 📇 Contato ${cleanOrig} criado na instância destino`);
+        }
+      }
+
       // Send the initial message
       if (server_url && instance_token && numero_destino) {
         const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial);
