@@ -1815,6 +1815,7 @@ export type Database = {
           status: string
           ultima_interacao: string | null
           ultimo_aviso_falha: string | null
+          ultimo_parceiro_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1831,6 +1832,7 @@ export type Database = {
           status?: string
           ultima_interacao?: string | null
           ultimo_aviso_falha?: string | null
+          ultimo_parceiro_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1847,6 +1849,7 @@ export type Database = {
           status?: string
           ultima_interacao?: string | null
           ultimo_aviso_falha?: string | null
+          ultimo_parceiro_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1854,6 +1857,13 @@ export type Database = {
             foreignKeyName: "whatsapp_aquecimento_instancias_instancia_id_fkey"
             columns: ["instancia_id"]
             isOneToOne: true
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_aquecimento_instancias_ultimo_parceiro_id_fkey"
+            columns: ["ultimo_parceiro_id"]
+            isOneToOne: false
             referencedRelation: "user_whatsapp_instances"
             referencedColumns: ["id"]
           },
