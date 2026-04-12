@@ -169,6 +169,32 @@ Responda APENAS com a mensagem, sem explicações.`,
   }
 }
 
+async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
+  const cleanUrl = serverUrl.replace(/\/+$/, "");
+  const cleanNumber = numero.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+  const endpoints = [`${cleanUrl}/contact/add`, `${cleanUrl}/contacts/add`];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: instanceToken },
+        body: JSON.stringify({ number: cleanNumber, name: nome }),
+      });
+      if (res.ok) {
+        await res.text();
+        console.log(`[IA] 📱 Contato salvo na agenda: ${cleanNumber} como "${nome}"`);
+        return true;
+      }
+      await res.text();
+    } catch (e) {
+      console.warn(`[IA] Endpoint contato ${url} falhou:`, e);
+    }
+  }
+  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda`);
+  return false;
+}
+
 async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, texto: string): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
