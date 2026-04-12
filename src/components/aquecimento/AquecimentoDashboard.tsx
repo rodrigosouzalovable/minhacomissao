@@ -287,7 +287,7 @@ export default function AquecimentoDashboard({ metrics }: Props) {
     setTimeline(timelineData);
 
     // Load today's AI conversations
-    const today = new Date().toISOString().split('T')[0];
+    const todayConv = new Date().toISOString().split('T')[0];
     const { data: conversasData } = await supabase
       .from('whatsapp_conversas_ia' as any)
       .select('id, instancia_origem_id, instancia_destino_id, total_trocas, max_trocas, status, inicio_em')
