@@ -258,11 +258,12 @@ export default function WhatsAppInbox() {
     // For initial load, get most recent messages; for load-more, get older ones
     const offset = loadMore ? (paginaAtual + 1) * PAGE_SIZE : 0;
     
+    const phoneSuffix = contatoAtivo.telefone.replace(/^55/, '').slice(-8);
     const { data, count } = await supabase
       .from('whatsapp_mensagens')
       .select('*', { count: 'exact' })
       .eq('instancia_id', contatoAtivo.instancia_id)
-      .eq('telefone_remoto', contatoAtivo.telefone)
+      .ilike('telefone_remoto', `%${phoneSuffix}`)
       .order('timestamp_msg', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
 
@@ -345,8 +346,9 @@ export default function WhatsAppInbox() {
       .channel('whatsapp-mensagens-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
         const newMsg = payload.new as Mensagem;
+        const suffix = contatoAtivo.telefone.replace(/^55/, '').slice(-8);
         if (newMsg.instancia_id === contatoAtivo.instancia_id &&
-            newMsg.telefone_remoto === contatoAtivo.telefone) {
+            newMsg.telefone_remoto.endsWith(suffix)) {
           setMensagens(prev => {
             if (prev.some(m => m.id === newMsg.id)) return prev;
             const newIdentity = getMessageIdentity(newMsg);
@@ -393,9 +395,10 @@ export default function WhatsAppInbox() {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
     const markRead = async () => {
       await supabase.from('whatsapp_contatos').update({ nao_lido: 0 }).eq('id', contatoAtivo.id);
+      const readSuffix = contatoAtivo.telefone.replace(/^55/, '').slice(-8);
       await supabase.from('whatsapp_mensagens').update({ lida: true })
         .eq('instancia_id', contatoAtivo.instancia_id)
-        .eq('telefone_remoto', contatoAtivo.telefone)
+        .ilike('telefone_remoto', `%${readSuffix}`)
         .eq('lida', false);
     };
     markRead();

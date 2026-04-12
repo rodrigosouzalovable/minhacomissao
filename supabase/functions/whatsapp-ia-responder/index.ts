@@ -199,21 +199,24 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
     const cleanPhone = telefoneRemoto.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
     const phoneSuffix = cleanPhone.replace(/^55/, "").slice(-8);
 
+    // Find existing contact to use their phone format (avoids mismatch with/without "9")
+    const { data: contato } = await sb
+      .from("whatsapp_contatos")
+      .select("id, telefone")
+      .eq("instancia_id", instanciaId)
+      .or(`telefone.eq.${cleanPhone},telefone.ilike.%${phoneSuffix}`)
+      .maybeSingle();
+
+    const phoneToStore = contato?.telefone || cleanPhone;
+
     await sb.from("whatsapp_mensagens").insert({
       instancia_id: instanciaId,
-      telefone_remoto: cleanPhone,
+      telefone_remoto: phoneToStore,
       conteudo: texto,
       direcao,
       tipo_conteudo: "texto",
       timestamp_msg: new Date().toISOString(),
     });
-
-    const { data: contato } = await sb
-      .from("whatsapp_contatos")
-      .select("id")
-      .eq("instancia_id", instanciaId)
-      .or(`telefone.eq.${cleanPhone},telefone.ilike.%${phoneSuffix}`)
-      .maybeSingle();
 
     if (contato) {
       await sb.from("whatsapp_contatos").update({
