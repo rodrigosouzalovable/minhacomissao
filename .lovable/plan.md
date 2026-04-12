@@ -1,47 +1,37 @@
 
 
-## Salvar contatos automaticamente ao iniciar conversa de aquecimento
+## Salvar contatos na agenda do WhatsApp (telefone físico)
 
-### Situação Atual
-- O `logToInbox` no `whatsapp-ia-responder` salva mensagens mas **NÃO cria contatos** na tabela `whatsapp_contatos` se eles não existirem
-- Os contatos são criados pelo webhook quando mensagens chegam — mas isso depende do webhook estar funcionando
-- Se o contato não existir, a mensagem é salva com o telefone correto mas não aparece na sidebar do Inbox
+### Situação
+Atualmente, os contatos são salvos apenas no **banco de dados** da plataforma (tabela `whatsapp_contatos`). Isso faz com que apareçam no Inbox do sistema, mas **não no telefone físico** — no WhatsApp do aparelho, o número aparece sem nome salvo.
 
 ### Solução
-Atualizar a função `logToInbox` no `whatsapp-ia-responder` para criar o contato automaticamente (upsert) caso não exista. Quando uma conversa de aquecimento é iniciada, garantir que ambos os lados tenham o contato do outro salvo.
+A UAZAPI possui um endpoint `Contact:Add` que permite salvar contatos diretamente na agenda do WhatsApp do dispositivo. Vamos adicionar uma função que chama esse endpoint sempre que uma conversa de aquecimento é iniciada.
 
-#### Alteração em `whatsapp-ia-responder/index.ts` — função `logToInbox`
-Após buscar o contato existente, se não encontrar, criar um novo registro em `whatsapp_contatos` com:
-- `instancia_id`: a instância que está enviando/recebendo
-- `telefone`: o número remoto (formato limpo)
-- `nome`: extraído do nome da instância destino (se disponível) ou o próprio número
+### Alteração em `supabase/functions/whatsapp-ia-responder/index.ts`
 
+#### 1. Nova função `salvarContatoUAZAPI`
+Criar função que chama o endpoint `/contact/add` da UAZAPI para salvar o contato na agenda do telefone:
 ```typescript
-// Na função logToInbox, após o maybeSingle():
-if (!contato) {
-  // Criar contato automaticamente
-  const { data: newContato } = await sb.from("whatsapp_contatos").insert({
-    instancia_id: instanciaId,
-    telefone: cleanPhone,
-    nome: cleanPhone, // será atualizado pelo webhook depois
-    ultima_mensagem: texto.slice(0, 200),
-    ultima_mensagem_em: new Date().toISOString(),
-  }).select("id, telefone").single();
-  
-  if (newContato) phoneToStore = newContato.telefone;
+async function salvarContatoUAZAPI(serverUrl, instanceToken, numero, nome) {
+  // Tenta endpoints: /contact/add, /contacts/add
+  // Envia: { number: "5562...", name: "Nome" }
 }
 ```
 
-#### Melhoria adicional na action `iniciar-conversa`
-Após iniciar a conversa, salvar o contato em ambos os lados:
-- Na instância de origem: salvar o número de destino
-- Na instância de destino: salvar o número de origem
+#### 2. Chamar na action `iniciar-conversa`
+Após criar a conversa, salvar o contato em ambos os lados:
+- Instância de origem salva o número de destino na agenda do telefone
+- Instância de destino salva o número de origem na agenda do telefone
 
-Isso garante que mesmo antes de qualquer webhook disparar, ambos os contatos já existem.
+Usar o nome da instância (ex: "62982451153 25 N1 07/04") ou um nome amigável extraído.
+
+#### 3. Chamar no `logToInbox` quando cria contato novo
+Quando o `logToInbox` cria um contato novo no banco, também salvar na agenda do telefone.
 
 ### Arquivo Modificado
-- `supabase/functions/whatsapp-ia-responder/index.ts` — `logToInbox` cria contato se não existir + `iniciar-conversa` garante contatos em ambos os lados
+- `supabase/functions/whatsapp-ia-responder/index.ts`
 
 ### Resultado
-Toda conversa de aquecimento criará automaticamente os contatos em ambas as instâncias, garantindo visibilidade imediata no Inbox.
+Quando uma conversa de aquecimento é iniciada, ambos os telefones terão o contato do outro salvo automaticamente na agenda do WhatsApp.
 
