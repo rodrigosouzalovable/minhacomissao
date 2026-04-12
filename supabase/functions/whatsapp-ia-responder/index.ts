@@ -207,7 +207,28 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
       .or(`telefone.eq.${cleanPhone},telefone.ilike.%${phoneSuffix}`)
       .maybeSingle();
 
-    const phoneToStore = contato?.telefone || cleanPhone;
+    let phoneToStore = contato?.telefone || cleanPhone;
+
+    // If contact doesn't exist, create it automatically
+    if (!contato) {
+      const { data: newContato } = await sb.from("whatsapp_contatos").insert({
+        instancia_id: instanciaId,
+        telefone: cleanPhone,
+        nome: cleanPhone,
+        ultima_mensagem: texto.slice(0, 200),
+        ultima_mensagem_em: new Date().toISOString(),
+      }).select("id, telefone").single();
+
+      if (newContato) {
+        phoneToStore = newContato.telefone;
+        console.log(`[IA] 📇 Contato criado: ${cleanPhone} para instância ${instanciaId}`);
+      }
+    } else {
+      await sb.from("whatsapp_contatos").update({
+        ultima_mensagem: texto.slice(0, 200),
+        ultima_mensagem_em: new Date().toISOString(),
+      }).eq("id", contato.id);
+    }
 
     await sb.from("whatsapp_mensagens").insert({
       instancia_id: instanciaId,
@@ -217,13 +238,6 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
       tipo_conteudo: "texto",
       timestamp_msg: new Date().toISOString(),
     });
-
-    if (contato) {
-      await sb.from("whatsapp_contatos").update({
-        ultima_mensagem: texto.slice(0, 200),
-        ultima_mensagem_em: new Date().toISOString(),
-      }).eq("id", contato.id);
-    }
   } catch (e) {
     console.warn("[IA] Erro ao logar no inbox:", e);
   }
