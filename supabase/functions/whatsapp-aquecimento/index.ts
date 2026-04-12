@@ -89,6 +89,28 @@ Deno.serve(async (req) => {
       console.log(`[AQUECIMENTO] Auto-enrolled: ${inst.nome}`);
     }
 
+    // ========== AUTO-REACTIVATE PAUSED INSTANCES ==========
+    const { data: pausedInstances } = await supabase
+      .from("whatsapp_aquecimento_instancias")
+      .select("id, instancia_id")
+      .eq("status", "PAUSADO");
+
+    for (const paused of (pausedInstances || [])) {
+      const pausedDetails = (allActiveInstances || []).find((i: any) => i.id === paused.instancia_id);
+      if (!pausedDetails) continue;
+
+      const connected = await checkInstanceHealth(pausedDetails);
+      if (connected) {
+        await supabase.from("whatsapp_aquecimento_instancias")
+          .update({ status: "EM_AQUECIMENTO" }).eq("id", paused.id);
+        console.log(`[AQUECIMENTO] ✅ Reativado: ${pausedDetails.nome}`);
+        await supabase.from("aquecimento_notificacoes").insert({
+          tipo: "reativacao", instancia_id: paused.instancia_id,
+          mensagem: `✅ "${pausedDetails.nome}" reconectado. Aquecimento retomado.`,
+        });
+      }
+    }
+
     // ========== GET ALL WARMING INSTANCES ==========
     const { data: instancias } = await supabase
       .from("whatsapp_aquecimento_instancias")

@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
           });
 
           // Schedule the other side to respond after delay
-          const delayMs = randomDelay(20000, 90000);
+          const delayMs = randomDelay(30000, 60000);
           console.log(`[IA] 🔄 ${instancia_destino_id} responderá em ${Math.round(delayMs / 1000)}s`);
 
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -444,7 +444,7 @@ Deno.serve(async (req) => {
           const estePhone = esteInst?.nome?.match(/^\d+/)?.[0] || "";
 
           if (estePhone) {
-            const delayNext = randomDelay(20000, 120000);
+            const delayNext = randomDelay(30000, 60000);
             console.log(`[IA] 🔄 Cadeia: ${outroInst.nome} responderá em ${Math.round(delayNext / 1000)}s`);
 
             const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
