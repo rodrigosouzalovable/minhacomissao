@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer } from 'lucide-react';
+import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer, Users } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DashboardMetrics {
@@ -44,6 +44,16 @@ interface TimelineItem {
   enviado_em: string | null;
   origem_nome: string;
   destino_nome: string;
+}
+
+interface ConversaHoje {
+  id: string;
+  origem_nome: string;
+  destino_nome: string;
+  total_trocas: number;
+  max_trocas: number;
+  status: string;
+  inicio_em: string;
 }
 
 interface Props {
@@ -153,6 +163,7 @@ function statusIcon(status: string) {
 export default function AquecimentoDashboard({ metrics }: Props) {
   const [activeInstances, setActiveInstances] = useState<ActiveInstance[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [conversasHoje, setConversasHoje] = useState<ConversaHoje[]>([]);
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
   const [loading, setLoading] = useState(true);
 
