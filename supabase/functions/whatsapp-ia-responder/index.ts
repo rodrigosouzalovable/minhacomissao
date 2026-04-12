@@ -207,7 +207,28 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
       .or(`telefone.eq.${cleanPhone},telefone.ilike.%${phoneSuffix}`)
       .maybeSingle();
 
-    const phoneToStore = contato?.telefone || cleanPhone;
+    let phoneToStore = contato?.telefone || cleanPhone;
+
+    // If contact doesn't exist, create it automatically
+    if (!contato) {
+      const { data: newContato } = await sb.from("whatsapp_contatos").insert({
+        instancia_id: instanciaId,
+        telefone: cleanPhone,
+        nome: cleanPhone,
+        ultima_mensagem: texto.slice(0, 200),
+        ultima_mensagem_em: new Date().toISOString(),
+      }).select("id, telefone").single();
+
+      if (newContato) {
+        phoneToStore = newContato.telefone;
+        console.log(`[IA] 📇 Contato criado: ${cleanPhone} para instância ${instanciaId}`);
+      }
+    } else {
+      await sb.from("whatsapp_contatos").update({
+        ultima_mensagem: texto.slice(0, 200),
+        ultima_mensagem_em: new Date().toISOString(),
+      }).eq("id", contato.id);
+    }
 
     await sb.from("whatsapp_mensagens").insert({
       instancia_id: instanciaId,
@@ -217,13 +238,6 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
       tipo_conteudo: "texto",
       timestamp_msg: new Date().toISOString(),
     });
-
-    if (contato) {
-      await sb.from("whatsapp_contatos").update({
-        ultima_mensagem: texto.slice(0, 200),
-        ultima_mensagem_em: new Date().toISOString(),
-      }).eq("id", contato.id);
-    }
   } catch (e) {
     console.warn("[IA] Erro ao logar no inbox:", e);
   }
@@ -286,6 +300,38 @@ Deno.serve(async (req) => {
       if (convError) {
         console.error("[IA] Erro ao criar conversa:", convError);
         return json({ error: "Erro ao criar conversa" }, 500);
+      }
+
+      // Ensure contacts exist on both sides
+      if (numero_destino && numero_origem) {
+        const cleanDest = numero_destino.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+        const cleanOrig = numero_origem.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+        const suffDest = cleanDest.replace(/^55/, "").slice(-8);
+        const suffOrig = cleanOrig.replace(/^55/, "").slice(-8);
+
+        // Contact of destino on origem's inbox
+        const { data: c1 } = await sb.from("whatsapp_contatos")
+          .select("id").eq("instancia_id", instancia_origem_id)
+          .or(`telefone.eq.${cleanDest},telefone.ilike.%${suffDest}`)
+          .maybeSingle();
+        if (!c1) {
+          await sb.from("whatsapp_contatos").insert({
+            instancia_id: instancia_origem_id, telefone: cleanDest, nome: cleanDest,
+          });
+          console.log(`[IA] 📇 Contato ${cleanDest} criado na instância origem`);
+        }
+
+        // Contact of origem on destino's inbox
+        const { data: c2 } = await sb.from("whatsapp_contatos")
+          .select("id").eq("instancia_id", instancia_destino_id)
+          .or(`telefone.eq.${cleanOrig},telefone.ilike.%${suffOrig}`)
+          .maybeSingle();
+        if (!c2) {
+          await sb.from("whatsapp_contatos").insert({
+            instancia_id: instancia_destino_id, telefone: cleanOrig, nome: cleanOrig,
+          });
+          console.log(`[IA] 📇 Contato ${cleanOrig} criado na instância destino`);
+        }
       }
 
       // Send the initial message
