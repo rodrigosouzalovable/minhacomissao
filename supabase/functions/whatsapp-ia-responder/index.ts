@@ -169,6 +169,32 @@ Responda APENAS com a mensagem, sem explicações.`,
   }
 }
 
+async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
+  const cleanUrl = serverUrl.replace(/\/+$/, "");
+  const cleanNumber = numero.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+  const endpoints = [`${cleanUrl}/contact/add`, `${cleanUrl}/contacts/add`];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: instanceToken },
+        body: JSON.stringify({ number: cleanNumber, name: nome }),
+      });
+      if (res.ok) {
+        await res.text();
+        console.log(`[IA] 📱 Contato salvo na agenda: ${cleanNumber} como "${nome}"`);
+        return true;
+      }
+      await res.text();
+    } catch (e) {
+      console.warn(`[IA] Endpoint contato ${url} falhou:`, e);
+    }
+  }
+  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda`);
+  return false;
+}
+
 async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, texto: string): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
@@ -302,12 +328,20 @@ Deno.serve(async (req) => {
         return json({ error: "Erro ao criar conversa" }, 500);
       }
 
-      // Ensure contacts exist on both sides
+      // Ensure contacts exist on both sides (DB + phone agenda)
       if (numero_destino && numero_origem) {
         const cleanDest = numero_destino.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
         const cleanOrig = numero_origem.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
         const suffDest = cleanDest.replace(/^55/, "").slice(-8);
         const suffOrig = cleanOrig.replace(/^55/, "").slice(-8);
+
+        // Get instance names for contact naming
+        const [{ data: origInst }, { data: destInst }] = await Promise.all([
+          sb.from("user_whatsapp_instances").select("nome").eq("id", instancia_origem_id).single(),
+          sb.from("user_whatsapp_instances").select("nome").eq("id", instancia_destino_id).single(),
+        ]);
+        const nomeOrig = origInst?.nome || cleanOrig;
+        const nomeDest = destInst?.nome || cleanDest;
 
         // Contact of destino on origem's inbox
         const { data: c1 } = await sb.from("whatsapp_contatos")
@@ -316,7 +350,7 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (!c1) {
           await sb.from("whatsapp_contatos").insert({
-            instancia_id: instancia_origem_id, telefone: cleanDest, nome: cleanDest,
+            instancia_id: instancia_origem_id, telefone: cleanDest, nome: nomeDest,
           });
           console.log(`[IA] 📇 Contato ${cleanDest} criado na instância origem`);
         }
@@ -328,10 +362,18 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (!c2) {
           await sb.from("whatsapp_contatos").insert({
-            instancia_id: instancia_destino_id, telefone: cleanOrig, nome: cleanOrig,
+            instancia_id: instancia_destino_id, telefone: cleanOrig, nome: nomeOrig,
           });
           console.log(`[IA] 📇 Contato ${cleanOrig} criado na instância destino`);
         }
+
+        // Save contacts on physical phone agenda via UAZAPI
+        await Promise.all([
+          salvarContatoUAZAPI(server_url, instance_token, cleanDest, nomeDest),
+          dest_server_url && dest_instance_token
+            ? salvarContatoUAZAPI(dest_server_url, dest_instance_token, cleanOrig, nomeOrig)
+            : Promise.resolve(),
+        ]);
       }
 
       // Send the initial message
