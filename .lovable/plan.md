@@ -1,37 +1,52 @@
 
 
-## Salvar contatos na agenda do WhatsApp (telefone físico)
+## Melhorias no Sistema de Aquecimento Multi-Instâncias
 
-### Situação
-Atualmente, os contatos são salvos apenas no **banco de dados** da plataforma (tabela `whatsapp_contatos`). Isso faz com que apareçam no Inbox do sistema, mas **não no telefone físico** — no WhatsApp do aparelho, o número aparece sem nome salvo.
+### 1. Pares Rotativos Inteligentes (evitar duplicação e garantir rotação)
 
-### Solução
-A UAZAPI possui um endpoint `Contact:Add` que permite salvar contatos diretamente na agenda do WhatsApp do dispositivo. Vamos adicionar uma função que chama esse endpoint sempre que uma conversa de aquecimento é iniciada.
+**Problema atual:** Com 5 instâncias, cada uma escolhe um destino aleatório a cada ciclo. Isso causa conversas duplicadas (A→B e B→A ao mesmo tempo) e falta de rotação.
 
-### Alteração em `supabase/functions/whatsapp-ia-responder/index.ts`
+**Solução:** Implementar sistema de pares no `whatsapp-aquecimento`:
+- A cada ciclo, gerar **pares únicos** em vez de cada instância agir independente
+- Com 5 instâncias: gera 2 pares (A↔B, C↔D), 1 fica de fora e entra no próximo ciclo
+- Usar um campo `ultimo_parceiro_id` na tabela `whatsapp_aquecimento_instancias` para evitar repetir o mesmo par no mesmo dia
+- Algoritmo: shuffle das instâncias, formar pares em sequência, verificar cooldown de 2h entre mesmo par (já existe), pular pares que já conversaram hoje
 
-#### 1. Nova função `salvarContatoUAZAPI`
-Criar função que chama o endpoint `/contact/add` da UAZAPI para salvar o contato na agenda do telefone:
-```typescript
-async function salvarContatoUAZAPI(serverUrl, instanceToken, numero, nome) {
-  // Tenta endpoints: /contact/add, /contacts/add
-  // Envia: { number: "5562...", name: "Nome" }
-}
-```
+**Arquivo:** `supabase/functions/whatsapp-aquecimento/index.ts`
+- Substituir o loop "para cada instância, escolha destino aleatório" por um gerador de pares
+- Cada par inicia apenas 1 conversa (não 2 — A inicia com B, B responde via cadeia)
 
-#### 2. Chamar na action `iniciar-conversa`
-Após criar a conversa, salvar o contato em ambos os lados:
-- Instância de origem salva o número de destino na agenda do telefone
-- Instância de destino salva o número de origem na agenda do telefone
+#### Migration SQL
+- Adicionar coluna `ultimo_parceiro_id` (uuid nullable) na tabela `whatsapp_aquecimento_instancias`
 
-Usar o nome da instância (ex: "62982451153 25 N1 07/04") ou um nome amigável extraído.
+### 2. Limite Diário Real (contar trocas da cadeia, não apenas iniciações)
 
-#### 3. Chamar no `logToInbox` quando cria contato novo
-Quando o `logToInbox` cria um contato novo no banco, também salvar na agenda do telefone.
+**Problema atual:** O `interacoes_hoje` conta apenas as *iniciações* de conversa. Uma conversa gera 12-18 mensagens via cadeia ping-pong, mas o contador fica em 1.
 
-### Arquivo Modificado
-- `supabase/functions/whatsapp-ia-responder/index.ts`
+**Solução:**
+- No `whatsapp-ia-responder`, na action `gerar-resposta`, incrementar `interacoes_hoje` da instância que está respondendo
+- Definir limite diário de **15 mensagens totais** (enviadas + recebidas na cadeia)
+- No `gerar-resposta`, antes de responder, verificar se a instância atingiu o limite. Se sim, finalizar a conversa
 
-### Resultado
-Quando uma conversa de aquecimento é iniciada, ambos os telefones terão o contato do outro salvo automaticamente na agenda do WhatsApp.
+**Arquivo:** `supabase/functions/whatsapp-ia-responder/index.ts`
+- Na action `gerar-resposta`, após o delay, buscar o registro da instância em `whatsapp_aquecimento_instancias`
+- Se `interacoes_hoje >= 15`, marcar conversa como FINALIZADA e não responder
+- Caso contrário, incrementar `interacoes_hoje` e `interacoes_total`
+
+### 3. Log de Pares no Dashboard
+
+**Solução:** Adicionar no dashboard existente uma seção "Conversas de Hoje" mostrando:
+- Pares que conversaram (Nome A ↔ Nome B)
+- Total de trocas de cada conversa
+- Status (ATIVA, FINALIZADA)
+
+**Arquivo:** `src/components/aquecimento/AquecimentoDashboard.tsx`
+- Buscar `whatsapp_conversas_ia` do dia com status ATIVA ou FINALIZADA
+- Exibir cards simples com origem ↔ destino, total_trocas/max_trocas, status
+
+### Resumo de Arquivos
+1. **SQL Migration** — adicionar `ultimo_parceiro_id` em `whatsapp_aquecimento_instancias`
+2. **`supabase/functions/whatsapp-aquecimento/index.ts`** — sistema de pares rotativos
+3. **`supabase/functions/whatsapp-ia-responder/index.ts`** — contagem real + limite na cadeia
+4. **`src/components/aquecimento/AquecimentoDashboard.tsx`** — seção de conversas do dia
 
