@@ -249,6 +249,7 @@ export default function Acionamento() {
 
   // QR Code connection state
   const [qrLoading, setQrLoading] = useState(false);
+  const [webhookAllLoading, setWebhookAllLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [qrPolling, setQrPolling] = useState(false);
