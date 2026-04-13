@@ -172,26 +172,41 @@ Responda APENAS com a mensagem, sem explicações.`,
 async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const cleanNumber = numero.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
-  const endpoints = [`${cleanUrl}/contact/add`, `${cleanUrl}/contacts/add`];
+  console.log(`[IA] 📋 Tentando salvar contato na agenda: numero=${cleanNumber}, nome="${nome}", server=${cleanUrl}`);
+  
+  const payloads = [
+    { number: cleanNumber, name: nome },
+    { number: `${cleanNumber}@s.whatsapp.net`, name: nome },
+    { phone: cleanNumber, name: nome, displayName: nome },
+  ];
+  const endpoints = [
+    `${cleanUrl}/contact/add`,
+    `${cleanUrl}/contacts/add`,
+    `${cleanUrl}/contact/upsert`,
+    `${cleanUrl}/contacts/upsert`,
+  ];
 
   for (const url of endpoints) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", token: instanceToken },
-        body: JSON.stringify({ number: cleanNumber, name: nome }),
-      });
-      if (res.ok) {
-        await res.text();
-        console.log(`[IA] 📱 Contato salvo na agenda: ${cleanNumber} como "${nome}"`);
-        return true;
+    for (const payload of payloads) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", token: instanceToken },
+          body: JSON.stringify(payload),
+        });
+        const text = await res.text();
+        console.log(`[IA] 📱 ${url} payload=${JSON.stringify(payload)} → status=${res.status} body=${text.substring(0, 200)}`);
+        if (res.ok) {
+          console.log(`[IA] ✅ Contato salvo na agenda: ${cleanNumber} como "${nome}" via ${url}`);
+          return true;
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn(`[IA] Endpoint contato ${url} falhou: ${msg}`);
       }
-      await res.text();
-    } catch (e) {
-      console.warn(`[IA] Endpoint contato ${url} falhou:`, e);
     }
   }
-  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda`);
+  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda (todos endpoints falharam)`);
   return false;
 }
 
