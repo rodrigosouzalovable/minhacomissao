@@ -48,7 +48,15 @@ Deno.serve(async (req) => {
     console.log(`Resposta (${response.status}):`, JSON.stringify(data));
 
     if (!response.ok) {
-      throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
+      const errMsg = data?.message || data?.error || `HTTP ${response.status}`;
+      const isDisconnected = (errMsg.toLowerCase().includes('disconnected') || errMsg.toLowerCase().includes('not connected') || response.status >= 500);
+      if (isDisconnected) {
+        return new Response(JSON.stringify({ success: false, error: errMsg, fallback: true }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error(errMsg);
     }
 
     // Save to inbox
