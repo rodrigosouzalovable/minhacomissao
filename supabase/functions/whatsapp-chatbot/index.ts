@@ -119,6 +119,50 @@ function extractTextFromPayload(payload: any): string {
   return '';
 }
 
+// === SALVAR CONTATO NA AGENDA FÍSICA DO DISPOSITIVO VIA UAZAPI ===
+async function salvarContatoUAZAPI(baseUrl: string, token: string, numero: string, nome: string): Promise<boolean> {
+  if (!baseUrl || !token || !numero || !nome) return false;
+  const cleanUrl = baseUrl.replace(/\/+$/, '');
+  const cleanNumber = numero.replace(/\D/g, '');
+  const jid = cleanNumber.includes('@') ? cleanNumber : `${cleanNumber}@s.whatsapp.net`;
+  
+  const endpoints = [
+    `${cleanUrl}/contact/add`,
+    `${cleanUrl}/contacts/add`,
+    `${cleanUrl}/contact/upsert`,
+    `${cleanUrl}/contacts/upsert`,
+  ];
+  
+  const payloads = [
+    { number: cleanNumber, name: nome },
+    { number: jid, name: nome },
+    { jid, name: nome },
+    { phone: cleanNumber, name: nome },
+  ];
+  
+  for (const url of endpoints) {
+    for (const payload of payloads) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          console.log(`[CONTATO-AGENDA] ✅ Salvo: ${nome} (${cleanNumber}) via ${url}`);
+          return true;
+        }
+        const txt = await res.text();
+        console.log(`[CONTATO-AGENDA] ${url} status=${res.status} body=${txt.slice(0, 200)}`);
+      } catch (e) {
+        console.log(`[CONTATO-AGENDA] Erro ${url}: ${e}`);
+      }
+    }
+  }
+  console.warn(`[CONTATO-AGENDA] ❌ Nenhum endpoint funcionou para ${nome} (${cleanNumber})`);
+  return false;
+}
+
 function extractMediaMetadata(payload: any) {
   const content = payload?.message?.content || {};
   const imageMsg = payload?.message?.imageMessage || {};
@@ -1269,6 +1313,12 @@ serve(async (req) => {
                 ultima_mensagem_em: agora,
                 nao_lido: 1,
               });
+            }
+
+            // Fire-and-forget: salvar contato na agenda física do dispositivo
+            if (!matchedContact && inboxNomeContato && inboxServerUrl && inboxInstanceToken) {
+              salvarContatoUAZAPI(inboxServerUrl, inboxInstanceToken, inboxTelefone, inboxNomeContato)
+                .catch(err => console.error('[CONTATO-AGENDA] Erro fire-and-forget:', err));
             }
 
             console.log(`[INBOX] Mensagem entrada salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo} (instancia: ${instanciaId})`);
