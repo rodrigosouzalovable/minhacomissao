@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
     if (action === "qr") return await fetchQr(instanceId || await getLatestInstanceId(userId));
     if (action === "status") return await checkStatus(instanceId || await getLatestInstanceId(userId));
     if (action === "setup-webhook") return await setupWebhook(instanceId || await getLatestInstanceId(userId));
+    if (action === "setup-webhook-all") return await setupWebhookAll();
     if (action === "disconnect") return await disconnectInstance(instanceId);
 
     return json({ error: "Unknown action" }, 400);
