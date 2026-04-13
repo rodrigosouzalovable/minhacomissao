@@ -1,34 +1,34 @@
 
 
-## Salvar contatos automaticamente na agenda do dispositivo
+## Corrigir recebimento de mensagens no Inbox — Webhooks não configurados
 
-### Contexto
-Atualmente, o salvamento de contatos só acontece no fluxo de aquecimento (`whatsapp-ia-responder`). O usuário quer que **toda conversa recebida** — de qualquer número — salve automaticamente o contato na agenda física do WhatsApp do dispositivo.
+### Diagnóstico
+A instância **MEMU 98 (62981034702)** não tem webhook configurado na UAZAPI — nenhum log de webhook foi recebido para esta instância. O cliente respondeu "Sim" mas a UAZAPI não enviou essa mensagem para o sistema.
 
-### Como funciona
-O webhook `whatsapp-chatbot` já recebe o nome do perfil do contato via `pushName`/`senderName` (linha 849). Basta adicionar a lógica de salvamento de contato nessa função, usando o mesmo padrão `salvarContatoUAZAPI` que já existe no `whatsapp-ia-responder`.
+Isso afeta **~20 instâncias** que não receberam nenhuma mensagem de entrada nas últimas 24h, incluindo várias instâncias MEMU e outras criadas recentemente (12/04, 11/04, etc.).
 
-### Implementação
+**Causa raiz**: O webhook só é configurado automaticamente no momento da conexão via QR. Se o webhook foi resetado na UAZAPI ou falhou silenciosamente, nunca mais é reconfigurado.
 
-#### 1. Adicionar `salvarContatoUAZAPI` no `whatsapp-chatbot/index.ts`
-- Copiar a função `salvarContatoUAZAPI` (endpoints `/contact/add`, `/contact/upsert`, etc.)
-- Executar logo após detectar o telefone e nome do contato (após linha 849)
-- Só salvar se:
-  - `isFromMe === false` (mensagem recebida, não enviada)
-  - `inboxNomeContato` existe (tem nome de perfil)
-  - `inboxServerUrl` e `inboxInstanceToken` existem
-- Executar de forma **fire-and-forget** (não bloquear o processamento do webhook)
-- Adicionar cache simples: verificar na tabela `whatsapp_inbox_conversas` se o contato já tem `nome_contato` salvo — se já tem, pular (evitar chamadas repetidas a cada mensagem)
+### Correções
 
-#### 2. Controle de duplicatas (evitar salvar a cada mensagem)
-- Usar a coluna `nome_contato` da tabela `whatsapp_inbox_conversas` como indicador
-- Se já existe conversa com `nome_contato` preenchido para aquele telefone, não tenta salvar novamente
-- Só tenta salvar na **primeira mensagem** de um contato novo ou quando o nome muda
+#### 1. Adicionar botão "Reconfigurar Webhooks" em Acionamento
+- Na seção "Configurações WhatsApp", adicionar um botão que percorre TODAS as instâncias ativas e reconfigura o webhook via a mesma lógica de `setupWebhook` do `whatsapp-qr`
+- Mostrar progresso e resultado (quantas configuradas com sucesso vs. falhas)
+
+#### 2. Nova action `setup-webhook-all` no `whatsapp-qr`
+- Aceita `action: "setup-webhook-all"` 
+- Percorre todas as instâncias ativas do banco
+- Para cada uma, tenta configurar o webhook usando a estratégia de 3 tentativas (endpoint com token, sem token, globalwebhook)
+- Retorna resumo: `{ total, success, failed, details[] }`
+
+#### 3. Auto-reconfigurar webhook no check de conexão
+- Na action `status` do `whatsapp-qr`, quando detecta que a instância está conectada, também reconfigura o webhook automaticamente (fire-and-forget)
+- Isso garante que toda vez que o sistema verifica o status de uma instância, o webhook é reforçado
 
 ### Arquivos
-1. **`supabase/functions/whatsapp-chatbot/index.ts`** — adicionar função `salvarContatoUAZAPI` + chamada fire-and-forget no fluxo de webhook
-2. **Deploy** da edge function
+1. **`supabase/functions/whatsapp-qr/index.ts`** — nova action `setup-webhook-all` + auto-reconfig no `status`
+2. **`src/pages/Acionamento.tsx`** — botão "Reconfigurar Webhooks" na seção de configurações
 
 ### Resultado
-Todo contato que enviar mensagem terá seu nome de perfil do WhatsApp salvo automaticamente na agenda física do dispositivo, sem impacto no desempenho do webhook.
+Todas as instâncias terão webhooks configurados corretamente. Mensagens de clientes passarão a aparecer no Inbox imediatamente.
 
