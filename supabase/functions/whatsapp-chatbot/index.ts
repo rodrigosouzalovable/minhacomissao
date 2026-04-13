@@ -74,6 +74,13 @@ const MEDIA_HKDF_INFO: Record<string, string> = {
 
 // Extract text from all message types including button/list responses
 function extractTextFromPayload(payload: any): string {
+  // UAZAPI button/list response (highest priority — client clicked a button)
+  const buttonOrListId = (payload?.message?.buttonOrListid || '').toString().trim();
+  if (buttonOrListId) {
+    console.log(`[EXTRACT] Button/List response detected: "${buttonOrListId}"`);
+    return buttonOrListId;
+  }
+
   // Standard text fields
   const standardText = (
     payload?.message?.text ||
@@ -87,7 +94,7 @@ function extractTextFromPayload(payload: any): string {
   ).toString().trim();
   if (standardText) return standardText;
 
-  // Button response (when client clicks an interactive button)
+  // Button response (Baileys format)
   const buttonsResponse = payload?.message?.buttonsResponseMessage;
   if (buttonsResponse) {
     return (buttonsResponse.selectedDisplayText || buttonsResponse.selectedButtonId || '').trim();
