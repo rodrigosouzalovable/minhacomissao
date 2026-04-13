@@ -1315,6 +1315,12 @@ serve(async (req) => {
               });
             }
 
+            // Fire-and-forget: salvar contato na agenda física do dispositivo
+            if (!matchedContact && inboxNomeContato && inboxServerUrl && inboxInstanceToken) {
+              salvarContatoUAZAPI(inboxServerUrl, inboxInstanceToken, inboxTelefone, inboxNomeContato)
+                .catch(err => console.error('[CONTATO-AGENDA] Erro fire-and-forget:', err));
+            }
+
             console.log(`[INBOX] Mensagem entrada salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo} (instancia: ${instanciaId})`);
           }
         }
