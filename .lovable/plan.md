@@ -1,39 +1,34 @@
 
 
-## Corrigir salvamento de contatos na agenda do WhatsApp (Aquecimento)
+## Salvar contatos automaticamente na agenda do dispositivo
 
-### Diagnóstico
-Investiguei os logs da edge function `whatsapp-ia-responder` e confirmei:
-- A conversa entre MEMU 0 e MEMU 1 aconteceu normalmente (12 mensagens trocadas)
-- **Nenhum log de salvamento de contato foi encontrado** ("📱 Contato salvo na agenda" ou "📇 Contato criado")
-- O código de salvamento de contatos existe no source (linhas 331-377 da action `iniciar-conversa`), mas **não foi executado na versão deployed**
+### Contexto
+Atualmente, o salvamento de contatos só acontece no fluxo de aquecimento (`whatsapp-ia-responder`). O usuário quer que **toda conversa recebida** — de qualquer número — salve automaticamente o contato na agenda física do WhatsApp do dispositivo.
 
-A causa mais provável é que a versão com o código de contact-saving **não foi deployada** após a última edição. Além disso, o endpoint UAZAPI pode estar incorreto.
+### Como funciona
+O webhook `whatsapp-chatbot` já recebe o nome do perfil do contato via `pushName`/`senderName` (linha 849). Basta adicionar a lógica de salvamento de contato nessa função, usando o mesmo padrão `salvarContatoUAZAPI` que já existe no `whatsapp-ia-responder`.
 
-### Correções
+### Implementação
 
-#### 1. Redeployar a edge function
-- Fazer deploy da versão atual do `whatsapp-ia-responder` que já contém o código de salvamento
+#### 1. Adicionar `salvarContatoUAZAPI` no `whatsapp-chatbot/index.ts`
+- Copiar a função `salvarContatoUAZAPI` (endpoints `/contact/add`, `/contact/upsert`, etc.)
+- Executar logo após detectar o telefone e nome do contato (após linha 849)
+- Só salvar se:
+  - `isFromMe === false` (mensagem recebida, não enviada)
+  - `inboxNomeContato` existe (tem nome de perfil)
+  - `inboxServerUrl` e `inboxInstanceToken` existem
+- Executar de forma **fire-and-forget** (não bloquear o processamento do webhook)
+- Adicionar cache simples: verificar na tabela `whatsapp_inbox_conversas` se o contato já tem `nome_contato` salvo — se já tem, pular (evitar chamadas repetidas a cada mensagem)
 
-#### 2. Adicionar logs mais detalhados no salvamento de contatos
-- Adicionar log antes de tentar salvar: `[IA] Tentando salvar contatos na agenda...`
-- Logar os parâmetros (números, nomes, URLs) para debug
-- Logar erros com mais detalhes caso a UAZAPI rejeite
-
-#### 3. Testar o endpoint correto da UAZAPI para adicionar contatos
-- Os endpoints atuais são `/contact/add` e `/contacts/add`
-- Verificar se o endpoint correto não é outro (ex: `/contacts/upsert` ou `/contact/upsert`)
-- Adicionar fallback com mais variações de endpoints
-
-#### 4. Garantir salvamento também no `gerar-resposta` (backup)
-- Atualmente, o salvamento só ocorre na action `iniciar-conversa`
-- Se por algum motivo a parte de salvamento falhar na inicialização, nunca mais tenta
-- Adicionar verificação no primeiro `gerar-resposta` de cada conversa: se os contatos ainda não existem na agenda, salvá-los
+#### 2. Controle de duplicatas (evitar salvar a cada mensagem)
+- Usar a coluna `nome_contato` da tabela `whatsapp_inbox_conversas` como indicador
+- Se já existe conversa com `nome_contato` preenchido para aquele telefone, não tenta salvar novamente
+- Só tenta salvar na **primeira mensagem** de um contato novo ou quando o nome muda
 
 ### Arquivos
-1. **`supabase/functions/whatsapp-ia-responder/index.ts`** — logs detalhados + salvamento backup no gerar-resposta
+1. **`supabase/functions/whatsapp-chatbot/index.ts`** — adicionar função `salvarContatoUAZAPI` + chamada fire-and-forget no fluxo de webhook
 2. **Deploy** da edge function
 
 ### Resultado
-Os contatos serão salvos na agenda física do WhatsApp de ambos os dispositivos assim que a conversa for iniciada.
+Todo contato que enviar mensagem terá seu nome de perfil do WhatsApp salvo automaticamente na agenda física do dispositivo, sem impacto no desempenho do webhook.
 
