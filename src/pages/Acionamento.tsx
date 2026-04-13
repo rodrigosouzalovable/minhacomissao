@@ -2860,6 +2860,40 @@ export default function Acionamento() {
                 <>
                   <Separator />
                   <div className="space-y-3">
+                    <h3 className="text-base font-semibold">🔄 Reconfigurar Webhooks</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Reconfigura o webhook em todas as instâncias ativas para garantir que as mensagens recebidas apareçam no Inbox.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={webhookAllLoading}
+                      onClick={async () => {
+                        setWebhookAllLoading(true);
+                        try {
+                          const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+                            body: { action: 'setup-webhook-all', userId: user?.id },
+                          });
+                          if (error) throw error;
+                          if (data?.ok) {
+                            toast.success(`Webhooks reconfigurados: ${data.success}/${data.total} com sucesso${data.failed > 0 ? `, ${data.failed} falharam` : ''}`);
+                          } else {
+                            toast.error(data?.error || 'Erro ao reconfigurar webhooks');
+                          }
+                        } catch (err: any) {
+                          toast.error('Erro: ' + (err.message || 'Falha na reconfiguração'));
+                        } finally {
+                          setWebhookAllLoading(false);
+                        }
+                      }}
+                    >
+                      {webhookAllLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                      Reconfigurar Webhooks de Todas as Instâncias
+                    </Button>
+                  </div>
+
+                  <Separator />
+                  <div className="space-y-3">
                     <h3 className="text-base font-semibold">🔗 Webhook do Chatbot IA</h3>
                     <p className="text-sm text-muted-foreground">
                       Configure este webhook em cada instância UAZAPI para que a IA responda automaticamente.
