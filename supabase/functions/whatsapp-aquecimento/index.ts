@@ -88,6 +88,26 @@ Deno.serve(async (req) => {
       console.log(`[AQUECIMENTO] Auto-enrolled: ${inst.nome}`);
     }
 
+    // ========== SYNC: PAUSE DEACTIVATED INSTANCES (backup do trigger) ==========
+    const { data: allInstances } = await supabase
+      .from("user_whatsapp_instances")
+      .select("id, ativo")
+      .eq("user_id", adminUserId);
+
+    const { data: allAquecInstances } = await supabase
+      .from("whatsapp_aquecimento_instancias")
+      .select("id, instancia_id, status")
+      .not("status", "eq", "REMOVIDO");
+
+    for (const aquec of (allAquecInstances || [])) {
+      const mainInst = (allInstances || []).find((i: any) => i.id === aquec.instancia_id);
+      if (mainInst && !mainInst.ativo && aquec.status !== "PAUSADO") {
+        await supabase.from("whatsapp_aquecimento_instancias")
+          .update({ status: "PAUSADO" }).eq("id", aquec.id);
+        console.log(`[AQUECIMENTO] ⏸️ Pausado (desativado): ${aquec.instancia_id}`);
+      }
+    }
+
     // ========== AUTO-REACTIVATE PAUSED INSTANCES ==========
     const { data: pausedInstances } = await supabase
       .from("whatsapp_aquecimento_instancias")
