@@ -172,26 +172,41 @@ Responda APENAS com a mensagem, sem explicações.`,
 async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const cleanNumber = numero.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
-  const endpoints = [`${cleanUrl}/contact/add`, `${cleanUrl}/contacts/add`];
+  console.log(`[IA] 📋 Tentando salvar contato na agenda: numero=${cleanNumber}, nome="${nome}", server=${cleanUrl}`);
+  
+  const payloads = [
+    { number: cleanNumber, name: nome },
+    { number: `${cleanNumber}@s.whatsapp.net`, name: nome },
+    { phone: cleanNumber, name: nome, displayName: nome },
+  ];
+  const endpoints = [
+    `${cleanUrl}/contact/add`,
+    `${cleanUrl}/contacts/add`,
+    `${cleanUrl}/contact/upsert`,
+    `${cleanUrl}/contacts/upsert`,
+  ];
 
   for (const url of endpoints) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", token: instanceToken },
-        body: JSON.stringify({ number: cleanNumber, name: nome }),
-      });
-      if (res.ok) {
-        await res.text();
-        console.log(`[IA] 📱 Contato salvo na agenda: ${cleanNumber} como "${nome}"`);
-        return true;
+    for (const payload of payloads) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", token: instanceToken },
+          body: JSON.stringify(payload),
+        });
+        const text = await res.text();
+        console.log(`[IA] 📱 ${url} payload=${JSON.stringify(payload)} → status=${res.status} body=${text.substring(0, 200)}`);
+        if (res.ok) {
+          console.log(`[IA] ✅ Contato salvo na agenda: ${cleanNumber} como "${nome}" via ${url}`);
+          return true;
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn(`[IA] Endpoint contato ${url} falhou: ${msg}`);
       }
-      await res.text();
-    } catch (e) {
-      console.warn(`[IA] Endpoint contato ${url} falhou:`, e);
     }
   }
-  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda`);
+  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda (todos endpoints falharam)`);
   return false;
 }
 
@@ -503,6 +518,34 @@ Deno.serve(async (req) => {
 
         console.log(`[IA] 🏁 Conversa ${conversa.id} finalizada após ${conversa.total_trocas + 1} trocas`);
         return json({ responded: true, resposta: fraseEncerramento, finalizada: true });
+      }
+
+      // Backup: save contacts on first response if not saved yet
+      if (conversa.total_trocas <= 1 && server_url && instance_token && numero_destino) {
+        try {
+          console.log(`[IA] 🔄 Backup: verificando salvamento de contatos na troca ${conversa.total_trocas}...`);
+          const { data: origInst } = await sb.from("user_whatsapp_instances")
+            .select("nome, server_url, instance_token").eq("id", instancia_origem_id).single();
+          const { data: destInst } = await sb.from("user_whatsapp_instances")
+            .select("nome, server_url, instance_token").eq("id", instancia_destino_id).single();
+          
+          if (origInst && destInst) {
+            const cleanDest = numero_destino.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+            const origPhone = origInst.nome?.match(/^\d+/)?.[0] || "";
+            const nomeOrig = origInst.nome || origPhone;
+            const nomeDest = destInst.nome || cleanDest;
+            
+            // Save destino contact on origem's phone
+            await salvarContatoUAZAPI(server_url, instance_token, cleanDest, nomeDest);
+            
+            // Save origem contact on destino's phone  
+            if (origPhone && destInst.server_url && destInst.instance_token) {
+              await salvarContatoUAZAPI(destInst.server_url, destInst.instance_token, `55${origPhone}`, nomeOrig);
+            }
+          }
+        } catch (e) {
+          console.warn("[IA] Backup contato erro:", e);
+        }
       }
 
       // Generate response
