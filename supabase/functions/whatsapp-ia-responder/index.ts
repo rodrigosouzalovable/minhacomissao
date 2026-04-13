@@ -520,6 +520,34 @@ Deno.serve(async (req) => {
         return json({ responded: true, resposta: fraseEncerramento, finalizada: true });
       }
 
+      // Backup: save contacts on first response if not saved yet
+      if (conversa.total_trocas <= 1 && server_url && instance_token && numero_destino) {
+        try {
+          console.log(`[IA] 🔄 Backup: verificando salvamento de contatos na troca ${conversa.total_trocas}...`);
+          const { data: origInst } = await sb.from("user_whatsapp_instances")
+            .select("nome, server_url, instance_token").eq("id", instancia_origem_id).single();
+          const { data: destInst } = await sb.from("user_whatsapp_instances")
+            .select("nome, server_url, instance_token").eq("id", instancia_destino_id).single();
+          
+          if (origInst && destInst) {
+            const cleanDest = numero_destino.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+            const origPhone = origInst.nome?.match(/^\d+/)?.[0] || "";
+            const nomeOrig = origInst.nome || origPhone;
+            const nomeDest = destInst.nome || cleanDest;
+            
+            // Save destino contact on origem's phone
+            await salvarContatoUAZAPI(server_url, instance_token, cleanDest, nomeDest);
+            
+            // Save origem contact on destino's phone  
+            if (origPhone && destInst.server_url && destInst.instance_token) {
+              await salvarContatoUAZAPI(destInst.server_url, destInst.instance_token, `55${origPhone}`, nomeOrig);
+            }
+          }
+        } catch (e) {
+          console.warn("[IA] Backup contato erro:", e);
+        }
+      }
+
       // Generate response
       const historicoArr = (conversa.historico || []) as any[];
       const historicoTexto = historicoArr.slice(-10)
