@@ -267,6 +267,8 @@ async function checkStatus(instanceId: string) {
       const parsed = parseConnectionState(data);
 
       if (parsed.connected) {
+        // Fire-and-forget: reinforce webhook config whenever instance is connected
+        reinforceWebhook(instanceId).catch((e) => console.log(`[STATUS] Webhook reinforce error (non-blocking): ${e.message}`));
         return json({ ok: true, connected: true, status: parsed.status, phone: parsed.phone });
       }
 
@@ -368,4 +370,95 @@ async function disconnectInstance(instanceId: string) {
   }
 
   return json({ ok: true, message: "WhatsApp desconectado com sucesso" });
+}
+
+// ── REINFORCE WEBHOOK (fire-and-forget helper) ──
+async function reinforceWebhook(instanceId: string) {
+  const instance = await getInstanceById(instanceId);
+  if (!instance) return;
+
+  const base = instance.server_url.replace(/\/+$/, "");
+  const token = instance.instance_token;
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
+
+  const attempts = [
+    { url: `${base}/webhook/${token}`, headers: { "Content-Type": "application/json" } },
+    { url: `${base}/webhook`, headers: { "Content-Type": "application/json", token } },
+  ];
+
+  const payload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
+
+  for (const attempt of attempts) {
+    try {
+      const res = await fetch(attempt.url, { method: "POST", headers: attempt.headers, body: payload });
+      if (res.ok) {
+        console.log(`[REINFORCE] Webhook OK for ${instance.nome || instanceId}`);
+        return;
+      }
+    } catch (_) {}
+  }
+  console.log(`[REINFORCE] Webhook failed for ${instance.nome || instanceId}`);
+}
+
+// ── SETUP WEBHOOK ALL ──
+async function setupWebhookAll() {
+  const sb = getSupabaseAdmin();
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+  const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
+
+  const { data: instances, error } = await sb
+    .from("user_whatsapp_instances")
+    .select("*")
+    .eq("ativo", true);
+
+  if (error) return json({ ok: false, error: error.message }, 500);
+  if (!instances || instances.length === 0) return json({ ok: true, total: 0, success: 0, failed: 0, details: [] });
+
+  const details: Array<{ id: string; nome: string; ok: boolean; error?: string }> = [];
+  let successCount = 0;
+  let failedCount = 0;
+
+  for (const inst of instances) {
+    const base = inst.server_url.replace(/\/+$/, "");
+    const token = inst.instance_token;
+    const payload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
+
+    const attempts = [
+      { url: `${base}/webhook/${token}`, headers: { "Content-Type": "application/json" } },
+      { url: `${base}/webhook`, headers: { "Content-Type": "application/json", token } },
+      { url: `${base}/globalwebhook`, headers: { "Content-Type": "application/json", admintoken: adminToken } },
+    ];
+
+    let configured = false;
+    let lastError = "";
+
+    for (const attempt of attempts) {
+      try {
+        const res = await fetch(attempt.url, { method: "POST", headers: attempt.headers, body: payload });
+        if (res.ok) {
+          configured = true;
+          break;
+        }
+        const text = await res.text();
+        lastError = `${res.status}: ${text.substring(0, 100)}`;
+      } catch (e) {
+        lastError = e.message;
+      }
+    }
+
+    if (configured) {
+      successCount++;
+      details.push({ id: inst.id, nome: inst.nome || inst.id, ok: true });
+      console.log(`[WEBHOOK-ALL] ✅ ${inst.nome || inst.id}`);
+    } else {
+      failedCount++;
+      details.push({ id: inst.id, nome: inst.nome || inst.id, ok: false, error: lastError });
+      console.log(`[WEBHOOK-ALL] ❌ ${inst.nome || inst.id}: ${lastError}`);
+    }
+  }
+
+  return json({ ok: true, total: instances.length, success: successCount, failed: failedCount, details });
 }
