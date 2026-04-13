@@ -760,6 +760,25 @@ export default function Aquecimento() {
               Selecione 2+ instâncias para enviar mensagens de teste entre elas. A IA responderá automaticamente.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">
+              {instancias.length} instâncias no aquecimento · {selectedTestIds.length} selecionadas
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => {
+                if (selectedTestIds.length === instancias.length) {
+                  setSelectedTestIds([]);
+                } else {
+                  setSelectedTestIds(instancias.map(i => i.instancia_id));
+                }
+              }}
+            >
+              {selectedTestIds.length === instancias.length ? 'Desmarcar todos' : 'Selecionar todos'}
+            </Button>
+          </div>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {instancias.map(inst => (
               <label key={inst.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent cursor-pointer">
