@@ -262,6 +262,13 @@ export default function Acionamento() {
 
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
+
+  // WhatsApp number verification state
+  const [verificandoWhatsApp, setVerificandoWhatsApp] = useState(false);
+  const [verificacaoProgresso, setVerificacaoProgresso] = useState<{ checked: number; total: number } | null>(null);
+  const [numerosInvalidos, setNumerosInvalidos] = useState<ClienteData[]>([]);
+  const [mostrarInvalidos, setMostrarInvalidos] = useState(false);
+  const [verificacaoConcluida, setVerificacaoConcluida] = useState(false);
   
   // Scheduling state
   const [agendamentos, setAgendamentos] = useState<Array<{ id: string; agendado_para: string; status: string; total_enviados: number; total_erros: number; historico_data: any }>>([]);
