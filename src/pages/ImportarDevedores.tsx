@@ -182,34 +182,49 @@ export default function ImportarDevedores() {
   };
 
   const getSheetRowsByLetters = (sheet: XLSX.WorkSheet): Record<string, unknown>[] => {
-    const ref = sheet['!ref'];
-    if (!ref) return [];
-    const range = XLSX.utils.decode_range(ref);
+    const cellKeys = Object.keys(sheet).filter((key) => !key.startsWith('!'));
+    if (cellKeys.length === 0) return [];
+
+    let maxRow = 0;
+    let maxCol = 0;
+
+    for (const key of cellKeys) {
+      const decoded = XLSX.utils.decode_cell(key);
+      if (decoded.r > maxRow) maxRow = decoded.r;
+      if (decoded.c > maxCol) maxCol = decoded.c;
+    }
+
     const rows: Record<string, unknown>[] = [];
-    for (let r = range.s.r; r <= range.e.r; r++) {
+
+    for (let r = 0; r <= maxRow; r++) {
       const record: Record<string, unknown> = {};
-      for (let c = range.s.c; c <= range.e.c; c++) {
+
+      for (let c = 0; c <= maxCol; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = sheet[addr];
-        if (cell) {
-          // For date cells, convert serial to Date
-          if (cell.t === 'd') {
-            record[String.fromCharCode(65 + c)] = cell.v;
-          } else if (cell.t === 'n' && cell.w && /\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(cell.w)) {
-            // Number cell formatted as date
-            const dt = XLSX.SSF.parse_date_code(cell.v as number);
-            if (dt) {
-              record[String.fromCharCode(65 + c)] = new Date(dt.y, dt.m - 1, dt.d);
-            } else {
-              record[String.fromCharCode(65 + c)] = cell.v;
-            }
+        if (!cell) continue;
+
+        const key = String.fromCharCode(65 + c);
+
+        if (cell.t === 'd') {
+          record[key] = cell.v;
+        } else if (cell.t === 'n' && typeof cell.v === 'number') {
+          const maybeDate = XLSX.SSF.parse_date_code(cell.v);
+          if (key === 'E' && maybeDate && cell.v > 20000 && cell.v < 90000) {
+            record[key] = new Date(maybeDate.y, maybeDate.m - 1, maybeDate.d);
           } else {
-            record[String.fromCharCode(65 + c)] = cell.v;
+            record[key] = cell.v;
           }
+        } else {
+          record[key] = cell.v;
         }
       }
-      rows.push(record);
+
+      if (Object.keys(record).length > 0) {
+        rows.push(record);
+      }
     }
+
     return rows;
   };
 
