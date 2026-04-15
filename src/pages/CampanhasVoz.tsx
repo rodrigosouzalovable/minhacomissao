@@ -260,6 +260,55 @@ export default function CampanhasVoz() {
     reader.readAsArrayBuffer(file);
   };
 
+  const handleVerificarWhatsApp = async () => {
+    if (importedContacts.length === 0) return;
+    const connectedInstance = allInstances.find(i => connectionStatus[i.id] === 'connected');
+    if (!connectedInstance) {
+      toast.error('Nenhuma instância WhatsApp conectada para verificar');
+      return;
+    }
+    setVerificandoWhatsApp(true);
+    setNumerosInvalidos([]);
+    setVerificacaoConcluida(false);
+    try {
+      const telefones = importedContacts.map(c => c.telefone);
+      const { data, error } = await supabase.functions.invoke('check-whatsapp-numbers', {
+        body: {
+          numbers: telefones,
+          server_url: connectedInstance.server_url,
+          instance_token: connectedInstance.instance_token,
+        },
+      });
+      if (error) throw error;
+      if (data?.invalid && Array.isArray(data.invalid)) {
+        const invalidSet = new Set(data.invalid.map((n: string) => n.replace(/\D/g, '')));
+        const removidos: { nome: string; telefone: string }[] = [];
+        const mantidos: { id: string; nome: string; telefone: string }[] = [];
+        importedContacts.forEach(c => {
+          const clean = c.telefone.replace(/\D/g, '');
+          const full = clean.startsWith('55') ? clean : `55${clean}`;
+          if (invalidSet.has(clean) || invalidSet.has(full)) {
+            removidos.push({ nome: c.nome, telefone: c.telefone });
+          } else {
+            mantidos.push(c);
+          }
+        });
+        setNumerosInvalidos(removidos);
+        setImportedContacts(mantidos);
+        setSelectedContacts(new Set());
+        setVerificacaoConcluida(true);
+        toast.success(`${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`);
+      } else {
+        setVerificacaoConcluida(true);
+        toast.info('Todos os números parecem válidos');
+      }
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message || 'Erro desconhecido'}`);
+    } finally {
+      setVerificandoWhatsApp(false);
+    }
+  };
+
   // Multi-audio handling
   const handleAudioFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
