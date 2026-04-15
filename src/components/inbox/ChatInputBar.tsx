@@ -24,6 +24,7 @@ interface ChatInputBarProps {
   externalFile?: File | null;
   onExternalFileHandled?: () => void;
   mensagensRapidas?: MensagemRapida[];
+  onBusyChange?: (busy: boolean) => void;
 }
 
 export function ChatInputBar({
