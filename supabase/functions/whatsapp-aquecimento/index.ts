@@ -177,59 +177,14 @@ Deno.serve(async (req) => {
 
     console.log(`[AQUECIMENTO] ${eligible.length} elegíveis de ${instancias.length} (${instancias.length - eligible.length} já no target).`);
 
-    // ========== HEALTH CHECK IN PARALLEL BATCHES ==========
-    // Check up to 30 instances, 10 at a time in parallel
-    const maxToCheck = Math.min(eligible.length, 30);
-    const toCheck = eligible.slice(0, maxToCheck);
-    const healthyInstances: any[] = [];
-
-    for (let i = 0; i < toCheck.length; i += 10) {
-      const batch = toCheck.slice(i, i + 10);
-      const results = await Promise.allSettled(
-        batch.map(async (inst: any) => {
-          const details = instanceMap.get(inst.instancia_id);
-          if (!details) return { inst, connected: false, reason: "no details" };
-          const connected = await checkInstanceHealth(details);
-          return { inst, connected, details };
-        })
-      );
-
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          const { inst, connected, details } = result.value;
-          if (connected) {
-            healthyInstances.push(inst);
-          } else if (details) {
-            console.log(`[AQUECIMENTO] ${details.nome}: DESCONECTADO → PAUSADO`);
-            await supabase.from("whatsapp_aquecimento_instancias")
-              .update({ status: "PAUSADO" }).eq("id", inst.id);
-          }
-        }
-      }
-    }
-
-    // Also add remaining eligible instances that weren't health-checked (trust them)
-    if (eligible.length > maxToCheck) {
-      const unchecked = eligible.slice(maxToCheck);
-      healthyInstances.push(...unchecked);
-      console.log(`[AQUECIMENTO] ${unchecked.length} instâncias extras não verificadas (confiadas).`);
-    }
-
-    console.log(`[AQUECIMENTO] ${healthyInstances.length} instâncias saudáveis de ${eligible.length} elegíveis.`);
-
-    if (healthyInstances.length < 2) {
-      console.log("[AQUECIMENTO] Menos de 2 instâncias saudáveis.");
-      return json({ message: "Menos de 2 instâncias saudáveis" });
-    }
-
-    // ========== GENERATE PAIRS ==========
-    const shuffled = [...healthyInstances].sort(() => Math.random() - 0.5);
+    // ========== GENERATE PAIRS (sem health check — só pausa em falha de envio) ==========
+    const shuffled = [...eligible].sort(() => Math.random() - 0.5);
     const pairs: [any, any][] = [];
     for (let i = 0; i + 1 < shuffled.length; i += 2) {
       pairs.push([shuffled[i], shuffled[i + 1]]);
     }
 
-    console.log(`[AQUECIMENTO] Gerados ${pairs.length} pares de ${healthyInstances.length} instâncias.`);
+    console.log(`[AQUECIMENTO] Gerados ${pairs.length} pares de ${eligible.length} instâncias.`);
 
     let totalEnviados = 0;
 
@@ -275,13 +230,31 @@ Deno.serve(async (req) => {
         dest_instance_token: detailsB.instance_token,
       };
 
-      // Fire and forget
-      fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-        body: JSON.stringify(iaPayload),
-      }).then(r => r.text().then(t => console.log(`[AQUECIMENTO] IA response ${detailsA.nome}→${detailsB.nome}: ${t.substring(0, 200)}`)))
-        .catch(e => console.error("[AQUECIMENTO] IA call error:", e));
+      // Await response to detect disconnection errors
+      try {
+        const iaRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+          body: JSON.stringify(iaPayload),
+        });
+        const iaText = await iaRes.text();
+        console.log(`[AQUECIMENTO] IA response ${detailsA.nome}→${detailsB.nome}: ${iaText.substring(0, 200)}`);
+
+        // Only pause if explicit disconnection error
+        const lower = iaText.toLowerCase();
+        if (lower.includes("disconnected") || lower.includes("desconectado") || lower.includes("not connected")) {
+          if (lower.includes(phoneA) || iaText.includes(instA.instancia_id)) {
+            console.log(`[AQUECIMENTO] ⚠️ ${detailsA.nome} desconectado → PAUSADO`);
+            await supabase.from("whatsapp_aquecimento_instancias").update({ status: "PAUSADO" }).eq("id", instA.id);
+          }
+          if (lower.includes(phoneB) || iaText.includes(instB.instancia_id)) {
+            console.log(`[AQUECIMENTO] ⚠️ ${detailsB.nome} desconectado → PAUSADO`);
+            await supabase.from("whatsapp_aquecimento_instancias").update({ status: "PAUSADO" }).eq("id", instB.id);
+          }
+        }
+      } catch (e) {
+        console.error(`[AQUECIMENTO] IA call error ${detailsA.nome}→${detailsB.nome}:`, e);
+      }
 
       // Update counters
       await supabase.from("whatsapp_aquecimento_instancias").update({
