@@ -393,8 +393,13 @@ export default function WhatsAppInbox() {
 
   useEffect(() => {
     if (!contatoAtivo || contatoAtivo.nao_lido === 0) return;
+    // Immediately update local state so badge and list reflect read status
+    const id = contatoAtivo.id;
+    setContatoAtivo(prev => prev && prev.id === id ? { ...prev, nao_lido: 0 } : prev);
+    setContatos(prev => prev.map(c => c.id === id ? { ...c, nao_lido: 0 } : c));
+    
     const markRead = async () => {
-      await supabase.from('whatsapp_contatos').update({ nao_lido: 0 }).eq('id', contatoAtivo.id);
+      await supabase.from('whatsapp_contatos').update({ nao_lido: 0 }).eq('id', id);
       const readSuffix = contatoAtivo.telefone.replace(/^55/, '').slice(-8);
       await supabase.from('whatsapp_mensagens').update({ lida: true })
         .eq('instancia_id', contatoAtivo.instancia_id)
