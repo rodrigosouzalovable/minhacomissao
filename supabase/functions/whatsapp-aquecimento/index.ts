@@ -186,12 +186,15 @@ Deno.serve(async (req) => {
 
     // ========== GENERATE PAIRS (sem health check — só pausa em falha de envio) ==========
     const shuffled = [...eligible].sort(() => Math.random() - 0.5);
-    const pairs: [any, any][] = [];
+    const allPairs: [any, any][] = [];
     for (let i = 0; i + 1 < shuffled.length; i += 2) {
-      pairs.push([shuffled[i], shuffled[i + 1]]);
+      allPairs.push([shuffled[i], shuffled[i + 1]]);
     }
 
-    console.log(`[AQUECIMENTO] Gerados ${pairs.length} pares de ${eligible.length} instâncias.`);
+    // Limit to MAX_PAIRS_PER_CYCLE random pairs
+    const pairs = allPairs.sort(() => Math.random() - 0.5).slice(0, MAX_PAIRS_PER_CYCLE);
+
+    console.log(`[AQUECIMENTO] Selecionados ${pairs.length} pares de ${allPairs.length} disponíveis (max ${MAX_PAIRS_PER_CYCLE}/ciclo).`);
 
     let totalEnviados = 0;
 
