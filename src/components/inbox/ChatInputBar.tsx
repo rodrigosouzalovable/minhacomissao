@@ -31,7 +31,7 @@ export function ChatInputBar({
   instanciaId, telefone, serverUrl, instanceToken,
   onTextSent, onMediaSent, enviando,
   externalFile, onExternalFileHandled,
-  mensagensRapidas,
+  mensagensRapidas, onBusyChange,
 }: ChatInputBarProps) {
   const { toast } = useToast();
   const [textoMensagem, setTextoMensagem] = useState('');
