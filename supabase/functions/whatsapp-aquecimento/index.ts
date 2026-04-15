@@ -40,24 +40,17 @@ Deno.serve(async (req) => {
     const config: Record<string, any> = {};
     (configRows || []).forEach((c: any) => { config[c.chave] = c.valor; });
 
-    const adminUserId = config.admin_user_id || null;
-    if (!adminUserId) {
-      console.log("[AQUECIMENTO] admin_user_id não configurado.");
-      return json({ error: "admin_user_id não configurado" });
-    }
-
     const diasAtivos: number[] = config.dias_ativos || [1, 2, 3, 4, 5, 6];
     if (!diasAtivos.includes(dayOfWeek)) {
       console.log(`[AQUECIMENTO] Dia ${dayOfWeek} não ativo.`);
       return json({ message: "Dia não ativo" });
     }
 
-    // ========== AUTO-ENROLLMENT ==========
+    // ========== AUTO-ENROLLMENT (ALL USERS) ==========
     const { data: allActiveInstances } = await supabase
       .from("user_whatsapp_instances")
-      .select("id, nome, server_url, instance_token, criado_em, ativo")
-      .eq("ativo", true)
-      .eq("user_id", adminUserId);
+      .select("id, nome, server_url, instance_token, criado_em, ativo, user_id")
+      .eq("ativo", true);
 
     const { data: existingAquec } = await supabase
       .from("whatsapp_aquecimento_instancias")
@@ -88,11 +81,10 @@ Deno.serve(async (req) => {
       console.log(`[AQUECIMENTO] Auto-enrolled: ${inst.nome}`);
     }
 
-    // ========== SYNC: PAUSE DEACTIVATED INSTANCES (backup do trigger) ==========
+    // ========== SYNC: PAUSE DEACTIVATED INSTANCES ==========
     const { data: allInstances } = await supabase
       .from("user_whatsapp_instances")
-      .select("id, ativo")
-      .eq("user_id", adminUserId);
+      .select("id, ativo");
 
     const activeInstanceIds = new Set((allActiveInstances || []).map((i: any) => i.id));
 
@@ -111,8 +103,6 @@ Deno.serve(async (req) => {
     }
 
     // ========== AUTO-REACTIVATE PAUSED INSTANCES ==========
-    // NEW: Reactivate ALL paused instances whose main instance is ativo=true
-    // WITHOUT requiring a health check — health check moves to send-time
     const { data: pausedInstances } = await supabase
       .from("whatsapp_aquecimento_instancias")
       .select("id, instancia_id")
@@ -120,7 +110,6 @@ Deno.serve(async (req) => {
 
     let reativados = 0;
     for (const paused of (pausedInstances || [])) {
-      // Only reactivate if the main instance is active
       if (activeInstanceIds.has(paused.instancia_id)) {
         await supabase.from("whatsapp_aquecimento_instancias")
           .update({ status: "EM_AQUECIMENTO" }).eq("id", paused.id);
@@ -128,7 +117,7 @@ Deno.serve(async (req) => {
       }
     }
     if (reativados > 0) {
-      console.log(`[AQUECIMENTO] ✅ Reativados ${reativados} instâncias PAUSADO → EM_AQUECIMENTO (sem health check)`);
+      console.log(`[AQUECIMENTO] ✅ Reativados ${reativados} instâncias PAUSADO → EM_AQUECIMENTO`);
     }
 
     // ========== GET ALL WARMING INSTANCES ==========
@@ -147,13 +136,22 @@ Deno.serve(async (req) => {
     const instanciaIds = instancias.map((i: any) => i.instancia_id);
     const { data: whatsappInstances } = await supabase
       .from("user_whatsapp_instances")
-      .select("id, nome, server_url, instance_token, criado_em")
+      .select("id, nome, server_url, instance_token, criado_em, user_id")
       .in("id", instanciaIds);
 
     const instanceMap = new Map((whatsappInstances || []).map((i: any) => [i.id, i]));
 
-    // ========== DAILY VARIANCE: randomize target (0, 1 or 2 conversations) ==========
-    // 20% chance: 0 (busy day), 60% chance: 1 (normal), 20% chance: 2 (relaxed day)
+    // ========== GROUP INSTANCES BY USER ==========
+    const instancesByUser = new Map<string, any[]>();
+    for (const inst of instancias) {
+      const details = instanceMap.get(inst.instancia_id);
+      if (!details) continue;
+      const userId = details.user_id;
+      if (!instancesByUser.has(userId)) instancesByUser.set(userId, []);
+      instancesByUser.get(userId)!.push({ ...inst, details });
+    }
+
+    // ========== DAILY VARIANCE ==========
     const dailyRoll = Math.random();
     const TARGET_MESSAGES_PER_DAY = dailyRoll < 0.20 ? 0 : dailyRoll < 0.80 ? 1 : 2;
     const MAX_PAIRS_PER_CYCLE = 3;
@@ -165,7 +163,7 @@ Deno.serve(async (req) => {
 
     console.log(`[AQUECIMENTO] 🎯 Target do dia: ${TARGET_MESSAGES_PER_DAY} conversa(s) por instância.`);
 
-    // 50% chance to skip this cycle for natural, unpredictable pattern
+    // 50% chance to skip this cycle
     if (Math.random() > 0.5) {
       console.log("[AQUECIMENTO] ⏭️ Skip aleatório para padrão natural.");
       return json({ message: "Random skip for natural pattern", skipped: true });
@@ -184,135 +182,130 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Filter eligible instances (not at daily limit)
-    const eligible = instancias.filter((inst: any) => inst.interacoes_hoje < TARGET_MESSAGES_PER_DAY);
-
-    if (eligible.length < 2) {
-      console.log(`[AQUECIMENTO] ⏭️ Skip rápido: ${instancias.length - eligible.length}/${instancias.length} já atingiram target. Elegíveis: ${eligible.length}`);
-      return json({ message: "Menos de 2 instâncias elegíveis", skipped: true, total: instancias.length, at_target: instancias.length - eligible.length });
-    }
-
-    console.log(`[AQUECIMENTO] ${eligible.length} elegíveis de ${instancias.length} (${instancias.length - eligible.length} já no target).`);
-
-    // ========== GENERATE PAIRS with affinity (30% preference for last partner) ==========
-    const shuffled = [...eligible].sort(() => Math.random() - 0.5);
-    const allPairs: [any, any][] = [];
-    const usedIds = new Set<string>();
-
-    // First pass: 30% chance to pair with last partner (affinity)
-    for (const inst of shuffled) {
-      if (usedIds.has(inst.id)) continue;
-      if (inst.ultimo_parceiro_id && Math.random() < 0.30) {
-        const partner = shuffled.find((p: any) => p.instancia_id === inst.ultimo_parceiro_id && !usedIds.has(p.id));
-        if (partner) {
-          allPairs.push([inst, partner]);
-          usedIds.add(inst.id);
-          usedIds.add(partner.id);
-        }
-      }
-    }
-
-    // Second pass: random pairs for remaining
-    const remaining = shuffled.filter((i: any) => !usedIds.has(i.id));
-    for (let i = 0; i + 1 < remaining.length; i += 2) {
-      allPairs.push([remaining[i], remaining[i + 1]]);
-    }
-
-    // Limit to MAX_PAIRS_PER_CYCLE random pairs
-    const pairs = allPairs.sort(() => Math.random() - 0.5).slice(0, MAX_PAIRS_PER_CYCLE);
-
-    console.log(`[AQUECIMENTO] Selecionados ${pairs.length} pares de ${allPairs.length} disponíveis (max ${MAX_PAIRS_PER_CYCLE}/ciclo).`);
-
     let totalEnviados = 0;
 
-    for (const [instA, instB] of pairs) {
-      const detailsA = instanceMap.get(instA.instancia_id);
-      const detailsB = instanceMap.get(instB.instancia_id);
-      if (!detailsA || !detailsB) continue;
+    // ========== PROCESS EACH USER'S INSTANCES SEPARATELY ==========
+    for (const [userId, userInstances] of instancesByUser.entries()) {
+      // Filter eligible (not at daily limit)
+      const eligible = userInstances.filter((inst: any) => inst.interacoes_hoje < TARGET_MESSAGES_PER_DAY);
 
-      // Check if same pair already had conversation today
-      const todayStart = new Date(spTime);
-      todayStart.setHours(0, 0, 0, 0);
-      const { data: conversaHoje } = await supabase
-        .from("whatsapp_conversas_ia")
-        .select("id")
-        .or(`and(instancia_origem_id.eq.${instA.instancia_id},instancia_destino_id.eq.${instB.instancia_id}),and(instancia_origem_id.eq.${instB.instancia_id},instancia_destino_id.eq.${instA.instancia_id})`)
-        .gte("inicio_em", todayStart.toISOString())
-        .limit(1)
-        .maybeSingle();
-
-      if (conversaHoje) {
+      if (eligible.length < 2) {
+        console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis, precisa de 2+. Pulando.`);
         continue;
       }
 
-      // Get phone numbers
-      const phoneA = detailsA.nome?.match(/^\d+/)?.[0] || "";
-      const phoneB = detailsB.nome?.match(/^\d+/)?.[0] || "";
-      if (!phoneA || !phoneB) continue;
+      console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis de ${userInstances.length}.`);
 
-      const destNum = `55${phoneB}@s.whatsapp.net`;
-      const origNum = `55${phoneA}@s.whatsapp.net`;
+      // ========== GENERATE PAIRS (same user only) ==========
+      const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+      const allPairs: [any, any][] = [];
+      const usedIds = new Set<string>();
 
-      console.log(`[AQUECIMENTO] 🤝 Par: ${detailsA.nome} → ${detailsB.nome}`);
-
-      const iaPayload = {
-        action: "iniciar-conversa",
-        instancia_origem_id: instA.instancia_id,
-        instancia_destino_id: instB.instancia_id,
-        server_url: detailsA.server_url,
-        instance_token: detailsA.instance_token,
-        numero_destino: destNum,
-        numero_origem: origNum,
-        dest_server_url: detailsB.server_url,
-        dest_instance_token: detailsB.instance_token,
-      };
-
-      // Await response to detect disconnection errors
-      try {
-        const iaRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-          body: JSON.stringify(iaPayload),
-        });
-        const iaText = await iaRes.text();
-        console.log(`[AQUECIMENTO] IA response ${detailsA.nome}→${detailsB.nome}: ${iaText.substring(0, 200)}`);
-
-        // Only pause if explicit disconnection error
-        const lower = iaText.toLowerCase();
-        if (lower.includes("disconnected") || lower.includes("desconectado") || lower.includes("not connected")) {
-          if (lower.includes(phoneA) || iaText.includes(instA.instancia_id)) {
-            console.log(`[AQUECIMENTO] ⚠️ ${detailsA.nome} desconectado → PAUSADO`);
-            await supabase.from("whatsapp_aquecimento_instancias").update({ status: "PAUSADO" }).eq("id", instA.id);
-          }
-          if (lower.includes(phoneB) || iaText.includes(instB.instancia_id)) {
-            console.log(`[AQUECIMENTO] ⚠️ ${detailsB.nome} desconectado → PAUSADO`);
-            await supabase.from("whatsapp_aquecimento_instancias").update({ status: "PAUSADO" }).eq("id", instB.id);
+      // First pass: 30% affinity with last partner
+      for (const inst of shuffled) {
+        if (usedIds.has(inst.id)) continue;
+        if (inst.ultimo_parceiro_id && Math.random() < 0.30) {
+          const partner = shuffled.find((p: any) => p.instancia_id === inst.ultimo_parceiro_id && !usedIds.has(p.id));
+          if (partner) {
+            allPairs.push([inst, partner]);
+            usedIds.add(inst.id);
+            usedIds.add(partner.id);
           }
         }
-      } catch (e) {
-        console.error(`[AQUECIMENTO] IA call error ${detailsA.nome}→${detailsB.nome}:`, e);
       }
 
-      // Update counters
-      await supabase.from("whatsapp_aquecimento_instancias").update({
-        interacoes_hoje: (instA.interacoes_hoje || 0) + 1,
-        interacoes_total: (instA.interacoes_total || 0) + 1,
-        ultima_interacao: new Date().toISOString(),
-        ultimo_parceiro_id: instB.instancia_id,
-      }).eq("id", instA.id);
+      // Second pass: random pairs for remaining
+      const remaining = shuffled.filter((i: any) => !usedIds.has(i.id));
+      for (let i = 0; i + 1 < remaining.length; i += 2) {
+        allPairs.push([remaining[i], remaining[i + 1]]);
+      }
 
-      await supabase.from("whatsapp_aquecimento_instancias").update({
-        ultimo_parceiro_id: instA.instancia_id,
-      }).eq("id", instB.id);
+      const pairs = allPairs.sort(() => Math.random() - 0.5).slice(0, MAX_PAIRS_PER_CYCLE);
 
-      totalEnviados++;
+      for (const [instA, instB] of pairs) {
+        const detailsA = instA.details;
+        const detailsB = instB.details;
+        if (!detailsA || !detailsB) continue;
 
-      // Small delay between pairs
-      await new Promise(r => setTimeout(r, 30000 + Math.random() * 90000));
+        // Check if same pair already had conversation today
+        const todayStart = new Date(spTime);
+        todayStart.setHours(0, 0, 0, 0);
+        const { data: conversaHoje } = await supabase
+          .from("whatsapp_conversas_ia")
+          .select("id")
+          .or(`and(instancia_origem_id.eq.${instA.instancia_id},instancia_destino_id.eq.${instB.instancia_id}),and(instancia_origem_id.eq.${instB.instancia_id},instancia_destino_id.eq.${instA.instancia_id})`)
+          .gte("inicio_em", todayStart.toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (conversaHoje) continue;
+
+        const phoneA = detailsA.nome?.match(/^\d+/)?.[0] || "";
+        const phoneB = detailsB.nome?.match(/^\d+/)?.[0] || "";
+        if (!phoneA || !phoneB) continue;
+
+        const destNum = `55${phoneB}@s.whatsapp.net`;
+        const origNum = `55${phoneA}@s.whatsapp.net`;
+
+        console.log(`[AQUECIMENTO] 🤝 Par: ${detailsA.nome} → ${detailsB.nome} (user: ${userId})`);
+
+        const iaPayload = {
+          action: "iniciar-conversa",
+          instancia_origem_id: instA.instancia_id,
+          instancia_destino_id: instB.instancia_id,
+          server_url: detailsA.server_url,
+          instance_token: detailsA.instance_token,
+          numero_destino: destNum,
+          numero_origem: origNum,
+          dest_server_url: detailsB.server_url,
+          dest_instance_token: detailsB.instance_token,
+        };
+
+        try {
+          const iaRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+            body: JSON.stringify(iaPayload),
+          });
+          const iaText = await iaRes.text();
+          console.log(`[AQUECIMENTO] IA response ${detailsA.nome}→${detailsB.nome}: ${iaText.substring(0, 200)}`);
+
+          const lower = iaText.toLowerCase();
+          if (lower.includes("disconnected") || lower.includes("desconectado") || lower.includes("not connected")) {
+            if (lower.includes(phoneA) || iaText.includes(instA.instancia_id)) {
+              console.log(`[AQUECIMENTO] ⚠️ ${detailsA.nome} desconectado → PAUSADO`);
+              await supabase.from("whatsapp_aquecimento_instancias").update({ status: "PAUSADO" }).eq("id", instA.id);
+            }
+            if (lower.includes(phoneB) || iaText.includes(instB.instancia_id)) {
+              console.log(`[AQUECIMENTO] ⚠️ ${detailsB.nome} desconectado → PAUSADO`);
+              await supabase.from("whatsapp_aquecimento_instancias").update({ status: "PAUSADO" }).eq("id", instB.id);
+            }
+          }
+        } catch (e) {
+          console.error(`[AQUECIMENTO] IA call error ${detailsA.nome}→${detailsB.nome}:`, e);
+        }
+
+        // Update counters
+        await supabase.from("whatsapp_aquecimento_instancias").update({
+          interacoes_hoje: (instA.interacoes_hoje || 0) + 1,
+          interacoes_total: (instA.interacoes_total || 0) + 1,
+          ultima_interacao: new Date().toISOString(),
+          ultimo_parceiro_id: instB.instancia_id,
+        }).eq("id", instA.id);
+
+        await supabase.from("whatsapp_aquecimento_instancias").update({
+          ultimo_parceiro_id: instA.instancia_id,
+        }).eq("id", instB.id);
+
+        totalEnviados++;
+
+        // Small delay between pairs
+        await new Promise(r => setTimeout(r, 30000 + Math.random() * 90000));
+      }
     }
 
-    console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas de ${pairs.length} pares.`);
-    return json({ success: true, conversas_iniciadas: totalEnviados, total_pares: pairs.length, reativados });
+    console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas.`);
+    return json({ success: true, conversas_iniciadas: totalEnviados, reativados });
 
   } catch (err) {
     console.error("[AQUECIMENTO] Erro:", err);
