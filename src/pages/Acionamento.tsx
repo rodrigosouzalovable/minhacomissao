@@ -657,6 +657,74 @@ export default function Acionamento() {
     toast.success('Planilha removida do histórico');
   };
 
+  const handleVerificarWhatsApp = async () => {
+    if (clientes.length === 0) return;
+    const connectedInstance = instances.find(i => i.ativo && connectionStatus[i.id] === 'connected');
+    if (!connectedInstance) {
+      toast.error('Nenhuma instância WhatsApp conectada para verificar os números');
+      return;
+    }
+
+    setVerificandoWhatsApp(true);
+    setVerificacaoProgresso({ checked: 0, total: clientes.length });
+    setNumerosInvalidos([]);
+    setVerificacaoConcluida(false);
+
+    try {
+      const telefones = clientes.map(c => c.telefone);
+      const { data, error } = await supabase.functions.invoke('check-whatsapp-numbers', {
+        body: {
+          numbers: telefones,
+          server_url: connectedInstance.server_url,
+          instance_token: connectedInstance.instance_token,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.invalid && Array.isArray(data.invalid)) {
+        const invalidSet = new Set(data.invalid.map((n: string) => n.replace(/\D/g, '')));
+        const removidos: ClienteData[] = [];
+        const mantidos: ClienteData[] = [];
+
+        clientes.forEach(c => {
+          const cleanPhone = c.telefone.replace(/\D/g, '');
+          const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+          if (invalidSet.has(cleanPhone) || invalidSet.has(fullPhone)) {
+            removidos.push(c);
+          } else {
+            mantidos.push(c);
+          }
+        });
+
+        setNumerosInvalidos(removidos);
+        setClientes(mantidos);
+        setSendStatus({});
+        setManualChecked(new Set());
+        setSendTimestamps({});
+
+        // Update historico
+        if (activeHistoricoId) {
+          const updated = historico.map(h =>
+            h.id === activeHistoricoId ? { ...h, clientes: mantidos, qtdClientes: mantidos.length } : h
+          );
+          saveHistorico(updated);
+        }
+
+        setVerificacaoConcluida(true);
+        toast.success(`Verificação concluída: ${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`);
+      } else {
+        toast.info('Verificação concluída — todos os números parecem válidos');
+        setVerificacaoConcluida(true);
+      }
+    } catch (err: any) {
+      toast.error(`Erro na verificação: ${err.message || 'Erro desconhecido'}`);
+    } finally {
+      setVerificandoWhatsApp(false);
+      setVerificacaoProgresso(null);
+    }
+  };
+
   const handleManualCheck = (originalIndex: number, checked: boolean) => {
     const next = new Set(manualChecked);
     if (checked) {
