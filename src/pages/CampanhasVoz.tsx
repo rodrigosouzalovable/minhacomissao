@@ -695,9 +695,56 @@ export default function CampanhasVoz() {
                   className="mt-1"
                 />
                 {importedContacts.length > 0 && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {importedContacts.length} contatos importados
-                  </p>
+                  <div className="space-y-2 mt-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {importedContacts.length} contatos importados
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleVerificarWhatsApp}
+                        disabled={verificandoWhatsApp}
+                        className="gap-1 h-7 text-xs"
+                      >
+                        {verificandoWhatsApp ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3" />
+                        )}
+                        {verificandoWhatsApp ? 'Verificando...' : 'Verificar WhatsApp'}
+                      </Button>
+                    </div>
+                    {verificacaoConcluida && numerosInvalidos.length > 0 && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>{numerosInvalidos.length} sem WhatsApp removidos</AlertTitle>
+                        <AlertDescription>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
+                            className="text-xs p-0 h-auto"
+                          >
+                            {mostrarInvalidos ? 'Ocultar' : 'Ver removidos'}
+                          </Button>
+                          {mostrarInvalidos && (
+                            <div className="max-h-32 overflow-y-auto border rounded p-2 mt-1 space-y-0.5">
+                              {numerosInvalidos.map((c, i) => (
+                                <p key={i} className="text-xs text-muted-foreground">{c.nome} — {c.telefone}</p>
+                              ))}
+                            </div>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {verificacaoConcluida && numerosInvalidos.length === 0 && (
+                      <Alert>
+                        <Check className="h-4 w-4" />
+                        <AlertTitle>Todos possuem WhatsApp ✓</AlertTitle>
+                      </Alert>
+                    )}
+                  </div>
                 )}
               </div>
 
