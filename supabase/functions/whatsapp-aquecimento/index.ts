@@ -194,11 +194,28 @@ Deno.serve(async (req) => {
 
     console.log(`[AQUECIMENTO] ${eligible.length} elegíveis de ${instancias.length} (${instancias.length - eligible.length} já no target).`);
 
-    // ========== GENERATE PAIRS (sem health check — só pausa em falha de envio) ==========
+    // ========== GENERATE PAIRS with affinity (30% preference for last partner) ==========
     const shuffled = [...eligible].sort(() => Math.random() - 0.5);
     const allPairs: [any, any][] = [];
-    for (let i = 0; i + 1 < shuffled.length; i += 2) {
-      allPairs.push([shuffled[i], shuffled[i + 1]]);
+    const usedIds = new Set<string>();
+
+    // First pass: 30% chance to pair with last partner (affinity)
+    for (const inst of shuffled) {
+      if (usedIds.has(inst.id)) continue;
+      if (inst.ultimo_parceiro_id && Math.random() < 0.30) {
+        const partner = shuffled.find((p: any) => p.instancia_id === inst.ultimo_parceiro_id && !usedIds.has(p.id));
+        if (partner) {
+          allPairs.push([inst, partner]);
+          usedIds.add(inst.id);
+          usedIds.add(partner.id);
+        }
+      }
+    }
+
+    // Second pass: random pairs for remaining
+    const remaining = shuffled.filter((i: any) => !usedIds.has(i.id));
+    for (let i = 0; i + 1 < remaining.length; i += 2) {
+      allPairs.push([remaining[i], remaining[i + 1]]);
     }
 
     // Limit to MAX_PAIRS_PER_CYCLE random pairs
