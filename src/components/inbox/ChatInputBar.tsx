@@ -138,6 +138,11 @@ export function ChatInputBar({
   const isLoading = enviando || enviandoAudio || enviandoArquivo;
   const [enviandoAtalho, setEnviandoAtalho] = useState<string | null>(null);
 
+  // Report busy state to parent
+  useEffect(() => {
+    onBusyChange?.(isLoading || !!enviandoAtalho);
+  }, [isLoading, enviandoAtalho]);
+
   const handleAtalhoClick = async (atalho: MensagemRapida) => {
     if (isLoading || enviandoAtalho) return;
     setEnviandoAtalho(atalho.id);
