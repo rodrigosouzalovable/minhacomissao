@@ -160,13 +160,18 @@ export default function ImportarDevedores() {
     setRows([]);
     setPagamentoRows([]);
     setMontrealRows([]);
+    setUmeAporteGroups([]);
     setImported(false);
     setPagamentoImported(false);
+    setUmeAporteImported(false);
     if (value === 'pagamentos') {
       setCredorDestino('UME | NOVO MUNDO');
     }
     if (value === 'montreal_atualizacao') {
       setCredorDestino('MONTREAL');
+    }
+    if (value === 'ume_aporte') {
+      setCredorDestino('UME | NOVO MUNDO');
     }
   };
 
