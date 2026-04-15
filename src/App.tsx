@@ -34,7 +34,7 @@ import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import AntifraudePage from "./pages/Antifraude";
 import Clientes from "./pages/Clientes";
 import DevedorDetalhe from "./pages/DevedorDetalhe";
-import PortalHome from "./pages/PortalHome";
+
 import CredorDashboard from "./pages/CredorDashboard";
 import Acionamento from "./pages/Acionamento";
 import MetaPessoal from "./pages/MetaPessoal";
@@ -152,7 +152,7 @@ const App = () => (
           <WhatsAppSendingProvider>
           <VoiceCampaignSendingProvider>
           <Routes>
-            <Route path="/" element={<PortalHome />} />
+            <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/inbox" element={<PermissionRoute><WhatsAppInbox /></PermissionRoute>} />
             <Route path="/:creditor" element={<PortalConsulta />} />
             <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
