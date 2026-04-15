@@ -1,39 +1,40 @@
 
 
-## Corrigir Aquecimento Automático — Todas as Instâncias Travadas em PAUSADO
+## Gravar preferência de economia + Otimizar consumo do Aquecimento
 
-### Diagnóstico
+### Preferência a gravar
+Salvar em memória: **"Sempre avisar o usuário antes de qualquer mudança que aumente o consumo da Lovable Cloud (Edge Functions, banco de dados, storage). Priorizar economia."**
 
-O cron está rodando corretamente (`*/15 10-23 * * *`, 7h-20h BRT). O problema é que **todas as 77 instâncias estão PAUSADO** e o health check falha para todas, impedindo a reativação. O ciclo aborta com "Menos de 2 instâncias ativas."
+### Diagnóstico de consumo atual
 
-**Por que o manual funciona mas o automático não?**
-O teste manual pula o health check e envia direto. O automático exige que o health check retorne `connected: true`, `status: "CONNECTED"` ou `state: "open"` — mas a UAZAPI pode retornar em outro formato (ex: `{ instance: { state: "open" } }` ou `{ status: "open" }`).
+O aquecimento é o maior consumidor:
+- **Cron a cada 15 min** = ~56 execuções/dia da edge function `whatsapp-aquecimento`
+- Cada execução faz health checks (fetch externo) em até 30 instâncias
+- Cada par gera uma chamada extra ao `whatsapp-ia-responder`
+- Com 77 instâncias e 15 msgs/dia/instância, o target é atingido em poucas rodadas
 
-O ciclo de 77 instâncias com health check sequencial de 8s timeout também pode exceder o limite de execução da edge function (max 26-60s).
+### Otimização proposta
 
-### Correções
+1. **Reduzir frequência do cron de 15 min para 60 min**
+   - De ~56 para ~14 execuções/dia (75% de redução)
+   - 15 msgs/dia ainda são facilmente atingidas com 14 ciclos
+   - Alterar via SQL: `cron.alter_job` para `0 10-23 * * *`
 
-#### 1. Tornar o health check mais resiliente (`whatsapp-aquecimento`)
-- Aceitar mais formatos de resposta da UAZAPI (`instance.state`, `status: "open"`, etc.)
-- Adicionar log detalhado da resposta para debug
-- Reduzir timeout de 8s para 5s
+2. **Skip rápido quando target atingido**
+   - Se todas as instâncias já atingiram 15 msgs/dia, retornar imediatamente sem fazer health checks
+   - Evita chamadas de rede desnecessárias
 
-#### 2. Limitar health checks para não estourar timeout
-- Fazer health check em paralelo (Promise.allSettled) com limite de 10 simultâneos
-- Limitar a 30 instâncias por ciclo para não estourar o tempo da function
-
-#### 3. Reativar em massa instâncias `ativo: true`
-- Nova lógica: se a instância principal está `ativo: true` na tabela `user_whatsapp_instances`, reativar automaticamente para `EM_AQUECIMENTO` SEM exigir health check
-- O health check passa a ser feito apenas NO MOMENTO do envio — se falhar, pausa novamente
-- Isso garante que instâncias conectadas não fiquem presas em PAUSADO
-
-#### 4. Adicionar logging detalhado
-- Logar quantas instâncias foram reativadas, quantas falharam health check, e o motivo
-- Logar a resposta exata do `/instance/status` para diagnóstico
+3. **Reduzir health checks desnecessários**
+   - Só fazer health check em instâncias que vão efetivamente enviar neste ciclo
+   - Se uma instância já atingiu o limite diário, não verificar saúde dela
 
 ### Arquivos
-1. **`supabase/functions/whatsapp-aquecimento/index.ts`** — health check resiliente, reativação automática, logging
+1. **`mem://preferences/cloud-cost-awareness`** — gravar preferência
+2. **`supabase/functions/whatsapp-aquecimento/index.ts`** — skip rápido + health check seletivo
+3. **Cron job** — alterar frequência de 15 min para 60 min
 
-### Resultado
-Instâncias ativas serão automaticamente reativadas a cada ciclo. O aquecimento começará a funcionar de forma autônoma às 7h BRT diariamente.
+### Impacto
+- Redução de ~75% nas execuções diárias do aquecimento
+- Mesma funcionalidade (15 msgs/dia por instância mantidas)
+- Economia significativa em Edge Function invocations
 
