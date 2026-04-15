@@ -152,7 +152,14 @@ Deno.serve(async (req) => {
 
     const instanceMap = new Map((whatsappInstances || []).map((i: any) => [i.id, i]));
 
-    const TARGET_MESSAGES_PER_DAY = 15;
+    const TARGET_MESSAGES_PER_DAY = 1;
+    const MAX_PAIRS_PER_CYCLE = 3;
+
+    // 50% chance to skip this cycle for natural, unpredictable pattern
+    if (Math.random() > 0.5) {
+      console.log("[AQUECIMENTO] ⏭️ Skip aleatório para padrão natural.");
+      return json({ message: "Random skip for natural pattern", skipped: true });
+    }
 
     // ========== RESET DAILY COUNTERS ==========
     for (const inst of instancias) {
@@ -179,12 +186,15 @@ Deno.serve(async (req) => {
 
     // ========== GENERATE PAIRS (sem health check — só pausa em falha de envio) ==========
     const shuffled = [...eligible].sort(() => Math.random() - 0.5);
-    const pairs: [any, any][] = [];
+    const allPairs: [any, any][] = [];
     for (let i = 0; i + 1 < shuffled.length; i += 2) {
-      pairs.push([shuffled[i], shuffled[i + 1]]);
+      allPairs.push([shuffled[i], shuffled[i + 1]]);
     }
 
-    console.log(`[AQUECIMENTO] Gerados ${pairs.length} pares de ${eligible.length} instâncias.`);
+    // Limit to MAX_PAIRS_PER_CYCLE random pairs
+    const pairs = allPairs.sort(() => Math.random() - 0.5).slice(0, MAX_PAIRS_PER_CYCLE);
+
+    console.log(`[AQUECIMENTO] Selecionados ${pairs.length} pares de ${allPairs.length} disponíveis (max ${MAX_PAIRS_PER_CYCLE}/ciclo).`);
 
     let totalEnviados = 0;
 
@@ -271,7 +281,7 @@ Deno.serve(async (req) => {
       totalEnviados++;
 
       // Small delay between pairs
-      await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+      await new Promise(r => setTimeout(r, 30000 + Math.random() * 90000));
     }
 
     console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas de ${pairs.length} pares.`);
