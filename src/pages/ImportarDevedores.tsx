@@ -607,7 +607,9 @@ export default function ImportarDevedores() {
 
       let dataVencimento: Date;
       const vencRaw = row['E'];
-      if (typeof vencRaw === 'number') {
+      if (vencRaw instanceof Date) {
+        dataVencimento = vencRaw;
+      } else if (typeof vencRaw === 'number') {
         const dt = XLSX.SSF.parse_date_code(vencRaw);
         if (dt) {
           dataVencimento = new Date(dt.y, dt.m - 1, dt.d);
@@ -752,7 +754,7 @@ export default function ImportarDevedores() {
     reader.onload = async (evt) => {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'buffer' });
+        const workbook = XLSX.read(data, { type: 'buffer', cellDates: true });
 
         if (credorSelecionado === 'ume_aporte') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
