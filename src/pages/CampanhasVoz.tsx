@@ -253,6 +253,8 @@ export default function CampanhasVoz() {
       setImportedContacts(contacts);
       setContactSource('planilha');
       setSelectedContacts(new Set());
+      setVerificacaoConcluida(false);
+      setNumerosInvalidos([]);
       toast.success(`${contacts.length} contatos importados da planilha`);
     };
     reader.readAsArrayBuffer(file);
