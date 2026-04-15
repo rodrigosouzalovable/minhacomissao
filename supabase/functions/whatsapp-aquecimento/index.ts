@@ -94,6 +94,8 @@ Deno.serve(async (req) => {
       .select("id, ativo")
       .eq("user_id", adminUserId);
 
+    const activeInstanceIds = new Set((allActiveInstances || []).map((i: any) => i.id));
+
     const { data: allAquecInstances } = await supabase
       .from("whatsapp_aquecimento_instancias")
       .select("id, instancia_id, status")
@@ -109,25 +111,24 @@ Deno.serve(async (req) => {
     }
 
     // ========== AUTO-REACTIVATE PAUSED INSTANCES ==========
+    // NEW: Reactivate ALL paused instances whose main instance is ativo=true
+    // WITHOUT requiring a health check — health check moves to send-time
     const { data: pausedInstances } = await supabase
       .from("whatsapp_aquecimento_instancias")
       .select("id, instancia_id")
       .eq("status", "PAUSADO");
 
+    let reativados = 0;
     for (const paused of (pausedInstances || [])) {
-      const pausedDetails = (allActiveInstances || []).find((i: any) => i.id === paused.instancia_id);
-      if (!pausedDetails) continue;
-
-      const connected = await checkInstanceHealth(pausedDetails);
-      if (connected) {
+      // Only reactivate if the main instance is active
+      if (activeInstanceIds.has(paused.instancia_id)) {
         await supabase.from("whatsapp_aquecimento_instancias")
           .update({ status: "EM_AQUECIMENTO" }).eq("id", paused.id);
-        console.log(`[AQUECIMENTO] ✅ Reativado: ${pausedDetails.nome}`);
-        await supabase.from("aquecimento_notificacoes").insert({
-          tipo: "reativacao", instancia_id: paused.instancia_id,
-          mensagem: `✅ "${pausedDetails.nome}" reconectado. Aquecimento retomado.`,
-        });
+        reativados++;
       }
+    }
+    if (reativados > 0) {
+      console.log(`[AQUECIMENTO] ✅ Reativados ${reativados} instâncias PAUSADO → EM_AQUECIMENTO (sem health check)`);
     }
 
     // ========== GET ALL WARMING INSTANCES ==========
@@ -137,9 +138,11 @@ Deno.serve(async (req) => {
       .in("status", ["EM_AQUECIMENTO", "AQUECIDO"]);
 
     if (!instancias || instancias.length < 2) {
-      console.log("[AQUECIMENTO] Menos de 2 instâncias ativas.");
+      console.log(`[AQUECIMENTO] Menos de 2 instâncias ativas (${instancias?.length || 0}).`);
       return json({ message: "Menos de 2 instâncias" });
     }
+
+    console.log(`[AQUECIMENTO] ${instancias.length} instâncias ativas para aquecimento.`);
 
     const instanciaIds = instancias.map((i: any) => i.instancia_id);
     const { data: whatsappInstances } = await supabase
@@ -151,8 +154,7 @@ Deno.serve(async (req) => {
 
     const TARGET_MESSAGES_PER_DAY = 15;
 
-    // ========== ROTATING PAIRS SYSTEM ==========
-    // Reset daily counters if new day
+    // ========== RESET DAILY COUNTERS ==========
     for (const inst of instancias) {
       if (inst.ultima_interacao) {
         const lastDate = new Date(inst.ultima_interacao).toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" });
@@ -168,8 +170,6 @@ Deno.serve(async (req) => {
     // Filter eligible instances (not at daily limit)
     const eligible = instancias.filter((inst: any) => {
       if (inst.interacoes_hoje >= TARGET_MESSAGES_PER_DAY) {
-        const details = instanceMap.get(inst.instancia_id);
-        console.log(`[AQUECIMENTO] ${details?.nome}: limite diário atingido (${inst.interacoes_hoje}/${TARGET_MESSAGES_PER_DAY})`);
         return false;
       }
       return true;
@@ -180,32 +180,52 @@ Deno.serve(async (req) => {
       return json({ message: "Menos de 2 instâncias elegíveis" });
     }
 
-    // Health check all eligible instances
+    // ========== HEALTH CHECK IN PARALLEL BATCHES ==========
+    // Check up to 30 instances, 10 at a time in parallel
+    const maxToCheck = Math.min(eligible.length, 30);
+    const toCheck = eligible.slice(0, maxToCheck);
     const healthyInstances: any[] = [];
-    for (const inst of eligible) {
-      const instDetails = instanceMap.get(inst.instancia_id);
-      if (!instDetails) continue;
 
-      const connected = await checkInstanceHealth(instDetails);
-      if (!connected) {
-        console.log(`[AQUECIMENTO] ${instDetails.nome}: DESCONECTADO. Pausando.`);
-        await supabase.from("whatsapp_aquecimento_instancias")
-          .update({ status: "PAUSADO" }).eq("id", inst.id);
-        await supabase.from("aquecimento_notificacoes").insert({
-          tipo: "desconexao", instancia_id: inst.instancia_id,
-          mensagem: `🚫 "${instDetails.nome}" desconectado. Aquecimento pausado.`,
-        });
-        continue;
+    for (let i = 0; i < toCheck.length; i += 10) {
+      const batch = toCheck.slice(i, i + 10);
+      const results = await Promise.allSettled(
+        batch.map(async (inst: any) => {
+          const details = instanceMap.get(inst.instancia_id);
+          if (!details) return { inst, connected: false, reason: "no details" };
+          const connected = await checkInstanceHealth(details);
+          return { inst, connected, details };
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          const { inst, connected, details } = result.value;
+          if (connected) {
+            healthyInstances.push(inst);
+          } else if (details) {
+            console.log(`[AQUECIMENTO] ${details.nome}: DESCONECTADO → PAUSADO`);
+            await supabase.from("whatsapp_aquecimento_instancias")
+              .update({ status: "PAUSADO" }).eq("id", inst.id);
+          }
+        }
       }
-      healthyInstances.push(inst);
     }
+
+    // Also add remaining eligible instances that weren't health-checked (trust them)
+    if (eligible.length > maxToCheck) {
+      const unchecked = eligible.slice(maxToCheck);
+      healthyInstances.push(...unchecked);
+      console.log(`[AQUECIMENTO] ${unchecked.length} instâncias extras não verificadas (confiadas).`);
+    }
+
+    console.log(`[AQUECIMENTO] ${healthyInstances.length} instâncias saudáveis de ${eligible.length} elegíveis.`);
 
     if (healthyInstances.length < 2) {
       console.log("[AQUECIMENTO] Menos de 2 instâncias saudáveis.");
       return json({ message: "Menos de 2 instâncias saudáveis" });
     }
 
-    // Generate unique pairs using shuffle
+    // ========== GENERATE PAIRS ==========
     const shuffled = [...healthyInstances].sort(() => Math.random() - 0.5);
     const pairs: [any, any][] = [];
     for (let i = 0; i + 1 < shuffled.length; i += 2) {
@@ -221,7 +241,7 @@ Deno.serve(async (req) => {
       const detailsB = instanceMap.get(instB.instancia_id);
       if (!detailsA || !detailsB) continue;
 
-      // Check if same pair already had conversation today (avoid repeating)
+      // Check if same pair already had conversation today
       const todayStart = new Date(spTime);
       todayStart.setHours(0, 0, 0, 0);
       const { data: conversaHoje } = await supabase
@@ -233,19 +253,14 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (conversaHoje) {
-        console.log(`[AQUECIMENTO] Par ${detailsA.nome} ↔ ${detailsB.nome} já conversou hoje. Pulando.`);
         continue;
       }
 
       // Get phone numbers
       const phoneA = detailsA.nome?.match(/^\d+/)?.[0] || "";
       const phoneB = detailsB.nome?.match(/^\d+/)?.[0] || "";
-      if (!phoneA || !phoneB) {
-        console.log(`[AQUECIMENTO] Par sem telefone: ${detailsA.nome} ↔ ${detailsB.nome}`);
-        continue;
-      }
+      if (!phoneA || !phoneB) continue;
 
-      // A initiates conversation with B (B responds via chain)
       const destNum = `55${phoneB}@s.whatsapp.net`;
       const origNum = `55${phoneA}@s.whatsapp.net`;
 
@@ -271,7 +286,7 @@ Deno.serve(async (req) => {
       }).then(r => r.text().then(t => console.log(`[AQUECIMENTO] IA response ${detailsA.nome}→${detailsB.nome}: ${t.substring(0, 200)}`)))
         .catch(e => console.error("[AQUECIMENTO] IA call error:", e));
 
-      // Update counters for the initiator
+      // Update counters
       await supabase.from("whatsapp_aquecimento_instancias").update({
         interacoes_hoje: (instA.interacoes_hoje || 0) + 1,
         interacoes_total: (instA.interacoes_total || 0) + 1,
@@ -279,7 +294,6 @@ Deno.serve(async (req) => {
         ultimo_parceiro_id: instB.instancia_id,
       }).eq("id", instA.id);
 
-      // Update ultimo_parceiro for the responder too
       await supabase.from("whatsapp_aquecimento_instancias").update({
         ultimo_parceiro_id: instA.instancia_id,
       }).eq("id", instB.id);
@@ -291,7 +305,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas de ${pairs.length} pares.`);
-    return json({ success: true, conversas_iniciadas: totalEnviados, total_pares: pairs.length });
+    return json({ success: true, conversas_iniciadas: totalEnviados, total_pares: pairs.length, reativados });
 
   } catch (err) {
     console.error("[AQUECIMENTO] Erro:", err);
@@ -299,20 +313,37 @@ Deno.serve(async (req) => {
   }
 });
 
-// ========== HEALTH CHECK ==========
+// ========== HEALTH CHECK (RESILIENT) ==========
 async function checkInstanceHealth(inst: any): Promise<boolean> {
   try {
     const cleanUrl = inst.server_url.replace(/\/+$/, "");
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(`${cleanUrl}/instance/status`, {
       headers: { token: inst.instance_token },
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    const data = await res.json().catch(() => ({}));
-    return data?.connected || data?.status === "CONNECTED" || data?.state === "open";
-  } catch {
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { return false; }
+
+    // Accept multiple UAZAPI response formats
+    const connected =
+      data?.connected === true ||
+      data?.status === "CONNECTED" ||
+      data?.status === "open" ||
+      data?.state === "open" ||
+      data?.instance?.state === "open" ||
+      data?.instance?.status === "CONNECTED" ||
+      (typeof data?.status === "object" && data?.status?.state === "open");
+
+    if (!connected) {
+      console.log(`[AQUECIMENTO] Health check failed for ${inst.nome}: ${text.substring(0, 150)}`);
+    }
+    return connected;
+  } catch (e) {
+    console.log(`[AQUECIMENTO] Health check error for ${inst.nome}: ${e}`);
     return false;
   }
 }
@@ -333,7 +364,6 @@ async function handleManualTest(supabase: any, body: any, supabaseUrl: string, s
     return json({ error: "Instâncias não encontradas" }, 404);
   }
 
-  // Generate pairs instead of sequential loop
   const shuffled = [...whatsappInsts].sort(() => Math.random() - 0.5);
   const pairs: [any, any][] = [];
   for (let i = 0; i + 1 < shuffled.length; i += 2) {
