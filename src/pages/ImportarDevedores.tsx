@@ -1115,10 +1115,11 @@ export default function ImportarDevedores() {
                    <SelectItem value="cobmais">COBMAIS</SelectItem>
                    <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
                    <SelectItem value="pagamentos">Pagamentos</SelectItem>
+                   <SelectItem value="ume_aporte">UME APORTE</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {!isPagamentos && !isMontrealAtualizacao && (
+            {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && (
               <div className="space-y-2">
                 <Label>Credor de Destino</Label>
                 <Select value={credorDestino} onValueChange={setCredorDestino}>
@@ -1140,9 +1141,10 @@ export default function ImportarDevedores() {
                 )}
               </div>
             )}
-            {isPagamentos && (
+            {(isPagamentos || isUmeAporte) && (
               <div className="text-sm text-muted-foreground">
                 Credor: <strong>UME | NOVO MUNDO</strong> (automático)
+                {isUmeAporte && <> — O sistema criará acordos automaticamente para CPFs que ainda não possuem acordo.</>}
               </div>
             )}
             {isMontrealAtualizacao && (
