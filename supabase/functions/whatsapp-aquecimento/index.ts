@@ -283,41 +283,6 @@ Deno.serve(async (req) => {
   }
 });
 
-// ========== HEALTH CHECK (RESILIENT) ==========
-async function checkInstanceHealth(inst: any): Promise<boolean> {
-  try {
-    const cleanUrl = inst.server_url.replace(/\/+$/, "");
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`${cleanUrl}/instance/status`, {
-      headers: { token: inst.instance_token },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const text = await res.text();
-    let data: any = {};
-    try { data = JSON.parse(text); } catch { return false; }
-
-    // Accept multiple UAZAPI response formats
-    const connected =
-      data?.connected === true ||
-      data?.status === "CONNECTED" ||
-      data?.status === "open" ||
-      data?.state === "open" ||
-      data?.instance?.state === "open" ||
-      data?.instance?.status === "CONNECTED" ||
-      (typeof data?.status === "object" && data?.status?.state === "open");
-
-    if (!connected) {
-      console.log(`[AQUECIMENTO] Health check failed for ${inst.nome}: ${text.substring(0, 150)}`);
-    }
-    return connected;
-  } catch (e) {
-    console.log(`[AQUECIMENTO] Health check error for ${inst.nome}: ${e}`);
-    return false;
-  }
-}
-
 // ========== MANUAL TEST ==========
 async function handleManualTest(supabase: any, body: any, supabaseUrl: string, supabaseKey: string) {
   const instanceIds: string[] = body.instance_ids || [];
