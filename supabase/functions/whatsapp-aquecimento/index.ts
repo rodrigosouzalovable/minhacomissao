@@ -168,17 +168,14 @@ Deno.serve(async (req) => {
     }
 
     // Filter eligible instances (not at daily limit)
-    const eligible = instancias.filter((inst: any) => {
-      if (inst.interacoes_hoje >= TARGET_MESSAGES_PER_DAY) {
-        return false;
-      }
-      return true;
-    });
+    const eligible = instancias.filter((inst: any) => inst.interacoes_hoje < TARGET_MESSAGES_PER_DAY);
 
     if (eligible.length < 2) {
-      console.log("[AQUECIMENTO] Menos de 2 instâncias elegíveis neste ciclo.");
-      return json({ message: "Menos de 2 instâncias elegíveis" });
+      console.log(`[AQUECIMENTO] ⏭️ Skip rápido: ${instancias.length - eligible.length}/${instancias.length} já atingiram target. Elegíveis: ${eligible.length}`);
+      return json({ message: "Menos de 2 instâncias elegíveis", skipped: true, total: instancias.length, at_target: instancias.length - eligible.length });
     }
+
+    console.log(`[AQUECIMENTO] ${eligible.length} elegíveis de ${instancias.length} (${instancias.length - eligible.length} já no target).`);
 
     // ========== HEALTH CHECK IN PARALLEL BATCHES ==========
     // Check up to 30 instances, 10 at a time in parallel
