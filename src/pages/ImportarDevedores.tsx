@@ -1539,7 +1539,7 @@ export default function ImportarDevedores() {
         )}
 
         {/* Standard Devedores Preview */}
-        {!isPagamentos && !isMontrealAtualizacao && rows.length > 0 && (
+        {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && rows.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
               <div className="flex items-center justify-between">
