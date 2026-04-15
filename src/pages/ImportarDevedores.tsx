@@ -978,8 +978,10 @@ export default function ImportarDevedores() {
     setRows([]);
     setPagamentoRows([]);
     setMontrealRows([]);
+    setUmeAporteGroups([]);
     setImported(false);
     setPagamentoImported(false);
+    setUmeAporteImported(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
