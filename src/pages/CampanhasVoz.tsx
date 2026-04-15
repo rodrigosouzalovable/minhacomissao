@@ -69,6 +69,10 @@ export default function CampanhasVoz() {
   const [contactSource, setContactSource] = useState<'acordos' | 'devedores' | 'planilha'>('planilha');
   const [importedContacts, setImportedContacts] = useState<{ id: string; nome: string; telefone: string }[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [verificandoWhatsApp, setVerificandoWhatsApp] = useState(false);
+  const [numerosInvalidos, setNumerosInvalidos] = useState<{ nome: string; telefone: string }[]>([]);
+  const [mostrarInvalidos, setMostrarInvalidos] = useState(false);
+  const [verificacaoConcluida, setVerificacaoConcluida] = useState(false);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('voice-campaign-instances');
