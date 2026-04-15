@@ -57,6 +57,24 @@ interface PagamentoRow {
   sem_acordo?: boolean;
 }
 
+interface UmeAporteParcelaRow {
+  numeroParcela: number;
+  dataVencimento: Date;
+  valor: number;
+}
+
+interface UmeAporteGroup {
+  cpf: string;
+  nome: string;
+  telefone: string;
+  parcelas: UmeAporteParcelaRow[];
+  valorTotal: number;
+  numParcelas: number;
+  dataPrimeiroPagamento: Date;
+  diasAtraso: number;
+  jaTemAcordo: boolean;
+}
+
 interface Importacao {
   id: string;
   nome_arquivo: string;
