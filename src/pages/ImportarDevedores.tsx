@@ -19,8 +19,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
+import { calcularComissao } from '@/lib/comissao';
 
-type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos';
+type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos' | 'ume_aporte';
 
 type MontrealRowStatus = 'existe' | 'nova_parcela' | 'cliente_novo';
 
@@ -56,6 +57,24 @@ interface PagamentoRow {
   sem_acordo?: boolean;
 }
 
+interface UmeAporteParcelaRow {
+  numeroParcela: number;
+  dataVencimento: Date;
+  valor: number;
+}
+
+interface UmeAporteGroup {
+  cpf: string;
+  nome: string;
+  telefone: string;
+  parcelas: UmeAporteParcelaRow[];
+  valorTotal: number;
+  numParcelas: number;
+  dataPrimeiroPagamento: Date;
+  diasAtraso: number;
+  jaTemAcordo: boolean;
+}
+
 interface Importacao {
   id: string;
   nome_arquivo: string;
@@ -72,6 +91,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
   pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
   pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
+  ume_aporte: 'A = CPF, B = Nome, C = Telefone, D = Nº Parcela, E = Data Vencimento, F = Valor Parcela — Cria acordos automaticamente no sistema',
 };
 
 export default function ImportarDevedores() {
@@ -101,6 +121,13 @@ export default function ImportarDevedores() {
   const [pagamentoProgress, setPagamentoProgress] = useState(0);
   const [pagamentoUpdated, setPagamentoUpdated] = useState(0);
 
+  // UME Aporte state
+  const [umeAporteGroups, setUmeAporteGroups] = useState<UmeAporteGroup[]>([]);
+  const [umeAporteImporting, setUmeAporteImporting] = useState(false);
+  const [umeAporteImported, setUmeAporteImported] = useState(false);
+  const [umeAporteProgress, setUmeAporteProgress] = useState(0);
+  const [umeAporteInserted, setUmeAporteInserted] = useState(0);
+
   // Montreal Atualização state
   const [montrealRows, setMontrealRows] = useState<MontrealAtualizacaoRow[]>([]);
 
@@ -109,6 +136,7 @@ export default function ImportarDevedores() {
 
   const isPagamentos = credorSelecionado === 'pagamentos';
   const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
+  const isUmeAporte = credorSelecionado === 'ume_aporte';
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -132,13 +160,18 @@ export default function ImportarDevedores() {
     setRows([]);
     setPagamentoRows([]);
     setMontrealRows([]);
+    setUmeAporteGroups([]);
     setImported(false);
     setPagamentoImported(false);
+    setUmeAporteImported(false);
     if (value === 'pagamentos') {
       setCredorDestino('UME | NOVO MUNDO');
     }
     if (value === 'montreal_atualizacao') {
       setCredorDestino('MONTREAL');
+    }
+    if (value === 'ume_aporte') {
+      setCredorDestino('UME | NOVO MUNDO');
     }
   };
 
@@ -555,12 +588,164 @@ export default function ImportarDevedores() {
     return rawRows;
   };
 
+  const parseUmeAporte = async (dataRows: Record<string, unknown>[]): Promise<UmeAporteGroup[]> => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const cpfMap = new Map<string, { nome: string; telefone: string; parcelas: UmeAporteParcelaRow[] }>();
+
+    for (const row of dataRows) {
+      let cpfRaw = String(row['A'] ?? '').replace(/\D/g, '');
+      if (!cpfRaw) continue;
+      cpfRaw = cpfRaw.padStart(11, '0');
+      if (cpfRaw.length < 11) continue;
+
+      const nome = String(row['B'] ?? '').trim();
+      const telefone = String(row['C'] ?? '').replace(/\D/g, '');
+      const numeroParcela = parseInt(String(row['D'] ?? '0')) || 0;
+      const valor = parseNum(row['F']);
+
+      let dataVencimento: Date;
+      const vencRaw = row['E'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          dataVencimento = new Date(dt.y, dt.m - 1, dt.d);
+        } else continue;
+      } else if (vencRaw) {
+        const parts = String(vencRaw).split('/');
+        if (parts.length === 3) {
+          dataVencimento = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else continue;
+      } else continue;
+
+      if (!cpfMap.has(cpfRaw)) {
+        cpfMap.set(cpfRaw, { nome, telefone, parcelas: [] });
+      }
+      cpfMap.get(cpfRaw)!.parcelas.push({ numeroParcela, dataVencimento, valor });
+    }
+
+    if (cpfMap.size === 0) return [];
+
+    for (const [, group] of cpfMap) {
+      group.parcelas.sort((a, b) => a.numeroParcela - b.numeroParcela);
+    }
+
+    // Check existing acordos by CPF
+    const existingCpfs = new Set<string>();
+    const { data: allAcordos } = await supabase
+      .from('acordos')
+      .select('cliente_cpf')
+      .in('status', ['ativo', 'concluido']);
+    if (allAcordos) {
+      for (const a of allAcordos) {
+        const cpfNorm = (a.cliente_cpf || '').replace(/\D/g, '').padStart(11, '0');
+        existingCpfs.add(cpfNorm);
+      }
+    }
+
+    const groups: UmeAporteGroup[] = [];
+    for (const [cpf, data] of cpfMap) {
+      const valorTotal = data.parcelas.reduce((sum, p) => sum + p.valor, 0);
+      const numParcelas = data.parcelas.length;
+      const dataPrimeiroPagamento = new Date(Math.min(...data.parcelas.map(p => p.dataVencimento.getTime())));
+      const diffMs = hoje.getTime() - dataPrimeiroPagamento.getTime();
+      const diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+      groups.push({
+        cpf, nome: data.nome, telefone: data.telefone, parcelas: data.parcelas,
+        valorTotal, numParcelas, dataPrimeiroPagamento, diasAtraso,
+        jaTemAcordo: existingCpfs.has(cpf),
+      });
+    }
+    return groups;
+  };
+
+  const handleImportUmeAporte = async () => {
+    if (!user) return;
+    const toImport = umeAporteGroups.filter(g => !g.jaTemAcordo);
+    if (toImport.length === 0) {
+      toast({ title: 'Nada para importar', description: 'Todos os clientes já possuem acordo no sistema.', variant: 'destructive' });
+      return;
+    }
+
+    setUmeAporteImporting(true);
+    setUmeAporteProgress(0);
+    setUmeAporteInserted(0);
+
+    const { data: importacao, error: importError } = await supabase
+      .from('importacoes' as any)
+      .insert({ nome_arquivo: file?.name || 'unknown', credor: 'UME | NOVO MUNDO', total_registros: toImport.length, importado_por: user.id } as any)
+      .select('id')
+      .single();
+
+    if (importError || !importacao) {
+      toast({ title: 'Erro ao registrar importação', description: importError?.message, variant: 'destructive' });
+      setUmeAporteImporting(false);
+      return;
+    }
+
+    let inserted = 0;
+    for (let i = 0; i < toImport.length; i++) {
+      const group = toImport[i];
+      const comissao = calcularComissao(group.valorTotal, group.numParcelas, group.diasAtraso);
+
+      const { data: acordo, error: acordoError } = await supabase
+        .from('acordos')
+        .insert({
+          cliente_nome: group.nome,
+          cliente_cpf: group.cpf,
+          cliente_telefone: group.telefone || null,
+          valor_total: Math.round(group.valorTotal * 100) / 100,
+          parcelas: group.numParcelas,
+          valor_parcela: Math.round((group.parcelas[0]?.valor || group.valorTotal / group.numParcelas) * 100) / 100,
+          data_primeiro_pagamento: group.dataPrimeiroPagamento.toISOString().split('T')[0],
+          dias_atraso: group.diasAtraso,
+          percentual_comissao: comissao.percentual,
+          comissao_total: comissao.comissaoTotal,
+          empresa: 'ume_novo_mundo',
+          user_id: user.id,
+          status: 'ativo',
+          duplicado_verificado: true,
+        } as any)
+        .select('id')
+        .single();
+
+      if (acordoError || !acordo) {
+        console.error('Erro ao inserir acordo:', acordoError);
+        continue;
+      }
+
+      const pagamentosToInsert = group.parcelas.map(p => ({
+        acordo_id: (acordo as any).id,
+        numero_parcela: p.numeroParcela,
+        data_prevista: p.dataVencimento.toISOString().split('T')[0],
+        valor_parcela: Math.round(p.valor * 100) / 100,
+        comissao_parcela: Math.round(p.valor * (comissao.percentual / 100) * 100) / 100,
+        status: 'pendente',
+      }));
+
+      const { error: pagError } = await supabase.from('pagamentos').insert(pagamentosToInsert as any);
+      if (pagError) console.error('Erro ao inserir pagamentos:', pagError);
+
+      inserted++;
+      setUmeAporteInserted(inserted);
+      setUmeAporteProgress(Math.round(((i + 1) / toImport.length) * 100));
+    }
+
+    setUmeAporteImported(true);
+    setUmeAporteImporting(false);
+    toast({ title: 'Importação concluída', description: `${inserted} acordos criados com sucesso.` });
+    fetchImportacoes();
+  };
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
     setImported(false);
     setPagamentoImported(false);
+    setUmeAporteImported(false);
     setParsing(true);
 
     const reader = new FileReader();
@@ -569,8 +754,19 @@ export default function ImportarDevedores() {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'buffer' });
 
-        if (credorSelecionado === 'pagamentos') {
-          // Find the sheet with the most data — try all sheets and pick the one with most rows
+        if (credorSelecionado === 'ume_aporte') {
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          const dataRows = json.slice(1);
+          const parsed = await parseUmeAporte(dataRows);
+          setUmeAporteGroups(parsed);
+          setRows([]);
+          setPagamentoRows([]);
+          setMontrealRows([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
+          }
+        } else if (credorSelecionado === 'pagamentos') {
           let bestSheet = workbook.Sheets[workbook.SheetNames[0]];
           let bestSheetName = workbook.SheetNames[0];
           let bestRowCount = 0;
@@ -782,8 +978,10 @@ export default function ImportarDevedores() {
     setRows([]);
     setPagamentoRows([]);
     setMontrealRows([]);
+    setUmeAporteGroups([]);
     setImported(false);
     setPagamentoImported(false);
+    setUmeAporteImported(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -917,10 +1115,11 @@ export default function ImportarDevedores() {
                    <SelectItem value="cobmais">COBMAIS</SelectItem>
                    <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
                    <SelectItem value="pagamentos">Pagamentos</SelectItem>
+                   <SelectItem value="ume_aporte">UME APORTE</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {!isPagamentos && !isMontrealAtualizacao && (
+            {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && (
               <div className="space-y-2">
                 <Label>Credor de Destino</Label>
                 <Select value={credorDestino} onValueChange={setCredorDestino}>
@@ -942,9 +1141,10 @@ export default function ImportarDevedores() {
                 )}
               </div>
             )}
-            {isPagamentos && (
+            {(isPagamentos || isUmeAporte) && (
               <div className="text-sm text-muted-foreground">
                 Credor: <strong>UME | NOVO MUNDO</strong> (automático)
+                {isUmeAporte && <> — O sistema criará acordos automaticamente para CPFs que ainda não possuem acordo.</>}
               </div>
             )}
             {isMontrealAtualizacao && (
@@ -976,7 +1176,7 @@ export default function ImportarDevedores() {
                   <div>
                     <p className="font-semibold text-sm">Processando planilha...</p>
                     <p className="text-xs text-muted-foreground">
-                      {isPagamentos ? 'Lendo parcelas e cruzando com acordos no sistema...' : isMontrealAtualizacao ? 'Cruzando com dados existentes no sistema...' : 'Lendo abas e cruzando dados, aguarde...'}
+                      {isPagamentos ? 'Lendo parcelas e cruzando com acordos no sistema...' : isMontrealAtualizacao ? 'Cruzando com dados existentes no sistema...' : isUmeAporte ? 'Agrupando por CPF e verificando acordos existentes...' : 'Lendo abas e cruzando dados, aguarde...'}
                     </p>
                   </div>
                 </CardContent>
@@ -984,6 +1184,90 @@ export default function ImportarDevedores() {
             )}
           </CardContent>
         </Card>
+
+        {/* UME Aporte Preview */}
+        {isUmeAporte && umeAporteGroups.length > 0 && (() => {
+          const novos = umeAporteGroups.filter(g => !g.jaTemAcordo);
+          const existentes = umeAporteGroups.filter(g => g.jaTemAcordo);
+
+          return (
+            <Card className="mb-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-5 w-5" />
+                      Preview UME APORTE ({umeAporteGroups.length} clientes)
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      {file?.name} — 
+                      <span className="text-blue-600 font-medium"> {novos.length} acordos novos</span>,
+                      <span className="text-green-600 font-medium"> {existentes.length} já possuem acordo</span>
+                    </CardDescription>
+                  </div>
+                  {!umeAporteImported ? (
+                    <Button
+                      onClick={handleImportUmeAporte}
+                      disabled={umeAporteImporting || novos.length === 0}
+                      style={{ background: '#00a86b', color: '#fff' }}
+                    >
+                      {umeAporteImporting ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Importando...</>
+                      ) : (
+                        <><Check className="h-4 w-4 mr-1" />Criar {novos.length} acordos</>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
+                      <Check className="h-4 w-4" />
+                      {umeAporteInserted} acordos criados
+                    </div>
+                  )}
+                </div>
+                {umeAporteImporting && (
+                  <div className="mt-4 space-y-2">
+                    <Progress value={umeAporteProgress} className="h-3" />
+                    <p className="text-sm text-muted-foreground text-center">
+                      Criando {umeAporteInserted} de {novos.length} acordos... ({umeAporteProgress}%)
+                    </p>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {umeAporteGroups.map((group, idx) => (
+                    <div key={idx} className={`border rounded-lg p-3 ${group.jaTemAcordo ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {group.jaTemAcordo ? (
+                            <Badge className="bg-green-600 hover:bg-green-700 text-white text-xs">Já tem acordo</Badge>
+                          ) : (
+                            <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">Novo acordo</Badge>
+                          )}
+                          <div>
+                            <p className="font-medium text-sm">{group.nome}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{group.cpf}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">
+                            {group.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {group.numParcelas} parcela{group.numParcelas !== 1 ? 's' : ''} · {group.diasAtraso > 0 ? `${group.diasAtraso} dias atraso` : 'Em dia'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            1º pgto: {group.dataPrimeiroPagamento.toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Montreal Atualização Preview */}
         {isMontrealAtualizacao && montrealRows.length > 0 && (() => {
@@ -1255,7 +1539,7 @@ export default function ImportarDevedores() {
         )}
 
         {/* Standard Devedores Preview */}
-        {!isPagamentos && !isMontrealAtualizacao && rows.length > 0 && (
+        {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && rows.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
               <div className="flex items-center justify-between">
