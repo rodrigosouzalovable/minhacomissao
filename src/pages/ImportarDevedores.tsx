@@ -754,7 +754,8 @@ export default function ImportarDevedores() {
     reader.onload = async (evt) => {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'buffer', cellDates: true });
+        const usesCellDates = credorSelecionado === 'ume_aporte';
+        const workbook = XLSX.read(data, { type: 'buffer', cellDates: usesCellDates });
 
         if (credorSelecionado === 'ume_aporte') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
