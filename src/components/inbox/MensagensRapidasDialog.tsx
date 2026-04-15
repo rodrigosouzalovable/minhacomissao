@@ -19,6 +19,7 @@ export interface MensagemRapida {
   botoes_texto: string | null;
   botoes_choices: any[] | null;
   ordem: number;
+  arquivado: boolean;
 }
 
 interface Props {
