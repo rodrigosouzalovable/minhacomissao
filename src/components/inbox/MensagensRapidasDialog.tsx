@@ -149,6 +149,20 @@ export function MensagensRapidasDialog({ open, onOpenChange, userId, onUpdated }
     onUpdated();
   };
 
+  const handleToggleArquivar = async (item: MensagemRapida) => {
+    const { error } = await supabase
+      .from('whatsapp_mensagens_rapidas')
+      .update({ arquivado: !item.arquivado } as any)
+      .eq('id', item.id);
+    if (error) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+    fetchItems();
+    onUpdated();
+    toast({ title: item.arquivado ? 'Atalho restaurado' : 'Atalho arquivado' });
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
