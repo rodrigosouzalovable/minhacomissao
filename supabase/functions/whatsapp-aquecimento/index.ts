@@ -152,8 +152,18 @@ Deno.serve(async (req) => {
 
     const instanceMap = new Map((whatsappInstances || []).map((i: any) => [i.id, i]));
 
-    const TARGET_MESSAGES_PER_DAY = 1;
+    // ========== DAILY VARIANCE: randomize target (0, 1 or 2 conversations) ==========
+    // 20% chance: 0 (busy day), 60% chance: 1 (normal), 20% chance: 2 (relaxed day)
+    const dailyRoll = Math.random();
+    const TARGET_MESSAGES_PER_DAY = dailyRoll < 0.20 ? 0 : dailyRoll < 0.80 ? 1 : 2;
     const MAX_PAIRS_PER_CYCLE = 3;
+
+    if (TARGET_MESSAGES_PER_DAY === 0) {
+      console.log("[AQUECIMENTO] 📵 Dia de folga (sorteio 20%). Nenhuma conversa hoje.");
+      return json({ message: "Rest day - no conversations", skipped: true, daily_target: 0 });
+    }
+
+    console.log(`[AQUECIMENTO] 🎯 Target do dia: ${TARGET_MESSAGES_PER_DAY} conversa(s) por instância.`);
 
     // 50% chance to skip this cycle for natural, unpredictable pattern
     if (Math.random() > 0.5) {
