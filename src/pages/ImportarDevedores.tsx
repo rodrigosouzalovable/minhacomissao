@@ -594,6 +594,10 @@ export default function ImportarDevedores() {
 
     const cpfMap = new Map<string, { nome: string; telefone: string; parcelas: UmeAporteParcelaRow[] }>();
 
+    console.log('parseUmeAporte: total rows received:', dataRows.length);
+    if (dataRows.length > 0) {
+      console.log('parseUmeAporte: first row sample:', JSON.stringify(dataRows[0]));
+    }
     for (const row of dataRows) {
       let cpfRaw = String(row['A'] ?? '').replace(/\D/g, '');
       if (!cpfRaw) continue;
