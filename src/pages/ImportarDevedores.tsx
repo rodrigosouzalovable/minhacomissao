@@ -177,8 +177,25 @@ export default function ImportarDevedores() {
 
   const parseNum = (val: unknown) => {
     if (val === undefined || val === null) return 0;
-    const raw = String(val).replace(/[^\d.,]/g, '').replace(',', '.');
+    const raw = String(val).replace(/[^\d.,-]/g, '').replace(',', '.');
     return parseFloat(raw) || 0;
+  };
+
+  const getSheetRowsByLetters = (sheet: XLSX.WorkSheet): Record<string, unknown>[] => {
+    const matrix = XLSX.utils.sheet_to_json<(string | number | Date | null)[]>(sheet, {
+      header: 1,
+      raw: true,
+      defval: null,
+      blankrows: false,
+    });
+
+    return matrix.map((row) => {
+      const record: Record<string, unknown> = {};
+      row.forEach((value, index) => {
+        record[String.fromCharCode(65 + index)] = value;
+      });
+      return record;
+    });
   };
 
   const parsePadrao = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
@@ -772,8 +789,7 @@ export default function ImportarDevedores() {
 
         if (credorSelecionado === 'ume_aporte') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-          const dataRows = json.slice(1);
+          const dataRows = getSheetRowsByLetters(sheet).slice(1);
           const parsed = await parseUmeAporte(dataRows);
           setUmeAporteGroups(parsed);
           setRows([]);
