@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -130,6 +131,7 @@ function CountdownTimer({ targetDate }: { targetDate: Date | null }) {
 }
 
 export default function Aquecimento() {
+  const { isAdmin } = useUserRole();
   const [instancias, setInstancias] = useState<AquecimentoInstancia[]>([]);
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
@@ -369,10 +371,12 @@ export default function Aquecimento() {
             <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Atualizar
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setManualTestOpen(true)} className="gap-1">
-              <FlaskConical className="h-4 w-4" /> Teste IA Manual
-            </Button>
-            {pausadoInstances.length > 0 && (
+            {isAdmin && (
+              <Button variant="outline" size="sm" onClick={() => setManualTestOpen(true)} className="gap-1">
+                <FlaskConical className="h-4 w-4" /> Teste IA Manual
+              </Button>
+            )}
+            {isAdmin && pausadoInstances.length > 0 && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1">

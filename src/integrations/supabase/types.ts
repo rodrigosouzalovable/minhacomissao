@@ -2398,6 +2398,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       ranking_mensal: {
         Args: { p_mes_ano?: string }
         Returns: {
