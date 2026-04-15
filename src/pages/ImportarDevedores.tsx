@@ -91,6 +91,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
   pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
   pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
+  ume_aporte: 'A = CPF, B = Nome, C = Telefone, D = Nº Parcela, E = Data Vencimento, F = Valor Parcela — Cria acordos automaticamente no sistema',
 };
 
 export default function ImportarDevedores() {
