@@ -281,7 +281,7 @@ Deno.serve(async (req) => {
       totalEnviados++;
 
       // Small delay between pairs
-      await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+      await new Promise(r => setTimeout(r, 30000 + Math.random() * 90000));
     }
 
     console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas de ${pairs.length} pares.`);
