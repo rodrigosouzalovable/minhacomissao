@@ -588,12 +588,164 @@ export default function ImportarDevedores() {
     return rawRows;
   };
 
+  const parseUmeAporte = async (dataRows: Record<string, unknown>[]): Promise<UmeAporteGroup[]> => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const cpfMap = new Map<string, { nome: string; telefone: string; parcelas: UmeAporteParcelaRow[] }>();
+
+    for (const row of dataRows) {
+      let cpfRaw = String(row['A'] ?? '').replace(/\D/g, '');
+      if (!cpfRaw) continue;
+      cpfRaw = cpfRaw.padStart(11, '0');
+      if (cpfRaw.length < 11) continue;
+
+      const nome = String(row['B'] ?? '').trim();
+      const telefone = String(row['C'] ?? '').replace(/\D/g, '');
+      const numeroParcela = parseInt(String(row['D'] ?? '0')) || 0;
+      const valor = parseNum(row['F']);
+
+      let dataVencimento: Date;
+      const vencRaw = row['E'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          dataVencimento = new Date(dt.y, dt.m - 1, dt.d);
+        } else continue;
+      } else if (vencRaw) {
+        const parts = String(vencRaw).split('/');
+        if (parts.length === 3) {
+          dataVencimento = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else continue;
+      } else continue;
+
+      if (!cpfMap.has(cpfRaw)) {
+        cpfMap.set(cpfRaw, { nome, telefone, parcelas: [] });
+      }
+      cpfMap.get(cpfRaw)!.parcelas.push({ numeroParcela, dataVencimento, valor });
+    }
+
+    if (cpfMap.size === 0) return [];
+
+    for (const [, group] of cpfMap) {
+      group.parcelas.sort((a, b) => a.numeroParcela - b.numeroParcela);
+    }
+
+    // Check existing acordos by CPF
+    const existingCpfs = new Set<string>();
+    const { data: allAcordos } = await supabase
+      .from('acordos')
+      .select('cliente_cpf')
+      .in('status', ['ativo', 'concluido']);
+    if (allAcordos) {
+      for (const a of allAcordos) {
+        const cpfNorm = (a.cliente_cpf || '').replace(/\D/g, '').padStart(11, '0');
+        existingCpfs.add(cpfNorm);
+      }
+    }
+
+    const groups: UmeAporteGroup[] = [];
+    for (const [cpf, data] of cpfMap) {
+      const valorTotal = data.parcelas.reduce((sum, p) => sum + p.valor, 0);
+      const numParcelas = data.parcelas.length;
+      const dataPrimeiroPagamento = new Date(Math.min(...data.parcelas.map(p => p.dataVencimento.getTime())));
+      const diffMs = hoje.getTime() - dataPrimeiroPagamento.getTime();
+      const diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+      groups.push({
+        cpf, nome: data.nome, telefone: data.telefone, parcelas: data.parcelas,
+        valorTotal, numParcelas, dataPrimeiroPagamento, diasAtraso,
+        jaTemAcordo: existingCpfs.has(cpf),
+      });
+    }
+    return groups;
+  };
+
+  const handleImportUmeAporte = async () => {
+    if (!user) return;
+    const toImport = umeAporteGroups.filter(g => !g.jaTemAcordo);
+    if (toImport.length === 0) {
+      toast({ title: 'Nada para importar', description: 'Todos os clientes já possuem acordo no sistema.', variant: 'destructive' });
+      return;
+    }
+
+    setUmeAporteImporting(true);
+    setUmeAporteProgress(0);
+    setUmeAporteInserted(0);
+
+    const { data: importacao, error: importError } = await supabase
+      .from('importacoes' as any)
+      .insert({ nome_arquivo: file?.name || 'unknown', credor: 'UME | NOVO MUNDO', total_registros: toImport.length, importado_por: user.id } as any)
+      .select('id')
+      .single();
+
+    if (importError || !importacao) {
+      toast({ title: 'Erro ao registrar importação', description: importError?.message, variant: 'destructive' });
+      setUmeAporteImporting(false);
+      return;
+    }
+
+    let inserted = 0;
+    for (let i = 0; i < toImport.length; i++) {
+      const group = toImport[i];
+      const comissao = calcularComissao(group.valorTotal, group.numParcelas, group.diasAtraso);
+
+      const { data: acordo, error: acordoError } = await supabase
+        .from('acordos')
+        .insert({
+          cliente_nome: group.nome,
+          cliente_cpf: group.cpf,
+          cliente_telefone: group.telefone || null,
+          valor_total: Math.round(group.valorTotal * 100) / 100,
+          parcelas: group.numParcelas,
+          valor_parcela: Math.round((group.parcelas[0]?.valor || group.valorTotal / group.numParcelas) * 100) / 100,
+          data_primeiro_pagamento: group.dataPrimeiroPagamento.toISOString().split('T')[0],
+          dias_atraso: group.diasAtraso,
+          percentual_comissao: comissao.percentual,
+          comissao_total: comissao.comissaoTotal,
+          empresa: 'ume_novo_mundo',
+          user_id: user.id,
+          status: 'ativo',
+          duplicado_verificado: true,
+        } as any)
+        .select('id')
+        .single();
+
+      if (acordoError || !acordo) {
+        console.error('Erro ao inserir acordo:', acordoError);
+        continue;
+      }
+
+      const pagamentosToInsert = group.parcelas.map(p => ({
+        acordo_id: (acordo as any).id,
+        numero_parcela: p.numeroParcela,
+        data_prevista: p.dataVencimento.toISOString().split('T')[0],
+        valor_parcela: Math.round(p.valor * 100) / 100,
+        comissao_parcela: Math.round(p.valor * (comissao.percentual / 100) * 100) / 100,
+        status: 'pendente',
+      }));
+
+      const { error: pagError } = await supabase.from('pagamentos').insert(pagamentosToInsert as any);
+      if (pagError) console.error('Erro ao inserir pagamentos:', pagError);
+
+      inserted++;
+      setUmeAporteInserted(inserted);
+      setUmeAporteProgress(Math.round(((i + 1) / toImport.length) * 100));
+    }
+
+    setUmeAporteImported(true);
+    setUmeAporteImporting(false);
+    toast({ title: 'Importação concluída', description: `${inserted} acordos criados com sucesso.` });
+    fetchImportacoes();
+  };
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
     setImported(false);
     setPagamentoImported(false);
+    setUmeAporteImported(false);
     setParsing(true);
 
     const reader = new FileReader();
@@ -602,8 +754,19 @@ export default function ImportarDevedores() {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'buffer' });
 
-        if (credorSelecionado === 'pagamentos') {
-          // Find the sheet with the most data — try all sheets and pick the one with most rows
+        if (credorSelecionado === 'ume_aporte') {
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          const dataRows = json.slice(1);
+          const parsed = await parseUmeAporte(dataRows);
+          setUmeAporteGroups(parsed);
+          setRows([]);
+          setPagamentoRows([]);
+          setMontrealRows([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
+          }
+        } else if (credorSelecionado === 'pagamentos') {
           let bestSheet = workbook.Sheets[workbook.SheetNames[0]];
           let bestSheetName = workbook.SheetNames[0];
           let bestRowCount = 0;
