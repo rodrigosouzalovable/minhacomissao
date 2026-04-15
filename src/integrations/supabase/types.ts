@@ -2378,6 +2378,10 @@ export type Database = {
         Args: { p_acordo_id: string }
         Returns: undefined
       }
+      delete_importacao_em_lotes: {
+        Args: { p_importacao_id: string }
+        Returns: Json
+      }
       get_acordos_compartilhados_admin: {
         Args: { _user_id: string }
         Returns: string
