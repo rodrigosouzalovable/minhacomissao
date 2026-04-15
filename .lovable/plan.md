@@ -1,34 +1,46 @@
 
 
-## Corrigir recebimento de mensagens no Inbox — Webhooks não configurados
+## Ativar Aquecimento Automático Diário + Envio de Áudios e Imagens
 
-### Diagnóstico
-A instância **MEMU 98 (62981034702)** não tem webhook configurado na UAZAPI — nenhum log de webhook foi recebido para esta instância. O cliente respondeu "Sim" mas a UAZAPI não enviou essa mensagem para o sistema.
+### Situação Atual
 
-Isso afeta **~20 instâncias** que não receberam nenhuma mensagem de entrada nas últimas 24h, incluindo várias instâncias MEMU e outras criadas recentemente (12/04, 11/04, etc.).
+1. **Cron job existe** (`jobid:16`) mas com problemas:
+   - Schedule: `*/15 7-20 * * 1-6` (UTC) = roda das 4h-17h BRT, apenas Seg-Sáb
+   - Deveria rodar das 7h-21h BRT (10h-00h UTC), incluindo Domingo
+   
+2. **Áudios e imagens existem** no bucket `campaign-audio`:
+   - Áudios: `aquecimento/audio_adam.mp3`, `audio_mario.mp3`, `audio_whisper.mp3`
+   - Imagens: `aquecimento-imagens/img_bomdia_1.jpg`, `img_motivacional_1-6.jpg`
+   
+3. **Salvamento de contatos**: Ativo no código (`salvarContatoUAZAPI` existe no `whatsapp-ia-responder`) e config `salvar_contatos_auto: true`
 
-**Causa raiz**: O webhook só é configurado automaticamente no momento da conexão via QR. Se o webhook foi resetado na UAZAPI ou falhou silenciosamente, nunca mais é reconfigurado.
+4. **Conversas**: Atualmente só trocam **texto** — nenhum envio de áudio ou imagem na cadeia
 
 ### Correções
 
-#### 1. Adicionar botão "Reconfigurar Webhooks" em Acionamento
-- Na seção "Configurações WhatsApp", adicionar um botão que percorre TODAS as instâncias ativas e reconfigura o webhook via a mesma lógica de `setupWebhook` do `whatsapp-qr`
-- Mostrar progresso e resultado (quantas configuradas com sucesso vs. falhas)
+#### 1. Corrigir o cron job
+- Remover o job atual (`jobid:16`)
+- Criar novo com schedule `*/15 10-23 * * *` (UTC) = 7h-20h BRT, todos os dias incluindo domingo
 
-#### 2. Nova action `setup-webhook-all` no `whatsapp-qr`
-- Aceita `action: "setup-webhook-all"` 
-- Percorre todas as instâncias ativas do banco
-- Para cada uma, tenta configurar o webhook usando a estratégia de 3 tentativas (endpoint com token, sem token, globalwebhook)
-- Retorna resumo: `{ total, success, failed, details[] }`
+#### 2. Adicionar envio de áudio e imagem na cadeia de conversas
+No `whatsapp-ia-responder/index.ts`, dentro do fluxo `gerar-resposta`:
+- A cada resposta na cadeia, sortear aleatoriamente (probabilidade ~20%) se envia áudio ou imagem em vez de texto
+- **Áudio (~10%)**: Buscar um MP3 aleatório do storage (`campaign-audio/aquecimento/`), enviar via endpoint `/send/media` com type `ptt`
+- **Imagem (~10%)**: Buscar uma imagem aleatória do storage (`campaign-audio/aquecimento-imagens/`), enviar via `/send/media` com type `image`
+- A mensagem de texto da IA continua sendo gerada como legenda/contexto
+- Registrar no inbox com `tipo_conteudo: "audio"` ou `"imagem"`
 
-#### 3. Auto-reconfigurar webhook no check de conexão
-- Na action `status` do `whatsapp-qr`, quando detecta que a instância está conectada, também reconfigura o webhook automaticamente (fire-and-forget)
-- Isso garante que toda vez que o sistema verifica o status de uma instância, o webhook é reforçado
+#### 3. Funções auxiliares no `whatsapp-ia-responder`
+- `enviarAudioUAZAPI()`: busca URL pública do storage, envia via `/send/media` com `type: "ptt"`
+- `enviarImagemUAZAPI()`: busca URL pública do storage, envia via `/send/media` com `type: "image"`
+- `listarMidiaAquecimento()`: lista arquivos no bucket para sortear aleatoriamente
+
+#### 4. Confirmar salvamento de contatos
+- Já está implementado e funcional no `whatsapp-ia-responder` (linhas 172-211, 346-392, 523-548)
+- Config `salvar_contatos_auto: true` ativa
+- Nenhuma alteração necessária
 
 ### Arquivos
-1. **`supabase/functions/whatsapp-qr/index.ts`** — nova action `setup-webhook-all` + auto-reconfig no `status`
-2. **`src/pages/Acionamento.tsx`** — botão "Reconfigurar Webhooks" na seção de configurações
-
-### Resultado
-Todas as instâncias terão webhooks configurados corretamente. Mensagens de clientes passarão a aparecer no Inbox imediatamente.
+1. **`supabase/functions/whatsapp-ia-responder/index.ts`** — adicionar envio de áudio e imagem
+2. **Cron job** — recriar com horário correto (7h-20h BRT, todos os dias)
 
