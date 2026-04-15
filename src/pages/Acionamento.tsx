@@ -568,8 +568,9 @@ export default function Acionamento() {
         if (!row || row.length < 2) continue;
 
         if (isSimpleLayout) {
-          const telefone = String(row[1] ?? '').replace(/\D/g, '');
-          if (!telefone) continue;
+          const rawTelefone = String(row[1] ?? '').replace(/\D/g, '');
+          if (!rawTelefone) continue;
+          const telefone = rawTelefone.startsWith('55') ? rawTelefone : `55${rawTelefone}`;
           parsed.push({
             cpf: '',
             nome: String(row[0] ?? ''),
@@ -579,8 +580,9 @@ export default function Acionamento() {
           });
         } else {
           if (row.length < 5) continue;
-          const telefone = String(row[2] ?? '').replace(/\D/g, '');
-          if (!telefone) continue;
+          const rawTelefone = String(row[2] ?? '').replace(/\D/g, '');
+          if (!rawTelefone) continue;
+          const telefone = rawTelefone.startsWith('55') ? rawTelefone : `55${rawTelefone}`;
           parsed.push({
             cpf: String(row[0] ?? ''),
             nome: String(row[1] ?? ''),

@@ -244,12 +244,16 @@ export default function CampanhasVoz() {
       const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
       const contacts = rows.slice(1)
         .filter(row => row[1])
-        .map(row => ({
-          id: crypto.randomUUID(),
-          nome: String(row[0] || ''),
-          telefone: String(row[1] || '').replace(/\D/g, ''),
-        }))
-        .filter(c => c.telefone.length >= 8);
+        .map(row => {
+          const raw = String(row[1] || '').replace(/\D/g, '');
+          const telefone = raw.startsWith('55') ? raw : `55${raw}`;
+          return {
+            id: crypto.randomUUID(),
+            nome: String(row[0] || ''),
+            telefone,
+          };
+        })
+        .filter(c => c.telefone.length >= 10);
       setImportedContacts(contacts);
       setContactSource('planilha');
       setSelectedContacts(new Set());

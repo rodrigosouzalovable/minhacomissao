@@ -36,8 +36,7 @@ Deno.serve(async (req) => {
     const invalid: string[] = [];
     const errors: string[] = [];
 
-    // Process in batches of 50
-    const BATCH_SIZE = 50;
+    const BATCH_SIZE = 10;
     for (let i = 0; i < formattedNumbers.length; i += BATCH_SIZE) {
       const batch = formattedNumbers.slice(i, i + BATCH_SIZE);
       const originalBatch = numbers.slice(i, i + BATCH_SIZE);
@@ -60,12 +59,18 @@ Deno.serve(async (req) => {
           data = JSON.parse(text);
         } catch {
           console.error(`Resposta não-JSON: ${text.slice(0, 200)}`);
-          // If we can't parse, mark all as errors
           originalBatch.forEach((n: string) => errors.push(n));
           continue;
         }
 
         console.log(`Resposta lote: ${JSON.stringify(data).slice(0, 500)}`);
+
+        // Handle timeout responses
+        if (data?.code === 504 || data?.message === 'Request timeout') {
+          console.error(`Timeout no lote ${Math.floor(i / BATCH_SIZE) + 1}`);
+          originalBatch.forEach((n: string) => errors.push(n));
+          continue;
+        }
 
         if (!response.ok) {
           console.error(`Erro HTTP ${response.status}: ${JSON.stringify(data)}`);
@@ -73,53 +78,37 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // UAZAPI returns array of objects with { number, exists } or similar
-        // Handle different response formats
+        const processItem = (item: any, originalNumber: string) => {
+          const hasWhatsApp = item.isInWhatsapp === true || 
+                             item.exists === true || 
+                             item.numberExists === true ||
+                             item.onWhatsapp === true;
+          if (hasWhatsApp) {
+            valid.push(originalNumber);
+          } else {
+            invalid.push(originalNumber);
+          }
+        };
+
         if (Array.isArray(data)) {
           data.forEach((item: any, idx: number) => {
-            const originalNumber = originalBatch[idx] || batch[idx];
-            const hasWhatsApp = item.exists === true || item.numberExists === true || 
-                               item.status === 'valid' || item.isRegistered === true ||
-                               item.result === 'exists' || item.onWhatsapp === true;
-            if (hasWhatsApp) {
-              valid.push(originalNumber);
-            } else {
-              invalid.push(originalNumber);
-            }
+            processItem(item, originalBatch[idx] || batch[idx]);
           });
         } else if (data.numbers && Array.isArray(data.numbers)) {
           data.numbers.forEach((item: any, idx: number) => {
-            const originalNumber = originalBatch[idx] || batch[idx];
-            const hasWhatsApp = item.exists === true || item.numberExists === true ||
-                               item.status === 'valid' || item.isRegistered === true ||
-                               item.result === 'exists' || item.onWhatsapp === true;
-            if (hasWhatsApp) {
-              valid.push(originalNumber);
-            } else {
-              invalid.push(originalNumber);
-            }
+            processItem(item, originalBatch[idx] || batch[idx]);
           });
         } else if (data.result && Array.isArray(data.result)) {
           data.result.forEach((item: any, idx: number) => {
-            const originalNumber = originalBatch[idx] || batch[idx];
-            const hasWhatsApp = item.exists === true || item.numberExists === true ||
-                               item.status === 'valid' || item.isRegistered === true ||
-                               item.result === 'exists' || item.onWhatsapp === true;
-            if (hasWhatsApp) {
-              valid.push(originalNumber);
-            } else {
-              invalid.push(originalNumber);
-            }
+            processItem(item, originalBatch[idx] || batch[idx]);
           });
         } else {
-          // Unknown format — log and add all as errors
-          console.error(`Formato de resposta desconhecido: ${JSON.stringify(data).slice(0, 300)}`);
+          console.error(`Formato desconhecido: ${JSON.stringify(data).slice(0, 300)}`);
           originalBatch.forEach((n: string) => errors.push(n));
         }
 
-        // Small delay between batches to avoid rate limiting
         if (i + BATCH_SIZE < formattedNumbers.length) {
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 1000));
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro desconhecido';
