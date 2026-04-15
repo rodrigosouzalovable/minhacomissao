@@ -1,31 +1,42 @@
 
 
-## Arquivar Mensagens Rapidas
+## Liberar Aquecimento para Todos os Usuarios
 
-### O que muda
-Adicionar uma coluna `arquivado` na tabela `whatsapp_mensagens_rapidas`. Mensagens arquivadas continuam visiveis no dialog de gerenciamento (com indicador visual) mas nao aparecem nos botoes de envio rapido na conversa.
+### Problema atual
+- A aba Aquecimento so aparece para admins (`adminOnly: true`)
+- As tabelas de aquecimento (`whatsapp_aquecimento_instancias`, `whatsapp_aquecimento_interacoes`, etc.) so permitem acesso admin via RLS
+- A Edge Function usa `admin_user_id` da config para buscar instancias — precisa buscar de todos os usuarios
+
+### Seguranca
+A tabela `user_whatsapp_instances` ja tem RLS que filtra por `user_id = auth.uid()`. As politicas das tabelas de aquecimento vao referenciar essa tabela, garantindo que cada usuario so veja dados das **suas proprias instancias**.
 
 ### Alteracoes
 
-#### 1. Migration — adicionar coluna `arquivado`
-```sql
-ALTER TABLE public.whatsapp_mensagens_rapidas
-ADD COLUMN arquivado boolean NOT NULL DEFAULT false;
-```
+#### 1. Migration — RLS para tabelas de aquecimento
+Adicionar politicas SELECT/UPDATE para usuarios autenticados nas tabelas:
+- `whatsapp_aquecimento_instancias` — SELECT/UPDATE onde `instancia_id` pertence ao usuario
+- `whatsapp_aquecimento_interacoes` — SELECT onde origem ou destino pertence ao usuario
+- `whatsapp_conversas_ia` — SELECT onde origem ou destino pertence ao usuario
+- `whatsapp_aquecimento_agendamentos` — SELECT
+- `whatsapp_aquecimento_status_log` — SELECT
+- `aquecimento_notificacoes` — SELECT/UPDATE onde `instancia_id` pertence ao usuario
 
-#### 2. `src/components/inbox/MensagensRapidasDialog.tsx`
-- Adicionar botao de arquivar/desarquivar em cada item (icone Archive/ArchiveRestore)
-- Itens arquivados ficam com opacidade reduzida e badge "Arquivado"
-- Toggle via `update({ arquivado: !item.arquivado })`
+Criar funcao helper `owns_whatsapp_instance(instance_id uuid)` SECURITY DEFINER para evitar recursao.
 
-#### 3. `src/pages/WhatsAppInbox.tsx`
-- Filtrar `mensagensRapidas` passadas ao `ChatInputBar` para excluir `arquivado === true`
-- Ou filtrar direto na query com `.eq('arquivado', false)`
+#### 2. `src/components/layout/AppLayout.tsx`
+- Remover `adminOnly: true` da rota `/aquecimento`
 
-#### 4. Interface `MensagemRapida`
-- Adicionar campo `arquivado: boolean` na interface exportada
+#### 3. `src/pages/Aquecimento.tsx`
+- Nenhuma mudanca necessaria nos queries — a RLS ja vai filtrar automaticamente via `user_whatsapp_instances.user_id`
+- Esconder botoes de config global (dias ativos, hora inicio/fim) para nao-admins
+- Esconder botao "Teste Manual IA" para nao-admins (pois envolve instancias de outros usuarios)
 
-### Impacto
-- Sem aumento de custo (1 coluna boolean)
-- Nenhuma mudanca em Edge Functions
+#### 4. Edge Function `whatsapp-aquecimento/index.ts`
+- Remover dependencia de `admin_user_id` — buscar TODAS as instancias ativas de TODOS os usuarios
+- O pareamento so acontece entre instancias do MESMO usuario (nunca cruzar instancias de usuarios diferentes)
+
+### O que NAO muda
+- Admins continuam vendo tudo (politicas existentes)
+- A logica de fases e warming permanece igual
+- Sem aumento de custo
 
