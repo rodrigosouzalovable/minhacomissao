@@ -152,7 +152,14 @@ Deno.serve(async (req) => {
 
     const instanceMap = new Map((whatsappInstances || []).map((i: any) => [i.id, i]));
 
-    const TARGET_MESSAGES_PER_DAY = 15;
+    const TARGET_MESSAGES_PER_DAY = 1;
+    const MAX_PAIRS_PER_CYCLE = 3;
+
+    // 50% chance to skip this cycle for natural, unpredictable pattern
+    if (Math.random() > 0.5) {
+      console.log("[AQUECIMENTO] ⏭️ Skip aleatório para padrão natural.");
+      return json({ message: "Random skip for natural pattern", skipped: true });
+    }
 
     // ========== RESET DAILY COUNTERS ==========
     for (const inst of instancias) {
