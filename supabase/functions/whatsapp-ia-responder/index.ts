@@ -235,12 +235,72 @@ async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, nu
   return false;
 }
 
-async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, texto: string, direcao: "saida" | "entrada" = "saida") {
+// ========== MEDIA HELPERS (Audio + Image) ==========
+
+async function listarMidiaAquecimento(sb: any, pasta: string): Promise<string[]> {
+  try {
+    const { data: files, error } = await sb.storage
+      .from("campaign-audio")
+      .list(pasta, { limit: 100 });
+    if (error || !files) {
+      console.warn(`[IA] Erro listando mídia em ${pasta}:`, error);
+      return [];
+    }
+    return files
+      .filter((f: any) => f.name && !f.name.startsWith("."))
+      .map((f: any) => f.name);
+  } catch (e) {
+    console.warn(`[IA] Erro listando mídia ${pasta}:`, e);
+    return [];
+  }
+}
+
+function getPublicUrl(sb: any, bucket: string, path: string): string {
+  const { data } = sb.storage.from(bucket).getPublicUrl(path);
+  return data?.publicUrl || "";
+}
+
+async function enviarAudioUAZAPI(serverUrl: string, instanceToken: string, numero: string, audioUrl: string): Promise<boolean> {
+  const cleanUrl = serverUrl.replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${cleanUrl}/send/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token: instanceToken },
+      body: JSON.stringify({ number: numero, type: "ptt", file: audioUrl }),
+    });
+    const text = await res.text();
+    console.log(`[IA] 🎙️ Áudio enviado para ${numero}: status=${res.status} body=${text.substring(0, 200)}`);
+    return res.ok;
+  } catch (e) {
+    console.error(`[IA] ❌ Erro envio áudio:`, e);
+    return false;
+  }
+}
+
+async function enviarImagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, imageUrl: string, caption?: string): Promise<boolean> {
+  const cleanUrl = serverUrl.replace(/\/+$/, "");
+  try {
+    const body: any = { number: numero, type: "image", file: imageUrl };
+    if (caption) body.caption = caption;
+    const res = await fetch(`${cleanUrl}/send/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token: instanceToken },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    console.log(`[IA] 🖼️ Imagem enviada para ${numero}: status=${res.status} body=${text.substring(0, 200)}`);
+    return res.ok;
+  } catch (e) {
+    console.error(`[IA] ❌ Erro envio imagem:`, e);
+    return false;
+  }
+}
+
+async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, texto: string, direcao: "saida" | "entrada" = "saida", tipoConteudo: string = "texto", mediaUrl?: string) {
   try {
     const cleanPhone = telefoneRemoto.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
     const phoneSuffix = cleanPhone.replace(/^55/, "").slice(-8);
 
-    // Find existing contact to use their phone format (avoids mismatch with/without "9")
     const { data: contato } = await sb
       .from("whatsapp_contatos")
       .select("id, telefone")
@@ -250,7 +310,6 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
 
     let phoneToStore = contato?.telefone || cleanPhone;
 
-    // If contact doesn't exist, create it automatically
     if (!contato) {
       const { data: newContato } = await sb.from("whatsapp_contatos").insert({
         instancia_id: instanciaId,
@@ -271,17 +330,67 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
       }).eq("id", contato.id);
     }
 
-    await sb.from("whatsapp_mensagens").insert({
+    const insertData: any = {
       instancia_id: instanciaId,
       telefone_remoto: phoneToStore,
       conteudo: texto,
       direcao,
-      tipo_conteudo: "texto",
+      tipo_conteudo: tipoConteudo,
       timestamp_msg: new Date().toISOString(),
-    });
+    };
+    if (mediaUrl) insertData.media_url = mediaUrl;
+
+    await sb.from("whatsapp_mensagens").insert(insertData);
   } catch (e) {
     console.warn("[IA] Erro ao logar no inbox:", e);
   }
+}
+
+// ========== Decide if this response should be media ==========
+async function tentarEnviarMidia(
+  sb: any, serverUrl: string, instanceToken: string, numero: string,
+  instanciaId: string, textoIA: string
+): Promise<{ sent: boolean; tipo?: string }> {
+  const rand = Math.random();
+
+  // ~10% chance audio, ~10% chance image
+  if (rand >= 0.20) return { sent: false };
+
+  const isAudio = rand < 0.10;
+  const pasta = isAudio ? "aquecimento" : "aquecimento-imagens";
+
+  const arquivos = await listarMidiaAquecimento(sb, pasta);
+  if (arquivos.length === 0) {
+    console.log(`[IA] Sem arquivos em ${pasta}, enviando texto`);
+    return { sent: false };
+  }
+
+  const arquivo = arquivos[Math.floor(Math.random() * arquivos.length)];
+  const publicUrl = getPublicUrl(sb, "campaign-audio", `${pasta}/${arquivo}`);
+  if (!publicUrl) return { sent: false };
+
+  console.log(`[IA] 🎲 Sorteou ${isAudio ? "áudio" : "imagem"}: ${arquivo}`);
+
+  let ok: boolean;
+  let tipoConteudo: string;
+  let descricao: string;
+
+  if (isAudio) {
+    ok = await enviarAudioUAZAPI(serverUrl, instanceToken, numero, publicUrl);
+    tipoConteudo = "audio";
+    descricao = `🎙️ Áudio enviado`;
+  } else {
+    ok = await enviarImagemUAZAPI(serverUrl, instanceToken, numero, publicUrl, textoIA.length < 80 ? textoIA : undefined);
+    tipoConteudo = "imagem";
+    descricao = `📷 Imagem enviada`;
+  }
+
+  if (ok) {
+    await logToInbox(sb, instanciaId, numero, descricao, "saida", tipoConteudo, publicUrl);
+    return { sent: true, tipo: tipoConteudo };
+  }
+
+  return { sent: false };
 }
 
 Deno.serve(async (req) => {
@@ -295,7 +404,7 @@ Deno.serve(async (req) => {
 
     const sb = getSupabaseAdmin();
 
-    // ========== NEW: Iniciar conversa com IA ==========
+    // ========== Iniciar conversa com IA ==========
     if (action === "iniciar-conversa") {
       const {
         instancia_origem_id, instancia_destino_id,
@@ -307,7 +416,6 @@ Deno.serve(async (req) => {
         return json({ error: "instancia_origem_id e instancia_destino_id obrigatórios" }, 400);
       }
 
-      // Check cooldown - don't start if there's a recent conversation
       const duasHorasAtras = new Date(Date.now() - 2 * 3600000).toISOString();
       const { data: recente } = await sb
         .from("whatsapp_conversas_ia")
@@ -322,11 +430,9 @@ Deno.serve(async (req) => {
         return json({ started: false, reason: "cooldown" });
       }
 
-      // Generate initial message with AI
       const mensagemInicial = await gerarMensagemInicial();
 
-      // Create conversation record
-      const maxTrocas = 12 + Math.floor(Math.random() * 7); // 12-18 trocas
+      const maxTrocas = 12 + Math.floor(Math.random() * 7);
       const { data: conversa, error: convError } = await sb
         .from("whatsapp_conversas_ia")
         .insert({
@@ -343,14 +449,13 @@ Deno.serve(async (req) => {
         return json({ error: "Erro ao criar conversa" }, 500);
       }
 
-      // Ensure contacts exist on both sides (DB + phone agenda)
+      // Ensure contacts exist on both sides
       if (numero_destino && numero_origem) {
         const cleanDest = numero_destino.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
         const cleanOrig = numero_origem.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
         const suffDest = cleanDest.replace(/^55/, "").slice(-8);
         const suffOrig = cleanOrig.replace(/^55/, "").slice(-8);
 
-        // Get instance names for contact naming
         const [{ data: origInst }, { data: destInst }] = await Promise.all([
           sb.from("user_whatsapp_instances").select("nome").eq("id", instancia_origem_id).single(),
           sb.from("user_whatsapp_instances").select("nome").eq("id", instancia_destino_id).single(),
@@ -358,7 +463,6 @@ Deno.serve(async (req) => {
         const nomeOrig = origInst?.nome || cleanOrig;
         const nomeDest = destInst?.nome || cleanDest;
 
-        // Contact of destino on origem's inbox
         const { data: c1 } = await sb.from("whatsapp_contatos")
           .select("id").eq("instancia_id", instancia_origem_id)
           .or(`telefone.eq.${cleanDest},telefone.ilike.%${suffDest}`)
@@ -367,10 +471,8 @@ Deno.serve(async (req) => {
           await sb.from("whatsapp_contatos").insert({
             instancia_id: instancia_origem_id, telefone: cleanDest, nome: nomeDest,
           });
-          console.log(`[IA] 📇 Contato ${cleanDest} criado na instância origem`);
         }
 
-        // Contact of origem on destino's inbox
         const { data: c2 } = await sb.from("whatsapp_contatos")
           .select("id").eq("instancia_id", instancia_destino_id)
           .or(`telefone.eq.${cleanOrig},telefone.ilike.%${suffOrig}`)
@@ -379,10 +481,8 @@ Deno.serve(async (req) => {
           await sb.from("whatsapp_contatos").insert({
             instancia_id: instancia_destino_id, telefone: cleanOrig, nome: nomeOrig,
           });
-          console.log(`[IA] 📇 Contato ${cleanOrig} criado na instância destino`);
         }
 
-        // Save contacts on physical phone agenda via UAZAPI
         await Promise.all([
           salvarContatoUAZAPI(server_url, instance_token, cleanDest, nomeDest),
           dest_server_url && dest_instance_token
@@ -391,43 +491,47 @@ Deno.serve(async (req) => {
         ]);
       }
 
-      // Send the initial message
+      // Send initial message (may be media ~20% of the time)
       if (server_url && instance_token && numero_destino) {
-        const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial);
-        if (sent) {
-          // Log outgoing message on sender's inbox
-          await logToInbox(sb, instancia_origem_id, numero_destino, mensagemInicial, "saida");
+        let sentAsMedia = false;
+        const mediaResult = await tentarEnviarMidia(sb, server_url, instance_token, numero_destino, instancia_origem_id, mensagemInicial);
+        sentAsMedia = mediaResult.sent;
 
-          // Log interaction
-          await sb.from("whatsapp_aquecimento_interacoes").insert({
-            instancia_origem_id, instancia_destino_id,
-            tipo: "texto", conteudo: mensagemInicial,
-            status: "ENVIADO", enviado_em: new Date().toISOString(),
-            tipo_interacao: "mensagem",
-          });
-
-          // Schedule the other side to respond after delay
-          const delayMs = randomDelay(30000, 60000);
-          console.log(`[IA] 🔄 ${instancia_destino_id} responderá em ${Math.round(delayMs / 1000)}s`);
-
-          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-          fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-            body: JSON.stringify({
-              action: "gerar-resposta",
-              mensagem: mensagemInicial,
-              instancia_origem_id: instancia_destino_id,
-              instancia_destino_id: instancia_origem_id,
-              delay_ms: delayMs,
-              server_url: dest_server_url,
-              instance_token: dest_instance_token,
-              numero_destino: numero_origem,
-            }),
-          }).catch(err => console.error("[IA] Erro ao disparar resposta:", err));
+        if (!sentAsMedia) {
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial);
+          if (sent) {
+            await logToInbox(sb, instancia_origem_id, numero_destino, mensagemInicial, "saida");
+          }
         }
+
+        await sb.from("whatsapp_aquecimento_interacoes").insert({
+          instancia_origem_id, instancia_destino_id,
+          tipo: mediaResult.sent ? (mediaResult.tipo || "texto") : "texto",
+          conteudo: mensagemInicial,
+          status: "ENVIADO", enviado_em: new Date().toISOString(),
+          tipo_interacao: "mensagem",
+        });
+
+        const delayMs = randomDelay(30000, 60000);
+        console.log(`[IA] 🔄 ${instancia_destino_id} responderá em ${Math.round(delayMs / 1000)}s`);
+
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+        fetch(`${supabaseUrl}/functions/v1/whatsapp-ia-responder`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+          body: JSON.stringify({
+            action: "gerar-resposta",
+            mensagem: mensagemInicial,
+            instancia_origem_id: instancia_destino_id,
+            instancia_destino_id: instancia_origem_id,
+            delay_ms: delayMs,
+            server_url: dest_server_url,
+            instance_token: dest_instance_token,
+            numero_destino: numero_origem,
+          }),
+        }).catch(err => console.error("[IA] Erro ao disparar resposta:", err));
       }
 
       console.log(`[IA] 🆕 Conversa iniciada: ${conversa.id} (max ${maxTrocas} trocas)`);
@@ -445,14 +549,12 @@ Deno.serve(async (req) => {
         return json({ error: "campos obrigatórios faltando" }, 400);
       }
 
-      // Wait delay
       const delayMs = delay_ms || 0;
       if (delayMs > 0) {
         console.log(`[IA] Aguardando ${Math.round(delayMs / 1000)}s...`);
         await new Promise((r) => setTimeout(r, delayMs));
       }
 
-      // Check daily limit BEFORE responding
       const LIMITE_DIARIO_REAL = 15;
       const { data: instAquec } = await sb
         .from("whatsapp_aquecimento_instancias")
@@ -462,7 +564,6 @@ Deno.serve(async (req) => {
 
       if (instAquec && instAquec.interacoes_hoje >= LIMITE_DIARIO_REAL) {
         console.log(`[IA] 🛑 Instância ${instancia_origem_id} atingiu limite diário (${instAquec.interacoes_hoje}/${LIMITE_DIARIO_REAL}). Finalizando conversa.`);
-        // Find and finalize the conversation
         const { data: convToFinish } = await sb
           .from("whatsapp_conversas_ia")
           .select("id")
@@ -475,7 +576,6 @@ Deno.serve(async (req) => {
         return json({ responded: false, reason: "daily_limit_reached" });
       }
 
-      // Find active conversation
       const { data: conversa } = await sb
         .from("whatsapp_conversas_ia")
         .select("*")
@@ -491,14 +591,12 @@ Deno.serve(async (req) => {
       }
 
       if (conversa.total_trocas >= conversa.max_trocas) {
-        // Generate closing message
         const historicoArr = (conversa.historico || []) as any[];
         const historicoTexto = historicoArr.slice(-10)
           .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
         const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas);
 
-        // Update conversation as finished
         const novoHistorico = [
           ...historicoArr,
           { role: "recebida", content: mensagem, ts: new Date().toISOString() },
@@ -520,10 +618,9 @@ Deno.serve(async (req) => {
         return json({ responded: true, resposta: fraseEncerramento, finalizada: true });
       }
 
-      // Backup: save contacts on first response if not saved yet
+      // Backup: save contacts on first response
       if (conversa.total_trocas <= 1 && server_url && instance_token && numero_destino) {
         try {
-          console.log(`[IA] 🔄 Backup: verificando salvamento de contatos na troca ${conversa.total_trocas}...`);
           const { data: origInst } = await sb.from("user_whatsapp_instances")
             .select("nome, server_url, instance_token").eq("id", instancia_origem_id).single();
           const { data: destInst } = await sb.from("user_whatsapp_instances")
@@ -535,10 +632,7 @@ Deno.serve(async (req) => {
             const nomeOrig = origInst.nome || origPhone;
             const nomeDest = destInst.nome || cleanDest;
             
-            // Save destino contact on origem's phone
             await salvarContatoUAZAPI(server_url, instance_token, cleanDest, nomeDest);
-            
-            // Save origem contact on destino's phone  
             if (origPhone && destInst.server_url && destInst.instance_token) {
               await salvarContatoUAZAPI(destInst.server_url, destInst.instance_token, `55${origPhone}`, nomeOrig);
             }
@@ -568,7 +662,6 @@ Deno.serve(async (req) => {
         historico: novoHistorico,
       }).eq("id", conversa.id);
 
-      // Increment daily counter for this responding instance
       if (instAquec) {
         await sb.from("whatsapp_aquecimento_instancias").update({
           interacoes_hoje: (instAquec.interacoes_hoje || 0) + 1,
@@ -577,17 +670,20 @@ Deno.serve(async (req) => {
         }).eq("id", instAquec.id);
       }
 
-      // Send message and log
+      // Send message — try media first (~20%), fallback to text
       if (server_url && instance_token && numero_destino) {
-        const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
-        if (sent) {
-          await logToInbox(sb, instancia_origem_id, numero_destino, resposta, "saida");
+        const mediaResult = await tentarEnviarMidia(sb, server_url, instance_token, numero_destino, instancia_origem_id, resposta);
+        
+        if (!mediaResult.sent) {
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
+          if (sent) {
+            await logToInbox(sb, instancia_origem_id, numero_destino, resposta, "saida");
+          }
         }
       }
 
-      // Chain: trigger the other side to respond back
+      // Chain: trigger other side to respond
       if (novaTroca < conversa.max_trocas) {
-        // Need to get the other side's details to respond back
         const outroLado = instancia_origem_id === conversa.instancia_origem_id
           ? conversa.instancia_destino_id : conversa.instancia_origem_id;
         const esteLado = instancia_origem_id;
@@ -600,7 +696,6 @@ Deno.serve(async (req) => {
           .single();
 
         if (outroInst) {
-          // Get phone of current side
           const { data: esteInst } = await sb
             .from("user_whatsapp_instances")
             .select("nome")
