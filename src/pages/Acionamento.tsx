@@ -1844,7 +1844,58 @@ export default function Acionamento() {
                   {clientes.length} clientes importados
                 </Badge>
               )}
+              {clientes.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleVerificarWhatsApp}
+                  disabled={verificandoWhatsApp}
+                  className="gap-1"
+                >
+                  {verificandoWhatsApp ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {verificandoWhatsApp ? 'Verificando...' : 'Verificar WhatsApp'}
+                </Button>
+              )}
             </div>
+
+            {/* Resultado da verificação */}
+            {verificacaoConcluida && numerosInvalidos.length > 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>{numerosInvalidos.length} número(s) sem WhatsApp removidos</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm">Apenas {clientes.length} contatos válidos permanecem na lista.</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
+                    className="text-xs"
+                  >
+                    {mostrarInvalidos ? 'Ocultar removidos' : 'Ver números removidos'}
+                  </Button>
+                  {mostrarInvalidos && (
+                    <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
+                      {numerosInvalidos.map((c, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          {c.nome} — {c.telefone}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+            {verificacaoConcluida && numerosInvalidos.length === 0 && (
+              <Alert>
+                <Check className="h-4 w-4" />
+                <AlertTitle>Todos os números possuem WhatsApp ✓</AlertTitle>
+              </Alert>
+            )}
+
             <p className="text-xs text-muted-foreground">
               Formato esperado: <strong>Coluna A</strong> = CPF, <strong>Coluna B</strong> = Nome, <strong>Coluna C</strong> = Telefone, <strong>Coluna D</strong> = Atraso, <strong>Coluna E</strong> = Saldo
             </p>
