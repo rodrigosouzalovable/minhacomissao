@@ -2274,6 +2274,7 @@ export type Database = {
       }
       whatsapp_mensagens_rapidas: {
         Row: {
+          arquivado: boolean
           audio_url: string | null
           botoes_choices: Json | null
           botoes_texto: string | null
@@ -2286,6 +2287,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          arquivado?: boolean
           audio_url?: string | null
           botoes_choices?: Json | null
           botoes_texto?: string | null
@@ -2298,6 +2300,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          arquivado?: boolean
           audio_url?: string | null
           botoes_choices?: Json | null
           botoes_texto?: string | null
