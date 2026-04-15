@@ -156,7 +156,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         const { data: adminInstances } = await supabase
           .from('user_whatsapp_instances')
           .select('id')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('ativo', true);
         if (adminInstances && adminInstances.length > 0) {
           const ids = adminInstances.map(i => i.id);
           const { count } = await supabase
@@ -172,7 +173,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         const { data: sharedInstances } = await supabase
           .from('user_whatsapp_instances')
           .select('id')
-          .eq('user_id', concedidoPor);
+          .eq('user_id', concedidoPor)
+          .eq('ativo', true);
         if (sharedInstances && sharedInstances.length > 0) {
           const ids = sharedInstances.map(i => i.id);
           const { count } = await supabase
@@ -190,7 +192,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { data: instances } = await supabase
       .from('user_whatsapp_instances')
       .select('id')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .eq('ativo', true);
     
     if (!instances || instances.length === 0) {
       setInboxUnreadCount(0);
