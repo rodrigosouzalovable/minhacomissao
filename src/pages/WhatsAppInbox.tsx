@@ -101,6 +101,7 @@ export default function WhatsAppInbox() {
   const [editTexto, setEditTexto] = useState('');
   const [mensagensRapidasOpen, setMensagensRapidasOpen] = useState(false);
   const [mensagensRapidas, setMensagensRapidas] = useState<MensagemRapida[]>([]);
+  const [inputBusy, setInputBusy] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -409,7 +410,7 @@ export default function WhatsAppInbox() {
     markRead();
   }, [contatoAtivo]);
 
-  const hasPendingMessages = enviando || mensagens.some(m => m.id.startsWith('temp-'));
+  const hasPendingMessages = enviando || inputBusy || mensagens.some(m => m.id.startsWith('temp-'));
 
   const handleSelectContato = (contato: Contato) => {
     if (hasPendingMessages) {
@@ -998,6 +999,7 @@ export default function WhatsAppInbox() {
                   externalFile={droppedFile}
                   onExternalFileHandled={() => setDroppedFile(null)}
                   mensagensRapidas={mensagensRapidas.filter(m => !m.arquivado)}
+                  onBusyChange={setInputBusy}
                 />
               )}
             </>

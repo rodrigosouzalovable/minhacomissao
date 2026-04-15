@@ -24,13 +24,14 @@ interface ChatInputBarProps {
   externalFile?: File | null;
   onExternalFileHandled?: () => void;
   mensagensRapidas?: MensagemRapida[];
+  onBusyChange?: (busy: boolean) => void;
 }
 
 export function ChatInputBar({
   instanciaId, telefone, serverUrl, instanceToken,
   onTextSent, onMediaSent, enviando,
   externalFile, onExternalFileHandled,
-  mensagensRapidas,
+  mensagensRapidas, onBusyChange,
 }: ChatInputBarProps) {
   const { toast } = useToast();
   const [textoMensagem, setTextoMensagem] = useState('');
@@ -136,6 +137,11 @@ export function ChatInputBar({
 
   const isLoading = enviando || enviandoAudio || enviandoArquivo;
   const [enviandoAtalho, setEnviandoAtalho] = useState<string | null>(null);
+
+  // Report busy state to parent
+  useEffect(() => {
+    onBusyChange?.(isLoading || !!enviandoAtalho);
+  }, [isLoading, enviandoAtalho]);
 
   const handleAtalhoClick = async (atalho: MensagemRapida) => {
     if (isLoading || enviandoAtalho) return;
