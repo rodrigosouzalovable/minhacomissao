@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, Pencil, Loader2, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Loader2, Upload, X, Archive, ArchiveRestore } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export interface MensagemRapida {
   id: string;
