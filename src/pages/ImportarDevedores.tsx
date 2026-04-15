@@ -121,6 +121,13 @@ export default function ImportarDevedores() {
   const [pagamentoProgress, setPagamentoProgress] = useState(0);
   const [pagamentoUpdated, setPagamentoUpdated] = useState(0);
 
+  // UME Aporte state
+  const [umeAporteGroups, setUmeAporteGroups] = useState<UmeAporteGroup[]>([]);
+  const [umeAporteImporting, setUmeAporteImporting] = useState(false);
+  const [umeAporteImported, setUmeAporteImported] = useState(false);
+  const [umeAporteProgress, setUmeAporteProgress] = useState(0);
+  const [umeAporteInserted, setUmeAporteInserted] = useState(0);
+
   // Montreal Atualização state
   const [montrealRows, setMontrealRows] = useState<MontrealAtualizacaoRow[]>([]);
 
