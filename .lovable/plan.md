@@ -1,37 +1,60 @@
 
 
-## Corrigir instâncias pausando indevidamente no Aquecimento
+## Nova Estrategia de Aquecimento — 1 conversa/dia, espalhada aleatoriamente
 
-### Diagnóstico
+### Situacao atual
+- Cron roda a cada **1 hora** (14 execucoes/dia)
+- Cada execucao tenta processar **todos os pares de uma vez** (~32 pares com 64 instancias)
+- Target: **15 mensagens/dia** por instancia
+- Resultado: rajada de 30+ conversas simultaneas — comportamento nao natural
 
-O fluxo atual cria um ciclo vicioso:
-1. Linha 113-129: Reativa PAUSADO → EM_AQUECIMENTO ✅
-2. Linha 180-209: Health check via `/instance/status` → formato não reconhecido → volta para PAUSADO ❌
+### Nova estrategia
 
-Todas as 77 instâncias estão `ativo: true` na tabela principal mas `PAUSADO` no aquecimento porque o health check falha (a UAZAPI retorna um formato que o código não reconhece) e imediatamente re-pausa.
+Cada instancia conversa **apenas 1 vez por dia**, e os pares sao processados **um de cada vez**, espalhados ao longo do dia de forma aleatoria.
 
-### Correção
+```text
+Antes:  10h → [30 pares de uma vez] → 11h → [30 pares] → ...
+Depois: 10h → [2 pares] → 11h → [skip] → 12h → [3 pares] → 13h → [1 par] → ...
+```
 
-Seguir exatamente o que você pediu: **só pausar se estiver desconectada de verdade** (falha no envio da mensagem).
+### Como funciona
 
-#### 1. Remover health check preventivo do ciclo automático
-- Eliminar o bloco de health check em paralelo (linhas 180-209)
-- Confiar que instâncias `ativo: true` estão conectadas
-- Se o envio falhar no `whatsapp-ia-responder`, aí sim pausar
+1. **TARGET_MESSAGES_PER_DAY = 1** (era 15)
+   - Cada instancia conversa com apenas 1 parceiro por dia
 
-#### 2. Tratar falha de envio como motivo para pausar
-- Trocar o "fire and forget" (linha 279) por `await` com tratamento de erro
-- Se a IA responder com erro de conexão/desconectado, pausar a instância
-- Caso contrário, manter ativa
+2. **Maximo 3 pares por execucao do cron**
+   - A cada hora, processa no maximo 3 pares aleatorios
+   - 64 instancias = 32 pares, distribuidos ao longo de ~14 horas
+   - Media: 2-3 pares/hora, naturalmente espalhados
 
-#### 3. Simplificar o código
-- Remover ~30 linhas de health check desnecessário
-- Resultado: menos código, menos chamadas de rede, menos consumo
+3. **Skip aleatorio** (50% de chance de pular a hora)
+   - Cada execucao tem 50% de chance de nao fazer nada
+   - Torna o padrao ainda mais imprevisivel e natural
+   - Resultado efetivo: ~7 execucoes reais/dia, ~4-5 pares cada
 
-### Impacto no consumo
-- **Reduz** chamadas: elimina 30-77 fetches de `/instance/status` por ciclo
-- Sem aumento de custo — apenas remoção de lógica
+4. **Delay aleatorio entre pares** (30s a 120s)
+   - Quando processa 2-3 pares na mesma hora, espera 30-120s entre cada um
+   - Nao envia tudo junto
 
-### Arquivos
-1. **`supabase/functions/whatsapp-aquecimento/index.ts`** — remover health check, pausar só em falha de envio
+### Impacto no consumo Lovable Cloud
+- **Cron continua horario** (14 invocacoes/dia) — sem aumento
+- **Metade das invocacoes faz skip rapido** — reduz processamento
+- **Elimina ~90% das chamadas ao whatsapp-ia-responder** (de ~30/hora para ~3/hora)
+- **Economia liquida significativa** em relacao ao modelo atual
+
+### Alteracoes
+
+#### 1. Edge Function `whatsapp-aquecimento/index.ts`
+- TARGET_MESSAGES_PER_DAY: 15 → 1
+- Adicionar MAX_PAIRS_PER_CYCLE = 3
+- Adicionar skip aleatorio (50% chance)
+- Aumentar delay entre pares para 30-120s
+- Manter toda logica de auto-enrollment, reativacao e manual-test intacta
+
+#### 2. Nenhuma mudanca no cron
+- Mantem `0 10-23 * * *` (horario, 14x/dia)
+- O skip aleatorio dentro da function cuida da distribuicao
+
+### Arquivo
+1. **`supabase/functions/whatsapp-aquecimento/index.ts`** — target=1, max 3 pares/ciclo, skip aleatorio
 
