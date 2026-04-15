@@ -1,60 +1,62 @@
 
 
-## Nova Estrategia de Aquecimento — 1 conversa/dia, espalhada aleatoriamente
+## Melhorias para Aquecimento Mais Natural
 
-### Situacao atual
-- Cron roda a cada **1 hora** (14 execucoes/dia)
-- Cada execucao tenta processar **todos os pares de uma vez** (~32 pares com 64 instancias)
-- Target: **15 mensagens/dia** por instancia
-- Resultado: rajada de 30+ conversas simultaneas — comportamento nao natural
+### Diagnóstico atual
+O sistema já é bom na qualidade das mensagens (gírias, temas variados, mídia). Mas tem padrões detectáveis: conversas longas demais, delays fixos, horários previsíveis, e falta de indicador "digitando".
 
-### Nova estrategia
+### Melhorias propostas (sem aumento de custo)
 
-Cada instancia conversa **apenas 1 vez por dia**, e os pares sao processados **um de cada vez**, espalhados ao longo do dia de forma aleatoria.
+#### 1. Conversas mais curtas e realistas
+- Reduzir `max_trocas` de 12-18 para **4-8** (aleatório)
+- Resultado: ~60% menos chamadas ao IA responder por conversa
+- Pessoa real troca 3-6 mensagens numa conversa casual rápida
 
-```text
-Antes:  10h → [30 pares de uma vez] → 11h → [30 pares] → ...
-Depois: 10h → [2 pares] → 11h → [skip] → 12h → [3 pares] → 13h → [1 par] → ...
-```
+#### 2. Delays humanizados entre respostas
+- Atual: sempre 30-60s (fixo e previsível)
+- Novo: distribuição variada:
+  - 30% chance: resposta rápida (5-15s) — "tava com o celular na mão"
+  - 40% chance: normal (30-90s) — leu e respondeu
+  - 20% chance: demorou (2-5 min) — estava ocupado
+  - 10% chance: bem demorado (5-10 min) — foi fazer outra coisa
+- Torna o padrão impossível de prever
 
-### Como funciona
+#### 3. Indicador "digitando..." antes de enviar
+- Chamar endpoint UAZAPI de "composing/typing" antes de cada mensagem
+- Duração proporcional ao tamanho da mensagem (1-4s)
+- Faz a conversa parecer 100% humana no lado do WhatsApp
 
-1. **TARGET_MESSAGES_PER_DAY = 1** (era 15)
-   - Cada instancia conversa com apenas 1 parceiro por dia
+#### 4. Variação diária (dias mais/menos ativos)
+- Em vez de sempre 1 conversa/dia, sortear:
+  - 20% chance: 0 conversas (dia "ocupado", não mexe no celular)
+  - 60% chance: 1 conversa (normal)
+  - 20% chance: 2 conversas (dia tranquilo)
+- Média se mantém ~1/dia mas com variação natural
 
-2. **Maximo 3 pares por execucao do cron**
-   - A cada hora, processa no maximo 3 pares aleatorios
-   - 64 instancias = 32 pares, distribuidos ao longo de ~14 horas
-   - Media: 2-3 pares/hora, naturalmente espalhados
-
-3. **Skip aleatorio** (50% de chance de pular a hora)
-   - Cada execucao tem 50% de chance de nao fazer nada
-   - Torna o padrao ainda mais imprevisivel e natural
-   - Resultado efetivo: ~7 execucoes reais/dia, ~4-5 pares cada
-
-4. **Delay aleatorio entre pares** (30s a 120s)
-   - Quando processa 2-3 pares na mesma hora, espera 30-120s entre cada um
-   - Nao envia tudo junto
+#### 5. "Amigos frequentes" — pares com afinidade
+- Manter registro do `ultimo_parceiro_id` e dar 30% de preferência para repetir o mesmo parceiro
+- Pessoas reais conversam mais com os mesmos contatos
+- Outros 70% continuam aleatórios para variedade
 
 ### Impacto no consumo Lovable Cloud
-- **Cron continua horario** (14 invocacoes/dia) — sem aumento
-- **Metade das invocacoes faz skip rapido** — reduz processamento
-- **Elimina ~90% das chamadas ao whatsapp-ia-responder** (de ~30/hora para ~3/hora)
-- **Economia liquida significativa** em relacao ao modelo atual
+- **Conversas mais curtas**: reduz ~50% das chamadas ao IA responder (de ~15 trocas para ~6)
+- **Dias sem conversa (20%)**: reduz mais ~20% no total
+- **Typing indicator**: 1 fetch extra por mensagem (leve, sem custo de Edge Function)
+- **Resultado líquido: ECONOMIA de ~40-50%** comparado ao sistema atual
 
-### Alteracoes
+### Alterações
 
-#### 1. Edge Function `whatsapp-aquecimento/index.ts`
-- TARGET_MESSAGES_PER_DAY: 15 → 1
-- Adicionar MAX_PAIRS_PER_CYCLE = 3
-- Adicionar skip aleatorio (50% chance)
-- Aumentar delay entre pares para 30-120s
-- Manter toda logica de auto-enrollment, reativacao e manual-test intacta
+#### 1. `supabase/functions/whatsapp-ia-responder/index.ts`
+- `max_trocas`: `12 + random(7)` → `4 + random(5)` (4-8 trocas)
+- `randomDelay`: distribuição variada em vez de 30-60s fixo
+- Adicionar `enviarTypingIndicator()` antes de cada `enviarMensagemUAZAPI`
 
-#### 2. Nenhuma mudanca no cron
-- Mantem `0 10-23 * * *` (horario, 14x/dia)
-- O skip aleatorio dentro da function cuida da distribuicao
+#### 2. `supabase/functions/whatsapp-aquecimento/index.ts`
+- Sortear quantidade diária (0, 1 ou 2 conversas) em vez de sempre 1
+- Dar 30% preferência ao `ultimo_parceiro_id` na seleção de pares
+- Manter lógica de skip aleatório e max 3 pares/ciclo
 
-### Arquivo
-1. **`supabase/functions/whatsapp-aquecimento/index.ts`** — target=1, max 3 pares/ciclo, skip aleatorio
+### Arquivos
+1. **`supabase/functions/whatsapp-ia-responder/index.ts`** — trocas mais curtas, delays humanizados, typing indicator
+2. **`supabase/functions/whatsapp-aquecimento/index.ts`** — variação diária, pares com afinidade
 
