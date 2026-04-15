@@ -182,20 +182,35 @@ export default function ImportarDevedores() {
   };
 
   const getSheetRowsByLetters = (sheet: XLSX.WorkSheet): Record<string, unknown>[] => {
-    const matrix = XLSX.utils.sheet_to_json<(string | number | Date | null)[]>(sheet, {
-      header: 1,
-      raw: true,
-      defval: null,
-      blankrows: false,
-    });
-
-    return matrix.map((row) => {
+    const ref = sheet['!ref'];
+    if (!ref) return [];
+    const range = XLSX.utils.decode_range(ref);
+    const rows: Record<string, unknown>[] = [];
+    for (let r = range.s.r; r <= range.e.r; r++) {
       const record: Record<string, unknown> = {};
-      row.forEach((value, index) => {
-        record[String.fromCharCode(65 + index)] = value;
-      });
-      return record;
-    });
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = sheet[addr];
+        if (cell) {
+          // For date cells, convert serial to Date
+          if (cell.t === 'd') {
+            record[String.fromCharCode(65 + c)] = cell.v;
+          } else if (cell.t === 'n' && cell.w && /\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(cell.w)) {
+            // Number cell formatted as date
+            const dt = XLSX.SSF.parse_date_code(cell.v as number);
+            if (dt) {
+              record[String.fromCharCode(65 + c)] = new Date(dt.y, dt.m - 1, dt.d);
+            } else {
+              record[String.fromCharCode(65 + c)] = cell.v;
+            }
+          } else {
+            record[String.fromCharCode(65 + c)] = cell.v;
+          }
+        }
+      }
+      rows.push(record);
+    }
+    return rows;
   };
 
   const parsePadrao = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
@@ -855,8 +870,9 @@ export default function ImportarDevedores() {
             toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos para importar.', variant: 'destructive' });
           }
         }
-      } catch {
-        toast({ title: 'Erro ao processar planilha', variant: 'destructive' });
+      } catch (err) {
+        console.error('Erro ao processar planilha:', err);
+        toast({ title: 'Erro ao processar planilha', description: String(err), variant: 'destructive' });
       } finally {
         setParsing(false);
       }
