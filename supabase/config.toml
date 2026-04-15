@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.process-acionamento-agendado]
 verify_jwt = false
+
+[functions.check-whatsapp-numbers]
+verify_jwt = false
