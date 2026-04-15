@@ -594,32 +594,45 @@ export default function ImportarDevedores() {
 
     const cpfMap = new Map<string, { nome: string; telefone: string; parcelas: UmeAporteParcelaRow[] }>();
 
+    console.log('parseUmeAporte: total rows received:', dataRows.length);
+    if (dataRows.length > 0) {
+      console.log('parseUmeAporte: first row sample:', JSON.stringify(dataRows[0]));
+    }
     for (const row of dataRows) {
       let cpfRaw = String(row['A'] ?? '').replace(/\D/g, '');
       if (!cpfRaw) continue;
       cpfRaw = cpfRaw.padStart(11, '0');
-      if (cpfRaw.length < 11) continue;
 
       const nome = String(row['B'] ?? '').trim();
+      if (!nome) continue;
       const telefone = String(row['C'] ?? '').replace(/\D/g, '');
       const numeroParcela = parseInt(String(row['D'] ?? '0')) || 0;
       const valor = parseNum(row['F']);
 
-      let dataVencimento: Date;
+      let dataVencimento: Date | null = null;
       const vencRaw = row['E'];
-      if (vencRaw instanceof Date) {
+      if (vencRaw instanceof Date && !isNaN(vencRaw.getTime())) {
         dataVencimento = vencRaw;
       } else if (typeof vencRaw === 'number') {
         const dt = XLSX.SSF.parse_date_code(vencRaw);
         if (dt) {
           dataVencimento = new Date(dt.y, dt.m - 1, dt.d);
-        } else continue;
+        }
       } else if (vencRaw) {
-        const parts = String(vencRaw).split('/');
+        const vStr = String(vencRaw).trim();
+        // Try dd/mm/yyyy
+        const parts = vStr.split('/');
         if (parts.length === 3) {
           dataVencimento = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        } else continue;
-      } else continue;
+        } else {
+          // Try ISO or other parseable format
+          const tryDate = new Date(vStr);
+          if (!isNaN(tryDate.getTime())) {
+            dataVencimento = tryDate;
+          }
+        }
+      }
+      if (!dataVencimento || isNaN(dataVencimento.getTime())) continue;
 
       if (!cpfMap.has(cpfRaw)) {
         cpfMap.set(cpfRaw, { nome, telefone, parcelas: [] });
