@@ -1,35 +1,39 @@
 
 
-## Corrigir verificação WhatsApp + Auto DDI 55 na importação
+## Corrigir Aquecimento Automático — Todas as Instâncias Travadas em PAUSADO
 
-### Problema 1: Todos os números marcados como inválidos
-A UAZAPI retorna `isInWhatsapp: true/false` mas o código verifica campos inexistentes (`exists`, `numberExists`, `status`, etc.). Resultado: **nenhum número é reconhecido como válido**.
+### Diagnóstico
 
-Nos logs, o número `5561993243834` retornou `"isInWhatsapp": true` — mas o código não verifica esse campo.
+O cron está rodando corretamente (`*/15 10-23 * * *`, 7h-20h BRT). O problema é que **todas as 77 instâncias estão PAUSADO** e o health check falha para todas, impedindo a reativação. O ciclo aborta com "Menos de 2 instâncias ativas."
 
-### Problema 2: Timeouts com lotes de 50
-Vários lotes retornaram `{"code":504,"message":"Request timeout"}`. Lotes de 50 são grandes demais para a UAZAPI.
+**Por que o manual funciona mas o automático não?**
+O teste manual pula o health check e envia direto. O automático exige que o health check retorne `connected: true`, `status: "CONNECTED"` ou `state: "open"` — mas a UAZAPI pode retornar em outro formato (ex: `{ instance: { state: "open" } }` ou `{ status: "open" }`).
 
-### Problema 3: DDI 55 não adicionado na importação
-Os telefones da planilha não recebem o prefixo 55 automaticamente.
+O ciclo de 77 instâncias com health check sequencial de 8s timeout também pode exceder o limite de execução da edge function (max 26-60s).
 
 ### Correções
 
-#### 1. Edge Function `check-whatsapp-numbers/index.ts`
-- Adicionar `item.isInWhatsapp === true` na verificação (campo real da UAZAPI)
-- Reduzir `BATCH_SIZE` de 50 para **10** para evitar timeouts
-- Tratar resposta com `code: 504` como retry ou erro explícito
-- Aumentar delay entre lotes para 1 segundo
+#### 1. Tornar o health check mais resiliente (`whatsapp-aquecimento`)
+- Aceitar mais formatos de resposta da UAZAPI (`instance.state`, `status: "open"`, etc.)
+- Adicionar log detalhado da resposta para debug
+- Reduzir timeout de 8s para 5s
 
-#### 2. Importação no `Acionamento.tsx`
-- No `handleFileUpload`, após limpar o telefone com `replace(/\D/g, '')`, adicionar DDI 55 se não começar com 55
-- Mesma lógica para layout simples e padrão
+#### 2. Limitar health checks para não estourar timeout
+- Fazer health check em paralelo (Promise.allSettled) com limite de 10 simultâneos
+- Limitar a 30 instâncias por ciclo para não estourar o tempo da function
 
-#### 3. Importação no `CampanhasVoz.tsx`
-- Mesma lógica de DDI 55 automático na importação de planilha
+#### 3. Reativar em massa instâncias `ativo: true`
+- Nova lógica: se a instância principal está `ativo: true` na tabela `user_whatsapp_instances`, reativar automaticamente para `EM_AQUECIMENTO` SEM exigir health check
+- O health check passa a ser feito apenas NO MOMENTO do envio — se falhar, pausa novamente
+- Isso garante que instâncias conectadas não fiquem presas em PAUSADO
+
+#### 4. Adicionar logging detalhado
+- Logar quantas instâncias foram reativadas, quantas falharam health check, e o motivo
+- Logar a resposta exata do `/instance/status` para diagnóstico
 
 ### Arquivos
-1. **`supabase/functions/check-whatsapp-numbers/index.ts`** — corrigir campo `isInWhatsapp`, reduzir batch size
-2. **`src/pages/Acionamento.tsx`** — auto DDI 55 na importação
-3. **`src/pages/CampanhasVoz.tsx`** — auto DDI 55 na importação
+1. **`supabase/functions/whatsapp-aquecimento/index.ts`** — health check resiliente, reativação automática, logging
+
+### Resultado
+Instâncias ativas serão automaticamente reativadas a cada ciclo. O aquecimento começará a funcionar de forma autônoma às 7h BRT diariamente.
 
