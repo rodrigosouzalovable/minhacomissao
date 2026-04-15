@@ -999,6 +999,7 @@ export default function WhatsAppInbox() {
                   externalFile={droppedFile}
                   onExternalFileHandled={() => setDroppedFile(null)}
                   mensagensRapidas={mensagensRapidas.filter(m => !m.arquivado)}
+                  onBusyChange={setInputBusy}
                 />
               )}
             </>
