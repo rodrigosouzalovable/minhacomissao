@@ -1,40 +1,37 @@
 
 
-## Gravar preferência de economia + Otimizar consumo do Aquecimento
+## Corrigir instâncias pausando indevidamente no Aquecimento
 
-### Preferência a gravar
-Salvar em memória: **"Sempre avisar o usuário antes de qualquer mudança que aumente o consumo da Lovable Cloud (Edge Functions, banco de dados, storage). Priorizar economia."**
+### Diagnóstico
 
-### Diagnóstico de consumo atual
+O fluxo atual cria um ciclo vicioso:
+1. Linha 113-129: Reativa PAUSADO → EM_AQUECIMENTO ✅
+2. Linha 180-209: Health check via `/instance/status` → formato não reconhecido → volta para PAUSADO ❌
 
-O aquecimento é o maior consumidor:
-- **Cron a cada 15 min** = ~56 execuções/dia da edge function `whatsapp-aquecimento`
-- Cada execução faz health checks (fetch externo) em até 30 instâncias
-- Cada par gera uma chamada extra ao `whatsapp-ia-responder`
-- Com 77 instâncias e 15 msgs/dia/instância, o target é atingido em poucas rodadas
+Todas as 77 instâncias estão `ativo: true` na tabela principal mas `PAUSADO` no aquecimento porque o health check falha (a UAZAPI retorna um formato que o código não reconhece) e imediatamente re-pausa.
 
-### Otimização proposta
+### Correção
 
-1. **Reduzir frequência do cron de 15 min para 60 min**
-   - De ~56 para ~14 execuções/dia (75% de redução)
-   - 15 msgs/dia ainda são facilmente atingidas com 14 ciclos
-   - Alterar via SQL: `cron.alter_job` para `0 10-23 * * *`
+Seguir exatamente o que você pediu: **só pausar se estiver desconectada de verdade** (falha no envio da mensagem).
 
-2. **Skip rápido quando target atingido**
-   - Se todas as instâncias já atingiram 15 msgs/dia, retornar imediatamente sem fazer health checks
-   - Evita chamadas de rede desnecessárias
+#### 1. Remover health check preventivo do ciclo automático
+- Eliminar o bloco de health check em paralelo (linhas 180-209)
+- Confiar que instâncias `ativo: true` estão conectadas
+- Se o envio falhar no `whatsapp-ia-responder`, aí sim pausar
 
-3. **Reduzir health checks desnecessários**
-   - Só fazer health check em instâncias que vão efetivamente enviar neste ciclo
-   - Se uma instância já atingiu o limite diário, não verificar saúde dela
+#### 2. Tratar falha de envio como motivo para pausar
+- Trocar o "fire and forget" (linha 279) por `await` com tratamento de erro
+- Se a IA responder com erro de conexão/desconectado, pausar a instância
+- Caso contrário, manter ativa
+
+#### 3. Simplificar o código
+- Remover ~30 linhas de health check desnecessário
+- Resultado: menos código, menos chamadas de rede, menos consumo
+
+### Impacto no consumo
+- **Reduz** chamadas: elimina 30-77 fetches de `/instance/status` por ciclo
+- Sem aumento de custo — apenas remoção de lógica
 
 ### Arquivos
-1. **`mem://preferences/cloud-cost-awareness`** — gravar preferência
-2. **`supabase/functions/whatsapp-aquecimento/index.ts`** — skip rápido + health check seletivo
-3. **Cron job** — alterar frequência de 15 min para 60 min
-
-### Impacto
-- Redução de ~75% nas execuções diárias do aquecimento
-- Mesma funcionalidade (15 msgs/dia por instância mantidas)
-- Economia significativa em Edge Function invocations
+1. **`supabase/functions/whatsapp-aquecimento/index.ts`** — remover health check, pausar só em falha de envio
 
