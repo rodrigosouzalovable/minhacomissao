@@ -13,7 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Upload, Play, Pause, Trash2, Send, StopCircle, Download, Plus, Mic, FileSpreadsheet, Loader2, Check, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import * as XLSX from 'xlsx';
@@ -68,6 +69,10 @@ export default function CampanhasVoz() {
   const [contactSource, setContactSource] = useState<'acordos' | 'devedores' | 'planilha'>('planilha');
   const [importedContacts, setImportedContacts] = useState<{ id: string; nome: string; telefone: string }[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [verificandoWhatsApp, setVerificandoWhatsApp] = useState(false);
+  const [numerosInvalidos, setNumerosInvalidos] = useState<{ nome: string; telefone: string }[]>([]);
+  const [mostrarInvalidos, setMostrarInvalidos] = useState(false);
+  const [verificacaoConcluida, setVerificacaoConcluida] = useState(false);
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('voice-campaign-instances');
@@ -248,9 +253,60 @@ export default function CampanhasVoz() {
       setImportedContacts(contacts);
       setContactSource('planilha');
       setSelectedContacts(new Set());
+      setVerificacaoConcluida(false);
+      setNumerosInvalidos([]);
       toast.success(`${contacts.length} contatos importados da planilha`);
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  const handleVerificarWhatsApp = async () => {
+    if (importedContacts.length === 0) return;
+    const connectedInstance = allInstances.find(i => connectionStatus[i.id] === 'connected');
+    if (!connectedInstance) {
+      toast.error('Nenhuma instância WhatsApp conectada para verificar');
+      return;
+    }
+    setVerificandoWhatsApp(true);
+    setNumerosInvalidos([]);
+    setVerificacaoConcluida(false);
+    try {
+      const telefones = importedContacts.map(c => c.telefone);
+      const { data, error } = await supabase.functions.invoke('check-whatsapp-numbers', {
+        body: {
+          numbers: telefones,
+          server_url: connectedInstance.server_url,
+          instance_token: connectedInstance.instance_token,
+        },
+      });
+      if (error) throw error;
+      if (data?.invalid && Array.isArray(data.invalid)) {
+        const invalidSet = new Set(data.invalid.map((n: string) => n.replace(/\D/g, '')));
+        const removidos: { nome: string; telefone: string }[] = [];
+        const mantidos: { id: string; nome: string; telefone: string }[] = [];
+        importedContacts.forEach(c => {
+          const clean = c.telefone.replace(/\D/g, '');
+          const full = clean.startsWith('55') ? clean : `55${clean}`;
+          if (invalidSet.has(clean) || invalidSet.has(full)) {
+            removidos.push({ nome: c.nome, telefone: c.telefone });
+          } else {
+            mantidos.push(c);
+          }
+        });
+        setNumerosInvalidos(removidos);
+        setImportedContacts(mantidos);
+        setSelectedContacts(new Set());
+        setVerificacaoConcluida(true);
+        toast.success(`${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`);
+      } else {
+        setVerificacaoConcluida(true);
+        toast.info('Todos os números parecem válidos');
+      }
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message || 'Erro desconhecido'}`);
+    } finally {
+      setVerificandoWhatsApp(false);
+    }
   };
 
   // Multi-audio handling
@@ -639,9 +695,56 @@ export default function CampanhasVoz() {
                   className="mt-1"
                 />
                 {importedContacts.length > 0 && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {importedContacts.length} contatos importados
-                  </p>
+                  <div className="space-y-2 mt-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {importedContacts.length} contatos importados
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleVerificarWhatsApp}
+                        disabled={verificandoWhatsApp}
+                        className="gap-1 h-7 text-xs"
+                      >
+                        {verificandoWhatsApp ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3" />
+                        )}
+                        {verificandoWhatsApp ? 'Verificando...' : 'Verificar WhatsApp'}
+                      </Button>
+                    </div>
+                    {verificacaoConcluida && numerosInvalidos.length > 0 && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>{numerosInvalidos.length} sem WhatsApp removidos</AlertTitle>
+                        <AlertDescription>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
+                            className="text-xs p-0 h-auto"
+                          >
+                            {mostrarInvalidos ? 'Ocultar' : 'Ver removidos'}
+                          </Button>
+                          {mostrarInvalidos && (
+                            <div className="max-h-32 overflow-y-auto border rounded p-2 mt-1 space-y-0.5">
+                              {numerosInvalidos.map((c, i) => (
+                                <p key={i} className="text-xs text-muted-foreground">{c.nome} — {c.telefone}</p>
+                              ))}
+                            </div>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {verificacaoConcluida && numerosInvalidos.length === 0 && (
+                      <Alert>
+                        <Check className="h-4 w-4" />
+                        <AlertTitle>Todos possuem WhatsApp ✓</AlertTitle>
+                      </Alert>
+                    )}
+                  </div>
                 )}
               </div>
 

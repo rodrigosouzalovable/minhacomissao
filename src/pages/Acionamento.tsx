@@ -262,6 +262,13 @@ export default function Acionamento() {
 
   const [autoMinSec, setAutoMinSec] = useState(10);
   const [autoMaxSec, setAutoMaxSec] = useState(30);
+
+  // WhatsApp number verification state
+  const [verificandoWhatsApp, setVerificandoWhatsApp] = useState(false);
+  const [verificacaoProgresso, setVerificacaoProgresso] = useState<{ checked: number; total: number } | null>(null);
+  const [numerosInvalidos, setNumerosInvalidos] = useState<ClienteData[]>([]);
+  const [mostrarInvalidos, setMostrarInvalidos] = useState(false);
+  const [verificacaoConcluida, setVerificacaoConcluida] = useState(false);
   
   // Scheduling state
   const [agendamentos, setAgendamentos] = useState<Array<{ id: string; agendado_para: string; status: string; total_enviados: number; total_erros: number; historico_data: any }>>([]);
@@ -648,6 +655,74 @@ export default function Acionamento() {
       localStorage.removeItem(ACTIVE_KEY);
     }
     toast.success('Planilha removida do histórico');
+  };
+
+  const handleVerificarWhatsApp = async () => {
+    if (clientes.length === 0) return;
+    const connectedInstance = instances.find(i => i.ativo && connectionStatus[i.id] === 'connected');
+    if (!connectedInstance) {
+      toast.error('Nenhuma instância WhatsApp conectada para verificar os números');
+      return;
+    }
+
+    setVerificandoWhatsApp(true);
+    setVerificacaoProgresso({ checked: 0, total: clientes.length });
+    setNumerosInvalidos([]);
+    setVerificacaoConcluida(false);
+
+    try {
+      const telefones = clientes.map(c => c.telefone);
+      const { data, error } = await supabase.functions.invoke('check-whatsapp-numbers', {
+        body: {
+          numbers: telefones,
+          server_url: connectedInstance.server_url,
+          instance_token: connectedInstance.instance_token,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.invalid && Array.isArray(data.invalid)) {
+        const invalidSet = new Set(data.invalid.map((n: string) => n.replace(/\D/g, '')));
+        const removidos: ClienteData[] = [];
+        const mantidos: ClienteData[] = [];
+
+        clientes.forEach(c => {
+          const cleanPhone = c.telefone.replace(/\D/g, '');
+          const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+          if (invalidSet.has(cleanPhone) || invalidSet.has(fullPhone)) {
+            removidos.push(c);
+          } else {
+            mantidos.push(c);
+          }
+        });
+
+        setNumerosInvalidos(removidos);
+        setClientes(mantidos);
+        setSendStatus({});
+        setManualChecked(new Set());
+        setSendTimestamps({});
+
+        // Update historico
+        if (activeHistoricoId) {
+          const updated = historico.map(h =>
+            h.id === activeHistoricoId ? { ...h, clientes: mantidos, qtdClientes: mantidos.length } : h
+          );
+          saveHistorico(updated);
+        }
+
+        setVerificacaoConcluida(true);
+        toast.success(`Verificação concluída: ${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`);
+      } else {
+        toast.info('Verificação concluída — todos os números parecem válidos');
+        setVerificacaoConcluida(true);
+      }
+    } catch (err: any) {
+      toast.error(`Erro na verificação: ${err.message || 'Erro desconhecido'}`);
+    } finally {
+      setVerificandoWhatsApp(false);
+      setVerificacaoProgresso(null);
+    }
   };
 
   const handleManualCheck = (originalIndex: number, checked: boolean) => {
@@ -1769,7 +1844,58 @@ export default function Acionamento() {
                   {clientes.length} clientes importados
                 </Badge>
               )}
+              {clientes.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleVerificarWhatsApp}
+                  disabled={verificandoWhatsApp}
+                  className="gap-1"
+                >
+                  {verificandoWhatsApp ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {verificandoWhatsApp ? 'Verificando...' : 'Verificar WhatsApp'}
+                </Button>
+              )}
             </div>
+
+            {/* Resultado da verificação */}
+            {verificacaoConcluida && numerosInvalidos.length > 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>{numerosInvalidos.length} número(s) sem WhatsApp removidos</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm">Apenas {clientes.length} contatos válidos permanecem na lista.</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
+                    className="text-xs"
+                  >
+                    {mostrarInvalidos ? 'Ocultar removidos' : 'Ver números removidos'}
+                  </Button>
+                  {mostrarInvalidos && (
+                    <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
+                      {numerosInvalidos.map((c, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          {c.nome} — {c.telefone}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+            {verificacaoConcluida && numerosInvalidos.length === 0 && (
+              <Alert>
+                <Check className="h-4 w-4" />
+                <AlertTitle>Todos os números possuem WhatsApp ✓</AlertTitle>
+              </Alert>
+            )}
+
             <p className="text-xs text-muted-foreground">
               Formato esperado: <strong>Coluna A</strong> = CPF, <strong>Coluna B</strong> = Nome, <strong>Coluna C</strong> = Telefone, <strong>Coluna D</strong> = Atraso, <strong>Coluna E</strong> = Saldo
             </p>
