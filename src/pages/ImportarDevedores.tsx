@@ -1185,6 +1185,90 @@ export default function ImportarDevedores() {
           </CardContent>
         </Card>
 
+        {/* UME Aporte Preview */}
+        {isUmeAporte && umeAporteGroups.length > 0 && (() => {
+          const novos = umeAporteGroups.filter(g => !g.jaTemAcordo);
+          const existentes = umeAporteGroups.filter(g => g.jaTemAcordo);
+
+          return (
+            <Card className="mb-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-5 w-5" />
+                      Preview UME APORTE ({umeAporteGroups.length} clientes)
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      {file?.name} — 
+                      <span className="text-blue-600 font-medium"> {novos.length} acordos novos</span>,
+                      <span className="text-green-600 font-medium"> {existentes.length} já possuem acordo</span>
+                    </CardDescription>
+                  </div>
+                  {!umeAporteImported ? (
+                    <Button
+                      onClick={handleImportUmeAporte}
+                      disabled={umeAporteImporting || novos.length === 0}
+                      style={{ background: '#00a86b', color: '#fff' }}
+                    >
+                      {umeAporteImporting ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Importando...</>
+                      ) : (
+                        <><Check className="h-4 w-4 mr-1" />Criar {novos.length} acordos</>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
+                      <Check className="h-4 w-4" />
+                      {umeAporteInserted} acordos criados
+                    </div>
+                  )}
+                </div>
+                {umeAporteImporting && (
+                  <div className="mt-4 space-y-2">
+                    <Progress value={umeAporteProgress} className="h-3" />
+                    <p className="text-sm text-muted-foreground text-center">
+                      Criando {umeAporteInserted} de {novos.length} acordos... ({umeAporteProgress}%)
+                    </p>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {umeAporteGroups.map((group, idx) => (
+                    <div key={idx} className={`border rounded-lg p-3 ${group.jaTemAcordo ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {group.jaTemAcordo ? (
+                            <Badge className="bg-green-600 hover:bg-green-700 text-white text-xs">Já tem acordo</Badge>
+                          ) : (
+                            <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">Novo acordo</Badge>
+                          )}
+                          <div>
+                            <p className="font-medium text-sm">{group.nome}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{group.cpf}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">
+                            {group.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {group.numParcelas} parcela{group.numParcelas !== 1 ? 's' : ''} · {group.diasAtraso > 0 ? `${group.diasAtraso} dias atraso` : 'Em dia'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            1º pgto: {group.dataPrimeiroPagamento.toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* Montreal Atualização Preview */}
         {isMontrealAtualizacao && montrealRows.length > 0 && (() => {
           const existe = montrealRows.filter(r => r.status_importacao === 'existe').length;
