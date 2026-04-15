@@ -6,8 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, Pencil, Loader2, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Loader2, Upload, X, Archive, ArchiveRestore } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export interface MensagemRapida {
   id: string;
@@ -18,6 +20,7 @@ export interface MensagemRapida {
   botoes_texto: string | null;
   botoes_choices: any[] | null;
   ordem: number;
+  arquivado: boolean;
 }
 
 interface Props {
@@ -147,6 +150,20 @@ export function MensagensRapidasDialog({ open, onOpenChange, userId, onUpdated }
     onUpdated();
   };
 
+  const handleToggleArquivar = async (item: MensagemRapida) => {
+    const { error } = await supabase
+      .from('whatsapp_mensagens_rapidas')
+      .update({ arquivado: !item.arquivado } as any)
+      .eq('id', item.id);
+    if (error) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+    fetchItems();
+    onUpdated();
+    toast({ title: item.arquivado ? 'Atalho restaurado' : 'Atalho arquivado' });
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
@@ -162,11 +179,17 @@ export function MensagensRapidasDialog({ open, onOpenChange, userId, onUpdated }
               <p className="text-sm text-muted-foreground text-center py-4">Nenhum atalho configurado</p>
             ) : (
               items.map(item => (
-                <div key={item.id} className="flex items-center gap-2 p-2 rounded-md border border-border bg-card">
+                <div key={item.id} className={cn("flex items-center gap-2 p-2 rounded-md border border-border bg-card", item.arquivado && "opacity-50")}>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.titulo}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">{item.titulo}</p>
+                      {item.arquivado && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Arquivado</Badge>}
+                    </div>
                     <p className="text-xs text-muted-foreground capitalize">{item.tipo}</p>
                   </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleToggleArquivar(item)} title={item.arquivado ? 'Desarquivar' : 'Arquivar'}>
+                    {item.arquivado ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(item)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
