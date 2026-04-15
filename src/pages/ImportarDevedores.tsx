@@ -1068,12 +1068,46 @@ export default function ImportarDevedores() {
 
   const handleDeleteImportacao = async (id: string) => {
     setDeleting(id);
-    const { error } = await supabase.from('importacoes' as any).delete().eq('id', id);
-    if (error) {
-      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: 'Importação excluída', description: 'Todos os devedores associados foram removidos.' });
+    try {
+      // Delete devedores in batches to avoid statement timeout
+      const BATCH_SIZE = 500;
+      let totalDeleted = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        // Get a batch of devedor IDs for this importacao
+        const { data: batch, error: fetchErr } = await supabase
+          .from('devedores')
+          .select('id')
+          .eq('importacao_id', id)
+          .limit(BATCH_SIZE);
+        
+        if (fetchErr) throw fetchErr;
+        
+        if (!batch || batch.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        const ids = batch.map((d: any) => d.id);
+        const { error: delErr } = await supabase
+          .from('devedores')
+          .delete()
+          .in('id', ids);
+        
+        if (delErr) throw delErr;
+        totalDeleted += ids.length;
+      }
+      
+      // Now delete the importacao record itself
+      const { error } = await supabase.from('importacoes' as any).delete().eq('id', id);
+      if (error) throw error;
+      
+      toast({ title: 'Importação excluída', description: `${totalDeleted} devedores removidos com sucesso.` });
       fetchImportacoes();
+    } catch (error: any) {
+      console.error('Erro ao excluir importação:', error);
+      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
     }
     setDeleting(null);
   };
