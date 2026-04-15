@@ -101,6 +101,7 @@ export default function WhatsAppInbox() {
   const [editTexto, setEditTexto] = useState('');
   const [mensagensRapidasOpen, setMensagensRapidasOpen] = useState(false);
   const [mensagensRapidas, setMensagensRapidas] = useState<MensagemRapida[]>([]);
+  const [inputBusy, setInputBusy] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
