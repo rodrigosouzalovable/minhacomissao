@@ -409,7 +409,13 @@ export default function WhatsAppInbox() {
     markRead();
   }, [contatoAtivo]);
 
+  const hasPendingMessages = enviando || mensagens.some(m => m.id.startsWith('temp-'));
+
   const handleSelectContato = (contato: Contato) => {
+    if (hasPendingMessages) {
+      toast({ title: 'Aguarde', description: 'Aguardando confirmação do envio da mensagem...', variant: 'default' });
+      return;
+    }
     setContatoAtivo(contato);
     setMensagens([]);
     setPaginaAtual(0);
