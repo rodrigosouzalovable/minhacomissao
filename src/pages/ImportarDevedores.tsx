@@ -228,6 +228,48 @@ export default function ImportarDevedores() {
     return rows;
   };
 
+  const normalizeHeaderValue = (value: unknown) => {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+  };
+
+  const findBestSheetForUmeAporte = (workbook: XLSX.WorkBook) => {
+    let fallbackSheet = workbook.Sheets[workbook.SheetNames[0]];
+    let bestSheet = fallbackSheet;
+    let bestScore = -1;
+
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = getSheetRowsByLetters(sheet);
+      if (rows.length === 0) continue;
+
+      const headerRow = rows[0] ?? {};
+      const headers = ['A', 'B', 'C', 'D', 'E', 'F'].map((col) => normalizeHeaderValue(headerRow[col]));
+      const hasCpf = headers[0].includes('CPF');
+      const hasNome = headers[1].includes('CLIENTE') || headers[1].includes('NOME');
+      const hasTelefone = headers[2].includes('TELEFONE') || headers[2].includes('FONE') || headers[2].includes('CELULAR');
+      const hasParcela = headers[3].includes('NUMERO') || headers[3].includes('NRO') || headers[3].includes('PARCELA');
+      const hasVencimento = headers[4].includes('VENC');
+      const hasValor = headers[5].includes('VALOR');
+
+      const score = [hasCpf, hasNome, hasTelefone, hasParcela, hasVencimento, hasValor].filter(Boolean).length;
+
+      if (score > bestScore || (score === bestScore && rows.length > getSheetRowsByLetters(bestSheet).length)) {
+        bestSheet = sheet;
+        bestScore = score;
+      }
+
+      if (score >= 5 && rows.length > 1) {
+        fallbackSheet = sheet;
+      }
+    }
+
+    return bestScore >= 4 ? bestSheet : fallbackSheet;
+  };
+
   const parsePadrao = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
     return dataRows.map((row) => {
       const risco = parseNum(row['G']);
@@ -818,7 +860,7 @@ export default function ImportarDevedores() {
         const workbook = XLSX.read(data, { type: 'buffer', cellDates: usesCellDates });
 
         if (credorSelecionado === 'ume_aporte') {
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const sheet = findBestSheetForUmeAporte(workbook);
           const dataRows = getSheetRowsByLetters(sheet).slice(1);
           const parsed = await parseUmeAporte(dataRows);
           setUmeAporteGroups(parsed);
