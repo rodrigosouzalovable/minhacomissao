@@ -1,47 +1,35 @@
 
 
-## Verificação de números WhatsApp na importação (Acionamento + Campanhas de Voz)
+## Corrigir verificação WhatsApp + Auto DDI 55 na importação
 
-### Objetivo
-Ao importar planilha no Acionamento ou Campanhas de Voz, verificar automaticamente quais números possuem WhatsApp usando o endpoint `POST /chat/check` da UAZAPI e remover os que não têm.
+### Problema 1: Todos os números marcados como inválidos
+A UAZAPI retorna `isInWhatsapp: true/false` mas o código verifica campos inexistentes (`exists`, `numberExists`, `status`, etc.). Resultado: **nenhum número é reconhecido como válido**.
 
-### Como funciona o endpoint UAZAPI
-- **URL**: `{server_url}/chat/check`
-- **Header**: `token: {instance_token}`
-- **Body**: `{ "numbers": ["5511999999999", "5562981034702"] }`
-- Aceita array de números e retorna resultado para todos de uma vez
-- Retorna se cada número está registrado no WhatsApp ou não
+Nos logs, o número `5561993243834` retornou `"isInWhatsapp": true` — mas o código não verifica esse campo.
 
-### Implementação
+### Problema 2: Timeouts com lotes de 50
+Vários lotes retornaram `{"code":504,"message":"Request timeout"}`. Lotes de 50 são grandes demais para a UAZAPI.
 
-#### 1. Nova Edge Function `check-whatsapp-numbers`
-- Recebe array de telefones + credenciais UAZAPI (server_url, instance_token)
-- Formata números (adiciona 55 se necessário)
-- Chama `POST {server_url}/chat/check` com `{ numbers: [...] }`
-- Retorna lista separada: `{ valid: [...], invalid: [...] }`
-- Divide em lotes de 50 números se necessário para evitar timeout
+### Problema 3: DDI 55 não adicionado na importação
+Os telefones da planilha não recebem o prefixo 55 automaticamente.
 
-#### 2. Acionamento (`src/pages/Acionamento.tsx`)
-- Após importar planilha e parsear os contatos, exibir botão "Verificar WhatsApp"
-- Ao clicar, usa a primeira instância conectada para verificar todos os números
-- Mostra progresso (verificando X de Y...)
-- Remove automaticamente os sem WhatsApp e exibe resumo: "X válidos, Y removidos"
-- Contatos removidos ficam visíveis em uma seção colapsável para referência
+### Correções
 
-#### 3. Campanhas de Voz (`src/pages/CampanhasVoz.tsx`)
-- Mesma lógica após importar contatos da planilha
-- Botão "Verificar WhatsApp" aparece quando há contatos importados
-- Remove inválidos antes de criar a campanha
+#### 1. Edge Function `check-whatsapp-numbers/index.ts`
+- Adicionar `item.isInWhatsapp === true` na verificação (campo real da UAZAPI)
+- Reduzir `BATCH_SIZE` de 50 para **10** para evitar timeouts
+- Tratar resposta com `code: 504` como retry ou erro explícito
+- Aumentar delay entre lotes para 1 segundo
 
-#### 4. Config no `supabase/config.toml`
-- Adicionar `[functions.check-whatsapp-numbers]` com `verify_jwt = false`
+#### 2. Importação no `Acionamento.tsx`
+- No `handleFileUpload`, após limpar o telefone com `replace(/\D/g, '')`, adicionar DDI 55 se não começar com 55
+- Mesma lógica para layout simples e padrão
+
+#### 3. Importação no `CampanhasVoz.tsx`
+- Mesma lógica de DDI 55 automático na importação de planilha
 
 ### Arquivos
-1. **`supabase/functions/check-whatsapp-numbers/index.ts`** — nova edge function
-2. **`src/pages/Acionamento.tsx`** — botão de verificação pós-importação
-3. **`src/pages/CampanhasVoz.tsx`** — botão de verificação pós-importação
-4. **`supabase/config.toml`** — registro da nova function
-
-### Resultado
-Toda planilha importada passará por verificação automática, garantindo que apenas números com WhatsApp ativo recebam mensagens, reduzindo erros e banimentos.
+1. **`supabase/functions/check-whatsapp-numbers/index.ts`** — corrigir campo `isInWhatsapp`, reduzir batch size
+2. **`src/pages/Acionamento.tsx`** — auto DDI 55 na importação
+3. **`src/pages/CampanhasVoz.tsx`** — auto DDI 55 na importação
 
