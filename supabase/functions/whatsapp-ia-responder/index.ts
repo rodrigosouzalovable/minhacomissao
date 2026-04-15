@@ -45,6 +45,52 @@ function randomDelay(minMs: number, maxMs: number): number {
   return Math.floor(Math.random() * (maxMs - minMs)) + minMs;
 }
 
+// Humanized delay distribution simulating real human response patterns
+function humanizedDelay(): number {
+  const roll = Math.random();
+  if (roll < 0.30) {
+    // 30%: fast reply (5-15s) — had phone in hand
+    return randomDelay(5000, 15000);
+  } else if (roll < 0.70) {
+    // 40%: normal reply (30-90s) — read and replied
+    return randomDelay(30000, 90000);
+  } else if (roll < 0.90) {
+    // 20%: slow reply (2-5 min) — was busy
+    return randomDelay(120000, 300000);
+  } else {
+    // 10%: very slow (5-10 min) — went to do something else
+    return randomDelay(300000, 600000);
+  }
+}
+
+// Send "typing..." indicator before message for natural feel
+async function enviarTypingIndicator(serverUrl: string, instanceToken: string, numero: string, textoLength: number): Promise<void> {
+  const cleanUrl = serverUrl.replace(/\/+$/, "");
+  // Duration proportional to message length: 1-4 seconds
+  const typingDuration = Math.min(1000 + textoLength * 30, 4000);
+  
+  try {
+    // Start composing
+    await fetch(`${cleanUrl}/send/presence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token: instanceToken },
+      body: JSON.stringify({ number: numero, state: "composing" }),
+    }).catch(() => {});
+    
+    // Wait for typing duration
+    await new Promise(r => setTimeout(r, typingDuration));
+    
+    // Stop composing
+    await fetch(`${cleanUrl}/send/presence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token: instanceToken },
+      body: JSON.stringify({ number: numero, state: "paused" }),
+    }).catch(() => {});
+  } catch (e) {
+    console.warn("[IA] Typing indicator error (non-critical):", e);
+  }
+}
+
 function buildSystemPrompt(totalTrocas: number, maxTrocas: number): string {
   const trocasRestantes = maxTrocas - totalTrocas;
   const estaFinalizando = trocasRestantes <= 3;
@@ -432,7 +478,7 @@ Deno.serve(async (req) => {
 
       const mensagemInicial = await gerarMensagemInicial();
 
-      const maxTrocas = 12 + Math.floor(Math.random() * 7);
+      const maxTrocas = 4 + Math.floor(Math.random() * 5); // 4-8 trocas (realistic short conversation)
       const { data: conversa, error: convError } = await sb
         .from("whatsapp_conversas_ia")
         .insert({
@@ -493,6 +539,9 @@ Deno.serve(async (req) => {
 
       // Send initial message (may be media ~20% of the time)
       if (server_url && instance_token && numero_destino) {
+        // Send typing indicator before first message
+        await enviarTypingIndicator(server_url, instance_token, numero_destino, mensagemInicial.length);
+        
         let sentAsMedia = false;
         const mediaResult = await tentarEnviarMidia(sb, server_url, instance_token, numero_destino, instancia_origem_id, mensagemInicial);
         sentAsMedia = mediaResult.sent;
@@ -512,7 +561,7 @@ Deno.serve(async (req) => {
           tipo_interacao: "mensagem",
         });
 
-        const delayMs = randomDelay(30000, 60000);
+        const delayMs = humanizedDelay();
         console.log(`[IA] 🔄 ${instancia_destino_id} responderá em ${Math.round(delayMs / 1000)}s`);
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -672,6 +721,9 @@ Deno.serve(async (req) => {
 
       // Send message — try media first (~20%), fallback to text
       if (server_url && instance_token && numero_destino) {
+        // Send typing indicator before each response
+        await enviarTypingIndicator(server_url, instance_token, numero_destino, resposta.length);
+        
         const mediaResult = await tentarEnviarMidia(sb, server_url, instance_token, numero_destino, instancia_origem_id, resposta);
         
         if (!mediaResult.sent) {
@@ -705,7 +757,7 @@ Deno.serve(async (req) => {
           const estePhone = esteInst?.nome?.match(/^\d+/)?.[0] || "";
 
           if (estePhone) {
-            const delayNext = randomDelay(30000, 60000);
+            const delayNext = humanizedDelay();
             console.log(`[IA] 🔄 Cadeia: ${outroInst.nome} responderá em ${Math.round(delayNext / 1000)}s`);
 
             const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

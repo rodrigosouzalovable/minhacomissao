@@ -152,8 +152,18 @@ Deno.serve(async (req) => {
 
     const instanceMap = new Map((whatsappInstances || []).map((i: any) => [i.id, i]));
 
-    const TARGET_MESSAGES_PER_DAY = 1;
+    // ========== DAILY VARIANCE: randomize target (0, 1 or 2 conversations) ==========
+    // 20% chance: 0 (busy day), 60% chance: 1 (normal), 20% chance: 2 (relaxed day)
+    const dailyRoll = Math.random();
+    const TARGET_MESSAGES_PER_DAY = dailyRoll < 0.20 ? 0 : dailyRoll < 0.80 ? 1 : 2;
     const MAX_PAIRS_PER_CYCLE = 3;
+
+    if (TARGET_MESSAGES_PER_DAY === 0) {
+      console.log("[AQUECIMENTO] 📵 Dia de folga (sorteio 20%). Nenhuma conversa hoje.");
+      return json({ message: "Rest day - no conversations", skipped: true, daily_target: 0 });
+    }
+
+    console.log(`[AQUECIMENTO] 🎯 Target do dia: ${TARGET_MESSAGES_PER_DAY} conversa(s) por instância.`);
 
     // 50% chance to skip this cycle for natural, unpredictable pattern
     if (Math.random() > 0.5) {
@@ -184,11 +194,28 @@ Deno.serve(async (req) => {
 
     console.log(`[AQUECIMENTO] ${eligible.length} elegíveis de ${instancias.length} (${instancias.length - eligible.length} já no target).`);
 
-    // ========== GENERATE PAIRS (sem health check — só pausa em falha de envio) ==========
+    // ========== GENERATE PAIRS with affinity (30% preference for last partner) ==========
     const shuffled = [...eligible].sort(() => Math.random() - 0.5);
     const allPairs: [any, any][] = [];
-    for (let i = 0; i + 1 < shuffled.length; i += 2) {
-      allPairs.push([shuffled[i], shuffled[i + 1]]);
+    const usedIds = new Set<string>();
+
+    // First pass: 30% chance to pair with last partner (affinity)
+    for (const inst of shuffled) {
+      if (usedIds.has(inst.id)) continue;
+      if (inst.ultimo_parceiro_id && Math.random() < 0.30) {
+        const partner = shuffled.find((p: any) => p.instancia_id === inst.ultimo_parceiro_id && !usedIds.has(p.id));
+        if (partner) {
+          allPairs.push([inst, partner]);
+          usedIds.add(inst.id);
+          usedIds.add(partner.id);
+        }
+      }
+    }
+
+    // Second pass: random pairs for remaining
+    const remaining = shuffled.filter((i: any) => !usedIds.has(i.id));
+    for (let i = 0; i + 1 < remaining.length; i += 2) {
+      allPairs.push([remaining[i], remaining[i + 1]]);
     }
 
     // Limit to MAX_PAIRS_PER_CYCLE random pairs
