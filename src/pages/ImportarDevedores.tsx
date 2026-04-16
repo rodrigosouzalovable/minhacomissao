@@ -864,7 +864,19 @@ export default function ImportarDevedores() {
         const usesCellDates = credorSelecionado === 'ume_aporte';
         const workbook = XLSX.read(data, { type: 'buffer', cellDates: usesCellDates });
 
-        if (credorSelecionado === 'ume_aporte') {
+        if (credorSelecionado === 'ume_consolidado') {
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          const dataRows = json.slice(1);
+          const parsed = parseUmeConsolidado(dataRows);
+          setRows(parsed);
+          setPagamentoRows([]);
+          setMontrealRows([]);
+          setUmeAporteGroups([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
+          }
+        } else if (credorSelecionado === 'ume_aporte') {
           const sheet = findBestSheetForUmeAporte(workbook);
           const dataRows = getSheetRowsByLetters(sheet).slice(1);
           const parsed = await parseUmeAporte(dataRows);
