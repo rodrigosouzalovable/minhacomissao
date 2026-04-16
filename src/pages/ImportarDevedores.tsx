@@ -1049,8 +1049,8 @@ export default function ImportarDevedores() {
   const handleImport = async () => {
     if (!user || rows.length === 0) return;
 
-    const credorFinal = credorDestino === 'outro' ? credorOutro.trim() : credorDestino;
-    if (!credorFinal) {
+    const credorFinal = credorSelecionado === 'ume_consolidado' ? 'UME | NOVO MUNDO' : (credorDestino === 'outro' ? credorOutro.trim() : credorDestino);
+    if (!credorFinal && credorSelecionado !== 'ume_consolidado') {
       toast({ title: 'Selecione o credor de destino', variant: 'destructive' });
       return;
     }
