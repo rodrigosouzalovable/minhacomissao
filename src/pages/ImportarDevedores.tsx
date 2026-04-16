@@ -967,9 +967,9 @@ export default function ImportarDevedores() {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const binaryStr = evt.target?.result as string;
         const usesCellDates = credorSelecionado === 'ume_aporte';
-        const workbook = XLSX.read(data, { type: 'array', cellDates: usesCellDates });
+        const workbook = XLSX.read(binaryStr, { type: 'binary', cellDates: usesCellDates });
 
         if (credorSelecionado === 'ume_consolidado') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -1088,9 +1088,9 @@ export default function ImportarDevedores() {
       const reader = new FileReader();
       reader.onload = async (evt) => {
         try {
-          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          const binaryStr = evt.target?.result as string;
           const usesCellDates = credorSelecionado === 'ume_aporte';
-          const workbook = XLSX.read(data, { type: 'array', cellDates: usesCellDates });
+          const workbook = XLSX.read(binaryStr, { type: 'binary', cellDates: usesCellDates });
           let pRows: DevedorRow[] = [];
           let pPag: PagamentoRow[] = [];
           let pUme: UmeAporteGroup[] = [];
