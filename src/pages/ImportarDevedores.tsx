@@ -1394,6 +1394,11 @@ export default function ImportarDevedores() {
         results[i] = { name: files[i].name, status: 'error', count: 0, error: err.message || 'Erro desconhecido' };
       }
       setFileResults([...results]);
+      
+      // Throttle between jobs to avoid saturating browser connection pool
+      if (i < files.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
 
     setBatchImporting(false);
