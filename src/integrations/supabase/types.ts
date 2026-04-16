@@ -926,6 +926,51 @@ export type Database = {
         }
         Relationships: []
       }
+      importacao_jobs: {
+        Row: {
+          atualizado_em: string
+          credor: string
+          criado_em: string
+          dados_json: Json | null
+          erro_mensagem: string | null
+          id: string
+          layout: string
+          nome_arquivo: string
+          registros_inseridos: number
+          status: string
+          total_registros: number
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          credor?: string
+          criado_em?: string
+          dados_json?: Json | null
+          erro_mensagem?: string | null
+          id?: string
+          layout?: string
+          nome_arquivo: string
+          registros_inseridos?: number
+          status?: string
+          total_registros?: number
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          credor?: string
+          criado_em?: string
+          dados_json?: Json | null
+          erro_mensagem?: string | null
+          id?: string
+          layout?: string
+          nome_arquivo?: string
+          registros_inseridos?: number
+          status?: string
+          total_registros?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       importacoes: {
         Row: {
           credor: string
