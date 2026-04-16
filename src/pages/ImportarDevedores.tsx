@@ -142,6 +142,10 @@ export default function ImportarDevedores() {
   const [batchImporting, setBatchImporting] = useState(false);
   const stopRef = useRef(false);
 
+  // Background jobs polling
+  const [backgroundJobs, setBackgroundJobs] = useState<any[]>([]);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const isPagamentos = credorSelecionado === 'pagamentos';
   const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
   const isUmeAporte = credorSelecionado === 'ume_aporte';
@@ -159,9 +163,43 @@ export default function ImportarDevedores() {
     setLoadingHistory(false);
   }, []);
 
+  // Fetch background jobs
+  const fetchBackgroundJobs = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('importacao_jobs' as any)
+      .select('*')
+      .eq('user_id', user.id)
+      .in('status', ['pendente', 'processando', 'concluido', 'erro'])
+      .order('criado_em', { ascending: false })
+      .limit(20);
+    if (data) setBackgroundJobs(data as any[]);
+  }, [user]);
+
   useEffect(() => {
     fetchImportacoes();
-  }, [fetchImportacoes]);
+    fetchBackgroundJobs();
+  }, [fetchImportacoes, fetchBackgroundJobs]);
+
+  // Poll for active jobs
+  useEffect(() => {
+    const hasActive = backgroundJobs.some((j: any) => j.status === 'pendente' || j.status === 'processando');
+    if (hasActive && !pollingRef.current) {
+      pollingRef.current = setInterval(() => {
+        fetchBackgroundJobs();
+        fetchImportacoes();
+      }, 3000);
+    } else if (!hasActive && pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [backgroundJobs, fetchBackgroundJobs, fetchImportacoes]);
 
   const handleCredorChange = (value: CredorLayout) => {
     setCredorSelecionado(value);
@@ -1197,9 +1235,112 @@ export default function ImportarDevedores() {
     return inserted;
   };
 
-  // Batch: import all files sequentially
+  // Prepare dados_json for the edge function based on layout
+  const prepareDadosJson = (parsed: { rows: DevedorRow[]; pagamentoRows: PagamentoRow[]; umeAporteGroups: UmeAporteGroup[]; montrealRows: MontrealAtualizacaoRow[] }, fileName: string): { layout: string; credor: string; dados: any; totalRegistros: number } | null => {
+    if (!user) return null;
+
+    const credorFinal = credorSelecionado === 'ume_consolidado' ? 'UME | NOVO MUNDO' : (credorDestino === 'outro' ? credorOutro.trim() : credorDestino);
+
+    if (credorSelecionado === 'pagamentos') {
+      const updates = parsed.pagamentoRows
+        .filter(r => r.pagamento_id && !r.ja_pago)
+        .map(r => ({ pagamento_id: r.pagamento_id, data_paga: parseDate(r.vencimento) }));
+      if (updates.length === 0) return null;
+      return { layout: 'pagamentos', credor: 'UME | NOVO MUNDO', dados: { updates }, totalRegistros: updates.length };
+    }
+
+    if (credorSelecionado === 'ume_aporte') {
+      const toImport = parsed.umeAporteGroups.filter(g => !g.jaTemAcordo);
+      if (toImport.length === 0) return null;
+      const groups = toImport.map(group => {
+        const comissao = calcularComissao(group.valorTotal, group.numParcelas, group.diasAtraso);
+        return {
+          cliente_nome: group.nome,
+          cliente_cpf: group.cpf,
+          cliente_telefone: group.telefone || null,
+          valor_total: Math.round(group.valorTotal * 100) / 100,
+          parcelas: group.numParcelas,
+          valor_parcela: Math.round((group.parcelas[0]?.valor || group.valorTotal / group.numParcelas) * 100) / 100,
+          data_primeiro_pagamento: group.dataPrimeiroPagamento.toISOString().split('T')[0],
+          dias_atraso: group.diasAtraso,
+          percentual_comissao: comissao.percentual,
+          comissao_total: comissao.comissaoTotal,
+          empresa: 'ume_novo_mundo',
+          pagamentos: group.parcelas.map(p => ({
+            numero_parcela: p.numeroParcela,
+            data_prevista: p.dataVencimento.toISOString().split('T')[0],
+            valor_parcela: Math.round(p.valor * 100) / 100,
+            comissao_parcela: Math.round(p.valor * (comissao.percentual / 100) * 100) / 100,
+          })),
+        };
+      });
+      return { layout: 'acordos', credor: 'UME | NOVO MUNDO', dados: { groups }, totalRegistros: groups.length };
+    }
+
+    if (credorSelecionado === 'montreal_atualizacao') {
+      const toImport = parsed.montrealRows.filter(r => r.status_importacao !== 'existe');
+      if (toImport.length === 0) return null;
+      const records = toImport.map(r => ({
+        nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
+        credor: 'MONTREAL', descricao: r.descricao || null, contrato: r.contrato || null,
+        data_vencimento: parseDate(r.atraso), telefone: r.telefone || null,
+      }));
+      // Prepare telefones
+      const phoneRecords: any[] = [];
+      const seenPhones = new Set<string>();
+      for (const row of parsed.montrealRows) {
+        const phones = [row.telefone, row.telefone2].filter(Boolean) as string[];
+        for (const phone of phones) {
+          const normalized = phone.replace(/\D/g, '');
+          if (!normalized || normalized.length < 10) continue;
+          const key = `${row.cpf}_${normalized}`;
+          if (seenPhones.has(key)) continue;
+          seenPhones.add(key);
+          phoneRecords.push({
+            devedor_cpf: row.cpf, numero: phone, tipo: 'celular',
+            criado_por: user.id, is_whatsapp: false, is_contato: false, observacao: 'Importado da planilha',
+          });
+        }
+      }
+      return { layout: 'devedores', credor: 'MONTREAL', dados: { records, telefones: phoneRecords }, totalRegistros: records.length };
+    }
+
+    // Standard layouts
+    const rowsToImport = parsed.rows;
+    if (rowsToImport.length === 0) return null;
+    const records = rowsToImport.map(r => ({
+      nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
+      credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
+      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      contrato: r.contrato || null,
+      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      telefone: r.telefone || null,
+    }));
+    // Montreal telefones
+    let telefones: any[] = [];
+    if (credorSelecionado === 'montreal') {
+      const seenPhones = new Set<string>();
+      for (const row of rowsToImport) {
+        const phones = [row.telefone, row.telefone2].filter(Boolean) as string[];
+        for (const phone of phones) {
+          const normalized = phone.replace(/\D/g, '');
+          if (!normalized || normalized.length < 10) continue;
+          const key = `${row.cpf}_${normalized}`;
+          if (seenPhones.has(key)) continue;
+          seenPhones.add(key);
+          telefones.push({
+            devedor_cpf: row.cpf, numero: phone, tipo: 'celular',
+            criado_por: user.id, is_whatsapp: false, is_contato: false, observacao: 'Importado da planilha',
+          });
+        }
+      }
+    }
+    return { layout: 'devedores', credor: credorFinal, dados: { records, telefones }, totalRegistros: records.length };
+  };
+
+  // Batch: import all files via background jobs
   const handleImportAll = async () => {
-    if (files.length === 0) return;
+    if (files.length === 0 || !user) return;
     setBatchImporting(true);
     stopRef.current = false;
     const results: {name: string; status: 'pending'|'processing'|'done'|'error'; count: number; error?: string}[] = files.map(f => ({ name: f.name, status: 'pending' as const, count: 0 }));
@@ -1212,14 +1353,43 @@ export default function ImportarDevedores() {
       setFileResults([...results]);
 
       try {
+        // Parse file in browser
         const parsed = await readAndParseFile(files[i]);
-        const totalRecords = parsed.rows.length + parsed.pagamentoRows.length + parsed.umeAporteGroups.length + parsed.montrealRows.length;
-        if (totalRecords === 0) {
+        const prepared = prepareDadosJson(parsed, files[i].name);
+        
+        if (!prepared) {
           results[i] = { name: files[i].name, status: 'error', count: 0, error: 'Nenhum registro válido' };
-        } else {
-          const count = await importParsedData(parsed, files[i].name);
-          results[i] = { name: files[i].name, status: 'done', count };
+          setFileResults([...results]);
+          continue;
         }
+
+        // Create job in DB
+        const { data: job, error: jobError } = await supabase
+          .from('importacao_jobs' as any)
+          .insert({
+            user_id: user.id,
+            nome_arquivo: files[i].name,
+            credor: prepared.credor,
+            layout: prepared.layout,
+            total_registros: prepared.totalRegistros,
+            status: 'pendente',
+            dados_json: prepared.dados,
+          } as any)
+          .select('id')
+          .single();
+
+        if (jobError || !job) {
+          results[i] = { name: files[i].name, status: 'error', count: 0, error: jobError?.message || 'Erro ao criar job' };
+          setFileResults([...results]);
+          continue;
+        }
+
+        // Fire-and-forget: invoke edge function
+        supabase.functions.invoke('process-import-job', {
+          body: { job_id: (job as any).id },
+        }).catch(err => console.error('Edge function invoke error:', err));
+
+        results[i] = { name: files[i].name, status: 'done', count: prepared.totalRegistros };
       } catch (err: any) {
         results[i] = { name: files[i].name, status: 'error', count: 0, error: err.message || 'Erro desconhecido' };
       }
@@ -1228,10 +1398,10 @@ export default function ImportarDevedores() {
 
     setBatchImporting(false);
     setCurrentFileIndex(-1);
-    fetchImportacoes();
+    fetchBackgroundJobs();
     const totalDone = results.filter(r => r.status === 'done').length;
     const totalErr = results.filter(r => r.status === 'error').length;
-    toast({ title: 'Importação em lote concluída', description: `${totalDone} arquivo(s) importado(s)${totalErr > 0 ? `, ${totalErr} com erro` : ''}.` });
+    toast({ title: 'Jobs de importação criados', description: `${totalDone} arquivo(s) enviado(s) para processamento em background${totalErr > 0 ? `, ${totalErr} com erro` : ''}. Você pode fechar a página.` });
   };
 
   const handleImportPagamentos = async () => {
@@ -1652,7 +1822,62 @@ export default function ImportarDevedores() {
           </Card>
         )}
 
-        {/* UME Aporte Preview */}
+        {/* Background Jobs Status */}
+        {backgroundJobs.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Loader2 className={`h-5 w-5 ${backgroundJobs.some((j: any) => j.status === 'pendente' || j.status === 'processando') ? 'animate-spin text-blue-500' : 'text-muted-foreground'}`} />
+                Importações em Background
+              </CardTitle>
+              <CardDescription>
+                {backgroundJobs.some((j: any) => j.status === 'pendente' || j.status === 'processando')
+                  ? 'Processando no servidor — você pode fechar a página sem problemas.'
+                  : 'Todas as importações foram concluídas.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {backgroundJobs.map((job: any) => (
+                  <div key={job.id} className={`flex items-center justify-between border rounded-lg p-3 ${
+                    job.status === 'concluido' ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950' :
+                    job.status === 'erro' ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950' :
+                    job.status === 'processando' ? 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950' : ''
+                  }`}>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {job.status === 'pendente' && <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-xs">⏳</div>}
+                      {job.status === 'processando' && <Loader2 className="h-5 w-5 animate-spin text-blue-500 shrink-0" />}
+                      {job.status === 'concluido' && <Check className="h-5 w-5 text-green-600 shrink-0" />}
+                      {job.status === 'erro' && <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{job.nome_arquivo}</p>
+                        {job.status === 'processando' && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <Progress value={job.total_registros > 0 ? Math.round((job.registros_inseridos / job.total_registros) * 100) : 0} className="h-2 w-32" />
+                            <span className="text-xs text-blue-500">{job.registros_inseridos}/{job.total_registros}</span>
+                          </div>
+                        )}
+                        {job.status === 'concluido' && <p className="text-xs text-green-600">{job.registros_inseridos} registros importados</p>}
+                        {job.status === 'erro' && <p className="text-xs text-red-500">{job.erro_mensagem || 'Erro desconhecido'}</p>}
+                        {job.status === 'pendente' && <p className="text-xs text-muted-foreground">Aguardando processamento...</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={job.status === 'concluido' ? 'default' : job.status === 'erro' ? 'destructive' : 'secondary'} className={job.status === 'concluido' ? 'bg-green-600' : ''}>
+                        {job.status === 'pendente' ? 'Pendente' : job.status === 'processando' ? 'Processando' : job.status === 'concluido' ? 'Concluído' : 'Erro'}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(job.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+
         {isUmeAporte && umeAporteGroups.length > 0 && (() => {
           const novos = umeAporteGroups.filter(g => !g.jaTemAcordo);
           const existentes = umeAporteGroups.filter(g => g.jaTemAcordo);
