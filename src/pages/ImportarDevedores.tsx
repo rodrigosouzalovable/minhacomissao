@@ -969,7 +969,7 @@ export default function ImportarDevedores() {
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const usesCellDates = credorSelecionado === 'ume_aporte';
-        const workbook = XLSX.read(data, { type: 'buffer', cellDates: usesCellDates });
+        const workbook = XLSX.read(data, { type: 'array', cellDates: usesCellDates });
 
         if (credorSelecionado === 'ume_consolidado') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -1090,7 +1090,7 @@ export default function ImportarDevedores() {
         try {
           const data = new Uint8Array(evt.target?.result as ArrayBuffer);
           const usesCellDates = credorSelecionado === 'ume_aporte';
-          const workbook = XLSX.read(data, { type: 'buffer', cellDates: usesCellDates });
+          const workbook = XLSX.read(data, { type: 'array', cellDates: usesCellDates });
           let pRows: DevedorRow[] = [];
           let pPag: PagamentoRow[] = [];
           let pUme: UmeAporteGroup[] = [];
