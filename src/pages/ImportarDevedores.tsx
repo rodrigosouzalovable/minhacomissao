@@ -1191,7 +1191,7 @@ export default function ImportarDevedores() {
       if (error) break;
       inserted += records.slice(i, i + BATCH_SIZE).length;
     }
-    if (inserted > 0 && (credorSelecionado === 'montreal' || credorSelecionado === 'montreal_atualizacao')) {
+    if (inserted > 0 && credorSelecionado === 'montreal') {
       await insertTelefonesFromRows(rowsToImport, user.id);
     }
     return inserted;
@@ -1202,7 +1202,7 @@ export default function ImportarDevedores() {
     if (files.length === 0) return;
     setBatchImporting(true);
     stopRef.current = false;
-    const results = files.map(f => ({ name: f.name, status: 'pending' as const, count: 0 }));
+    const results: {name: string; status: 'pending'|'processing'|'done'|'error'; count: number; error?: string}[] = files.map(f => ({ name: f.name, status: 'pending' as const, count: 0 }));
     setFileResults([...results]);
 
     for (let i = 0; i < files.length; i++) {
