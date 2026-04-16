@@ -1235,9 +1235,112 @@ export default function ImportarDevedores() {
     return inserted;
   };
 
-  // Batch: import all files sequentially
+  // Prepare dados_json for the edge function based on layout
+  const prepareDadosJson = (parsed: { rows: DevedorRow[]; pagamentoRows: PagamentoRow[]; umeAporteGroups: UmeAporteGroup[]; montrealRows: MontrealAtualizacaoRow[] }, fileName: string): { layout: string; credor: string; dados: any; totalRegistros: number } | null => {
+    if (!user) return null;
+
+    const credorFinal = credorSelecionado === 'ume_consolidado' ? 'UME | NOVO MUNDO' : (credorDestino === 'outro' ? credorOutro.trim() : credorDestino);
+
+    if (credorSelecionado === 'pagamentos') {
+      const updates = parsed.pagamentoRows
+        .filter(r => r.pagamento_id && !r.ja_pago)
+        .map(r => ({ pagamento_id: r.pagamento_id, data_paga: parseDate(r.vencimento) }));
+      if (updates.length === 0) return null;
+      return { layout: 'pagamentos', credor: 'UME | NOVO MUNDO', dados: { updates }, totalRegistros: updates.length };
+    }
+
+    if (credorSelecionado === 'ume_aporte') {
+      const toImport = parsed.umeAporteGroups.filter(g => !g.jaTemAcordo);
+      if (toImport.length === 0) return null;
+      const groups = toImport.map(group => {
+        const comissao = calcularComissao(group.valorTotal, group.numParcelas, group.diasAtraso);
+        return {
+          cliente_nome: group.nome,
+          cliente_cpf: group.cpf,
+          cliente_telefone: group.telefone || null,
+          valor_total: Math.round(group.valorTotal * 100) / 100,
+          parcelas: group.numParcelas,
+          valor_parcela: Math.round((group.parcelas[0]?.valor || group.valorTotal / group.numParcelas) * 100) / 100,
+          data_primeiro_pagamento: group.dataPrimeiroPagamento.toISOString().split('T')[0],
+          dias_atraso: group.diasAtraso,
+          percentual_comissao: comissao.percentual,
+          comissao_total: comissao.comissaoTotal,
+          empresa: 'ume_novo_mundo',
+          pagamentos: group.parcelas.map(p => ({
+            numero_parcela: p.numeroParcela,
+            data_prevista: p.dataVencimento.toISOString().split('T')[0],
+            valor_parcela: Math.round(p.valor * 100) / 100,
+            comissao_parcela: Math.round(p.valor * (comissao.percentual / 100) * 100) / 100,
+          })),
+        };
+      });
+      return { layout: 'acordos', credor: 'UME | NOVO MUNDO', dados: { groups }, totalRegistros: groups.length };
+    }
+
+    if (credorSelecionado === 'montreal_atualizacao') {
+      const toImport = parsed.montrealRows.filter(r => r.status_importacao !== 'existe');
+      if (toImport.length === 0) return null;
+      const records = toImport.map(r => ({
+        nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
+        credor: 'MONTREAL', descricao: r.descricao || null, contrato: r.contrato || null,
+        data_vencimento: parseDate(r.atraso), telefone: r.telefone || null,
+      }));
+      // Prepare telefones
+      const phoneRecords: any[] = [];
+      const seenPhones = new Set<string>();
+      for (const row of parsed.montrealRows) {
+        const phones = [row.telefone, row.telefone2].filter(Boolean) as string[];
+        for (const phone of phones) {
+          const normalized = phone.replace(/\D/g, '');
+          if (!normalized || normalized.length < 10) continue;
+          const key = `${row.cpf}_${normalized}`;
+          if (seenPhones.has(key)) continue;
+          seenPhones.add(key);
+          phoneRecords.push({
+            devedor_cpf: row.cpf, numero: phone, tipo: 'celular',
+            criado_por: user.id, is_whatsapp: false, is_contato: false, observacao: 'Importado da planilha',
+          });
+        }
+      }
+      return { layout: 'devedores', credor: 'MONTREAL', dados: { records, telefones: phoneRecords }, totalRegistros: records.length };
+    }
+
+    // Standard layouts
+    const rowsToImport = parsed.rows;
+    if (rowsToImport.length === 0) return null;
+    const records = rowsToImport.map(r => ({
+      nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
+      credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
+      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      contrato: r.contrato || null,
+      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      telefone: r.telefone || null,
+    }));
+    // Montreal telefones
+    let telefones: any[] = [];
+    if (credorSelecionado === 'montreal') {
+      const seenPhones = new Set<string>();
+      for (const row of rowsToImport) {
+        const phones = [row.telefone, row.telefone2].filter(Boolean) as string[];
+        for (const phone of phones) {
+          const normalized = phone.replace(/\D/g, '');
+          if (!normalized || normalized.length < 10) continue;
+          const key = `${row.cpf}_${normalized}`;
+          if (seenPhones.has(key)) continue;
+          seenPhones.add(key);
+          telefones.push({
+            devedor_cpf: row.cpf, numero: phone, tipo: 'celular',
+            criado_por: user.id, is_whatsapp: false, is_contato: false, observacao: 'Importado da planilha',
+          });
+        }
+      }
+    }
+    return { layout: 'devedores', credor: credorFinal, dados: { records, telefones }, totalRegistros: records.length };
+  };
+
+  // Batch: import all files via background jobs
   const handleImportAll = async () => {
-    if (files.length === 0) return;
+    if (files.length === 0 || !user) return;
     setBatchImporting(true);
     stopRef.current = false;
     const results: {name: string; status: 'pending'|'processing'|'done'|'error'; count: number; error?: string}[] = files.map(f => ({ name: f.name, status: 'pending' as const, count: 0 }));
@@ -1250,14 +1353,43 @@ export default function ImportarDevedores() {
       setFileResults([...results]);
 
       try {
+        // Parse file in browser
         const parsed = await readAndParseFile(files[i]);
-        const totalRecords = parsed.rows.length + parsed.pagamentoRows.length + parsed.umeAporteGroups.length + parsed.montrealRows.length;
-        if (totalRecords === 0) {
+        const prepared = prepareDadosJson(parsed, files[i].name);
+        
+        if (!prepared) {
           results[i] = { name: files[i].name, status: 'error', count: 0, error: 'Nenhum registro válido' };
-        } else {
-          const count = await importParsedData(parsed, files[i].name);
-          results[i] = { name: files[i].name, status: 'done', count };
+          setFileResults([...results]);
+          continue;
         }
+
+        // Create job in DB
+        const { data: job, error: jobError } = await supabase
+          .from('importacao_jobs' as any)
+          .insert({
+            user_id: user.id,
+            nome_arquivo: files[i].name,
+            credor: prepared.credor,
+            layout: prepared.layout,
+            total_registros: prepared.totalRegistros,
+            status: 'pendente',
+            dados_json: prepared.dados,
+          } as any)
+          .select('id')
+          .single();
+
+        if (jobError || !job) {
+          results[i] = { name: files[i].name, status: 'error', count: 0, error: jobError?.message || 'Erro ao criar job' };
+          setFileResults([...results]);
+          continue;
+        }
+
+        // Fire-and-forget: invoke edge function
+        supabase.functions.invoke('process-import-job', {
+          body: { job_id: (job as any).id },
+        }).catch(err => console.error('Edge function invoke error:', err));
+
+        results[i] = { name: files[i].name, status: 'done', count: prepared.totalRegistros };
       } catch (err: any) {
         results[i] = { name: files[i].name, status: 'error', count: 0, error: err.message || 'Erro desconhecido' };
       }
@@ -1266,10 +1398,10 @@ export default function ImportarDevedores() {
 
     setBatchImporting(false);
     setCurrentFileIndex(-1);
-    fetchImportacoes();
+    fetchBackgroundJobs();
     const totalDone = results.filter(r => r.status === 'done').length;
     const totalErr = results.filter(r => r.status === 'error').length;
-    toast({ title: 'Importação em lote concluída', description: `${totalDone} arquivo(s) importado(s)${totalErr > 0 ? `, ${totalErr} com erro` : ''}.` });
+    toast({ title: 'Jobs de importação criados', description: `${totalDone} arquivo(s) enviado(s) para processamento em background${totalErr > 0 ? `, ${totalErr} com erro` : ''}. Você pode fechar a página.` });
   };
 
   const handleImportPagamentos = async () => {
