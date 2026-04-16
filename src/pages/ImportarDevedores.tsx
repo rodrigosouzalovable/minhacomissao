@@ -1822,7 +1822,62 @@ export default function ImportarDevedores() {
           </Card>
         )}
 
-        {/* UME Aporte Preview */}
+        {/* Background Jobs Status */}
+        {backgroundJobs.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Loader2 className={`h-5 w-5 ${backgroundJobs.some((j: any) => j.status === 'pendente' || j.status === 'processando') ? 'animate-spin text-blue-500' : 'text-muted-foreground'}`} />
+                Importações em Background
+              </CardTitle>
+              <CardDescription>
+                {backgroundJobs.some((j: any) => j.status === 'pendente' || j.status === 'processando')
+                  ? 'Processando no servidor — você pode fechar a página sem problemas.'
+                  : 'Todas as importações foram concluídas.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {backgroundJobs.map((job: any) => (
+                  <div key={job.id} className={`flex items-center justify-between border rounded-lg p-3 ${
+                    job.status === 'concluido' ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950' :
+                    job.status === 'erro' ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950' :
+                    job.status === 'processando' ? 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950' : ''
+                  }`}>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {job.status === 'pendente' && <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-xs">⏳</div>}
+                      {job.status === 'processando' && <Loader2 className="h-5 w-5 animate-spin text-blue-500 shrink-0" />}
+                      {job.status === 'concluido' && <Check className="h-5 w-5 text-green-600 shrink-0" />}
+                      {job.status === 'erro' && <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{job.nome_arquivo}</p>
+                        {job.status === 'processando' && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <Progress value={job.total_registros > 0 ? Math.round((job.registros_inseridos / job.total_registros) * 100) : 0} className="h-2 w-32" />
+                            <span className="text-xs text-blue-500">{job.registros_inseridos}/{job.total_registros}</span>
+                          </div>
+                        )}
+                        {job.status === 'concluido' && <p className="text-xs text-green-600">{job.registros_inseridos} registros importados</p>}
+                        {job.status === 'erro' && <p className="text-xs text-red-500">{job.erro_mensagem || 'Erro desconhecido'}</p>}
+                        {job.status === 'pendente' && <p className="text-xs text-muted-foreground">Aguardando processamento...</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={job.status === 'concluido' ? 'default' : job.status === 'erro' ? 'destructive' : 'secondary'} className={job.status === 'concluido' ? 'bg-green-600' : ''}>
+                        {job.status === 'pendente' ? 'Pendente' : job.status === 'processando' ? 'Processando' : job.status === 'concluido' ? 'Concluído' : 'Erro'}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(job.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+
         {isUmeAporte && umeAporteGroups.length > 0 && (() => {
           const novos = umeAporteGroups.filter(g => !g.jaTemAcordo);
           const existentes = umeAporteGroups.filter(g => g.jaTemAcordo);
