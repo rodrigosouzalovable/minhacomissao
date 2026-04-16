@@ -17,6 +17,36 @@ interface PaymentReminder {
   categoria: 'pagamento' | 'retorno';
 }
 
+// Filtra parcelas pendentes que possuem parcelas posteriores já pagas no mesmo acordo
+async function filterParcelsWithLaterPaid(items: PaymentReminder[]): Promise<PaymentReminder[]> {
+  if (items.length === 0) return items;
+
+  const acordoIds = [...new Set(items.filter(i => i.acordo_id).map(i => i.acordo_id!))];
+  if (acordoIds.length === 0) return items;
+
+  const { data: pagas } = await supabase
+    .from('pagamentos')
+    .select('acordo_id, numero_parcela')
+    .in('acordo_id', acordoIds)
+    .eq('status', 'pago');
+
+  if (!pagas || pagas.length === 0) return items;
+
+  // Para cada acordo, encontrar a maior parcela paga
+  const maxPagaPorAcordo: Record<string, number> = {};
+  pagas.forEach(p => {
+    const current = maxPagaPorAcordo[p.acordo_id] || 0;
+    if (p.numero_parcela > current) maxPagaPorAcordo[p.acordo_id] = p.numero_parcela;
+  });
+
+  return items.filter(item => {
+    if (!item.acordo_id || !item.numero_parcela) return true;
+    const maxPaga = maxPagaPorAcordo[item.acordo_id];
+    if (maxPaga && maxPaga > item.numero_parcela) return false;
+    return true;
+  });
+}
+
 export function usePaymentReminders() {
   const { user } = useAuth();
   const { acordosCompartilhados, concedidoPor } = useUserPermissions();
@@ -79,7 +109,7 @@ export function usePaymentReminders() {
         return [];
       }
 
-      return (data || []).map((pagamento: any) => ({
+      const items = (data || []).map((pagamento: any) => ({
         id: pagamento.id,
         acordo_id: pagamento.acordo_id,
         numero_parcela: pagamento.numero_parcela,
@@ -90,6 +120,8 @@ export function usePaymentReminders() {
         tipo: pagamento.data_prevista === hoje ? 'hoje' : 'tres_dias',
         categoria: 'pagamento',
       })) as PaymentReminder[];
+
+      return await filterParcelsWithLaterPaid(items);
     },
     enabled: !!user,
     refetchInterval: 30 * 1000,
@@ -122,7 +154,7 @@ export function usePaymentReminders() {
         return [];
       }
 
-      return (data || []).map((pagamento: any) => ({
+      const items = (data || []).map((pagamento: any) => ({
         id: pagamento.id,
         acordo_id: pagamento.acordo_id,
         numero_parcela: pagamento.numero_parcela,
@@ -133,6 +165,8 @@ export function usePaymentReminders() {
         tipo: 'vencido',
         categoria: 'pagamento',
       })) as PaymentReminder[];
+
+      return await filterParcelsWithLaterPaid(items);
     },
     enabled: !!user,
     refetchInterval: 30 * 1000,
