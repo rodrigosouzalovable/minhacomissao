@@ -477,6 +477,49 @@ export default function ImportarDevedores() {
     return s === '#N/D' || s === '#N/A' || s === '#REF!' || s === '#VALUE!' || s === '';
   };
 
+  const parseUmeConsolidado = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
+    return dataRows.map((row) => {
+      let cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      if (!cpf) return null;
+      cpf = cpf.padStart(11, '0');
+
+      const nome = String(row['B'] ?? '').trim();
+      if (!nome) return null;
+
+      const credorRaw = String(row['C'] ?? '').toUpperCase();
+      const isAporte = credorRaw.includes('APORTE');
+      const credor = isAporte ? 'ume_novo_mundo_aporte' : 'ume_novo_mundo';
+
+      const contrato = String(row['D'] ?? '').trim();
+      const numeroParcela = parseInt(String(row['E'] ?? '0')) || 0;
+      const valor = parseNum(row['G']);
+      const valorTotal = parseNum(row['H']);
+
+      let vencimentoStr = '';
+      const vencRaw = row['F'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+        }
+      } else if (vencRaw) {
+        vencimentoStr = String(vencRaw);
+      }
+
+      return {
+        cpf,
+        nascimento: vencimentoStr, // use nascimento field for date (used by parseDate in handleImport)
+        nome,
+        credor,
+        contrato,
+        atraso: '',
+        descricao: `Parcela ${numeroParcela}`,
+        valor_original: valor,
+        valor_atualizado: valorTotal || valor,
+      };
+    }).filter((r): r is DevedorRow => r !== null && r.cpf.length >= 11);
+  };
+
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
     const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
