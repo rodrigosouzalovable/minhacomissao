@@ -1,45 +1,68 @@
 
 
-## Corrigir Lembretes Mostrando Parcelas de Acordos com Pagamentos Já Realizados
+## Diagnóstico
 
-### Diagnóstico
+### 1. Acordos órfãos (sem parcelas) — confirmado no banco
 
-Os lembretes de vencidos estão mostrando parcelas pendentes de acordos onde o cliente já pagou parcelas posteriores. Por exemplo, se o cliente pagou parcela 2 mas parcela 3 está pendente e vencida, ela aparece no lembrete — mas se o cliente já pagou parcelas recentes, essas parcelas antigas provavelmente são inconsistências, não cobranças reais.
+São **8 acordos** criados em 15/04/2026 entre 23:16:48 e 23:17:14 pela usuária Anna Flávia, todos ativos, com 0 registros em `pagamentos`. A `MARIA APARECIDA DIAS` foi removida da lista (já tem parcelas). Lista final a corrigir:
 
-O problema está no hook `usePaymentReminders.tsx` que busca **todas** as parcelas com `status = 'pendente'`, sem verificar se existem parcelas mais recentes já pagas no mesmo acordo.
+| # | Cliente | CPF | Parcelas | Valor parcela | 1º vencimento | % comissão |
+|---|---|---|---|---|---|---|
+| 1 | OSMAR ALMEIDA DA SILVA | 00423975102 | 23 | 429,89 | 25/03/2026 | 2% |
+| 2 | ILDETE ALVES FEITOSA | 00546560105 | 24 | 364,00 | 10/04/2026 | 2% |
+| 3 | RENATO DIAS PIMENTA | 02217119109 | 27 | 210,18 | 25/03/2026 | 2% |
+| 4 | IARA NERES PINHEIRO | 02788189354 | 9 | 59,00 | 05/04/2026 | 2% |
+| 5 | BEATRIZ CONCEICAO DOS SANTOS | 06832841507 | 24 | 104,08 | 10/04/2026 | 2% |
+| 6 | GUILHERME HENRIQUE DE SA MARTINS | 07675820126 | 18 | 55,00 | 06/05/2026 | 0% |
+| 7 | WALDEMIR MONTEIRO FERREIRA | 10676333320 | 21 | 351,92 | 08/04/2026 | 2% |
+| 8 | MARIA DAS GRACAS CARDOSO | 25589903149 | 11 | 249,21 | 10/04/2026 | 2% |
 
-### Solução
+Confirmei via `LEFT JOIN ... HAVING COUNT = 0` que **estes são os únicos acordos órfãos do sistema inteiro** — não há mais casos semelhantes em outros lotes ou usuários.
 
-Adicionar um filtro no hook `usePaymentReminders.tsx` que exclui parcelas pendentes quando o acordo possui parcelas com `numero_parcela` maior já marcadas como pagas. Ou seja: se a parcela 5 está paga, a parcela 3 pendente não deve aparecer como lembrete.
+### 2. Sistema de lembretes — auditoria completa
 
-### Alterações técnicas
+Hoje é **16/04/2026**. No banco:
+- **26** parcelas vencendo HOJE
+- **13** parcelas vencendo em 3 dias (19/04)
+- **496** parcelas VENCIDAS (já filtrando casos com parcela posterior paga)
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/usePaymentReminders.tsx` | Filtrar no frontend: após buscar parcelas pendentes, remover as que pertencem a acordos onde uma parcela posterior já foi paga |
+Distribuição por operador: RODRIGO (402) e Anna Flávia (163).
 
-### Lógica do filtro
+A lógica do hook `usePaymentReminders.tsx` (após o último fix) está correta: busca pendentes com `data_prevista = hoje`, `data_prevista = hoje+3`, `data_prevista < hoje`, e remove parcelas onde existe outra paga com número maior. **Tudo que está no banco aparece nos lembretes** — desde que o operador logado seja o `user_id` do acordo (ou tenha acesso compartilhado).
 
-Para cada parcela pendente retornada:
-1. Agrupar por `acordo_id`
-2. Para cada acordo, verificar se existe alguma parcela com `numero_parcela` maior e `status = 'pago'`
-3. Se sim, remover essa parcela pendente dos lembretes
+**Único ponto cego real:** os 8 acordos órfãos acima têm `data_primeiro_pagamento` no passado (alguns desde 25/03), portanto **deveriam estar gerando lembretes de parcelas vencidas** — mas como não têm linhas em `pagamentos`, ficam invisíveis. Corrigir os órfãos resolve também o problema de lembretes faltantes.
 
-Isso será feito em duas etapas:
-- Na query de **pagamentos hoje e 3 dias**: adicionar filtro client-side
-- Na query de **parcelas vencidas**: adicionar filtro client-side
-- Alternativamente, fazer uma sub-query SQL que exclua parcelas onde existem parcelas posteriores pagas no mesmo acordo
+## Plano de correção
 
-### Abordagem preferida: filtro SQL direto
+### Etapa 1 — Gerar parcelas faltantes para os 8 acordos órfãos
 
-Adicionar cláusula `AND NOT EXISTS (SELECT 1 FROM pagamentos p2 WHERE p2.acordo_id = pagamentos.acordo_id AND p2.status = 'pago' AND p2.numero_parcela > pagamentos.numero_parcela)` nas três queries de pagamentos.
+Para cada acordo, inserir N linhas em `pagamentos` (N = `acordos.parcelas`) com:
+- `numero_parcela`: 1..N
+- `data_prevista`: `data_primeiro_pagamento + (i-1) meses`
+- `valor_parcela`: vindo de `acordos.valor_parcela`
+- `comissao_parcela`: `valor_parcela * percentual_comissao / 100`
+- `status`: `'pendente'`
 
-Isso garante que:
-- Parcelas vencidas com parcelas posteriores pagas **não aparecem**
-- Parcelas legítimas (próximo vencimento) continuam aparecendo normalmente
+Faço com um único `INSERT ... SELECT ... FROM generate_series(1, parcelas)` filtrando pelos 8 IDs — operação atômica, custo zero, sem mudança de código.
+
+### Etapa 2 — Validação pós-inserção
+
+Re-rodar a query de órfãos (deve retornar zero) e contar parcelas vencidas/hoje/3-dias para confirmar que os novos lembretes apareceram (espera-se ~10–15 parcelas vencidas adicionais entrando no painel de Anna Flávia).
+
+### Etapa 3 — Confirmação para o usuário
+
+Reportar:
+- Parcelas geradas por cliente
+- Novo total de lembretes "vencidas" para Anna Flávia
+- Pedir validação visual abrindo a ficha da Beatriz e o painel de lembretes
 
 ### O que NÃO muda
-- Lembretes de retornos permanecem iguais
-- Lógica de marcar como lido/deslido permanece igual
-- Templates e envio de WhatsApp não são afetados
+
+- Nenhum código alterado (correção 100% de dados)
+- Hook de lembretes permanece como está (já corrigido na rodada anterior)
+- Trigger de CPF duplicado e demais permissões intactas
+
+### Prevenção (opcional, não incluída agora)
+
+Causa raiz: criação de acordo + parcelas em duas chamadas separadas sem transação. Posso, em uma rodada futura, mover a criação completa para uma RPC `criar_acordo_com_parcelas` atômica, eliminando órfãos definitivamente. Aviso antes pelo impacto.
 
