@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History, Users, Eye, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, Check, AlertCircle, History, Users, Eye, Loader2, Square, X } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -134,6 +134,13 @@ export default function ImportarDevedores() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const CREDORES_OPCOES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
+
+  // Multi-file batch state
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileResults, setFileResults] = useState<{name: string; status: 'pending'|'processing'|'done'|'error'; count: number; error?: string}[]>([]);
+  const [currentFileIndex, setCurrentFileIndex] = useState(-1);
+  const [batchImporting, setBatchImporting] = useState(false);
+  const stopRef = useRef(false);
 
   const isPagamentos = credorSelecionado === 'pagamentos';
   const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
@@ -892,12 +899,31 @@ export default function ImportarDevedores() {
   };
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setFile(f);
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
     setImported(false);
     setPagamentoImported(false);
     setUmeAporteImported(false);
+
+    // Multi-file: batch mode, no preview
+    if (selectedFiles.length > 1) {
+      setFiles(selectedFiles);
+      setFile(null);
+      setRows([]);
+      setPagamentoRows([]);
+      setMontrealRows([]);
+      setUmeAporteGroups([]);
+      setFileResults(selectedFiles.map(f => ({ name: f.name, status: 'pending' as const, count: 0 })));
+      setParsing(false);
+      return;
+    }
+
+    // Single file: existing preview flow
+    const f = selectedFiles[0];
+    setFile(f);
+    setFiles([f]);
+    setFileResults([]);
     setParsing(true);
 
     const reader = new FileReader();
@@ -945,19 +971,16 @@ export default function ImportarDevedores() {
               bestSheetName = sName;
             }
           }
-          const sheet = bestSheet;
-          console.log('[PAGAMENTOS] Using sheet:', bestSheetName, 'ref:', sheet['!ref'], 'rows:', bestRowCount);
-          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-          console.log('[PAGAMENTOS] json.length:', json.length);
-          if (json.length > 1) {
-            console.log('[PAGAMENTOS] Row 2 sample:', Object.keys(json[1]).map(k => `${k}=${json[1][k]}`).join(', '));
-          }
+          console.log('[PAGAMENTOS] Melhor aba:', bestSheetName, '| Linhas:', bestRowCount);
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(bestSheet, { header: 'A' });
           const dataRows = json.slice(1);
           const parsed = await parsePagamentos(dataRows);
           setPagamentoRows(parsed);
           setRows([]);
+          setMontrealRows([]);
+          setUmeAporteGroups([]);
           if (parsed.length === 0) {
-            toast({ title: 'Nenhuma parcela PAGA encontrada', description: 'A planilha não contém linhas com status PAGA.', variant: 'destructive' });
+            toast({ title: 'Nenhuma parcela PAGA encontrada', description: 'A planilha não contém linhas com status "PAGA" na coluna K.', variant: 'destructive' });
           }
         } else if (credorSelecionado === 'montreal_atualizacao') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -967,36 +990,44 @@ export default function ImportarDevedores() {
           setMontrealRows(parsed);
           setRows([]);
           setPagamentoRows([]);
+          setUmeAporteGroups([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
+          }
+        } else if (credorSelecionado === 'cobmais') {
+          const parsed = parseCobmais(workbook);
+          setRows(parsed);
+          setPagamentoRows([]);
+          setMontrealRows([]);
+          setUmeAporteGroups([]);
           if (parsed.length === 0) {
             toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
           }
         } else {
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          const dataRows = json.slice(1);
           let parsed: DevedorRow[];
-          if (credorSelecionado === 'cobmais') {
-            parsed = parseCobmais(workbook);
+          if (credorSelecionado === 'montreal') {
+            parsed = parseMontreal(dataRows);
+          } else if (credorSelecionado === 'pesquisa') {
+            parsed = parsePesquisa(dataRows);
           } else {
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-            const dataRows = json.slice(1);
-            parsed = credorSelecionado === 'montreal' ? parseMontreal(dataRows) : credorSelecionado === 'pesquisa' ? parsePesquisa(dataRows) : parsePadrao(dataRows);
+            parsed = parsePadrao(dataRows);
           }
           setRows(parsed);
           setPagamentoRows([]);
           setMontrealRows([]);
+          setUmeAporteGroups([]);
           if (parsed.length === 0) {
-            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos para importar.', variant: 'destructive' });
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
           }
         }
       } catch (err) {
         console.error('Erro ao processar planilha:', err);
-        toast({ title: 'Erro ao processar planilha', description: String(err), variant: 'destructive' });
-      } finally {
-        setParsing(false);
+        toast({ title: 'Erro ao ler planilha', description: 'Verifique o formato do arquivo.', variant: 'destructive' });
       }
-    };
-    reader.onerror = () => {
       setParsing(false);
-      toast({ title: 'Erro ao ler arquivo', variant: 'destructive' });
     };
     reader.readAsArrayBuffer(f);
   }, [credorSelecionado]);
@@ -1011,6 +1042,196 @@ export default function ImportarDevedores() {
       }
     }
     return null;
+  };
+
+  // Batch: read and parse a single file (returns parsed data without setting state)
+  const readAndParseFile = (f: File): Promise<{ rows: DevedorRow[]; pagamentoRows: PagamentoRow[]; umeAporteGroups: UmeAporteGroup[]; montrealRows: MontrealAtualizacaoRow[] }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          const usesCellDates = credorSelecionado === 'ume_aporte';
+          const workbook = XLSX.read(data, { type: 'buffer', cellDates: usesCellDates });
+          let pRows: DevedorRow[] = [];
+          let pPag: PagamentoRow[] = [];
+          let pUme: UmeAporteGroup[] = [];
+          let pMontreal: MontrealAtualizacaoRow[] = [];
+
+          if (credorSelecionado === 'ume_consolidado') {
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+            pRows = parseUmeConsolidado(json.slice(1));
+          } else if (credorSelecionado === 'ume_aporte') {
+            const sheet = findBestSheetForUmeAporte(workbook);
+            const dataRows = getSheetRowsByLetters(sheet).slice(1);
+            pUme = await parseUmeAporte(dataRows);
+          } else if (credorSelecionado === 'pagamentos') {
+            let bestSheet = workbook.Sheets[workbook.SheetNames[0]];
+            let bestRowCount = 0;
+            for (const sName of workbook.SheetNames) {
+              const s = workbook.Sheets[sName];
+              const ref = s['!ref'] || '';
+              const match = ref.match(/:.*?(\d+)$/);
+              const rowCount = match ? parseInt(match[1], 10) : 0;
+              if (rowCount > bestRowCount) { bestRowCount = rowCount; bestSheet = s; }
+            }
+            const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(bestSheet, { header: 'A' });
+            pPag = await parsePagamentos(json.slice(1));
+          } else if (credorSelecionado === 'montreal_atualizacao') {
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+            pMontreal = await parseMontrealAtualizacao(json.slice(1));
+          } else if (credorSelecionado === 'cobmais') {
+            pRows = parseCobmais(workbook);
+          } else {
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+            const dataRows = json.slice(1);
+            if (credorSelecionado === 'montreal') pRows = parseMontreal(dataRows);
+            else if (credorSelecionado === 'pesquisa') pRows = parsePesquisa(dataRows);
+            else pRows = parsePadrao(dataRows);
+          }
+          resolve({ rows: pRows, pagamentoRows: pPag, umeAporteGroups: pUme, montrealRows: pMontreal });
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+      reader.readAsArrayBuffer(f);
+    });
+  };
+
+  // Batch: import parsed data for a single file (returns count of records processed)
+  const importParsedData = async (parsed: { rows: DevedorRow[]; pagamentoRows: PagamentoRow[]; umeAporteGroups: UmeAporteGroup[]; montrealRows: MontrealAtualizacaoRow[] }, fileName: string): Promise<number> => {
+    if (!user) return 0;
+
+    if (credorSelecionado === 'pagamentos') {
+      const toUpdate = parsed.pagamentoRows.filter(r => r.pagamento_id && !r.ja_pago);
+      let updated = 0;
+      for (const row of toUpdate) {
+        const dataPaga = parseDate(row.vencimento);
+        const { error } = await supabase.from('pagamentos').update({ status: 'pago', data_paga: dataPaga } as any).eq('id', row.pagamento_id!);
+        if (!error) updated++;
+      }
+      return updated;
+    }
+
+    if (credorSelecionado === 'ume_aporte') {
+      const toImport = parsed.umeAporteGroups.filter(g => !g.jaTemAcordo);
+      if (toImport.length === 0) return 0;
+      const { data: importacao } = await supabase.from('importacoes' as any).insert({ nome_arquivo: fileName, credor: 'UME | NOVO MUNDO', total_registros: toImport.length, importado_por: user.id } as any).select('id').single();
+      if (!importacao) return 0;
+      let inserted = 0;
+      for (const group of toImport) {
+        const comissao = calcularComissao(group.valorTotal, group.numParcelas, group.diasAtraso);
+        const { data: acordo } = await supabase.from('acordos').insert({
+          cliente_nome: group.nome, cliente_cpf: group.cpf, cliente_telefone: group.telefone || null,
+          valor_total: Math.round(group.valorTotal * 100) / 100, parcelas: group.numParcelas,
+          valor_parcela: Math.round((group.parcelas[0]?.valor || group.valorTotal / group.numParcelas) * 100) / 100,
+          data_primeiro_pagamento: group.dataPrimeiroPagamento.toISOString().split('T')[0],
+          dias_atraso: group.diasAtraso, percentual_comissao: comissao.percentual,
+          comissao_total: comissao.comissaoTotal, empresa: 'ume_novo_mundo', user_id: user.id,
+          status: 'ativo', duplicado_verificado: true,
+        } as any).select('id').single();
+        if (!acordo) continue;
+        const pagamentos = group.parcelas.map(p => ({
+          acordo_id: (acordo as any).id, numero_parcela: p.numeroParcela,
+          data_prevista: p.dataVencimento.toISOString().split('T')[0],
+          valor_parcela: Math.round(p.valor * 100) / 100,
+          comissao_parcela: Math.round(p.valor * (comissao.percentual / 100) * 100) / 100, status: 'pendente',
+        }));
+        await supabase.from('pagamentos').insert(pagamentos as any);
+        inserted++;
+      }
+      return inserted;
+    }
+
+    if (credorSelecionado === 'montreal_atualizacao') {
+      const toImport = parsed.montrealRows.filter(r => r.status_importacao !== 'existe');
+      if (toImport.length === 0) return 0;
+      const { data: importacao } = await supabase.from('importacoes' as any).insert({ nome_arquivo: fileName, credor: 'MONTREAL', total_registros: toImport.length, importado_por: user.id } as any).select('id').single();
+      if (!importacao) return 0;
+      const importacaoId = (importacao as any).id;
+      const records = toImport.map(r => ({
+        nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
+        credor: 'MONTREAL', descricao: r.descricao || null, contrato: r.contrato || null,
+        data_vencimento: parseDate(r.atraso), telefone: r.telefone || null,
+        importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
+      }));
+      const BATCH_SIZE = 500;
+      let inserted = 0;
+      for (let i = 0; i < records.length; i += BATCH_SIZE) {
+        const { error } = await supabase.from('devedores' as any).insert(records.slice(i, i + BATCH_SIZE) as any);
+        if (error) break;
+        inserted += records.slice(i, i + BATCH_SIZE).length;
+      }
+      if (inserted > 0) await insertTelefonesFromRows(parsed.montrealRows, user.id);
+      return inserted;
+    }
+
+    // Standard layouts (padrao, montreal, cobmais, pesquisa, ume_consolidado)
+    const rowsToImport = parsed.rows;
+    if (rowsToImport.length === 0) return 0;
+    const credorFinal = credorSelecionado === 'ume_consolidado' ? 'UME | NOVO MUNDO' : (credorDestino === 'outro' ? credorOutro.trim() : credorDestino);
+    const { data: importacao } = await supabase.from('importacoes' as any).insert({ nome_arquivo: fileName, credor: credorFinal, total_registros: rowsToImport.length, importado_por: user.id } as any).select('id').single();
+    if (!importacao) return 0;
+    const importacaoId = (importacao as any).id;
+    const records = rowsToImport.map(r => ({
+      nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
+      credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
+      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      contrato: r.contrato || null,
+      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      telefone: r.telefone || null,
+      importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
+    }));
+    const BATCH_SIZE = 500;
+    let inserted = 0;
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const { error } = await supabase.from('devedores' as any).insert(records.slice(i, i + BATCH_SIZE) as any);
+      if (error) break;
+      inserted += records.slice(i, i + BATCH_SIZE).length;
+    }
+    if (inserted > 0 && (credorSelecionado === 'montreal' || credorSelecionado === 'montreal_atualizacao')) {
+      await insertTelefonesFromRows(rowsToImport, user.id);
+    }
+    return inserted;
+  };
+
+  // Batch: import all files sequentially
+  const handleImportAll = async () => {
+    if (files.length === 0) return;
+    setBatchImporting(true);
+    stopRef.current = false;
+    const results = files.map(f => ({ name: f.name, status: 'pending' as const, count: 0 }));
+    setFileResults([...results]);
+
+    for (let i = 0; i < files.length; i++) {
+      if (stopRef.current) break;
+      setCurrentFileIndex(i);
+      results[i] = { ...results[i], status: 'processing' };
+      setFileResults([...results]);
+
+      try {
+        const parsed = await readAndParseFile(files[i]);
+        const totalRecords = parsed.rows.length + parsed.pagamentoRows.length + parsed.umeAporteGroups.length + parsed.montrealRows.length;
+        if (totalRecords === 0) {
+          results[i] = { name: files[i].name, status: 'error', count: 0, error: 'Nenhum registro válido' };
+        } else {
+          const count = await importParsedData(parsed, files[i].name);
+          results[i] = { name: files[i].name, status: 'done', count };
+        }
+      } catch (err: any) {
+        results[i] = { name: files[i].name, status: 'error', count: 0, error: err.message || 'Erro desconhecido' };
+      }
+      setFileResults([...results]);
+    }
+
+    setBatchImporting(false);
+    setCurrentFileIndex(-1);
+    fetchImportacoes();
+    const totalDone = results.filter(r => r.status === 'done').length;
+    const totalErr = results.filter(r => r.status === 'error').length;
+    toast({ title: 'Importação em lote concluída', description: `${totalDone} arquivo(s) importado(s)${totalErr > 0 ? `, ${totalErr} com erro` : ''}.` });
   };
 
   const handleImportPagamentos = async () => {
@@ -1145,6 +1366,11 @@ export default function ImportarDevedores() {
 
   const handleClear = () => {
     setFile(null);
+    setFiles([]);
+    setFileResults([]);
+    setCurrentFileIndex(-1);
+    setBatchImporting(false);
+    stopRef.current = false;
     setRows([]);
     setPagamentoRows([]);
     setMontrealRows([]);
@@ -1331,9 +1557,10 @@ export default function ImportarDevedores() {
                 accept=".xlsx,.xls,.csv"
                 onChange={handleFile}
                 className="max-w-sm"
-                disabled={parsing}
+                disabled={parsing || batchImporting}
+                multiple
               />
-              {file && !parsing && (
+              {(file || files.length > 0) && !parsing && !batchImporting && (
                 <Button variant="outline" size="sm" onClick={handleClear}>
                   <Trash2 className="h-4 w-4 mr-1" />
                   Limpar
@@ -1356,6 +1583,74 @@ export default function ImportarDevedores() {
             )}
           </CardContent>
         </Card>
+
+        {/* Batch Multi-File UI */}
+        {files.length > 1 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileSpreadsheet className="h-5 w-5" />
+                    Importação em Lote ({files.length} arquivos)
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    {batchImporting
+                      ? `Processando arquivo ${currentFileIndex + 1} de ${files.length}...`
+                      : fileResults.every(r => r.status === 'done' || r.status === 'error')
+                        ? `Concluído — ${fileResults.filter(r => r.status === 'done').length} importado(s), ${fileResults.filter(r => r.status === 'error').length} erro(s)`
+                        : `${files.length} arquivos selecionados. Clique em "Importar Todos" para iniciar.`
+                    }
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {batchImporting ? (
+                    <Button variant="destructive" size="sm" onClick={() => { stopRef.current = true; }}>
+                      <Square className="h-4 w-4 mr-1" />
+                      Parar
+                    </Button>
+                  ) : !fileResults.some(r => r.status === 'done' || r.status === 'error') ? (
+                    <Button onClick={handleImportAll} style={{ background: '#00a86b', color: '#fff' }}>
+                      <Check className="h-4 w-4 mr-1" />
+                      Importar Todos
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              {batchImporting && (
+                <div className="mt-4 space-y-2">
+                  <Progress value={Math.round(((currentFileIndex + 1) / files.length) * 100)} className="h-3" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Arquivo {currentFileIndex + 1} de {files.length} ({Math.round(((currentFileIndex + 1) / files.length) * 100)}%)
+                  </p>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {fileResults.map((result, idx) => (
+                  <div key={idx} className={`flex items-center justify-between border rounded-lg p-3 ${result.status === 'done' ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950' : result.status === 'error' ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950' : result.status === 'processing' ? 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      {result.status === 'pending' && <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground">{idx + 1}</div>}
+                      {result.status === 'processing' && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
+                      {result.status === 'done' && <Check className="h-5 w-5 text-green-600" />}
+                      {result.status === 'error' && <AlertCircle className="h-5 w-5 text-red-500" />}
+                      <div>
+                        <p className="font-medium text-sm">{result.name}</p>
+                        {result.status === 'done' && <p className="text-xs text-green-600">{result.count} registros importados</p>}
+                        {result.status === 'error' && <p className="text-xs text-red-500">{result.error}</p>}
+                        {result.status === 'processing' && <p className="text-xs text-blue-500">Processando...</p>}
+                      </div>
+                    </div>
+                    <Badge variant={result.status === 'done' ? 'default' : result.status === 'error' ? 'destructive' : 'secondary'} className={result.status === 'done' ? 'bg-green-600' : ''}>
+                      {result.status === 'pending' ? 'Pendente' : result.status === 'processing' ? 'Processando' : result.status === 'done' ? 'Concluído' : 'Erro'}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* UME Aporte Preview */}
         {isUmeAporte && umeAporteGroups.length > 0 && (() => {
