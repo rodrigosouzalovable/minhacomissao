@@ -227,6 +227,17 @@ export function EditPermissionsDialog({
                 onCheckedChange={setAcordosCompartilhados}
               />
             </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Permitir CPF Duplicado</Label>
+                <p className="text-xs text-muted-foreground">Permite criar novos acordos mesmo que já exista acordo com o mesmo CPF</p>
+              </div>
+              <Switch
+                checked={permiteCpfDuplicado}
+                onCheckedChange={setPermiteCpfDuplicado}
+              />
+            </div>
           </div>
         </div>
 
