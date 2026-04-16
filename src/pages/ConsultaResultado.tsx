@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ArrowLeft, MessageCircle, FileText, Phone, AlertCircle, CalendarIcon, Check, Shield, Lock, Clock, ChevronDown, TrendingDown, Sparkles } from 'lucide-react';
 import DiscountTierSelector, { type DescontoFaixa, getDesconto, getMinParcelas, getMaxParcelasFaixa } from '@/components/negociacao/DiscountTierSelector';
 import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
+import { calcularJurosAporte } from '@/lib/comissao';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ interface Debito {
   descricao: string | null;
   contrato: string | null;
   data_vencimento: string | null;
+  credor: string | null;
 }
 
 interface ParcelaAcordo {
