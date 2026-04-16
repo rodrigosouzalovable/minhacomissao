@@ -1,71 +1,35 @@
 
 
-## Importação em Background (Continua Mesmo ao Fechar a Página)
+## Corrigir Login Bloqueado Durante Importação em Lote
 
-### Problema
-Hoje toda a importação roda no navegador. Se você fechar a aba ou sair da conta, o processo para.
+### Diagnóstico
+
+O problema não é a importação em si, mas os **payloads enormes** de `dados_json` sendo inseridos na tabela `importacao_jobs`. Cada arquivo XLSX pode gerar megabytes de JSON. Com 14 arquivos, o navegador fica enviando requisições gigantes sequencialmente para o Supabase, esgotando o pool de conexões HTTP do browser (limite de ~6 conexões simultâneas por domínio). Quando você abre outra aba e tenta fazer login, a requisição de `signInWithPassword` fica na fila esperando uma conexão disponível.
 
 ### Solução
-Mover o processamento para uma **função backend** que roda no servidor. O fluxo será:
 
-1. **Frontend**: Lê os arquivos Excel no navegador, faz o parse (como já faz hoje), e envia os dados parseados para a função backend
-2. **Backend**: Recebe os dados e insere no banco em lotes — independente do navegador
-3. **Acompanhamento**: Uma tabela `importacao_jobs` registra o progresso de cada arquivo, e o frontend consulta o status em tempo real
+Dois ajustes para garantir que a importação não bloqueie o resto do sistema:
 
-### Mudanças
+#### 1. Adicionar timeout no login (`src/pages/Auth.tsx`)
+Envolver a chamada de `signIn` com um timeout para que nunca fique preso infinitamente no "Entrando...". Se demorar mais de 15 segundos, mostrar mensagem de erro pedindo para tentar novamente.
 
-#### 1. Nova tabela `importacao_jobs`
-Registra cada job de importação com status e progresso:
-- `id`, `user_id`, `nome_arquivo`, `credor`, `layout`
-- `status`: `pendente` | `processando` | `concluido` | `erro`
-- `total_registros`, `registros_inseridos`, `erro_mensagem`
-- `dados_json` (JSONB): os dados parseados enviados pelo frontend
-- `criado_em`, `atualizado_em`
+#### 2. Throttle nas inserções de jobs (`src/pages/ImportarDevedores.tsx`)
+- Adicionar um pequeno `await new Promise(resolve => setTimeout(resolve, 500))` entre cada inserção de job para não saturar as conexões
+- Mais importante: marcar o resultado como "done" (enviado ao servidor) imediatamente após a inserção, liberando o browser para outras operações
 
-#### 2. Nova Edge Function `process-import-job`
-- Recebe o `job_id`, lê os dados da tabela `importacao_jobs`
-- Insere os registros no banco em lotes de 500 (mesma lógica atual)
-- Atualiza `registros_inseridos` e `status` conforme avança
-- Cria o registro na tabela `importacoes` (histórico) ao concluir
-- Usa `service_role_key` para inserções sem RLS
+#### 3. Otimizar o tamanho do payload
+- Remover campos desnecessários do `dados_json` antes de enviar (ex: campos vazios, metadados do XLSX)
+- Isso reduz o tempo de upload de cada job
 
-#### 3. Mudanças no Frontend (`ImportarDevedores.tsx`)
-- **Parse**: Continua no navegador (lê Excel, converte em JSON)
-- **Ao clicar "Importar"**: Salva os dados parseados na tabela `importacao_jobs` e chama a Edge Function (fire-and-forget)
-- **Polling**: A cada 3 segundos, consulta `importacao_jobs` para atualizar a barra de progresso
-- **Multi-arquivo**: Cada arquivo vira um job independente — todos são enviados de uma vez
-- Se o usuário fechar e voltar, verá os jobs em andamento ou concluídos
+### Alterações técnicas
 
-#### 4. UI de acompanhamento
-- Card "Importações em Andamento" aparece quando há jobs ativos
-- Mostra cada arquivo com status (Pendente → Processando → Concluído/Erro)
-- Progress bar com contagem de registros inseridos
-- Jobs concluídos ficam visíveis por 24h depois somem
-
-### Fluxo visual
-
-```text
-[Usuário seleciona arquivos]
-        ↓
-[Browser parse XLSX → JSON]
-        ↓
-[Salva JSON em importacao_jobs]
-        ↓
-[Chama Edge Function (fire-and-forget)]
-        ↓
-[Edge Function insere no banco em lotes]
-        ↓                    ↓
-[Atualiza progresso]   [Usuário pode fechar]
-        ↓
-[Frontend faz polling e mostra status]
-```
+| Arquivo | Mudança |
+|---------|---------|
+| `src/pages/Auth.tsx` | Timeout de 15s no login com mensagem amigável |
+| `src/pages/ImportarDevedores.tsx` | Delay de 500ms entre jobs + limpeza de payload |
 
 ### O que NÃO muda
-- Lógica de parsing de cada layout (permanece no frontend)
-- Tabelas existentes (`devedores`, `importacoes`, `acordos`, `pagamentos`)
-- Funciona mesmo com um único arquivo
-
-### Custo
-- Uma Edge Function adicional (custo mínimo, executa só durante importação)
-- Tabela `importacao_jobs` com dados temporários (JSONB é limpo após conclusão)
+- Edge Function `process-import-job` permanece igual
+- Tabela `importacao_jobs` não muda
+- Toda lógica de parsing e importação continua a mesma
 
