@@ -21,7 +21,7 @@ import {
 import * as XLSX from 'xlsx';
 import { calcularComissao } from '@/lib/comissao';
 
-type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos' | 'ume_aporte';
+type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos' | 'ume_aporte' | 'ume_consolidado';
 
 type MontrealRowStatus = 'existe' | 'nova_parcela' | 'cliente_novo';
 
@@ -92,6 +92,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
   pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
   ume_aporte: 'A = CPF, B = Nome, C = Telefone, D = Nº Parcela, E = Data Vencimento, F = Valor Parcela — Cria acordos automaticamente no sistema',
+  ume_consolidado: 'A = CPF, B = Nome, C = Credor, D = Contrato, E = Nº Parcela, F = Vencimento, G = Valor Parcela, H = Valor Total — Importa INADIMPLENTES e APORTE juntos',
 };
 
 export default function ImportarDevedores() {
@@ -137,6 +138,7 @@ export default function ImportarDevedores() {
   const isPagamentos = credorSelecionado === 'pagamentos';
   const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
   const isUmeAporte = credorSelecionado === 'ume_aporte';
+  const isUmeConsolidado = credorSelecionado === 'ume_consolidado';
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -171,6 +173,9 @@ export default function ImportarDevedores() {
       setCredorDestino('MONTREAL');
     }
     if (value === 'ume_aporte') {
+      setCredorDestino('UME | NOVO MUNDO');
+    }
+    if (value === 'ume_consolidado') {
       setCredorDestino('UME | NOVO MUNDO');
     }
   };
@@ -470,6 +475,49 @@ export default function ImportarDevedores() {
     if (val === undefined || val === null) return true;
     const s = String(val).trim().toUpperCase();
     return s === '#N/D' || s === '#N/A' || s === '#REF!' || s === '#VALUE!' || s === '';
+  };
+
+  const parseUmeConsolidado = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
+    return dataRows.map((row) => {
+      let cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      if (!cpf) return null;
+      cpf = cpf.padStart(11, '0');
+
+      const nome = String(row['B'] ?? '').trim();
+      if (!nome) return null;
+
+      const credorRaw = String(row['C'] ?? '').toUpperCase();
+      const isAporte = credorRaw.includes('APORTE');
+      const credor = isAporte ? 'ume_novo_mundo_aporte' : 'ume_novo_mundo';
+
+      const contrato = String(row['D'] ?? '').trim();
+      const numeroParcela = parseInt(String(row['E'] ?? '0')) || 0;
+      const valor = parseNum(row['G']);
+      const valorTotal = parseNum(row['H']);
+
+      let vencimentoStr = '';
+      const vencRaw = row['F'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+        }
+      } else if (vencRaw) {
+        vencimentoStr = String(vencRaw);
+      }
+
+      return {
+        cpf,
+        nascimento: vencimentoStr, // use nascimento field for date (used by parseDate in handleImport)
+        nome,
+        credor,
+        contrato,
+        atraso: '',
+        descricao: `Parcela ${numeroParcela}`,
+        valor_original: valor,
+        valor_atualizado: valorTotal || valor,
+      };
+    }).filter(Boolean) as DevedorRow[];
   };
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
@@ -859,7 +907,19 @@ export default function ImportarDevedores() {
         const usesCellDates = credorSelecionado === 'ume_aporte';
         const workbook = XLSX.read(data, { type: 'buffer', cellDates: usesCellDates });
 
-        if (credorSelecionado === 'ume_aporte') {
+        if (credorSelecionado === 'ume_consolidado') {
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
+          const dataRows = json.slice(1);
+          const parsed = parseUmeConsolidado(dataRows);
+          setRows(parsed);
+          setPagamentoRows([]);
+          setMontrealRows([]);
+          setUmeAporteGroups([]);
+          if (parsed.length === 0) {
+            toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
+          }
+        } else if (credorSelecionado === 'ume_aporte') {
           const sheet = findBestSheetForUmeAporte(workbook);
           const dataRows = getSheetRowsByLetters(sheet).slice(1);
           const parsed = await parseUmeAporte(dataRows);
@@ -989,8 +1049,8 @@ export default function ImportarDevedores() {
   const handleImport = async () => {
     if (!user || rows.length === 0) return;
 
-    const credorFinal = credorDestino === 'outro' ? credorOutro.trim() : credorDestino;
-    if (!credorFinal) {
+    const credorFinal = credorSelecionado === 'ume_consolidado' ? 'UME | NOVO MUNDO' : (credorDestino === 'outro' ? credorOutro.trim() : credorDestino);
+    if (!credorFinal && credorSelecionado !== 'ume_consolidado') {
       toast({ title: 'Selecione o credor de destino', variant: 'destructive' });
       return;
     }
@@ -1023,10 +1083,10 @@ export default function ImportarDevedores() {
       cpf: r.cpf,
       valor_original: r.valor_original,
       valor_atualizado: r.valor_atualizado,
-      credor: credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : (r.credor || null),
+      credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
+      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : credorSelecionado === 'ume_consolidado' ? parseDate(r.nascimento) : parseDate(r.nascimento),
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
@@ -1226,10 +1286,11 @@ export default function ImportarDevedores() {
                    <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
                    <SelectItem value="pagamentos">Pagamentos</SelectItem>
                    <SelectItem value="ume_aporte">UME APORTE</SelectItem>
+                   <SelectItem value="ume_consolidado">UME Consolidado (INADIMPLENTES + APORTE)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && (
+            {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && !isUmeConsolidado && (
               <div className="space-y-2">
                 <Label>Credor de Destino</Label>
                 <Select value={credorDestino} onValueChange={setCredorDestino}>
@@ -1251,10 +1312,11 @@ export default function ImportarDevedores() {
                 )}
               </div>
             )}
-            {(isPagamentos || isUmeAporte) && (
+            {(isPagamentos || isUmeAporte || isUmeConsolidado) && (
               <div className="text-sm text-muted-foreground">
                 Credor: <strong>UME | NOVO MUNDO</strong> (automático)
                 {isUmeAporte && <> — O sistema criará acordos automaticamente para CPFs que ainda não possuem acordo.</>}
+                {isUmeConsolidado && <> — Importa INADIMPLENTES e APORTE com credor diferenciado por linha. Juros calculados automaticamente no portal.</>}
               </div>
             )}
             {isMontrealAtualizacao && (

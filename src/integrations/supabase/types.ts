@@ -2345,6 +2345,7 @@ export type Database = {
         Returns: {
           contrato: string
           cpf: string
+          credor: string
           data_vencimento: string
           descricao: string
           id: string

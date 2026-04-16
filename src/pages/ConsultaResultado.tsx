@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ArrowLeft, MessageCircle, FileText, Phone, AlertCircle, CalendarIcon, Check, Shield, Lock, Clock, ChevronDown, TrendingDown, Sparkles } from 'lucide-react';
 import DiscountTierSelector, { type DescontoFaixa, getDesconto, getMinParcelas, getMaxParcelasFaixa } from '@/components/negociacao/DiscountTierSelector';
 import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
+import { calcularJurosAporte } from '@/lib/comissao';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ interface Debito {
   descricao: string | null;
   contrato: string | null;
   data_vencimento: string | null;
+  credor: string | null;
 }
 
 interface ParcelaAcordo {
@@ -119,8 +121,32 @@ export default function ConsultaResultado() {
     fetchDebitos();
   }, [cpf]);
 
-  const valorTotal = debitos.reduce((acc, d) => acc + d.valor_original, 0);
-  const valorAvista = valorTotal * 0.5;
+  // Separate APORTE and INADIMPLENTES debts
+  const debitosAporte = debitos.filter(d => (d.credor || '').toLowerCase().includes('aporte'));
+  const debitosInadimplentes = debitos.filter(d => !(d.credor || '').toLowerCase().includes('aporte'));
+  const hasAporte = debitosAporte.length > 0;
+  const hasInadimplentes = debitosInadimplentes.length > 0;
+
+  // Calculate effective value per debt (with interest for APORTE)
+  const getValorEfetivo = (d: Debito) => {
+    if (!(d.credor || '').toLowerCase().includes('aporte')) return d.valor_original;
+    if (!d.data_vencimento) return d.valor_original;
+    const vencimento = new Date(d.data_vencimento + 'T00:00:00');
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const diffMs = hoje.getTime() - vencimento.getTime();
+    const diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    if (diasAtraso === 0) return d.valor_original;
+    return calcularJurosAporte(d.valor_original, diasAtraso);
+  };
+
+  // Total for INADIMPLENTES (eligible for discount)
+  const valorTotalInadimplentes = debitosInadimplentes.reduce((acc, d) => acc + d.valor_original, 0);
+  // Total for APORTE (with interest, no discount)
+  const valorTotalAporte = debitosAporte.reduce((acc, d) => acc + getValorEfetivo(d), 0);
+  // Grand total
+  const valorTotal = valorTotalInadimplentes + valorTotalAporte;
+  const valorAvista = valorTotalInadimplentes * 0.5 + valorTotalAporte;
 
   const toggleNegociacao = () => {
     setNegociacao(prev =>
@@ -137,7 +163,8 @@ export default function ConsultaResultado() {
   const getValorComDesconto = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return valorTotal;
     const desconto = getDesconto(neg.descontoFaixa);
-    return valorTotal * (1 - desconto / 100);
+    // Discount applies only to INADIMPLENTES; APORTE pays full + interest
+    return valorTotalInadimplentes * (1 - desconto / 100) + valorTotalAporte;
   };
 
   const getValorParcela = (neg: NegociacaoState) => {
@@ -446,15 +473,24 @@ export default function ConsultaResultado() {
                     <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#ffffff66' }}>
                       {debitos.length} débito{debitos.length > 1 ? 's' : ''} em aberto
                     </p>
-                    {debitosVisiveis.map((debito, index) => (
-                      <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : '3px solid #ffffff15' }}>
+                    {debitosVisiveis.map((debito, index) => {
+                      const isAporte = (debito.credor || '').toLowerCase().includes('aporte');
+                      const valorEfetivo = getValorEfetivo(debito);
+                      const temJuros = isAporte && valorEfetivo > debito.valor_original;
+                      return (
+                      <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : isAporte ? '3px solid #f59e0b' : '3px solid #ffffff15' }}>
                         <CardContent className="p-4 flex items-center justify-between">
                           <div>
                             <div className="flex items-center gap-2">
                               <p className="font-semibold text-sm" style={{ color: '#fff' }}>
                                 Parcela {index + 1} de {debitos.length}
                               </p>
-                              {isDebitoVencido(debito) && (
+                              {isAporte && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b44' }}>
+                                  APORTE
+                                </span>
+                              )}
+                              {isDebitoVencido(debito) && !isAporte && (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#ff6b6b22', color: '#ff6b6b', border: '1px solid #ff6b6b44' }}>
                                   VENCIDO
                                 </span>
@@ -473,12 +509,20 @@ export default function ConsultaResultado() {
                               </p>
                             )}
                           </div>
-                          <p className="text-lg font-black" style={{ color: '#ff6b6b' }}>
-                            {formatCurrency(debito.valor_original)}
-                          </p>
+                          <div className="text-right">
+                            <p className="text-lg font-black" style={{ color: isAporte ? '#f59e0b' : '#ff6b6b' }}>
+                              {formatCurrency(valorEfetivo)}
+                            </p>
+                            {temJuros && (
+                              <p className="text-[10px]" style={{ color: '#ffffff66' }}>
+                                Original: {formatCurrency(debito.valor_original)}
+                              </p>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
-                    ))}
+                      );
+                    })}
                     {debitos.length > 2 && !mostrarTodosDebitos && (
                       <button
                         onClick={() => setMostrarTodosDebitos(true)}

@@ -1,3 +1,27 @@
+// Tabela de juros UME APORTE baseada em dias de atraso
+export const tabelaJurosAporte = [
+  { min: 1, max: 30, percentual: 7 },
+  { min: 31, max: 90, percentual: 15 },
+  { min: 91, max: 180, percentual: 20 },
+  { min: 181, max: 365, percentual: 27 },
+  { min: 366, max: 99999, percentual: 36 },
+];
+
+export function calcularPercentualJurosAporte(diasAtraso: number): number {
+  for (const faixa of tabelaJurosAporte) {
+    if (diasAtraso >= faixa.min && diasAtraso <= faixa.max) {
+      return faixa.percentual;
+    }
+  }
+  return 0;
+}
+
+// Calcula valor com juros para APORTE: retorna valor original + juros
+export function calcularJurosAporte(valorParcela: number, diasAtraso: number): number {
+  const percentual = calcularPercentualJurosAporte(diasAtraso);
+  return Math.round(valorParcela * (1 + percentual / 100) * 100) / 100;
+}
+
 // Tabela de comissões UME | NOVO MUNDO baseada em dias em atraso (comissão em todas as parcelas)
 export const tabelaComissoes = [
   { min: 1, max: 60, percentual: 2 },
