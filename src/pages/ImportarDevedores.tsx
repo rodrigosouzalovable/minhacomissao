@@ -163,9 +163,43 @@ export default function ImportarDevedores() {
     setLoadingHistory(false);
   }, []);
 
+  // Fetch background jobs
+  const fetchBackgroundJobs = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('importacao_jobs' as any)
+      .select('*')
+      .eq('user_id', user.id)
+      .in('status', ['pendente', 'processando', 'concluido', 'erro'])
+      .order('criado_em', { ascending: false })
+      .limit(20);
+    if (data) setBackgroundJobs(data as any[]);
+  }, [user]);
+
   useEffect(() => {
     fetchImportacoes();
-  }, [fetchImportacoes]);
+    fetchBackgroundJobs();
+  }, [fetchImportacoes, fetchBackgroundJobs]);
+
+  // Poll for active jobs
+  useEffect(() => {
+    const hasActive = backgroundJobs.some((j: any) => j.status === 'pendente' || j.status === 'processando');
+    if (hasActive && !pollingRef.current) {
+      pollingRef.current = setInterval(() => {
+        fetchBackgroundJobs();
+        fetchImportacoes();
+      }, 3000);
+    } else if (!hasActive && pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [backgroundJobs, fetchBackgroundJobs, fetchImportacoes]);
 
   const handleCredorChange = (value: CredorLayout) => {
     setCredorSelecionado(value);
