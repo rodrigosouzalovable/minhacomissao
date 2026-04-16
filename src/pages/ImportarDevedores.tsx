@@ -138,6 +138,7 @@ export default function ImportarDevedores() {
   const isPagamentos = credorSelecionado === 'pagamentos';
   const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
   const isUmeAporte = credorSelecionado === 'ume_aporte';
+  const isUmeConsolidado = credorSelecionado === 'ume_consolidado';
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
