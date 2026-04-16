@@ -558,7 +558,7 @@ export default function NovoAcordo() {
                   if (cpfQuebraInfo) setCpfQuebraInfo('');
                   
                   // Verificar CPF duplicado quando completo (11 dígitos) e não for admin
-                  if (isCpfCompleto(formatted) && !isAdmin) {
+                  if (isCpfCompleto(formatted) && !isAdmin && !permiteCpfDuplicado) {
                     setCheckingCpf(true);
                     try {
                       const { data: hasDuplicate, error } = await supabase.rpc('cpf_has_acordo', { p_cpf: formatted });
