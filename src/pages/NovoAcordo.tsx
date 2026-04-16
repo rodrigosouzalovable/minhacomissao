@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -75,6 +76,7 @@ export default function NovoAcordo() {
     user
   } = useAuth();
   const { isAdmin } = useUserRole();
+  const { permiteCpfDuplicado } = useUserPermissions();
   const navigate = useNavigate();
   const {
     toast
@@ -556,7 +558,7 @@ export default function NovoAcordo() {
                   if (cpfQuebraInfo) setCpfQuebraInfo('');
                   
                   // Verificar CPF duplicado quando completo (11 dígitos) e não for admin
-                  if (isCpfCompleto(formatted) && !isAdmin) {
+                  if (isCpfCompleto(formatted) && !isAdmin && !permiteCpfDuplicado) {
                     setCheckingCpf(true);
                     try {
                       const { data: hasDuplicate, error } = await supabase.rpc('cpf_has_acordo', { p_cpf: formatted });

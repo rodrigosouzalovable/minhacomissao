@@ -1460,6 +1460,7 @@ export type Database = {
           criado_em: string
           id: string
           inbox_compartilhado: boolean
+          permite_cpf_duplicado: boolean
           user_id: string
           visivel_ranking: boolean
         }
@@ -1472,6 +1473,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          permite_cpf_duplicado?: boolean
           user_id: string
           visivel_ranking?: boolean
         }
@@ -1484,6 +1486,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          permite_cpf_duplicado?: boolean
           user_id?: string
           visivel_ranking?: boolean
         }

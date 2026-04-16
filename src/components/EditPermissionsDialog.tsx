@@ -65,6 +65,7 @@ export function EditPermissionsDialog({
   const [visivelRanking, setVisivelRanking] = useState(true);
   const [inboxCompartilhado, setInboxCompartilhado] = useState(false);
   const [acordosCompartilhados, setAcordosCompartilhados] = useState(false);
+  const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -87,12 +88,14 @@ export function EditPermissionsDialog({
       setVisivelRanking((permissions as any).visivel_ranking ?? true);
       setInboxCompartilhado((permissions as any).inbox_compartilhado ?? false);
       setAcordosCompartilhados((permissions as any).acordos_compartilhados ?? false);
+      setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
       setVisivelRanking(true);
       setInboxCompartilhado(false);
       setAcordosCompartilhados(false);
+      setPermiteCpfDuplicado(false);
     }
   }, [permissions, open]);
 
@@ -106,6 +109,7 @@ export function EditPermissionsDialog({
             visivel_ranking: visivelRanking,
             inbox_compartilhado: inboxCompartilhado,
             acordos_compartilhados: acordosCompartilhados,
+            permite_cpf_duplicado: permiteCpfDuplicado,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
@@ -221,6 +225,17 @@ export function EditPermissionsDialog({
               <Switch
                 checked={acordosCompartilhados}
                 onCheckedChange={setAcordosCompartilhados}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Permitir CPF Duplicado</Label>
+                <p className="text-xs text-muted-foreground">Permite criar novos acordos mesmo que já exista acordo com o mesmo CPF</p>
+              </div>
+              <Switch
+                checked={permiteCpfDuplicado}
+                onCheckedChange={setPermiteCpfDuplicado}
               />
             </div>
           </div>
