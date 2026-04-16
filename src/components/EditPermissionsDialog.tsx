@@ -65,6 +65,7 @@ export function EditPermissionsDialog({
   const [visivelRanking, setVisivelRanking] = useState(true);
   const [inboxCompartilhado, setInboxCompartilhado] = useState(false);
   const [acordosCompartilhados, setAcordosCompartilhados] = useState(false);
+  const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
