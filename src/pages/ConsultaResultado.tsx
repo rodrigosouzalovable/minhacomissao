@@ -163,7 +163,8 @@ export default function ConsultaResultado() {
   const getValorComDesconto = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return valorTotal;
     const desconto = getDesconto(neg.descontoFaixa);
-    return valorTotal * (1 - desconto / 100);
+    // Discount applies only to INADIMPLENTES; APORTE pays full + interest
+    return valorTotalInadimplentes * (1 - desconto / 100) + valorTotalAporte;
   };
 
   const getValorParcela = (neg: NegociacaoState) => {
