@@ -175,6 +175,9 @@ export default function ImportarDevedores() {
     if (value === 'ume_aporte') {
       setCredorDestino('UME | NOVO MUNDO');
     }
+    if (value === 'ume_consolidado') {
+      setCredorDestino('UME | NOVO MUNDO');
+    }
   };
 
   const parseNum = (val: unknown) => {
