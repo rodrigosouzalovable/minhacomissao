@@ -517,7 +517,7 @@ export default function ImportarDevedores() {
         valor_original: valor,
         valor_atualizado: valorTotal || valor,
       };
-    }).filter((r): r is DevedorRow => r !== null && r.cpf.length >= 11) as DevedorRow[];
+    }).filter(Boolean) as DevedorRow[];
   };
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
