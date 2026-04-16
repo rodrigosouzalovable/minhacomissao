@@ -1067,7 +1067,7 @@ export default function ImportarDevedores() {
       }
       setParsing(false);
     };
-    reader.readAsArrayBuffer(f);
+    reader.readAsBinaryString(f);
   }, [credorSelecionado]);
 
   const parseDate = (raw: string): string | null => {
@@ -1134,7 +1134,7 @@ export default function ImportarDevedores() {
         } catch (err) { reject(err); }
       };
       reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
-      reader.readAsArrayBuffer(f);
+      reader.readAsBinaryString(f);
     });
   };
 
