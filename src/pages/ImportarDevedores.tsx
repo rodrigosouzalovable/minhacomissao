@@ -973,8 +973,7 @@ export default function ImportarDevedores() {
 
         if (credorSelecionado === 'ume_consolidado') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-          const dataRows = json.slice(1);
+          const dataRows = getSheetRowsByLetters(sheet).slice(1);
           const parsed = parseUmeConsolidado(dataRows);
           setRows(parsed);
           setPagamentoRows([]);
@@ -1098,8 +1097,8 @@ export default function ImportarDevedores() {
 
           if (credorSelecionado === 'ume_consolidado') {
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-            pRows = parseUmeConsolidado(json.slice(1));
+            const dataRows = getSheetRowsByLetters(sheet).slice(1);
+            pRows = parseUmeConsolidado(dataRows);
           } else if (credorSelecionado === 'ume_aporte') {
             const sheet = findBestSheetForUmeAporte(workbook);
             const dataRows = getSheetRowsByLetters(sheet).slice(1);
