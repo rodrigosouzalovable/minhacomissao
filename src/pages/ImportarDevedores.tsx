@@ -1083,10 +1083,10 @@ export default function ImportarDevedores() {
       cpf: r.cpf,
       valor_original: r.valor_original,
       valor_atualizado: r.valor_atualizado,
-      credor: credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : (r.credor || null),
+      credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
+      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : credorSelecionado === 'ume_consolidado' ? parseDate(r.nascimento) : parseDate(r.nascimento),
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
@@ -1286,10 +1286,11 @@ export default function ImportarDevedores() {
                    <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
                    <SelectItem value="pagamentos">Pagamentos</SelectItem>
                    <SelectItem value="ume_aporte">UME APORTE</SelectItem>
+                   <SelectItem value="ume_consolidado">UME Consolidado (INADIMPLENTES + APORTE)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && (
+            {!isPagamentos && !isMontrealAtualizacao && !isUmeAporte && !isUmeConsolidado && (
               <div className="space-y-2">
                 <Label>Credor de Destino</Label>
                 <Select value={credorDestino} onValueChange={setCredorDestino}>
@@ -1311,10 +1312,11 @@ export default function ImportarDevedores() {
                 )}
               </div>
             )}
-            {(isPagamentos || isUmeAporte) && (
+            {(isPagamentos || isUmeAporte || isUmeConsolidado) && (
               <div className="text-sm text-muted-foreground">
                 Credor: <strong>UME | NOVO MUNDO</strong> (automático)
                 {isUmeAporte && <> — O sistema criará acordos automaticamente para CPFs que ainda não possuem acordo.</>}
+                {isUmeConsolidado && <> — Importa INADIMPLENTES e APORTE com credor diferenciado por linha. Juros calculados automaticamente no portal.</>}
               </div>
             )}
             {isMontrealAtualizacao && (
