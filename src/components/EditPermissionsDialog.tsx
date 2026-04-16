@@ -109,6 +109,7 @@ export function EditPermissionsDialog({
             visivel_ranking: visivelRanking,
             inbox_compartilhado: inboxCompartilhado,
             acordos_compartilhados: acordosCompartilhados,
+            permite_cpf_duplicado: permiteCpfDuplicado,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
