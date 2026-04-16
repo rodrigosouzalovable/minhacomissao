@@ -88,12 +88,14 @@ export function EditPermissionsDialog({
       setVisivelRanking((permissions as any).visivel_ranking ?? true);
       setInboxCompartilhado((permissions as any).inbox_compartilhado ?? false);
       setAcordosCompartilhados((permissions as any).acordos_compartilhados ?? false);
+      setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
       setVisivelRanking(true);
       setInboxCompartilhado(false);
       setAcordosCompartilhados(false);
+      setPermiteCpfDuplicado(false);
     }
   }, [permissions, open]);
 
