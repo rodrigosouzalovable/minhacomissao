@@ -29,15 +29,24 @@ export default function Auth() {
 
     try {
       const validated = loginSchema.parse(loginData);
-      const { error } = await signIn(validated.email, validated.password);
+      
+      // Timeout to prevent hanging when connection pool is saturated
+      const loginPromise = signIn(validated.email, validated.password);
+      const timeoutPromise = new Promise<{ error: Error }>((resolve) =>
+        setTimeout(() => resolve({ error: new Error('timeout') }), 15000)
+      );
+      
+      const { error } = await Promise.race([loginPromise, timeoutPromise]);
       
       if (error) {
         toast({
           variant: 'destructive',
           title: 'Erro ao entrar',
-          description: error.message === 'Invalid login credentials' 
-            ? 'E-mail ou senha incorretos'
-            : error.message,
+          description: error.message === 'timeout'
+            ? 'O servidor demorou para responder. Tente novamente em alguns segundos.'
+            : error.message === 'Invalid login credentials' 
+              ? 'E-mail ou senha incorretos'
+              : error.message,
         });
       } else {
         navigate('/dashboard');
