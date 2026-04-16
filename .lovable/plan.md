@@ -1,50 +1,42 @@
 
 
-## Importar Planilha Multi-Credor (INADIMPLENTES + APORTE) com Juros Automáticos
-
-### Contexto
-
-A planilha tem 8 colunas: A=CPF, B=Nome, C=Credor, D=Contrato, E=Nº Parcela, F=Vencimento, G=Valor Parcela, H=Valor Total. Contém dois tipos de credor:
-- **UME | NOVO MUNDO - INADIMPLENTES**: mantém desconto de 50% à vista e 30% parcelado (comportamento atual)
-- **UME | NOVO MUNDO - APORTE**: aplica **juros** sobre o valor da parcela baseado nos dias de atraso
+## Upload Múltiplo de Planilhas com Importação Sequencial
 
 ### O que será feito
 
-#### 1. Novo layout de importação "UME Consolidado"
-Criar um novo layout na página Importar Devedores que lê as 8 colunas, agrupa por CPF+Contrato e importa como `devedores` com o campo `credor` diferenciando entre `ume_novo_mundo` (inadimplentes) e `ume_novo_mundo_aporte` (aporte).
+Transformar o campo de upload para aceitar **múltiplos arquivos** de uma vez. Ao clicar em "Importar", o sistema processará e importará cada arquivo sequencialmente (um após o outro), mostrando progresso global e por arquivo.
 
-#### 2. Tabela de juros para APORTE
-Adicionar em `src/lib/comissao.ts` a tabela de juros:
-- 1-30 dias: 7%
-- 31-90 dias: 15%
-- 91-180 dias: 20%
-- 181-365 dias: 27%
-- 366+ dias: 36%
+### Mudanças no `src/pages/ImportarDevedores.tsx`
 
-E uma função `calcularJurosAporte(valorParcela, diasAtraso)` que retorna o valor com juros.
+#### 1. Estado para múltiplos arquivos
+- Substituir `file: File | null` por `files: File[]` (lista de arquivos)
+- Adicionar estado `currentFileIndex` para controlar qual arquivo está sendo processado
+- Adicionar estado `fileResults: { name: string, status: 'pending' | 'processing' | 'done' | 'error', count: number, error?: string }[]` para mostrar resultado de cada arquivo
 
-#### 3. Portal público: cálculo automático de juros para APORTE
-No `ConsultaResultado.tsx`, ao exibir débitos:
-- Se o credor do débito contém "APORTE" → calcular dias de atraso (vencimento → hoje) e aplicar juros sobre `valor_original`, exibindo o `valor_atualizado` com juros
-- Se o credor é INADIMPLENTES → manter comportamento atual (desconto 50%/30%)
+#### 2. Input com `multiple`
+- Adicionar `multiple` ao `<Input type="file" />` para permitir seleção de vários arquivos
+- Mostrar lista dos arquivos selecionados com nome e tamanho
+- Botão "Limpar" remove todos os arquivos
 
-A lógica será: ao carregar os débitos via `consultar_debitos_por_cpf`, o frontend verifica o campo `credor` de cada débito e, para os que são APORTE, recalcula o valor com juros em tempo real.
+#### 3. Botão "Importar Todos"
+- Um único botão que inicia o processo sequencial
+- Para cada arquivo na fila:
+  1. Lê e parseia o arquivo (usa a lógica existente de `handleFile`)
+  2. Executa a importação (usa `handleImport` / `handleImportUmeAporte` / etc. conforme o layout)
+  3. Marca como concluído e avança para o próximo
+- Progress bar global mostrando "Arquivo 2 de 5" + progress bar individual do arquivo atual
 
-#### 4. Diferenciação na negociação do portal
-- Débitos APORTE: mostrar valor original + juros calculados, sem oferecer desconto (o cliente paga o valor + juros)
-- Débitos INADIMPLENTES: manter desconto 50% à vista e 30% parcelado
-
-### Alterações técnicas
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/lib/comissao.ts` | Nova tabela `tabelaJurosAporte` e função `calcularJurosAporte()` |
-| `src/pages/ImportarDevedores.tsx` | Novo layout `'ume_consolidado'` com parser para 8 colunas, gravar credor como `ume_novo_mundo` ou `ume_novo_mundo_aporte` |
-| `src/pages/ConsultaResultado.tsx` | Detectar débitos APORTE, calcular juros em tempo real, separar lógica de negociação por tipo de credor |
-| `src/components/negociacao/DiscountTierSelector.tsx` | Não alterar — será usado apenas para INADIMPLENTES |
+#### 4. UI de progresso
+- Lista visual dos arquivos com status:
+  - ⏳ Pendente (cinza)
+  - 🔄 Processando (azul, com spinner)
+  - ✅ Concluído (verde, com contagem de registros)
+  - ❌ Erro (vermelho, com mensagem)
+- Se um arquivo der erro, o sistema pula para o próximo (não trava tudo)
+- Botão "Parar" para interromper a fila
 
 ### O que NÃO muda
-- Tabelas do banco (usa `devedores` existente, campo `credor` já existe)
-- Nenhuma migration necessária
-- Sem aumento de custo
+- Toda a lógica de parsing e importação existente permanece intacta
+- Layouts, credores, banco de dados — nada muda
+- Funciona igualmente com upload de arquivo único (comportamento retrocompatível)
 
