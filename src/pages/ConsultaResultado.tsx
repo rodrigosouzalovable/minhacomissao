@@ -473,15 +473,24 @@ export default function ConsultaResultado() {
                     <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#ffffff66' }}>
                       {debitos.length} débito{debitos.length > 1 ? 's' : ''} em aberto
                     </p>
-                    {debitosVisiveis.map((debito, index) => (
-                      <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : '3px solid #ffffff15' }}>
+                    {debitosVisiveis.map((debito, index) => {
+                      const isAporte = (debito.credor || '').toLowerCase().includes('aporte');
+                      const valorEfetivo = getValorEfetivo(debito);
+                      const temJuros = isAporte && valorEfetivo > debito.valor_original;
+                      return (
+                      <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : isAporte ? '3px solid #f59e0b' : '3px solid #ffffff15' }}>
                         <CardContent className="p-4 flex items-center justify-between">
                           <div>
                             <div className="flex items-center gap-2">
                               <p className="font-semibold text-sm" style={{ color: '#fff' }}>
                                 Parcela {index + 1} de {debitos.length}
                               </p>
-                              {isDebitoVencido(debito) && (
+                              {isAporte && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b44' }}>
+                                  APORTE
+                                </span>
+                              )}
+                              {isDebitoVencido(debito) && !isAporte && (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#ff6b6b22', color: '#ff6b6b', border: '1px solid #ff6b6b44' }}>
                                   VENCIDO
                                 </span>
@@ -500,12 +509,20 @@ export default function ConsultaResultado() {
                               </p>
                             )}
                           </div>
-                          <p className="text-lg font-black" style={{ color: '#ff6b6b' }}>
-                            {formatCurrency(debito.valor_original)}
-                          </p>
+                          <div className="text-right">
+                            <p className="text-lg font-black" style={{ color: isAporte ? '#f59e0b' : '#ff6b6b' }}>
+                              {formatCurrency(valorEfetivo)}
+                            </p>
+                            {temJuros && (
+                              <p className="text-[10px]" style={{ color: '#ffffff66' }}>
+                                Original: {formatCurrency(debito.valor_original)}
+                              </p>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
-                    ))}
+                      );
+                    })}
                     {debitos.length > 2 && !mostrarTodosDebitos && (
                       <button
                         onClick={() => setMostrarTodosDebitos(true)}
