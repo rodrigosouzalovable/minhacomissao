@@ -142,6 +142,10 @@ export default function ImportarDevedores() {
   const [batchImporting, setBatchImporting] = useState(false);
   const stopRef = useRef(false);
 
+  // Background jobs polling
+  const [backgroundJobs, setBackgroundJobs] = useState<any[]>([]);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const isPagamentos = credorSelecionado === 'pagamentos';
   const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
   const isUmeAporte = credorSelecionado === 'ume_aporte';
