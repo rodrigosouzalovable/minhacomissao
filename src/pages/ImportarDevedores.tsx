@@ -560,7 +560,7 @@ export default function ImportarDevedores() {
         atraso: '',
         descricao: `Parcela ${numeroParcela}`,
         valor_original: valor,
-        valor_atualizado: valorTotal || valor,
+        valor_atualizado: valor,
       };
     }).filter(Boolean) as DevedorRow[];
   };
