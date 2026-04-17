@@ -1,13 +1,4 @@
 
-User wants: when listing acordos in "Meus Acordos" and "Acordos da Equipe", flag any acordo whose CPF appears in another acordo (duplicate CPF). Show a visual indicator/badge on the client card.
+User wants a new option "Duplicados" in the status filter dropdown (Todos/Ativos/Concluídos/Cancelados/Quebrados) on both Meus Acordos and Acordos da Equipe pages. When selected, only show acordos flagged with the duplicate CPF badge.
 
-Looking at Comissoes.tsx, there's already similar logic (cpfDuplicados Set + Badge "CPF duplicado"). I'll replicate that pattern.
-
-Need to check Acordos.tsx and EquipeAcordos.tsx structure briefly to know where to inject the badge — but I have enough context. Plan is straightforward.
-
-Scope:
-- Detect duplicate CPFs across the loaded list (client-side, no extra cost).
-- Show an orange badge "CPF já lançado em outro acordo" on each affected card.
-- Tooltip on hover showing how many other acordos exist with that CPF (and optionally the names if different).
-
-No DB changes. No edge function. Zero Cloud cost.
+Need to check the filter implementation in both pages to confirm the dropdown structure.
