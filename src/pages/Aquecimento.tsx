@@ -12,9 +12,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer, Settings } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
+import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -136,7 +137,7 @@ export default function Aquecimento() {
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
@@ -416,7 +417,17 @@ export default function Aquecimento() {
           >
             <List className="h-4 w-4" /> Log de Interações
           </Button>
+          <Button
+            variant={activeTab === 'config' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('config')}
+            className="gap-1"
+          >
+            <Settings className="h-4 w-4" /> Configuração
+          </Button>
         </div>
+
+        {activeTab === 'config' && <AquecimentoConfigTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
