@@ -369,7 +369,21 @@ export default function Clientes() {
       termLimpo.length > 0 &&
       /^[\d.\-/\s]+$/.test(busca.trim());
 
-    if (isNumericSearch) {
+    // Fast path: only credor selected (no name, no phone) → use RPC with tem_acordo flag
+    const isCredorOnlySearch =
+      !busca.trim() && !telefone.trim() && credor !== 'todos';
+
+    if (isCredorOnlySearch) {
+      const { data, error } = await supabase.rpc('listar_devedores_por_credor', {
+        p_credor: credor,
+      });
+      if (error) {
+        toast.error('Erro na busca: ' + error.message);
+      } else if (data) {
+        allData = data as ClienteRow[];
+        setLoadingCount(allData.length);
+      }
+    } else if (isNumericSearch) {
       const { data, error } = await supabase.rpc('buscar_devedores_por_documento', {
         p_doc: termLimpo,
         p_credor: credor !== 'todos' ? credor : null,
