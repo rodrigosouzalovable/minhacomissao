@@ -259,7 +259,7 @@ export default function GrupoAquecimentoCard() {
                   <div key={m.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        {m.status === "ok" && <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />}
+                        {m.status === "ok" && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
                         <span className="truncate">{inst?.nome || m.instancia_id}</span>
                       </div>
                       {m.erro_mensagem && <p className="text-[10px] text-destructive truncate">{m.erro_mensagem}</p>}
