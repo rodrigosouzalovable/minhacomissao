@@ -174,9 +174,36 @@ function AcordoCard({
                 <FileText className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold flex items-center gap-1">
+                <h3 className="font-semibold flex items-center gap-1 flex-wrap">
                   {acordo.cliente_nome}
                   <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+                  {cpfDuplicadoOutros.length > 0 && (
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="outline"
+                            className="border-orange-500 text-orange-600 bg-orange-50 dark:bg-orange-950/30 gap-1 cursor-help"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            CPF já lançado em outro acordo ({cpfDuplicadoOutros.length + 1}x)
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="font-semibold mb-1">Outros acordos com este CPF:</p>
+                          <ul className="text-xs space-y-0.5">
+                            {cpfDuplicadoOutros.slice(0, 5).map(o => (
+                              <li key={o.id}>• {o.cliente_nome}</li>
+                            ))}
+                            {cpfDuplicadoOutros.length > 5 && (
+                              <li className="italic">+ {cpfDuplicadoOutros.length - 5} outro(s)</li>
+                            )}
+                          </ul>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </h3>
                 {(acordo.cliente_cpf || acordo.cliente_telefone) && <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mt-1">
                     {acordo.cliente_cpf && <span className="flex items-center gap-1">
