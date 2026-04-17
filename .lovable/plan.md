@@ -1,84 +1,39 @@
 
+## Diagnóstico
 
-## Plano: Mudar Estágio para "ACORDO" ao lançar acordo MONTREAL
+O loop atual em `handleBulkDeleteImportacoes` chama `delete_importacao_em_lotes` **sequencialmente** para cada uma das 14 planilhas. Cada chamada dessa RPC processa devedores em lotes internos e pode levar de 10s a 60s+ por planilha (principalmente as grandes, com milhares de devedores). Resultado: 14 planilhas × ~30s = potencialmente 5-10 minutos só esperando, sem nenhum feedback de progresso.
 
-### Diagnóstico
+Além disso, a chamada RPC PostgREST tem timeout padrão de ~60s — se uma planilha tiver dezenas de milhares de devedores, a RPC pode estourar timeout silenciosamente, e o loop continua na próxima sem o usuário saber.
 
-Hoje, ao criar um acordo via `acordos_devedor` (fluxo da ficha do cliente), o `estagio` na tabela `devedores` permanece inalterado (ex.: "Novo", "Andamento"). O usuário quer que, **especificamente para clientes MONTREAL**, ao criar um acordo o estágio mude automaticamente para **"Acordo"** — refletindo na coluna **Estágio** da página `/clientes`.
+## Plano
 
-Verifiquei que MONTREAL hoje tem 0 acordos, mas a regra precisa estar pronta para os próximos. Também notei que o cliente DANIEL PEREIRA DE ABRANTES LTDA (CNPJ 51688297000160) já tem 1 acordo ativo em `acordos_devedor` — esse será beneficiado retroativamente pela atualização.
+### 1. Adicionar progresso visível
+No botão e no banner de "X planilha(s) selecionada(s)", mostrar `Excluindo X de 14...` em tempo real conforme cada RPC termina, em vez de só "Excluindo...".
 
-### Mudanças
+### 2. Tratar erros por planilha sem abortar tudo
+- Capturar erro de cada RPC individualmente.
+- Coletar lista de planilhas que falharam.
+- Ao final, mostrar toast de sucesso com total + toast de erro listando quais falharam (para o usuário tentar de novo só nessas).
 
-**1. Trigger no banco em `acordos_devedor`** (após INSERT)
+### 3. Atualizar lista incrementalmente
+Após cada planilha excluída com sucesso, remover ela do estado `importacoes` localmente (em vez de esperar todas terminarem e dar refetch único). Isso dá feedback visual imediato.
 
-Quando um novo registro for inserido em `acordos_devedor` com `status='ativo'`:
-- Buscar todos os registros em `devedores` cujo `cpf_normalize(cpf) = cpf_normalize(NEW.devedor_cpf)` **E** `credor` corresponde a MONTREAL (filtro: `credor ILIKE '%montreal%'`).
-- Atualizar `estagio = 'Acordo'` em todas as linhas correspondentes.
-
-```sql
-CREATE OR REPLACE FUNCTION public.atualizar_estagio_montreal_acordo()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NEW.status = 'ativo' THEN
-    UPDATE public.devedores
-    SET estagio = 'Acordo'
-    WHERE public.cpf_normalize(cpf) = public.cpf_normalize(NEW.devedor_cpf)
-      AND credor ILIKE '%montreal%'
-      AND ativo = true;
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER trg_estagio_montreal_acordo
-AFTER INSERT ON public.acordos_devedor
-FOR EACH ROW EXECUTE FUNCTION public.atualizar_estagio_montreal_acordo();
-```
-
-**2. Trigger equivalente em `acordos`** (fluxo antigo)
-
-Mesma lógica, em caso futuro de acordo MONTREAL ser criado pela página `/acordos/novo`:
-
-```sql
-CREATE TRIGGER trg_estagio_montreal_acordo_old
-AFTER INSERT ON public.acordos
-FOR EACH ROW EXECUTE FUNCTION public.atualizar_estagio_montreal_acordo_old();
-```
-(função análoga usando `NEW.cliente_cpf`)
-
-**3. Backfill imediato (one-shot)**
-
-Aplicar a regra retroativamente para o caso já existente (DANIEL PEREIRA…):
-
-```sql
-UPDATE devedores SET estagio = 'Acordo'
-WHERE credor ILIKE '%montreal%' AND ativo = true
-  AND cpf_normalize(cpf) IN (
-    SELECT cpf_normalize(devedor_cpf) FROM acordos_devedor WHERE status='ativo'
-    UNION
-    SELECT cpf_normalize(cliente_cpf) FROM acordos WHERE status='ativo'
-  );
-```
-
-### O que NÃO muda
-
-- Frontend: zero alteração. A coluna **Estágio** já lê `devedores.estagio` e renderiza o badge automaticamente.
-- Outros credores (Novo Mundo, etc.) **não são afetados** — regra é exclusiva MONTREAL.
-- Permissões, RLS, agrupamento empresarial: intactos.
-- Custo Cloud: zero adicional (triggers são gratuitos).
-
-### Reversibilidade
-
-Se no futuro quiser remover, basta `DROP TRIGGER` — dados antigos permanecem com estágio "Acordo" mas podem ser revertidos manualmente.
+### 4. Aumentar resiliência da RPC
+A RPC `delete_importacao_em_lotes` já existe e processa em lotes internos. Confirmar via `code--view` que ela está realmente fatiando e não estourando timeout. Se necessário, ajustar o tamanho do lote interno (provavelmente já está OK — só falta feedback no frontend).
 
 ### Arquivos a tocar
+- `src/pages/ImportarDevedores.tsx` — refatorar `handleBulkDeleteImportacoes` para:
+  - Estado `bulkProgress: { current, total, failed: string[] }`.
+  - Loop sequencial com try/catch por iteração.
+  - Atualização incremental de `importacoes` e `selectedImportacoes`.
+  - Botão mostra `Excluindo {current}/{total}...`.
 
-- **Nova migração SQL**: 2 funções trigger + 2 triggers + 1 UPDATE de backfill.
-- Sem alteração de código frontend.
+### Não vou tocar
+- A função RPC em si (a menos que a inspeção mostre problema real).
+- Lógica de seleção/checkbox (já funciona).
 
 ### Resultado esperado
-
-- Próximo acordo MONTREAL criado → CNPJ aparece com badge **"Acordo"** na coluna Estágio em `/clientes`.
-- DANIEL PEREIRA DE ABRANTES LTDA já passa a exibir "Acordo" imediatamente após o backfill.
-
+- Usuário vê "Excluindo 3/14..." atualizando em tempo real.
+- Planilhas somem da lista uma a uma conforme excluídas.
+- Se 2 falharem, recebe toast "12 excluídas, 2 falharam: [nomes]" — pode reselecionar e tentar novamente.
+- Sem mais sensação de "travou".
