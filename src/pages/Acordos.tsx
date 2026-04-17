@@ -827,6 +827,29 @@ export default function Acordos() {
     return datas.some(d => d === selectedStr);
   };
 
+  // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
+  const cpfDuplicadosMap = (() => {
+    const map = new Map<string, Acordo[]>();
+    acordos.forEach(a => {
+      const c = (a.cliente_cpf || '').replace(/\D/g, '');
+      if (c.length === 11) {
+        if (!map.has(c)) map.set(c, []);
+        map.get(c)!.push(a);
+      }
+    });
+    const dup = new Map<string, Acordo[]>();
+    map.forEach((arr, k) => { if (arr.length > 1) dup.set(k, arr); });
+    return dup;
+  })();
+
+  const getCpfDuplicadoOutros = (acordo: Acordo) => {
+    const c = (acordo.cliente_cpf || '').replace(/\D/g, '');
+    if (c.length !== 11) return [];
+    const lista = cpfDuplicadosMap.get(c);
+    if (!lista) return [];
+    return lista.filter(a => a.id !== acordo.id).map(a => ({ id: a.id, cliente_nome: a.cliente_nome }));
+  };
+
   const filteredAcordos = acordos.filter(acordo => {
     const termo = search.trim().toLowerCase();
     const digitos = search.replace(/\D/g, '');
