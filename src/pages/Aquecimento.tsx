@@ -417,7 +417,17 @@ export default function Aquecimento() {
           >
             <List className="h-4 w-4" /> Log de Interações
           </Button>
+          <Button
+            variant={activeTab === 'config' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('config')}
+            className="gap-1"
+          >
+            <Settings className="h-4 w-4" /> Configuração
+          </Button>
         </div>
+
+        {activeTab === 'config' && <AquecimentoConfigTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
