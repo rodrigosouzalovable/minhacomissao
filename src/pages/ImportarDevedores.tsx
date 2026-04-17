@@ -324,11 +324,20 @@ export default function ImportarDevedores() {
     return bestScore >= 4 ? bestSheet : fallbackSheet;
   };
 
+  // Normaliza CPF/CNPJ: pad-left de zeros (corrige Excel que perde zero à esquerda em células numéricas)
+  const normalizeCpfCnpj = (raw: unknown): string => {
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length <= 11) return digits.padStart(11, '0');
+    if (digits.length <= 14) return digits.padStart(14, '0');
+    return digits;
+  };
+
   const parsePadrao = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
     return dataRows.map((row) => {
       const risco = parseNum(row['G']);
       return {
-        cpf: String(row['A'] ?? '').replace(/\D/g, ''),
+        cpf: normalizeCpfCnpj(row['A']),
         nascimento: String(row['B'] ?? ''),
         nome: String(row['C'] ?? ''),
         credor: String(row['D'] ?? ''),
@@ -421,7 +430,7 @@ export default function ImportarDevedores() {
       }
 
       return {
-        cpf: String(row['C'] ?? '').replace(/\D/g, ''),
+        cpf: normalizeCpfCnpj(row['C']),
         nascimento: '',
         nome: String(row['B'] ?? ''),
         credor: 'MONTREAL',
