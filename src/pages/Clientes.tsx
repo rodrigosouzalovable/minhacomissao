@@ -763,7 +763,10 @@ export default function Clientes() {
                                 {row.nome}
                                 {row.isGrupo && <Badge variant="secondary">Grupo</Badge>}
                                 {row.temAcordo && (
-                                  <Badge className="bg-green-600 hover:bg-green-700 text-white border-transparent">
+                                  <Badge
+                                    className="border-transparent text-white"
+                                    style={{ backgroundColor: 'hsl(var(--success))' }}
+                                  >
                                     Com acordo
                                   </Badge>
                                 )}
