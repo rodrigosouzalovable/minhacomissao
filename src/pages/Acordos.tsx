@@ -797,10 +797,15 @@ export default function Acordos() {
   };
 
   const filteredAcordos = acordos.filter(acordo => {
-    const searchLower = search.toLowerCase();
-    const searchDigits = search.replace(/\D/g, '');
-    const matchesSearch = acordo.cliente_nome.toLowerCase().includes(searchLower) || 
-      (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
+    const termo = search.trim().toLowerCase();
+    const digitos = search.replace(/\D/g, '');
+    const nome = acordo.cliente_nome?.trim().toLowerCase() ?? '';
+    const cpfDigits = acordo.cliente_cpf?.replace(/\D/g, '') ?? '';
+    const telDigits = acordo.cliente_telefone?.replace(/\D/g, '') ?? '';
+    const matchesSearch =
+      !termo ||
+      nome.includes(termo) ||
+      (digitos.length >= 3 && (cpfDigits.includes(digitos) || telDigits.includes(digitos)));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     return matchesSearch && matchesStatus && matchesDateFilter(acordo.id);
   });

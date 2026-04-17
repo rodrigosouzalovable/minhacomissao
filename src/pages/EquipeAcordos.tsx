@@ -19,6 +19,7 @@ interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
   cliente_cpf?: string;
+  cliente_telefone?: string;
   valor_total: number;
   valor_parcela: number;
   parcelas: number;
@@ -403,11 +404,17 @@ export default function EquipeAcordos() {
   }, [user, isAdmin, roleLoading]);
 
   const filteredAcordos = acordos.filter(acordo => {
-    const searchDigits = search.replace(/\D/g, '');
-    const matchesSearch = 
-      acordo.cliente_nome.toLowerCase().includes(search.toLowerCase()) ||
-      acordo.funcionario_nome?.toLowerCase().includes(search.toLowerCase()) ||
-      (searchDigits.length > 0 && acordo.cliente_cpf && acordo.cliente_cpf.replace(/\D/g, '').includes(searchDigits));
+    const termo = search.trim().toLowerCase();
+    const digitos = search.replace(/\D/g, '');
+    const nome = acordo.cliente_nome?.trim().toLowerCase() ?? '';
+    const funcionario = acordo.funcionario_nome?.trim().toLowerCase() ?? '';
+    const cpfDigits = acordo.cliente_cpf?.replace(/\D/g, '') ?? '';
+    const telDigits = acordo.cliente_telefone?.replace(/\D/g, '') ?? '';
+    const matchesSearch =
+      !termo ||
+      nome.includes(termo) ||
+      funcionario.includes(termo) ||
+      (digitos.length >= 3 && (cpfDigits.includes(digitos) || telDigits.includes(digitos)));
     const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
     const matchesMember = memberFilter === 'todos' || acordo.user_id === memberFilter;
     
