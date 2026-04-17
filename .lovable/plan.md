@@ -1,68 +1,54 @@
 
 
-## Diagnóstico
+## Corrigir timeout na busca de Clientes (CNPJ 14 dígitos)
 
-### 1. Acordos órfãos (sem parcelas) — confirmado no banco
+### Diagnóstico
 
-São **8 acordos** criados em 15/04/2026 entre 23:16:48 e 23:17:14 pela usuária Anna Flávia, todos ativos, com 0 registros em `pagamentos`. A `MARIA APARECIDA DIAS` foi removida da lista (já tem parcelas). Lista final a corrigir:
+- Tabela `devedores` tem **717.280 linhas ativas** — muito grande.
+- Já existe índice `idx_devedores_cpf` sobre `cpf_normalize(cpf)`, mas o código **não o usa**: `cpf.ilike('%45611695000186%')` é uma busca com `%` no início, força *sequential scan* e estoura o `statement_timeout` (8s).
+- O `OR(nome.ilike..., cpf.ilike...)` agrava: o planner não consegue usar índice em nenhum dos lados.
+- Adicionalmente, o `useEffect fetchCredores` faz paginação 1000-em-1000 sobre todos os 717k registros só para listar credores distintos — também lento e desnecessário.
 
-| # | Cliente | CPF | Parcelas | Valor parcela | 1º vencimento | % comissão |
-|---|---|---|---|---|---|---|
-| 1 | OSMAR ALMEIDA DA SILVA | 00423975102 | 23 | 429,89 | 25/03/2026 | 2% |
-| 2 | ILDETE ALVES FEITOSA | 00546560105 | 24 | 364,00 | 10/04/2026 | 2% |
-| 3 | RENATO DIAS PIMENTA | 02217119109 | 27 | 210,18 | 25/03/2026 | 2% |
-| 4 | IARA NERES PINHEIRO | 02788189354 | 9 | 59,00 | 05/04/2026 | 2% |
-| 5 | BEATRIZ CONCEICAO DOS SANTOS | 06832841507 | 24 | 104,08 | 10/04/2026 | 2% |
-| 6 | GUILHERME HENRIQUE DE SA MARTINS | 07675820126 | 18 | 55,00 | 06/05/2026 | 0% |
-| 7 | WALDEMIR MONTEIRO FERREIRA | 10676333320 | 21 | 351,92 | 08/04/2026 | 2% |
-| 8 | MARIA DAS GRACAS CARDOSO | 25589903149 | 11 | 249,21 | 10/04/2026 | 2% |
+### Correção
 
-Confirmei via `LEFT JOIN ... HAVING COUNT = 0` que **estes são os únicos acordos órfãos do sistema inteiro** — não há mais casos semelhantes em outros lotes ou usuários.
+**1. Página `src/pages/Clientes.tsx` — função `handleSearch`**
 
-### 2. Sistema de lembretes — auditoria completa
+Quando o termo de busca é puramente numérico (CPF/CNPJ), usar uma **RPC server-side** que faz match exato via índice `cpf_normalize`:
 
-Hoje é **16/04/2026**. No banco:
-- **26** parcelas vencendo HOJE
-- **13** parcelas vencendo em 3 dias (19/04)
-- **496** parcelas VENCIDAS (já filtrando casos com parcela posterior paga)
+```sql
+WHERE cpf_normalize(cpf) = '45611695000186'
+```
 
-Distribuição por operador: RODRIGO (402) e Anna Flávia (163).
+Para busca por nome (alfanumérica), continuar com `nome.ilike` mas **sem** o OR com cpf — assim o index de texto/scan é coerente.
 
-A lógica do hook `usePaymentReminders.tsx` (após o último fix) está correta: busca pendentes com `data_prevista = hoje`, `data_prevista = hoje+3`, `data_prevista < hoje`, e remove parcelas onde existe outra paga com número maior. **Tudo que está no banco aparece nos lembretes** — desde que o operador logado seja o `user_id` do acordo (ou tenha acesso compartilhado).
+Detalhe: criar RPC `buscar_devedores_por_documento(p_doc text, p_credor text default null)` que retorna as colunas atuais (`id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio, telefone`), filtra `ativo=true` e usa `cpf_normalize(cpf) = p_doc` (igualdade exata, índice funciona) — ou prefix-match se o termo tiver < 11 dígitos.
 
-**Único ponto cego real:** os 8 acordos órfãos acima têm `data_primeiro_pagamento` no passado (alguns desde 25/03), portanto **deveriam estar gerando lembretes de parcelas vencidas** — mas como não têm linhas em `pagamentos`, ficam invisíveis. Corrigir os órfãos resolve também o problema de lembretes faltantes.
+Lógica nova no front:
+- Termo limpo = só dígitos.
+- Se `len(termoLimpo) >= 11`: chamar RPC com igualdade exata.
+- Se `len(termoLimpo) > 0` mas `< 11`: chamar RPC com prefix match (`LIKE '<digits>%'` sobre `cpf_normalize(cpf)` — também usa o índice).
+- Se vazio: usar `nome.ilike` como hoje.
 
-## Plano de correção
+**2. Otimizar `fetchCredores`**
 
-### Etapa 1 — Gerar parcelas faltantes para os 8 acordos órfãos
+Substituir o loop paginado por uma RPC `listar_credores_distintos()` que faz `SELECT DISTINCT credor FROM devedores WHERE ativo=true AND credor IS NOT NULL` no servidor (1 query, alguns ms). Hoje são ~717 chamadas equivalentes (paginadas) que ocorrem em todo carregamento da página.
 
-Para cada acordo, inserir N linhas em `pagamentos` (N = `acordos.parcelas`) com:
-- `numero_parcela`: 1..N
-- `data_prevista`: `data_primeiro_pagamento + (i-1) meses`
-- `valor_parcela`: vindo de `acordos.valor_parcela`
-- `comissao_parcela`: `valor_parcela * percentual_comissao / 100`
-- `status`: `'pendente'`
+**3. Sem mudanças em**
+- Lógica de agrupamento por grupo empresarial (front-end)
+- Filtro de estágio
+- Permissões de credor
+- Outras páginas
 
-Faço com um único `INSERT ... SELECT ... FROM generate_series(1, parcelas)` filtrando pelos 8 IDs — operação atômica, custo zero, sem mudança de código.
+### Migrações necessárias
 
-### Etapa 2 — Validação pós-inserção
+- `CREATE OR REPLACE FUNCTION public.buscar_devedores_por_documento(...)` — `SECURITY DEFINER`, `SET search_path = public`, retorna SETOF com as colunas necessárias, respeita filtro de credor.
+- `CREATE OR REPLACE FUNCTION public.listar_credores_distintos()` — `SECURITY DEFINER`, retorna `TABLE(credor text)`.
+- Ambas com `GRANT EXECUTE ... TO authenticated`.
+- Sem nova tabela, sem RLS nova, sem custo adicional de Cloud.
 
-Re-rodar a query de órfãos (deve retornar zero) e contar parcelas vencidas/hoje/3-dias para confirmar que os novos lembretes apareceram (espera-se ~10–15 parcelas vencidas adicionais entrando no painel de Anna Flávia).
+### Resultado esperado
 
-### Etapa 3 — Confirmação para o usuário
-
-Reportar:
-- Parcelas geradas por cliente
-- Novo total de lembretes "vencidas" para Anna Flávia
-- Pedir validação visual abrindo a ficha da Beatriz e o painel de lembretes
-
-### O que NÃO muda
-
-- Nenhum código alterado (correção 100% de dados)
-- Hook de lembretes permanece como está (já corrigido na rodada anterior)
-- Trigger de CPF duplicado e demais permissões intactas
-
-### Prevenção (opcional, não incluída agora)
-
-Causa raiz: criação de acordo + parcelas em duas chamadas separadas sem transação. Posso, em uma rodada futura, mover a criação completa para uma RPC `criar_acordo_com_parcelas` atômica, eliminando órfãos definitivamente. Aviso antes pelo impacto.
+- Busca por CNPJ `45611695000186` (e qualquer CPF/CNPJ) responde em **< 100 ms** em vez de timeout.
+- Carregamento inicial da página Clientes fica instantâneo (1 query em vez de centenas).
+- Comportamento visível idêntico ao usuário, só mais rápido.
 
