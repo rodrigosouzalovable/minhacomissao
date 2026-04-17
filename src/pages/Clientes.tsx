@@ -503,9 +503,10 @@ export default function Clientes() {
   };
 
   const estagioVariant = (e: string) => {
-    switch (e) {
+    switch ((e || '').toLowerCase()) {
       case 'novo': return 'default';
       case 'andamento': return 'secondary';
+      case 'acordo': return 'default';
       case 'finalizado': return 'outline';
       default: return 'default';
     }
