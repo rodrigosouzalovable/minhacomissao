@@ -200,26 +200,12 @@ export default function Clientes() {
     }
   };
 
-  // Fetch dynamic creditors from database
+  // Fetch dynamic creditors from database (single RPC call instead of paginating 717k rows)
   useEffect(() => {
     const fetchCredores = async () => {
-      const PAGE = 1000;
-      let allCredorData: any[] = [];
-      let from = 0;
-      let keepFetching = true;
-      while (keepFetching) {
-        const { data } = await supabase
-          .from('devedores')
-          .select('credor')
-          .eq('ativo', true)
-          .not('credor', 'is', null)
-          .range(from, from + PAGE - 1);
-        if (data) allCredorData = [...allCredorData, ...data];
-        if (!data || data.length < PAGE) keepFetching = false;
-        else from += PAGE;
-      }
-      if (allCredorData.length > 0) {
-        const unique = Array.from(new Set(allCredorData.map((d: any) => d.credor).filter(Boolean))) as string[];
+      const { data } = await supabase.rpc('listar_credores_distintos');
+      if (data && data.length > 0) {
+        const unique = (data as { credor: string }[]).map(d => d.credor).filter(Boolean);
         let merged = Array.from(new Set([...CREDORES_FIXOS, ...unique]));
         
         // Filter by user permissions
