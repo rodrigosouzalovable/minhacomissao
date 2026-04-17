@@ -249,11 +249,12 @@ export default function Clientes() {
     for (const row of rawResults) {
       const cpfNorm = row.cpf.replace(/\D/g, '');
       if (!map[cpfNorm]) {
-        map[cpfNorm] = { id: row.id, nome: row.nome, cpf: row.cpf, credor: row.credor, qtdContratos: 0, valorTotal: 0, estagios: [] };
+        map[cpfNorm] = { id: row.id, nome: row.nome, cpf: row.cpf, credor: row.credor, qtdContratos: 0, valorTotal: 0, estagios: [], temAcordo: false };
       }
       map[cpfNorm].qtdContratos += 1;
       map[cpfNorm].valorTotal += Number(row.valor_atualizado);
       if (!map[cpfNorm].estagios.includes(row.estagio)) map[cpfNorm].estagios.push(row.estagio);
+      if (row.tem_acordo) map[cpfNorm].temAcordo = true;
     }
 
     // Step 2: Merge by grupo_empresarial
@@ -281,6 +282,7 @@ export default function Clientes() {
         const allEstagios: string[] = [];
         const allCredores: string[] = [];
         let firstId = '';
+        let grupoTemAcordo = false;
 
         for (const memberCpf of info.cpfs) {
           if (map[memberCpf]) {
@@ -294,6 +296,7 @@ export default function Clientes() {
             if (memberCredor && !allCredores.includes(memberCredor)) {
               allCredores.push(memberCredor);
             }
+            if (map[memberCpf].temAcordo) grupoTemAcordo = true;
             processedCpfs.add(memberCpf);
           }
         }
@@ -307,6 +310,7 @@ export default function Clientes() {
             qtdContratos: totalContratos,
             valorTotal: totalValor,
             estagios: allEstagios,
+            temAcordo: grupoTemAcordo,
             isGrupo: true,
             grupoId,
             cpfsGrupo: info.cpfs,
@@ -321,6 +325,12 @@ export default function Clientes() {
         result.push(entry);
       }
     }
+
+    // Final ordering: clients with agreements first, then by name
+    result.sort((a, b) => {
+      if (!!a.temAcordo !== !!b.temAcordo) return a.temAcordo ? -1 : 1;
+      return a.nome.localeCompare(b.nome, 'pt-BR');
+    });
 
     return result;
   }, [rawResults, grupos]);
