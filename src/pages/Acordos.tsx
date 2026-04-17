@@ -860,7 +860,15 @@ export default function Acordos() {
       !termo ||
       nome.includes(termo) ||
       (digitos.length >= 3 && (cpfDigits.includes(digitos) || telDigits.includes(digitos)));
-    const matchesStatus = statusFilter === 'todos' || acordo.status === statusFilter;
+    let matchesStatus: boolean;
+    if (statusFilter === 'todos') {
+      matchesStatus = true;
+    } else if (statusFilter === 'duplicados') {
+      const c = (acordo.cliente_cpf || '').replace(/\D/g, '');
+      matchesStatus = c.length === 11 && cpfDuplicadosMap.has(c);
+    } else {
+      matchesStatus = acordo.status === statusFilter;
+    }
     return matchesSearch && matchesStatus && matchesDateFilter(acordo.id);
   });
 
@@ -1097,6 +1105,7 @@ export default function Acordos() {
               <SelectItem value="concluido">Concluídos</SelectItem>
               <SelectItem value="cancelado">Cancelados</SelectItem>
               <SelectItem value="quebrado">Quebrados</SelectItem>
+              <SelectItem value="duplicados">Duplicados (CPF)</SelectItem>
             </SelectContent>
           </Select>
         </div>
