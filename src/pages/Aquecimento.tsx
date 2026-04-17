@@ -137,7 +137,7 @@ export default function Aquecimento() {
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
