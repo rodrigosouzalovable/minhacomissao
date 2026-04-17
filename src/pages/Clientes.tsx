@@ -63,6 +63,7 @@ const CREDOR_SLUG_MAP: Record<string, string> = {
 const ESTAGIOS = [
   { value: 'novo', label: 'Novo' },
   { value: 'andamento', label: 'Andamento' },
+  { value: 'acordo', label: 'Acordo' },
   { value: 'finalizado', label: 'Finalizado' },
 ];
 
