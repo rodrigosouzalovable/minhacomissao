@@ -668,23 +668,27 @@ export default function Acordos() {
         }
 
         if (!quebraError && todasParcelasPendentes.length > 0) {
-          // Agrupar por acordo_id e pegar a MAX data_prevista de cada
-          const ultimaParcelaPorAcordo = new Map<string, string>();
+          // Agrupar por acordo_id: MAX data_prevista (apenas pendentes p/ quebra) e TODAS as datas (p/ filtro)
+          const ultimaParcelaPendentePorAcordo = new Map<string, string>();
           const allDatesMap = new Map<string, string[]>();
           todasParcelasPendentes.forEach(p => {
-            const atual = ultimaParcelaPorAcordo.get(p.acordo_id);
-            if (!atual || p.data_prevista > atual) {
-              ultimaParcelaPorAcordo.set(p.acordo_id, p.data_prevista);
-            }
-            // Collect all dates per acordo
+            // Para o filtro por vencimento: incluir parcelas pagas e pendentes
             const existing = allDatesMap.get(p.acordo_id) || [];
             existing.push(p.data_prevista);
             allDatesMap.set(p.acordo_id, existing);
+
+            // Para a regra de quebra (>10 dias): considerar apenas pendentes
+            if (p.status === 'pendente') {
+              const atual = ultimaParcelaPendentePorAcordo.get(p.acordo_id);
+              if (!atual || p.data_prevista > atual) {
+                ultimaParcelaPendentePorAcordo.set(p.acordo_id, p.data_prevista);
+              }
+            }
           });
           setTodasDatasPorAcordo(allDatesMap);
-          
+
           // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
-          ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
+          ultimaParcelaPendentePorAcordo.forEach((ultimaData, acordoId) => {
             if (ultimaData < dezDiasAtrasStr) {
               idsComQuebra.add(acordoId);
             }
