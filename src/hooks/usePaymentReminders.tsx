@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useUserRole } from '@/hooks/useUserRole';
 import { format, addDays } from 'date-fns';
 
 interface PaymentReminder {
