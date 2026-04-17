@@ -1,54 +1,61 @@
 
 
-## Corrigir timeout na busca de Clientes (CNPJ 14 dígitos)
+## Plano: listar todos os clientes MONTREAL ao pesquisar, com quem já tem acordo no topo
 
 ### Diagnóstico
 
-- Tabela `devedores` tem **717.280 linhas ativas** — muito grande.
-- Já existe índice `idx_devedores_cpf` sobre `cpf_normalize(cpf)`, mas o código **não o usa**: `cpf.ilike('%45611695000186%')` é uma busca com `%` no início, força *sequential scan* e estoura o `statement_timeout` (8s).
-- O `OR(nome.ilike..., cpf.ilike...)` agrava: o planner não consegue usar índice em nenhum dos lados.
-- Adicionalmente, o `useEffect fetchCredores` faz paginação 1000-em-1000 sobre todos os 717k registros só para listar credores distintos — também lento e desnecessário.
+1. Hoje, na página `/clientes`, ao escolher credor MONTREAL e clicar **Pesquisar** sem digitar nome, o front lista os clientes — mas:
+   - O fluxo atual pagina a tabela `devedores` em chamadas de 1000, e MONTREAL tem 1.064 linhas → traz tudo, ok, mas lento e sem ordenação por "tem acordo".
+   - Não há nenhuma coluna/flag de "este CPF já tem acordo"; a ordenação é por `criado_em DESC`.
 
-### Correção
+2. No banco confirmei: **MONTREAL tem 82 CPFs únicos e 1.064 contratos/parcelas ativos. Hoje nenhum desses CPFs tem acordo lançado** (`acordos` filtrado por CPF MONTREAL = 0). Ou seja, agora todos cairão na seção "sem acordo" — mas a infraestrutura precisa estar pronta para quando começarem a fechar acordos com Montreal.
 
-**1. Página `src/pages/Clientes.tsx` — função `handleSearch`**
+### Mudanças
 
-Quando o termo de busca é puramente numérico (CPF/CNPJ), usar uma **RPC server-side** que faz match exato via índice `cpf_normalize`:
+**1. Nova RPC `listar_devedores_por_credor(p_credor text)`** (servidor, indexada)
+
+Retorna todos os devedores ativos do credor com uma flag pré-calculada `tem_acordo` — usando `EXISTS` em `acordos` com match por `cpf_normalize`. Como é cálculo no servidor, não trafegamos lixo e a ordenação fica eficiente:
 
 ```sql
-WHERE cpf_normalize(cpf) = '45611695000186'
+SELECT d.id, d.nome, d.cpf, d.credor, d.contrato,
+       d.valor_original, d.valor_atualizado, d.estagio, d.telefone,
+       d.data_vencimento, d.descricao,
+       EXISTS (
+         SELECT 1 FROM public.acordos a
+         WHERE public.cpf_normalize(a.cliente_cpf) = public.cpf_normalize(d.cpf)
+           AND a.status = 'ativo'
+       ) AS tem_acordo
+FROM public.devedores d
+WHERE d.ativo = true AND d.credor = p_credor
+ORDER BY tem_acordo DESC, d.nome ASC
+LIMIT 5000;
 ```
 
-Para busca por nome (alfanumérica), continuar com `nome.ilike` mas **sem** o OR com cpf — assim o index de texto/scan é coerente.
+`SECURITY DEFINER`, `SET search_path = public`, `GRANT EXECUTE TO authenticated`. Sem custo extra de Cloud — é uma única query indexada.
 
-Detalhe: criar RPC `buscar_devedores_por_documento(p_doc text, p_credor text default null)` que retorna as colunas atuais (`id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio, telefone`), filtra `ativo=true` e usa `cpf_normalize(cpf) = p_doc` (igualdade exata, índice funciona) — ou prefix-match se o termo tiver < 11 dígitos.
+**2. Ajuste no `src/pages/Clientes.tsx` → `handleSearch`**
 
-Lógica nova no front:
-- Termo limpo = só dígitos.
-- Se `len(termoLimpo) >= 11`: chamar RPC com igualdade exata.
-- Se `len(termoLimpo) > 0` mas `< 11`: chamar RPC com prefix match (`LIKE '<digits>%'` sobre `cpf_normalize(cpf)` — também usa o índice).
-- Se vazio: usar `nome.ilike` como hoje.
+Adicionar um terceiro caminho: **se a busca por nome estiver vazia, telefone vazio e um credor específico estiver selecionado**, chamar a nova RPC `listar_devedores_por_credor(credor)` em vez de paginar `devedores`. O retorno já vem ordenado.
 
-**2. Otimizar `fetchCredores`**
+**3. Ranking visível na tabela de resultados**
 
-Substituir o loop paginado por uma RPC `listar_credores_distintos()` que faz `SELECT DISTINCT credor FROM devedores WHERE ativo=true AND credor IS NOT NULL` no servidor (1 query, alguns ms). Hoje são ~717 chamadas equivalentes (paginadas) que ocorrem em todo carregamento da página.
+- Propagar a flag `tem_acordo` para `ClienteAgrupado` (no agrupamento por CPF/grupo: "tem acordo" se *qualquer* CPF do grupo tiver).
+- Após o agrupamento por grupo empresarial (que já existe), aplicar uma ordenação final: `tem_acordo DESC, nome ASC` — garante que clientes com acordo aparecem **primeiro na fila**, mesmo após agrupamento.
+- Adicionar um pequeno **badge "Com acordo"** (verde) na linha da tabela ao lado do nome, para visualização clara.
 
-**3. Sem mudanças em**
-- Lógica de agrupamento por grupo empresarial (front-end)
-- Filtro de estágio
-- Permissões de credor
-- Outras páginas
+### O que NÃO muda
 
-### Migrações necessárias
+- Busca por nome / CPF / telefone continua igual (caminhos rápidos já corrigidos).
+- Permissões de credor, agrupamento por grupo empresarial, exportação de telefones — intactos.
+- Custo Cloud: zero adicional (RPC pontual).
 
-- `CREATE OR REPLACE FUNCTION public.buscar_devedores_por_documento(...)` — `SECURITY DEFINER`, `SET search_path = public`, retorna SETOF com as colunas necessárias, respeita filtro de credor.
-- `CREATE OR REPLACE FUNCTION public.listar_credores_distintos()` — `SECURITY DEFINER`, retorna `TABLE(credor text)`.
-- Ambas com `GRANT EXECUTE ... TO authenticated`.
-- Sem nova tabela, sem RLS nova, sem custo adicional de Cloud.
+### Arquivos a tocar
+
+- **Migração SQL**: criar `listar_devedores_por_credor`.
+- **`src/pages/Clientes.tsx`**: novo branch em `handleSearch`, propagar `tem_acordo` na agregação, ordenação final, badge "Com acordo".
+- **`src/integrations/supabase/types.ts`**: regenerado automaticamente com a nova RPC.
 
 ### Resultado esperado
 
-- Busca por CNPJ `45611695000186` (e qualquer CPF/CNPJ) responde em **< 100 ms** em vez de timeout.
-- Carregamento inicial da página Clientes fica instantâneo (1 query em vez de centenas).
-- Comportamento visível idêntico ao usuário, só mais rápido.
+Selecionar MONTREAL + Pesquisar → lista os 82 clientes únicos (consolidados de 1.064 contratos), com aqueles que tiverem acordo aparecendo no topo e marcados visualmente. Hoje todos virão sem acordo; assim que o primeiro acordo MONTREAL for criado, ele sobe automaticamente para o topo da lista.
 
