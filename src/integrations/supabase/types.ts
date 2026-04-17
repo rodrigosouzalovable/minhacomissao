@@ -2367,6 +2367,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      buscar_devedores_por_documento: {
+        Args: { p_credor?: string; p_doc: string }
+        Returns: {
+          contrato: string
+          cpf: string
+          credor: string
+          data_vencimento: string
+          descricao: string
+          estagio: string
+          id: string
+          nome: string
+          telefone: string
+          valor_atualizado: number
+          valor_original: number
+        }[]
+      }
       chatbot_append_buffer: {
         Args: { p_telefone: string; p_texto: string; p_timestamp: string }
         Returns: undefined
@@ -2444,6 +2460,12 @@ export type Database = {
         Returns: boolean
       }
       is_admin_user: { Args: { uid: string }; Returns: boolean }
+      listar_credores_distintos: {
+        Args: never
+        Returns: {
+          credor: string
+        }[]
+      }
       listar_funcionarios: {
         Args: never
         Returns: {
