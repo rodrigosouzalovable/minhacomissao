@@ -1560,28 +1560,48 @@ export default function ImportarDevedores() {
   const handleBulkDeleteImportacoes = async () => {
     const ids = Array.from(selectedImportacoes);
     if (ids.length === 0) return;
+    const idToNome = new Map(importacoes.map(i => [i.id, i.nome_arquivo]));
     setBulkDeleting(true);
+    setBulkProgress({ current: 0, total: ids.length });
     let totalDeleted = 0;
-    let errors = 0;
-    for (const id of ids) {
+    const failed: string[] = [];
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      setBulkProgress({ current: i + 1, total: ids.length });
       try {
         const { data, error } = await supabase.rpc('delete_importacao_em_lotes', {
           p_importacao_id: id,
         });
         if (error) throw error;
         totalDeleted += (data as any)?.deleted ?? 0;
+        // Atualiza UI incrementalmente
+        setImportacoes((prev) => prev.filter((imp) => imp.id !== id));
+        setSelectedImportacoes((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       } catch (error: any) {
         console.error('Erro ao excluir importação:', id, error);
-        errors++;
+        failed.push(idToNome.get(id) ?? id);
       }
     }
-    toast({
-      title: errors > 0 ? 'Concluído com erros' : 'Importações excluídas',
-      description: `${ids.length - errors} de ${ids.length} planilhas excluídas. ${totalDeleted} devedores removidos.`,
-      variant: errors > 0 ? 'destructive' : 'default',
-    });
-    setSelectedImportacoes(new Set());
+    const okCount = ids.length - failed.length;
+    if (okCount > 0) {
+      toast({
+        title: 'Importações excluídas',
+        description: `${okCount} de ${ids.length} planilhas excluídas. ${totalDeleted} devedores removidos.`,
+      });
+    }
+    if (failed.length > 0) {
+      toast({
+        title: `${failed.length} planilha(s) falharam`,
+        description: failed.slice(0, 5).join(', ') + (failed.length > 5 ? '…' : ''),
+        variant: 'destructive',
+      });
+    }
     setBulkDeleting(false);
+    setBulkProgress(null);
     fetchImportacoes();
   };
 
