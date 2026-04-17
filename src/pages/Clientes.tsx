@@ -29,6 +29,7 @@ interface ClienteRow {
   valor_original: number;
   valor_atualizado: number;
   estagio: string;
+  tem_acordo?: boolean;
 }
 
 interface ClienteAgrupado {
@@ -39,6 +40,7 @@ interface ClienteAgrupado {
   qtdContratos: number;
   valorTotal: number;
   estagios: string[];
+  temAcordo?: boolean;
   isGrupo?: boolean;
   grupoId?: string;
   cpfsGrupo?: string[];
