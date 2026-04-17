@@ -1,34 +1,13 @@
 
+User wants: when listing acordos in "Meus Acordos" and "Acordos da Equipe", flag any acordo whose CPF appears in another acordo (duplicate CPF). Show a visual indicator/badge on the client card.
 
-## Mudanças
+Looking at Comissoes.tsx, there's already similar logic (cpfDuplicados Set + Badge "CPF duplicado"). I'll replicate that pattern.
 
-**Arquivos:** `src/pages/Acordos.tsx` e `src/pages/EquipeAcordos.tsx`
+Need to check Acordos.tsx and EquipeAcordos.tsx structure briefly to know where to inject the badge — but I have enough context. Plan is straightforward.
 
-### 1. Trim e normalização de espaços no nome
-- Aplicar `.trim()` no termo de busca antes de comparar.
-- Aplicar `.trim()` também em `cliente_nome` ao comparar (caso o nome cadastrado tenha espaços extras no início/fim).
-- Continuar usando `.toLowerCase()` para case-insensitive.
+Scope:
+- Detect duplicate CPFs across the loaded list (client-side, no extra cost).
+- Show an orange badge "CPF já lançado em outro acordo" on each affected card.
+- Tooltip on hover showing how many other acordos exist with that CPF (and optionally the names if different).
 
-### 2. Busca por telefone
-- Em `Acordos.tsx`: já lê `cliente_telefone` no select. Adicionar comparação por dígitos: `acordo.cliente_telefone?.replace(/\D/g,'').includes(searchDigits)`.
-- Em `EquipeAcordos.tsx`: confirmar que `cliente_telefone` está no select da query (verificarei). Se não estiver, adicionar ao `.select(...)` e à interface `AcordoComFuncionario`. Aplicar mesma comparação.
-
-### 3. Lógica unificada de match (em ambas as páginas)
-```
-const termo = search.trim().toLowerCase();
-const digitos = search.replace(/\D/g, '');
-const nome = acordo.cliente_nome?.trim().toLowerCase() ?? '';
-const cpfDigits = acordo.cliente_cpf?.replace(/\D/g, '') ?? '';
-const telDigits = acordo.cliente_telefone?.replace(/\D/g, '') ?? '';
-
-const matchesSearch =
-  !termo ||
-  nome.includes(termo) ||
-  (digitos.length >= 3 && (cpfDigits.includes(digitos) || telDigits.includes(digitos)));
-```
-- Limite mínimo de 3 dígitos para evitar matches falsos com 1-2 números soltos no CPF/telefone.
-- Em `EquipeAcordos.tsx`, manter também o match por `funcionario_nome` (com trim).
-
-### Custo Lovable Cloud
-Nenhum impacto — apenas filtragem client-side no array já carregado.
-
+No DB changes. No edge function. Zero Cloud cost.
