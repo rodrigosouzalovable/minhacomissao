@@ -269,6 +269,8 @@ async function checkStatus(instanceId: string) {
       if (parsed.connected) {
         // Fire-and-forget: reinforce webhook config whenever instance is connected
         reinforceWebhook(instanceId).catch((e) => console.log(`[STATUS] Webhook reinforce error (non-blocking): ${e.message}`));
+        // Fire-and-forget: tentar adicionar ao grupo de aquecimento
+        triggerWarmingGroupAdd(instanceId).catch((e) => console.log(`[STATUS] Warming group add error (non-blocking): ${e.message}`));
         return json({ ok: true, connected: true, status: parsed.status, phone: parsed.phone });
       }
 
