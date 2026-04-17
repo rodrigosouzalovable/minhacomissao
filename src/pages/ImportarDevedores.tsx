@@ -2522,7 +2522,9 @@ export default function ImportarDevedores() {
                       <AlertDialogTrigger asChild>
                         <Button variant="destructive" size="sm" disabled={bulkDeleting}>
                           <Trash2 className="h-4 w-4 mr-1" />
-                          {bulkDeleting ? 'Excluindo...' : `Excluir ${selectedImportacoes.size} selecionadas`}
+                          {bulkDeleting && bulkProgress
+                            ? `Excluindo ${bulkProgress.current} de ${bulkProgress.total}...`
+                            : `Excluir ${selectedImportacoes.size} selecionadas`}
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
