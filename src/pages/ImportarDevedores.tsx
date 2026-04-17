@@ -1541,6 +1541,49 @@ export default function ImportarDevedores() {
     setDeleting(null);
   };
 
+  const toggleSelectImportacao = (id: string) => {
+    setSelectedImportacoes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllImportacoes = () => {
+    setSelectedImportacoes((prev) => {
+      if (prev.size === importacoes.length) return new Set();
+      return new Set(importacoes.map(i => i.id));
+    });
+  };
+
+  const handleBulkDeleteImportacoes = async () => {
+    const ids = Array.from(selectedImportacoes);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    let totalDeleted = 0;
+    let errors = 0;
+    for (const id of ids) {
+      try {
+        const { data, error } = await supabase.rpc('delete_importacao_em_lotes', {
+          p_importacao_id: id,
+        });
+        if (error) throw error;
+        totalDeleted += (data as any)?.deleted ?? 0;
+      } catch (error: any) {
+        console.error('Erro ao excluir importação:', id, error);
+        errors++;
+      }
+    }
+    toast({
+      title: errors > 0 ? 'Concluído com erros' : 'Importações excluídas',
+      description: `${ids.length - errors} de ${ids.length} planilhas excluídas. ${totalDeleted} devedores removidos.`,
+      variant: errors > 0 ? 'destructive' : 'default',
+    });
+    setSelectedImportacoes(new Set());
+    setBulkDeleting(false);
+    fetchImportacoes();
+  };
+
   const handleClear = () => {
     setFile(null);
     setFiles([]);
