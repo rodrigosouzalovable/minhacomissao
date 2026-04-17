@@ -338,9 +338,10 @@ export default function Clientes() {
 
   const filteredGrouped = useMemo(() => {
     if (estagio === 'todos') return grouped;
-    const prioridade = ['finalizado', 'andamento', 'novo'];
+    const prioridade = ['acordo', 'finalizado', 'andamento', 'novo'];
     return grouped.filter(row => {
-      const principal = prioridade.find(p => row.estagios.includes(p)) || row.estagios[0];
+      const estagiosLower = row.estagios.map(e => (e || '').toLowerCase());
+      const principal = prioridade.find(p => estagiosLower.includes(p)) || estagiosLower[0];
       return principal === estagio;
     });
   }, [grouped, estagio]);
