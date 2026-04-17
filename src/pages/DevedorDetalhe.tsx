@@ -174,23 +174,37 @@ export default function DevedorDetalhe() {
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
+    // Reset state to avoid showing stale data from previous client
+    setContratos([]);
+    setEventos([]);
+    setTelefones([]);
 
-    const { data: dev } = await supabase
+    const { data: dev, error: devErr } = await supabase
       .from('devedores')
       .select('id, nome, cpf, telefone, credor, contrato, valor_original, valor_atualizado, data_vencimento, descricao, estagio')
       .eq('id', id)
       .eq('ativo', true)
-      .single();
+      .maybeSingle();
 
+    if (devErr) console.error('[DevedorDetalhe] erro ao carregar devedor:', devErr);
     if (!dev) { setLoading(false); return; }
     setDevedor(dev as Devedor);
 
-    const normCpf = (dev as any).cpf?.replace(/\D/g, '') || '';
+    // Normalize and pad CPF/CNPJ to handle leading-zero loss from Excel imports
+    const rawDigits = (dev as any).cpf?.replace(/\D/g, '') || '';
+    let normCpf = rawDigits;
+    if (rawDigits && rawDigits.length <= 11) normCpf = rawDigits.padStart(11, '0');
+    else if (rawDigits && rawDigits.length <= 14) normCpf = rawDigits.padStart(14, '0');
     setCpfNorm(normCpf);
 
     if (normCpf) {
+      // Build all CPF variants to be resilient to historical data with stripped zeros
+      const cpfVariants = new Set<string>([normCpf, rawDigits]);
+      // Also try unpadded versions in case some rows still lack leading zeros
+      cpfVariants.add(normCpf.replace(/^0+/, ''));
+
       // Check if this CPF belongs to a business group
-      let allCpfs = [normCpf];
+      let allCpfs = Array.from(cpfVariants).filter(Boolean);
       const { data: grupoMembro } = await supabase
         .from('grupo_empresarial_membros' as any)
         .select('grupo_id')
@@ -204,17 +218,20 @@ export default function DevedorDetalhe() {
           .select('cpf_cnpj')
           .eq('grupo_id', grupoId);
         if (allMembros) {
-          allCpfs = (allMembros as any[]).map(m => m.cpf_cnpj);
+          (allMembros as any[]).forEach(m => allCpfs.push(m.cpf_cnpj));
+          allCpfs = Array.from(new Set(allCpfs));
         }
       }
 
-      // Contracts for all CPFs in the group
-      const { data: ctrs } = await supabase
+      // Contracts for all CPFs in the group (and their variants)
+      const { data: ctrs, error: ctrsErr } = await supabase
         .from('devedores')
         .select('id, nome, cpf, telefone, credor, contrato, valor_original, valor_atualizado, data_vencimento, descricao, estagio')
         .eq('ativo', true)
         .in('cpf', allCpfs)
         .order('data_vencimento', { ascending: true });
+      if (ctrsErr) console.error('[DevedorDetalhe] erro ao carregar contratos:', ctrsErr, 'cpfs=', allCpfs);
+      console.log('[DevedorDetalhe] contratos carregados:', ctrs?.length || 0, 'para cpfs=', allCpfs);
       if (ctrs) setContratos(ctrs as Devedor[]);
 
       // Phones for all CPFs in the group
