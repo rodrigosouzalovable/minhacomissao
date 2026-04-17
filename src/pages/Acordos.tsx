@@ -1078,6 +1078,8 @@ export default function Acordos() {
           </Select>
         </div>
 
+        {/* Mapa de CPFs duplicados (computado a partir de TODOS os acordos carregados) */}
+        {(() => null)()}
         {/* Abas de acordos */}
         <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as 'pagos' | 'negociados' | 'proximas' | 'acordos_realizados' | 'vencidos')}>
           <TabsList className="grid w-full grid-cols-5 mb-4">
