@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.process-import-job]
 verify_jwt = false
+
+[functions.add-to-warming-group]
+verify_jwt = false
