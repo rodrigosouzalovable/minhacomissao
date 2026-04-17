@@ -337,12 +337,19 @@ export default function Clientes() {
   }, [rawResults, grupos]);
 
   const filteredGrouped = useMemo(() => {
-    if (estagio === 'todos') return grouped;
     const prioridade = ['acordo', 'finalizado', 'andamento', 'novo'];
-    return grouped.filter(row => {
-      const estagiosLower = row.estagios.map(e => (e || '').toLowerCase());
-      const principal = prioridade.find(p => estagiosLower.includes(p)) || estagiosLower[0];
-      return principal === estagio;
+    const base = estagio === 'todos'
+      ? grouped
+      : grouped.filter(row => {
+          const estagiosLower = row.estagios.map(e => (e || '').toLowerCase());
+          const principal = prioridade.find(p => estagiosLower.includes(p)) || estagiosLower[0];
+          return principal === estagio;
+        });
+    // Sempre colocar clientes com tag "Acordo" no topo
+    return [...base].sort((a, b) => {
+      const aHas = a.estagios.some(e => (e || '').toLowerCase() === 'acordo') ? 1 : 0;
+      const bHas = b.estagios.some(e => (e || '').toLowerCase() === 'acordo') ? 1 : 0;
+      return bHas - aHas;
     });
   }, [grouped, estagio]);
 
