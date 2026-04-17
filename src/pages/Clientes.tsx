@@ -29,6 +29,7 @@ interface ClienteRow {
   valor_original: number;
   valor_atualizado: number;
   estagio: string;
+  tem_acordo?: boolean;
 }
 
 interface ClienteAgrupado {
@@ -39,6 +40,7 @@ interface ClienteAgrupado {
   qtdContratos: number;
   valorTotal: number;
   estagios: string[];
+  temAcordo?: boolean;
   isGrupo?: boolean;
   grupoId?: string;
   cpfsGrupo?: string[];
@@ -247,11 +249,12 @@ export default function Clientes() {
     for (const row of rawResults) {
       const cpfNorm = row.cpf.replace(/\D/g, '');
       if (!map[cpfNorm]) {
-        map[cpfNorm] = { id: row.id, nome: row.nome, cpf: row.cpf, credor: row.credor, qtdContratos: 0, valorTotal: 0, estagios: [] };
+        map[cpfNorm] = { id: row.id, nome: row.nome, cpf: row.cpf, credor: row.credor, qtdContratos: 0, valorTotal: 0, estagios: [], temAcordo: false };
       }
       map[cpfNorm].qtdContratos += 1;
       map[cpfNorm].valorTotal += Number(row.valor_atualizado);
       if (!map[cpfNorm].estagios.includes(row.estagio)) map[cpfNorm].estagios.push(row.estagio);
+      if (row.tem_acordo) map[cpfNorm].temAcordo = true;
     }
 
     // Step 2: Merge by grupo_empresarial
@@ -279,6 +282,7 @@ export default function Clientes() {
         const allEstagios: string[] = [];
         const allCredores: string[] = [];
         let firstId = '';
+        let grupoTemAcordo = false;
 
         for (const memberCpf of info.cpfs) {
           if (map[memberCpf]) {
@@ -292,6 +296,7 @@ export default function Clientes() {
             if (memberCredor && !allCredores.includes(memberCredor)) {
               allCredores.push(memberCredor);
             }
+            if (map[memberCpf].temAcordo) grupoTemAcordo = true;
             processedCpfs.add(memberCpf);
           }
         }
@@ -305,6 +310,7 @@ export default function Clientes() {
             qtdContratos: totalContratos,
             valorTotal: totalValor,
             estagios: allEstagios,
+            temAcordo: grupoTemAcordo,
             isGrupo: true,
             grupoId,
             cpfsGrupo: info.cpfs,
@@ -319,6 +325,12 @@ export default function Clientes() {
         result.push(entry);
       }
     }
+
+    // Final ordering: clients with agreements first, then by name
+    result.sort((a, b) => {
+      if (!!a.temAcordo !== !!b.temAcordo) return a.temAcordo ? -1 : 1;
+      return a.nome.localeCompare(b.nome, 'pt-BR');
+    });
 
     return result;
   }, [rawResults, grupos]);
@@ -357,7 +369,21 @@ export default function Clientes() {
       termLimpo.length > 0 &&
       /^[\d.\-/\s]+$/.test(busca.trim());
 
-    if (isNumericSearch) {
+    // Fast path: only credor selected (no name, no phone) → use RPC with tem_acordo flag
+    const isCredorOnlySearch =
+      !busca.trim() && !telefone.trim() && credor !== 'todos';
+
+    if (isCredorOnlySearch) {
+      const { data, error } = await supabase.rpc('listar_devedores_por_credor', {
+        p_credor: credor,
+      });
+      if (error) {
+        toast.error('Erro na busca: ' + error.message);
+      } else if (data) {
+        allData = data as ClienteRow[];
+        setLoadingCount(allData.length);
+      }
+    } else if (isNumericSearch) {
       const { data, error } = await supabase.rpc('buscar_devedores_por_documento', {
         p_doc: termLimpo,
         p_credor: credor !== 'todos' ? credor : null,
@@ -736,6 +762,14 @@ export default function Clientes() {
                               <div className="flex items-center gap-2">
                                 {row.nome}
                                 {row.isGrupo && <Badge variant="secondary">Grupo</Badge>}
+                                {row.temAcordo && (
+                                  <Badge
+                                    className="border-transparent text-white"
+                                    style={{ backgroundColor: 'hsl(var(--success))' }}
+                                  >
+                                    Com acordo
+                                  </Badge>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="font-mono text-xs max-w-[200px]">

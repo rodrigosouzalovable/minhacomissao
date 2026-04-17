@@ -2466,6 +2466,23 @@ export type Database = {
           credor: string
         }[]
       }
+      listar_devedores_por_credor: {
+        Args: { p_credor: string }
+        Returns: {
+          contrato: string
+          cpf: string
+          credor: string
+          data_vencimento: string
+          descricao: string
+          estagio: string
+          id: string
+          nome: string
+          telefone: string
+          tem_acordo: boolean
+          valor_atualizado: number
+          valor_original: number
+        }[]
+      }
       listar_funcionarios: {
         Args: never
         Returns: {
