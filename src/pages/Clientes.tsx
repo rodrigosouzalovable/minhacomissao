@@ -561,11 +561,26 @@ export default function Clientes() {
   const handleDeleteConfirm = async () => {
     setDeleting(true);
     const ids = Array.from(selectedForDeletion);
-    const { error } = await supabase.from('devedores').delete().in('id', ids);
-    if (error) {
-      toast.error('Erro ao excluir contratos: ' + error.message);
+    const BATCH = 200;
+    let totalDeleted = 0;
+    let lastError: string | null = null;
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const slice = ids.slice(i, i + BATCH);
+      const { error } = await supabase.from('devedores').delete().in('id', slice);
+      if (error) {
+        lastError = error.message;
+        break;
+      }
+      totalDeleted += slice.length;
+    }
+    if (lastError) {
+      toast.error(`Erro ao excluir contratos: ${lastError} (${totalDeleted}/${ids.length} excluídos)`);
+      if (totalDeleted > 0) {
+        const deletedSet = new Set(ids.slice(0, totalDeleted));
+        setRawResults(prev => prev.filter(r => !deletedSet.has(r.id)));
+      }
     } else {
-      toast.success(`${ids.length} contrato(s) excluído(s) com sucesso!`);
+      toast.success(`${totalDeleted} contrato(s) excluído(s) com sucesso!`);
       setRawResults(prev => prev.filter(r => !selectedForDeletion.has(r.id)));
       setDeleteMode(false);
       setSelectedForDeletion(new Set());
