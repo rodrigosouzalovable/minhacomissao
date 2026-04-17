@@ -348,39 +348,59 @@ export default function Clientes() {
     setDeleteMode(false);
     setSelectedForDeletion(new Set());
 
-    const PAGE_FETCH = 1000;
     let allData: ClienteRow[] = [];
-    let from = 0;
-    let keepFetching = true;
 
-    while (keepFetching) {
-      let q = supabase
-        .from('devedores')
-        .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio, telefone')
-        .eq('ativo', true)
-        .order('criado_em', { ascending: false })
-        .range(from, from + PAGE_FETCH - 1);
+    // Fast path: if search term is purely numeric (CPF/CNPJ), use indexed RPC
+    const termLimpo = busca.trim().replace(/\D/g, '');
+    const isNumericSearch =
+      busca.trim().length > 0 &&
+      termLimpo.length > 0 &&
+      /^[\d.\-/\s]+$/.test(busca.trim());
 
-      if (busca.trim()) {
-        const termLimpo = busca.trim().replace(/\D/g, '');
-        if (termLimpo.length > 0) {
-          q = q.or(`nome.ilike.%${busca.trim()}%,cpf.ilike.%${termLimpo}%`);
-        } else {
-          q = q.ilike('nome', `%${busca.trim()}%`);
+    if (isNumericSearch) {
+      const { data, error } = await supabase.rpc('buscar_devedores_por_documento', {
+        p_doc: termLimpo,
+        p_credor: credor !== 'todos' ? credor : null,
+      });
+      if (error) {
+        toast.error('Erro na busca: ' + error.message);
+      } else if (data) {
+        let rows = data as ClienteRow[];
+        if (telefone.trim()) {
+          const tel = telefone.trim().replace(/\D/g, '');
+          rows = rows.filter(r => (r as any).telefone && (r as any).telefone.replace(/\D/g, '').includes(tel));
         }
-      }
-      if (telefone.trim()) q = q.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
-      if (credor !== 'todos') q = q.eq('credor', credor);
-      // Estágio filter is applied post-grouping to respect priority logic
-
-      const { data, error } = await q;
-      if (error) { toast.error('Erro na busca: ' + error.message); break; }
-      if (data) {
-        allData = [...allData, ...(data as ClienteRow[])];
+        allData = rows;
         setLoadingCount(allData.length);
       }
-      if (!data || data.length < PAGE_FETCH) keepFetching = false;
-      else from += PAGE_FETCH;
+    } else {
+      const PAGE_FETCH = 1000;
+      let from = 0;
+      let keepFetching = true;
+
+      while (keepFetching) {
+        let q = supabase
+          .from('devedores')
+          .select('id, nome, cpf, credor, contrato, valor_original, valor_atualizado, estagio, telefone')
+          .eq('ativo', true)
+          .order('criado_em', { ascending: false })
+          .range(from, from + PAGE_FETCH - 1);
+
+        if (busca.trim()) {
+          q = q.ilike('nome', `%${busca.trim()}%`);
+        }
+        if (telefone.trim()) q = q.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
+        if (credor !== 'todos') q = q.eq('credor', credor);
+
+        const { data, error } = await q;
+        if (error) { toast.error('Erro na busca: ' + error.message); break; }
+        if (data) {
+          allData = [...allData, ...(data as ClienteRow[])];
+          setLoadingCount(allData.length);
+        }
+        if (!data || data.length < PAGE_FETCH) keepFetching = false;
+        else from += PAGE_FETCH;
+      }
     }
 
     setRawResults(allData);
