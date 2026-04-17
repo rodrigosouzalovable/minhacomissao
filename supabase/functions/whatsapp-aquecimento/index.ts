@@ -120,6 +120,19 @@ Deno.serve(async (req) => {
       console.log(`[AQUECIMENTO] ✅ Reativados ${reativados} instâncias PAUSADO → EM_AQUECIMENTO`);
     }
 
+    // ========== SWEEP: ADD PENDING INSTANCES TO WARMING GROUP ==========
+    try {
+      const sweepRes = await fetch(`${supabaseUrl}/functions/v1/add-to-warming-group`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+        body: JSON.stringify({}),
+      });
+      const sweepText = await sweepRes.text();
+      console.log(`[AQUECIMENTO] Group sweep: ${sweepText.substring(0, 200)}`);
+    } catch (e) {
+      console.error("[AQUECIMENTO] Group sweep error:", e);
+    }
+
     // ========== GET ALL WARMING INSTANCES ==========
     const { data: instancias } = await supabase
       .from("whatsapp_aquecimento_instancias")
