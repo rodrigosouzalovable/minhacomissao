@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useUserRole } from '@/hooks/useUserRole';
 import { format, addDays } from 'date-fns';
 
 interface PaymentReminder {
@@ -50,6 +51,7 @@ async function filterParcelsWithLaterPaid(items: PaymentReminder[]): Promise<Pay
 export function usePaymentReminders() {
   const { user } = useAuth();
   const { acordosCompartilhados, concedidoPor } = useUserPermissions();
+  const { isAdmin } = useUserRole();
   const queryClient = useQueryClient();
 
   // ID do admin cujos lembretes também devem ser exibidos
@@ -83,14 +85,15 @@ export function usePaymentReminders() {
 
   // Buscar pagamentos pendentes (hoje e 3 dias)
   const { data: pagamentos = [], isLoading: isLoadingPagamentos } = useQuery({
-    queryKey: ['payment-reminders', user?.id, adminId],
+    queryKey: ['payment-reminders', user?.id, adminId, isAdmin],
     queryFn: async () => {
-      if (!user || userIds.length === 0) return [];
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('pagamentos')
         .select(`
           id,
@@ -101,8 +104,13 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .in('acordos.user_id', userIds)
         .or(`data_prevista.eq.${hoje},data_prevista.eq.${tresDias}`);
+
+      if (!isAdmin) {
+        query = query.in('acordos.user_id', userIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Erro ao buscar lembretes de pagamentos:', error);
@@ -129,13 +137,14 @@ export function usePaymentReminders() {
 
   // Buscar parcelas vencidas (data_prevista < hoje)
   const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
-    queryKey: ['overdue-reminders', user?.id, adminId],
+    queryKey: ['overdue-reminders', user?.id, adminId, isAdmin],
     queryFn: async () => {
-      if (!user || userIds.length === 0) return [];
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('pagamentos')
         .select(`
           id,
@@ -146,8 +155,13 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .in('acordos.user_id', userIds)
         .lt('data_prevista', hoje);
+
+      if (!isAdmin) {
+        query = query.in('acordos.user_id', userIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Erro ao buscar parcelas vencidas:', error);
@@ -174,19 +188,25 @@ export function usePaymentReminders() {
 
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
-    queryKey: ['retorno-reminders', user?.id, adminId],
+    queryKey: ['retorno-reminders', user?.id, adminId, isAdmin],
     queryFn: async () => {
-      if (!user || userIds.length === 0) return [];
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('retornos')
         .select('*')
-        .in('user_id', userIds)
         .eq('status', 'pendente')
         .or(`data_retorno.eq.${hoje},data_retorno.eq.${tresDias}`);
+
+      if (!isAdmin) {
+        query = query.in('user_id', userIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Erro ao buscar lembretes de retornos:', error);
