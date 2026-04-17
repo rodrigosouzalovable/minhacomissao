@@ -110,6 +110,8 @@ export default function ImportarDevedores() {
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedImportacoes, setSelectedImportacoes] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [credorDestino, setCredorDestino] = useState('');
   const [credorOutro, setCredorOutro] = useState('');
