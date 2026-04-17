@@ -85,14 +85,15 @@ export function usePaymentReminders() {
 
   // Buscar pagamentos pendentes (hoje e 3 dias)
   const { data: pagamentos = [], isLoading: isLoadingPagamentos } = useQuery({
-    queryKey: ['payment-reminders', user?.id, adminId],
+    queryKey: ['payment-reminders', user?.id, adminId, isAdmin],
     queryFn: async () => {
-      if (!user || userIds.length === 0) return [];
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('pagamentos')
         .select(`
           id,
@@ -103,8 +104,13 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .in('acordos.user_id', userIds)
         .or(`data_prevista.eq.${hoje},data_prevista.eq.${tresDias}`);
+
+      if (!isAdmin) {
+        query = query.in('acordos.user_id', userIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Erro ao buscar lembretes de pagamentos:', error);
