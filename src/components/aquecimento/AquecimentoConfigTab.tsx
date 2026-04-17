@@ -122,6 +122,9 @@ export default function AquecimentoConfigTab() {
 
   return (
     <div className="space-y-6">
+      {/* Grupo de Aquecimento */}
+      <GrupoAquecimentoCard />
+
       {/* Limites por Fase */}
       {getConfig('limites_por_fase') && (
         <Card>
