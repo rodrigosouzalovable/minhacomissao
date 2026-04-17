@@ -196,15 +196,17 @@ async function upsertMember(
   extra: Record<string, any>
 ) {
   if (existingId) {
+    const { data: cur } = await supabase
+      .from("whatsapp_aquecimento_grupo_membros")
+      .select("tentativas")
+      .eq("id", existingId)
+      .maybeSingle();
     await supabase.from("whatsapp_aquecimento_grupo_membros").update({
       status,
       ultima_tentativa_em: new Date().toISOString(),
-      tentativas: (extra._tentativas ?? undefined) ?? undefined,
+      tentativas: (cur?.tentativas || 0) + 1,
       ...extra,
     }).eq("id", existingId);
-    // increment tentativas
-    await supabase.rpc("noop_increment").catch(() => {});
-    await supabase.from("whatsapp_aquecimento_grupo_membros").update({}).eq("id", existingId);
   } else {
     await supabase.from("whatsapp_aquecimento_grupo_membros").insert({
       grupo_id,
