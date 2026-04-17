@@ -19,6 +19,7 @@ interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
   cliente_cpf?: string;
+  cliente_telefone?: string;
   valor_total: number;
   valor_parcela: number;
   parcelas: number;
