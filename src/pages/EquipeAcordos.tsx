@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
-import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle } from 'lucide-react';
+import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { useToast } from '@/hooks/use-toast';
 import { DateRangePicker } from '@/components/DateRangePicker';
@@ -435,6 +436,29 @@ export default function EquipeAcordos() {
     return matchesSearch && matchesStatus && matchesMember && matchesDate && matchesViewFilter;
   });
 
+  // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
+  const cpfDuplicadosMap = (() => {
+    const map = new Map<string, AcordoComFuncionario[]>();
+    acordos.forEach(a => {
+      const c = (a.cliente_cpf || '').replace(/\D/g, '');
+      if (c.length === 11) {
+        if (!map.has(c)) map.set(c, []);
+        map.get(c)!.push(a);
+      }
+    });
+    const dup = new Map<string, AcordoComFuncionario[]>();
+    map.forEach((arr, k) => { if (arr.length > 1) dup.set(k, arr); });
+    return dup;
+  })();
+
+  const getCpfDuplicadoOutros = (acordo: AcordoComFuncionario) => {
+    const c = (acordo.cliente_cpf || '').replace(/\D/g, '');
+    if (c.length !== 11) return [];
+    const lista = cpfDuplicadosMap.get(c);
+    if (!lista) return [];
+    return lista.filter(a => a.id !== acordo.id).map(a => ({ id: a.id, cliente_nome: a.cliente_nome }));
+  };
+
   const getStatusVariant = (status: string) => {
     switch (status) {
       case 'ativo': return 'default';
@@ -689,9 +713,40 @@ export default function EquipeAcordos() {
                           <FileText className="h-6 w-6 text-primary" />
                         </div>
                         <div>
-                          <h3 className="font-semibold flex items-center gap-1">
+                          <h3 className="font-semibold flex items-center gap-1 flex-wrap">
                             {acordo.cliente_nome}
                             <CopyButton value={acordo.cliente_nome} label="Nome" preserveText />
+                            {(() => {
+                              const outros = getCpfDuplicadoOutros(acordo);
+                              if (outros.length === 0) return null;
+                              return (
+                                <TooltipProvider delayDuration={150}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge
+                                        variant="outline"
+                                        className="border-orange-500 text-orange-600 bg-orange-50 dark:bg-orange-950/30 gap-1 cursor-help"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                      >
+                                        <AlertTriangle className="h-3 w-3" />
+                                        CPF já lançado em outro acordo ({outros.length + 1}x)
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <p className="font-semibold mb-1">Outros acordos com este CPF:</p>
+                                      <ul className="text-xs space-y-0.5">
+                                        {outros.slice(0, 5).map(o => (
+                                          <li key={o.id}>• {o.cliente_nome}</li>
+                                        ))}
+                                        {outros.length > 5 && (
+                                          <li className="italic">+ {outros.length - 5} outro(s)</li>
+                                        )}
+                                      </ul>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              );
+                            })()}
                           </h3>
                           <p className="text-sm text-primary font-medium">
                             {acordo.funcionario_nome}
