@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone, Shield, Coffee, TrendingDown } from 'lucide-react';
+import GrupoAquecimentoCard from './GrupoAquecimentoCard';
 
 interface ConfigItem {
   id: string;
