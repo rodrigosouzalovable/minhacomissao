@@ -63,6 +63,7 @@ const CREDOR_SLUG_MAP: Record<string, string> = {
 const ESTAGIOS = [
   { value: 'novo', label: 'Novo' },
   { value: 'andamento', label: 'Andamento' },
+  { value: 'acordo', label: 'Acordo' },
   { value: 'finalizado', label: 'Finalizado' },
 ];
 
@@ -337,9 +338,10 @@ export default function Clientes() {
 
   const filteredGrouped = useMemo(() => {
     if (estagio === 'todos') return grouped;
-    const prioridade = ['finalizado', 'andamento', 'novo'];
+    const prioridade = ['acordo', 'finalizado', 'andamento', 'novo'];
     return grouped.filter(row => {
-      const principal = prioridade.find(p => row.estagios.includes(p)) || row.estagios[0];
+      const estagiosLower = row.estagios.map(e => (e || '').toLowerCase());
+      const principal = prioridade.find(p => estagiosLower.includes(p)) || estagiosLower[0];
       return principal === estagio;
     });
   }, [grouped, estagio]);
@@ -501,9 +503,10 @@ export default function Clientes() {
   };
 
   const estagioVariant = (e: string) => {
-    switch (e) {
+    switch ((e || '').toLowerCase()) {
       case 'novo': return 'default';
       case 'andamento': return 'secondary';
+      case 'acordo': return 'default';
       case 'finalizado': return 'outline';
       default: return 'default';
     }
@@ -786,10 +789,11 @@ export default function Clientes() {
                             <TableCell>{row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                             <TableCell>
                               {(() => {
-                                const prioridade = ['finalizado', 'andamento', 'novo'];
-                                const principal = prioridade.find(p => row.estagios.includes(p)) || row.estagios[0];
+                                const prioridade = ['acordo', 'finalizado', 'andamento', 'novo'];
+                                const estagiosLower = row.estagios.map(e => (e || '').toLowerCase());
+                                const principal = prioridade.find(p => estagiosLower.includes(p)) || estagiosLower[0];
                                 return (
-                                  <Badge variant={estagioVariant(principal)}>
+                                  <Badge variant={estagioVariant(principal)} className={principal === 'acordo' ? 'bg-green-600 hover:bg-green-600 text-white' : ''}>
                                     {ESTAGIOS.find(es => es.value === principal)?.label || principal}
                                   </Badge>
                                 );
