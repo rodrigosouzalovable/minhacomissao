@@ -188,19 +188,25 @@ export function usePaymentReminders() {
 
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
-    queryKey: ['retorno-reminders', user?.id, adminId],
+    queryKey: ['retorno-reminders', user?.id, adminId, isAdmin],
     queryFn: async () => {
-      if (!user || userIds.length === 0) return [];
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('retornos')
         .select('*')
-        .in('user_id', userIds)
         .eq('status', 'pendente')
         .or(`data_retorno.eq.${hoje},data_retorno.eq.${tresDias}`);
+
+      if (!isAdmin) {
+        query = query.in('user_id', userIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Erro ao buscar lembretes de retornos:', error);
