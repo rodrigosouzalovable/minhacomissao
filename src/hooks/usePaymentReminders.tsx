@@ -51,6 +51,7 @@ async function filterParcelsWithLaterPaid(items: PaymentReminder[]): Promise<Pay
 export function usePaymentReminders() {
   const { user } = useAuth();
   const { acordosCompartilhados, concedidoPor } = useUserPermissions();
+  const { isAdmin } = useUserRole();
   const queryClient = useQueryClient();
 
   // ID do admin cujos lembretes também devem ser exibidos
