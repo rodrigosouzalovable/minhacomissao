@@ -464,3 +464,15 @@ async function setupWebhookAll() {
 
   return json({ ok: true, total: instances.length, success: successCount, failed: failedCount, details });
 }
+
+// ── TRIGGER ADD TO WARMING GROUP (fire-and-forget) ──
+async function triggerWarmingGroupAdd(instanceId: string) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) return;
+  await fetch(`${supabaseUrl}/functions/v1/add-to-warming-group`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+    body: JSON.stringify({ instancia_id: instanceId }),
+  });
+}
