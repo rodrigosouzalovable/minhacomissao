@@ -1848,6 +1848,107 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_aquecimento_grupo_membros: {
+        Row: {
+          adicionado_em: string | null
+          atualizado_em: string
+          criado_em: string
+          erro_mensagem: string | null
+          grupo_id: string
+          id: string
+          instancia_id: string
+          invite_link: string | null
+          status: string
+          tentativas: number
+          ultima_tentativa_em: string | null
+        }
+        Insert: {
+          adicionado_em?: string | null
+          atualizado_em?: string
+          criado_em?: string
+          erro_mensagem?: string | null
+          grupo_id: string
+          id?: string
+          instancia_id: string
+          invite_link?: string | null
+          status?: string
+          tentativas?: number
+          ultima_tentativa_em?: string | null
+        }
+        Update: {
+          adicionado_em?: string | null
+          atualizado_em?: string
+          criado_em?: string
+          erro_mensagem?: string | null
+          grupo_id?: string
+          id?: string
+          instancia_id?: string
+          invite_link?: string | null
+          status?: string
+          tentativas?: number
+          ultima_tentativa_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_grupo_membros_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_aquecimento_grupos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_aquecimento_grupo_membros_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_aquecimento_grupos: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          auto_add_novas: boolean
+          criado_em: string
+          group_jid: string
+          id: string
+          instancia_admin_id: string
+          nome: string
+          ultimo_erro: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          auto_add_novas?: boolean
+          criado_em?: string
+          group_jid: string
+          id?: string
+          instancia_admin_id: string
+          nome: string
+          ultimo_erro?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          auto_add_novas?: boolean
+          criado_em?: string
+          group_jid?: string
+          id?: string
+          instancia_admin_id?: string
+          nome?: string
+          ultimo_erro?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_grupos_instancia_admin_id_fkey"
+            columns: ["instancia_admin_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_aquecimento_instancias: {
         Row: {
           created_at: string

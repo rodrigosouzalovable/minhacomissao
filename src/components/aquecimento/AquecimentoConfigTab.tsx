@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Save, Clock, Calendar, MessageSquare, Timer, Zap, Camera, UserPlus, Smartphone, Shield, Coffee, TrendingDown } from 'lucide-react';
+import GrupoAquecimentoCard from './GrupoAquecimentoCard';
 
 interface ConfigItem {
   id: string;
@@ -121,6 +122,9 @@ export default function AquecimentoConfigTab() {
 
   return (
     <div className="space-y-6">
+      {/* Grupo de Aquecimento */}
+      <GrupoAquecimentoCard />
+
       {/* Limites por Fase */}
       {getConfig('limites_por_fase') && (
         <Card>

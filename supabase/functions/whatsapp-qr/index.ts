@@ -269,6 +269,8 @@ async function checkStatus(instanceId: string) {
       if (parsed.connected) {
         // Fire-and-forget: reinforce webhook config whenever instance is connected
         reinforceWebhook(instanceId).catch((e) => console.log(`[STATUS] Webhook reinforce error (non-blocking): ${e.message}`));
+        // Fire-and-forget: tentar adicionar ao grupo de aquecimento
+        triggerWarmingGroupAdd(instanceId).catch((e) => console.log(`[STATUS] Warming group add error (non-blocking): ${e.message}`));
         return json({ ok: true, connected: true, status: parsed.status, phone: parsed.phone });
       }
 
@@ -461,4 +463,16 @@ async function setupWebhookAll() {
   }
 
   return json({ ok: true, total: instances.length, success: successCount, failed: failedCount, details });
+}
+
+// ── TRIGGER ADD TO WARMING GROUP (fire-and-forget) ──
+async function triggerWarmingGroupAdd(instanceId: string) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) return;
+  await fetch(`${supabaseUrl}/functions/v1/add-to-warming-group`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+    body: JSON.stringify({ instancia_id: instanceId }),
+  });
 }
