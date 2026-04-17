@@ -646,13 +646,28 @@ export default function Acordos() {
           }
         });
         
-        // Buscar todas as parcelas pendentes
-        const { data: todasParcelasPendentes, error: quebraError } = await supabase
-          .from('pagamentos')
-          .select('acordo_id, data_prevista')
-          .eq('status', 'pendente');
-        
-        if (!quebraError && todasParcelasPendentes) {
+        // Buscar TODAS as parcelas (pagas e pendentes) paginando para evitar limite de 1000 linhas do Supabase
+        // Pendentes -> usadas para detectar quebra (>10 dias) e para datas futuras no filtro
+        // Pagas -> usadas no filtro por data de vencimento (cliente que pagou na data ainda deve aparecer)
+        const todasParcelasPendentes: { acordo_id: string; data_prevista: string; status: string }[] = [];
+        const PAGE_SIZE = 1000;
+        let pageStart = 0;
+        let quebraError: any = null;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { data: lote, error: loteError } = await supabase
+            .from('pagamentos')
+            .select('acordo_id, data_prevista, status')
+            .order('acordo_id', { ascending: true })
+            .range(pageStart, pageStart + PAGE_SIZE - 1);
+          if (loteError) { quebraError = loteError; break; }
+          if (!lote || lote.length === 0) break;
+          todasParcelasPendentes.push(...lote);
+          if (lote.length < PAGE_SIZE) break;
+          pageStart += PAGE_SIZE;
+        }
+
+        if (!quebraError && todasParcelasPendentes.length > 0) {
           // Agrupar por acordo_id e pegar a MAX data_prevista de cada
           const ultimaParcelaPorAcordo = new Map<string, string>();
           const allDatesMap = new Map<string, string[]>();
