@@ -137,13 +137,14 @@ export function usePaymentReminders() {
 
   // Buscar parcelas vencidas (data_prevista < hoje)
   const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
-    queryKey: ['overdue-reminders', user?.id, adminId],
+    queryKey: ['overdue-reminders', user?.id, adminId, isAdmin],
     queryFn: async () => {
-      if (!user || userIds.length === 0) return [];
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('pagamentos')
         .select(`
           id,
@@ -154,8 +155,13 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .in('acordos.user_id', userIds)
         .lt('data_prevista', hoje);
+
+      if (!isAdmin) {
+        query = query.in('acordos.user_id', userIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Erro ao buscar parcelas vencidas:', error);
