@@ -1,61 +1,84 @@
 
 
-## Plano: listar todos os clientes MONTREAL ao pesquisar, com quem já tem acordo no topo
+## Plano: Mudar Estágio para "ACORDO" ao lançar acordo MONTREAL
 
 ### Diagnóstico
 
-1. Hoje, na página `/clientes`, ao escolher credor MONTREAL e clicar **Pesquisar** sem digitar nome, o front lista os clientes — mas:
-   - O fluxo atual pagina a tabela `devedores` em chamadas de 1000, e MONTREAL tem 1.064 linhas → traz tudo, ok, mas lento e sem ordenação por "tem acordo".
-   - Não há nenhuma coluna/flag de "este CPF já tem acordo"; a ordenação é por `criado_em DESC`.
+Hoje, ao criar um acordo via `acordos_devedor` (fluxo da ficha do cliente), o `estagio` na tabela `devedores` permanece inalterado (ex.: "Novo", "Andamento"). O usuário quer que, **especificamente para clientes MONTREAL**, ao criar um acordo o estágio mude automaticamente para **"Acordo"** — refletindo na coluna **Estágio** da página `/clientes`.
 
-2. No banco confirmei: **MONTREAL tem 82 CPFs únicos e 1.064 contratos/parcelas ativos. Hoje nenhum desses CPFs tem acordo lançado** (`acordos` filtrado por CPF MONTREAL = 0). Ou seja, agora todos cairão na seção "sem acordo" — mas a infraestrutura precisa estar pronta para quando começarem a fechar acordos com Montreal.
+Verifiquei que MONTREAL hoje tem 0 acordos, mas a regra precisa estar pronta para os próximos. Também notei que o cliente DANIEL PEREIRA DE ABRANTES LTDA (CNPJ 51688297000160) já tem 1 acordo ativo em `acordos_devedor` — esse será beneficiado retroativamente pela atualização.
 
 ### Mudanças
 
-**1. Nova RPC `listar_devedores_por_credor(p_credor text)`** (servidor, indexada)
+**1. Trigger no banco em `acordos_devedor`** (após INSERT)
 
-Retorna todos os devedores ativos do credor com uma flag pré-calculada `tem_acordo` — usando `EXISTS` em `acordos` com match por `cpf_normalize`. Como é cálculo no servidor, não trafegamos lixo e a ordenação fica eficiente:
+Quando um novo registro for inserido em `acordos_devedor` com `status='ativo'`:
+- Buscar todos os registros em `devedores` cujo `cpf_normalize(cpf) = cpf_normalize(NEW.devedor_cpf)` **E** `credor` corresponde a MONTREAL (filtro: `credor ILIKE '%montreal%'`).
+- Atualizar `estagio = 'Acordo'` em todas as linhas correspondentes.
 
 ```sql
-SELECT d.id, d.nome, d.cpf, d.credor, d.contrato,
-       d.valor_original, d.valor_atualizado, d.estagio, d.telefone,
-       d.data_vencimento, d.descricao,
-       EXISTS (
-         SELECT 1 FROM public.acordos a
-         WHERE public.cpf_normalize(a.cliente_cpf) = public.cpf_normalize(d.cpf)
-           AND a.status = 'ativo'
-       ) AS tem_acordo
-FROM public.devedores d
-WHERE d.ativo = true AND d.credor = p_credor
-ORDER BY tem_acordo DESC, d.nome ASC
-LIMIT 5000;
+CREATE OR REPLACE FUNCTION public.atualizar_estagio_montreal_acordo()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.status = 'ativo' THEN
+    UPDATE public.devedores
+    SET estagio = 'Acordo'
+    WHERE public.cpf_normalize(cpf) = public.cpf_normalize(NEW.devedor_cpf)
+      AND credor ILIKE '%montreal%'
+      AND ativo = true;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_estagio_montreal_acordo
+AFTER INSERT ON public.acordos_devedor
+FOR EACH ROW EXECUTE FUNCTION public.atualizar_estagio_montreal_acordo();
 ```
 
-`SECURITY DEFINER`, `SET search_path = public`, `GRANT EXECUTE TO authenticated`. Sem custo extra de Cloud — é uma única query indexada.
+**2. Trigger equivalente em `acordos`** (fluxo antigo)
 
-**2. Ajuste no `src/pages/Clientes.tsx` → `handleSearch`**
+Mesma lógica, em caso futuro de acordo MONTREAL ser criado pela página `/acordos/novo`:
 
-Adicionar um terceiro caminho: **se a busca por nome estiver vazia, telefone vazio e um credor específico estiver selecionado**, chamar a nova RPC `listar_devedores_por_credor(credor)` em vez de paginar `devedores`. O retorno já vem ordenado.
+```sql
+CREATE TRIGGER trg_estagio_montreal_acordo_old
+AFTER INSERT ON public.acordos
+FOR EACH ROW EXECUTE FUNCTION public.atualizar_estagio_montreal_acordo_old();
+```
+(função análoga usando `NEW.cliente_cpf`)
 
-**3. Ranking visível na tabela de resultados**
+**3. Backfill imediato (one-shot)**
 
-- Propagar a flag `tem_acordo` para `ClienteAgrupado` (no agrupamento por CPF/grupo: "tem acordo" se *qualquer* CPF do grupo tiver).
-- Após o agrupamento por grupo empresarial (que já existe), aplicar uma ordenação final: `tem_acordo DESC, nome ASC` — garante que clientes com acordo aparecem **primeiro na fila**, mesmo após agrupamento.
-- Adicionar um pequeno **badge "Com acordo"** (verde) na linha da tabela ao lado do nome, para visualização clara.
+Aplicar a regra retroativamente para o caso já existente (DANIEL PEREIRA…):
+
+```sql
+UPDATE devedores SET estagio = 'Acordo'
+WHERE credor ILIKE '%montreal%' AND ativo = true
+  AND cpf_normalize(cpf) IN (
+    SELECT cpf_normalize(devedor_cpf) FROM acordos_devedor WHERE status='ativo'
+    UNION
+    SELECT cpf_normalize(cliente_cpf) FROM acordos WHERE status='ativo'
+  );
+```
 
 ### O que NÃO muda
 
-- Busca por nome / CPF / telefone continua igual (caminhos rápidos já corrigidos).
-- Permissões de credor, agrupamento por grupo empresarial, exportação de telefones — intactos.
-- Custo Cloud: zero adicional (RPC pontual).
+- Frontend: zero alteração. A coluna **Estágio** já lê `devedores.estagio` e renderiza o badge automaticamente.
+- Outros credores (Novo Mundo, etc.) **não são afetados** — regra é exclusiva MONTREAL.
+- Permissões, RLS, agrupamento empresarial: intactos.
+- Custo Cloud: zero adicional (triggers são gratuitos).
+
+### Reversibilidade
+
+Se no futuro quiser remover, basta `DROP TRIGGER` — dados antigos permanecem com estágio "Acordo" mas podem ser revertidos manualmente.
 
 ### Arquivos a tocar
 
-- **Migração SQL**: criar `listar_devedores_por_credor`.
-- **`src/pages/Clientes.tsx`**: novo branch em `handleSearch`, propagar `tem_acordo` na agregação, ordenação final, badge "Com acordo".
-- **`src/integrations/supabase/types.ts`**: regenerado automaticamente com a nova RPC.
+- **Nova migração SQL**: 2 funções trigger + 2 triggers + 1 UPDATE de backfill.
+- Sem alteração de código frontend.
 
 ### Resultado esperado
 
-Selecionar MONTREAL + Pesquisar → lista os 82 clientes únicos (consolidados de 1.064 contratos), com aqueles que tiverem acordo aparecendo no topo e marcados visualmente. Hoje todos virão sem acordo; assim que o primeiro acordo MONTREAL for criado, ele sobe automaticamente para o topo da lista.
+- Próximo acordo MONTREAL criado → CNPJ aparece com badge **"Acordo"** na coluna Estágio em `/clientes`.
+- DANIEL PEREIRA DE ABRANTES LTDA já passa a exibir "Acordo" imediatamente após o backfill.
 
