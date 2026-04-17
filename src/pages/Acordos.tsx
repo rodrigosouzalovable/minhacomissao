@@ -26,6 +26,8 @@ import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Sen
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertTriangle } from 'lucide-react';
 import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
@@ -142,6 +144,7 @@ function AcordoCard({
   isVencido = false,
   isQuebraAcordo = false,
   envioStatus,
+  cpfDuplicadoOutros = [],
 }: {
   acordo: Acordo;
   onDelete: () => void;
@@ -153,6 +156,7 @@ function AcordoCard({
   isVencido?: boolean;
   isQuebraAcordo?: boolean;
   envioStatus?: 'enviado' | 'erro' | 'enviando';
+  cpfDuplicadoOutros?: Array<{ id: string; cliente_nome: string }>;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   return <Link to={`/acordos/${acordo.id}`}>
