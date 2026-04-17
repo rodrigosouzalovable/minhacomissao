@@ -789,10 +789,11 @@ export default function Clientes() {
                             <TableCell>{row.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                             <TableCell>
                               {(() => {
-                                const prioridade = ['finalizado', 'andamento', 'novo'];
-                                const principal = prioridade.find(p => row.estagios.includes(p)) || row.estagios[0];
+                                const prioridade = ['acordo', 'finalizado', 'andamento', 'novo'];
+                                const estagiosLower = row.estagios.map(e => (e || '').toLowerCase());
+                                const principal = prioridade.find(p => estagiosLower.includes(p)) || estagiosLower[0];
                                 return (
-                                  <Badge variant={estagioVariant(principal)}>
+                                  <Badge variant={estagioVariant(principal)} className={principal === 'acordo' ? 'bg-green-600 hover:bg-green-600 text-white' : ''}>
                                     {ESTAGIOS.find(es => es.value === principal)?.label || principal}
                                   </Badge>
                                 );
