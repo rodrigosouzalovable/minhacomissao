@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
@@ -109,6 +110,8 @@ export default function ImportarDevedores() {
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedImportacoes, setSelectedImportacoes] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [credorDestino, setCredorDestino] = useState('');
   const [credorOutro, setCredorOutro] = useState('');
@@ -1538,6 +1541,49 @@ export default function ImportarDevedores() {
     setDeleting(null);
   };
 
+  const toggleSelectImportacao = (id: string) => {
+    setSelectedImportacoes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllImportacoes = () => {
+    setSelectedImportacoes((prev) => {
+      if (prev.size === importacoes.length) return new Set();
+      return new Set(importacoes.map(i => i.id));
+    });
+  };
+
+  const handleBulkDeleteImportacoes = async () => {
+    const ids = Array.from(selectedImportacoes);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    let totalDeleted = 0;
+    let errors = 0;
+    for (const id of ids) {
+      try {
+        const { data, error } = await supabase.rpc('delete_importacao_em_lotes', {
+          p_importacao_id: id,
+        });
+        if (error) throw error;
+        totalDeleted += (data as any)?.deleted ?? 0;
+      } catch (error: any) {
+        console.error('Erro ao excluir importação:', id, error);
+        errors++;
+      }
+    }
+    toast({
+      title: errors > 0 ? 'Concluído com erros' : 'Importações excluídas',
+      description: `${ids.length - errors} de ${ids.length} planilhas excluídas. ${totalDeleted} devedores removidos.`,
+      variant: errors > 0 ? 'destructive' : 'default',
+    });
+    setSelectedImportacoes(new Set());
+    setBulkDeleting(false);
+    fetchImportacoes();
+  };
+
   const handleClear = () => {
     setFile(null);
     setFiles([]);
@@ -2445,52 +2491,97 @@ export default function ImportarDevedores() {
             ) : importacoes.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma importação registrada.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Arquivo</TableHead>
-                      <TableHead>Credor</TableHead>
-                      <TableHead>Registros</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {importacoes.map((imp) => (
-                      <TableRow key={imp.id}>
-                        <TableCell className="font-medium">{imp.nome_arquivo}</TableCell>
-                        <TableCell className="capitalize">{imp.credor}</TableCell>
-                        <TableCell>{imp.total_registros}</TableCell>
-                        <TableCell>{new Date(imp.criado_em).toLocaleDateString('pt-BR')} {new Date(imp.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</TableCell>
-                        <TableCell className="text-right">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm" disabled={deleting === imp.id}>
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                {deleting === imp.id ? 'Excluindo...' : 'Excluir'}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir importação?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Isso removerá permanentemente <strong>{imp.total_registros} devedores</strong> importados do arquivo "<strong>{imp.nome_arquivo}</strong>". Esta ação não pode ser desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteImportacao(imp.id)}>
-                                  Confirmar Exclusão
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </TableCell>
+              <div className="space-y-3">
+                {selectedImportacoes.size > 0 && (
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-md">
+                    <span className="text-sm font-medium">
+                      {selectedImportacoes.size} planilha(s) selecionada(s)
+                    </span>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm" disabled={bulkDeleting}>
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          {bulkDeleting ? 'Excluindo...' : `Excluir ${selectedImportacoes.size} selecionadas`}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir {selectedImportacoes.size} importações?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Isso removerá permanentemente todos os devedores associados às planilhas selecionadas. Esta ação não pode ser desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleBulkDeleteImportacoes}>
+                            Confirmar Exclusão
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={importacoes.length > 0 && selectedImportacoes.size === importacoes.length}
+                            onCheckedChange={toggleSelectAllImportacoes}
+                            aria-label="Selecionar todas"
+                          />
+                        </TableHead>
+                        <TableHead>Arquivo</TableHead>
+                        <TableHead>Credor</TableHead>
+                        <TableHead>Registros</TableHead>
+                        <TableHead>Data</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {importacoes.map((imp) => (
+                        <TableRow key={imp.id} data-state={selectedImportacoes.has(imp.id) ? 'selected' : undefined}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedImportacoes.has(imp.id)}
+                              onCheckedChange={() => toggleSelectImportacao(imp.id)}
+                              aria-label={`Selecionar ${imp.nome_arquivo}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{imp.nome_arquivo}</TableCell>
+                          <TableCell className="capitalize">{imp.credor}</TableCell>
+                          <TableCell>{imp.total_registros}</TableCell>
+                          <TableCell>{new Date(imp.criado_em).toLocaleDateString('pt-BR')} {new Date(imp.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</TableCell>
+                          <TableCell className="text-right">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm" disabled={deleting === imp.id}>
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  {deleting === imp.id ? 'Excluindo...' : 'Excluir'}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir importação?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Isso removerá permanentemente <strong>{imp.total_registros} devedores</strong> importados do arquivo "<strong>{imp.nome_arquivo}</strong>". Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteImportacao(imp.id)}>
+                                    Confirmar Exclusão
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
           </CardContent>
