@@ -762,6 +762,11 @@ export default function Clientes() {
                               <div className="flex items-center gap-2">
                                 {row.nome}
                                 {row.isGrupo && <Badge variant="secondary">Grupo</Badge>}
+                                {row.temAcordo && (
+                                  <Badge className="bg-green-600 hover:bg-green-700 text-white border-transparent">
+                                    Com acordo
+                                  </Badge>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="font-mono text-xs max-w-[200px]">
