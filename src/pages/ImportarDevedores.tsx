@@ -112,6 +112,7 @@ export default function ImportarDevedores() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedImportacoes, setSelectedImportacoes] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const [parsing, setParsing] = useState(false);
   const [credorDestino, setCredorDestino] = useState('');
   const [credorOutro, setCredorOutro] = useState('');
