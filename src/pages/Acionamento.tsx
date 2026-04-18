@@ -1562,6 +1562,8 @@ export default function Acionamento() {
     setQrStep('idle');
     setQrImage(null);
     setPairingCode(null);
+    setPairingPhone('');
+    setConnectMethod('qr');
     setCreatedInstanceId(null);
     // If instance was created but not connected, delete it
     if (createdInstanceId) {
