@@ -2359,11 +2359,20 @@ export default function Acionamento() {
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      onClick={handleConnectQr}
+                      onClick={() => { setConnectMethod('qr'); handleConnectQr(); }}
                       disabled={qrLoading || qrStep === 'qr'}
                     >
-                      {qrLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
+                      {qrLoading && connectMethod === 'qr' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
                       Conectar via QR Code
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => { setConnectMethod('code'); setQrStep('qr'); }}
+                      disabled={qrLoading || qrStep === 'qr'}
+                    >
+                      <Smartphone className="h-4 w-4 mr-1" />
+                      Conectar via Código
                     </Button>
                     <Button
                       size="sm"
