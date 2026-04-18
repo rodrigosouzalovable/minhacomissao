@@ -1499,9 +1499,10 @@ export default function Acionamento() {
       const instanceId = createData.instanceId;
       setCreatedInstanceId(instanceId);
 
-      // Step 2: Fetch QR code
+      // Step 2: Fetch QR code or pairing code
+      const usePhone = connectMethod === 'code' ? pairingPhone.replace(/\D/g, '') : '';
       const { data: qrData, error: qrError } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId },
+        body: { action: 'qr', userId: user.id, instanceId, phone: usePhone || undefined },
       });
 
       if (qrError) throw qrError;
