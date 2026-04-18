@@ -257,6 +257,8 @@ export default function Acionamento() {
   const [qrCountdown, setQrCountdown] = useState(60);
   const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(null);
   const [reconnectingInstanceId, setReconnectingInstanceId] = useState<string | null>(null);
+  const [connectMethod, setConnectMethod] = useState<'qr' | 'code'>('qr');
+  const [pairingPhone, setPairingPhone] = useState('');
   const qrPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qrCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
