@@ -2387,47 +2387,111 @@ export default function Acionamento() {
                   </div>
                 </div>
 
-                  {/* QR Code connection flow */}
+                  {/* QR Code / Pairing Code connection flow */}
                   {qrStep === 'qr' && (
                     <div className="rounded-md border p-6 space-y-4 bg-muted/20">
-                      <div className="flex flex-col items-center gap-4">
-                        <Smartphone className="h-8 w-8 text-primary" />
-                        <p className="text-sm font-medium text-center">
-                          Escaneie o QR Code com o WhatsApp
-                        </p>
-
-                        {qrImage && (
-                          <div className="bg-background p-3 rounded-lg border shadow-sm">
-                            <img src={qrImage} alt="QR Code WhatsApp" className="w-64 h-64 object-contain" />
+                      {/* Phone input step (only for code method, before generation) */}
+                      {connectMethod === 'code' && !qrImage && !pairingCode && (
+                        <div className="flex flex-col items-center gap-3 max-w-sm mx-auto">
+                          <Smartphone className="h-8 w-8 text-primary" />
+                          <p className="text-sm font-medium text-center">
+                            Digite o número do WhatsApp (com DDD)
+                          </p>
+                          <Input
+                            placeholder="62 99999-9999"
+                            value={pairingPhone}
+                            onChange={(e) => setPairingPhone(e.target.value)}
+                            className="text-center text-lg"
+                            autoFocus
+                          />
+                          <p className="text-xs text-muted-foreground text-center">
+                            Será adicionado o DDI 55 (Brasil) automaticamente
+                          </p>
+                          <div className="flex gap-2 w-full">
+                            <Button
+                              className="flex-1"
+                              onClick={() => {
+                                const digits = pairingPhone.replace(/\D/g, '');
+                                if (digits.length < 10) {
+                                  toast.error('Digite um número válido com DDD');
+                                  return;
+                                }
+                                if (!digits.startsWith('55')) {
+                                  setPairingPhone('55' + digits);
+                                }
+                                handleConnectQr();
+                              }}
+                              disabled={qrLoading}
+                            >
+                              {qrLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+                              Gerar Código
+                            </Button>
+                            <Button variant="ghost" onClick={handleCancelQr}>
+                              Cancelar
+                            </Button>
                           </div>
-                        )}
-
-                        {pairingCode && (
-                          <div className="text-center space-y-1">
-                            <p className="text-xs text-muted-foreground">Ou use o código de pareamento:</p>
-                            <p className="text-2xl font-mono font-bold tracking-widest text-primary">
-                              {pairingCode.slice(0, 4)}-{pairingCode.slice(4)}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          {qrPolling && <Loader2 className="h-4 w-4 animate-spin" />}
-                          <span>
-                            {qrCountdown > 0 ? `Aguardando conexão... (${qrCountdown}s)` : 'QR Code expirado'}
-                          </span>
                         </div>
-                      </div>
+                      )}
 
-                      <div className="flex gap-2 justify-center">
-                        <Button variant="outline" size="sm" onClick={handleRefreshQr} disabled={qrLoading}>
-                          {qrLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-                          Atualizar QR Code
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={handleCancelQr}>
-                          Cancelar
-                        </Button>
-                      </div>
+                      {/* QR / Pairing Code display */}
+                      {(qrImage || pairingCode) && (
+                        <div className="flex flex-col items-center gap-4">
+                          <Smartphone className="h-8 w-8 text-primary" />
+                          <p className="text-sm font-medium text-center">
+                            {connectMethod === 'code'
+                              ? 'Use o código abaixo no WhatsApp'
+                              : 'Escaneie o QR Code com o WhatsApp'}
+                          </p>
+
+                          {connectMethod === 'qr' && qrImage && (
+                            <div className="bg-background p-3 rounded-lg border shadow-sm">
+                              <img src={qrImage} alt="QR Code WhatsApp" className="w-64 h-64 object-contain" />
+                            </div>
+                          )}
+
+                          {pairingCode && (
+                            <div className="text-center space-y-2">
+                              {connectMethod === 'code' && (
+                                <p className="text-xs text-muted-foreground">Seu código de pareamento:</p>
+                              )}
+                              {connectMethod === 'qr' && (
+                                <p className="text-xs text-muted-foreground">Ou use o código de pareamento:</p>
+                              )}
+                              <p className={connectMethod === 'code'
+                                ? "text-4xl font-mono font-bold tracking-widest text-primary"
+                                : "text-2xl font-mono font-bold tracking-widest text-primary"}>
+                                {pairingCode.length >= 8
+                                  ? `${pairingCode.slice(0, 4)}-${pairingCode.slice(4)}`
+                                  : pairingCode}
+                              </p>
+                              {connectMethod === 'code' && (
+                                <div className="text-xs text-muted-foreground text-left max-w-xs mx-auto pt-2 space-y-1">
+                                  <p>1. Abra o WhatsApp no celular</p>
+                                  <p>2. Toque em <strong>Aparelhos conectados</strong> → <strong>Conectar com número de telefone</strong></p>
+                                  <p>3. Digite o código mostrado acima</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            {qrPolling && <Loader2 className="h-4 w-4 animate-spin" />}
+                            <span>
+                              {qrCountdown > 0 ? `Aguardando conexão... (${qrCountdown}s)` : 'Código expirado'}
+                            </span>
+                          </div>
+
+                          <div className="flex gap-2 justify-center">
+                            <Button variant="outline" size="sm" onClick={handleRefreshQr} disabled={qrLoading}>
+                              {qrLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                              {connectMethod === 'code' ? 'Gerar Novo Código' : 'Atualizar QR Code'}
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={handleCancelQr}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
