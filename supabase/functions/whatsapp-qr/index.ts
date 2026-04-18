@@ -134,7 +134,7 @@ async function createInstance(userId: string) {
 }
 
 // ── FETCH QR ──
-async function fetchQr(instanceId: string) {
+async function fetchQr(instanceId: string, phone?: string) {
   const instance = await getInstanceById(instanceId);
   if (!instance) {
     return json({ ok: false, error: "No instance found. Create one first." }, 404);
@@ -144,13 +144,17 @@ async function fetchQr(instanceId: string) {
 
   const debugLogs: string[] = [];
 
+  // Normalize phone (digits only). If provided, request pairing code instead of QR.
+  const cleanPhone = phone ? phone.replace(/\D/g, "") : "";
+  const reqBody = cleanPhone ? JSON.stringify({ phone: cleanPhone }) : "{}";
+
   // Primary approach: POST /instance/connect with token header
   try {
-    console.log(`[QR] POST ${base}/instance/connect (token header)`);
+    console.log(`[QR] POST ${base}/instance/connect (token header)${cleanPhone ? ` phone=${cleanPhone}` : ""}`);
     const res = await fetch(`${base}/instance/connect`, {
       method: "POST",
       headers: { "Content-Type": "application/json", token },
-      body: "{}",
+      body: reqBody,
     });
 
     const text = await res.text();
