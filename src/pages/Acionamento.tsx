@@ -1537,8 +1537,9 @@ export default function Acionamento() {
     stopQrPolling();
     setQrLoading(true);
     try {
+      const usePhone = connectMethod === 'code' ? pairingPhone.replace(/\D/g, '') : '';
       const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId: createdInstanceId },
+        body: { action: 'qr', userId: user.id, instanceId: createdInstanceId, phone: usePhone || undefined },
       });
       if (error) throw error;
       if (data?.ok && data.qr) {
