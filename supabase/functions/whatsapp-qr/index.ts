@@ -181,11 +181,18 @@ async function fetchQr(instanceId: string, phone?: string) {
       try { data = JSON.parse(text); } catch (_) {}
 
       if (data) {
-        const qr = data.qrcode || data.qr || data.base64 || data.qrCode || data.code ||
-                   data.instance?.qrcode || null;
-        const pairingCode = data.pairingCode || data.pairing_code || data.instance?.paircode || null;
+        const qr = data.qrcode || data.qr || data.base64 || data.qrCode ||
+                   data.instance?.qrcode || data.instance?.qrcode_base64 || null;
+        const pairingCode = data.pairingCode || data.pairing_code || data.paircode ||
+                            data.instance?.paircode || data.instance?.pairingCode || null;
+
+        // If pairing code requested, return it even without QR
+        if (cleanPhone && pairingCode) {
+          return json({ ok: true, qr: null, pairingCode });
+        }
 
         if (qr) return json({ ok: true, qr, pairingCode });
+        if (pairingCode) return json({ ok: true, qr: null, pairingCode });
 
         if (data.connected || data.status === "CONNECTED" || data.status === "open" ||
             data.instance?.status === "connected" || data.loggedIn) {
