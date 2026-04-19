@@ -1,52 +1,44 @@
 
 
-## Plano: Conectar WhatsApp via Código de Pareamento
+## Implementação: Trocar IA do Aquecimento para Ollama local
 
-### Como funciona
-A UAZAPI já suporta código de pareamento nativo. Quando você envia o número do WhatsApp para `/instance/connect`, ela retorna um código de 8 dígitos (ex: `ABCD-1234`) em vez do QR. O usuário digita esse código no WhatsApp do celular em **Aparelhos conectados → Conectar com número de telefone**.
-
-A boa notícia: **a infraestrutura já está 90% pronta** — o backend já lê o campo `paircode` e a UI já exibe ele quando presente. Só falta:
-1. Permitir o usuário escolher o método (QR ou Código)
-2. Enviar o telefone para a UAZAPI quando a opção "Código" for escolhida
+**Servidor confirmado:** `https://efficient-unparticular-dilan.ngrok-free.dev` | Modelo: `gemma4:e4b`
 
 ### Mudanças
 
-**1. `supabase/functions/whatsapp-qr/index.ts`**
-- Aceitar parâmetro opcional `phone` na ação `qr` e `create-instance`
-- Quando vier `phone`: enviar `{ phone: "5562999999999" }` no body do POST `/instance/connect` (em vez de `"{}"`)
-- Resposta continua igual (já extrai `pairingCode` do retorno)
+**Arquivo único:** `supabase/functions/whatsapp-ia-responder/index.ts`
 
-**2. `src/pages/Acionamento.tsx` (Dialog de configuração WhatsApp)**
-- Trocar o botão único "Conectar via QR Code" por um seletor com 2 opções:
-  - **QR Code** (atual, padrão)
-  - **Código de Pareamento** — abre input para digitar o número (ex: `62982458447`)
-- Ao escolher "Código": mostrar tela com input de telefone → botão "Gerar Código" → exibir código grande tipo `ABCD-1234` com instruções:
-  > 1. Abra o WhatsApp no celular
-  > 2. Toque em **Aparelhos conectados** → **Conectar com número**
-  > 3. Digite o código mostrado
-- Polling de status (já existe) detecta a conexão automaticamente
-- Mesmo fluxo se aplica ao **reconectar** instância existente
+1. **Substituir as 2 chamadas pagas** (`chamarIA()` e `gerarMensagemInicial()`):
+   - **De:** `https://ai.gateway.lovable.dev/v1/chat/completions` + `LOVABLE_API_KEY` + `google/gemini-2.5-flash-lite`
+   - **Para:** `${OLLAMA_NGROK_URL}/api/chat` + modelo `gemma4:e4b` (formato Ollama nativo)
 
-### UI (esboço)
-```text
-┌─ Conectar WhatsApp ─────────────────┐
-│  ( ) QR Code   (•) Código           │
-│                                     │
-│  Número (com DDD):                  │
-│  [+55] [62 99999-9999]              │
-│  [ Gerar Código ]                   │
-│                                     │
-│  ─── Após gerar: ───                │
-│  Seu código:                        │
-│      A B C D - 1 2 3 4              │
-│  Aguardando conexão... (60s)        │
-└─────────────────────────────────────┘
-```
+2. **Formato da requisição Ollama:**
+   ```ts
+   POST ${OLLAMA_NGROK_URL}/api/chat
+   {
+     "model": "gemma4:e4b",
+     "messages": [{ "role": "user", "content": "..." }],
+     "stream": false,
+     "options": { "temperature": 0.8, "num_predict": 80 }
+   }
+   ```
+   Resposta: `data.message.content`
 
-### Custo Lovable Cloud
-**Zero impacto.** Mesma chamada de edge function existente, só mudando o body do POST upstream.
+3. **Headers ngrok:** adicionar `'ngrok-skip-browser-warning': 'true'` para evitar página de warning do ngrok grátis.
+
+4. **Manter intacto:**
+   - Timeout de 20s (AbortController)
+   - Sistema `FALLBACK_RESPOSTAS` — se Ollama falhar/timeout, usa respostas pré-prontas (zero risco de quebrar aquecimento)
+   - Toda a lógica de ping-pong, deduplicação, limite diário
+
+5. **Verificar/atualizar secret `OLLAMA_NGROK_URL`** — se a URL salva for diferente da atual, peço para você atualizar.
+
+### Resultado
+- **Custo Lovable AI do aquecimento:** $0
+- Continua funcionando igual; se ngrok cair, fallback assume automaticamente
+- Mestra WA (chat manual) continua no Gemini pago — consumo desprezível
 
 ### Fora de escopo
-- Não removo o fluxo QR — fica como opção alternativa
-- Validação avançada de número internacional (apenas DDI 55 / Brasil por enquanto)
+- Não mexo em `whatsapp-mentor`, chatbot de cobrança, extração de acordos
+- Não removo o código do Lovable AI Gateway de outras funções
 
