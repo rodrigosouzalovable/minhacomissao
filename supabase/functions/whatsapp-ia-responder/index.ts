@@ -116,13 +116,62 @@ Mude de assunto naturalmente às vezes.
 NUNCA repita a mesma estrutura duas vezes seguidas.${instrucaoEncerramento}`;
 }
 
-async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number): Promise<string> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) {
-    console.warn("[IA] LOVABLE_API_KEY não configurado, usando fallback");
-    return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
-  }
+// ========== OLLAMA LOCAL (Gemma) — substitui Lovable AI Gateway ==========
+const OLLAMA_MODEL = Deno.env.get("OLLAMA_MODEL") || "gemma4:e4b";
+const OLLAMA_API_KEY = Deno.env.get("OLLAMA_API_KEY") || "";
 
+async function callOllama(messages: { role: string; content: string }[], opts: { timeoutMs?: number; numPredict?: number; temperature?: number } = {}): Promise<string | null> {
+  const ollamaUrl = Deno.env.get("OLLAMA_NGROK_URL");
+  if (!ollamaUrl) {
+    console.warn("[IA] OLLAMA_NGROK_URL não configurado");
+    return null;
+  }
+  const cleanUrl = ollamaUrl.replace(/\/+$/, "");
+  const timeoutMs = opts.timeoutMs ?? 20000;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+    };
+    if (OLLAMA_API_KEY) headers["Authorization"] = `Bearer ${OLLAMA_API_KEY}`;
+
+    const response = await fetch(`${cleanUrl}/api/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        messages,
+        stream: false,
+        options: {
+          temperature: opts.temperature ?? 0.8,
+          num_predict: opts.numPredict ?? 80,
+        },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[IA] Ollama ${response.status}: ${errText.substring(0, 200)}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const content = (data.message?.content || data.response || "").trim();
+    return content || null;
+  } catch (err) {
+    clearTimeout(timeout);
+    console.error("[IA] Ollama erro:", err);
+    return null;
+  }
+}
+
+async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number): Promise<string> {
   const systemPrompt = buildSystemPrompt(totalTrocas, maxTrocas);
   const messages: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt },
@@ -135,84 +184,44 @@ async function chamarIA(mensagem: string, historico: string, totalTrocas: number
 
   messages.push({ role: "user", content: mensagem });
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "google/gemini-2.5-flash-lite", messages, stream: false }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[IA] Gateway ${response.status}: ${errText.substring(0, 200)}`);
-      return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
-    }
-
-    const data = await response.json();
-    let resposta = (data.choices?.[0]?.message?.content || "").trim();
-    resposta = resposta.replace(/^["']|["']$/g, "").trim();
-    if (!resposta || resposta.length < 2) {
-      return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
-    }
-    if (resposta.length > 200) {
-      resposta = resposta.substring(0, 200).replace(/\s\S*$/, "");
-    }
-    console.log(`[IA] Resposta (troca ${totalTrocas + 1}/${maxTrocas}): "${resposta}"`);
-    return resposta;
-  } catch (err) {
-    console.error("[IA] Erro:", err);
+  const raw = await callOllama(messages, { timeoutMs: 20000, numPredict: 80, temperature: 0.85 });
+  if (!raw) {
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
   }
+
+  let resposta = raw.replace(/^["']|["']$/g, "").trim();
+  if (!resposta || resposta.length < 2) {
+    return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
+  }
+  if (resposta.length > 200) {
+    resposta = resposta.substring(0, 200).replace(/\s\S*$/, "");
+  }
+  console.log(`[IA-Ollama] Resposta (troca ${totalTrocas + 1}/${maxTrocas}): "${resposta}"`);
+  return resposta;
 }
 
 async function gerarMensagemInicial(): Promise<string> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
   const tema = TEMAS_CONVERSA[Math.floor(Math.random() * TEMAS_CONVERSA.length)];
 
-  if (!apiKey) {
-    return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
-  }
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [
-          {
-            role: "system",
-            content: `Você é um brasileiro comum no WhatsApp. Gere UMA mensagem curta e casual para iniciar uma conversa com um amigo sobre: ${tema}. 
+  const messages = [
+    {
+      role: "system",
+      content: `Você é um brasileiro comum no WhatsApp. Gere UMA mensagem curta e casual para iniciar uma conversa com um amigo sobre: ${tema}. 
 Seja informal, use gírias, abreviações. Pode usar emoji mas com moderação. 
 Exemplos de tom: "e aí mano, viu o jogo ontem?", "cara tô morrendo de calor hj", "vc viu aquele filme novo?", "mano q fome, oq vc almoçou?".
 Responda APENAS com a mensagem, sem explicações.`,
-          },
-          { role: "user", content: "Gere a mensagem inicial." },
-        ],
-        stream: false,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+    },
+    { role: "user", content: "Gere a mensagem inicial." },
+  ];
 
-    if (!response.ok) return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
+  const raw = await callOllama(messages, { timeoutMs: 15000, numPredict: 60, temperature: 0.9 });
+  if (!raw) return "e aí, tudo bem? 😊";
 
-    const data = await response.json();
-    let msg = (data.choices?.[0]?.message?.content || "").trim();
-    msg = msg.replace(/^["']|["']$/g, "").trim();
-    if (!msg || msg.length < 2) return "e aí, tudo bem? 😊";
-    if (msg.length > 150) msg = msg.substring(0, 150);
-    console.log(`[IA] Mensagem inicial gerada (tema: ${tema}): "${msg}"`);
-    return msg;
-  } catch {
-    return "e aí, tudo bem? 😊";
-  }
+  let msg = raw.replace(/^["']|["']$/g, "").trim();
+  if (!msg || msg.length < 2) return "e aí, tudo bem? 😊";
+  if (msg.length > 150) msg = msg.substring(0, 150);
+  console.log(`[IA-Ollama] Mensagem inicial gerada (tema: ${tema}): "${msg}"`);
+  return msg;
 }
 
 async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
