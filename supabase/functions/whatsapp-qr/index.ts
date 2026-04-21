@@ -220,9 +220,16 @@ async function fetchQr(instanceId: string, phone?: string) {
         debugLogs.push(`200 no QR: ${JSON.stringify(data).substring(0, 150)}`);
       }
     }
-  } catch (e) {
-    console.log(`[QR] Error: ${e.message}`);
-    debugLogs.push(`ERROR: ${e.message}`);
+    break;
+    } catch (e) {
+      console.log(`[QR] Error attempt ${attempt}: ${e.message}`);
+      debugLogs.push(`attempt ${attempt} ERROR: ${e.message}`);
+      if (attempt < maxAttempts && (e.name === "AbortError" || e.message?.includes("timeout"))) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      break;
+    }
   }
 
   return json({ ok: false, error: "Não foi possível obter o QR Code.", debug: debugLogs }, 400);
