@@ -609,26 +609,25 @@ async function registrarAprendizado(
 }
 
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
-  try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return null;
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          { role: 'system', content: `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você interpreta a intenção do cliente em uma negociação de dívida. Responda APENAS com uma das opções listadas.` },
-          { role: 'user', content: `O cliente disse: "${texto}"\n\nOpções: ${opcoes.join(', ')}\n\nResponda APENAS com uma das opções, ou "nenhuma".` },
-        ],
-        max_tokens: 30,
-        temperature: 0,
-      }),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim()?.toLowerCase() || null;
-  } catch { return null; }
+  const chave = `${texto.toLowerCase().trim().slice(0, 80)}::${opcoes.join('|').toLowerCase()}`;
+
+  // 1. Cache
+  if (intencaoCache.has(chave)) return intencaoCache.get(chave) ?? null;
+
+  // 2. Curto-circuito local
+  const local = intencaoLocal(texto, opcoes);
+  if (local) {
+    setCacheLimited(intencaoCache, chave, local);
+    return local;
+  }
+
+  // 3. Ollama local
+  const sys = `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você interpreta a intenção do cliente em uma negociação de dívida. Responda APENAS com uma das opções listadas.`;
+  const usr = `O cliente disse: "${texto}"\n\nOpções: ${opcoes.join(', ')}\n\nResponda APENAS com uma das opções, ou "nenhuma".`;
+  const out = await chamarOllama(sys, usr, 30, 0);
+  const result = out?.toLowerCase() || null;
+  setCacheLimited(intencaoCache, chave, result);
+  return result;
 }
 
 // Extract a date from text like "dia 15", "15/03", "amanha", "segunda"
