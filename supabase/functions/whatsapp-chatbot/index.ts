@@ -477,42 +477,18 @@ function parseAdminInstructionWithTarget(texto: string): { telefoneAlvo: string 
 }
 
 async function gerarRespostaComInstrucaoAdmin(instrucao: string, contextoConversa: any): Promise<string> {
-  try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return instrucao;
+  const historico = contextoConversa?.mensagens_historico || [];
+  const historicoTexto = historico.slice(-10).map((m: any) => `${m.role}: ${m.content}`).join('\n');
+  const nomeCliente = contextoConversa?.nome || 'cliente';
+  const primeiroNome = nomeCliente.split(' ')[0];
 
-    const historico = contextoConversa?.mensagens_historico || [];
-    const historicoTexto = historico.slice(-10).map((m: any) => `${m.role}: ${m.content}`).join('\n');
-    const nomeCliente = contextoConversa?.nome || 'cliente';
-    const primeiroNome = nomeCliente.split(' ')[0];
-
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          {
-            role: 'system',
-            content: `Você é um assistente de cobrança amigável e profissional. O administrador Rodrigo está instruindo como responder ao cliente ${primeiroNome}. 
+  const sys = `Você é um assistente de cobrança amigável e profissional. O administrador Rodrigo está instruindo como responder ao cliente ${primeiroNome}.
 Gere uma resposta natural e amigável para o cliente baseada na instrução do administrador.
-Mantenha o tom informal e cordial. Não mencione o administrador. Responda APENAS com a mensagem para o cliente, sem explicações.`
-          },
-          {
-            role: 'user',
-            content: `Contexto da conversa:\n${historicoTexto}\n\nInstrução do administrador: "${instrucao}"\n\nGere a resposta para o cliente:`
-          },
-        ],
-        max_tokens: 300,
-        temperature: 0.7,
-      }),
-    });
-    if (!response.ok) return instrucao;
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim() || instrucao;
-  } catch {
-    return instrucao;
-  }
+Mantenha o tom informal e cordial. Não mencione o administrador. Responda APENAS com a mensagem para o cliente, sem explicações.`;
+  const usr = `Contexto da conversa:\n${historicoTexto}\n\nInstrução do administrador: "${instrucao}"\n\nGere a resposta para o cliente:`;
+
+  const out = await chamarOllama(sys, usr, 300, 0.7);
+  return out || instrucao;
 }
 
 async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
