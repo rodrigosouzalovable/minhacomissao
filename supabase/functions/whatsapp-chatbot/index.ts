@@ -360,62 +360,90 @@ async function sendMessage(serverUrl: string, instanceToken: string, telefone: s
   throw new Error(lastError?.message || 'Falha ao enviar mensagem UAZAPI');
 }
 
-async function transcreverAudio(audioUrl: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY não configurada');
+// ===== OLLAMA LOCAL (gratuito) — substitui Lovable AI Gateway =====
+const OLLAMA_URL = Deno.env.get('OLLAMA_NGROK_URL') || '';
+const OLLAMA_MODEL = 'gemma4:e4b';
 
-  console.log('[AUDIO] Baixando áudio de:', audioUrl);
-  const audioResponse = await fetch(audioUrl);
-  if (!audioResponse.ok) throw new Error(`Falha ao baixar áudio: ${audioResponse.status}`);
-
-  const audioBuffer = await audioResponse.arrayBuffer();
-  const audioBytes = new Uint8Array(audioBuffer);
-  
-  // Converter para base64
-  let binary = '';
-  for (let i = 0; i < audioBytes.length; i++) {
-    binary += String.fromCharCode(audioBytes[i]);
+async function chamarOllama(systemPrompt: string, userPrompt: string, maxTokens = 80, temperature = 0): Promise<string | null> {
+  if (!OLLAMA_URL) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch(`${OLLAMA_URL.replace(/\/+$/, '')}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        stream: false,
+        options: { temperature, num_predict: maxTokens },
+      }),
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return (data?.message?.content || '').trim() || null;
+  } catch (e) {
+    console.error('[OLLAMA] erro:', e instanceof Error ? e.message : e);
+    return null;
   }
-  const audioBase64 = btoa(binary);
-  console.log('[AUDIO] Áudio convertido para base64, tamanho:', audioBase64.length);
+}
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        {
-          role: 'system',
-          content: 'Você é um transcritor de áudio. Transcreva o áudio fornecido em texto. Retorne APENAS o texto transcrito, sem explicações ou formatação adicional. Se o áudio estiver em português, mantenha em português.',
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Transcreva o seguinte áudio para texto:' },
-            { type: 'input_audio', input_audio: { data: audioBase64, format: 'wav' } },
-          ],
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[AUDIO] Erro AI Gateway:', response.status, errorText);
-    throw new Error(`AI gateway error: ${response.status}`);
+// Cache em memória — mensagens repetidas não chamam IA
+const gatilhoCache = new Map<string, string>();
+const intencaoCache = new Map<string, string | null>();
+const CACHE_MAX = 500;
+function setCacheLimited<K, V>(map: Map<K, V>, key: K, value: V) {
+  if (map.size >= CACHE_MAX) {
+    const firstKey = map.keys().next().value;
+    if (firstKey !== undefined) map.delete(firstKey);
   }
+  map.set(key, value);
+}
 
-  const result = await response.json();
-  const transcribed = (result.choices?.[0]?.message?.content || '').trim();
-  
-  if (!transcribed) throw new Error('Transcrição vazia');
-  
-  console.log('[AUDIO] Transcrição concluída:', transcribed);
-  return transcribed;
+// Curto-circuito local — resolve ~70% das mensagens sem IA
+function gatilhoLocal(texto: string): string | null {
+  const t = texto.toLowerCase().trim().replace(/[!?.,;]/g, '');
+  if (!t) return null;
+  if (t.length <= 25) {
+    const confirma = ['sim', 'ok', 'okay', 'beleza', 'fechado', 'fechou', 'pode', 'pode ser', 'aceito', 'concordo', 'tá', 'ta', 'tá bom', 'ta bom', 'isso', 'claro', 'perfeito', 'combinado', 'show', 'blz', 's'];
+    if (confirma.includes(t)) return 'sim';
+    const nega = ['não', 'nao', 'n', 'não posso', 'nao posso', 'não dá', 'nao da', 'não consigo', 'nao consigo', 'jamais', 'nunca'];
+    if (nega.includes(t)) return 'não';
+    const adia = ['depois', 'amanhã', 'amanha', 'mais tarde', 'logo mais', 'em breve', 'semana que vem', 'mês que vem', 'mes que vem', 'vou ver', 'vou pensar', 'preciso pensar', 'me da um tempo', 'me dá um tempo'];
+    if (adia.some(a => t === a || t.includes(a))) return 'vou ver';
+  }
+  return null;
+}
+
+function intencaoLocal(texto: string, opcoes: string[]): string | null {
+  const t = texto.toLowerCase().trim();
+  // Match direto
+  for (const op of opcoes) {
+    if (t === op.toLowerCase() || t.includes(op.toLowerCase())) return op.toLowerCase();
+  }
+  // Confirmações
+  const opcoesLower = opcoes.map(o => o.toLowerCase());
+  const isConfirm = ['sim', 'ok', 'beleza', 'pode', 'aceito', 'fechado', 'isso', 's', 'claro'].includes(t);
+  const isNega = ['não', 'nao', 'n'].includes(t);
+  if (isConfirm) {
+    const aceitar = opcoesLower.find(o => /aceit|sim|confirm|fechar|pagar|à vista|avista|parcel/.test(o));
+    if (aceitar) return aceitar;
+  }
+  if (isNega) {
+    const recusar = opcoesLower.find(o => /recus|não|nao|cancel/.test(o));
+    if (recusar) return recusar;
+  }
+  return null;
+}
+
+// Transcrição de áudio DESABILITADA (custo zero) — bot pede texto
+async function transcreverAudio(_audioUrl: string): Promise<string> {
+  throw new Error('AUDIO_DISABLED');
 }
 
 const ADMIN_NUMERO = '5562991672674';
@@ -449,42 +477,18 @@ function parseAdminInstructionWithTarget(texto: string): { telefoneAlvo: string 
 }
 
 async function gerarRespostaComInstrucaoAdmin(instrucao: string, contextoConversa: any): Promise<string> {
-  try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return instrucao;
+  const historico = contextoConversa?.mensagens_historico || [];
+  const historicoTexto = historico.slice(-10).map((m: any) => `${m.role}: ${m.content}`).join('\n');
+  const nomeCliente = contextoConversa?.nome || 'cliente';
+  const primeiroNome = nomeCliente.split(' ')[0];
 
-    const historico = contextoConversa?.mensagens_historico || [];
-    const historicoTexto = historico.slice(-10).map((m: any) => `${m.role}: ${m.content}`).join('\n');
-    const nomeCliente = contextoConversa?.nome || 'cliente';
-    const primeiroNome = nomeCliente.split(' ')[0];
-
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          {
-            role: 'system',
-            content: `Você é um assistente de cobrança amigável e profissional. O administrador Rodrigo está instruindo como responder ao cliente ${primeiroNome}. 
+  const sys = `Você é um assistente de cobrança amigável e profissional. O administrador Rodrigo está instruindo como responder ao cliente ${primeiroNome}.
 Gere uma resposta natural e amigável para o cliente baseada na instrução do administrador.
-Mantenha o tom informal e cordial. Não mencione o administrador. Responda APENAS com a mensagem para o cliente, sem explicações.`
-          },
-          {
-            role: 'user',
-            content: `Contexto da conversa:\n${historicoTexto}\n\nInstrução do administrador: "${instrucao}"\n\nGere a resposta para o cliente:`
-          },
-        ],
-        max_tokens: 300,
-        temperature: 0.7,
-      }),
-    });
-    if (!response.ok) return instrucao;
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim() || instrucao;
-  } catch {
-    return instrucao;
-  }
+Mantenha o tom informal e cordial. Não mencione o administrador. Responda APENAS com a mensagem para o cliente, sem explicações.`;
+  const usr = `Contexto da conversa:\n${historicoTexto}\n\nInstrução do administrador: "${instrucao}"\n\nGere a resposta para o cliente:`;
+
+  const out = await chamarOllama(sys, usr, 300, 0.7);
+  return out || instrucao;
 }
 
 async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
@@ -524,39 +528,32 @@ async function notificarAcordoFechado(serverUrl: string, instanceToken: string, 
   }
 }
 
-// AI only for INTENT interpretation — never for composing responses
+// Extrai gatilho — curto-circuito local, cache, depois Ollama
 async function extrairGatilho(mensagemCliente: string): Promise<string> {
-  try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return mensagemCliente.toLowerCase().slice(0, 50);
-    
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          { 
-            role: 'system', 
-            content: `Você extrai palavras-chave (gatilho) de mensagens de clientes. Responda APENAS com 1-4 palavras-chave em minúsculas, sem pontuação.
+  const fallback = mensagemCliente.toLowerCase().slice(0, 50);
+  const chave = mensagemCliente.toLowerCase().trim().slice(0, 100);
+
+  // 1. Cache
+  const cached = gatilhoCache.get(chave);
+  if (cached !== undefined) return cached;
+
+  // 2. Curto-circuito local (resolve a maioria — sim/não/ok/depois)
+  const local = gatilhoLocal(mensagemCliente);
+  if (local) {
+    setCacheLimited(gatilhoCache, chave, local);
+    return local;
+  }
+
+  // 3. Ollama local (gratuito)
+  const sys = `Você extrai palavras-chave (gatilho) de mensagens de clientes. Responda APENAS com 1-4 palavras-chave em minúsculas, sem pontuação.
 Exemplos:
 "Vou ver aqui" -> "vou ver"
 "Não sei se consigo" -> "não sei se consigo"
-"Preciso pensar melhor" -> "preciso pensar"`
-          },
-          { role: 'user', content: `Extraia o gatilho: "${mensagemCliente}"` },
-        ],
-        max_tokens: 30,
-        temperature: 0,
-      }),
-    });
-    
-    if (!response.ok) return mensagemCliente.toLowerCase().slice(0, 50);
-    const data = await response.json();
-    return (data.choices?.[0]?.message?.content?.trim()?.toLowerCase() || mensagemCliente.toLowerCase()).slice(0, 50);
-  } catch {
-    return mensagemCliente.toLowerCase().slice(0, 50);
-  }
+"Preciso pensar melhor" -> "preciso pensar"`;
+  const out = await chamarOllama(sys, `Extraia o gatilho: "${mensagemCliente}"`, 30, 0);
+  const result = (out?.toLowerCase() || fallback).slice(0, 50);
+  setCacheLimited(gatilhoCache, chave, result);
+  return result;
 }
 
 async function registrarAprendizado(
@@ -612,26 +609,25 @@ async function registrarAprendizado(
 }
 
 async function interpretarIntencao(texto: string, opcoes: string[]): Promise<string | null> {
-  try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return null;
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          { role: 'system', content: `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você interpreta a intenção do cliente em uma negociação de dívida. Responda APENAS com uma das opções listadas.` },
-          { role: 'user', content: `O cliente disse: "${texto}"\n\nOpções: ${opcoes.join(', ')}\n\nResponda APENAS com uma das opções, ou "nenhuma".` },
-        ],
-        max_tokens: 30,
-        temperature: 0,
-      }),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim()?.toLowerCase() || null;
-  } catch { return null; }
+  const chave = `${texto.toLowerCase().trim().slice(0, 80)}::${opcoes.join('|').toLowerCase()}`;
+
+  // 1. Cache
+  if (intencaoCache.has(chave)) return intencaoCache.get(chave) ?? null;
+
+  // 2. Curto-circuito local
+  const local = intencaoLocal(texto, opcoes);
+  if (local) {
+    setCacheLimited(intencaoCache, chave, local);
+    return local;
+  }
+
+  // 3. Ollama local
+  const sys = `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você interpreta a intenção do cliente em uma negociação de dívida. Responda APENAS com uma das opções listadas.`;
+  const usr = `O cliente disse: "${texto}"\n\nOpções: ${opcoes.join(', ')}\n\nResponda APENAS com uma das opções, ou "nenhuma".`;
+  const out = await chamarOllama(sys, usr, 30, 0);
+  const result = out?.toLowerCase() || null;
+  setCacheLimited(intencaoCache, chave, result);
+  return result;
 }
 
 // Extract a date from text like "dia 15", "15/03", "amanha", "segunda"
