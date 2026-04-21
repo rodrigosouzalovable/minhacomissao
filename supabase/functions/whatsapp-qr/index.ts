@@ -149,27 +149,43 @@ async function fetchQr(instanceId: string, phone?: string) {
   const reqBody = cleanPhone ? JSON.stringify({ phone: cleanPhone }) : "{}";
 
   // Primary approach: POST /instance/connect with token header
-  try {
-    console.log(`[QR] POST ${base}/instance/connect (token header)${cleanPhone ? ` phone=${cleanPhone}` : ""}`);
-    const res = await fetch(`${base}/instance/connect`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", token },
-      body: reqBody,
-    });
+  // Retry up to 3x on 504/timeout (UAZAPI server can be slow to respond)
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[QR] Attempt ${attempt}/${maxAttempts} POST ${base}/instance/connect${cleanPhone ? ` phone=${cleanPhone}` : ""}`);
 
-    const text = await res.text();
-    console.log(`[QR] Response ${res.status}: ${text.substring(0, 500)}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-    if (res.status === 401) {
-      return json({
-        ok: false,
-        error: `Token inválido para a instância "${instance.nome || instanceId}". Esta instância pode ter sido removida do servidor. Tente criar uma nova conexão.`,
-      }, 401);
-    }
+      const res = await fetch(`${base}/instance/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token },
+        body: reqBody,
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
-    if (!res.ok) {
-      debugLogs.push(`${res.status}: ${text.substring(0, 150)}`);
-    } else {
+      const text = await res.text();
+      console.log(`[QR] Response ${res.status}: ${text.substring(0, 500)}`);
+
+      if (res.status === 401) {
+        return json({
+          ok: false,
+          error: `Token inválido para a instância "${instance.nome || instanceId}". Esta instância pode ter sido removida do servidor. Tente criar uma nova conexão.`,
+        }, 401);
+      }
+
+      // Retry on gateway timeout / bad gateway
+      if ((res.status === 504 || res.status === 502 || res.status === 503) && attempt < maxAttempts) {
+        debugLogs.push(`attempt ${attempt}: ${res.status}`);
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+
+      if (!res.ok) {
+        debugLogs.push(`${res.status}: ${text.substring(0, 150)}`);
+        break;
+      } else {
       const contentType = res.headers.get("content-type") || "";
       if (contentType.includes("image")) {
         const buf = new TextEncoder().encode(text);
@@ -204,9 +220,16 @@ async function fetchQr(instanceId: string, phone?: string) {
         debugLogs.push(`200 no QR: ${JSON.stringify(data).substring(0, 150)}`);
       }
     }
-  } catch (e) {
-    console.log(`[QR] Error: ${e.message}`);
-    debugLogs.push(`ERROR: ${e.message}`);
+    break;
+    } catch (e) {
+      console.log(`[QR] Error attempt ${attempt}: ${e.message}`);
+      debugLogs.push(`attempt ${attempt} ERROR: ${e.message}`);
+      if (attempt < maxAttempts && (e.name === "AbortError" || e.message?.includes("timeout"))) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      break;
+    }
   }
 
   return json({ ok: false, error: "Não foi possível obter o QR Code.", debug: debugLogs }, 400);
