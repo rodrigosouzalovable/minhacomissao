@@ -528,39 +528,32 @@ async function notificarAcordoFechado(serverUrl: string, instanceToken: string, 
   }
 }
 
-// AI only for INTENT interpretation — never for composing responses
+// Extrai gatilho — curto-circuito local, cache, depois Ollama
 async function extrairGatilho(mensagemCliente: string): Promise<string> {
-  try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return mensagemCliente.toLowerCase().slice(0, 50);
-    
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          { 
-            role: 'system', 
-            content: `Você extrai palavras-chave (gatilho) de mensagens de clientes. Responda APENAS com 1-4 palavras-chave em minúsculas, sem pontuação.
+  const fallback = mensagemCliente.toLowerCase().slice(0, 50);
+  const chave = mensagemCliente.toLowerCase().trim().slice(0, 100);
+
+  // 1. Cache
+  const cached = gatilhoCache.get(chave);
+  if (cached !== undefined) return cached;
+
+  // 2. Curto-circuito local (resolve a maioria — sim/não/ok/depois)
+  const local = gatilhoLocal(mensagemCliente);
+  if (local) {
+    setCacheLimited(gatilhoCache, chave, local);
+    return local;
+  }
+
+  // 3. Ollama local (gratuito)
+  const sys = `Você extrai palavras-chave (gatilho) de mensagens de clientes. Responda APENAS com 1-4 palavras-chave em minúsculas, sem pontuação.
 Exemplos:
 "Vou ver aqui" -> "vou ver"
 "Não sei se consigo" -> "não sei se consigo"
-"Preciso pensar melhor" -> "preciso pensar"`
-          },
-          { role: 'user', content: `Extraia o gatilho: "${mensagemCliente}"` },
-        ],
-        max_tokens: 30,
-        temperature: 0,
-      }),
-    });
-    
-    if (!response.ok) return mensagemCliente.toLowerCase().slice(0, 50);
-    const data = await response.json();
-    return (data.choices?.[0]?.message?.content?.trim()?.toLowerCase() || mensagemCliente.toLowerCase()).slice(0, 50);
-  } catch {
-    return mensagemCliente.toLowerCase().slice(0, 50);
-  }
+"Preciso pensar melhor" -> "preciso pensar"`;
+  const out = await chamarOllama(sys, `Extraia o gatilho: "${mensagemCliente}"`, 30, 0);
+  const result = (out?.toLowerCase() || fallback).slice(0, 50);
+  setCacheLimited(gatilhoCache, chave, result);
+  return result;
 }
 
 async function registrarAprendizado(
