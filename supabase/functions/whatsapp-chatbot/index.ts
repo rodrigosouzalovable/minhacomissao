@@ -360,62 +360,90 @@ async function sendMessage(serverUrl: string, instanceToken: string, telefone: s
   throw new Error(lastError?.message || 'Falha ao enviar mensagem UAZAPI');
 }
 
-async function transcreverAudio(audioUrl: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY não configurada');
+// ===== OLLAMA LOCAL (gratuito) — substitui Lovable AI Gateway =====
+const OLLAMA_URL = Deno.env.get('OLLAMA_NGROK_URL') || '';
+const OLLAMA_MODEL = 'gemma4:e4b';
 
-  console.log('[AUDIO] Baixando áudio de:', audioUrl);
-  const audioResponse = await fetch(audioUrl);
-  if (!audioResponse.ok) throw new Error(`Falha ao baixar áudio: ${audioResponse.status}`);
-
-  const audioBuffer = await audioResponse.arrayBuffer();
-  const audioBytes = new Uint8Array(audioBuffer);
-  
-  // Converter para base64
-  let binary = '';
-  for (let i = 0; i < audioBytes.length; i++) {
-    binary += String.fromCharCode(audioBytes[i]);
+async function chamarOllama(systemPrompt: string, userPrompt: string, maxTokens = 80, temperature = 0): Promise<string | null> {
+  if (!OLLAMA_URL) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch(`${OLLAMA_URL.replace(/\/+$/, '')}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        stream: false,
+        options: { temperature, num_predict: maxTokens },
+      }),
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return (data?.message?.content || '').trim() || null;
+  } catch (e) {
+    console.error('[OLLAMA] erro:', e instanceof Error ? e.message : e);
+    return null;
   }
-  const audioBase64 = btoa(binary);
-  console.log('[AUDIO] Áudio convertido para base64, tamanho:', audioBase64.length);
+}
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        {
-          role: 'system',
-          content: 'Você é um transcritor de áudio. Transcreva o áudio fornecido em texto. Retorne APENAS o texto transcrito, sem explicações ou formatação adicional. Se o áudio estiver em português, mantenha em português.',
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Transcreva o seguinte áudio para texto:' },
-            { type: 'input_audio', input_audio: { data: audioBase64, format: 'wav' } },
-          ],
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[AUDIO] Erro AI Gateway:', response.status, errorText);
-    throw new Error(`AI gateway error: ${response.status}`);
+// Cache em memória — mensagens repetidas não chamam IA
+const gatilhoCache = new Map<string, string>();
+const intencaoCache = new Map<string, string | null>();
+const CACHE_MAX = 500;
+function setCacheLimited<K, V>(map: Map<K, V>, key: K, value: V) {
+  if (map.size >= CACHE_MAX) {
+    const firstKey = map.keys().next().value;
+    if (firstKey !== undefined) map.delete(firstKey);
   }
+  map.set(key, value);
+}
 
-  const result = await response.json();
-  const transcribed = (result.choices?.[0]?.message?.content || '').trim();
-  
-  if (!transcribed) throw new Error('Transcrição vazia');
-  
-  console.log('[AUDIO] Transcrição concluída:', transcribed);
-  return transcribed;
+// Curto-circuito local — resolve ~70% das mensagens sem IA
+function gatilhoLocal(texto: string): string | null {
+  const t = texto.toLowerCase().trim().replace(/[!?.,;]/g, '');
+  if (!t) return null;
+  if (t.length <= 25) {
+    const confirma = ['sim', 'ok', 'okay', 'beleza', 'fechado', 'fechou', 'pode', 'pode ser', 'aceito', 'concordo', 'tá', 'ta', 'tá bom', 'ta bom', 'isso', 'claro', 'perfeito', 'combinado', 'show', 'blz', 's'];
+    if (confirma.includes(t)) return 'sim';
+    const nega = ['não', 'nao', 'n', 'não posso', 'nao posso', 'não dá', 'nao da', 'não consigo', 'nao consigo', 'jamais', 'nunca'];
+    if (nega.includes(t)) return 'não';
+    const adia = ['depois', 'amanhã', 'amanha', 'mais tarde', 'logo mais', 'em breve', 'semana que vem', 'mês que vem', 'mes que vem', 'vou ver', 'vou pensar', 'preciso pensar', 'me da um tempo', 'me dá um tempo'];
+    if (adia.some(a => t === a || t.includes(a))) return 'vou ver';
+  }
+  return null;
+}
+
+function intencaoLocal(texto: string, opcoes: string[]): string | null {
+  const t = texto.toLowerCase().trim();
+  // Match direto
+  for (const op of opcoes) {
+    if (t === op.toLowerCase() || t.includes(op.toLowerCase())) return op.toLowerCase();
+  }
+  // Confirmações
+  const opcoesLower = opcoes.map(o => o.toLowerCase());
+  const isConfirm = ['sim', 'ok', 'beleza', 'pode', 'aceito', 'fechado', 'isso', 's', 'claro'].includes(t);
+  const isNega = ['não', 'nao', 'n'].includes(t);
+  if (isConfirm) {
+    const aceitar = opcoesLower.find(o => /aceit|sim|confirm|fechar|pagar|à vista|avista|parcel/.test(o));
+    if (aceitar) return aceitar;
+  }
+  if (isNega) {
+    const recusar = opcoesLower.find(o => /recus|não|nao|cancel/.test(o));
+    if (recusar) return recusar;
+  }
+  return null;
+}
+
+// Transcrição de áudio DESABILITADA (custo zero) — bot pede texto
+async function transcreverAudio(_audioUrl: string): Promise<string> {
+  throw new Error('AUDIO_DISABLED');
 }
 
 const ADMIN_NUMERO = '5562991672674';
