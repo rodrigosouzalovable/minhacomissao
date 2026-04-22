@@ -69,6 +69,12 @@ const normalizePhoneForWhatsApp = (phone: string): string => {
   return full;
 };
 
+const normalizePairingPhone = (phone: string): string => {
+  const clean = phone.replace(/\D/g, '');
+  if (!clean) return '';
+  return clean.startsWith('55') ? clean : `55${clean}`;
+};
+
 interface ConversaInfo {
   etapa: string;
   historico: Array<{ role: string; content: string; ts?: string }>;
@@ -1500,7 +1506,7 @@ export default function Acionamento() {
       setCreatedInstanceId(instanceId);
 
       // Step 2: Fetch QR code or pairing code
-      const usePhone = connectMethod === 'code' ? pairingPhone.replace(/\D/g, '') : '';
+      const usePhone = connectMethod === 'code' ? normalizePairingPhone(pairingPhone) : '';
       const { data: qrData, error: qrError } = await supabase.functions.invoke('whatsapp-qr', {
         body: { action: 'qr', userId: user.id, instanceId, phone: usePhone || undefined },
       });
@@ -1541,7 +1547,7 @@ export default function Acionamento() {
     stopQrPolling();
     setQrLoading(true);
     try {
-      const usePhone = connectMethod === 'code' ? pairingPhone.replace(/\D/g, '') : '';
+      const usePhone = connectMethod === 'code' ? normalizePairingPhone(pairingPhone) : '';
       const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
         body: { action: 'qr', userId: user.id, instanceId: createdInstanceId, phone: usePhone || undefined },
       });
@@ -2421,14 +2427,12 @@ export default function Acionamento() {
                             <Button
                               className="flex-1"
                               onClick={() => {
-                                const digits = pairingPhone.replace(/\D/g, '');
-                                if (digits.length < 10) {
+                                const normalizedPhone = normalizePairingPhone(pairingPhone);
+                                if (normalizedPhone.length < 12) {
                                   toast.error('Digite um número válido com DDD');
                                   return;
                                 }
-                                if (!digits.startsWith('55')) {
-                                  setPairingPhone('55' + digits);
-                                }
+                                setPairingPhone(normalizedPhone);
                                 handleConnectQr();
                               }}
                               disabled={qrLoading}
