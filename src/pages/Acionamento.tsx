@@ -1516,9 +1516,13 @@ export default function Acionamento() {
         if (refreshed) setInstances(refreshed as any);
         setQrStep('idle');
         toast.success('WhatsApp já está conectado!');
-      } else if (qrData?.ok && qrData.qr) {
-        const qr = qrData.qr.startsWith('data:') ? qrData.qr : `data:image/png;base64,${qrData.qr}`;
-        setQrImage(qr);
+      } else if (qrData?.ok && (qrData.qr || qrData.pairingCode)) {
+        if (qrData.qr) {
+          const qr = qrData.qr.startsWith('data:') ? qrData.qr : `data:image/png;base64,${qrData.qr}`;
+          setQrImage(qr);
+        } else {
+          setQrImage(null);
+        }
         setPairingCode(qrData.pairingCode || null);
         setQrStep('qr');
         startQrPolling(instanceId);
@@ -1542,9 +1546,13 @@ export default function Acionamento() {
         body: { action: 'qr', userId: user.id, instanceId: createdInstanceId, phone: usePhone || undefined },
       });
       if (error) throw error;
-      if (data?.ok && data.qr) {
-        const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
-        setQrImage(qr);
+      if (data?.ok && (data.qr || data.pairingCode)) {
+        if (data.qr) {
+          const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
+          setQrImage(qr);
+        } else {
+          setQrImage(null);
+        }
         setPairingCode(data.pairingCode || null);
         startQrPolling(createdInstanceId);
         startQrCountdown();
@@ -2426,7 +2434,7 @@ export default function Acionamento() {
                               disabled={qrLoading}
                             >
                               {qrLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
-                              Gerar Código
+                              {qrLoading ? 'Aguardando WhatsApp… (pode levar até 1 min)' : 'Gerar Código'}
                             </Button>
                             <Button variant="ghost" onClick={handleCancelQr}>
                               Cancelar
