@@ -2470,9 +2470,12 @@ export default function Acionamento() {
                               <p className={connectMethod === 'code'
                                 ? "text-4xl font-mono font-bold tracking-widest text-primary"
                                 : "text-2xl font-mono font-bold tracking-widest text-primary"}>
-                                {pairingCode.length >= 8
-                                  ? `${pairingCode.slice(0, 4)}-${pairingCode.slice(4)}`
-                                  : pairingCode}
+                                {(() => {
+                                  const clean = pairingCode.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                                  return clean.length >= 8
+                                    ? `${clean.slice(0, 4)}-${clean.slice(4)}`
+                                    : clean;
+                                })()}
                               </p>
                               {connectMethod === 'code' && (
                                 <div className="text-xs text-muted-foreground text-left max-w-xs mx-auto pt-2 space-y-1">
