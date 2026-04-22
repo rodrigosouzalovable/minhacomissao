@@ -149,14 +149,17 @@ async function fetchQr(instanceId: string, phone?: string) {
   const reqBody = cleanPhone ? JSON.stringify({ phone: cleanPhone }) : "{}";
 
   // Primary approach: POST /instance/connect with token header
-  // Retry up to 3x on 504/timeout (UAZAPI server can be slow to respond)
-  const maxAttempts = 3;
+  // Pairing-code flow is slower (UAZAPI opens session + generates code) → longer timeout + more retries
+  const isPairing = !!cleanPhone;
+  const maxAttempts = isPairing ? 5 : 3;
+  const perAttemptTimeoutMs = isPairing ? 45000 : 25000;
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      console.log(`[QR] Attempt ${attempt}/${maxAttempts} POST ${base}/instance/connect${cleanPhone ? ` phone=${cleanPhone}` : ""}`);
+      console.log(`[QR] Attempt ${attempt}/${maxAttempts} POST ${base}/instance/connect${cleanPhone ? ` phone=${cleanPhone}` : ""} (timeout ${perAttemptTimeoutMs}ms)`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      const timeoutId = setTimeout(() => controller.abort(), perAttemptTimeoutMs);
 
       const res = await fetch(`${base}/instance/connect`, {
         method: "POST",
@@ -177,13 +180,13 @@ async function fetchQr(instanceId: string, phone?: string) {
 
       // Retry on gateway timeout / bad gateway
       if ((res.status === 504 || res.status === 502 || res.status === 503) && attempt < maxAttempts) {
-        debugLogs.push(`attempt ${attempt}: ${res.status}`);
+        debugLogs.push(`attempt ${attempt} TIMEOUT/GATEWAY: ${res.status}`);
         await new Promise((r) => setTimeout(r, 1500 * attempt));
         continue;
       }
 
       if (!res.ok) {
-        debugLogs.push(`${res.status}: ${text.substring(0, 150)}`);
+        debugLogs.push(`${res.status} PAYLOAD_ERR: ${text.substring(0, 150)}`);
         break;
       } else {
       const contentType = res.headers.get("content-type") || "";
@@ -223,12 +226,57 @@ async function fetchQr(instanceId: string, phone?: string) {
     break;
     } catch (e) {
       console.log(`[QR] Error attempt ${attempt}: ${e.message}`);
-      debugLogs.push(`attempt ${attempt} ERROR: ${e.message}`);
-      if (attempt < maxAttempts && (e.name === "AbortError" || e.message?.includes("timeout"))) {
+      const isTimeout = e.name === "AbortError" || e.message?.includes("timeout");
+      debugLogs.push(`attempt ${attempt} ${isTimeout ? "TIMEOUT" : "ERROR"}: ${e.message}`);
+      if (attempt < maxAttempts && isTimeout) {
         await new Promise((r) => setTimeout(r, 1500 * attempt));
         continue;
       }
       break;
+    }
+  }
+
+  // Fallback: if all attempts failed and we were in pairing mode, check status + try QR (no phone)
+  if (isPairing) {
+    try {
+      console.log(`[QR] Fallback: checking status + retry connect without phone`);
+      // Quick status check (best-effort, short timeout)
+      try {
+        const sCtrl = new AbortController();
+        const sTimer = setTimeout(() => sCtrl.abort(), 8000);
+        const sRes = await fetch(uazUrl(base, "/instance/status", { token }), { signal: sCtrl.signal })
+          .finally(() => clearTimeout(sTimer));
+        if (sRes.ok) {
+          const sText = await sRes.text();
+          let sData: any = null;
+          try { sData = JSON.parse(sText); } catch (_) {}
+          const parsed = sData ? parseConnectionState(sData) : null;
+          if (parsed?.connected) {
+            return json({ ok: true, alreadyConnected: true, connected: true, phone: parsed.phone });
+          }
+        }
+      } catch (_) {}
+
+      const fbCtrl = new AbortController();
+      const fbTimer = setTimeout(() => fbCtrl.abort(), 25000);
+      const fbRes = await fetch(`${base}/instance/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token },
+        body: "{}",
+        signal: fbCtrl.signal,
+      }).finally(() => clearTimeout(fbTimer));
+      if (fbRes.ok) {
+        const fbText = await fbRes.text();
+        let fbData: any = null;
+        try { fbData = JSON.parse(fbText); } catch (_) {}
+        const qr = fbData?.qrcode || fbData?.qr || fbData?.base64 || fbData?.qrCode ||
+                   fbData?.instance?.qrcode || fbData?.instance?.qrcode_base64 || null;
+        if (qr) return json({ ok: true, qr, pairingCode: null, fallback: "qr-without-phone" });
+      } else {
+        debugLogs.push(`fallback ${fbRes.status}`);
+      }
+    } catch (e) {
+      debugLogs.push(`fallback ERROR: ${e.message}`);
     }
   }
 
