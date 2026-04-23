@@ -7,23 +7,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const BLOCKED_WEBHOOK_MARKERS = [
-  '@g.us',
-  'status@broadcast',
-  '"isgroup":true',
-  '"wa_isgroup":true',
-  '"messagetype":"reactionmessage"',
-  '"messagetype":"protocolmessage"',
-];
-
-function isBlockedWebhookPayload(rawBody: string) {
-  const normalized = rawBody.toLowerCase();
-  return BLOCKED_WEBHOOK_MARKERS.some((marker) => normalized.includes(marker));
-}
-
+// Precise group/broadcast/noise filter — applied AFTER JSON.parse so it only inspects
+// the chat identifier fields (never the full body, which often contains '@g.us' in
+// metadata like instanceOwner of legitimate DMs).
 function isBlockedRemoteJid(remoteJid: string | null | undefined) {
   const normalized = (remoteJid || '').toLowerCase();
-  return normalized.includes('@g.us') || normalized.includes('status@broadcast');
+  return normalized.endsWith('@g.us') || normalized === 'status@broadcast' || normalized.includes('@broadcast');
+}
+
+function isBlockedParsedPayload(payload: any): { blocked: boolean; reason?: string } {
+  if (!payload || typeof payload !== 'object') return { blocked: false };
+
+  const candidates: unknown[] = [
+    payload.chatid,
+    payload.chatId,
+    payload.remoteJid,
+    payload.from,
+    payload.key?.remoteJid,
+    payload.message?.key?.remoteJid,
+    payload.message?.chatid,
+    payload.message?.chatId,
+    payload.data?.key?.remoteJid,
+    payload.data?.chatid,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && isBlockedRemoteJid(c)) {
+      return { blocked: true, reason: `group_or_broadcast:${c}` };
+    }
+  }
+
+  if (payload.isGroup === true || payload.wa_isGroup === true || payload.message?.isGroup === true) {
+    return { blocked: true, reason: 'isGroup_flag' };
+  }
+
+  const msgType = (payload.messageType || payload.message?.messageType || payload.type || '').toString().toLowerCase();
+  if (msgType === 'reactionmessage' || msgType === 'protocolmessage') {
+    return { blocked: true, reason: `noise_type:${msgType}` };
+  }
+
+  return { blocked: false };
 }
 
 function getImageDimensions(bytes: Uint8Array, mimeType?: string): { width: number; height: number } | null {
@@ -732,15 +754,7 @@ serve(async (req) => {
   }
 
   try {
-    // ⚠ COST CONTROL: ultra-fast pre-parse early-return for noise (groups, broadcasts, reactions).
-    // Group payloads are forbidden here and must never enter the inbox/chatbot flow again.
     const rawBody = await req.text();
-    if (isBlockedWebhookPayload(rawBody)) {
-      return new Response(JSON.stringify({ success: true, ignored: 'blocked_group_noise' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     let payload: any;
     try {
       payload = JSON.parse(rawBody);
@@ -749,6 +763,19 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
     }
+
+    // ⚠ COST CONTROL (post-parse, precise): block groups/broadcasts/noise without
+    // false-positives on legitimate DMs whose metadata may mention '@g.us'.
+    const blockCheck = isBlockedParsedPayload(payload);
+    if (blockCheck.blocked) {
+      console.log(`[CHATBOT] Ignored: ${blockCheck.reason}`);
+      return new Response(JSON.stringify({ success: true, ignored: blockCheck.reason }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const _dmFrom = payload?.chatid || payload?.remoteJid || payload?.from || payload?.message?.key?.remoteJid || 'unknown';
+    console.log(`[CHATBOT] DM recebida de ${_dmFrom}`);
     console.log('Webhook recebido:', JSON.stringify(payload).substring(0, 500));
 
     // --- VOICE CALL EVENT HANDLING ---
