@@ -480,12 +480,14 @@ async function reinforceWebhook(instanceId: string) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
 
-  // Payload simplificado recomendado pelo suporte UAZAPI
-  // isGroupYes filtra grupos no servidor; wasSentByApi filtra eco de envios próprios
+  // Payload: força enabled:true (UAZAPI cria desabilitado por padrão em algumas versões)
+  // excludeGroupMessages + excludeBroadcast são os booleans que esta versão UAZAPI realmente respeita
   const payload = JSON.stringify({
     url: webhookUrl,
     events: ["messages"],
-    excludeMessages: ["wasSentByApi", "isGroupYes"],
+    enabled: true,
+    excludeGroupMessages: true,
+    excludeBroadcast: true,
   });
 
   const postAttempts = [
