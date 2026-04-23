@@ -7,6 +7,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const BLOCKED_WEBHOOK_MARKERS = [
+  '@g.us',
+  'status@broadcast',
+  '"isgroup":true',
+  '"wa_isgroup":true',
+  '"messagetype":"reactionmessage"',
+  '"messagetype":"protocolmessage"',
+];
+
+function isBlockedWebhookPayload(rawBody: string) {
+  const normalized = rawBody.toLowerCase();
+  return BLOCKED_WEBHOOK_MARKERS.some((marker) => normalized.includes(marker));
+}
+
+function isBlockedRemoteJid(remoteJid: string | null | undefined) {
+  const normalized = (remoteJid || '').toLowerCase();
+  return normalized.includes('@g.us') || normalized.includes('status@broadcast');
+}
+
 function getImageDimensions(bytes: Uint8Array, mimeType?: string): { width: number; height: number } | null {
   const mime = (mimeType || '').toLowerCase();
 
@@ -713,18 +732,11 @@ serve(async (req) => {
   }
 
   try {
-    // ⚠ COST CONTROL: ultra-fast pre-parse early-return for noise (groups, status broadcasts, reactions).
-    // Reads body as text first to scan for unwanted patterns BEFORE expensive JSON parse / DB calls.
-    // Each invocation is billed even if rejected, but exiting fast minimizes CPU/wall-time charges.
+    // ⚠ COST CONTROL: ultra-fast pre-parse early-return for noise (groups, broadcasts, reactions).
+    // Group payloads are forbidden here and must never enter the inbox/chatbot flow again.
     const rawBody = await req.text();
-    if (
-      rawBody.includes('@g.us') ||                  // group chat
-      rawBody.includes('"isGroup":true') ||
-      rawBody.includes('status@broadcast') ||       // status updates
-      rawBody.includes('"messageType":"reactionMessage"') ||
-      rawBody.includes('"messageType":"protocolMessage"')
-    ) {
-      return new Response(JSON.stringify({ success: true, ignored: 'noise' }), {
+    if (isBlockedWebhookPayload(rawBody)) {
+      return new Response(JSON.stringify({ success: true, ignored: 'blocked_group_noise' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -874,10 +886,11 @@ serve(async (req) => {
 
     // --- Filtros rápidos (ANTES de qualquer DB call para economizar) ---
     const remoteJid = payload?.message?.chatid || payload?.chat?.wa_chatid || payload?.message?.sender_pn || payload?.key?.remoteJid || payload?.from || '';
-    const isGroup = payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? remoteJid.includes('@g.us') ?? false;
+    const isGroup = Boolean(payload?.message?.isGroup ?? payload?.chat?.wa_isGroup ?? isBlockedRemoteJid(remoteJid));
+    const isBlockedChat = isBlockedRemoteJid(remoteJid);
     const uazapiMsgType = (payload?.message?.messageType || '').toLowerCase();
 
-    if (isGroup || uazapiMsgType === 'reactionmessage' || uazapiMsgType === 'protocolmessage') {
+    if (isGroup || isBlockedChat || uazapiMsgType === 'reactionmessage' || uazapiMsgType === 'protocolmessage') {
       return new Response(JSON.stringify({ success: true, ignored: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
