@@ -519,39 +519,64 @@ async function reinforceWebhook(instanceId: string) {
     return;
   }
 
-  // Verify: GET /webhook para confirmar URL + evento messages
+  // Verify: GET /webhook para confirmar URL + evento messages + enabled:true
+  // Se vier desabilitado, faz 1 retry de POST para forçar ativação.
   const getAttempts = [
     { url: `${base}/webhook/${token}`, headers: {} as Record<string, string> },
     { url: `${base}/webhook`, headers: { token } },
   ];
 
-  let verified = false;
-  for (const a of getAttempts) {
-    try {
-      const res = await fetch(a.url, { method: "GET", headers: a.headers });
-      if (!res.ok) continue;
-      const text = await res.text();
-      let data: any = null;
-      try { data = JSON.parse(text); } catch { continue; }
+  const verifyOnce = async (): Promise<{ verified: boolean; lastState?: any }> => {
+    let lastState: any = null;
+    for (const a of getAttempts) {
+      try {
+        const res = await fetch(a.url, { method: "GET", headers: a.headers });
+        if (!res.ok) continue;
+        const text = await res.text();
+        let data: any = null;
+        try { data = JSON.parse(text); } catch { continue; }
 
-      // Normaliza: pode ser objeto único ou array
-      const items = Array.isArray(data) ? data : (data?.webhooks || data?.data || [data]);
-      const match = items.find((it: any) => {
-        const url = it?.url || it?.webhook || "";
-        const events = it?.events || it?.event || [];
-        const evList = Array.isArray(events) ? events : [events];
-        return url === webhookUrl && evList.some((e: any) => String(e).toLowerCase().includes("message"));
-      });
+        const items = Array.isArray(data) ? data : (data?.webhooks || data?.data || [data]);
+        const match = items.find((it: any) => {
+          const url = it?.url || it?.webhook || "";
+          const events = it?.events || it?.event || [];
+          const evList = Array.isArray(events) ? events : [events];
+          return url === webhookUrl && evList.some((e: any) => String(e).toLowerCase().includes("message"));
+        });
 
-      if (match) {
-        verified = true;
-        console.log(`[REINFORCE] VERIFY OK for ${instance.nome || instanceId}`);
-        break;
-      }
-    } catch (_) {}
+        if (match) {
+          lastState = {
+            enabled: match.enabled,
+            events: match.events || match.event,
+            excludeGroupMessages: match.excludeGroupMessages,
+            excludeBroadcast: match.excludeBroadcast,
+          };
+          if (match.enabled === true) {
+            return { verified: true, lastState };
+          }
+        }
+      } catch (_) {}
+    }
+    return { verified: false, lastState };
+  };
+
+  let { verified, lastState } = await verifyOnce();
+
+  // Se webhook existe mas está desabilitado, faz 1 retry de POST para ativar
+  if (!verified && lastState && lastState.enabled === false) {
+    console.log(`[REINFORCE] Webhook found but disabled for ${instance.nome || instanceId} — retrying POST to enable`);
+    for (const a of postAttempts) {
+      try {
+        const res = await fetch(a.url, { method: "POST", headers: a.headers, body: payload });
+        if (res.ok) break;
+      } catch (_) {}
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+    ({ verified, lastState } = await verifyOnce());
   }
 
   if (verified) {
+    console.log(`[REINFORCE] VERIFY OK (enabled:true) for ${instance.nome || instanceId}`);
     try {
       const sb = getSupabaseAdmin();
       await sb
@@ -562,7 +587,7 @@ async function reinforceWebhook(instanceId: string) {
       console.log(`[REINFORCE] DB update failed: ${(e as any).message}`);
     }
   } else {
-    console.log(`[REINFORCE] VERIFY failed for ${instance.nome || instanceId} (POST ok mas GET não confirmou)`);
+    console.log(`[REINFORCE] VERIFY failed for ${instance.nome || instanceId} — state: ${JSON.stringify(lastState)}`);
   }
 }
 
