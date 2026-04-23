@@ -14,6 +14,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -25,7 +26,8 @@ Deno.serve(async (req) => {
     const { data: instances, error } = await supabase
       .from("user_whatsapp_instances")
       .select("id, nome, server_url, instance_token")
-      .eq("ativo", true);
+      .eq("ativo", true)
+      .limit(typeof body?.limit === "number" && body.limit > 0 ? body.limit : 500);
 
     if (error) {
       return new Response(JSON.stringify({ ok: false, error: error.message }), {
@@ -85,7 +87,7 @@ Deno.serve(async (req) => {
     const success = details.filter(d => d.ok).length;
     const failed = details.length - success;
 
-    return new Response(JSON.stringify({ ok: true, total: details.length, success, failed, details }), {
+    return new Response(JSON.stringify({ ok: true, total: details.length, success, failed, details, blocked_groups: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
