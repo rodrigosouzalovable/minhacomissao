@@ -130,6 +130,12 @@ async function createInstance(userId: string) {
     return json({ ok: false, error: "Failed to save instance: " + dbError.message }, 500);
   }
 
+  // Fire-and-forget: já pré-configura o webhook na UAZAPI assim que a instância existe.
+  // Quando o usuário escanear o QR e conectar, o webhook já estará ativo.
+  reinforceWebhook(inserted.id).catch((e) =>
+    console.log(`[CREATE] Webhook pre-config error (non-blocking): ${e.message}`)
+  );
+
   return json({ ok: true, instanceId: inserted.id, instanceUrl, instanceToken: token });
 }
 
