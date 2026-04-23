@@ -1641,6 +1641,7 @@ export type Database = {
           server_url: string
           tipo: string | null
           user_id: string
+          webhook_configurado_em: string | null
           whatsapp_profile_address: string | null
           whatsapp_profile_description: string | null
           whatsapp_profile_email: string | null
@@ -1660,6 +1661,7 @@ export type Database = {
           server_url: string
           tipo?: string | null
           user_id: string
+          webhook_configurado_em?: string | null
           whatsapp_profile_address?: string | null
           whatsapp_profile_description?: string | null
           whatsapp_profile_email?: string | null
@@ -1679,6 +1681,7 @@ export type Database = {
           server_url?: string
           tipo?: string | null
           user_id?: string
+          webhook_configurado_em?: string | null
           whatsapp_profile_address?: string | null
           whatsapp_profile_description?: string | null
           whatsapp_profile_email?: string | null

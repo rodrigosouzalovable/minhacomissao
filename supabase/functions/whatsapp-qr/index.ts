@@ -130,6 +130,12 @@ async function createInstance(userId: string) {
     return json({ ok: false, error: "Failed to save instance: " + dbError.message }, 500);
   }
 
+  // Fire-and-forget: já pré-configura o webhook na UAZAPI assim que a instância existe.
+  // Quando o usuário escanear o QR e conectar, o webhook já estará ativo.
+  reinforceWebhook(inserted.id).catch((e) =>
+    console.log(`[CREATE] Webhook pre-config error (non-blocking): ${e.message}`)
+  );
+
   return json({ ok: true, instanceId: inserted.id, instanceUrl, instanceToken: token });
 }
 
@@ -464,39 +470,98 @@ async function disconnectInstance(instanceId: string) {
   return json({ ok: true, message: "WhatsApp desconectado com sucesso" });
 }
 
-// ── REINFORCE WEBHOOK (fire-and-forget helper) ──
+// ── REINFORCE WEBHOOK (fire-and-forget helper, com retry + verify) ──
 async function reinforceWebhook(instanceId: string) {
   const instance = await getInstanceById(instanceId);
   if (!instance) return;
 
   const base = instance.server_url.replace(/\/+$/, "");
   const token = instance.instance_token;
-  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
 
-  const attempts = [
+  // Payload simplificado recomendado pelo suporte UAZAPI
+  // isGroupYes filtra grupos no servidor; wasSentByApi filtra eco de envios próprios
+  const payload = JSON.stringify({
+    url: webhookUrl,
+    events: ["messages"],
+    excludeMessages: ["wasSentByApi", "isGroupYes"],
+  });
+
+  const postAttempts = [
     { url: `${base}/webhook/${token}`, headers: { "Content-Type": "application/json" } },
     { url: `${base}/webhook`, headers: { "Content-Type": "application/json", token } },
   ];
 
-  const payload = JSON.stringify({
-    url: webhookUrl,
-    events: ["messages"],
-    excludeGroupMessages: true,
-    excludeBroadcast: true,
-  });
+  const backoffs = [1000, 3000, 6000];
+  let configured = false;
 
-  for (const attempt of attempts) {
+  for (let attempt = 0; attempt < backoffs.length && !configured; attempt++) {
+    for (const a of postAttempts) {
+      try {
+        const res = await fetch(a.url, { method: "POST", headers: a.headers, body: payload });
+        if (res.ok) {
+          configured = true;
+          console.log(`[REINFORCE] POST OK ${a.url} (attempt ${attempt + 1}) for ${instance.nome || instanceId}`);
+          break;
+        }
+      } catch (_) {}
+    }
+    if (!configured && attempt < backoffs.length - 1) {
+      await new Promise((r) => setTimeout(r, backoffs[attempt]));
+    }
+  }
+
+  if (!configured) {
+    console.log(`[REINFORCE] POST failed after retries for ${instance.nome || instanceId}`);
+    return;
+  }
+
+  // Verify: GET /webhook para confirmar URL + evento messages
+  const getAttempts = [
+    { url: `${base}/webhook/${token}`, headers: {} as Record<string, string> },
+    { url: `${base}/webhook`, headers: { token } },
+  ];
+
+  let verified = false;
+  for (const a of getAttempts) {
     try {
-      const res = await fetch(attempt.url, { method: "POST", headers: attempt.headers, body: payload });
-      if (res.ok) {
-        console.log(`[REINFORCE] Webhook OK for ${instance.nome || instanceId}`);
-        return;
+      const res = await fetch(a.url, { method: "GET", headers: a.headers });
+      if (!res.ok) continue;
+      const text = await res.text();
+      let data: any = null;
+      try { data = JSON.parse(text); } catch { continue; }
+
+      // Normaliza: pode ser objeto único ou array
+      const items = Array.isArray(data) ? data : (data?.webhooks || data?.data || [data]);
+      const match = items.find((it: any) => {
+        const url = it?.url || it?.webhook || "";
+        const events = it?.events || it?.event || [];
+        const evList = Array.isArray(events) ? events : [events];
+        return url === webhookUrl && evList.some((e: any) => String(e).toLowerCase().includes("message"));
+      });
+
+      if (match) {
+        verified = true;
+        console.log(`[REINFORCE] VERIFY OK for ${instance.nome || instanceId}`);
+        break;
       }
     } catch (_) {}
   }
-  console.log(`[REINFORCE] Webhook failed for ${instance.nome || instanceId}`);
+
+  if (verified) {
+    try {
+      const sb = getSupabaseAdmin();
+      await sb
+        .from("user_whatsapp_instances")
+        .update({ webhook_configurado_em: new Date().toISOString() })
+        .eq("id", instanceId);
+    } catch (e) {
+      console.log(`[REINFORCE] DB update failed: ${(e as any).message}`);
+    }
+  } else {
+    console.log(`[REINFORCE] VERIFY failed for ${instance.nome || instanceId} (POST ok mas GET não confirmou)`);
+  }
 }
 
 // ── SETUP WEBHOOK ALL ──
