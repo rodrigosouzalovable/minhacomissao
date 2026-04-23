@@ -377,6 +377,101 @@ export default function MonitorEnvios() {
           instances,
         }}
       />
+
+      {/* Diagnóstico de Webhooks */}
+      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5" /> Diagnóstico de Webhooks
+            </DialogTitle>
+          </DialogHeader>
+
+          {diagLoading && (
+            <div className="py-8 text-center text-muted-foreground">
+              Verificando webhooks de todas as instâncias...
+            </div>
+          )}
+
+          {diagResult && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-2xl font-bold">{diagResult.total}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-500/10">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Saudáveis</p>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">{diagResult.healthy}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-destructive/10">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Com problema</p>
+                    <p className="text-2xl font-bold text-destructive">{diagResult.broken}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="bg-muted p-3 rounded text-xs font-mono break-all">
+                <span className="text-muted-foreground">URL esperada: </span>
+                {diagResult.expectedWebhookUrl}
+              </div>
+
+              {diagResult.broken > 0 && (
+                <Button
+                  onClick={handleRepairAll}
+                  disabled={repairLoading}
+                  className="w-full"
+                  variant="default"
+                >
+                  <Wrench className="h-4 w-4 mr-2" />
+                  {repairLoading ? 'Reparando...' : `Reparar ${diagResult.broken} Webhook(s) com Problema`}
+                </Button>
+              )}
+
+              <div className="space-y-2">
+                {diagResult.details.map((d) => (
+                  <Card key={d.id} className={d.healthy ? 'border-green-500/30' : 'border-destructive/30'}>
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 font-medium">
+                          {d.healthy ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-destructive" />
+                          )}
+                          {d.nome}
+                        </div>
+                        <Badge variant={d.healthy ? 'secondary' : 'destructive'}>
+                          {d.healthy ? 'OK' : 'Quebrado'}
+                        </Badge>
+                      </div>
+                      {d.error && (
+                        <p className="text-xs text-destructive">{d.error}</p>
+                      )}
+                      {d.url !== undefined && (
+                        <p className="text-xs font-mono break-all text-muted-foreground">URL: {d.url || '(vazio)'}</p>
+                      )}
+                      {d.events && d.events.length > 0 && (
+                        <p className="text-xs text-muted-foreground">Eventos: {d.events.join(', ')}</p>
+                      )}
+                      {d.issues && d.issues.length > 0 && (
+                        <ul className="text-xs text-destructive mt-1 list-disc list-inside">
+                          {d.issues.map((i, idx) => <li key={idx}>{i}</li>)}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
