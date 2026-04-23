@@ -158,6 +158,90 @@ export type Database = {
         }
         Relationships: []
       }
+      aquecimento_contatos_autosave: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          nome: string | null
+          numero: string
+          respondeu_ultima: boolean
+          total_respostas: number
+          total_usos: number
+          ultimo_uso_em: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          nome?: string | null
+          numero: string
+          respondeu_ultima?: boolean
+          total_respostas?: number
+          total_usos?: number
+          ultimo_uso_em?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          nome?: string | null
+          numero?: string
+          respondeu_ultima?: boolean
+          total_respostas?: number
+          total_usos?: number
+          ultimo_uso_em?: string | null
+        }
+        Relationships: []
+      }
+      aquecimento_envios_autosave: {
+        Row: {
+          contato_id: string
+          enviado_em: string
+          id: string
+          instancia_id: string
+          mensagem_enviada: string
+          respondeu: boolean
+          resposta_em: string | null
+        }
+        Insert: {
+          contato_id: string
+          enviado_em?: string
+          id?: string
+          instancia_id: string
+          mensagem_enviada: string
+          respondeu?: boolean
+          resposta_em?: string | null
+        }
+        Update: {
+          contato_id?: string
+          enviado_em?: string
+          id?: string
+          instancia_id?: string
+          mensagem_enviada?: string
+          respondeu?: boolean
+          resposta_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aquecimento_envios_autosave_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "aquecimento_contatos_autosave"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aquecimento_envios_autosave_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aquecimento_notificacoes: {
         Row: {
           criado_em: string
