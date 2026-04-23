@@ -16,6 +16,7 @@ import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, Lis
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
+import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSaveTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -137,7 +138,7 @@ export default function Aquecimento() {
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
@@ -425,9 +426,18 @@ export default function Aquecimento() {
           >
             <Settings className="h-4 w-4" /> Configuração
           </Button>
+          <Button
+            variant={activeTab === 'autosave' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('autosave')}
+            className="gap-1"
+          >
+            <Phone className="h-4 w-4" /> Contatos Auto-Save
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
+        {activeTab === 'autosave' && <AquecimentoAutoSaveTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
