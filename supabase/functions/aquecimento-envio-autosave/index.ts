@@ -73,16 +73,14 @@ Deno.serve(async (req) => {
     const inicioDiaIso = inicioDia.toISOString();
     const corte30dIso = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
 
-    let enviados = 0;
-    const resultados: any[] = [];
-
-    for (const aquec of aquecInsts) {
+    // Processa todas as instâncias EM PARALELO (cada uma é independente)
+    // Evita timeout de 150s quando há muitas instâncias
+    const tasks = aquecInsts.map(async (aquec: any) => {
       const inst = instMap.get(aquec.instancia_id);
-      if (!inst) continue;
+      if (!inst) return { status: "sem_instancia" };
 
       const limite = limiteDiarioPorFase(aquec.fase || 1);
 
-      // Quantos enviou hoje
       const { count: enviosHoje } = await supabase
         .from("aquecimento_envios_autosave")
         .select("id", { count: "exact", head: true })
@@ -90,17 +88,15 @@ Deno.serve(async (req) => {
         .gte("enviado_em", inicioDiaIso);
 
       if ((enviosHoje || 0) >= limite) {
-        resultados.push({ instancia: inst.nome, status: "limite_atingido", enviosHoje });
-        continue;
+        return { instancia: inst.nome, status: "limite_atingido", enviosHoje };
       }
 
-      // Sortear: 60% de chance de enviar nesta rodada (espalhar ao longo do dia)
+      // Sortear: 60% de chance de enviar nesta rodada
       if (Math.random() > 0.6) {
-        resultados.push({ instancia: inst.nome, status: "skip_aleatorio" });
-        continue;
+        return { instancia: inst.nome, status: "skip_aleatorio" };
       }
 
-      // Contatos usados por esta instância nos últimos 30 dias
+      // Contatos usados nos últimos 30 dias
       const { data: usadosRecentes } = await supabase
         .from("aquecimento_envios_autosave")
         .select("contato_id")
@@ -109,45 +105,38 @@ Deno.serve(async (req) => {
 
       const excluir = new Set((usadosRecentes || []).map((u: any) => u.contato_id));
 
-      // Buscar candidato (round-robin por ultimo_uso_em ASC, NULLS FIRST)
-      let q = supabase
+      const { data: candidatos } = await supabase
         .from("aquecimento_contatos_autosave")
-        .select("id, numero, nome")
+        .select("id, numero, nome, total_usos")
         .eq("ativo", true)
         .order("ultimo_uso_em", { ascending: true, nullsFirst: true })
         .limit(50);
 
-      const { data: candidatos } = await q;
       const contato = (candidatos || []).find((c: any) => !excluir.has(c.id));
-
       if (!contato) {
-        resultados.push({ instancia: inst.nome, status: "sem_contato_disponivel" });
-        continue;
+        return { instancia: inst.nome, status: "sem_contato_disponivel" };
       }
 
       const mensagem = pickMsg();
       const numeroLimpo = String(contato.numero).replace(/\D/g, "");
       const numeroFinal = numeroLimpo.startsWith("55") ? numeroLimpo : `55${numeroLimpo}`;
 
-      // Enviar via UAZAPI direto (mais simples, sem passar por send-whatsapp que tem regras de cliente)
       try {
+        // Timeout de 20s por envio para evitar travamento
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 20000);
+
         const sendRes = await fetch(`${inst.server_url}/send/text`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            token: inst.instance_token,
-          },
-          body: JSON.stringify({
-            number: numeroFinal,
-            text: mensagem,
-          }),
+          headers: { "Content-Type": "application/json", token: inst.instance_token },
+          body: JSON.stringify({ number: numeroFinal, text: mensagem }),
+          signal: ctrl.signal,
         });
+        clearTimeout(timer);
 
-        const ok = sendRes.ok;
         const respText = await sendRes.text();
 
-        if (ok) {
-          // Log envio + atualiza contato
+        if (sendRes.ok) {
           await supabase.from("aquecimento_envios_autosave").insert({
             instancia_id: aquec.instancia_id,
             contato_id: contato.id,
@@ -157,23 +146,22 @@ Deno.serve(async (req) => {
             .from("aquecimento_contatos_autosave")
             .update({
               ultimo_uso_em: new Date().toISOString(),
-              total_usos: ((contato as any).total_usos || 0) + 1,
+              total_usos: (contato.total_usos || 0) + 1,
               respondeu_ultima: false,
             })
             .eq("id", contato.id);
 
-          enviados++;
-          resultados.push({ instancia: inst.nome, contato: contato.numero, status: "enviado", msg: mensagem });
+          return { instancia: inst.nome, contato: contato.numero, status: "enviado", msg: mensagem };
         } else {
-          resultados.push({ instancia: inst.nome, contato: contato.numero, status: "erro", detalhe: respText.substring(0, 150) });
+          return { instancia: inst.nome, contato: contato.numero, status: "erro", detalhe: respText.substring(0, 150) };
         }
       } catch (e) {
-        resultados.push({ instancia: inst.nome, status: "exception", erro: String(e) });
+        return { instancia: inst.nome, status: "exception", erro: String(e).substring(0, 150) };
       }
+    });
 
-      // Delay pequeno entre instâncias para não martelar
-      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
-    }
+    const resultados = await Promise.all(tasks);
+    const enviados = resultados.filter((r: any) => r.status === "enviado").length;
 
     return json({ success: true, enviados, total_instancias: aquecInsts.length, resultados });
   } catch (err) {
