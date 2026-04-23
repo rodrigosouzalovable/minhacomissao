@@ -318,6 +318,20 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas.`);
+
+    // ========== TRIGGER AUTO-SAVE WARMING (camada externa) ==========
+    try {
+      const autosaveRes = await fetch(`${supabaseUrl}/functions/v1/aquecimento-envio-autosave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+        body: JSON.stringify({}),
+      });
+      const autosaveText = await autosaveRes.text();
+      console.log(`[AQUECIMENTO] Auto-save layer: ${autosaveText.substring(0, 200)}`);
+    } catch (e) {
+      console.error("[AQUECIMENTO] Auto-save trigger error:", e);
+    }
+
     return json({ success: true, conversas_iniciadas: totalEnviados, reativados });
 
   } catch (err) {
