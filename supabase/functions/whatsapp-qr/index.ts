@@ -377,7 +377,16 @@ async function setupWebhook(instanceId: string) {
   const token = instance.instance_token;
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
-  const payload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
+  // ⚠ COST CONTROL: exclude group messages, status broadcasts, and own messages from webhook.
+  // UAZAPI charges per webhook delivery — groups create thousands of irrelevant calls.
+  const payload = JSON.stringify({
+    url: webhookUrl,
+    events: ["messages"],
+    excludeMessages: ["wasSentByApi"],
+    excludeGroupMessages: true,
+    excludeBroadcast: true,
+    addUrlEvents: false,
+  });
 
   const attempts = [
     { url: `${base}/webhook/${token}`, headers: { "Content-Type": "application/json" } },
@@ -472,7 +481,14 @@ async function reinforceWebhook(instanceId: string) {
     { url: `${base}/webhook`, headers: { "Content-Type": "application/json", token } },
   ];
 
-  const payload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
+  const payload = JSON.stringify({
+    url: webhookUrl,
+    events: ["messages"],
+    excludeMessages: ["wasSentByApi"],
+    excludeGroupMessages: true,
+    excludeBroadcast: true,
+    addUrlEvents: false,
+  });
 
   for (const attempt of attempts) {
     try {
@@ -508,7 +524,14 @@ async function setupWebhookAll() {
   for (const inst of instances) {
     const base = inst.server_url.replace(/\/+$/, "");
     const token = inst.instance_token;
-    const payload = JSON.stringify({ url: webhookUrl, events: ["messages"] });
+    const payload = JSON.stringify({
+      url: webhookUrl,
+      events: ["messages"],
+      excludeMessages: ["wasSentByApi"],
+      excludeGroupMessages: true,
+      excludeBroadcast: true,
+      addUrlEvents: false,
+    });
 
     const attempts = [
       { url: `${base}/webhook/${token}`, headers: { "Content-Type": "application/json" } },
