@@ -754,15 +754,7 @@ serve(async (req) => {
   }
 
   try {
-    // ⚠ COST CONTROL: ultra-fast pre-parse early-return for noise (groups, broadcasts, reactions).
-    // Group payloads are forbidden here and must never enter the inbox/chatbot flow again.
     const rawBody = await req.text();
-    if (isBlockedWebhookPayload(rawBody)) {
-      return new Response(JSON.stringify({ success: true, ignored: 'blocked_group_noise' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     let payload: any;
     try {
       payload = JSON.parse(rawBody);
@@ -771,6 +763,19 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
     }
+
+    // ⚠ COST CONTROL (post-parse, precise): block groups/broadcasts/noise without
+    // false-positives on legitimate DMs whose metadata may mention '@g.us'.
+    const blockCheck = isBlockedParsedPayload(payload);
+    if (blockCheck.blocked) {
+      console.log(`[CHATBOT] Ignored: ${blockCheck.reason}`);
+      return new Response(JSON.stringify({ success: true, ignored: blockCheck.reason }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const _dmFrom = payload?.chatid || payload?.remoteJid || payload?.from || payload?.message?.key?.remoteJid || 'unknown';
+    console.log(`[CHATBOT] DM recebida de ${_dmFrom}`);
     console.log('Webhook recebido:', JSON.stringify(payload).substring(0, 500));
 
     // --- VOICE CALL EVENT HANDLING ---
