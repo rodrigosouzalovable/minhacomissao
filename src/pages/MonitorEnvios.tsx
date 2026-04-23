@@ -38,8 +38,26 @@ import {
   Pause,
   Play,
   ShieldAlert,
+  Stethoscope,
+  Wrench,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+interface WebhookDiag {
+  id: string;
+  nome: string;
+  ok: boolean;
+  healthy: boolean;
+  url?: string | null;
+  events?: string[];
+  excludeGroupMessages?: boolean | null;
+  excludeBroadcast?: boolean | null;
+  excludeMessages?: string[];
+  issues?: string[];
+  error?: string;
+}
 
 function getStatus(inst: InstanceStats, limite: number) {
   if (!inst.ativo) return { label: 'Pausado', color: 'bg-muted text-muted-foreground', emoji: '⏸️' };
@@ -82,6 +100,49 @@ export default function MonitorEnvios() {
     setConfigOpen(false);
   };
 
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<{ expectedWebhookUrl: string; total: number; healthy: number; broken: number; details: WebhookDiag[] } | null>(null);
+
+  const handleDiagnose = async () => {
+    setDiagOpen(true);
+    setDiagLoading(true);
+    setDiagResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('diagnose-webhooks');
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Falha no diagnóstico');
+      setDiagResult(data);
+    } catch (e: any) {
+      toast({ title: 'Erro no diagnóstico', description: e.message || 'Falha', variant: 'destructive' });
+      setDiagOpen(false);
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
+  const handleRepairAll = async () => {
+    if (!confirm('Reconfigurar o webhook de TODAS as instâncias?\n\nIsso restaura o recebimento de respostas de clientes mantendo grupos e broadcasts BLOQUEADOS.')) return;
+    setRepairLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'setup-webhook-all', userId: 'system' },
+      });
+      if (error) throw error;
+      toast({
+        title: '🔧 Webhooks reparados',
+        description: `${data.success}/${data.total} instâncias reconfiguradas. Falhas: ${data.failed}. Aguarde 1-5 min e teste enviando uma mensagem.`,
+      });
+      // Re-run diagnosis to reflect new state
+      await handleDiagnose();
+    } catch (e: any) {
+      toast({ title: 'Erro ao reparar', description: e.message || 'Falha', variant: 'destructive' });
+    } finally {
+      setRepairLoading(false);
+    }
+  };
+
   const [panicLoading, setPanicLoading] = useState(false);
   const handlePanicDisableGroups = async () => {
     if (!confirm('PÂNICO: Desativar webhooks de grupo em TODAS as instâncias UAZAPI?\n\nIsso para o gasto descontrolado de créditos. As DMs continuam funcionando normalmente.')) return;
@@ -116,6 +177,16 @@ export default function MonitorEnvios() {
               <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
             </Button>
             <Button
+              variant="default"
+              size="sm"
+              onClick={handleDiagnose}
+              disabled={diagLoading}
+              title="Verifica e repara webhooks das instâncias (respostas no Inbox)"
+            >
+              <Stethoscope className="h-4 w-4 mr-1" />
+              {diagLoading ? 'Diagnosticando...' : 'Diagnosticar Webhooks'}
+            </Button>
+            <Button
               variant="destructive"
               size="sm"
               onClick={handlePanicDisableGroups}
@@ -123,7 +194,7 @@ export default function MonitorEnvios() {
               title="Desativa webhooks de grupo em todas as instâncias UAZAPI (corte de gasto)"
             >
               <ShieldAlert className="h-4 w-4 mr-1" />
-              {panicLoading ? 'Aplicando...' : 'Pânico: Cortar Webhooks de Grupo'}
+              {panicLoading ? 'Aplicando...' : 'Pânico: Cortar Grupos'}
             </Button>
             <Dialog open={configOpen} onOpenChange={setConfigOpen}>
               <DialogTrigger asChild>
@@ -306,6 +377,101 @@ export default function MonitorEnvios() {
           instances,
         }}
       />
+
+      {/* Diagnóstico de Webhooks */}
+      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5" /> Diagnóstico de Webhooks
+            </DialogTitle>
+          </DialogHeader>
+
+          {diagLoading && (
+            <div className="py-8 text-center text-muted-foreground">
+              Verificando webhooks de todas as instâncias...
+            </div>
+          )}
+
+          {diagResult && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-2xl font-bold">{diagResult.total}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-green-500/10">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Saudáveis</p>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">{diagResult.healthy}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-destructive/10">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground">Com problema</p>
+                    <p className="text-2xl font-bold text-destructive">{diagResult.broken}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="bg-muted p-3 rounded text-xs font-mono break-all">
+                <span className="text-muted-foreground">URL esperada: </span>
+                {diagResult.expectedWebhookUrl}
+              </div>
+
+              {diagResult.broken > 0 && (
+                <Button
+                  onClick={handleRepairAll}
+                  disabled={repairLoading}
+                  className="w-full"
+                  variant="default"
+                >
+                  <Wrench className="h-4 w-4 mr-2" />
+                  {repairLoading ? 'Reparando...' : `Reparar ${diagResult.broken} Webhook(s) com Problema`}
+                </Button>
+              )}
+
+              <div className="space-y-2">
+                {diagResult.details.map((d) => (
+                  <Card key={d.id} className={d.healthy ? 'border-green-500/30' : 'border-destructive/30'}>
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 font-medium">
+                          {d.healthy ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-destructive" />
+                          )}
+                          {d.nome}
+                        </div>
+                        <Badge variant={d.healthy ? 'secondary' : 'destructive'}>
+                          {d.healthy ? 'OK' : 'Quebrado'}
+                        </Badge>
+                      </div>
+                      {d.error && (
+                        <p className="text-xs text-destructive">{d.error}</p>
+                      )}
+                      {d.url !== undefined && (
+                        <p className="text-xs font-mono break-all text-muted-foreground">URL: {d.url || '(vazio)'}</p>
+                      )}
+                      {d.events && d.events.length > 0 && (
+                        <p className="text-xs text-muted-foreground">Eventos: {d.events.join(', ')}</p>
+                      )}
+                      {d.issues && d.issues.length > 0 && (
+                        <ul className="text-xs text-destructive mt-1 list-disc list-inside">
+                          {d.issues.map((i, idx) => <li key={idx}>{i}</li>)}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
