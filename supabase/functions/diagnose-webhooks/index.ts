@@ -72,14 +72,18 @@ Deno.serve(async (req) => {
           const broadcastBlocked = excludeBroadcast === true;
           const ownEchoBlocked = Array.isArray(excludeMessages) && excludeMessages.some((m: string) => String(m).toLowerCase() === "wassentbyapi");
 
-          const healthy = urlMatchesExpected && hasMessagesEvent && groupsBlocked && broadcastBlocked && ownEchoBlocked;
+          // "Healthy" only requires the URL to match AND the messages event to be active.
+          // Exclusion flags are reported as warnings (not failures) because several UAZAPI
+          // server versions do NOT return excludeGroupMessages/excludeBroadcast in GET /webhook
+          // even when those filters are correctly applied.
+          const healthy = urlMatchesExpected && hasMessagesEvent;
           const issues: string[] = [];
           if (!url) issues.push("Sem URL configurada");
           else if (!urlMatchesExpected) issues.push(`URL incorreta (${url})`);
           if (!hasMessagesEvent) issues.push("Evento 'messages' ausente — RESPOSTAS NÃO CHEGAM");
-          if (!groupsBlocked) issues.push("Grupos não bloqueados");
-          if (!broadcastBlocked) issues.push("Broadcast não bloqueado");
-          if (!ownEchoBlocked) issues.push("Eco de envios próprios não bloqueado");
+          if (!groupsBlocked) issues.push("Aviso: flag 'excludeGroupMessages' não retornada pelo servidor (filtro pode estar ativo mesmo assim)");
+          if (!broadcastBlocked) issues.push("Aviso: flag 'excludeBroadcast' não retornada pelo servidor (filtro pode estar ativo mesmo assim)");
+          if (!ownEchoBlocked) issues.push("Aviso: eco de envios próprios pode não estar bloqueado");
 
           return {
             id: inst.id,
