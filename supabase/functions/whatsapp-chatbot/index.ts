@@ -774,9 +774,13 @@ serve(async (req) => {
       });
     }
 
-    const _dmFrom = payload?.chatid || payload?.remoteJid || payload?.from || payload?.message?.key?.remoteJid || 'unknown';
-    console.log(`[CHATBOT] DM recebida de ${_dmFrom}`);
-    console.log('Webhook recebido:', JSON.stringify(payload).substring(0, 500));
+    // 🔬 DEBUG: log full raw payload for any non-group webhook so we can see
+    // exactly what UAZAPI is sending for legitimate DMs (helps diagnose silent drops).
+    const _dmFrom = payload?.chatid || payload?.remoteJid || payload?.from || payload?.message?.key?.remoteJid || payload?.message?.chatid || payload?.chat?.wa_chatid || 'unknown';
+    const _dmFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? payload?.key?.fromMe ?? false;
+    const _dmType = payload?.message?.messageType || payload?.messageType || payload?.type || 'unknown';
+    console.log(`[CHATBOT-DM] from=${_dmFrom} fromMe=${_dmFromMe} type=${_dmType}`);
+    console.log('[CHATBOT-DM] raw:', JSON.stringify(payload).substring(0, 800));
 
     // --- VOICE CALL EVENT HANDLING ---
     const eventType = payload?.event || payload?.type || payload?.action || '';
