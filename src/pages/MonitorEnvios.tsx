@@ -91,7 +91,7 @@ export default function MonitorEnvios() {
       if (error) throw error;
       toast({
         title: '🛡️ Webhooks restritos',
-        description: `${data.success}/${data.total} instâncias reconfiguradas. Falhas: ${data.failed}.`,
+        description: `${data.success}/${data.total} instâncias blindadas contra grupos. Falhas: ${data.failed}.`,
       });
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message || 'Falha ao reconfigurar webhooks', variant: 'destructive' });
