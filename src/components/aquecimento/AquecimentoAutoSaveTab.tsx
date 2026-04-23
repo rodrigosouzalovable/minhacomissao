@@ -172,15 +172,15 @@ export default function AquecimentoAutoSaveTab() {
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Ativos</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-green-600">{totalAtivos}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-primary">{totalAtivos}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Taxa de Resposta</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />{taxaResposta}%</div></CardContent>
+          <CardContent><div className="text-2xl font-bold flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary" />{taxaResposta}%</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Envios Hoje</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold flex items-center gap-2"><Activity className="h-5 w-5 text-orange-500" />{enviosHoje}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold flex items-center gap-2"><Activity className="h-5 w-5 text-accent-foreground" />{enviosHoje}</div></CardContent>
         </Card>
       </div>
 
