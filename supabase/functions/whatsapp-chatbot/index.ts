@@ -713,8 +713,31 @@ serve(async (req) => {
   }
 
   try {
-    const payload = await req.json();
-    console.log('Webhook recebido:', JSON.stringify(payload));
+    // ⚠ COST CONTROL: ultra-fast pre-parse early-return for noise (groups, status broadcasts, reactions).
+    // Reads body as text first to scan for unwanted patterns BEFORE expensive JSON parse / DB calls.
+    // Each invocation is billed even if rejected, but exiting fast minimizes CPU/wall-time charges.
+    const rawBody = await req.text();
+    if (
+      rawBody.includes('@g.us') ||                  // group chat
+      rawBody.includes('"isGroup":true') ||
+      rawBody.includes('status@broadcast') ||       // status updates
+      rawBody.includes('"messageType":"reactionMessage"') ||
+      rawBody.includes('"messageType":"protocolMessage"')
+    ) {
+      return new Response(JSON.stringify({ success: true, ignored: 'noise' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return new Response(JSON.stringify({ success: false, error: 'invalid json' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
+      });
+    }
+    console.log('Webhook recebido:', JSON.stringify(payload).substring(0, 500));
 
     // --- VOICE CALL EVENT HANDLING ---
     const eventType = payload?.event || payload?.type || payload?.action || '';
