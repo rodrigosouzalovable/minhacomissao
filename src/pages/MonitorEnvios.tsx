@@ -24,6 +24,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useMonitorEnvios, InstanceStats } from '@/hooks/useMonitorEnvios';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 import {
   MessageSquare,
   Smartphone,
@@ -35,6 +37,7 @@ import {
   BellRing,
   Pause,
   Play,
+  ShieldAlert,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -79,6 +82,24 @@ export default function MonitorEnvios() {
     setConfigOpen(false);
   };
 
+  const [panicLoading, setPanicLoading] = useState(false);
+  const handlePanicDisableGroups = async () => {
+    if (!confirm('PÂNICO: Desativar webhooks de grupo em TODAS as instâncias UAZAPI?\n\nIsso para o gasto descontrolado de créditos. As DMs continuam funcionando normalmente.')) return;
+    setPanicLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('uazapi-disable-group-webhooks');
+      if (error) throw error;
+      toast({
+        title: '🛡️ Webhooks restritos',
+        description: `${data.success}/${data.total} instâncias reconfiguradas. Falhas: ${data.failed}.`,
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message || 'Falha ao reconfigurar webhooks', variant: 'destructive' });
+    } finally {
+      setPanicLoading(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -93,6 +114,16 @@ export default function MonitorEnvios() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={refetch}>
               <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handlePanicDisableGroups}
+              disabled={panicLoading}
+              title="Desativa webhooks de grupo em todas as instâncias UAZAPI (corte de gasto)"
+            >
+              <ShieldAlert className="h-4 w-4 mr-1" />
+              {panicLoading ? 'Aplicando...' : 'Pânico: Cortar Webhooks de Grupo'}
             </Button>
             <Dialog open={configOpen} onOpenChange={setConfigOpen}>
               <DialogTrigger asChild>
