@@ -24,6 +24,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useMonitorEnvios, InstanceStats } from '@/hooks/useMonitorEnvios';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 import {
   MessageSquare,
   Smartphone,
@@ -35,6 +37,7 @@ import {
   BellRing,
   Pause,
   Play,
+  ShieldAlert,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
