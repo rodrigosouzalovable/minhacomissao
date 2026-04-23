@@ -177,6 +177,16 @@ export default function MonitorEnvios() {
               <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
             </Button>
             <Button
+              variant="default"
+              size="sm"
+              onClick={handleDiagnose}
+              disabled={diagLoading}
+              title="Verifica e repara webhooks das instâncias (respostas no Inbox)"
+            >
+              <Stethoscope className="h-4 w-4 mr-1" />
+              {diagLoading ? 'Diagnosticando...' : 'Diagnosticar Webhooks'}
+            </Button>
+            <Button
               variant="destructive"
               size="sm"
               onClick={handlePanicDisableGroups}
@@ -184,7 +194,7 @@ export default function MonitorEnvios() {
               title="Desativa webhooks de grupo em todas as instâncias UAZAPI (corte de gasto)"
             >
               <ShieldAlert className="h-4 w-4 mr-1" />
-              {panicLoading ? 'Aplicando...' : 'Pânico: Cortar Webhooks de Grupo'}
+              {panicLoading ? 'Aplicando...' : 'Pânico: Cortar Grupos'}
             </Button>
             <Dialog open={configOpen} onOpenChange={setConfigOpen}>
               <DialogTrigger asChild>
