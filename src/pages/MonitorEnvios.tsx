@@ -38,8 +38,26 @@ import {
   Pause,
   Play,
   ShieldAlert,
+  Stethoscope,
+  Wrench,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+interface WebhookDiag {
+  id: string;
+  nome: string;
+  ok: boolean;
+  healthy: boolean;
+  url?: string | null;
+  events?: string[];
+  excludeGroupMessages?: boolean | null;
+  excludeBroadcast?: boolean | null;
+  excludeMessages?: string[];
+  issues?: string[];
+  error?: string;
+}
 
 function getStatus(inst: InstanceStats, limite: number) {
   if (!inst.ativo) return { label: 'Pausado', color: 'bg-muted text-muted-foreground', emoji: '⏸️' };
@@ -80,6 +98,49 @@ export default function MonitorEnvios() {
     setLimiteDiario(tempLimite);
     setDelaySegundos(tempDelay);
     setConfigOpen(false);
+  };
+
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<{ expectedWebhookUrl: string; total: number; healthy: number; broken: number; details: WebhookDiag[] } | null>(null);
+
+  const handleDiagnose = async () => {
+    setDiagOpen(true);
+    setDiagLoading(true);
+    setDiagResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('diagnose-webhooks');
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Falha no diagnóstico');
+      setDiagResult(data);
+    } catch (e: any) {
+      toast({ title: 'Erro no diagnóstico', description: e.message || 'Falha', variant: 'destructive' });
+      setDiagOpen(false);
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
+  const handleRepairAll = async () => {
+    if (!confirm('Reconfigurar o webhook de TODAS as instâncias?\n\nIsso restaura o recebimento de respostas de clientes mantendo grupos e broadcasts BLOQUEADOS.')) return;
+    setRepairLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'setup-webhook-all', userId: 'system' },
+      });
+      if (error) throw error;
+      toast({
+        title: '🔧 Webhooks reparados',
+        description: `${data.success}/${data.total} instâncias reconfiguradas. Falhas: ${data.failed}. Aguarde 1-5 min e teste enviando uma mensagem.`,
+      });
+      // Re-run diagnosis to reflect new state
+      await handleDiagnose();
+    } catch (e: any) {
+      toast({ title: 'Erro ao reparar', description: e.message || 'Falha', variant: 'destructive' });
+    } finally {
+      setRepairLoading(false);
+    }
   };
 
   const [panicLoading, setPanicLoading] = useState(false);
