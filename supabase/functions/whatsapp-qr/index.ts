@@ -616,6 +616,7 @@ async function setupWebhookAll() {
     const payload = JSON.stringify({
       url: webhookUrl,
       events: ["messages"],
+      enabled: true,
       excludeGroupMessages: true,
       excludeBroadcast: true,
     });
