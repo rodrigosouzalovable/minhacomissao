@@ -20,6 +20,14 @@ Deno.serve(async (req) => {
       );
     }
 
+    const telefoneNormalizado = String(telefone).trim().toLowerCase();
+    if (telefoneNormalizado.includes("@g.us") || telefoneNormalizado.includes("status@broadcast")) {
+      return new Response(
+        JSON.stringify({ error: "Histórico de grupos e status está permanentemente bloqueado" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const cleanUrl = server_url.replace(/\/+$/, '');
     const chatId = `${telefone}@s.whatsapp.net`;
 
