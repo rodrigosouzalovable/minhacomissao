@@ -115,6 +115,16 @@ export default function MonitorEnvios() {
             <Button variant="outline" size="sm" onClick={refetch}>
               <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
             </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handlePanicDisableGroups}
+              disabled={panicLoading}
+              title="Desativa webhooks de grupo em todas as instâncias UAZAPI (corte de gasto)"
+            >
+              <ShieldAlert className="h-4 w-4 mr-1" />
+              {panicLoading ? 'Aplicando...' : 'Pânico: Cortar Webhooks de Grupo'}
+            </Button>
             <Dialog open={configOpen} onOpenChange={setConfigOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" onClick={() => { setTempLimite(limiteDiario); setTempDelay(delaySegundos); }}>
