@@ -377,15 +377,14 @@ async function setupWebhook(instanceId: string) {
   const token = instance.instance_token;
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-chatbot`;
-  // ⚠ COST CONTROL: exclude group messages, status broadcasts, and own messages from webhook.
-  // UAZAPI charges per webhook delivery — groups create thousands of irrelevant calls.
+  // ⚠ COST CONTROL: exclude only groups & broadcasts. Keep payload minimal — extra
+  // fields like 'excludeMessages' / 'addUrlEvents' break some UAZAPI server versions
+  // and cause webhooks to silently stop delivering DMs.
   const payload = JSON.stringify({
     url: webhookUrl,
     events: ["messages"],
-    excludeMessages: ["wasSentByApi"],
     excludeGroupMessages: true,
     excludeBroadcast: true,
-    addUrlEvents: false,
   });
 
   const attempts = [
@@ -484,10 +483,8 @@ async function reinforceWebhook(instanceId: string) {
   const payload = JSON.stringify({
     url: webhookUrl,
     events: ["messages"],
-    excludeMessages: ["wasSentByApi"],
     excludeGroupMessages: true,
     excludeBroadcast: true,
-    addUrlEvents: false,
   });
 
   for (const attempt of attempts) {
@@ -527,10 +524,8 @@ async function setupWebhookAll() {
     const payload = JSON.stringify({
       url: webhookUrl,
       events: ["messages"],
-      excludeMessages: ["wasSentByApi"],
       excludeGroupMessages: true,
       excludeBroadcast: true,
-      addUrlEvents: false,
     });
 
     const attempts = [

@@ -41,14 +41,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Restricted webhook config: only direct messages, no groups, no broadcasts, no echoes.
+    // Restricted webhook config: only direct messages, no groups, no broadcasts.
+    // Keep payload minimal — extra fields break some UAZAPI server versions
+    // and cause silent webhook failures (DMs never delivered).
     const restrictedPayload = JSON.stringify({
       url: webhookUrl,
       events: ["messages"],
-      excludeMessages: ["wasSentByApi"],
       excludeGroupMessages: true,
       excludeBroadcast: true,
-      addUrlEvents: false,
     });
 
     // Process all in parallel with 15s timeout each
