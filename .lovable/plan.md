@@ -1,56 +1,69 @@
 
 
-## Diagnóstico do consumo: $8,28 → $0 em poucas horas
+## Plano: Diagnóstico e Reparo de Webhooks das Instâncias WhatsApp
 
-Investigui os logs e encontrei a causa exata:
+Você relatou que enviou muitas mensagens hoje mas não recebeu NENHUMA resposta no Inbox. Isso é sintoma clássico de webhook desconfigurado — provavelmente colateral da operação anti-grupos de ontem (que reconfigurou todos os webhooks via `uazapi-disable-group-webhooks`).
 
-### O que está consumindo
+### Hipótese principal
 
-**TODAS as 500 invocações mais recentes da edge function são `whatsapp-chatbot`.** O webhook está sendo chamado para CADA mensagem que chega nas suas instâncias — incluindo grupos lotados como **"VÍDEOS🇧🇷RISOS"** (3.715 mensagens não lidas), correntes de vídeos, reações, etc.
+Quando rodamos a função de pânico ontem para parar o sangramento de $8,28, a chamada para a UAZAPI pode ter:
+1. Sobrescrito o webhook com uma URL errada/vazia, OU
+2. Configurado os filtros tão restritivos que mensagens recebidas (DMs reais) também foram bloqueadas, OU
+3. Removido o evento `messages` por completo deixando só exclusões
 
-Exemplo real do log: a UAZAPI mandou um webhook por causa de 1 vídeo de 4MB num grupo com `chatid: 120363161516933576@g.us`. Isso multiplicado por dezenas de grupos × dezenas de mensagens/hora × várias instâncias = **milhares de invocações cobradas por hora**.
+Resultado: respostas dos clientes chegam no celular mas nunca disparam o webhook → nunca aparecem no Inbox.
 
-### Por que o filtro atual não economiza
+### O que será feito
 
-A função TEM um filtro em `if (isGroup) return ignored` na linha 857 — mas a invocação **já foi cobrada** quando a UAZAPI chama o endpoint. O filtro só impede o processamento, não o custo da invocação em si.
+**1. Diagnóstico (nova edge function `diagnose-webhooks`)**
+Para cada instância ativa, consultar a UAZAPI (`GET /webhook` ou `GET /instance/status`) e retornar:
+- URL configurada atualmente
+- Eventos ativos
+- Filtros de exclusão aplicados
+- Status da conexão WhatsApp
 
-**O autosave NÃO é o culpado** (apenas 3 envios em 24h, custo desprezível).
+Resultado mostrado em uma tabela no Monitor de Envios.
 
-### Correção (corte imediato do gasto)
+**2. Reparo automático (ajuste em `whatsapp-qr` action `setup-webhook-all`)**
+Reconfigurar TODAS as instâncias com a config correta:
+```
+url: <projeto>/functions/v1/whatsapp-chatbot
+events: ["messages"]                    ← ESSENCIAL para receber respostas
+excludeGroupMessages: true              ← bloqueia grupos (mantém economia)
+excludeBroadcast: true                  ← bloqueia status
+excludeMessages: ["wasSentByApi"]       ← bloqueia eco de envios próprios
+```
 
-**1. Desativar o webhook da UAZAPI para mensagens de GRUPO em todas as instâncias**
-A UAZAPI tem configuração por instância para escolher quais eventos disparam webhook. Vou criar uma rotina que chama o endpoint `/instance/updateWebhook` da UAZAPI para cada instância conectada e desativa os eventos de grupo + reações + protocolMessage. Isso para o webhook na origem — zero invocações cobradas.
+Isso garante que **DMs de clientes voltem a chegar** mas grupos continuem bloqueados (memória `never-load-group-messages` preservada).
 
-**2. Adicionar early-return ainda mais agressivo na edge function**
-Como segundo escudo, mover o filtro para a primeira linha após o `serve()`, antes de qualquer parse pesado de payload, para o caso de webhooks de grupo passarem.
+**3. Botão "Diagnosticar e Reparar Webhooks" no Monitor de Envios**
+Substitui/complementa o botão de pânico. Fluxo:
+- Click → roda diagnóstico → mostra estado atual de cada instância
+- Mostra botão "Reparar Todas" → reconfigura com a config correta
+- Toast confirma sucesso por instância
 
-**3. Filtrar também `EventType` que não interessam**
-O log mostrou `EventType:"messages"` carregando vídeos de 4MB. Vou rejeitar payloads onde `mediaType === 'video'` em chats não-cadastrados (sem acordo/devedor associado), já que não usamos vídeos no fluxo de cobrança.
+**4. Validação pós-reparo**
+Após o reparo, verificar se a próxima mensagem recebida em qualquer instância chega na tabela `whatsapp_mensagens_inbox` nos próximos 5 minutos (instrução visual ao usuário).
 
-**4. Botão "Pânico" no Monitor de Envios**
-Adicionar botão admin que desativa instantaneamente TODOS os webhooks de TODAS as instâncias UAZAPI — para você usar caso volte a sangrar saldo no futuro.
+### Arquivos afetados
 
-### Impacto esperado
+- `supabase/functions/diagnose-webhooks/index.ts` (novo)
+- `supabase/functions/whatsapp-qr/index.ts` (revisar `setup-webhook-all` para garantir `events: ["messages"]`)
+- `src/pages/MonitorEnvios.tsx` (botão diagnóstico + modal de resultado)
 
-| Item | Antes | Depois |
-|---|---|---|
-| Invocações chatbot/dia | ~50.000+ (estimativa pelos logs) | ~500 (só msgs reais de cobrança) |
-| Custo Cloud/dia | ~$3-8 | < $0,20 |
-| Funcionalidade real perdida | nenhuma — grupos nunca foram processados mesmo |
+### Custo Lovable Cloud
 
-### Ações imediatas após aprovar
+Zero adicional. Pelo contrário: **restaurar o webhook é o que destrava o valor real do sistema** (respostas de clientes = acordos fechados). Sem novas tabelas, sem IA, sem cron novo.
 
-1. Migração SQL: criar tabela `uazapi_webhook_config` para registrar quais eventos cada instância escuta
-2. Edge function nova `uazapi-disable-group-webhooks` que itera todas instâncias conectadas e chama UAZAPI para remover eventos `messages.upsert` de grupos
-3. Disparar essa função 1x agora para parar o sangramento
-4. Atualizar `whatsapp-qr` para que NOVAS instâncias já sejam criadas com webhook restrito (só DM, sem grupos)
-5. Hardening do filtro em `whatsapp-chatbot/index.ts`
+### Memórias respeitadas
 
-### Custo Lovable Cloud do plano
-Zero. A correção REDUZ custo drasticamente (~95% menos invocações). Sem novas tabelas grandes, sem IA.
+- ✅ `never-load-group-messages`: filtros `excludeGroupMessages` e `excludeBroadcast` mantidos
+- ✅ `cloud-cost-awareness`: nenhum aumento de invocações esperado
+- ✅ `phone-suffix-matching-standard`: não toca em lógica de matching
 
 ### Fora de escopo
-- Não mexo no autosave (está custando $0)
-- Não mexo no Inbox para você ver mensagens reais
-- Não removo nada do fluxo de cobrança real (DMs continuam funcionando 100%)
+
+- Não mexer no fluxo de envio (que está OK, já enviou 17 mensagens hoje)
+- Não recriar instâncias (só reconfigurar webhooks)
+- Não tocar no autosave/aquecimento
 
