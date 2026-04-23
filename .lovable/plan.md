@@ -1,42 +1,56 @@
 
 
-## Plano: Automação do webhook só no momento da conexão (sem cron)
+## Plano: Garantir que o webhook seja criado JÁ ATIVO + filtros corretos
 
-### Decisão
-Removido o cron de 30/30 min. A configuração do webhook acontece **apenas quando o WhatsApp é conectado** — zero custo recorrente no Lovable Cloud.
+### Causa raiz (confirmada nos logs)
 
-### O que será feito
+Para a instância `IPHONE B1 22/04` (e várias outras), o `reinforceWebhook` rodou com sucesso, mas a UAZAPI criou o webhook com `enabled: false`. O verify atual só checa URL + evento, ignora o flag `enabled` — por isso marca como OK e você acha que funcionou. Resultado: você precisou ativar manualmente.
 
-**1. Reforçar `reinforceWebhook` em `whatsapp-qr/index.ts`**
-- 3 tentativas com backoff (1s, 3s, 6s) — cobre lentidão pontual da UAZAPI
-- Após o POST, fazer `GET /webhook` para confirmar que a URL salva é a esperada e o evento `messages` está ativo
-- Se confirmou, gravar `webhook_configurado_em = now()` em `user_whatsapp_instances`
-- Payload simplificado recomendado pelo suporte UAZAPI:
-  ```json
-  { "url": "<chatbot>", "events": ["messages"],
-    "excludeMessages": ["wasSentByApi","isGroupYes"] }
-  ```
+Bonus: o servidor UAZAPI dessa versão **descartou** `excludeMessages: ["wasSentByApi","isGroupYes"]` (salvou `[]`). Os filtros que essa versão entende são `excludeGroupMessages` e `excludeBroadcast` (booleans), conforme já provado pela `setupWebhook` que vinha funcionando antes.
 
-**2. Disparar a configuração nos 2 momentos certos**
-- Já existe: ao detectar `connected: true` no `checkStatus` (mantido)
-- Adicionar: imediatamente após `createInstance` retornar OK (antes mesmo de escanear o QR já fica pré-configurado)
+### Mudanças em `supabase/functions/whatsapp-qr/index.ts` (função `reinforceWebhook`)
 
-**3. Botão manual continua existindo como rede de segurança**
-"Diagnosticar Webhooks" + "Reparar X Webhook(s)" no Monitor de Envios → você usa só se desconfiar de algo. Sem automação rodando em background.
+**1. Forçar `enabled: true` no payload**
+```json
+{
+  "url": "<chatbot>",
+  "events": ["messages"],
+  "enabled": true,
+  "excludeGroupMessages": true,
+  "excludeBroadcast": true
+}
+```
+Volta para os 2 booleans que essa versão da UAZAPI realmente respeita (mantendo grupos e broadcasts bloqueados na origem — memória `never-load-group-messages` 100% preservada).
+
+**2. Verify mais rigoroso (GET /webhook)**
+Considerar OK somente quando:
+- `url === webhookUrl`
+- `events` contém `messages`
+- **`enabled === true`**
+
+Se o GET retornar `enabled: false`, fazer **1 retry de POST** com o mesmo payload (resolve o caso onde a UAZAPI cria desabilitado por padrão na primeira chamada).
+
+**3. Log claro do motivo da falha**
+Quando o verify falhar, logar exatamente o que veio do GET (`enabled`, `events`, `excludeGroupMessages`) — facilita diagnóstico futuro sem precisar abrir UAZAPI.
+
+**4. Aplicar a mesma correção em `setupWebhookAll`** (botão "Reparar X Webhooks" no Monitor de Envios) — adicionar `enabled: true` no payload para reparos manuais também garantirem ativação.
 
 ### Custo Lovable Cloud
-**Zero adicional.** Sem cron, sem invocações recorrentes. Só roda quando você conecta um WhatsApp novo (ato manual seu).
+**Zero adicional.** Continua disparando só na criação e na conexão (sem cron). A mudança é apenas no payload e na lógica de verificação.
 
 ### Memórias respeitadas
-- ✅ `cloud-cost-awareness`: nenhuma execução recorrente nova
-- ✅ `never-load-group-messages`: filtro `isGroupYes` mantido na origem
+- ✅ `never-load-group-messages`: filtros `excludeGroupMessages` + `excludeBroadcast` (que comprovadamente funcionam nessa versão UAZAPI) mantidos
+- ✅ `cloud-cost-awareness`: nenhuma execução nova
 
 ### Arquivos afetados
-- `supabase/functions/whatsapp-qr/index.ts` — `reinforceWebhook` com retry + verify; chamar também após `createInstance`
-- Migração: adicionar coluna `webhook_configurado_em timestamptz` em `user_whatsapp_instances`
+- `supabase/functions/whatsapp-qr/index.ts` — `reinforceWebhook` (payload com `enabled:true`, verify checa `enabled`, retry se vier desabilitado) e `setupWebhookAll` (mesmo payload)
+
+### Como você testa depois
+1. Desconecta a instância `IPHONE B1 22/04` e reconecta
+2. Abre a UAZAPI → aba Webhooks dessa instância → o toggle deve já estar **azul/ativo** sem você tocar
+3. Manda uma mensagem de teste do seu celular → chega no Inbox em até 30s
 
 ### Fora de escopo
-- ❌ Cron job (descartado por custo)
-- ❌ Nova edge function `auto-repair-webhooks` (descartada)
-- ❌ Mexer no fluxo de envio, autosave, aquecimento, inbox
+- Não mexer no fluxo de envio
+- Não recriar instâncias existentes (você usa o botão "Reparar Webhooks" do Monitor para corrigir as antigas com `enabled:false`)
 
