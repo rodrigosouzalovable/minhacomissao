@@ -82,6 +82,24 @@ export default function MonitorEnvios() {
     setConfigOpen(false);
   };
 
+  const [panicLoading, setPanicLoading] = useState(false);
+  const handlePanicDisableGroups = async () => {
+    if (!confirm('PÂNICO: Desativar webhooks de grupo em TODAS as instâncias UAZAPI?\n\nIsso para o gasto descontrolado de créditos. As DMs continuam funcionando normalmente.')) return;
+    setPanicLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('uazapi-disable-group-webhooks');
+      if (error) throw error;
+      toast({
+        title: '🛡️ Webhooks restritos',
+        description: `${data.success}/${data.total} instâncias reconfiguradas. Falhas: ${data.failed}.`,
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message || 'Falha ao reconfigurar webhooks', variant: 'destructive' });
+    } finally {
+      setPanicLoading(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
