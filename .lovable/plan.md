@@ -1,69 +1,58 @@
 
 
-## Plano: Diagnóstico e Reparo de Webhooks das Instâncias WhatsApp
+## Plano: Restaurar recebimento de DMs no Inbox (sem voltar a sangrar com grupos)
 
-Você relatou que enviou muitas mensagens hoje mas não recebeu NENHUMA resposta no Inbox. Isso é sintoma clássico de webhook desconfigurado — provavelmente colateral da operação anti-grupos de ontem (que reconfigurou todos os webhooks via `uazapi-disable-group-webhooks`).
+### Diagnóstico real
 
-### Hipótese principal
+Olhando a tela do diagnóstico que você mandou: **160 instâncias com a URL correta e o evento `messages` ativo**. Ou seja, a UAZAPI ESTÁ enviando webhooks. Os "problemas" que aparecem ("Grupos não bloqueados / Broadcast não bloqueado") são apenas **falso positivo do diagnóstico** — a UAZAPI aplicou os filtros mas devolve esses campos com nomes diferentes no `GET /webhook` dependendo da versão do servidor, e o diagnóstico não os reconhece.
 
-Quando rodamos a função de pânico ontem para parar o sangramento de $8,28, a chamada para a UAZAPI pode ter:
-1. Sobrescrito o webhook com uma URL errada/vazia, OU
-2. Configurado os filtros tão restritivos que mensagens recebidas (DMs reais) também foram bloqueadas, OU
-3. Removido o evento `messages` por completo deixando só exclusões
+**O verdadeiro motivo do Inbox vazio está em outro lugar:** na blindagem agressiva que adicionamos ontem em `whatsapp-chatbot/index.ts` (linhas 10-22). O filtro `isBlockedWebhookPayload` faz uma busca em texto cru por `'@g.us'` no body inteiro. Mas em mensagens de DM legítimas, a string `@g.us` aparece em campos secundários da UAZAPI (ex.: `owner`, `instanceOwner`, contatos referenciados, mensagens citadas) — então **toda DM real está sendo descartada como se fosse grupo**. Resultado: zero gravações em `whatsapp_mensagens_inbox` hoje.
 
-Resultado: respostas dos clientes chegam no celular mas nunca disparam o webhook → nunca aparecem no Inbox.
+Confirma isso o log da edge function: só aparecem "boot/shutdown" — o handler entra e sai sem logar nada (early return silencioso).
 
-### O que será feito
+### Correção
 
-**1. Diagnóstico (nova edge function `diagnose-webhooks`)**
-Para cada instância ativa, consultar a UAZAPI (`GET /webhook` ou `GET /instance/status`) e retornar:
-- URL configurada atualmente
-- Eventos ativos
-- Filtros de exclusão aplicados
-- Status da conexão WhatsApp
+**1. Refazer o filtro de grupo para olhar o lugar certo (não o body inteiro)**
+Substituir `isBlockedWebhookPayload(rawBody)` por uma checagem feita APÓS o `JSON.parse`, validando apenas os campos que importam:
+- `payload.chatid`, `payload.remoteJid`, `payload.message.key.remoteJid`, `payload.from`
+- Se qualquer um terminar em `@g.us` ou for `status@broadcast` → descarta
+- Se `messageType` for `reactionMessage` ou `protocolMessage` → descarta
 
-Resultado mostrado em uma tabela no Monitor de Envios.
+Assim DMs legítimas passam, e grupos continuam 100% bloqueados (a memória `never-load-group-messages` segue valendo).
 
-**2. Reparo automático (ajuste em `whatsapp-qr` action `setup-webhook-all`)**
-Reconfigurar TODAS as instâncias com a config correta:
-```
-url: <projeto>/functions/v1/whatsapp-chatbot
-events: ["messages"]                    ← ESSENCIAL para receber respostas
-excludeGroupMessages: true              ← bloqueia grupos (mantém economia)
-excludeBroadcast: true                  ← bloqueia status
-excludeMessages: ["wasSentByApi"]       ← bloqueia eco de envios próprios
-```
+**2. Manter a defesa em camadas na UAZAPI**
+A configuração `excludeGroupMessages: true` + `excludeBroadcast: true` em `setup-webhook-all` JÁ está correta e seguirá ativa — então a maioria dos grupos nem chega ao chatbot. A blindagem do código vira só "rede de segurança" para o que escapar.
 
-Isso garante que **DMs de clientes voltem a chegar** mas grupos continuem bloqueados (memória `never-load-group-messages` preservada).
+**3. Corrigir o falso positivo no diagnóstico**
+Em `diagnose-webhooks/index.ts`, considerar a instância "saudável" quando:
+- URL bate ✓
+- Evento `messages` está ativo ✓
+- (mantém só como aviso, não como "Quebrado", a ausência dos flags `excludeGroupMessages`/`excludeBroadcast` no GET — porque vários servidores UAZAPI não devolvem esses campos no GET mesmo tendo aplicado)
 
-**3. Botão "Diagnosticar e Reparar Webhooks" no Monitor de Envios**
-Substitui/complementa o botão de pânico. Fluxo:
-- Click → roda diagnóstico → mostra estado atual de cada instância
-- Mostra botão "Reparar Todas" → reconfigura com a config correta
-- Toast confirma sucesso por instância
+Assim o painel para de mostrar 160 falsamente quebrados.
 
-**4. Validação pós-reparo**
-Após o reparo, verificar se a próxima mensagem recebida em qualquer instância chega na tabela `whatsapp_mensagens_inbox` nos próximos 5 minutos (instrução visual ao usuário).
+**4. Validação rápida pós-deploy**
+- Logar `[CHATBOT] DM recebida de <numero>` no início do handler (depois do filtro novo) para você confirmar nos logs que está chegando.
+- Pedir para você mandar uma msg de teste do seu celular pessoal pra qualquer instância → em < 30s deve aparecer no Inbox.
 
 ### Arquivos afetados
 
-- `supabase/functions/diagnose-webhooks/index.ts` (novo)
-- `supabase/functions/whatsapp-qr/index.ts` (revisar `setup-webhook-all` para garantir `events: ["messages"]`)
-- `src/pages/MonitorEnvios.tsx` (botão diagnóstico + modal de resultado)
-
-### Custo Lovable Cloud
-
-Zero adicional. Pelo contrário: **restaurar o webhook é o que destrava o valor real do sistema** (respostas de clientes = acordos fechados). Sem novas tabelas, sem IA, sem cron novo.
+- `supabase/functions/whatsapp-chatbot/index.ts` — substituir `isBlockedWebhookPayload(rawBody)` por checagem em campos específicos do payload já parseado
+- `supabase/functions/diagnose-webhooks/index.ts` — relaxar regra de "healthy" para não exigir os flags no GET
 
 ### Memórias respeitadas
 
-- ✅ `never-load-group-messages`: filtros `excludeGroupMessages` e `excludeBroadcast` mantidos
-- ✅ `cloud-cost-awareness`: nenhum aumento de invocações esperado
-- ✅ `phone-suffix-matching-standard`: não toca em lógica de matching
+- ✅ `never-load-group-messages`: filtro continua, só fica mais preciso (campo certo em vez de texto cru)
+- ✅ `cloud-cost-awareness`: zero impacto em invocações (UAZAPI já bloqueia grupos na origem)
+- ✅ `phone-suffix-matching-standard`: não toca em matching
+
+### Custo Lovable Cloud
+
+Zero. Pelo contrário — restaura o valor do produto (respostas de clientes = acordos fechados).
 
 ### Fora de escopo
 
-- Não mexer no fluxo de envio (que está OK, já enviou 17 mensagens hoje)
-- Não recriar instâncias (só reconfigurar webhooks)
-- Não tocar no autosave/aquecimento
+- Não recriar instâncias
+- Não tocar no fluxo de envio (que está OK)
+- Não tocar em autosave/aquecimento
 
