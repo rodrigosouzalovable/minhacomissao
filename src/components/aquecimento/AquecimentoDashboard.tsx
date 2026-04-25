@@ -370,8 +370,18 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> Reputação</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{Math.min(100, Math.round(((metrics.statusHoje ?? 0) * 2 + (metrics.contatosSalvosMes ?? 0) * 0.5 + metrics.taxaSucesso) / 3))}%</div></CardContent></Card>
       </div>
 
-      {/* Botão de teste do relatório diário */}
-      <div className="flex justify-end">
+      {/* Botões de ação manual */}
+      <div className="flex justify-end gap-2 flex-wrap">
+        <Button
+          onClick={sincronizarAgendaFisica}
+          disabled={sincronizandoAgenda}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          {sincronizandoAgenda ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+          {sincronizandoAgenda ? 'Sincronizando...' : 'Sincronizar agenda física'}
+        </Button>
         <Button
           onClick={enviarRelatorioAgora}
           disabled={enviandoRelatorio}
