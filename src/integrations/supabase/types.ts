@@ -2331,6 +2331,27 @@ export type Database = {
           },
         ]
       }
+      whatsapp_contatos_agenda_salvos: {
+        Row: {
+          instancia_id: string
+          nome_salvo: string | null
+          numero_destino: string
+          salvo_em: string
+        }
+        Insert: {
+          instancia_id: string
+          nome_salvo?: string | null
+          numero_destino: string
+          salvo_em?: string
+        }
+        Update: {
+          instancia_id?: string
+          nome_salvo?: string | null
+          numero_destino?: string
+          salvo_em?: string
+        }
+        Relationships: []
+      }
       whatsapp_conversas_ia: {
         Row: {
           historico: Json
