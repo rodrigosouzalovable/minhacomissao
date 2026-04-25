@@ -84,7 +84,9 @@ Deno.serve(async (req) => {
       const inst = instMap.get(aquec.instancia_id);
       if (!inst) return { status: "sem_instancia" };
 
-      const limite = limiteDiarioPorFase(aquec.fase || 1);
+      // Aplica fator fim-de-semana (mín 1) ao limite da fase
+      const limiteBase = limiteDiarioPorFase(aquec.fase || 1);
+      const limite = Math.max(1, Math.floor(limiteBase * fatorDia));
 
       const { count: enviosHoje } = await supabase
         .from("aquecimento_envios_autosave")
@@ -96,8 +98,8 @@ Deno.serve(async (req) => {
         return { instancia: inst.nome, status: "limite_atingido", enviosHoje };
       }
 
-      // Sortear: 60% de chance de enviar nesta rodada
-      if (Math.random() > 0.6) {
+      // Sortear: 70% de chance de enviar nesta rodada (skip 30%)
+      if (Math.random() > 0.7) {
         return { instancia: inst.nome, status: "skip_aleatorio" };
       }
 
