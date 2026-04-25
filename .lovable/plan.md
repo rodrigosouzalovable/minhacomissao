@@ -1,82 +1,65 @@
-## Situação atual do salvamento de contatos
+## Diagnóstico
 
-Já existe a função `salvarContatoUAZAPI()` em `whatsapp-chatbot/index.ts` (linhas 170-212) que chama os endpoints UAZAPI `/contact/add` e `/contact/upsert` para salvar contatos na agenda física do dispositivo. Hoje ela é disparada apenas **quando uma mensagem é recebida** (no webhook), usando o `pushName` do remetente.
+Estado atual confirmado no banco:
+- **157 instâncias** EM_AQUECIMENTO, 20 PAUSADAS, 0 AQUECIDAS
+- Hoje, **apenas 18 instâncias conversaram** (23 interações totais, média 0.13)
+- Cron `aquecimento-auto-diario` roda **a cada 2 horas** (`0 10-22/2 * * *`) — só ~7 ciclos por dia
 
-### Por que alguns números não salvam um ao outro
+### Por que está lento
 
-O sistema de aquecimento envia mensagens entre as 160 instâncias, mas:
+Três gargalos no `whatsapp-aquecimento/index.ts`:
 
-1. **Aquecimento interno (`whatsapp-aquecimento`)**: instância A envia para B. O contato de B só é salvo na agenda de A **depois** que B responde via webhook. Se B não responder, A nunca salva B.
-2. **Auto-save externo (`aquecimento-envio-autosave`)**: envia "Oi/Olá" para contatos da pool. O número de destino nunca é salvo na agenda da instância remetente porque ele não dispara webhook de entrada.
-3. **Nome usado**: hoje depende do `pushName` que vem no webhook. Se o destinatário não tem nome de perfil público, o contato fica vazio.
+1. **Cron muito espaçado**: 1 ciclo a cada 2h = no máximo 7 ciclos/dia entre 7h-21h.
+2. **Target diário sorteado baixíssimo**: cada instância tem meta de 1-3 conversas/dia (50% chance = só 1).
+3. **MAX_PAIRS_PER_CYCLE = 3**: cada execução processa no máximo **3 pares** (6 instâncias). Com 157 instâncias precisaria de ~26 ciclos só para tocar todas uma vez. Em 7 ciclos/dia = só 21 instâncias contempladas/dia.
+4. **Delay interno de 30-120s entre pares** dentro do mesmo ciclo.
 
-Resultado: muitas instâncias trocam mensagens mas a agenda continua vazia, o que reduz o efeito anti-ban do aquecimento (o WhatsApp valoriza conversas entre contatos salvos mutuamente).
+Resultado: matematicamente impossível todas as 157 instâncias conversarem no mesmo dia.
 
 ---
 
-## Plano de correção
+## Plano de aceleração
 
-### 1. Salvar contato ANTES de enviar (pre-save bidirecional)
+Objetivo: **garantir que todas as ~157 instâncias conversem pelo menos 1× por dia**, mantendo padrão anti-ban (delays aleatórios, pausa de almoço, redução fim de semana).
 
-Criar uma função compartilhada `salvarContatoAgenda(serverUrl, token, numero, nome)` e chamá-la **antes do envio** em três pontos:
+### 1. Aumentar frequência do cron (de 2h para 30min)
 
-**a) Aquecimento interno entre instâncias** (`whatsapp-aquecimento/index.ts`)  
-Antes de cada par A→B disparar a primeira mensagem do dia, executar em paralelo:
-- Salvar B na agenda de A (com nome derivado da instância B)
-- Salvar A na agenda de B (com nome derivado da instância A)
+Alterar `aquecimento-auto-diario` de `0 10-22/2 * * *` para `*/30 7-23 * * *` (a cada 30min entre 7h-21h BRT). Isso passa de 7 → 28 ciclos/dia.
 
-Nome usado: extraído de `user_whatsapp_instances.nome` removendo o prefixo numérico (ex: `"62982458447 CERTIFICADORA CNPJ"` → `"CERTIFICADORA CNPJ"`). Se vazio, usar `"Contato 62982458447"`.
+### 2. Aumentar pares por ciclo (de 3 para 12)
 
-**b) Auto-save externo** (`aquecimento-envio-autosave/index.ts`)  
-Antes de enviar "Oi/Olá" para um contato da pool, salvar o `contato.nome` (já existe na tabela `aquecimento_contatos_autosave`) na agenda da instância remetente.
+Em `whatsapp-aquecimento/index.ts`: `MAX_PAIRS_PER_CYCLE = 3` → **`12`**. 28 ciclos × 12 pares = 336 pares/dia ≫ 157 instâncias necessárias para cobrir todas (com folga).
 
-**c) Webhook de recebimento** (`whatsapp-chatbot/index.ts`)  
-Manter o comportamento atual (já funciona) — serve como fallback caso o pre-save tenha falhado.
+### 3. Priorizar instâncias que ainda não conversaram hoje
 
-### 2. Cache para evitar chamadas repetidas
+Hoje a função embaralha aleatoriamente. Vou adicionar **ordenação por `interacoes_hoje ASC`** antes do embaralhamento parcial, garantindo que quem tem 0 interações hoje seja escolhido primeiro. Mantém afinidade de 30% com último parceiro só entre instâncias já com interações.
 
-Criar nova tabela `whatsapp_contatos_agenda_salvos`:
-```
-instancia_id uuid, numero_destino text, nome_salvo text, salvo_em timestamptz
-PRIMARY KEY (instancia_id, numero_destino)
-```
+### 4. Reduzir delay entre pares no mesmo ciclo
 
-Antes de chamar UAZAPI, consultar a tabela. Se o par (instância, número) já existe, **pular a chamada** — economiza requisições UAZAPI e reduz latência. Após sucesso, gravar na tabela.
+Atual: `30000 + Math.random() * 90000` (30-120s). Novo: **`8000 + Math.random() * 15000`** (8-23s). Com 12 pares × ~15s = ~3min por ciclo, ainda confortável dentro da janela de 30min do cron.
 
-### 3. Job de retroatividade (one-shot)
+### 5. Garantir target mínimo de 1/dia (já implementado)
 
-Criar edge function `aquecimento-sync-contatos-agenda` que:
-- Lista todos os pares (instância A, instância B) que já trocaram mensagens no histórico de aquecimento.
-- Para cada par, salva A na agenda de B e B na agenda de A (respeitando o cache).
-- Executa em lotes com delay anti-ban (2-5s entre chamadas).
-- Pode ser disparada manualmente pelo botão no Dashboard ou agendada para rodar 1x.
+O código já força `Math.max(1, ...)` no target. Mantém. A combinação dos itens 1-3 garante que o sistema consiga **cumprir** esse mínimo para todos.
 
-### 4. Botão no Dashboard
+### 6. Aviso de custo Lovable Cloud
 
-Adicionar em `AquecimentoDashboard.tsx` botão **"Sincronizar agenda física"** que chama a nova função, com toast de progresso.
+Esta mudança aumenta execuções de Edge Function de ~7/dia para ~28/dia (4×) e chamadas UAZAPI proporcionalmente. **Estimativa: +3 a +5% no consumo mensal de Cloud.** Compensa porque acelera o aquecimento de semanas para dias.
 
 ---
 
 ## Detalhes técnicos
 
 **Arquivos afetados:**
-- `supabase/functions/_shared/agenda-contatos.ts` (NOVO) — função utilitária reutilizável
-- `supabase/functions/whatsapp-aquecimento/index.ts` — pre-save bidirecional antes da primeira mensagem do par
-- `supabase/functions/aquecimento-envio-autosave/index.ts` — pre-save antes de cada envio
-- `supabase/functions/whatsapp-chatbot/index.ts` — refatorar para usar o util compartilhado
-- `supabase/functions/aquecimento-sync-contatos-agenda/index.ts` (NOVO) — backfill manual
-- `supabase/migrations/...` — tabela `whatsapp_contatos_agenda_salvos` + RLS (deny-all, só service role escreve)
-- `src/components/aquecimento/AquecimentoDashboard.tsx` — botão de sincronização
+- `supabase/functions/whatsapp-aquecimento/index.ts`:
+  - `MAX_PAIRS_PER_CYCLE`: 3 → 12
+  - Delay entre pares: 30-120s → 8-23s
+  - Adicionar sort por `interacoes_hoje ASC` antes do pareamento
+- **Cron job** `aquecimento-auto-diario`: reagendar para `*/30 7-23 * * *` via `cron.unschedule` + `cron.schedule` (tabela `cron.job`, executado por SQL com a service role).
 
-**Custo Lovable Cloud:** baixo. A tabela de cache evita chamadas repetidas (cada par instância↔número é salvo apenas 1 vez na vida). O backfill é um job único. Estimo +0,5% no consumo mensal de edge functions.
+**Sem novas tabelas, sem novas funções.** Apenas ajustes de configuração e parâmetros.
 
-**Anti-ban:** delay aleatório 800-2000ms entre cada chamada UAZAPI de salvamento, para não parecer robotizado.
-
----
-
-## Resultado esperado
-
-- Toda nova conversa do aquecimento começa com os dois lados já salvos na agenda física.
-- Contatos da pool de auto-save aparecem com nome no WhatsApp da instância.
-- Histórico antigo é regularizado pelo botão de sincronização.
-- O WhatsApp passa a tratar essas conversas como "entre contatos salvos", melhorando a reputação das instâncias.
+**Resultado esperado em 24h após deploy:**
+- ~157 instâncias com pelo menos 1 interação/dia (vs. 18 hoje)
+- ~280-330 conversas iniciadas/dia (vs. ~25 hoje)
+- Tempo até primeiras instâncias atingirem Fase 2: cai de ~3 semanas para ~7 dias.

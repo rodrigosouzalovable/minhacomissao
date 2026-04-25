@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
     // Fator fim-de-semana: sábado 60%, domingo 40% — mínimo 1
     const fatorDia = dayOfWeek === 0 ? 0.4 : dayOfWeek === 6 ? 0.6 : 1.0;
     const TARGET_MESSAGES_PER_DAY = Math.max(1, Math.round(baseTarget * fatorDia));
-    const MAX_PAIRS_PER_CYCLE = 3;
+    const MAX_PAIRS_PER_CYCLE = 12;
     // Pausa de almoço (12-14h BRT)
     if (hour >= 12 && hour < 14) {
       console.log("[AQUECIMENTO] 🍽️ Pausa de almoço (12-14h). Pulando ciclo.");
@@ -209,7 +209,13 @@ Deno.serve(async (req) => {
       console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis de ${userInstances.length}.`);
 
       // ========== GENERATE PAIRS (same user only) ==========
-      const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+      // Prioriza quem tem MENOS interações hoje (garante cobertura de todas as instâncias)
+      // Dentro do mesmo nível de interações_hoje, ordem aleatória para variar parceiros
+      const shuffled = [...eligible].sort((a: any, b: any) => {
+        const diff = (a.interacoes_hoje || 0) - (b.interacoes_hoje || 0);
+        if (diff !== 0) return diff;
+        return Math.random() - 0.5;
+      });
       const allPairs: [any, any][] = [];
       const usedIds = new Set<string>();
 
@@ -325,8 +331,8 @@ Deno.serve(async (req) => {
 
         totalEnviados++;
 
-        // Small delay between pairs
-        await new Promise(r => setTimeout(r, 30000 + Math.random() * 90000));
+        // Small delay between pairs (8-23s, anti-ban mantido)
+        await new Promise(r => setTimeout(r, 8000 + Math.random() * 15000));
       }
     }
 
