@@ -169,6 +169,7 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
   const [loading, setLoading] = useState(true);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
+  const [sincronizandoAgenda, setSincronizandoAgenda] = useState(false);
 
   const enviarRelatorioAgora = async () => {
     setEnviandoRelatorio(true);
@@ -184,6 +185,26 @@ export default function AquecimentoDashboard({ metrics }: Props) {
       toast.error(`Erro: ${e.message}`);
     } finally {
       setEnviandoRelatorio(false);
+    }
+  };
+
+  const sincronizarAgendaFisica = async () => {
+    setSincronizandoAgenda(true);
+    try {
+      toast.info('Sincronizando agenda física... pode levar alguns minutos');
+      const { data, error } = await supabase.functions.invoke('aquecimento-sync-contatos-agenda', {
+        body: { limite: 300 },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Agenda sincronizada: ${data.salvos} novos, ${data.pulos} já existentes, ${data.erros} erros`);
+      } else {
+        toast.error(`Falha: ${data?.error || 'erro desconhecido'}`);
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setSincronizandoAgenda(false);
     }
   };
 
