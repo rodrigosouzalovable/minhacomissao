@@ -1274,10 +1274,10 @@ serve(async (req) => {
 
     const finalMediaUrl = inboxPermanentMediaUrl;
 
+    let instanciaId: string | null = null;
     if (inboxTelefone && (inboxTexto || inboxMediaUrl)) {
       try {
         // Find the instance by matching token
-        let instanciaId: string | null = null;
         if (inboxInstanceToken) {
           const { data: instancia } = await supabase
             .from('user_whatsapp_instances')
