@@ -1,93 +1,82 @@
+## Situação atual do salvamento de contatos
 
-# Relatório Diário Avançado no WhatsApp (20h BRT)
+Já existe a função `salvarContatoUAZAPI()` em `whatsapp-chatbot/index.ts` (linhas 170-212) que chama os endpoints UAZAPI `/contact/add` e `/contact/upsert` para salvar contatos na agenda física do dispositivo. Hoje ela é disparada apenas **quando uma mensagem é recebida** (no webhook), usando o `pushName` do remetente.
 
-Vou criar uma nova rotina automática que, todo dia às **20:00 BRT**, monta um relatório completo do sistema de aquecimento e envia para o seu WhatsApp pessoal **(62) 99167-2674**, com fallback automático entre as instâncias conectadas caso alguma falhe.
+### Por que alguns números não salvam um ao outro
 
-> Importante: já existe a função `daily-report-aquecimento` (resumo curto). Esta nova função é **separada** (`daily-report-advanced`), com 7 seções detalhadas, IA e fallback. As duas vão coexistir — a antiga continua funcionando como está.
+O sistema de aquecimento envia mensagens entre as 160 instâncias, mas:
 
----
+1. **Aquecimento interno (`whatsapp-aquecimento`)**: instância A envia para B. O contato de B só é salvo na agenda de A **depois** que B responde via webhook. Se B não responder, A nunca salva B.
+2. **Auto-save externo (`aquecimento-envio-autosave`)**: envia "Oi/Olá" para contatos da pool. O número de destino nunca é salvo na agenda da instância remetente porque ele não dispara webhook de entrada.
+3. **Nome usado**: hoje depende do `pushName` que vem no webhook. Se o destinatário não tem nome de perfil público, o contato fica vazio.
 
-## O que o relatório vai conter
-
-1. **Visão geral** — total de instâncias, em aquecimento, aquecidas (Fase 5), pausadas, taxa de sucesso.
-2. **Conversas IA do dia** — total de conversas, trocas, média e listagem par-a-par (até 20 mostradas, restante resumido).
-3. **Auto-save** — total de envios, média por instância, **TOP 5** que mais enviaram e instâncias com **0 envios** (com motivo: pausada / fase baixa / sem contatos disponíveis).
-4. **Distribuição por fase** + **próximas promoções** nos próximos 3 dias.
-5. **Saúde das instâncias** — pausadas/desconectadas com motivo, recém-conectadas (últimos 3 dias), instâncias com taxa de falha > 10%.
-6. **Sugestões da IA** — análise via Lovable AI Gateway (`google/gemini-2.5-flash`, gratuito durante o período promocional) interpretando os números do dia e dando recomendações práticas.
-7. **Comparativo com o dia anterior** — variação % de conversas IA, auto-save e média de fases.
+Resultado: muitas instâncias trocam mensagens mas a agenda continua vazia, o que reduz o efeito anti-ban do aquecimento (o WhatsApp valoriza conversas entre contatos salvos mutuamente).
 
 ---
 
-## Resiliência no envio
+## Plano de correção
 
-Vai seguir exatamente sua lógica:
+### 1. Salvar contato ANTES de enviar (pre-save bidirecional)
 
-1. Busca todas as instâncias com `status = 'connected'`.
-2. Tenta enviar pela primeira; se falhar, tenta a próxima; assim por diante.
-3. Se todas falharem, grava o relatório em `relatorios_diarios_enviados` com status `PENDENTE` para retentar no próximo ciclo.
-4. Cada execução grava o resultado (sucesso/falha + qual instância foi usada) para histórico.
+Criar uma função compartilhada `salvarContatoAgenda(serverUrl, token, numero, nome)` e chamá-la **antes do envio** em três pontos:
+
+**a) Aquecimento interno entre instâncias** (`whatsapp-aquecimento/index.ts`)  
+Antes de cada par A→B disparar a primeira mensagem do dia, executar em paralelo:
+- Salvar B na agenda de A (com nome derivado da instância B)
+- Salvar A na agenda de B (com nome derivado da instância A)
+
+Nome usado: extraído de `user_whatsapp_instances.nome` removendo o prefixo numérico (ex: `"62982458447 CERTIFICADORA CNPJ"` → `"CERTIFICADORA CNPJ"`). Se vazio, usar `"Contato 62982458447"`.
+
+**b) Auto-save externo** (`aquecimento-envio-autosave/index.ts`)  
+Antes de enviar "Oi/Olá" para um contato da pool, salvar o `contato.nome` (já existe na tabela `aquecimento_contatos_autosave`) na agenda da instância remetente.
+
+**c) Webhook de recebimento** (`whatsapp-chatbot/index.ts`)  
+Manter o comportamento atual (já funciona) — serve como fallback caso o pre-save tenha falhado.
+
+### 2. Cache para evitar chamadas repetidas
+
+Criar nova tabela `whatsapp_contatos_agenda_salvos`:
+```
+instancia_id uuid, numero_destino text, nome_salvo text, salvo_em timestamptz
+PRIMARY KEY (instancia_id, numero_destino)
+```
+
+Antes de chamar UAZAPI, consultar a tabela. Se o par (instância, número) já existe, **pular a chamada** — economiza requisições UAZAPI e reduz latência. Após sucesso, gravar na tabela.
+
+### 3. Job de retroatividade (one-shot)
+
+Criar edge function `aquecimento-sync-contatos-agenda` que:
+- Lista todos os pares (instância A, instância B) que já trocaram mensagens no histórico de aquecimento.
+- Para cada par, salva A na agenda de B e B na agenda de A (respeitando o cache).
+- Executa em lotes com delay anti-ban (2-5s entre chamadas).
+- Pode ser disparada manualmente pelo botão no Dashboard ou agendada para rodar 1x.
+
+### 4. Botão no Dashboard
+
+Adicionar em `AquecimentoDashboard.tsx` botão **"Sincronizar agenda física"** que chama a nova função, com toast de progresso.
 
 ---
 
 ## Detalhes técnicos
 
-### Nova tabela
-`public.relatorios_diarios_enviados` (migration):
-- `id uuid pk`, `data date unique`, `conteudo text`, `status text` (`ENVIADO|FALHOU|PENDENTE`), `instancia_utilizada_id uuid`, `tentativas int default 0`, `erro text`, `enviado_em timestamptz`, `criado_em timestamptz default now()`
-- RLS: somente admins podem `SELECT` (service role insere/atualiza).
+**Arquivos afetados:**
+- `supabase/functions/_shared/agenda-contatos.ts` (NOVO) — função utilitária reutilizável
+- `supabase/functions/whatsapp-aquecimento/index.ts` — pre-save bidirecional antes da primeira mensagem do par
+- `supabase/functions/aquecimento-envio-autosave/index.ts` — pre-save antes de cada envio
+- `supabase/functions/whatsapp-chatbot/index.ts` — refatorar para usar o util compartilhado
+- `supabase/functions/aquecimento-sync-contatos-agenda/index.ts` (NOVO) — backfill manual
+- `supabase/migrations/...` — tabela `whatsapp_contatos_agenda_salvos` + RLS (deny-all, só service role escreve)
+- `src/components/aquecimento/AquecimentoDashboard.tsx` — botão de sincronização
 
-### Nova Edge Function
-`supabase/functions/daily-report-advanced/index.ts` (`verify_jwt = false` em `supabase/config.toml`):
-- Janela de 24h em BRT (00:00–23:59 do dia atual).
-- Queries em paralelo: `whatsapp_aquecimento_instancias` + join `user_whatsapp_instances` (nome, status, conectado_em); `whatsapp_aquecimento_interacoes` (24h, agrupa por par origem/destino); `whatsapp_conversas_ia` (24h); `aquecimento_envios_autosave` (hoje + ontem para comparativo).
-- Calcula TOP 5 auto-save, instâncias zeradas com motivo inferido (pausada / fase 1 sem ciclo / sem contatos).
-- Calcula próximas promoções: `7 - dias_na_fase <= 3` e `fase < 5` e `fase_auto = true`.
-- Detecta taxa de falha por instância usando `interacoes` com `status != 'ENVIADO'` vs total.
-- Chama Lovable AI Gateway (`LOVABLE_API_KEY` já existe) com um resumo numérico compacto pedindo 3-5 sugestões em pt-BR.
-- Monta a mensagem final formatada com emojis e separadores `━━━`.
-- Loop de envio com fallback descrito acima usando os mesmos 3 endpoints UAZAPI já usados (`/send/text`, `/message/sendText`, `/sendText`).
-- Grava em `relatorios_diarios_enviados` (upsert por `data`).
-- Retorna JSON com status para invocação manual de teste.
+**Custo Lovable Cloud:** baixo. A tabela de cache evita chamadas repetidas (cada par instância↔número é salvo apenas 1 vez na vida). O backfill é um job único. Estimo +0,5% no consumo mensal de edge functions.
 
-### Cron job
-Via SQL `cron.schedule` (não migration, pois inclui anon key) — todos os dias às **23:00 UTC** (20:00 BRT):
-```
-'daily-report-advanced-20h', '0 23 * * *',
-net.http_post(url := '.../functions/v1/daily-report-advanced', headers := jsonb_build_object('Authorization', 'Bearer <ANON>', 'Content-Type', 'application/json'), body := '{}'::jsonb)
-```
-
-### Botão de teste manual (opcional, leve)
-Adicionar no `AquecimentoDashboard.tsx` um pequeno botão "Enviar relatório agora" que chama `supabase.functions.invoke('daily-report-advanced')` para você testar sem esperar 20h.
+**Anti-ban:** delay aleatório 800-2000ms entre cada chamada UAZAPI de salvamento, para não parecer robotizado.
 
 ---
 
-## Custo na Lovable Cloud
+## Resultado esperado
 
-- **+1 invocação por dia** da Edge Function (≈30/mês — desprezível).
-- **+1 chamada Lovable AI por dia** com `gemini-2.5-flash` (gratuito até 06/out/2025 e baratíssimo depois — fração de centavo).
-- 1 nova tabela com 1 linha por dia (≈365 linhas/ano — irrelevante).
-
-**Impacto total: praticamente zero**, bem dentro do plano gratuito.
-
----
-
-## Arquivos que vou criar/alterar
-
-1. **Migration** (nova): cria `relatorios_diarios_enviados` + RLS.
-2. **Nova Edge Function**: `supabase/functions/daily-report-advanced/index.ts`.
-3. **`supabase/config.toml`**: adicionar `[functions.daily-report-advanced] verify_jwt = false`.
-4. **SQL via insert tool**: cria o cron `daily-report-advanced-20h`.
-5. **`src/components/aquecimento/AquecimentoDashboard.tsx`**: botão "Enviar relatório agora" (teste manual).
-
----
-
-## Validação após implementar
-
-1. Disparo manual da função (botão ou tool) → confirmar resposta JSON `{success: true}`.
-2. Verificar chegada da mensagem no **62991672674**.
-3. Conferir se as 7 seções aparecem com dados reais.
-4. Conferir registro em `relatorios_diarios_enviados` (data de hoje, status `ENVIADO`).
-5. Confirmar que o cron foi criado (`SELECT * FROM cron.job WHERE jobname = 'daily-report-advanced-20h'`).
-
-Se aprovar, eu implemento tudo de uma vez.
+- Toda nova conversa do aquecimento começa com os dois lados já salvos na agenda física.
+- Contatos da pool de auto-save aparecem com nome no WhatsApp da instância.
+- Histórico antigo é regularizado pelo botão de sincronização.
+- O WhatsApp passa a tratar essas conversas como "entre contatos salvos", melhorando a reputação das instâncias.

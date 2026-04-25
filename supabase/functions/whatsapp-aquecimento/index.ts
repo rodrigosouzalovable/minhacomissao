@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { salvarContatoAgendaCacheado, nomeAmigavelInstancia } from "../_shared/agenda-contatos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -261,6 +262,18 @@ Deno.serve(async (req) => {
         const origNum = `55${phoneA}@s.whatsapp.net`;
 
         console.log(`[AQUECIMENTO] 🤝 Par: ${detailsA.nome} → ${detailsB.nome} (user: ${userId})`);
+
+        // PRE-SAVE bidirecional: salva A na agenda de B e B na agenda de A (cacheado)
+        try {
+          const nomeA = nomeAmigavelInstancia(detailsA.nome, phoneA);
+          const nomeB = nomeAmigavelInstancia(detailsB.nome, phoneB);
+          await Promise.all([
+            salvarContatoAgendaCacheado(supabase, instA.instancia_id, detailsA.server_url, detailsA.instance_token, `55${phoneB}`, nomeB),
+            salvarContatoAgendaCacheado(supabase, instB.instancia_id, detailsB.server_url, detailsB.instance_token, `55${phoneA}`, nomeA),
+          ]);
+        } catch (e) {
+          console.log(`[AQUECIMENTO] pre-save agenda erro: ${e}`);
+        }
 
         const iaPayload = {
           action: "iniciar-conversa",

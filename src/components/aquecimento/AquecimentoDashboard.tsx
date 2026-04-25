@@ -169,6 +169,7 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
   const [loading, setLoading] = useState(true);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
+  const [sincronizandoAgenda, setSincronizandoAgenda] = useState(false);
 
   const enviarRelatorioAgora = async () => {
     setEnviandoRelatorio(true);
@@ -184,6 +185,26 @@ export default function AquecimentoDashboard({ metrics }: Props) {
       toast.error(`Erro: ${e.message}`);
     } finally {
       setEnviandoRelatorio(false);
+    }
+  };
+
+  const sincronizarAgendaFisica = async () => {
+    setSincronizandoAgenda(true);
+    try {
+      toast.info('Sincronizando agenda física... pode levar alguns minutos');
+      const { data, error } = await supabase.functions.invoke('aquecimento-sync-contatos-agenda', {
+        body: { limite: 300 },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Agenda sincronizada: ${data.salvos} novos, ${data.pulos} já existentes, ${data.erros} erros`);
+      } else {
+        toast.error(`Falha: ${data?.error || 'erro desconhecido'}`);
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setSincronizandoAgenda(false);
     }
   };
 
@@ -349,8 +370,18 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> Reputação</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{Math.min(100, Math.round(((metrics.statusHoje ?? 0) * 2 + (metrics.contatosSalvosMes ?? 0) * 0.5 + metrics.taxaSucesso) / 3))}%</div></CardContent></Card>
       </div>
 
-      {/* Botão de teste do relatório diário */}
-      <div className="flex justify-end">
+      {/* Botões de ação manual */}
+      <div className="flex justify-end gap-2 flex-wrap">
+        <Button
+          onClick={sincronizarAgendaFisica}
+          disabled={sincronizandoAgenda}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          {sincronizandoAgenda ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+          {sincronizandoAgenda ? 'Sincronizando...' : 'Sincronizar agenda física'}
+        </Button>
         <Button
           onClick={enviarRelatorioAgora}
           disabled={enviandoRelatorio}

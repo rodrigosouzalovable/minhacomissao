@@ -1,5 +1,6 @@
 // Aquecimento Externo Auto-Save - sem IA, custo zero por envio
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { salvarContatoAgendaCacheado } from "../_shared/agenda-contatos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,6 +130,18 @@ Deno.serve(async (req) => {
       const numeroFinal = numeroLimpo.startsWith("55") ? numeroLimpo : `55${numeroLimpo}`;
 
       try {
+        // PRE-SAVE: salva contato na agenda física antes de enviar (cacheado)
+        try {
+          await salvarContatoAgendaCacheado(
+            supabase,
+            aquec.instancia_id,
+            inst.server_url,
+            inst.instance_token,
+            numeroFinal,
+            contato.nome || `Contato ${numeroFinal}`,
+          );
+        } catch (_) { /* não bloqueia envio se falhar */ }
+
         // Timeout de 20s por envio para evitar travamento
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 20000);
