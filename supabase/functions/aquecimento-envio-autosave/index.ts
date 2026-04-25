@@ -34,14 +34,19 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    // Bloqueio de horário/dia (mesma regra do aquecimento principal)
+    // Horário comercial (07-21h BRT) e pausa de almoço (12-14h BRT)
     const now = new Date();
     const sp = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = sp.getHours();
     const dow = sp.getDay();
-    if (hour < 7 || hour >= 21 || dow === 0) {
-      return json({ message: "Fora do horário ou domingo", skipped: true });
+    if (hour < 7 || hour >= 21) {
+      return json({ message: "Fora do horário", skipped: true });
     }
+    if (hour >= 12 && hour < 14) {
+      return json({ message: "Pausa de almoço", skipped: true });
+    }
+    // Fator fim de semana: domingo 40%, sábado 60%, demais 100%
+    const fatorDia = dow === 0 ? 0.4 : dow === 6 ? 0.6 : 1.0;
 
     // Pool ativa
     const { count: poolAtiva } = await supabase
@@ -79,7 +84,9 @@ Deno.serve(async (req) => {
       const inst = instMap.get(aquec.instancia_id);
       if (!inst) return { status: "sem_instancia" };
 
-      const limite = limiteDiarioPorFase(aquec.fase || 1);
+      // Aplica fator fim-de-semana (mín 1) ao limite da fase
+      const limiteBase = limiteDiarioPorFase(aquec.fase || 1);
+      const limite = Math.max(1, Math.floor(limiteBase * fatorDia));
 
       const { count: enviosHoje } = await supabase
         .from("aquecimento_envios_autosave")
@@ -91,8 +98,8 @@ Deno.serve(async (req) => {
         return { instancia: inst.nome, status: "limite_atingido", enviosHoje };
       }
 
-      // Sortear: 60% de chance de enviar nesta rodada
-      if (Math.random() > 0.6) {
+      // Sortear: 70% de chance de enviar nesta rodada (skip 30%)
+      if (Math.random() > 0.7) {
         return { instancia: inst.nome, status: "skip_aleatorio" };
       }
 

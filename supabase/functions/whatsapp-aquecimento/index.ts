@@ -164,23 +164,21 @@ Deno.serve(async (req) => {
       instancesByUser.get(userId)!.push({ ...inst, details });
     }
 
-    // ========== DAILY VARIANCE ==========
-    const dailyRoll = Math.random();
-    const TARGET_MESSAGES_PER_DAY = dailyRoll < 0.20 ? 0 : dailyRoll < 0.80 ? 1 : 2;
+    // ========== TARGET DIÁRIO (sempre >= 1) ==========
+    // Volume varia por sorteio (50% = 1, 35% = 2, 15% = 3) — nunca zera o dia.
+    const r = Math.random();
+    let baseTarget = r < 0.5 ? 1 : r < 0.85 ? 2 : 3;
+    // Fator fim-de-semana: sábado 60%, domingo 40% — mínimo 1
+    const fatorDia = dayOfWeek === 0 ? 0.4 : dayOfWeek === 6 ? 0.6 : 1.0;
+    const TARGET_MESSAGES_PER_DAY = Math.max(1, Math.round(baseTarget * fatorDia));
     const MAX_PAIRS_PER_CYCLE = 3;
-
-    if (TARGET_MESSAGES_PER_DAY === 0) {
-      console.log("[AQUECIMENTO] 📵 Dia de folga (sorteio 20%). Nenhuma conversa hoje.");
-      return json({ message: "Rest day - no conversations", skipped: true, daily_target: 0 });
+    // Pausa de almoço (12-14h BRT)
+    if (hour >= 12 && hour < 14) {
+      console.log("[AQUECIMENTO] 🍽️ Pausa de almoço (12-14h). Pulando ciclo.");
+      return json({ message: "Lunch break", skipped: true });
     }
 
-    console.log(`[AQUECIMENTO] 🎯 Target do dia: ${TARGET_MESSAGES_PER_DAY} conversa(s) por instância.`);
-
-    // 50% chance to skip this cycle
-    if (Math.random() > 0.5) {
-      console.log("[AQUECIMENTO] ⏭️ Skip aleatório para padrão natural.");
-      return json({ message: "Random skip for natural pattern", skipped: true });
-    }
+    console.log(`[AQUECIMENTO] 🎯 Target do dia: ${TARGET_MESSAGES_PER_DAY} conversa(s) por instância (fator ${fatorDia}).`);
 
     // ========== RESET DAILY COUNTERS ==========
     for (const inst of instancias) {
@@ -241,17 +239,19 @@ Deno.serve(async (req) => {
         if (!detailsA || !detailsB) continue;
 
         // Check if same pair already had conversation today
-        const todayStart = new Date(spTime);
-        todayStart.setHours(0, 0, 0, 0);
-        const { data: conversaHoje } = await supabase
+        // Cooldown 2-4h por par (sorteado): evita repetição muito próxima
+        const cooldownMs = (2 + Math.random() * 2) * 60 * 60 * 1000;
+        const cooldownIso = new Date(Date.now() - cooldownMs).toISOString();
+        const { data: conversaRecente } = await supabase
           .from("whatsapp_conversas_ia")
           .select("id")
           .or(`and(instancia_origem_id.eq.${instA.instancia_id},instancia_destino_id.eq.${instB.instancia_id}),and(instancia_origem_id.eq.${instB.instancia_id},instancia_destino_id.eq.${instA.instancia_id})`)
-          .gte("inicio_em", todayStart.toISOString())
+          .gte("inicio_em", cooldownIso)
           .limit(1)
           .maybeSingle();
 
-        if (conversaHoje) continue;
+        if (conversaRecente) continue;
+
 
         const phoneA = detailsA.nome?.match(/^\d+/)?.[0] || "";
         const phoneB = detailsB.nome?.match(/^\d+/)?.[0] || "";
@@ -319,18 +319,7 @@ Deno.serve(async (req) => {
 
     console.log(`[AQUECIMENTO] Ciclo concluído. ${totalEnviados} conversas iniciadas.`);
 
-    // ========== TRIGGER AUTO-SAVE WARMING (camada externa) ==========
-    try {
-      const autosaveRes = await fetch(`${supabaseUrl}/functions/v1/aquecimento-envio-autosave`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-        body: JSON.stringify({}),
-      });
-      const autosaveText = await autosaveRes.text();
-      console.log(`[AQUECIMENTO] Auto-save layer: ${autosaveText.substring(0, 200)}`);
-    } catch (e) {
-      console.error("[AQUECIMENTO] Auto-save trigger error:", e);
-    }
+    // Auto-save agora roda em cron próprio (autosave-aquecimento-horario) — não chamar mais aqui.
 
     return json({ success: true, conversas_iniciadas: totalEnviados, reativados });
 
