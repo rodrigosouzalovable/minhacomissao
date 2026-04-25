@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer, Users } from 'lucide-react';
+import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer, Users, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface DashboardMetrics {
   total: number;
