@@ -1456,6 +1456,48 @@ export type Database = {
           },
         ]
       }
+      relatorios_diarios_enviados: {
+        Row: {
+          atualizado_em: string
+          conteudo: string | null
+          criado_em: string
+          data: string
+          enviado_em: string | null
+          erro: string | null
+          id: string
+          instancia_utilizada_id: string | null
+          instancia_utilizada_nome: string | null
+          status: string
+          tentativas: number
+        }
+        Insert: {
+          atualizado_em?: string
+          conteudo?: string | null
+          criado_em?: string
+          data: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_utilizada_id?: string | null
+          instancia_utilizada_nome?: string | null
+          status?: string
+          tentativas?: number
+        }
+        Update: {
+          atualizado_em?: string
+          conteudo?: string | null
+          criado_em?: string
+          data?: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_utilizada_id?: string | null
+          instancia_utilizada_nome?: string | null
+          status?: string
+          tentativas?: number
+        }
+        Relationships: []
+      }
       retornos: {
         Row: {
           atualizado_em: string

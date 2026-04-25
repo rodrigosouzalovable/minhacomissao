@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.aquecimento-envio-autosave]
 verify_jwt = false
+
+[functions.daily-report-advanced]
+verify_jwt = false

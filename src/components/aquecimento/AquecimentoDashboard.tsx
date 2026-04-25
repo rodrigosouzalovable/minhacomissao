@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer, Users } from 'lucide-react';
+import { Flame, Clock, MessageCircle, Mic, Image, Smile, CheckCircle, XCircle, Send, AlertTriangle, Camera, UserPlus, TrendingUp, Timer, Users, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface DashboardMetrics {
   total: number;
@@ -166,6 +168,24 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   const [conversasHoje, setConversasHoje] = useState<ConversaHoje[]>([]);
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
   const [loading, setLoading] = useState(true);
+  const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
+
+  const enviarRelatorioAgora = async () => {
+    setEnviandoRelatorio(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('daily-report-advanced');
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Relatório enviado via ${data.instancia || 'instância'} ✅`);
+      } else {
+        toast.error(`Falha no envio: ${data?.erro || 'erro desconhecido'}`);
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setEnviandoRelatorio(false);
+    }
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -327,6 +347,20 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Camera className="h-3.5 w-3.5" /> Status Hoje</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-purple-500">{metrics.statusHoje ?? 0}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><UserPlus className="h-3.5 w-3.5" /> Contatos Salvos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-cyan-500">{metrics.contatosSalvosMes ?? 0}<span className="text-xs text-muted-foreground ml-1">este mês</span></div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> Reputação</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{Math.min(100, Math.round(((metrics.statusHoje ?? 0) * 2 + (metrics.contatosSalvosMes ?? 0) * 0.5 + metrics.taxaSucesso) / 3))}%</div></CardContent></Card>
+      </div>
+
+      {/* Botão de teste do relatório diário */}
+      <div className="flex justify-end">
+        <Button
+          onClick={enviarRelatorioAgora}
+          disabled={enviandoRelatorio}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          {enviandoRelatorio ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+          {enviandoRelatorio ? 'Enviando...' : 'Enviar relatório agora (62991672674)'}
+        </Button>
       </div>
 
       {/* Status Banner */}
