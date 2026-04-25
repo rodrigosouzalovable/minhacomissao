@@ -168,6 +168,24 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   const [conversasHoje, setConversasHoje] = useState<ConversaHoje[]>([]);
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
   const [loading, setLoading] = useState(true);
+  const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
+
+  const enviarRelatorioAgora = async () => {
+    setEnviandoRelatorio(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('daily-report-advanced');
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Relatório enviado via ${data.instancia || 'instância'} ✅`);
+      } else {
+        toast.error(`Falha no envio: ${data?.erro || 'erro desconhecido'}`);
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setEnviandoRelatorio(false);
+    }
+  };
 
   useEffect(() => {
     loadDashboardData();
