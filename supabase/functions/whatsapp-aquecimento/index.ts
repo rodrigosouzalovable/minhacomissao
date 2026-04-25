@@ -239,17 +239,19 @@ Deno.serve(async (req) => {
         if (!detailsA || !detailsB) continue;
 
         // Check if same pair already had conversation today
-        const todayStart = new Date(spTime);
-        todayStart.setHours(0, 0, 0, 0);
-        const { data: conversaHoje } = await supabase
+        // Cooldown 2-4h por par (sorteado): evita repetição muito próxima
+        const cooldownMs = (2 + Math.random() * 2) * 60 * 60 * 1000;
+        const cooldownIso = new Date(Date.now() - cooldownMs).toISOString();
+        const { data: conversaRecente } = await supabase
           .from("whatsapp_conversas_ia")
           .select("id")
           .or(`and(instancia_origem_id.eq.${instA.instancia_id},instancia_destino_id.eq.${instB.instancia_id}),and(instancia_origem_id.eq.${instB.instancia_id},instancia_destino_id.eq.${instA.instancia_id})`)
-          .gte("inicio_em", todayStart.toISOString())
+          .gte("inicio_em", cooldownIso)
           .limit(1)
           .maybeSingle();
 
-        if (conversaHoje) continue;
+        if (conversaRecente) continue;
+
 
         const phoneA = detailsA.nome?.match(/^\d+/)?.[0] || "";
         const phoneB = detailsB.nome?.match(/^\d+/)?.[0] || "";
