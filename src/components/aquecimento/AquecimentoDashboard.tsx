@@ -349,6 +349,20 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> Reputação</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{Math.min(100, Math.round(((metrics.statusHoje ?? 0) * 2 + (metrics.contatosSalvosMes ?? 0) * 0.5 + metrics.taxaSucesso) / 3))}%</div></CardContent></Card>
       </div>
 
+      {/* Botão de teste do relatório diário */}
+      <div className="flex justify-end">
+        <Button
+          onClick={enviarRelatorioAgora}
+          disabled={enviandoRelatorio}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          {enviandoRelatorio ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+          {enviandoRelatorio ? 'Enviando...' : 'Enviar relatório agora (62991672674)'}
+        </Button>
+      </div>
+
       {/* Status Banner */}
       {metrics.emAquecimento > 0 ? (
         <Card className={nextCron.isActive ? 'border-green-500/50 bg-green-500/5' : 'border-yellow-500/50 bg-yellow-500/5'}>
