@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
 });
 
 async function buildReport(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   config: CredorConfig,
   credorInfo: { empresa: string; nome: string; dashboardSlug: string },
   tipo: string,

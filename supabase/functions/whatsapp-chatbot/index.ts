@@ -1274,10 +1274,10 @@ serve(async (req) => {
 
     const finalMediaUrl = inboxPermanentMediaUrl;
 
+    let instanciaId: string | null = null;
     if (inboxTelefone && (inboxTexto || inboxMediaUrl)) {
       try {
         // Find the instance by matching token
-        let instanciaId: string | null = null;
         if (inboxInstanceToken) {
           const { data: instancia } = await supabase
             .from('user_whatsapp_instances')
@@ -1559,8 +1559,8 @@ serve(async (req) => {
 
     // --- INBOX-ONLY MODE: Não responder automaticamente ---
     // Mensagens de clientes (não-admin, não-fromMe) são apenas salvas no Inbox
-    if (!isFromMe && !isAdminNumber(telefone)) {
-      console.log(`[INBOX-ONLY] Mensagem de ${telefone} salva no Inbox. Chatbot desativado - sem resposta automática.`);
+    if (!isFromMe && !isAdminNumber(inboxTelefone)) {
+      console.log(`[INBOX-ONLY] Mensagem de ${inboxTelefone} salva no Inbox. Chatbot desativado - sem resposta automática.`);
       return new Response(JSON.stringify({ success: true, inbox_only: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

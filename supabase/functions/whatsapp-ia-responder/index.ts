@@ -798,7 +798,7 @@ Deno.serve(async (req) => {
     return json({ error: "Ação desconhecida" }, 400);
   } catch (err) {
     console.error("[IA-RESPONDER] Erro:", err);
-    return json({ error: err.message }, 500);
+    return json({ error: (err as Error).message }, 500);
   }
 });
 
