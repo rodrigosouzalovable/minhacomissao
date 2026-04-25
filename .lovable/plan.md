@@ -1,56 +1,93 @@
 
+# Relatório Diário Avançado no WhatsApp (20h BRT)
 
-## Plano: Garantir que o webhook seja criado JÁ ATIVO + filtros corretos
+Vou criar uma nova rotina automática que, todo dia às **20:00 BRT**, monta um relatório completo do sistema de aquecimento e envia para o seu WhatsApp pessoal **(62) 99167-2674**, com fallback automático entre as instâncias conectadas caso alguma falhe.
 
-### Causa raiz (confirmada nos logs)
+> Importante: já existe a função `daily-report-aquecimento` (resumo curto). Esta nova função é **separada** (`daily-report-advanced`), com 7 seções detalhadas, IA e fallback. As duas vão coexistir — a antiga continua funcionando como está.
 
-Para a instância `IPHONE B1 22/04` (e várias outras), o `reinforceWebhook` rodou com sucesso, mas a UAZAPI criou o webhook com `enabled: false`. O verify atual só checa URL + evento, ignora o flag `enabled` — por isso marca como OK e você acha que funcionou. Resultado: você precisou ativar manualmente.
+---
 
-Bonus: o servidor UAZAPI dessa versão **descartou** `excludeMessages: ["wasSentByApi","isGroupYes"]` (salvou `[]`). Os filtros que essa versão entende são `excludeGroupMessages` e `excludeBroadcast` (booleans), conforme já provado pela `setupWebhook` que vinha funcionando antes.
+## O que o relatório vai conter
 
-### Mudanças em `supabase/functions/whatsapp-qr/index.ts` (função `reinforceWebhook`)
+1. **Visão geral** — total de instâncias, em aquecimento, aquecidas (Fase 5), pausadas, taxa de sucesso.
+2. **Conversas IA do dia** — total de conversas, trocas, média e listagem par-a-par (até 20 mostradas, restante resumido).
+3. **Auto-save** — total de envios, média por instância, **TOP 5** que mais enviaram e instâncias com **0 envios** (com motivo: pausada / fase baixa / sem contatos disponíveis).
+4. **Distribuição por fase** + **próximas promoções** nos próximos 3 dias.
+5. **Saúde das instâncias** — pausadas/desconectadas com motivo, recém-conectadas (últimos 3 dias), instâncias com taxa de falha > 10%.
+6. **Sugestões da IA** — análise via Lovable AI Gateway (`google/gemini-2.5-flash`, gratuito durante o período promocional) interpretando os números do dia e dando recomendações práticas.
+7. **Comparativo com o dia anterior** — variação % de conversas IA, auto-save e média de fases.
 
-**1. Forçar `enabled: true` no payload**
-```json
-{
-  "url": "<chatbot>",
-  "events": ["messages"],
-  "enabled": true,
-  "excludeGroupMessages": true,
-  "excludeBroadcast": true
-}
+---
+
+## Resiliência no envio
+
+Vai seguir exatamente sua lógica:
+
+1. Busca todas as instâncias com `status = 'connected'`.
+2. Tenta enviar pela primeira; se falhar, tenta a próxima; assim por diante.
+3. Se todas falharem, grava o relatório em `relatorios_diarios_enviados` com status `PENDENTE` para retentar no próximo ciclo.
+4. Cada execução grava o resultado (sucesso/falha + qual instância foi usada) para histórico.
+
+---
+
+## Detalhes técnicos
+
+### Nova tabela
+`public.relatorios_diarios_enviados` (migration):
+- `id uuid pk`, `data date unique`, `conteudo text`, `status text` (`ENVIADO|FALHOU|PENDENTE`), `instancia_utilizada_id uuid`, `tentativas int default 0`, `erro text`, `enviado_em timestamptz`, `criado_em timestamptz default now()`
+- RLS: somente admins podem `SELECT` (service role insere/atualiza).
+
+### Nova Edge Function
+`supabase/functions/daily-report-advanced/index.ts` (`verify_jwt = false` em `supabase/config.toml`):
+- Janela de 24h em BRT (00:00–23:59 do dia atual).
+- Queries em paralelo: `whatsapp_aquecimento_instancias` + join `user_whatsapp_instances` (nome, status, conectado_em); `whatsapp_aquecimento_interacoes` (24h, agrupa por par origem/destino); `whatsapp_conversas_ia` (24h); `aquecimento_envios_autosave` (hoje + ontem para comparativo).
+- Calcula TOP 5 auto-save, instâncias zeradas com motivo inferido (pausada / fase 1 sem ciclo / sem contatos).
+- Calcula próximas promoções: `7 - dias_na_fase <= 3` e `fase < 5` e `fase_auto = true`.
+- Detecta taxa de falha por instância usando `interacoes` com `status != 'ENVIADO'` vs total.
+- Chama Lovable AI Gateway (`LOVABLE_API_KEY` já existe) com um resumo numérico compacto pedindo 3-5 sugestões em pt-BR.
+- Monta a mensagem final formatada com emojis e separadores `━━━`.
+- Loop de envio com fallback descrito acima usando os mesmos 3 endpoints UAZAPI já usados (`/send/text`, `/message/sendText`, `/sendText`).
+- Grava em `relatorios_diarios_enviados` (upsert por `data`).
+- Retorna JSON com status para invocação manual de teste.
+
+### Cron job
+Via SQL `cron.schedule` (não migration, pois inclui anon key) — todos os dias às **23:00 UTC** (20:00 BRT):
 ```
-Volta para os 2 booleans que essa versão da UAZAPI realmente respeita (mantendo grupos e broadcasts bloqueados na origem — memória `never-load-group-messages` 100% preservada).
+'daily-report-advanced-20h', '0 23 * * *',
+net.http_post(url := '.../functions/v1/daily-report-advanced', headers := jsonb_build_object('Authorization', 'Bearer <ANON>', 'Content-Type', 'application/json'), body := '{}'::jsonb)
+```
 
-**2. Verify mais rigoroso (GET /webhook)**
-Considerar OK somente quando:
-- `url === webhookUrl`
-- `events` contém `messages`
-- **`enabled === true`**
+### Botão de teste manual (opcional, leve)
+Adicionar no `AquecimentoDashboard.tsx` um pequeno botão "Enviar relatório agora" que chama `supabase.functions.invoke('daily-report-advanced')` para você testar sem esperar 20h.
 
-Se o GET retornar `enabled: false`, fazer **1 retry de POST** com o mesmo payload (resolve o caso onde a UAZAPI cria desabilitado por padrão na primeira chamada).
+---
 
-**3. Log claro do motivo da falha**
-Quando o verify falhar, logar exatamente o que veio do GET (`enabled`, `events`, `excludeGroupMessages`) — facilita diagnóstico futuro sem precisar abrir UAZAPI.
+## Custo na Lovable Cloud
 
-**4. Aplicar a mesma correção em `setupWebhookAll`** (botão "Reparar X Webhooks" no Monitor de Envios) — adicionar `enabled: true` no payload para reparos manuais também garantirem ativação.
+- **+1 invocação por dia** da Edge Function (≈30/mês — desprezível).
+- **+1 chamada Lovable AI por dia** com `gemini-2.5-flash` (gratuito até 06/out/2025 e baratíssimo depois — fração de centavo).
+- 1 nova tabela com 1 linha por dia (≈365 linhas/ano — irrelevante).
 
-### Custo Lovable Cloud
-**Zero adicional.** Continua disparando só na criação e na conexão (sem cron). A mudança é apenas no payload e na lógica de verificação.
+**Impacto total: praticamente zero**, bem dentro do plano gratuito.
 
-### Memórias respeitadas
-- ✅ `never-load-group-messages`: filtros `excludeGroupMessages` + `excludeBroadcast` (que comprovadamente funcionam nessa versão UAZAPI) mantidos
-- ✅ `cloud-cost-awareness`: nenhuma execução nova
+---
 
-### Arquivos afetados
-- `supabase/functions/whatsapp-qr/index.ts` — `reinforceWebhook` (payload com `enabled:true`, verify checa `enabled`, retry se vier desabilitado) e `setupWebhookAll` (mesmo payload)
+## Arquivos que vou criar/alterar
 
-### Como você testa depois
-1. Desconecta a instância `IPHONE B1 22/04` e reconecta
-2. Abre a UAZAPI → aba Webhooks dessa instância → o toggle deve já estar **azul/ativo** sem você tocar
-3. Manda uma mensagem de teste do seu celular → chega no Inbox em até 30s
+1. **Migration** (nova): cria `relatorios_diarios_enviados` + RLS.
+2. **Nova Edge Function**: `supabase/functions/daily-report-advanced/index.ts`.
+3. **`supabase/config.toml`**: adicionar `[functions.daily-report-advanced] verify_jwt = false`.
+4. **SQL via insert tool**: cria o cron `daily-report-advanced-20h`.
+5. **`src/components/aquecimento/AquecimentoDashboard.tsx`**: botão "Enviar relatório agora" (teste manual).
 
-### Fora de escopo
-- Não mexer no fluxo de envio
-- Não recriar instâncias existentes (você usa o botão "Reparar Webhooks" do Monitor para corrigir as antigas com `enabled:false`)
+---
 
+## Validação após implementar
+
+1. Disparo manual da função (botão ou tool) → confirmar resposta JSON `{success: true}`.
+2. Verificar chegada da mensagem no **62991672674**.
+3. Conferir se as 7 seções aparecem com dados reais.
+4. Conferir registro em `relatorios_diarios_enviados` (data de hoje, status `ENVIADO`).
+5. Confirmar que o cron foi criado (`SELECT * FROM cron.job WHERE jobname = 'daily-report-advanced-20h'`).
+
+Se aprovar, eu implemento tudo de uma vez.
