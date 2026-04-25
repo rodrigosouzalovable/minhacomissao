@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
-    return json({ error: err.message }, 500);
+    return json({ error: (err as Error).message }, 500);
   }
 });
 
@@ -133,7 +133,7 @@ async function createInstance(userId: string) {
   // Fire-and-forget: já pré-configura o webhook na UAZAPI assim que a instância existe.
   // Quando o usuário escanear o QR e conectar, o webhook já estará ativo.
   reinforceWebhook(inserted.id).catch((e) =>
-    console.log(`[CREATE] Webhook pre-config error (non-blocking): ${e.message}`)
+    console.log(`[CREATE] Webhook pre-config error (non-blocking): ${(e as Error).message}`)
   );
 
   return json({ ok: true, instanceId: inserted.id, instanceUrl, instanceToken: token });
@@ -231,9 +231,9 @@ async function fetchQr(instanceId: string, phone?: string) {
     }
     break;
     } catch (e) {
-      console.log(`[QR] Error attempt ${attempt}: ${e.message}`);
-      const isTimeout = e.name === "AbortError" || e.message?.includes("timeout");
-      debugLogs.push(`attempt ${attempt} ${isTimeout ? "TIMEOUT" : "ERROR"}: ${e.message}`);
+      console.log(`[QR] Error attempt ${attempt}: ${(e as Error).message}`);
+      const isTimeout = (e as Error).name === "AbortError" || (e as Error).message?.includes("timeout");
+      debugLogs.push(`attempt ${attempt} ${isTimeout ? "TIMEOUT" : "ERROR"}: ${(e as Error).message}`);
       if (attempt < maxAttempts && isTimeout) {
         await new Promise((r) => setTimeout(r, 1500 * attempt));
         continue;
@@ -282,7 +282,7 @@ async function fetchQr(instanceId: string, phone?: string) {
         debugLogs.push(`fallback ${fbRes.status}`);
       }
     } catch (e) {
-      debugLogs.push(`fallback ERROR: ${e.message}`);
+      debugLogs.push(`fallback ERROR: ${(e as Error).message}`);
     }
   }
 
@@ -356,9 +356,9 @@ async function checkStatus(instanceId: string) {
 
       if (parsed.connected) {
         // Fire-and-forget: reinforce webhook config whenever instance is connected
-        reinforceWebhook(instanceId).catch((e) => console.log(`[STATUS] Webhook reinforce error (non-blocking): ${e.message}`));
+        reinforceWebhook(instanceId).catch((e) => console.log(`[STATUS] Webhook reinforce error (non-blocking): ${(e as Error).message}`));
         // Fire-and-forget: tentar adicionar ao grupo de aquecimento
-        triggerWarmingGroupAdd(instanceId).catch((e) => console.log(`[STATUS] Warming group add error (non-blocking): ${e.message}`));
+        triggerWarmingGroupAdd(instanceId).catch((e) => console.log(`[STATUS] Warming group add error (non-blocking): ${(e as Error).message}`));
         return json({ ok: true, connected: true, status: parsed.status, phone: parsed.phone });
       }
 
@@ -421,7 +421,7 @@ async function setupWebhook(instanceId: string) {
 
       debugLogs.push(`${res.status}: ${text.substring(0, 150)}`);
     } catch (err) {
-      debugLogs.push(`ERROR: ${err.message}`);
+      debugLogs.push(`ERROR: ${(err as Error).message}`);
     }
   }
 
@@ -457,7 +457,7 @@ async function disconnectInstance(instanceId: string) {
       } catch (_) {}
     }
   } catch (e) {
-    console.log(`[DISCONNECT] Logout error (non-blocking): ${e.message}`);
+    console.log(`[DISCONNECT] Logout error (non-blocking): ${(e as Error).message}`);
   }
 
   // Delete from DB
@@ -640,7 +640,7 @@ async function setupWebhookAll() {
         const text = await res.text();
         lastError = `${res.status}: ${text.substring(0, 100)}`;
       } catch (e) {
-        lastError = e.message;
+        lastError = (e as Error).message;
       }
     }
 
