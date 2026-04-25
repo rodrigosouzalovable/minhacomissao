@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { salvarContatoAgendaCacheado, nomeAmigavelInstancia } from "../_shared/agenda-contatos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
