@@ -1,5 +1,6 @@
 // Aquecimento Externo Auto-Save - sem IA, custo zero por envio
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { salvarContatoAgendaCacheado } from "../_shared/agenda-contatos.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
