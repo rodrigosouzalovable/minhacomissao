@@ -34,14 +34,19 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    // Bloqueio de horário/dia (mesma regra do aquecimento principal)
+    // Horário comercial (07-21h BRT) e pausa de almoço (12-14h BRT)
     const now = new Date();
     const sp = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = sp.getHours();
     const dow = sp.getDay();
-    if (hour < 7 || hour >= 21 || dow === 0) {
-      return json({ message: "Fora do horário ou domingo", skipped: true });
+    if (hour < 7 || hour >= 21) {
+      return json({ message: "Fora do horário", skipped: true });
     }
+    if (hour >= 12 && hour < 14) {
+      return json({ message: "Pausa de almoço", skipped: true });
+    }
+    // Fator fim de semana: domingo 40%, sábado 60%, demais 100%
+    const fatorDia = dow === 0 ? 0.4 : dow === 6 ? 0.6 : 1.0;
 
     // Pool ativa
     const { count: poolAtiva } = await supabase
