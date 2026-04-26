@@ -31,21 +31,25 @@ Deno.serve(async (req) => {
     // Determine which instances to process
     let instancesToProcess: any[] = [];
 
+    const MATURACAO_MS = 5 * 86400000;
     if (instanciaId) {
       const { data: inst } = await supabase
         .from("user_whatsapp_instances")
-        .select("id, nome, ativo")
+        .select("id, nome, ativo, criado_em")
         .eq("id", instanciaId)
         .eq("ativo", true)
         .maybeSingle();
       if (inst) instancesToProcess = [inst];
     } else {
-      // Sweep mode: pegar instâncias ativas que faltam em algum grupo
+      // Sweep mode: pegar instâncias ativas com 5+ dias de idade
       const { data: ativas } = await supabase
         .from("user_whatsapp_instances")
-        .select("id, nome")
+        .select("id, nome, criado_em")
         .eq("ativo", true);
-      instancesToProcess = ativas || [];
+      instancesToProcess = (ativas || []).filter((i: any) => {
+        const idade = Date.now() - new Date(i.criado_em).getTime();
+        return idade >= MATURACAO_MS;
+      });
     }
 
     const results: any[] = [];
