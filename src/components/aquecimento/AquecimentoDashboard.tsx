@@ -164,6 +164,7 @@ function statusIcon(status: string) {
 
 export default function AquecimentoDashboard({ metrics }: Props) {
   const [activeInstances, setActiveInstances] = useState<ActiveInstance[]>([]);
+  const [aguardandoMaturacao, setAguardandoMaturacao] = useState<{ nome: string; dias_restantes: number }[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [conversasHoje, setConversasHoje] = useState<ConversaHoje[]>([]);
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
@@ -225,10 +226,11 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   async function loadDashboardData() {
     setLoading(true);
 
-    const [configRes, instancesRes, allInstancesRes] = await Promise.all([
+    const [configRes, instancesRes, allInstancesRes, maturacaoRes] = await Promise.all([
       supabase.from('whatsapp_aquecimento_config' as any).select('chave, valor'),
       supabase.from('whatsapp_aquecimento_instancias' as any).select('*').eq('status', 'EM_AQUECIMENTO'),
       supabase.from('user_whatsapp_instances').select('id, nome, criado_em'),
+      supabase.from('whatsapp_aquecimento_instancias' as any).select('instancia_id').eq('status', 'AGUARDANDO_MATURACAO'),
     ]);
 
     const configs = (configRes.data as any[]) || [];
@@ -247,6 +249,16 @@ export default function AquecimentoDashboard({ metrics }: Props) {
 
     const instanceNameMap = new Map((allInstancesRes.data || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
     const activeData = (instancesRes.data as any[]) || [];
+
+    // Build maturação list (instances aguardando 5 dias)
+    const maturacaoList = ((maturacaoRes.data as any[]) || []).map((m: any) => {
+      const inst = (allInstancesRes.data || []).find((i: any) => i.id === m.instancia_id) as any;
+      if (!inst) return null;
+      const idadeDias = (Date.now() - new Date(inst.criado_em).getTime()) / 86400000;
+      const dias_restantes = Math.max(0, Math.ceil(5 - idadeDias));
+      return { nome: inst.nome || 'Sem nome', dias_restantes };
+    }).filter(Boolean) as { nome: string; dias_restantes: number }[];
+    setAguardandoMaturacao(maturacaoList);
 
     if (activeData.length === 0) {
       setActiveInstances([]);
@@ -431,6 +443,29 @@ export default function AquecimentoDashboard({ metrics }: Props) {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-muted-foreground/40"></span>
             </span>
             <span className="text-muted-foreground">Nenhum número em aquecimento. Vá na aba <strong>Números</strong> para iniciar.</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Aguardando maturação (5 dias) */}
+      {aguardandoMaturacao.length > 0 && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
+              ⏳ Aguardando maturação ({aguardandoMaturacao.length})
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Números novos só entram na fila de aquecimento após 5 dias da conexão (anti-ban).
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {aguardandoMaturacao.map((m, i) => (
+                <Badge key={i} variant="outline" className="text-[11px] border-yellow-500/50">
+                  {m.nome} — faltam {m.dias_restantes}d
+                </Badge>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
