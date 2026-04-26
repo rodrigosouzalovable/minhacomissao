@@ -164,6 +164,7 @@ function statusIcon(status: string) {
 
 export default function AquecimentoDashboard({ metrics }: Props) {
   const [activeInstances, setActiveInstances] = useState<ActiveInstance[]>([]);
+  const [aguardandoMaturacao, setAguardandoMaturacao] = useState<{ nome: string; dias_restantes: number }[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [conversasHoje, setConversasHoje] = useState<ConversaHoje[]>([]);
   const [nextCron, setNextCron] = useState<{ time: string; isActive: boolean; isToday: boolean; nextDate: Date | null }>({ time: '', isActive: false, isToday: false, nextDate: null });
