@@ -447,6 +447,29 @@ export default function AquecimentoDashboard({ metrics }: Props) {
         </Card>
       )}
 
+      {/* Aguardando maturação (5 dias) */}
+      {aguardandoMaturacao.length > 0 && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
+              ⏳ Aguardando maturação ({aguardandoMaturacao.length})
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Números novos só entram na fila de aquecimento após 5 dias da conexão (anti-ban).
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {aguardandoMaturacao.map((m, i) => (
+                <Badge key={i} variant="outline" className="text-[11px] border-yellow-500/50">
+                  {m.nome} — faltam {m.dias_restantes}d
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Active Instance Cards */}
       {activeInstances.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
