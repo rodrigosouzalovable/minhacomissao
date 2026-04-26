@@ -226,10 +226,11 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   async function loadDashboardData() {
     setLoading(true);
 
-    const [configRes, instancesRes, allInstancesRes] = await Promise.all([
+    const [configRes, instancesRes, allInstancesRes, maturacaoRes] = await Promise.all([
       supabase.from('whatsapp_aquecimento_config' as any).select('chave, valor'),
       supabase.from('whatsapp_aquecimento_instancias' as any).select('*').eq('status', 'EM_AQUECIMENTO'),
       supabase.from('user_whatsapp_instances').select('id, nome, criado_em'),
+      supabase.from('whatsapp_aquecimento_instancias' as any).select('instancia_id').eq('status', 'AGUARDANDO_MATURACAO'),
     ]);
 
     const configs = (configRes.data as any[]) || [];
@@ -248,6 +249,16 @@ export default function AquecimentoDashboard({ metrics }: Props) {
 
     const instanceNameMap = new Map((allInstancesRes.data || []).map((i: any) => [i.id, i.nome || 'Sem nome']));
     const activeData = (instancesRes.data as any[]) || [];
+
+    // Build maturação list (instances aguardando 5 dias)
+    const maturacaoList = ((maturacaoRes.data as any[]) || []).map((m: any) => {
+      const inst = (allInstancesRes.data || []).find((i: any) => i.id === m.instancia_id) as any;
+      if (!inst) return null;
+      const idadeDias = (Date.now() - new Date(inst.criado_em).getTime()) / 86400000;
+      const dias_restantes = Math.max(0, Math.ceil(5 - idadeDias));
+      return { nome: inst.nome || 'Sem nome', dias_restantes };
+    }).filter(Boolean) as { nome: string; dias_restantes: number }[];
+    setAguardandoMaturacao(maturacaoList);
 
     if (activeData.length === 0) {
       setActiveInstances([]);
