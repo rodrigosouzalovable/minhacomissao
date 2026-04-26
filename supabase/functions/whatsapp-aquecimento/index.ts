@@ -60,7 +60,11 @@ Deno.serve(async (req) => {
 
     const existingIds = new Set((existingAquec || []).map((e: any) => e.instancia_id));
 
+    const MATURACAO_DIAS = 5;
     for (const inst of (allActiveInstances || []).filter((i: any) => !existingIds.has(i.id))) {
+      const idadeDias = (Date.now() - new Date(inst.criado_em).getTime()) / 86400000;
+      const statusInicial = idadeDias < MATURACAO_DIAS ? "AGUARDANDO_MATURACAO" : "EM_AQUECIMENTO";
+
       const { data: removed } = await supabase
         .from("whatsapp_aquecimento_instancias")
         .select("id")
@@ -70,17 +74,37 @@ Deno.serve(async (req) => {
 
       if (removed) {
         await supabase.from("whatsapp_aquecimento_instancias").update({
-          status: "EM_AQUECIMENTO", fase: 1, limite_diario: 15,
+          status: statusInicial, fase: 1, limite_diario: 15,
         }).eq("id", removed.id);
       } else {
         await supabase.from("whatsapp_aquecimento_instancias").insert({
-          instancia_id: inst.id, status: "EM_AQUECIMENTO", fase: 1,
+          instancia_id: inst.id, status: statusInicial, fase: 1,
           fase_auto: true, limite_diario: 15, dias_na_fase: 0,
           interacoes_hoje: 0, interacoes_total: 0, respostas_recebidas: 0,
         });
       }
-      console.log(`[AQUECIMENTO] Auto-enrolled: ${inst.nome}`);
+      console.log(`[AQUECIMENTO] Auto-enrolled: ${inst.nome} (${statusInicial}, idade ${idadeDias.toFixed(1)}d)`);
     }
+
+    // ========== PROMOÇÃO: AGUARDANDO_MATURACAO → EM_AQUECIMENTO (após 5 dias) ==========
+    const { data: aguardando } = await supabase
+      .from("whatsapp_aquecimento_instancias")
+      .select("id, instancia_id")
+      .eq("status", "AGUARDANDO_MATURACAO");
+
+    let promovidos = 0;
+    for (const aw of (aguardando || [])) {
+      const inst = (allActiveInstances || []).find((i: any) => i.id === aw.instancia_id);
+      if (!inst) continue;
+      const idadeDias = (Date.now() - new Date(inst.criado_em).getTime()) / 86400000;
+      if (idadeDias >= MATURACAO_DIAS) {
+        await supabase.from("whatsapp_aquecimento_instancias")
+          .update({ status: "EM_AQUECIMENTO" }).eq("id", aw.id);
+        promovidos++;
+        console.log(`[AQUECIMENTO] 🎓 Promovido após maturação: ${inst.nome} (${idadeDias.toFixed(1)}d)`);
+      }
+    }
+    if (promovidos > 0) console.log(`[AQUECIMENTO] ${promovidos} instâncias promovidas para EM_AQUECIMENTO`);
 
     // ========== SYNC: PAUSE DEACTIVATED INSTANCES ==========
     const { data: allInstances } = await supabase
