@@ -609,6 +609,25 @@ export default function WhatsAppInbox() {
     setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
   };
 
+  const handleArquivarToggle = async (contatoId: string, arquivado: boolean) => {
+    const { error } = await supabase
+      .from('whatsapp_contatos')
+      .update({ arquivado } as any)
+      .eq('id', contatoId);
+    if (error) {
+      toast({ title: 'Erro ao arquivar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    // Remove da lista atual (sai do escopo da aba aberta) e atualiza contadores
+    setContatos(prev => prev.filter(c => c.id !== contatoId));
+    setArquivadosCount(prev => arquivado ? prev + 1 : Math.max(0, prev - 1));
+    if (contatoAtivo?.id === contatoId) {
+      setContatoAtivo(null);
+      setMensagens([]);
+    }
+    toast({ title: arquivado ? 'Conversa arquivada' : 'Conversa desarquivada' });
+  };
+
   const handleExcluirConversa = async (contatoId: string) => {
     const contato = contatos.find(c => c.id === contatoId);
     if (!contato) return;
