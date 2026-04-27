@@ -24,7 +24,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock, Download } from 'lucide-react';
+import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
@@ -418,7 +419,28 @@ export default function Acionamento() {
     }
   };
 
+  const exportClientes = (lista: ClienteData[], prefixo: string) => {
+    if (lista.length === 0) {
+      toast.info('Nenhum contato para exportar');
+      return;
+    }
+    const hoje = new Date().toISOString().slice(0, 10);
+    exportarParaExcel<ClienteData>(
+      lista,
+      [
+        { chave: 'cpf', titulo: 'CPF' },
+        { chave: 'nome', titulo: 'Nome' },
+        { chave: 'telefone', titulo: 'Telefone' },
+        { chave: 'atraso', titulo: 'Atraso' },
+        { chave: 'saldo', titulo: 'Saldo' },
+      ],
+      `${prefixo}-${hoje}`
+    );
+    toast.success(`Planilha "${prefixo}" baixada com ${lista.length} contato(s)`);
+  };
 
+  const handleDownloadComWhatsApp = () => exportClientes(clientes, 'contatos-com-whatsapp');
+  const handleDownloadSemWhatsApp = () => exportClientes(numerosInvalidos, 'contatos-sem-whatsapp');
 
   const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
     const activeOnes = instancesToCheck.filter(i => i.ativo);
@@ -1891,14 +1913,34 @@ export default function Acionamento() {
                 <AlertTitle>{numerosInvalidos.length} número(s) sem WhatsApp removidos</AlertTitle>
                 <AlertDescription className="space-y-2">
                   <p className="text-sm">Apenas {clientes.length} contatos válidos permanecem na lista.</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
-                    className="text-xs"
-                  >
-                    {mostrarInvalidos ? 'Ocultar removidos' : 'Ver números removidos'}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleDownloadComWhatsApp}
+                      className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Baixar com WhatsApp ({clientes.length})
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleDownloadSemWhatsApp}
+                      className="gap-1 bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Baixar sem WhatsApp ({numerosInvalidos.length})
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
+                      className="text-xs"
+                    >
+                      {mostrarInvalidos ? 'Ocultar removidos' : 'Ver números removidos'}
+                    </Button>
+                  </div>
                   {mostrarInvalidos && (
                     <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
                       {numerosInvalidos.map((c, i) => (
@@ -1915,6 +1957,17 @@ export default function Acionamento() {
               <Alert>
                 <Check className="h-4 w-4" />
                 <AlertTitle>Todos os números possuem WhatsApp ✓</AlertTitle>
+                <AlertDescription>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleDownloadComWhatsApp}
+                    className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white mt-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Baixar planilha ({clientes.length})
+                  </Button>
+                </AlertDescription>
               </Alert>
             )}
 
