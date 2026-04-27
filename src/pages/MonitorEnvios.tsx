@@ -42,6 +42,7 @@ import {
   Wrench,
   CheckCircle2,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -185,6 +186,17 @@ export default function MonitorEnvios() {
             >
               <Stethoscope className="h-4 w-4 mr-1" />
               {diagLoading ? 'Diagnosticando...' : 'Diagnosticar Webhooks'}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleRepairAll}
+              disabled={repairLoading}
+              title="Reativa o webhook de TODAS as instâncias ativas em um clique (UAZAPI)"
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              <Zap className="h-4 w-4 mr-1" />
+              {repairLoading ? 'Reativando...' : 'Reativar Todos Webhooks'}
             </Button>
             <Button
               variant="destructive"
