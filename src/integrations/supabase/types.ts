@@ -2526,6 +2526,54 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_conversas_auditoria: {
+        Row: {
+          created_at: string
+          etapa: string
+          http_status: number | null
+          id: string
+          instancia_destino_id: string | null
+          instancia_origem_id: string | null
+          mensagem_original: string | null
+          motivo: string | null
+          numero_destino: string | null
+          numero_origem: string | null
+          resposta_gerada: string | null
+          status: string
+          tempo_resposta_ms: number | null
+        }
+        Insert: {
+          created_at?: string
+          etapa: string
+          http_status?: number | null
+          id?: string
+          instancia_destino_id?: string | null
+          instancia_origem_id?: string | null
+          mensagem_original?: string | null
+          motivo?: string | null
+          numero_destino?: string | null
+          numero_origem?: string | null
+          resposta_gerada?: string | null
+          status: string
+          tempo_resposta_ms?: number | null
+        }
+        Update: {
+          created_at?: string
+          etapa?: string
+          http_status?: number | null
+          id?: string
+          instancia_destino_id?: string | null
+          instancia_origem_id?: string | null
+          mensagem_original?: string | null
+          motivo?: string | null
+          numero_destino?: string | null
+          numero_origem?: string | null
+          resposta_gerada?: string | null
+          status?: string
+          tempo_resposta_ms?: number | null
+        }
+        Relationships: []
+      }
       whatsapp_conversas_ia: {
         Row: {
           historico: Json
