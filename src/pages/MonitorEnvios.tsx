@@ -42,6 +42,7 @@ import {
   Wrench,
   CheckCircle2,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -123,21 +124,23 @@ export default function MonitorEnvios() {
   };
 
   const handleRepairAll = async () => {
-    if (!confirm('Reconfigurar o webhook de TODAS as instâncias?\n\nIsso restaura o recebimento de respostas de clientes mantendo grupos e broadcasts BLOQUEADOS.')) return;
+    if (!confirm('Reativar o webhook de TODAS as instâncias ativas?\n\nIsso restaura o recebimento de respostas no Inbox mantendo grupos e broadcasts BLOQUEADOS.')) return;
     setRepairLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
         body: { action: 'setup-webhook-all', userId: 'system' },
       });
       if (error) throw error;
+      const failed = data?.failed ?? 0;
       toast({
-        title: '🔧 Webhooks reparados',
-        description: `${data.success}/${data.total} instâncias reconfiguradas. Falhas: ${data.failed}. Aguarde 1-5 min e teste enviando uma mensagem.`,
+        title: failed === 0 ? '✅ Webhooks reativados' : '⚠️ Reativação parcial',
+        description: `${data.success}/${data.total} instâncias reativadas. Falhas: ${failed}. Aguarde 1-5 min e teste enviando uma mensagem.`,
+        variant: failed === 0 ? 'default' : 'destructive',
       });
-      // Re-run diagnosis to reflect new state
-      await handleDiagnose();
+      // Se o diálogo de diagnóstico estiver aberto, atualiza o estado
+      if (diagOpen) await handleDiagnose();
     } catch (e: any) {
-      toast({ title: 'Erro ao reparar', description: e.message || 'Falha', variant: 'destructive' });
+      toast({ title: 'Erro ao reativar', description: e.message || 'Falha', variant: 'destructive' });
     } finally {
       setRepairLoading(false);
     }
@@ -185,6 +188,17 @@ export default function MonitorEnvios() {
             >
               <Stethoscope className="h-4 w-4 mr-1" />
               {diagLoading ? 'Diagnosticando...' : 'Diagnosticar Webhooks'}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleRepairAll}
+              disabled={repairLoading}
+              title="Reativa o webhook de TODAS as instâncias ativas em um clique (UAZAPI)"
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              <Zap className="h-4 w-4 mr-1" />
+              {repairLoading ? 'Reativando...' : 'Reativar Todos Webhooks'}
             </Button>
             <Button
               variant="destructive"

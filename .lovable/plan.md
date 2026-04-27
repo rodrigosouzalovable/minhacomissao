@@ -1,76 +1,45 @@
-## Otimização do banco — pós upgrade SMALL
+## Botão "Reativar Todos os Webhooks"
 
-Limpar bloat, recuperar ~600MB de armazenamento e reduzir consumo de CPU/Egress sem tocar em **acordos** ou **pagamentos**.
+### Resposta direta
 
-### Garantia sobre acordos
+**Sim, é totalmente possível** — e a melhor notícia: **o backend já está 100% pronto** no projeto. Existe uma função na edge `whatsapp-qr` chamada `setupWebhookAll()` que:
 
-**Nenhuma das 4 etapas abaixo apaga, modifica ou desativa acordos, parcelas (`pagamentos`) ou clientes.** As tabelas tocadas são exclusivamente:
-- `chatbot_conversas` — conversas do robô do WhatsApp (não são acordos)
-- `whatsapp_lembretes_log` — log histórico de envios de lembrete (não são acordos)
-- `devedores` — apenas VACUUM (recupera espaço em disco, não apaga linhas)
-- `user_whatsapp_instances` — apenas VACUUM
+1. Busca todas as suas instâncias ativas no banco
+2. Para cada uma, faz `POST` no endpoint `/webhook` da UAZAPI (exatamente o que o suporte indicou)
+3. Envia o payload com `enabled: true`, evento `messages`, excluindo grupos e broadcast
+4. Tenta 3 rotas diferentes (`/webhook/{token}`, `/webhook` com token no header, `/globalwebhook`) para máxima compatibilidade
+5. Retorna um relatório `{ total, success, failed, details[] }` com o resultado de cada instância
 
-A função `cleanup-acordos` (que apaga acordos automaticamente após 30 dias sem pagamento) **fica como está**, conforme sua escolha.
+**Falta apenas o botão na interface.** Hoje essa função está "órfã" — ninguém a chama do frontend.
 
-### Etapa 1 — Limpeza de dados antigos (insert tool)
+### O que vou fazer
 
-```sql
--- Conversas do chatbot inativas há mais de 30 dias
-DELETE FROM chatbot_conversas
-WHERE ultimo_webhook_em < now() - interval '30 days'
-  AND COALESCE(array_length(mensagens_pendentes, 1), 0) = 0;
+Adicionar um botão **"Reativar Todos os Webhooks"** no painel **Monitor de Envios** (`/monitor-envios`), que é onde já ficam os controles operacionais de WhatsApp.
 
--- Logs de lembretes com mais de 60 dias
-DELETE FROM whatsapp_lembretes_log
-WHERE created_at < now() - interval '60 days';
-```
+**Comportamento:**
+1. Botão com ícone de raio (Zap) ao lado dos outros controles do painel
+2. Ao clicar → abre `AlertDialog` de confirmação ("Isso vai reativar os webhooks de todas as suas instâncias ativas. Continuar?")
+3. Confirmando → chama `supabase.functions.invoke('whatsapp-qr', { body: { action: 'setup-webhook-all' } })`
+4. Mostra loading com contador
+5. Ao terminar → toast com resumo: "✅ X de Y webhooks reativados" + lista expansível com detalhes por instância (sucesso/falha + erro)
+6. Se houver falhas → toast amarelo com botão "Tentar novamente"
 
-### Etapa 2 — VACUUM FULL (recuperar espaço)
+### Arquivos a modificar
 
-```sql
-VACUUM FULL public.chatbot_conversas;
-VACUUM FULL public.devedores;
-VACUUM FULL public.user_whatsapp_instances;
-```
+- `src/pages/MonitorEnvios.tsx` — adicionar botão + dialog + handler
 
-VACUUM **não apaga linhas vivas** — só recupera espaço de tuplas mortas (lixo deixado por updates/deletes anteriores). Acordos e parcelas não são afetados.
+### O que NÃO será feito
 
-### Etapa 3 — Reduzir frequência do cron
+- Nenhuma mudança no backend (já está pronto e testado)
+- Nenhum cron job automático (você ativa manualmente quando precisar — economiza Lovable Cloud)
+- Nenhuma migração de banco
 
-Alterar `process-acionamento-agendado-v2` de **cada 5 min → cada 10 min**. Reduz invocações de Edge Function pela metade.
+### Custo
 
-```sql
-SELECT cron.unschedule('process-acionamento-agendado-v2-5min');
-SELECT cron.schedule(
-  'process-acionamento-agendado-v2-10min',
-  '*/10 * * * *',
-  $$ SELECT net.http_post(...); $$
-);
-```
+**Zero impacto adicional** em Lovable Cloud. A edge function já existe e só roda quando você clicar no botão.
 
-### Etapa 4 — Auto-manutenção semanal
+### Próximo passo (opcional, para depois)
 
-Cron novo todo domingo às 04:00 BRT que repete a Etapa 1 automaticamente (só apaga conversas/logs antigos, **nunca acordos**).
+Se a UAZAPI continuar desabilitando webhooks "do nada", podemos criar um **cron de saúde** que verifica a cada 30 min se algum webhook caiu e reativa só os afetados. Mas isso aumenta consumo de Cloud — só faria sentido se o problema for recorrente. Por enquanto, botão manual é o mais econômico.
 
-```sql
-SELECT cron.schedule(
-  'weekly-cleanup-logs',
-  '0 7 * * 0', -- 04:00 BRT = 07:00 UTC, domingo
-  $$
-    DELETE FROM chatbot_conversas
-    WHERE ultimo_webhook_em < now() - interval '30 days'
-      AND COALESCE(array_length(mensagens_pendentes, 1), 0) = 0;
-    DELETE FROM whatsapp_lembretes_log
-    WHERE created_at < now() - interval '60 days';
-  $$
-);
-```
-
-### Resultado esperado
-
-- Storage: ~750MB → ~150MB
-- Invocações Edge Function: −50% no acionamento
-- Custo mensal: deve continuar dentro dos $25 grátis
-- **Acordos: 100% intocados**
-
-Aprovar para eu rodar as 4 etapas em sequência.
+Aprovar para eu adicionar o botão.
