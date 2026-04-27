@@ -37,7 +37,7 @@ import {
   BellRing,
   Pause,
   Play,
-  ShieldAlert,
+  
   Stethoscope,
   Wrench,
   CheckCircle2,
