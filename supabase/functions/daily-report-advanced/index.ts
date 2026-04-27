@@ -61,6 +61,11 @@ async function sendViaUazapi(serverUrl: string, token: string, telefone: string,
 async function gerarSugestoesIA(resumo: Record<string, any>): Promise<string> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) return "✅ Sistema operando normalmente.";
+  if (!(await isAiEnabled())) {
+    await logAiUsage({ function_name: "daily-report-advanced", status: "blocked_killswitch" });
+    return "💡 IA desativada — sugestões pausadas para economia.";
+  }
+  await logAiUsage({ function_name: "daily-report-advanced", model: "google/gemini-2.5-flash-lite", status: "ok" });
   try {
     const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
