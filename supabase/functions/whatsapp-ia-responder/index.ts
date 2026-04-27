@@ -41,6 +41,31 @@ function getSupabaseAdmin() {
   );
 }
 
+// ========== AUDITORIA: nunca quebra o fluxo ==========
+async function auditar(row: {
+  instancia_origem_id?: string | null;
+  instancia_destino_id?: string | null;
+  numero_origem?: string | null;
+  numero_destino?: string | null;
+  etapa: 'webhook_in' | 'ollama_call' | 'uazapi_send' | 'cascade_skip';
+  status: 'ok' | 'falhou' | 'timeout' | 'ignorado';
+  mensagem_original?: string | null;
+  resposta_gerada?: string | null;
+  motivo?: string | null;
+  http_status?: number | null;
+  tempo_resposta_ms?: number | null;
+}) {
+  try {
+    const sb = getSupabaseAdmin();
+    await sb.from('whatsapp_conversas_auditoria').insert({
+      ...row,
+      mensagem_original: row.mensagem_original?.substring(0, 500) ?? null,
+      resposta_gerada: row.resposta_gerada?.substring(0, 500) ?? null,
+      motivo: row.motivo?.substring(0, 300) ?? null,
+    });
+  } catch (_e) { /* silencioso */ }
+}
+
 function randomDelay(minMs: number, maxMs: number): number {
   return Math.floor(Math.random() * (maxMs - minMs)) + minMs;
 }
