@@ -1913,14 +1913,34 @@ export default function Acionamento() {
                 <AlertTitle>{numerosInvalidos.length} número(s) sem WhatsApp removidos</AlertTitle>
                 <AlertDescription className="space-y-2">
                   <p className="text-sm">Apenas {clientes.length} contatos válidos permanecem na lista.</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
-                    className="text-xs"
-                  >
-                    {mostrarInvalidos ? 'Ocultar removidos' : 'Ver números removidos'}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleDownloadComWhatsApp}
+                      className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Baixar com WhatsApp ({clientes.length})
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleDownloadSemWhatsApp}
+                      className="gap-1 bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Baixar sem WhatsApp ({numerosInvalidos.length})
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
+                      className="text-xs"
+                    >
+                      {mostrarInvalidos ? 'Ocultar removidos' : 'Ver números removidos'}
+                    </Button>
+                  </div>
                   {mostrarInvalidos && (
                     <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
                       {numerosInvalidos.map((c, i) => (
@@ -1937,6 +1957,17 @@ export default function Acionamento() {
               <Alert>
                 <Check className="h-4 w-4" />
                 <AlertTitle>Todos os números possuem WhatsApp ✓</AlertTitle>
+                <AlertDescription>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleDownloadComWhatsApp}
+                    className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white mt-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Baixar planilha ({clientes.length})
+                  </Button>
+                </AlertDescription>
               </Alert>
             )}
 
