@@ -1767,7 +1767,12 @@ serve(async (req) => {
       });
     }
 
-    const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+    let telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+    // Normalização BR: UAZAPI/WhatsApp às vezes devolve celular sem o "9".
+    // Padronizamos sempre para 13 dígitos para não criar conversa duplicada no Inbox.
+    if (telefone.length === 12 && telefone.startsWith('55')) {
+      telefone = telefone.slice(0, 4) + '9' + telefone.slice(4);
+    }
     let texto = extractTextFromPayload(payload);
 
     // Se não tem texto, verificar se é áudio e transcrever
