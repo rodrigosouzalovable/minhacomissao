@@ -193,6 +193,7 @@ export default function WhatsAppInbox() {
 
     if (instanciaIds.length === 0) {
       setContatos([]);
+      setArquivadosCount(0);
       return;
     }
 
@@ -207,6 +208,7 @@ export default function WhatsAppInbox() {
         ultima_mensagem_em,
         nao_lido,
         fixado,
+        arquivado,
         user_whatsapp_instances(nome)
       `)
       .order('ultima_mensagem_em', { ascending: false });
@@ -217,6 +219,9 @@ export default function WhatsAppInbox() {
       query = query.in('instancia_id', instanciaIds);
     }
 
+    // Filtra por aba (Conversas mostra não arquivados; Arquivados mostra arquivados)
+    query = query.eq('arquivado', abaAtiva === 'arquivados');
+
     const { data } = await query;
     if (data) {
       const contatosComNomeInstancia = (data as any[]).map((contato) => ({
@@ -225,7 +230,20 @@ export default function WhatsAppInbox() {
       }));
       setContatos(contatosComNomeInstancia as Contato[]);
     }
-  }, [filtroInstancia, instancias]);
+
+    // Conta total de arquivados (escopo das instâncias visíveis) para o badge da aba
+    let countQuery = supabase
+      .from('whatsapp_contatos')
+      .select('id', { count: 'exact', head: true })
+      .eq('arquivado', true);
+    if (filtroInstancia !== 'todas' && instanciaIds.includes(filtroInstancia)) {
+      countQuery = countQuery.eq('instancia_id', filtroInstancia);
+    } else {
+      countQuery = countQuery.in('instancia_id', instanciaIds);
+    }
+    const { count } = await countQuery;
+    setArquivadosCount(count ?? 0);
+  }, [filtroInstancia, instancias, abaAtiva]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
