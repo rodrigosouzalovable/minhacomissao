@@ -26,11 +26,13 @@ interface Props {
   etiquetas: Etiqueta[];
   contatoEtiquetaIds: string[];
   fixado: boolean;
+  arquivado?: boolean;
   onMarcarNaoLida: () => void;
   onExcluirConversa: (contatoId: string) => void;
   onEtiquetaToggle: (contatoId: string, etiquetaId: string, ativo: boolean) => void;
   onEtiquetasChange: () => void;
   onFixarToggle: (contatoId: string, fixado: boolean) => void;
+  onArquivarToggle?: (contatoId: string, arquivado: boolean) => void;
 }
 
 export function ConversaContextMenu({
