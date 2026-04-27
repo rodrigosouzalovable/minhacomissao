@@ -16,7 +16,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_TIMEOUT_MS = 10000;
 
-function withTimeout<T>(promise: Promise<T>, ms = AUTH_TIMEOUT_MS): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, ms = AUTH_TIMEOUT_MS): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check if user is active
     const userId = data.user?.id;
     if (userId) {
-      const { data: profile } = await withTimeout(
+      const profileResult = await withTimeout(
         supabase
           .from('profiles')
           .select('*')
@@ -97,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single(),
         AUTH_TIMEOUT_MS
       );
+      const profile = profileResult.data;
 
       if (profile && (profile as any).ativo === false) {
         await supabase.auth.signOut({ scope: 'local' });
