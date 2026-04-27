@@ -301,28 +301,39 @@ async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, num
   return false;
 }
 
-async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, texto: string): Promise<boolean> {
+async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, texto: string, auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string }): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+  let lastStatus: number | null = null;
+  let lastBody: string = '';
 
   for (const url of endpoints) {
+    const t0 = Date.now();
     try {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", token: instanceToken },
         body: JSON.stringify({ number: numero, text: texto }),
       });
+      const ms = Date.now() - t0;
+      lastStatus = res.status;
+      const body = await res.text();
+      lastBody = body.substring(0, 200);
       if (res.ok) {
-        await res.text();
-        console.log(`[IA] ✅ Enviada para ${numero}: "${texto}"`);
+        console.log(`[IA] ✅ Enviada via ${url} ms=${ms} status=${res.status} → ${numero}: "${texto}"`);
+        auditar({ etapa: 'uazapi_send', status: 'ok', http_status: res.status, tempo_resposta_ms: ms, numero_destino: numero, resposta_gerada: texto, motivo: url, ...(auditCtx || {}) });
         return true;
       }
-      await res.text();
+      console.warn(`[IA] Endpoint ${url} status=${res.status} ms=${ms} body=${lastBody}`);
     } catch (e) {
-      console.warn(`[IA] Endpoint ${url} falhou:`, e);
+      const ms = Date.now() - t0;
+      lastBody = String(e).substring(0, 200);
+      console.warn(`[IA] Endpoint ${url} ms=${ms} falhou:`, e);
+      auditar({ etapa: 'uazapi_send', status: 'falhou', tempo_resposta_ms: ms, numero_destino: numero, motivo: `${url}: ${lastBody}`, ...(auditCtx || {}) });
     }
   }
-  console.error(`[IA] ❌ Falha ao enviar para ${numero}`);
+  console.error(`[IA] ❌ Falha ao enviar para ${numero} (último status=${lastStatus})`);
+  auditar({ etapa: 'uazapi_send', status: 'falhou', http_status: lastStatus, numero_destino: numero, resposta_gerada: texto, motivo: `all endpoints failed: ${lastBody}`, ...(auditCtx || {}) });
   return false;
 }
 
