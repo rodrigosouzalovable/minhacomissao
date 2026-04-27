@@ -423,6 +423,17 @@ export default function AquecimentoDashboard({ metrics }: Props) {
           {enviandoRelatorio ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
           {enviandoRelatorio ? 'Enviando...' : 'Enviar relatório agora (62991672674)'}
         </Button>
+        <Button
+          onClick={sincronizarTelefonesInstancias}
+          disabled={sincronizandoTelefones}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          title="Busca os telefones das instâncias na UAZAPI e arquiva no Inbox conversas entre números da própria casa"
+        >
+          {sincronizandoTelefones ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+          {sincronizandoTelefones ? 'Sincronizando...' : 'Sincronizar telefones (arquivar internos)'}
+        </Button>
       </div>
 
       {/* Status Banner */}
