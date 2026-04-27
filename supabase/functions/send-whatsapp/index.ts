@@ -18,12 +18,22 @@ async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone:
   let lastError = null;
   for (const url of endpoints) {
     console.log(`Tentando endpoint: ${url}`);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'token': instanceToken },
-      body: JSON.stringify({ number: telefone, text: mensagem }),
-    });
-    const data = await response.json();
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': instanceToken },
+        body: JSON.stringify({ number: telefone, text: mensagem }),
+        // Hard cap so a hung UAZAPI server can't lock our worker for 150s.
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`Endpoint ${url} timed out / network error:`, msg);
+      lastError = { message: `timeout/network: ${msg}` };
+      continue;
+    }
+    const data = await response.json().catch(() => ({}));
     console.log(`Resposta de ${url}:`, JSON.stringify(data));
     if (response.ok) return data;
     
