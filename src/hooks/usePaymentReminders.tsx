@@ -80,7 +80,7 @@ export function usePaymentReminders() {
       return data.map((l) => l.pagamento_id);
     },
     enabled: !!user,
-    refetchInterval: 5 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
+    refetchInterval: 10 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
   });
 
   // Buscar pagamentos pendentes (hoje + 3 dias + vencidos) em UMA única query.
@@ -196,7 +196,7 @@ export function usePaymentReminders() {
       })) as PaymentReminder[];
     },
     enabled: !!user,
-    refetchInterval: 5 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
+    refetchInterval: 10 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
   });
 
   const isLoading = isLoadingPagamentos || isLoadingRetornos || isLoadingVencidas;
