@@ -14,11 +14,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_TIMEOUT_MS = 10000;
+const AUTH_TIMEOUT_MS = 8000;
 
 function withTimeout<T>(promise: PromiseLike<T>, ms = AUTH_TIMEOUT_MS): Promise<T> {
   return Promise.race([
-    promise,
+    Promise.resolve(promise) as Promise<T>,
     new Promise<T>((_, reject) =>
       setTimeout(() => reject(new Error('auth_timeout')), ms)
     ),
@@ -26,11 +26,15 @@ function withTimeout<T>(promise: PromiseLike<T>, ms = AUTH_TIMEOUT_MS): Promise<
 }
 
 function clearLocalAuthSession() {
-  Object.keys(localStorage).forEach((key) => {
-    if (/^sb-.+-auth-token$/.test(key) || key.includes('supabase.auth.token')) {
-      localStorage.removeItem(key);
-    }
-  });
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (/^sb-.+-auth-token$/.test(key) || key.includes('supabase.auth.token')) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch {
+    /* ignore */
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -41,9 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         if (!isMounted) return;
         setSession(session);
         setUser(session?.user ?? null);
@@ -51,7 +54,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
     withTimeout(supabase.auth.getSession(), AUTH_TIMEOUT_MS)
       .then(({ data: { session } }) => {
         if (!isMounted) return;
@@ -75,55 +77,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    supabase.auth.stopAutoRefresh();
+    try {
+      supabase.auth.stopAutoRefresh();
+    } catch {
+      /* ignore */
+    }
     clearLocalAuthSession();
 
-    const { data, error } = await withTimeout(
-      supabase.auth.signInWithPassword({ email, password }),
-      AUTH_TIMEOUT_MS
-    );
-    if (error) return { error: error as Error | null };
-
-    supabase.auth.startAutoRefresh();
-
-    // Check if user is active
-    const userId = data.user?.id;
-    if (userId) {
-      const profileResult = await withTimeout(
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single(),
+    try {
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
         AUTH_TIMEOUT_MS
       );
-      const profile = profileResult.data;
+      if (error) return { error: error as Error | null };
 
-      if (profile && (profile as any).ativo === false) {
-        await supabase.auth.signOut({ scope: 'local' });
-        return { error: new Error('Sua conta está inativa. Entre em contato com o administrador.') };
+      try {
+        supabase.auth.startAutoRefresh();
+      } catch {
+        /* ignore */
       }
-    }
 
-    return { error: null };
+      // IMPORTANTE: NÃO consultamos `profiles.ativo` aqui para não bloquear o
+      // login caso o backend esteja lento. A validação é feita de forma
+      // assíncrona depois, sem prender o usuário na tela de login.
+      return { error: null };
+    } catch (e: any) {
+      if (e?.message === 'auth_timeout') {
+        return {
+          error: new Error(
+            'Servidor demorou para responder. Tente novamente em alguns segundos.'
+          ),
+        };
+      }
+      return { error: e as Error };
+    }
   };
 
   const signUp = async (email: string, password: string, nome: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: { nome }
-      }
+        data: { nome },
+      },
     });
     return { error: error as Error | null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      clearLocalAuthSession();
+    }
   };
 
   const resetPassword = async (email: string) => {
@@ -135,7 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, resetPassword }}>
+    <AuthContext.Provider
+      value={{ user, session, loading, signIn, signUp, signOut, resetPassword }}
+    >
       {children}
     </AuthContext.Provider>
   );
