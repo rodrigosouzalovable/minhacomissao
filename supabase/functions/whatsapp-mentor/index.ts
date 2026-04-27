@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { isAiEnabled, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +45,14 @@ serve(async (req) => {
       });
     }
 
+    if (!(await isAiEnabled())) {
+      await logAiUsage({ function_name: "whatsapp-mentor", status: "blocked_killswitch" });
+      return aiDisabledResponse(corsHeaders);
+    }
+
+    // Limita histórico para reduzir custo
+    const trimmedMessages = messages.slice(-6);
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
@@ -80,12 +89,13 @@ ${
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: CHEAP_MODEL,
           messages: [
             { role: "system", content: SYSTEM_PROMPT + contextBlock },
-            ...messages,
+            ...trimmedMessages,
           ],
           stream: true,
+          max_tokens: 800,
         }),
       }
     );
@@ -110,6 +120,13 @@ ${
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    await logAiUsage({
+      function_name: "whatsapp-mentor",
+      model: CHEAP_MODEL,
+      prompt_chars: JSON.stringify(trimmedMessages).length + (contextBlock?.length ?? 0),
+      status: "ok",
+    });
 
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },

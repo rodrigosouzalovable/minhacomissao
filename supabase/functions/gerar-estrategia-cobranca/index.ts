@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { isAiEnabled, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +41,17 @@ serve(async (req) => {
       });
     }
 
+    if (!(await isAiEnabled())) {
+      await logAiUsage({ function_name: "gerar-estrategia-cobranca", status: "blocked_killswitch" });
+      return aiDisabledResponse(corsHeaders);
+    }
+    await logAiUsage({
+      function_name: "gerar-estrategia-cobranca",
+      model: CHEAP_MODEL,
+      prompt_chars: (prompt?.length ?? 0) + (resumoCarteira?.length ?? 0),
+      status: "ok",
+    });
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
@@ -58,7 +70,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "google/gemini-2.5-flash-lite",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userMessage },

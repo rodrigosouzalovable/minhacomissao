@@ -24,7 +24,8 @@ import {
   Bot,
   Volume2,
   Flame,
-  Activity
+  Activity,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -80,6 +81,7 @@ const navItems: NavItem[] = [
   { href: '/admin/importar-devedores', label: 'Importar Devedores', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/acionamento', label: 'Acionamento', icon: MessageSquare, adminOnly: true },
   { href: '/admin/automacao-cobmais', label: 'Robô CobMais', icon: Bot, adminOnly: true },
+  { href: '/admin/ia-uso', label: 'Uso de IA', icon: Sparkles, adminOnly: true },
   { href: '/campanhas-voz', label: 'Campanhas de Voz', icon: Volume2 },
   { href: '/inbox', label: 'WhatsApp Inbox', icon: MessageSquare, adminOnly: true },
   { href: '/aquecimento', label: 'Aquecimento', icon: Flame },

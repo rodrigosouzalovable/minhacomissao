@@ -2009,8 +2009,18 @@ serve(async (req) => {
         }
       }
 
-      // FALLBACK: encaminhar para teach-chatbot (ensino, perguntas, ações)
-      console.log(`[ADMIN-FALLBACK] Encaminhando mensagem do admin para teach-chatbot: "${texto}"`);
+      // FALLBACK: encaminhar para teach-chatbot — APENAS quando admin usa o prefixo "/ia"
+      // (corte de custo: antes toda mensagem do admin acionava IA paga)
+      const trimmedTexto = (texto || '').trim();
+      const iaPrefixMatch = /^\/(ia|ensinar|ai)\b\s*/i.exec(trimmedTexto);
+      if (!iaPrefixMatch) {
+        console.log('[ADMIN-FALLBACK] Mensagem do admin sem prefixo /ia — não chama IA. Texto:', trimmedTexto.slice(0, 80));
+        return new Response(JSON.stringify({ success: true, admin_no_ai_prefix: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const textoSemPrefixo = trimmedTexto.slice(iaPrefixMatch[0].length).trim();
+      console.log(`[ADMIN-FALLBACK] Encaminhando mensagem do admin para teach-chatbot: "${textoSemPrefixo}"`);
       try {
         // Carregar histórico recente do admin via chat_ia_mensagens
         const { data: adminUser } = await supabase.from('profiles').select('id').eq('email', 'rodrigo@grupoaltum.com.br').maybeSingle();
@@ -2030,7 +2040,8 @@ serve(async (req) => {
         }
 
         // Adicionar mensagem atual do admin
-        historicoMessages.push({ role: 'user', content: texto });
+        // Adicionar mensagem atual do admin (sem o prefixo)
+        historicoMessages.push({ role: 'user', content: textoSemPrefixo });
 
         // Chamar teach-chatbot
         const teachResponse = await fetch(`${supabaseUrl}/functions/v1/teach-chatbot`, {
@@ -2049,7 +2060,7 @@ serve(async (req) => {
           // Persistir mensagens no histórico (admin msg + resposta)
           if (adminUserId) {
             await supabase.from('chat_ia_mensagens').insert([
-              { user_id: adminUserId, role: 'user', content: texto },
+              { user_id: adminUserId, role: 'user', content: textoSemPrefixo },
               { user_id: adminUserId, role: 'assistant', content: reply },
             ]);
           }
