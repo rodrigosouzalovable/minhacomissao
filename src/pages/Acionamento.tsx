@@ -2351,16 +2351,16 @@ export default function Acionamento() {
 
         {/* Config Dialog */}
         <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
             <DialogHeader>
               <DialogTitle>Configurações WhatsApp</DialogTitle>
             </DialogHeader>
             <div className="space-y-6">
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
                       {instances.length > 0 && (
                         <Badge variant={connectedCount > 0 ? 'default' : 'secondary'} className="text-xs">
@@ -2372,7 +2372,7 @@ export default function Acionamento() {
                       Cadastre múltiplos WhatsApps para rotação automática dos envios.
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2 lg:shrink-0">
                     <Button
                       size="sm"
                       onClick={() => { setConnectMethod('qr'); handleConnectQr(); }}
