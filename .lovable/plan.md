@@ -1,55 +1,30 @@
-# Ajuste do Dialog "Configurações WhatsApp" no Acionamento
+# Download de planilhas após Verificação de WhatsApp
 
-## Objetivo
+## Contexto
+Na página `/admin/acionamento`, após clicar em **Verificar WhatsApp**, o sistema já separa os contatos em dois grupos:
+- `clientes` (válidos — têm WhatsApp)
+- `numerosInvalidos` (sem WhatsApp)
 
-Eliminar a barra de scroll horizontal e melhorar a disposição do header (badge de conectados + botões "Conectar via QR Code" / "Conectar via Código" / "Manual") para que o conteúdo respire melhor.
+Hoje só é possível ver os números removidos numa lista interna. Vamos adicionar **dois botões de download Excel** que aparecem assim que a verificação terminar.
 
-## Mudanças (arquivo: `src/pages/Acionamento.tsx`)
+## Mudanças
 
-### 1. Aumentar largura do dialog (linha 2354)
+### `src/pages/Acionamento.tsx`
 
-Trocar:
-```
-<DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-```
-Por:
-```
-<DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
-```
+1. **Importar utilitário existente** `exportarParaExcel` de `@/lib/exportExcel` (já presente no projeto, usa XLSX).
 
-- `max-w-5xl` (1024px) + `w-[95vw]`: usa quase toda a largura da tela em desktop, eliminando aperto que força scroll horizontal nos cards de instância (badges Ativo / Conectado / Só Lembretes / Robô / IA Responde + URL longa).
-- `overflow-x-hidden`: garante que nenhum elemento interno force barra horizontal.
+2. **Criar duas funções de download** logo acima do JSX do card "Importar Planilha":
+   - `handleDownloadComWhatsApp()` — exporta `clientes` (válidos) com colunas: CPF, Nome, Telefone, Atraso, Saldo. Nome do arquivo: `contatos-com-whatsapp-YYYY-MM-DD.xlsx`.
+   - `handleDownloadSemWhatsApp()` — exporta `numerosInvalidos` com as mesmas colunas. Nome do arquivo: `contatos-sem-whatsapp-YYYY-MM-DD.xlsx`.
 
-### 2. Reorganizar header das instâncias (linhas 2360–2404)
+3. **Adicionar 2 botões na UI** dentro do bloco `verificacaoConcluida`:
+   - Botão verde **"⬇ Baixar com WhatsApp (N)"** — sempre visível após verificação se `clientes.length > 0`.
+   - Botão âmbar **"⬇ Baixar sem WhatsApp (N)"** — visível se `numerosInvalidos.length > 0`.
+   
+   Posicionados como uma linha de ações no `Alert` de resultado, ao lado do botão "Ver números removidos". Quando todos têm WhatsApp (alerta verde), mostrar apenas o botão de baixar com WhatsApp.
 
-Atualmente título + descrição ficam à esquerda e os 3 botões à direita na mesma linha (`flex items-center justify-between`), o que espreme tudo e empurra o badge "85/107 conectados" para baixo do título quebrando o layout.
-
-Reestruturar para empilhar verticalmente em telas estreitas e alinhar de forma limpa em telas largas:
-
-```
-<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-  <div className="min-w-0">
-    <div className="flex flex-wrap items-center gap-2">
-      <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
-      {badge "X/Y conectados"}
-    </div>
-    <p className="text-sm text-muted-foreground">
-      Cadastre múltiplos WhatsApps para rotação automática dos envios.
-    </p>
-  </div>
-  <div className="flex flex-wrap gap-2 lg:shrink-0">
-    {Botão Conectar via QR Code}
-    {Botão Conectar via Código}
-    {Botão Manual}
-  </div>
-</div>
-```
-
-Resultado:
-- Badge "85/107 conectados" passa a ficar **na mesma linha** do título "Instâncias UAZAPI" (em vez de quebrar abaixo como na screenshot).
-- Os 3 botões alinham-se à direita em desktop e quebram lado a lado em telas menores, sem comprimir o título.
-
-## Não muda
-
-- Lógica dos botões, fluxo de QR/Pairing, lista de instâncias, badges internas — apenas layout do container e do header.
-- Dialog continua com scroll vertical normal.
+## Detalhes técnicos
+- Uso do helper `exportarParaExcel<T>(dados, colunas, nomeArquivo)` mantém consistência com o resto do app.
+- Nenhum custo de Cloud (geração 100% client-side via SheetJS já bundled).
+- Sem alterações de DB, edge functions ou estado persistente.
+- Persistência do `numerosInvalidos` mantida em memória até nova importação/verificação (comportamento atual já preservado).
