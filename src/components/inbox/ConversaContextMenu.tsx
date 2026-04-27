@@ -97,6 +97,12 @@ export function ConversaContextMenu({
             <Pin className="h-4 w-4 mr-2" />
             {fixado ? 'Desafixar conversa' : 'Fixar conversa'}
           </ContextMenuItem>
+          {onArquivarToggle && (
+            <ContextMenuItem onClick={() => onArquivarToggle(contatoId, !arquivado)}>
+              {arquivado ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
+              {arquivado ? 'Desarquivar conversa' : 'Arquivar conversa'}
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onExcluirConversa(contatoId)} className="text-destructive focus:text-destructive">
             <Trash2 className="h-4 w-4 mr-2" />
