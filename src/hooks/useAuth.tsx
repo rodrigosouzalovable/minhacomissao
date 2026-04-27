@@ -34,24 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-    }).catch((err) => {
-      console.error('[useAuth] getSession failed:', err);
-      setLoading(false);
     });
 
-    // Safety timeout: never leave the app stuck on "Carregando..." indefinitely
-    // if the backend is unreachable.
-    const safety = setTimeout(() => {
-      setLoading((prev) => {
-        if (prev) console.warn('[useAuth] Safety timeout reached — releasing loading state.');
-        return false;
-      });
-    }, 6000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(safety);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {

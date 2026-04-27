@@ -572,159 +572,168 @@ export default function Acordos() {
       setSendingWhatsappDialog(false);
     }
   }, [whatsappDialogAcordo, whatsappInstances, selectedInstanceId, profile, lembreteTemplates, toast]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-
   useEffect(() => {
-    let cancelled = false;
     async function loadAcordos() {
       if (!user) return;
-      setLoadError(null);
       try {
-        // 1) Acordos próprios (essencial - se falhar, mostra erro)
-        const { data: acordosData, error: acordosError } = await supabase
-          .from('acordos')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('criado_em', { ascending: false });
+        // Carregar acordos próprios
+        const {
+          data: acordosData,
+          error: acordosError
+        } = await supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', {
+          ascending: false
+        });
         if (acordosError) throw acordosError;
-
-        // 2) Permissões compartilhadas (não bloqueia)
+        
+        // Verificar se tem acordos compartilhados
+        const { data: perms } = await supabase
+          .from('user_permissions')
+          .select('acordos_compartilhados, concedido_por')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        const temCompartilhados = (perms as any)?.acordos_compartilhados === true;
+        const adminId = (perms as any)?.concedido_por as string | null;
+        
         let todosAcordos = acordosData || [];
-        try {
-          const { data: perms } = await supabase
-            .from('user_permissions')
-            .select('acordos_compartilhados, concedido_por')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          const temCompartilhados = (perms as any)?.acordos_compartilhados === true;
-          const adminId = (perms as any)?.concedido_por as string | null;
-          if (temCompartilhados && adminId) {
-            const { data: acordosAdmin } = await supabase
-              .from('acordos')
-              .select('*')
-              .eq('user_id', adminId)
-              .order('criado_em', { ascending: false });
-            if (acordosAdmin) {
-              const idsExistentes = new Set(todosAcordos.map(a => a.id));
-              const novos = acordosAdmin.filter(a => !idsExistentes.has(a.id));
-              todosAcordos = [...todosAcordos, ...novos];
-            }
+        
+        if (temCompartilhados && adminId) {
+          const { data: acordosAdmin } = await supabase
+            .from('acordos')
+            .select('*')
+            .eq('user_id', adminId)
+            .order('criado_em', { ascending: false });
+          if (acordosAdmin) {
+            // Marcar acordos do admin e combinar (sem duplicatas)
+            const idsExistentes = new Set(todosAcordos.map(a => a.id));
+            const novos = acordosAdmin.filter(a => !idsExistentes.has(a.id));
+            todosAcordos = [...todosAcordos, ...novos];
           }
-        } catch (e) {
-          console.warn('[Acordos] Falha ao carregar compartilhados:', e);
         }
-
-        if (cancelled) return;
+        
         setAcordos(todosAcordos);
 
-        // Restringir consultas de pagamentos APENAS aos acordos carregados.
-        const acordoIds = todosAcordos.map(a => a.id);
-        if (acordoIds.length === 0) {
-          setLoading(false);
-          return;
-        }
+        // Carregar IDs de acordos que têm parcelas pagas
+        const {
+          data: pagamentosPagos,
+          error: pagamentosError
+        } = await supabase.from('pagamentos').select('acordo_id').eq('status', 'pago');
+        if (pagamentosError) throw pagamentosError;
+        const idsComPagamentos = new Set(pagamentosPagos?.map(p => p.acordo_id) || []);
+        setAcordosComPagamentosPagos(idsComPagamentos);
 
+        // Carregar IDs de acordos que têm parcelas vencidas (pendentes com data_prevista < hoje)
         const hoje = new Date();
         const hojeStr = hoje.toISOString().split('T')[0];
+        const {
+          data: pagamentosPendentes,
+          error: pendentesError
+        } = await supabase.from('pagamentos').select('acordo_id, data_prevista').eq('status', 'pendente').lt('data_prevista', hojeStr);
+        if (pendentesError) throw pendentesError;
+        
+        // Criar Map com menor data por acordo (mais antiga = mais urgente)
+        const vencidasMap = new Map<string, string>();
+        pagamentosPendentes?.forEach(p => {
+          const atual = vencidasMap.get(p.acordo_id);
+          if (!atual || p.data_prevista < atual) {
+            vencidasMap.set(p.acordo_id, p.data_prevista);
+          }
+        });
+        setDataVencidaPorAcordo(vencidasMap);
+        setAcordosComParcelasVencidas(new Set(vencidasMap.keys()));
+
+        // Carregar IDs de acordos que têm parcelas próximas ao vencimento (hoje até +3 dias)
         const tresDias = new Date(hoje);
         tresDias.setDate(tresDias.getDate() + 3);
         const tresDiasStr = tresDias.toISOString().split('T')[0];
+        const {
+          data: parcelasProximas,
+          error: proximasError
+        } = await supabase.from('pagamentos').select('acordo_id, data_prevista').eq('status', 'pendente').gte('data_prevista', hojeStr).lte('data_prevista', tresDiasStr);
+        if (proximasError) throw proximasError;
+        
+        // Criar Map com menor data por acordo (mais próxima primeiro)
+        const proximasMap = new Map<string, string>();
+        parcelasProximas?.forEach(p => {
+          const atual = proximasMap.get(p.acordo_id);
+          if (!atual || p.data_prevista < atual) {
+            proximasMap.set(p.acordo_id, p.data_prevista);
+          }
+        });
+        setDataProximaPorAcordo(proximasMap);
+        setAcordosComParcelasProximas(new Set(proximasMap.keys()));
+
+        // Carregar IDs de acordos com QUEBRA DE ACORDO
+        // (status 'quebrado' OU última parcela pendente vencida há mais de 10 dias)
         const dezDiasAtras = new Date(hoje);
         dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
         const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
-
-        // 3) Consultas auxiliares em paralelo, todas tolerantes a falha.
-        // Buscar parcelas em lotes por acordo_id (max 200 por chunk para evitar URL gigante)
-        const chunk = <T,>(arr: T[], size: number) => {
-          const out: T[][] = [];
-          for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-          return out;
-        };
-        const idChunks = chunk(acordoIds, 200);
-
-        const fetchAllParcelas = async () => {
-          const all: { acordo_id: string; data_prevista: string; status: string }[] = [];
-          for (const ids of idChunks) {
-            const { data, error } = await supabase
-              .from('pagamentos')
-              .select('acordo_id, data_prevista, status')
-              .in('acordo_id', ids);
-            if (error) throw error;
-            if (data) all.push(...data);
+        
+        // Acordos com status 'quebrado' já são quebra de acordo
+        const idsComQuebra = new Set<string>();
+        (acordosData || []).forEach(a => {
+          if (a.status === 'quebrado') {
+            idsComQuebra.add(a.id);
           }
-          return all;
-        };
+        });
+        
+        // Buscar TODAS as parcelas (pagas e pendentes) paginando para evitar limite de 1000 linhas do Supabase
+        // Pendentes -> usadas para detectar quebra (>10 dias) e para datas futuras no filtro
+        // Pagas -> usadas no filtro por data de vencimento (cliente que pagou na data ainda deve aparecer)
+        const todasParcelasPendentes: { acordo_id: string; data_prevista: string; status: string }[] = [];
+        const PAGE_SIZE = 1000;
+        let pageStart = 0;
+        let quebraError: any = null;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { data: lote, error: loteError } = await supabase
+            .from('pagamentos')
+            .select('acordo_id, data_prevista, status')
+            .order('acordo_id', { ascending: true })
+            .range(pageStart, pageStart + PAGE_SIZE - 1);
+          if (loteError) { quebraError = loteError; break; }
+          if (!lote || lote.length === 0) break;
+          todasParcelasPendentes.push(...lote);
+          if (lote.length < PAGE_SIZE) break;
+          pageStart += PAGE_SIZE;
+        }
 
-        const results = await Promise.allSettled([fetchAllParcelas()]);
-        if (cancelled) return;
-
-        const parcelasResult = results[0];
-        if (parcelasResult.status === 'fulfilled') {
-          const parcelas = parcelasResult.value;
-
-          // Pagas
-          const idsComPagamentos = new Set<string>();
-          // Vencidas (pendente < hoje)
-          const vencidasMap = new Map<string, string>();
-          // Próximas (pendente entre hoje e +3)
-          const proximasMap = new Map<string, string>();
-          // Última pendente por acordo (para regra de quebra)
-          const ultimaPendentePorAcordo = new Map<string, string>();
-          // Todas as datas (para filtro)
+        if (!quebraError && todasParcelasPendentes.length > 0) {
+          // Agrupar por acordo_id: MAX data_prevista (apenas pendentes p/ quebra) e TODAS as datas (p/ filtro)
+          const ultimaParcelaPendentePorAcordo = new Map<string, string>();
           const allDatesMap = new Map<string, string[]>();
-
-          parcelas.forEach(p => {
+          todasParcelasPendentes.forEach(p => {
+            // Para o filtro por vencimento: incluir parcelas pagas e pendentes
             const existing = allDatesMap.get(p.acordo_id) || [];
             existing.push(p.data_prevista);
             allDatesMap.set(p.acordo_id, existing);
 
-            if (p.status === 'pago') {
-              idsComPagamentos.add(p.acordo_id);
-            } else if (p.status === 'pendente') {
-              if (p.data_prevista < hojeStr) {
-                const atual = vencidasMap.get(p.acordo_id);
-                if (!atual || p.data_prevista < atual) vencidasMap.set(p.acordo_id, p.data_prevista);
-              } else if (p.data_prevista >= hojeStr && p.data_prevista <= tresDiasStr) {
-                const atual = proximasMap.get(p.acordo_id);
-                if (!atual || p.data_prevista < atual) proximasMap.set(p.acordo_id, p.data_prevista);
+            // Para a regra de quebra (>10 dias): considerar apenas pendentes
+            if (p.status === 'pendente') {
+              const atual = ultimaParcelaPendentePorAcordo.get(p.acordo_id);
+              if (!atual || p.data_prevista > atual) {
+                ultimaParcelaPendentePorAcordo.set(p.acordo_id, p.data_prevista);
               }
-              const ultima = ultimaPendentePorAcordo.get(p.acordo_id);
-              if (!ultima || p.data_prevista > ultima) ultimaPendentePorAcordo.set(p.acordo_id, p.data_prevista);
             }
           });
-
-          setAcordosComPagamentosPagos(idsComPagamentos);
-          setDataVencidaPorAcordo(vencidasMap);
-          setAcordosComParcelasVencidas(new Set(vencidasMap.keys()));
-          setDataProximaPorAcordo(proximasMap);
-          setAcordosComParcelasProximas(new Set(proximasMap.keys()));
           setTodasDatasPorAcordo(allDatesMap);
 
-          // Quebra de acordo
-          const idsComQuebra = new Set<string>();
-          (todosAcordos || []).forEach(a => {
-            if (a.status === 'quebrado') idsComQuebra.add(a.id);
+          // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
+          ultimaParcelaPendentePorAcordo.forEach((ultimaData, acordoId) => {
+            if (ultimaData < dezDiasAtrasStr) {
+              idsComQuebra.add(acordoId);
+            }
           });
-          ultimaPendentePorAcordo.forEach((ultimaData, acordoId) => {
-            if (ultimaData < dezDiasAtrasStr) idsComQuebra.add(acordoId);
-          });
-          setAcordosComQuebraAcordo(idsComQuebra);
-        } else {
-          console.error('[Acordos] Falha ao carregar parcelas:', parcelasResult.reason);
         }
-      } catch (error: any) {
+        setAcordosComQuebraAcordo(idsComQuebra);
+      } catch (error) {
         console.error('Erro ao carregar acordos:', error);
-        if (!cancelled) {
-          setLoadError(error?.message || 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.');
-        }
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     }
     loadAcordos();
-    return () => { cancelled = true; };
-  }, [user, reloadKey]);
+  }, [user]);
   const handleDelete = async (acordoId: string) => {
     try {
       const { error } = await supabase.rpc('delete_acordo_atomico' as any, { p_acordo_id: acordoId });
@@ -1000,23 +1009,8 @@ export default function Acordos() {
   }, [user, profile, lembreteTemplates, startSending, toast]);
   if (loading) {
     return <AppLayout>
-        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="flex items-center justify-center min-h-[400px]">
           <p className="text-muted-foreground">Carregando...</p>
-          <Button variant="outline" size="sm" onClick={() => { setLoading(false); setReloadKey(k => k + 1); }}>
-            Cancelar e tentar novamente
-          </Button>
-        </div>
-      </AppLayout>;
-  }
-  if (loadError) {
-    return <AppLayout>
-        <div className="flex flex-col items-center justify-center min-h-[400px] gap-3 text-center max-w-md mx-auto">
-          <AlertTriangle className="h-10 w-10 text-destructive" />
-          <h2 className="text-lg font-semibold">Não foi possível carregar os acordos</h2>
-          <p className="text-sm text-muted-foreground">{loadError}</p>
-          <Button onClick={() => { setLoading(true); setLoadError(null); setReloadKey(k => k + 1); }}>
-            Tentar novamente
-          </Button>
         </div>
       </AppLayout>;
   }

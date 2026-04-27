@@ -80,17 +80,15 @@ export function usePaymentReminders() {
       return data.map((l) => l.pagamento_id);
     },
     enabled: !!user,
-    refetchInterval: 10 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
+    refetchInterval: 30 * 1000,
   });
 
-  // Buscar pagamentos pendentes (hoje + 3 dias + vencidos) em UMA única query.
-  // Antes eram 2 queries separadas com JOIN; unificamos e limitamos para
-  // reduzir carga no banco (especialmente para admins, que veem tudo).
-  const { data: pagamentosCombinados = { hoje3d: [], vencidas: [] }, isLoading: isLoadingPagamentos } = useQuery({
+  // Buscar pagamentos pendentes (hoje e 3 dias)
+  const { data: pagamentos = [], isLoading: isLoadingPagamentos } = useQuery({
     queryKey: ['payment-reminders', user?.id, adminId, isAdmin],
     queryFn: async () => {
-      if (!user) return { hoje3d: [], vencidas: [] };
-      if (!isAdmin && userIds.length === 0) return { hoje3d: [], vencidas: [] };
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       const tresDias = format(addDays(new Date(), 3), 'yyyy-MM-dd');
@@ -106,9 +104,7 @@ export function usePaymentReminders() {
           acordos!inner(cliente_nome, cliente_telefone, user_id)
         `)
         .eq('status', 'pendente')
-        .lte('data_prevista', tresDias)
-        .order('data_prevista', { ascending: false })
-        .limit(500); // protege contra varreduras gigantes
+        .or(`data_prevista.eq.${hoje},data_prevista.eq.${tresDias}`);
 
       if (!isAdmin) {
         query = query.in('acordos.user_id', userIds);
@@ -118,10 +114,10 @@ export function usePaymentReminders() {
 
       if (error) {
         console.error('Erro ao buscar lembretes de pagamentos:', error);
-        return { hoje3d: [], vencidas: [] };
+        return [];
       }
 
-      const todos = (data || []).map((pagamento: any) => ({
+      const items = (data || []).map((pagamento: any) => ({
         id: pagamento.id,
         acordo_id: pagamento.acordo_id,
         numero_parcela: pagamento.numero_parcela,
@@ -129,34 +125,66 @@ export function usePaymentReminders() {
         valor_parcela: pagamento.valor_parcela,
         cliente_nome: pagamento.acordos.cliente_nome,
         cliente_telefone: pagamento.acordos.cliente_telefone,
-      }));
+        tipo: pagamento.data_prevista === hoje ? 'hoje' : 'tres_dias',
+        categoria: 'pagamento',
+      })) as PaymentReminder[];
 
-      const hoje3d: PaymentReminder[] = [];
-      const vencidas: PaymentReminder[] = [];
-      for (const p of todos) {
-        if (p.data_prevista === hoje) {
-          hoje3d.push({ ...p, tipo: 'hoje', categoria: 'pagamento' });
-        } else if (p.data_prevista === tresDias) {
-          hoje3d.push({ ...p, tipo: 'tres_dias', categoria: 'pagamento' });
-        } else if (p.data_prevista < hoje) {
-          vencidas.push({ ...p, tipo: 'vencido', categoria: 'pagamento' });
-        }
-      }
-
-      const [hoje3dFiltradas, vencidasFiltradas] = await Promise.all([
-        filterParcelsWithLaterPaid(hoje3d),
-        filterParcelsWithLaterPaid(vencidas),
-      ]);
-
-      return { hoje3d: hoje3dFiltradas, vencidas: vencidasFiltradas };
+      return await filterParcelsWithLaterPaid(items);
     },
     enabled: !!user,
-    refetchInterval: 10 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
+    refetchInterval: 30 * 1000,
   });
 
-  const pagamentos = pagamentosCombinados.hoje3d;
-  const parcelasVencidas = pagamentosCombinados.vencidas;
-  const isLoadingVencidas = false;
+  // Buscar parcelas vencidas (data_prevista < hoje)
+  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
+    queryKey: ['overdue-reminders', user?.id, adminId, isAdmin],
+    queryFn: async () => {
+      if (!user) return [];
+      if (!isAdmin && userIds.length === 0) return [];
+
+      const hoje = format(new Date(), 'yyyy-MM-dd');
+
+      let query = supabase
+        .from('pagamentos')
+        .select(`
+          id,
+          acordo_id,
+          numero_parcela,
+          data_prevista,
+          valor_parcela,
+          acordos!inner(cliente_nome, cliente_telefone, user_id)
+        `)
+        .eq('status', 'pendente')
+        .lt('data_prevista', hoje);
+
+      if (!isAdmin) {
+        query = query.in('acordos.user_id', userIds);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Erro ao buscar parcelas vencidas:', error);
+        return [];
+      }
+
+      const items = (data || []).map((pagamento: any) => ({
+        id: pagamento.id,
+        acordo_id: pagamento.acordo_id,
+        numero_parcela: pagamento.numero_parcela,
+        data_prevista: pagamento.data_prevista,
+        valor_parcela: pagamento.valor_parcela,
+        cliente_nome: pagamento.acordos.cliente_nome,
+        cliente_telefone: pagamento.acordos.cliente_telefone,
+        tipo: 'vencido',
+        categoria: 'pagamento',
+      })) as PaymentReminder[];
+
+      return await filterParcelsWithLaterPaid(items);
+    },
+    enabled: !!user,
+    refetchInterval: 30 * 1000,
+  });
 
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
@@ -196,7 +224,7 @@ export function usePaymentReminders() {
       })) as PaymentReminder[];
     },
     enabled: !!user,
-    refetchInterval: 10 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
+    refetchInterval: 30 * 1000,
   });
 
   const isLoading = isLoadingPagamentos || isLoadingRetornos || isLoadingVencidas;

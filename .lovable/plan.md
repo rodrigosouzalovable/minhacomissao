@@ -1,74 +1,54 @@
-# Plano: Sistema mais leve e rápido
+# Por que o "oi" não apareceu no Inbox
 
-## Diagnóstico
+A mensagem **foi enviada e salva** no banco — só foi parar numa conversa "fantasma" porque a UAZAPI devolveu o seu número **sem o "9"** do celular (`556291672674` em vez de `5562991672674`).
 
-O login está falhando com "O servidor demorou para responder" e a própria consulta de metadados do banco retornou **"Connection terminated due to connection timeout"**. Isso confirma que o backend (banco de dados Lovable Cloud) está saturado — não é mais um problema só de UI.
+O Inbox lista conversas pelo telefone exato, então criou um chat separado de 12 dígitos que você não está olhando. Esse problema vem se repetindo há semanas — a maior parte do seu histórico está com 12 dígitos e algumas mensagens com 13 dígitos, em conversas separadas.
 
-Identifiquei 4 fontes principais de sobrecarga:
+# Correção (2 partes)
 
-1. **Realtime barulhento no badge do Inbox** (`AppLayout.tsx`): inscreve em TODAS as mudanças da tabela `whatsapp_contatos` (qualquer usuário, qualquer instância) e dispara um `COUNT(*)` no banco a cada evento. Com tráfego de WhatsApp ativo, isso pode gerar centenas de queries por minuto por aba aberta.
-2. **Lembretes de pagamento pesados para admin** (`usePaymentReminders.tsx`): 3 queries com JOIN em `pagamentos`+`acordos` SEM filtro por `user_id` quando é admin, mais uma 4ª query em `pagamentos` para deduplicar. Roda a cada 5 min em todas as abas.
-3. **Falta de índices** nas colunas mais consultadas (`pagamentos.status+data_prevista`, `acordos.user_id`, `whatsapp_contatos.instancia_id+nao_lido+arquivado`, `retornos.status+data_retorno`).
-4. **Sem timeout no login**: a tela de auth fica travada esperando indefinidamente quando o backend está lento.
+## Parte 1 — Normalizar telefone ao salvar (consertar o bug daqui pra frente)
 
-## O que vou fazer
+No `supabase/functions/send-whatsapp/index.ts`, antes de gravar em `whatsapp_mensagens`, aplicar normalização brasileira: se o número tem 12 dígitos começando com `55` + DDD, adicionar o "9" e salvar a forma canônica de 13 dígitos. Mesmo tratamento no `whatsapp-chatbot` (mensagens recebidas) para garantir que entrada e saída caem sempre no mesmo chat.
 
-### 1. Aliviar o backend imediatamente (maior impacto)
-- **Badge do Inbox**: remover o realtime global. Substituir por um refresh leve a cada 2 minutos + atualização sob demanda quando o usuário abre o Inbox. Isso elimina dezenas de queries/minuto.
-- **Lembretes de pagamento (sino)**:
-  - Aumentar `refetchInterval` de 5min para 10min.
-  - Selecionar apenas as colunas necessárias (remover JOIN gordo, usar `select` mínimo).
-  - Para admin, limitar resultado a no máximo 500 itens (`limit(500)`) — o sino não precisa carregar o sistema inteiro.
-  - Combinar a query de "hoje + 3 dias" com a de "vencidas" em uma única chamada (1 query em vez de 3).
-- **Login com timeout e mensagem clara**: adicionar `Promise.race` de 12s no `signIn` da página `/auth` com mensagem orientando a tentar novamente.
-
-### 2. Índices de performance no banco
-Criar (com `CREATE INDEX CONCURRENTLY` para não travar):
-- `pagamentos (status, data_prevista)`
-- `pagamentos (acordo_id, status)`
-- `acordos (user_id, status)`
-- `whatsapp_contatos (instancia_id, arquivado, nao_lido)`
-- `retornos (user_id, status, data_retorno)`
-- `lembretes_lidos (user_id, criado_em)`
-
-### 3. Recomendação de upgrade do Lovable Cloud
-Com base nos sintomas (timeouts até em metadados), o tamanho atual da instância está no limite. Após aplicar as otimizações acima, recomendo aumentar o tamanho da instância em **Cloud → Advanced settings → Upgrade instance**. Isso libera CPU/IO do Postgres e elimina a raiz do problema de "o servidor demorou para responder". Vou avisar no final, com link da documentação — você decide se quer subir o tamanho (impacta o consumo do Cloud).
-
-## O que NÃO vou fazer
-- Não vou criar novos cron jobs (você já pediu para não aumentar consumo).
-- Não vou refatorar páginas inteiras (Acionamento, Importar) agora — foco no que destrava o login e o carregamento global.
-- Não vou tocar em fluxo de autenticação além do timeout/UX.
-
-## Detalhes técnicos
-
-**Arquivos a alterar:**
-- `src/components/layout/AppLayout.tsx` — remover canal realtime, usar polling de 2min + revalidação no foco.
-- `src/hooks/usePaymentReminders.tsx` — unificar queries hoje/3d/vencidas, `limit(500)`, intervalo 10min, `select` enxuto.
-- `src/pages/Auth.tsx` (ou equivalente) — `Promise.race` de 12s no login + toast com instrução de retry.
-- Nova migração SQL com os 6 índices `CONCURRENTLY` listados acima.
-
-**Snippet do login com timeout:**
 ```ts
-const result = await Promise.race([
-  supabase.auth.signInWithPassword({ email, password }),
-  new Promise<never>((_, rej) =>
-    setTimeout(() => rej(new Error('timeout')), 12000)
-  ),
-]);
+function normalizarTelefoneBR(num: string): string {
+  const digits = num.replace(/\D/g, '');
+  // 5562991672674 (13) já ok
+  // 556291672674 (12) → adiciona 9 após DDD
+  if (digits.length === 12 && digits.startsWith('55')) {
+    return digits.slice(0, 4) + '9' + digits.slice(4);
+  }
+  return digits;
+}
 ```
 
-**Snippet do badge do Inbox (sem realtime):**
-```ts
-useEffect(() => {
-  fetchUnreadCount();
-  const id = setInterval(fetchUnreadCount, 120_000); // 2 min
-  const onFocus = () => fetchUnreadCount();
-  window.addEventListener('focus', onFocus);
-  return () => { clearInterval(id); window.removeEventListener('focus', onFocus); };
-}, [fetchUnreadCount]);
+## Parte 2 — Mesclar as conversas duplicadas que já existem
+
+Migração SQL única que percorre `whatsapp_mensagens` e atualiza todos os `telefone_remoto` de 12 dígitos (BR) para 13 dígitos. Com isso, todas as mensagens antigas do seu número (e de qualquer outro cliente afetado) vão se juntar numa só conversa no Inbox.
+
+```sql
+UPDATE whatsapp_mensagens
+SET telefone_remoto = substring(telefone_remoto, 1, 4) || '9' || substring(telefone_remoto, 5)
+WHERE length(regexp_replace(telefone_remoto, '\D', '', 'g')) = 12
+  AND telefone_remoto LIKE '55%';
 ```
 
-## Aviso de custo
-Nenhuma das mudanças de código aumenta consumo — pelo contrário, **reduz** queries e execuções. A única ação que pode aumentar custo é o upgrade de instância no Cloud, e isso fica como recomendação opcional para você decidir depois de ver o efeito das otimizações.
+Faço o mesmo na tabela `chatbot_conversas` se ela tiver o mesmo padrão de chave por telefone.
 
-Posso aplicar?
+# Resultado esperado
+
+- O "oi" que você mandou agora vai aparecer junto com o resto do histórico.
+- Toda nova mensagem entrando ou saindo cai no mesmo chat, independente do que a UAZAPI devolver.
+- Sem mais conversas duplicadas com 12/13 dígitos.
+
+# Sobre o impacto na Cloud
+
+Mudança barata: 2 edge functions ajustadas + 1 UPDATE SQL. Sem novos crons, sem novas chamadas externas, sem consumo extra de IA.
+
+# Arquivos afetados
+
+- `supabase/functions/send-whatsapp/index.ts` — normalização ao salvar saída
+- `supabase/functions/whatsapp-chatbot/index.ts` — normalização ao salvar entrada
+- migração SQL — backfill das mensagens antigas
+
+Aprove pra eu aplicar.

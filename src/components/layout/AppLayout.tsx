@@ -214,16 +214,15 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   useEffect(() => {
     fetchUnreadCount();
-    // Poll a cada 2 minutos + atualizar quando a janela ganha foco.
-    // Removido o realtime global em whatsapp_contatos por ser muito barulhento
-    // (gerava centenas de queries/min sob tráfego ativo de WhatsApp).
-    const intervalId = setInterval(fetchUnreadCount, 120_000);
-    const onFocus = () => fetchUnreadCount();
-    window.addEventListener('focus', onFocus);
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('focus', onFocus);
-    };
+
+    const channel = supabase
+      .channel('inbox-unread-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_contatos' }, () => {
+        fetchUnreadCount();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [fetchUnreadCount]);
 
   // Save sidebar order with debounce
