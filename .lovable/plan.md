@@ -1,45 +1,55 @@
-## Botão "Reativar Todos os Webhooks"
+# Ajuste do Dialog "Configurações WhatsApp" no Acionamento
 
-### Resposta direta
+## Objetivo
 
-**Sim, é totalmente possível** — e a melhor notícia: **o backend já está 100% pronto** no projeto. Existe uma função na edge `whatsapp-qr` chamada `setupWebhookAll()` que:
+Eliminar a barra de scroll horizontal e melhorar a disposição do header (badge de conectados + botões "Conectar via QR Code" / "Conectar via Código" / "Manual") para que o conteúdo respire melhor.
 
-1. Busca todas as suas instâncias ativas no banco
-2. Para cada uma, faz `POST` no endpoint `/webhook` da UAZAPI (exatamente o que o suporte indicou)
-3. Envia o payload com `enabled: true`, evento `messages`, excluindo grupos e broadcast
-4. Tenta 3 rotas diferentes (`/webhook/{token}`, `/webhook` com token no header, `/globalwebhook`) para máxima compatibilidade
-5. Retorna um relatório `{ total, success, failed, details[] }` com o resultado de cada instância
+## Mudanças (arquivo: `src/pages/Acionamento.tsx`)
 
-**Falta apenas o botão na interface.** Hoje essa função está "órfã" — ninguém a chama do frontend.
+### 1. Aumentar largura do dialog (linha 2354)
 
-### O que vou fazer
+Trocar:
+```
+<DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+```
+Por:
+```
+<DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
+```
 
-Adicionar um botão **"Reativar Todos os Webhooks"** no painel **Monitor de Envios** (`/monitor-envios`), que é onde já ficam os controles operacionais de WhatsApp.
+- `max-w-5xl` (1024px) + `w-[95vw]`: usa quase toda a largura da tela em desktop, eliminando aperto que força scroll horizontal nos cards de instância (badges Ativo / Conectado / Só Lembretes / Robô / IA Responde + URL longa).
+- `overflow-x-hidden`: garante que nenhum elemento interno force barra horizontal.
 
-**Comportamento:**
-1. Botão com ícone de raio (Zap) ao lado dos outros controles do painel
-2. Ao clicar → abre `AlertDialog` de confirmação ("Isso vai reativar os webhooks de todas as suas instâncias ativas. Continuar?")
-3. Confirmando → chama `supabase.functions.invoke('whatsapp-qr', { body: { action: 'setup-webhook-all' } })`
-4. Mostra loading com contador
-5. Ao terminar → toast com resumo: "✅ X de Y webhooks reativados" + lista expansível com detalhes por instância (sucesso/falha + erro)
-6. Se houver falhas → toast amarelo com botão "Tentar novamente"
+### 2. Reorganizar header das instâncias (linhas 2360–2404)
 
-### Arquivos a modificar
+Atualmente título + descrição ficam à esquerda e os 3 botões à direita na mesma linha (`flex items-center justify-between`), o que espreme tudo e empurra o badge "85/107 conectados" para baixo do título quebrando o layout.
 
-- `src/pages/MonitorEnvios.tsx` — adicionar botão + dialog + handler
+Reestruturar para empilhar verticalmente em telas estreitas e alinhar de forma limpa em telas largas:
 
-### O que NÃO será feito
+```
+<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+  <div className="min-w-0">
+    <div className="flex flex-wrap items-center gap-2">
+      <h3 className="text-base font-semibold">Instâncias UAZAPI</h3>
+      {badge "X/Y conectados"}
+    </div>
+    <p className="text-sm text-muted-foreground">
+      Cadastre múltiplos WhatsApps para rotação automática dos envios.
+    </p>
+  </div>
+  <div className="flex flex-wrap gap-2 lg:shrink-0">
+    {Botão Conectar via QR Code}
+    {Botão Conectar via Código}
+    {Botão Manual}
+  </div>
+</div>
+```
 
-- Nenhuma mudança no backend (já está pronto e testado)
-- Nenhum cron job automático (você ativa manualmente quando precisar — economiza Lovable Cloud)
-- Nenhuma migração de banco
+Resultado:
+- Badge "85/107 conectados" passa a ficar **na mesma linha** do título "Instâncias UAZAPI" (em vez de quebrar abaixo como na screenshot).
+- Os 3 botões alinham-se à direita em desktop e quebram lado a lado em telas menores, sem comprimir o título.
 
-### Custo
+## Não muda
 
-**Zero impacto adicional** em Lovable Cloud. A edge function já existe e só roda quando você clicar no botão.
-
-### Próximo passo (opcional, para depois)
-
-Se a UAZAPI continuar desabilitando webhooks "do nada", podemos criar um **cron de saúde** que verifica a cada 30 min se algum webhook caiu e reativa só os afetados. Mas isso aumenta consumo de Cloud — só faria sentido se o problema for recorrente. Por enquanto, botão manual é o mais econômico.
-
-Aprovar para eu adicionar o botão.
+- Lógica dos botões, fluxo de QR/Pairing, lista de instâncias, badges internas — apenas layout do container e do header.
+- Dialog continua com scroll vertical normal.
