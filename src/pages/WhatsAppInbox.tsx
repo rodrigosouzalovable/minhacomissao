@@ -44,6 +44,7 @@ interface Contato {
   ultima_mensagem_em: string | null;
   nao_lido: number;
   fixado?: boolean;
+  arquivado?: boolean;
   instancia_nome?: string | null;
 }
 
