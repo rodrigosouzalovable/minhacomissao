@@ -80,7 +80,7 @@ export function usePaymentReminders() {
       return data.map((l) => l.pagamento_id);
     },
     enabled: !!user,
-    refetchInterval: 30 * 1000,
+    refetchInterval: 5 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
   });
 
   // Buscar pagamentos pendentes (hoje e 3 dias)
@@ -132,7 +132,7 @@ export function usePaymentReminders() {
       return await filterParcelsWithLaterPaid(items);
     },
     enabled: !!user,
-    refetchInterval: 30 * 1000,
+    refetchInterval: 5 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
   });
 
   // Buscar parcelas vencidas (data_prevista < hoje)
@@ -183,7 +183,7 @@ export function usePaymentReminders() {
       return await filterParcelsWithLaterPaid(items);
     },
     enabled: !!user,
-    refetchInterval: 30 * 1000,
+    refetchInterval: 5 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
   });
 
   // Buscar retornos pendentes
@@ -224,7 +224,7 @@ export function usePaymentReminders() {
       })) as PaymentReminder[];
     },
     enabled: !!user,
-    refetchInterval: 30 * 1000,
+    refetchInterval: 5 * 60 * 1000, retry: 1, refetchOnWindowFocus: false,
   });
 
   const isLoading = isLoadingPagamentos || isLoadingRetornos || isLoadingVencidas;

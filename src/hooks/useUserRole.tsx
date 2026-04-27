@@ -11,6 +11,7 @@ export function useUserRole() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchRole() {
       if (!user) {
         setRole(null);
@@ -18,22 +19,42 @@ export function useUserRole() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching user role:', error);
+        if (cancelled) return;
+        if (error) {
+          console.error('Error fetching user role:', error);
+          setRole('funcionario');
+        } else {
+          setRole(data?.role ?? 'funcionario');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Error fetching user role (network):', err);
         setRole('funcionario');
-      } else {
-        setRole(data?.role ?? 'funcionario');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     }
 
+    // Safety timeout — não deixar a UI travada se o backend não responder
+    const safety = setTimeout(() => {
+      if (!cancelled) {
+        setLoading((prev) => {
+          if (prev) console.warn('[useUserRole] Safety timeout — assuming funcionario');
+          return false;
+        });
+        setRole((prev) => prev ?? 'funcionario');
+      }
+    }, 6000);
+
     fetchRole();
+    return () => { cancelled = true; clearTimeout(safety); };
   }, [user]);
 
   return {

@@ -1,42 +1,41 @@
-## Problema
+Identifiquei que a tela está presa em "Carregando..." porque as chamadas ao backend estão falhando com timeout/Failed to fetch, inclusive renovação de sessão e consultas de Acordos/Retornos/Pagamentos. Também encontrei consultas pesadas e repetidas no carregamento da página de Acordos e no sino de lembretes do menu, que podem piorar ou provocar esse travamento quando o backend está sobrecarregado.
 
-Os webhooks da UAZAPI estão sendo desativados sozinhos (toggle "Habilitado" OFF). Quando isso acontece, **nenhuma mensagem recebida chega no Inbox**, porque a UAZAPI deixa de chamar o webhook `whatsapp-chatbot`.
+Plano de correção urgente:
 
-Hoje o botão "Pânico: Cortar Grupos" no Monitor de Envios chama `uazapi-disable-group-webhooks`, mas essa função **não envia o flag `enabled: true`** no payload — então em algumas versões da UAZAPI o webhook é recriado já desabilitado, exatamente como está acontecendo.
+1. Evitar tela infinita de "Carregando"
+   - Adicionar timeout de segurança na autenticação inicial.
+   - Se o backend não responder, parar o loading e exibir uma mensagem de erro com botão "Tentar novamente", em vez de deixar o sistema travado.
+   - Manter o usuário logado quando houver sessão local, mas informar claramente quando os dados não puderem ser carregados.
 
-## Solução (manual, sem cron, sem custo extra)
+2. Corrigir a página "Meus Acordos"
+   - Trocar o carregamento atual por uma versão tolerante a falhas: se uma consulta auxiliar falhar, a tela ainda abre com o que foi possível carregar.
+   - Adicionar botão "Recarregar" e mensagem objetiva quando houver falha.
+   - Remover/limitar a consulta que varre todas as parcelas paginando em loop no carregamento inicial.
+   - Buscar parcelas somente dos acordos carregados do usuário/admin compartilhado, reduzindo o volume de dados.
+   - Selecionar apenas colunas necessárias em vez de `select('*')` onde for possível.
 
-### 1. Corrigir `uazapi-disable-group-webhooks`
-Adicionar `enabled: true` no payload e um passo de **verificação pós-POST** (GET `/webhook`) com 1 retry caso o webhook volte desabilitado — mesma lógica resiliente já usada em `whatsapp-qr/reinforceWebhook`.
+3. Reduzir sobrecarga dos lembretes globais do menu
+   - O sino de lembretes roda em todas as páginas e hoje refaz consultas a cada 30 segundos, incluindo parcelas vencidas.
+   - Aumentar o intervalo e/ou pausar refetch agressivo quando o popover não estiver aberto.
+   - Limitar consultas de lembretes a dados realmente necessários para o alerta.
+   - Garantir que falhas nesses lembretes não travem o layout principal.
 
-Resultado: o botão passa a garantir webhook **ativo + URL correta + grupos/broadcast bloqueados** numa única chamada.
+4. Melhorar consultas e índices do banco
+   - Criar índices complementares para os padrões críticos:
+     - `pagamentos(status, data_prevista, acordo_id)`
+     - `pagamentos(acordo_id, data_prevista, status)`
+     - `acordos(user_id, criado_em desc)`
+     - `retornos(status, data_retorno, user_id)`
+     - `user_permissions(user_id)` se ainda não existir
+   - Esses índices não alteram dados; apenas tornam as consultas mais rápidas e reduzem chance de timeout.
 
-### 2. Renomear/duplicar o botão no Monitor de Envios
-No `MonitorEnvios.tsx`, manter o botão atual mas deixar claro que ele também **reativa** os webhooks desabilitados:
+5. Revisar rotas/layout para isolamento de falhas
+   - Proteger `AppLayout`, `PaymentReminders`, `RetornoAlertChecker` e hooks relacionados para que erro de uma consulta secundária não impeça a página principal de renderizar.
+   - Adicionar tratamento consistente de erro nas consultas React Query.
 
-- Texto: **"Reconfigurar Webhooks de Todas as Instâncias"**
-- Ícone: `Wrench` (chave inglesa) em vez de `ShieldAlert`
-- Variante: `default` (azul) em vez de `destructive`
-- Confirmação atualizada: "Reconfigurar e reativar o webhook de TODAS as instâncias UAZAPI? Isso restaura o recebimento de mensagens no Inbox e mantém grupos/broadcasts bloqueados."
-- Toast: "X/Y instâncias reativadas. Z falharam."
+6. Validação após implementação
+   - Rodar build/teste local.
+   - Consultar logs novamente.
+   - Testar abertura de `/acordos` e confirmar que a tela não fica presa em "Carregando..." mesmo se alguma chamada falhar.
 
-O botão **"Diagnosticar Webhooks"** continua existindo do lado para você verificar antes/depois.
-
-## Detalhes técnicos
-
-**Arquivos modificados:**
-- `supabase/functions/uazapi-disable-group-webhooks/index.ts`
-  - Adicionar `enabled: true` no `restrictedPayload`
-  - Após POST bem-sucedido, fazer GET `/webhook` para verificar `enabled === true`
-  - Se vier `enabled: false`, fazer 1 retry de POST
-  - Retornar `healthy_after` no JSON de resposta
-- `src/pages/MonitorEnvios.tsx`
-  - Renomear handler `handlePanicDisableGroups` → `handleReconfigureWebhooks`
-  - Trocar texto, ícone, variante e mensagens do botão
-
-**Sem alterações em:**
-- Banco de dados (nenhuma migration)
-- Cron / pg_cron (nada agendado)
-- Outras edge functions
-
-**Custo Lovable Cloud:** zero adicional. A função só roda quando você clicar no botão.
+Aviso de custo Lovable Cloud: esta correção reduz consumo e carga no backend; os índices ocupam um pequeno espaço adicional de armazenamento, mas tendem a diminuir timeouts e processamento. Não vou adicionar cron, automação recorrente nem novas execuções automáticas.
