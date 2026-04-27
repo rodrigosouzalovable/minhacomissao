@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Emergency circuit breaker: the backend is currently refusing DB connections while
+// whatsapp-chatbot receives a webhook storm. Return 200 before any DB work so UAZAPI
+// stops retrying and the main app/auth can recover. Re-enable after the DB stabilizes.
+const EMERGENCY_WEBHOOK_PAUSE = true;
+
 // Precise group/broadcast/noise filter — applied AFTER JSON.parse so it only inspects
 // the chat identifier fields (never the full body, which often contains '@g.us' in
 // metadata like instanceOwner of legitimate DMs).
@@ -772,6 +777,12 @@ function fastPreParseBlock(raw: string): string | null {
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (EMERGENCY_WEBHOOK_PAUSE) {
+    return new Response(JSON.stringify({ success: true, paused: 'emergency_webhook_pause' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
