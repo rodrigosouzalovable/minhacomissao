@@ -841,10 +841,12 @@ export default function WhatsAppInbox() {
                     etiquetas={etiquetas}
                     contatoEtiquetaIds={etIds}
                     fixado={!!contato.fixado}
+                    arquivado={!!contato.arquivado}
                     onMarcarNaoLida={fetchContatos}
                     onEtiquetaToggle={handleEtiquetaToggle}
                     onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
                     onFixarToggle={handleFixarToggle}
+                    onArquivarToggle={handleArquivarToggle}
                     onExcluirConversa={handleExcluirConversa}
                   >
                     <button
