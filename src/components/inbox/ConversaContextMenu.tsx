@@ -41,11 +41,13 @@ export function ConversaContextMenu({
   etiquetas,
   contatoEtiquetaIds,
   fixado,
+  arquivado = false,
   onMarcarNaoLida,
   onExcluirConversa,
   onEtiquetaToggle,
   onEtiquetasChange,
   onFixarToggle,
+  onArquivarToggle,
 }: Props) {
   const { toast } = useToast();
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
