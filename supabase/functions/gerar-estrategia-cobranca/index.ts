@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { isAiEnabled, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +40,17 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    if (!(await isAiEnabled())) {
+      await logAiUsage({ function_name: "gerar-estrategia-cobranca", status: "blocked_killswitch" });
+      return aiDisabledResponse(corsHeaders);
+    }
+    await logAiUsage({
+      function_name: "gerar-estrategia-cobranca",
+      model: CHEAP_MODEL,
+      prompt_chars: (prompt?.length ?? 0) + (resumoCarteira?.length ?? 0),
+      status: "ok",
+    });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
