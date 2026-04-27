@@ -171,6 +171,25 @@ export default function AquecimentoDashboard({ metrics }: Props) {
   const [loading, setLoading] = useState(true);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
   const [sincronizandoAgenda, setSincronizandoAgenda] = useState(false);
+  const [sincronizandoTelefones, setSincronizandoTelefones] = useState(false);
+
+  const sincronizarTelefonesInstancias = async () => {
+    setSincronizandoTelefones(true);
+    try {
+      toast.info('Buscando telefones das instâncias e arquivando conversas internas...');
+      const { data, error } = await supabase.functions.invoke('backfill-instance-phones');
+      if (error) throw error;
+      if (data?.ok) {
+        toast.success(`Telefones: ${data.updated} atualizados, ${data.skipped} já tinham, ${data.failed} falharam. Conversas internas arquivadas: ${data.arquivados ?? 0}`);
+      } else {
+        toast.error(`Falha: ${data?.error || 'erro desconhecido'}`);
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setSincronizandoTelefones(false);
+    }
+  };
 
   const enviarRelatorioAgora = async () => {
     setEnviandoRelatorio(true);
