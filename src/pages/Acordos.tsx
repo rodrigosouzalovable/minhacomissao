@@ -1000,8 +1000,23 @@ export default function Acordos() {
   }, [user, profile, lembreteTemplates, startSending, toast]);
   if (loading) {
     return <AppLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
           <p className="text-muted-foreground">Carregando...</p>
+          <Button variant="outline" size="sm" onClick={() => { setLoading(false); setReloadKey(k => k + 1); }}>
+            Cancelar e tentar novamente
+          </Button>
+        </div>
+      </AppLayout>;
+  }
+  if (loadError) {
+    return <AppLayout>
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-3 text-center max-w-md mx-auto">
+          <AlertTriangle className="h-10 w-10 text-destructive" />
+          <h2 className="text-lg font-semibold">Não foi possível carregar os acordos</h2>
+          <p className="text-sm text-muted-foreground">{loadError}</p>
+          <Button onClick={() => { setLoading(true); setLoadError(null); setReloadKey(k => k + 1); }}>
+            Tentar novamente
+          </Button>
         </div>
       </AppLayout>;
   }
