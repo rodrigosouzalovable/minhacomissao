@@ -748,6 +748,27 @@ function getCredorNome(credorSlug: string): string {
   return credorSlug.replace(/_/g, ' ');
 }
 
+// Fast pre-parse fingerprint check on raw body for OBVIOUS group/broadcast payloads.
+// Avoids the cost of JSON.parse on huge UAZAPI payloads (which was saturating workers).
+// We only short-circuit when we are very confident; otherwise, we fall through to the
+// precise post-parse check that protects against false-positives on legitimate DMs.
+function fastPreParseBlock(raw: string): string | null {
+  if (!raw) return null;
+  // Sample only the first 2KB — group identifiers always appear early in the payload.
+  const sample = raw.length > 2048 ? raw.slice(0, 2048) : raw;
+  // Strong group signal: a remoteJid/chatid field whose value clearly ends in @g.us.
+  if (/"(?:chatid|chatId|remoteJid|from)"\s*:\s*"[^"]*@g\.us"/i.test(sample)) {
+    return 'fast:group_jid';
+  }
+  if (/"(?:chatid|chatId|remoteJid|from)"\s*:\s*"status@broadcast"/i.test(sample)) {
+    return 'fast:status_broadcast';
+  }
+  if (/"isGroup"\s*:\s*true/i.test(sample) || /"wa_isGroup"\s*:\s*true/i.test(sample)) {
+    return 'fast:isGroup_flag';
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -755,6 +776,16 @@ serve(async (req) => {
 
   try {
     const rawBody = await req.text();
+
+    // 🚀 FAST-PATH: short-circuit obvious group/broadcast webhooks BEFORE JSON.parse.
+    // This protects worker pool saturation when UAZAPI floods us with group events.
+    const fastBlock = fastPreParseBlock(rawBody);
+    if (fastBlock) {
+      return new Response(JSON.stringify({ success: true, ignored: fastBlock }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     let payload: any;
     try {
       payload = JSON.parse(rawBody);
@@ -768,7 +799,6 @@ serve(async (req) => {
     // false-positives on legitimate DMs whose metadata may mention '@g.us'.
     const blockCheck = isBlockedParsedPayload(payload);
     if (blockCheck.blocked) {
-      console.log(`[CHATBOT] Ignored: ${blockCheck.reason}`);
       return new Response(JSON.stringify({ success: true, ignored: blockCheck.reason }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
