@@ -1,81 +1,98 @@
-# Prioridade 1: Reativar e escalar Auto-Save com Números Âncora
+## Resumo
 
-## Diagnóstico atual
+Implementar Prioridades 2 (instrumentação do ping-pong de aquecimento) e 4 (rampa de fase real), com validação pós-deploy via Teste IA Manual + leitura da tabela de auditoria.
 
-- **Cron ativo**: `aquecimento-autosave-horario` roda de hora em hora 07-20h BRT — OK.
-- **Pool externa**: 985 contatos, todos ativos — OK.
-- **Envios reais nos últimos 10 dias: apenas 2.** O sistema está praticamente parado.
-- **Bloqueio de grupos no webhook `whatsapp-chatbot`: JÁ ESTÁ IMPLEMENTADO** (função `isBlockedRemoteJid` + `isBlockedParsedPayload` filtram `@g.us`, `status@broadcast`, `isGroup`, etc.). Não precisa mexer.
+---
 
-### Por que está parado mesmo com cron rodando
+## 1. Migration: `whatsapp_conversas_auditoria`
 
-1. `Math.random() > 0.7` na função descarta **30% das execuções por instância em cada rodada** — combinado com limite diário baixo (3 msg/dia para fase 1-2) e pausa 12-14h, sobram pouquíssimas janelas efetivas.
-2. A pool de 985 contatos é "fria" (números aleatórios externos) — sem reciprocidade, e WhatsApp pode marcar como spam.
-3. Não há priorização: chip de aquecimento não conversa com nenhum número confiável que vá responder de verdade.
+```sql
+CREATE TABLE public.whatsapp_conversas_auditoria (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  instancia_origem_id uuid,
+  instancia_destino_id uuid,
+  numero_origem text,
+  numero_destino text,
+  etapa text NOT NULL,        -- 'webhook_in' | 'ollama_call' | 'uazapi_send' | 'cascade_skip'
+  status text NOT NULL,       -- 'ok' | 'falhou' | 'timeout' | 'ignorado'
+  mensagem_original text,
+  resposta_gerada text,
+  motivo text,
+  http_status integer,
+  tempo_resposta_ms integer,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_aud_created ON public.whatsapp_conversas_auditoria (created_at DESC);
+CREATE INDEX idx_aud_par ON public.whatsapp_conversas_auditoria
+  (instancia_origem_id, instancia_destino_id, created_at DESC);
 
-## O que vai ser feito
+ALTER TABLE public.whatsapp_conversas_auditoria ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "admins_read_auditoria" ON public.whatsapp_conversas_auditoria
+  FOR SELECT TO authenticated USING (public.is_admin_user(auth.uid()));
+-- Inserts apenas via service_role (edge functions). Sem policy de INSERT para usuários.
 
-### 1. Edge function `aquecimento-envio-autosave/index.ts`
+-- Cron de purga 7 dias (03:00 BRT = 06:00 UTC)
+SELECT cron.schedule(
+  'purge-conversas-auditoria',
+  '0 6 * * *',
+  $$ DELETE FROM public.whatsapp_conversas_auditoria WHERE created_at < now() - interval '7 days'; $$
+);
+```
 
-**a) Adicionar lista de 7 âncoras prioritárias (no topo do arquivo):**
+---
+
+## 2. `supabase/functions/whatsapp-ia-responder/index.ts`
+
+- Adicionar helper `auditar(supabase, row)` (try/catch silencioso, nunca quebra fluxo).
+- `callOllama`: medir `Date.now()` antes/depois; logar `[IA-Ollama] OK ms=X model=Y` ou `TIMEOUT/HTTP_ERR`; inserir auditoria etapa=`ollama_call` com `tempo_resposta_ms`, `status` e `resposta_gerada` (truncada 200ch).
+- Subir timeout Ollama de **20s → 30s**.
+- `enviarMensagemUAZAPI`: capturar `res.status`, body curto; auditar etapa=`uazapi_send` com `http_status` e `motivo` em caso de falha; logar qual endpoint funcionou.
+- Auditar `cascade_skip` quando: limite de trocas atingido, número/instância desconectados, fallback usado por Ollama nulo.
+
+## 3. `supabase/functions/whatsapp-chatbot/index.ts`
+
+- No topo do handler: `console.log('[CHATBOT] IN from=<jid> instance=<id> isGroup=<bool> textLen=<n>')` antes dos filtros.
+- Quando o `from` corresponde a uma instância ativa em `whatsapp_aquecimento_instancias` (consulta cacheada por execução), inserir auditoria etapa=`webhook_in`, status=`ok`, com `mensagem_original`.
+- Se cair em "no_handler" (não é cliente nem fluxo de aquecimento conhecido): auditar etapa=`cascade_skip`, motivo=`no_handler`. Isso responde "o webhook chegou mas foi ignorado?".
+- **Não** auditar grupos/status (já filtrados, sem custo extra).
+
+## 4. `supabase/functions/whatsapp-aquecimento/index.ts`
+
+Substituir o cálculo global `TARGET_MESSAGES_PER_DAY` por target por instância:
+
 ```ts
-const ANCORAS_PRIORITARIAS = [
-  "5562991672674","5562981810202","5562981079590",
-  "5562981865213","5562982183144","5562982458447","5562981079569",
-];
+const PARES_POR_FASE: Record<number, number> = { 1: 1, 2: 2, 3: 3, 4: 5, 5: 8 };
+
+const computeTarget = (fase: number, dayOfWeek: number) => {
+  const base = PARES_POR_FASE[fase] ?? 1;
+  const fator = dayOfWeek === 0 ? 0.4 : dayOfWeek === 6 ? 0.6 : 1.0;
+  return Math.max(1, Math.round(base * fator));
+};
 ```
 
-**b) Selecionar destino com 70/30:**
-- 70% das vezes: escolhe uma âncora — a que **menos recebeu mensagens daquele chip nos últimos 7 dias** (rodízio justo, evita repetir).
-- 30% das vezes: pega 1 contato da pool atual `aquecimento_contatos_autosave` (lógica atual de últimos-30-dias preservada).
-- Âncoras são tratadas como contatos virtuais com `id` sintético (`ancora:<numero>`) e registradas em `aquecimento_envios_autosave.contato_id = null` + nova coluna `numero_destino TEXT` para histórico/rodízio. Migração SQL inclusa.
+- Remover `r = Math.random()` e os ramos `< 0.5 / 0.85`.
+- `eligible = userInstances.filter(i => (i.interacoes_hoje || 0) < computeTarget(i.fase || 1, dayOfWeek))`.
+- Log: `[AQUEC] inst=<nome> fase=<n> target=<n> hoje=<n>`.
+- Manter pausa 12-14h, cron horário, cooldown 2-4h por par e MAX_PAIRS_PER_CYCLE=12.
 
-**c) Expandir mensagens de 30 → 50+ frases variadas (manter as 30 atuais e adicionar 20+ com tom natural e alguns emojis discretos):**
-```
-"Hey, tudo joia? 👋", "Coe, firmeza?", "Bão?", "Fala chefe",
-"E aí, tranquilo?", "Suave?", "Oi, quanto tempo!", "Lembrou de mim?",
-"Passando pra dar um oi 👋", "Só passando pra dizer oi", "Tudo na paz?",
-"Firme e forte?", "E aí, novidades?", "Como andam as coisas?",
-"Tudo em cima? 👍", "Salve, camarada", "Opa, belezinha?",
-"Fala parceiro", "Oi, espero que esteja bem 🙂", "Só um oi rápido"
-```
+---
 
-**d) Remover o gargalo `Math.random() > 0.7`** (skip aleatório de 30%) — a aleatoriedade já vem do cron horário, do limite por fase e do fator fim de semana. Manter limites por fase (3/5/7) e a pausa 12-14h.
+## 5. Validação pós-deploy
 
-**e) Distribuição ao longo do dia já está garantida pelo cron horário** (07-20h BRT, exceto 12-14h = ~10 janelas/dia). Para fase 1 (limite 3/dia) o chip fica naturalmente espalhado.
+1. Disparar `whatsapp-aquecimento` com `action: "manual-test"` em 2 chips conectados (escolho 2 do par âncora ativo).
+2. Aguardar 60s para a cascata rodar.
+3. Rodar query: `SELECT etapa, status, motivo, http_status, tempo_resposta_ms, created_at FROM whatsapp_conversas_auditoria ORDER BY created_at DESC LIMIT 20;`
+4. Te mando análise: onde o ping-pong morreu (Ollama timeout / webhook não chegou / UAZAPI falhou) e recomendação concreta.
 
-### 2. Migração SQL
-
-Adicionar coluna `numero_destino TEXT` em `aquecimento_envios_autosave` (nullable) e tornar `contato_id` nullable, para registrar envios para âncoras sem precisar criá-las na pool. Index em `(instancia_id, numero_destino, enviado_em)` para o rodízio.
-
-### 3. Webhook `whatsapp-chatbot` — bloqueio de grupos
-
-**Nada a fazer.** Já existe e está completo (linhas 13-49 e 920-924 do arquivo). Apenas confirmado.
-
-### 4. Página `Aquecimento` (UI) — opcional, leve
-
-Na aba **Auto-Save**, adicionar um pequeno bloco "Números âncora" listando as 7 âncoras com badge de quantos envios receberam hoje (read-only). Sem inputs — lista fixa no código por enquanto.
+---
 
 ## Custo Lovable Cloud
 
-- Sem mudança de frequência de cron (continua 1x/hora).
-- Volume vai subir de ~2 envios/10 dias para ~20-30 envios/dia (147 instâncias × ~3 fase 1) — dentro do esperado para aquecimento e **muito abaixo de qualquer limite de Edge Functions**. Sem impacto financeiro relevante.
+- Tabela auditoria: ~5–10k inserts/dia, com purga 7 dias → tamanho estável <100MB.
+- Cron extra: 1 execução/dia, sem custo perceptível.
+- Sem aumento na frequência de envios.
+- **Impacto financeiro estimado: poucos centavos/mês.** Aceito conforme sua aprovação.
 
-## Verificação pós-deploy
+## Memória a atualizar
 
-1. Disparar `aquecimento-envio-autosave` manualmente pelo botão "Disparar ciclo agora" e checar nos logs: deve haver `status: "enviado"` para vários números, com ~70% sendo âncoras.
-2. Confirmar nos seus 7 celulares: mensagens chegando dos chips em aquecimento.
-3. SQL para auditar 24h depois:
-   ```sql
-   SELECT numero_destino, COUNT(*) FROM aquecimento_envios_autosave
-   WHERE enviado_em > now() - interval '1 day'
-   GROUP BY 1 ORDER BY 2 DESC;
-   ```
-
-## Arquivos alterados
-
-- `supabase/functions/aquecimento-envio-autosave/index.ts` (lógica principal)
-- Nova migration: coluna `numero_destino` + índice
-- `src/components/aquecimento/AquecimentoAutoSaveTab.tsx` (bloco de âncoras — opcional)
-
-Sem alterações em `whatsapp-chatbot` (bloqueio de grupos já existe e está robusto).
+- Atualizar `mem://features/whatsapp/warming-system-comprehensive` com a nova rampa por fase (1/2/3/5/8 pares/dia).

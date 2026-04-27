@@ -921,11 +921,50 @@ serve(async (req) => {
     const isBlockedChat = isBlockedRemoteJid(remoteJid);
     const uazapiMsgType = (payload?.message?.messageType || '').toLowerCase();
 
+    // --- LOG DE ENTRADA (antes de bloqueios DM) ---
+    const _msgText = payload?.message?.text || payload?.message?.content || payload?.text || '';
+    console.log(`[CHATBOT] IN from=${remoteJid} isGroup=${isGroup} type=${uazapiMsgType} textLen=${_msgText.length} fromMe=${payload?.message?.fromMe ?? payload?.fromMe ?? false}`);
+
     if (isGroup || isBlockedChat || uazapiMsgType === 'reactionmessage' || uazapiMsgType === 'protocolmessage') {
       return new Response(JSON.stringify({ success: true, ignored: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // --- AUDITORIA: registrar webhook_in para mensagens vindas de chips do sistema (fire-and-forget) ---
+    // Detecção: o "owner" do webhook é uma instância nossa; se o "from" também for uma instância nossa,
+    // estamos diante de ping-pong de aquecimento. Faz lookup async sem bloquear o fluxo.
+    (async () => {
+      try {
+        const fromPhone = String(remoteJid || '').replace(/\D/g, '');
+        if (!fromPhone) return;
+        const fromSuffix = fromPhone.slice(-8);
+        const ownerToken = payload?.token || payload?.instance_token || '';
+        const sbAud = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        // Procura instância destino (owner do webhook, via token) e instância origem (via sufixo do telefone)
+        const { data: instances } = await sbAud
+          .from('user_whatsapp_instances')
+          .select('id, nome, instance_token')
+          .eq('ativo', true);
+        if (!instances?.length) return;
+        const destInst = instances.find((i: any) => i.instance_token === ownerToken);
+        const origInst = instances.find((i: any) => {
+          const p = (i.nome || '').match(/\d+/)?.[0] || '';
+          return p && p.slice(-8) === fromSuffix;
+        });
+        // Só auditamos se origem é uma instância nossa (= ping-pong de aquecimento)
+        if (!origInst) return;
+        await sbAud.from('whatsapp_conversas_auditoria').insert({
+          etapa: 'webhook_in',
+          status: 'ok',
+          instancia_origem_id: origInst.id,
+          instancia_destino_id: destInst?.id || null,
+          numero_origem: fromPhone,
+          mensagem_original: String(_msgText).substring(0, 500),
+          motivo: `chatbot_received owner=${destInst?.nome || 'unknown'}`,
+        });
+      } catch (_e) { /* silencioso */ }
+    })();
 
     // --- Deduplicação ---
     const rawMessageId = payload?.message?.messageid || payload?.message?.id || payload?.key?.id || payload?.messageId || '';

@@ -189,13 +189,15 @@ Deno.serve(async (req) => {
       instancesByUser.get(userId)!.push({ ...inst, details });
     }
 
-    // ========== TARGET DIÁRIO (sempre >= 1) ==========
-    // Volume varia por sorteio (50% = 1, 35% = 2, 15% = 3) — nunca zera o dia.
-    const r = Math.random();
-    let baseTarget = r < 0.5 ? 1 : r < 0.85 ? 2 : 3;
+    // ========== RAMPA REAL POR FASE ==========
+    // Pares de conversa iniciados por instância/dia. Cada par dispara cascata de 4-10 trocas via webhook.
+    const PARES_POR_FASE: Record<number, number> = { 1: 1, 2: 2, 3: 3, 4: 5, 5: 8 };
     // Fator fim-de-semana: sábado 60%, domingo 40% — mínimo 1
     const fatorDia = dayOfWeek === 0 ? 0.4 : dayOfWeek === 6 ? 0.6 : 1.0;
-    const TARGET_MESSAGES_PER_DAY = Math.max(1, Math.round(baseTarget * fatorDia));
+    const computeTarget = (fase: number) => {
+      const base = PARES_POR_FASE[fase] ?? 1;
+      return Math.max(1, Math.round(base * fatorDia));
+    };
     const MAX_PAIRS_PER_CYCLE = 12;
     // Pausa de almoço (12-14h BRT)
     if (hour >= 12 && hour < 14) {
@@ -203,7 +205,7 @@ Deno.serve(async (req) => {
       return json({ message: "Lunch break", skipped: true });
     }
 
-    console.log(`[AQUECIMENTO] 🎯 Target do dia: ${TARGET_MESSAGES_PER_DAY} conversa(s) por instância (fator ${fatorDia}).`);
+    console.log(`[AQUECIMENTO] 🎯 Rampa por fase ativa (fator dia ${fatorDia}): F1=${computeTarget(1)} F2=${computeTarget(2)} F3=${computeTarget(3)} F4=${computeTarget(4)} F5=${computeTarget(5)}`);
 
     // ========== RESET DAILY COUNTERS ==========
     for (const inst of instancias) {
@@ -222,15 +224,19 @@ Deno.serve(async (req) => {
 
     // ========== PROCESS EACH USER'S INSTANCES SEPARATELY ==========
     for (const [userId, userInstances] of instancesByUser.entries()) {
-      // Filter eligible (not at daily limit)
-      const eligible = userInstances.filter((inst: any) => inst.interacoes_hoje < TARGET_MESSAGES_PER_DAY);
+      // Filter eligible — cada instância tem seu próprio target baseado na fase
+      const eligible = userInstances.filter((inst: any) => {
+        const target = computeTarget(inst.fase || 1);
+        return (inst.interacoes_hoje || 0) < target;
+      });
 
       if (eligible.length < 2) {
         console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis, precisa de 2+. Pulando.`);
         continue;
       }
 
-      console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis de ${userInstances.length}.`);
+      console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis de ${userInstances.length}. ` +
+        eligible.slice(0, 5).map((i: any) => `${i.details?.nome || i.instancia_id}=F${i.fase}(${i.interacoes_hoje || 0}/${computeTarget(i.fase || 1)})`).join(' '));
 
       // ========== GENERATE PAIRS (same user only) ==========
       // Prioriza quem tem MENOS interações hoje (garante cobertura de todas as instâncias)

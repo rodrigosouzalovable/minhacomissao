@@ -41,6 +41,31 @@ function getSupabaseAdmin() {
   );
 }
 
+// ========== AUDITORIA: nunca quebra o fluxo ==========
+async function auditar(row: {
+  instancia_origem_id?: string | null;
+  instancia_destino_id?: string | null;
+  numero_origem?: string | null;
+  numero_destino?: string | null;
+  etapa: 'webhook_in' | 'ollama_call' | 'uazapi_send' | 'cascade_skip';
+  status: 'ok' | 'falhou' | 'timeout' | 'ignorado';
+  mensagem_original?: string | null;
+  resposta_gerada?: string | null;
+  motivo?: string | null;
+  http_status?: number | null;
+  tempo_resposta_ms?: number | null;
+}) {
+  try {
+    const sb = getSupabaseAdmin();
+    await sb.from('whatsapp_conversas_auditoria').insert({
+      ...row,
+      mensagem_original: row.mensagem_original?.substring(0, 500) ?? null,
+      resposta_gerada: row.resposta_gerada?.substring(0, 500) ?? null,
+      motivo: row.motivo?.substring(0, 300) ?? null,
+    });
+  } catch (_e) { /* silencioso */ }
+}
+
 function randomDelay(minMs: number, maxMs: number): number {
   return Math.floor(Math.random() * (maxMs - minMs)) + minMs;
 }
@@ -120,17 +145,20 @@ NUNCA repita a mesma estrutura duas vezes seguidas.${instrucaoEncerramento}`;
 const OLLAMA_MODEL = Deno.env.get("OLLAMA_MODEL") || "gemma4:e4b";
 const OLLAMA_API_KEY = Deno.env.get("OLLAMA_API_KEY") || "";
 
-async function callOllama(messages: { role: string; content: string }[], opts: { timeoutMs?: number; numPredict?: number; temperature?: number } = {}): Promise<string | null> {
+async function callOllama(messages: { role: string; content: string }[], opts: { timeoutMs?: number; numPredict?: number; temperature?: number; auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string; numero_destino?: string } } = {}): Promise<string | null> {
   const ollamaUrl = Deno.env.get("OLLAMA_NGROK_URL");
+  const auditCtx = opts.auditCtx || {};
   if (!ollamaUrl) {
     console.warn("[IA] OLLAMA_NGROK_URL não configurado");
+    auditar({ etapa: 'ollama_call', status: 'falhou', motivo: 'OLLAMA_NGROK_URL ausente', ...auditCtx });
     return null;
   }
   const cleanUrl = ollamaUrl.replace(/\/+$/, "");
-  const timeoutMs = opts.timeoutMs ?? 20000;
+  const timeoutMs = opts.timeoutMs ?? 30000; // subido de 20s → 30s
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const t0 = Date.now();
 
   try {
     const headers: Record<string, string> = {
@@ -154,24 +182,31 @@ async function callOllama(messages: { role: string; content: string }[], opts: {
       signal: controller.signal,
     });
     clearTimeout(timeout);
+    const ms = Date.now() - t0;
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[IA] Ollama ${response.status}: ${errText.substring(0, 200)}`);
+      console.error(`[IA-Ollama] HTTP_ERR ${response.status} ms=${ms}: ${errText.substring(0, 200)}`);
+      auditar({ etapa: 'ollama_call', status: 'falhou', http_status: response.status, tempo_resposta_ms: ms, motivo: errText.substring(0, 200), ...auditCtx });
       return null;
     }
 
     const data = await response.json();
     const content = (data.message?.content || data.response || "").trim();
+    console.log(`[IA-Ollama] OK ms=${ms} model=${OLLAMA_MODEL} len=${content.length}`);
+    auditar({ etapa: 'ollama_call', status: 'ok', http_status: response.status, tempo_resposta_ms: ms, resposta_gerada: content, ...auditCtx });
     return content || null;
   } catch (err) {
     clearTimeout(timeout);
-    console.error("[IA] Ollama erro:", err);
+    const ms = Date.now() - t0;
+    const isTimeout = (err as Error)?.name === 'AbortError';
+    console.error(`[IA-Ollama] ${isTimeout ? 'TIMEOUT' : 'ERRO'} ms=${ms}:`, err);
+    auditar({ etapa: 'ollama_call', status: isTimeout ? 'timeout' : 'falhou', tempo_resposta_ms: ms, motivo: String(err).substring(0, 200), ...auditCtx });
     return null;
   }
 }
 
-async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number): Promise<string> {
+async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number, auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string; numero_destino?: string }): Promise<string> {
   const systemPrompt = buildSystemPrompt(totalTrocas, maxTrocas);
   const messages: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt },
@@ -184,8 +219,9 @@ async function chamarIA(mensagem: string, historico: string, totalTrocas: number
 
   messages.push({ role: "user", content: mensagem });
 
-  const raw = await callOllama(messages, { timeoutMs: 20000, numPredict: 80, temperature: 0.85 });
+  const raw = await callOllama(messages, { timeoutMs: 30000, numPredict: 80, temperature: 0.85, auditCtx });
   if (!raw) {
+    auditar({ etapa: 'cascade_skip', status: 'ignorado', motivo: 'ollama_null_fallback', mensagem_original: mensagem, ...auditCtx });
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
   }
 
@@ -265,28 +301,39 @@ async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, num
   return false;
 }
 
-async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, texto: string): Promise<boolean> {
+async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, numero: string, texto: string, auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string }): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+  let lastStatus: number | null = null;
+  let lastBody: string = '';
 
   for (const url of endpoints) {
+    const t0 = Date.now();
     try {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", token: instanceToken },
         body: JSON.stringify({ number: numero, text: texto }),
       });
+      const ms = Date.now() - t0;
+      lastStatus = res.status;
+      const body = await res.text();
+      lastBody = body.substring(0, 200);
       if (res.ok) {
-        await res.text();
-        console.log(`[IA] ✅ Enviada para ${numero}: "${texto}"`);
+        console.log(`[IA] ✅ Enviada via ${url} ms=${ms} status=${res.status} → ${numero}: "${texto}"`);
+        auditar({ etapa: 'uazapi_send', status: 'ok', http_status: res.status, tempo_resposta_ms: ms, numero_destino: numero, resposta_gerada: texto, motivo: url, ...(auditCtx || {}) });
         return true;
       }
-      await res.text();
+      console.warn(`[IA] Endpoint ${url} status=${res.status} ms=${ms} body=${lastBody}`);
     } catch (e) {
-      console.warn(`[IA] Endpoint ${url} falhou:`, e);
+      const ms = Date.now() - t0;
+      lastBody = String(e).substring(0, 200);
+      console.warn(`[IA] Endpoint ${url} ms=${ms} falhou:`, e);
+      auditar({ etapa: 'uazapi_send', status: 'falhou', tempo_resposta_ms: ms, numero_destino: numero, motivo: `${url}: ${lastBody}`, ...(auditCtx || {}) });
     }
   }
-  console.error(`[IA] ❌ Falha ao enviar para ${numero}`);
+  console.error(`[IA] ❌ Falha ao enviar para ${numero} (último status=${lastStatus})`);
+  auditar({ etapa: 'uazapi_send', status: 'falhou', http_status: lastStatus, numero_destino: numero, resposta_gerada: texto, motivo: `all endpoints failed: ${lastBody}`, ...(auditCtx || {}) });
   return false;
 }
 
@@ -556,7 +603,7 @@ Deno.serve(async (req) => {
         sentAsMedia = mediaResult.sent;
 
         if (!sentAsMedia) {
-          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial);
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial, { instancia_origem_id, instancia_destino_id });
           if (sent) {
             await logToInbox(sb, instancia_origem_id, numero_destino, mensagemInicial, "saida");
           }
@@ -653,7 +700,7 @@ Deno.serve(async (req) => {
         const historicoTexto = historicoArr.slice(-10)
           .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas);
+        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
 
         const novoHistorico = [
           ...historicoArr,
@@ -666,7 +713,7 @@ Deno.serve(async (req) => {
         }).eq("id", conversa.id);
 
         if (server_url && instance_token && numero_destino) {
-          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento);
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento, { instancia_origem_id, instancia_destino_id });
           if (sent) {
             await logToInbox(sb, instancia_origem_id, numero_destino, fraseEncerramento, "saida");
           }
@@ -705,7 +752,7 @@ Deno.serve(async (req) => {
       const historicoTexto = historicoArr.slice(-10)
         .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas);
+      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
 
       const novoHistorico = [
         ...historicoArr,
@@ -736,7 +783,7 @@ Deno.serve(async (req) => {
         const mediaResult = await tentarEnviarMidia(sb, server_url, instance_token, numero_destino, instancia_origem_id, resposta);
         
         if (!mediaResult.sent) {
-          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta, { instancia_origem_id, instancia_destino_id });
           if (sent) {
             await logToInbox(sb, instancia_origem_id, numero_destino, resposta, "saida");
           }
