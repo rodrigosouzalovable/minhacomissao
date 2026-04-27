@@ -419,7 +419,28 @@ export default function Acionamento() {
     }
   };
 
+  const exportClientes = (lista: ClienteData[], prefixo: string) => {
+    if (lista.length === 0) {
+      toast.info('Nenhum contato para exportar');
+      return;
+    }
+    const hoje = new Date().toISOString().slice(0, 10);
+    exportarParaExcel<ClienteData>(
+      lista,
+      [
+        { chave: 'cpf', titulo: 'CPF' },
+        { chave: 'nome', titulo: 'Nome' },
+        { chave: 'telefone', titulo: 'Telefone' },
+        { chave: 'atraso', titulo: 'Atraso' },
+        { chave: 'saldo', titulo: 'Saldo' },
+      ],
+      `${prefixo}-${hoje}`
+    );
+    toast.success(`Planilha "${prefixo}" baixada com ${lista.length} contato(s)`);
+  };
 
+  const handleDownloadComWhatsApp = () => exportClientes(clientes, 'contatos-com-whatsapp');
+  const handleDownloadSemWhatsApp = () => exportClientes(numerosInvalidos, 'contatos-sem-whatsapp');
 
   const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
     const activeOnes = instancesToCheck.filter(i => i.ativo);
