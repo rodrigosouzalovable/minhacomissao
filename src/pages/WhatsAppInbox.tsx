@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { MensagensRapidasDialog, type MensagemRapida } from '@/components/inbox/MensagensRapidasDialog';
+import { NovaConversaDialog } from '@/components/inbox/NovaConversaDialog';
 interface Etiqueta {
   id: string;
   nome: string;
