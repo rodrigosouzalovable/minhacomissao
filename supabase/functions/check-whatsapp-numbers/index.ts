@@ -36,14 +36,37 @@ Deno.serve(async (req) => {
     const invalid: string[] = [];
     const errors: string[] = [];
 
-    const BATCH_SIZE = 10;
-    for (let i = 0; i < formattedNumbers.length; i += BATCH_SIZE) {
-      const batch = formattedNumbers.slice(i, i + BATCH_SIZE);
-      const originalBatch = numbers.slice(i, i + BATCH_SIZE);
+    const BATCH_SIZE = 50;
+    const CONCURRENCY = 5;
+    const REQUEST_TIMEOUT_MS = 25000;
 
+    // Build all batches
+    const batches: { batch: string[]; originalBatch: string[]; index: number }[] = [];
+    for (let i = 0; i < formattedNumbers.length; i += BATCH_SIZE) {
+      batches.push({
+        batch: formattedNumbers.slice(i, i + BATCH_SIZE),
+        originalBatch: numbers.slice(i, i + BATCH_SIZE),
+        index: Math.floor(i / BATCH_SIZE) + 1,
+      });
+    }
+
+    const processItem = (item: any, originalNumber: string) => {
+      const hasWhatsApp = item.isInWhatsapp === true ||
+                         item.exists === true ||
+                         item.numberExists === true ||
+                         item.onWhatsapp === true;
+      if (hasWhatsApp) {
+        valid.push(originalNumber);
+      } else {
+        invalid.push(originalNumber);
+      }
+    };
+
+    const processBatch = async ({ batch, originalBatch, index }: { batch: string[]; originalBatch: string[]; index: number }) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
-        console.log(`Verificando lote ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} números`);
-        
+        console.log(`Verificando lote ${index}: ${batch.length} números`);
         const response = await fetch(`${cleanUrl}/chat/check`, {
           method: 'POST',
           headers: {
@@ -51,6 +74,7 @@ Deno.serve(async (req) => {
             'token': instance_token,
           },
           body: JSON.stringify({ numbers: batch }),
+          signal: controller.signal,
         });
 
         const text = await response.text();
@@ -60,61 +84,51 @@ Deno.serve(async (req) => {
         } catch {
           console.error(`Resposta não-JSON: ${text.slice(0, 200)}`);
           originalBatch.forEach((n: string) => errors.push(n));
-          continue;
+          return;
         }
 
-        console.log(`Resposta lote: ${JSON.stringify(data).slice(0, 500)}`);
-
-        // Handle timeout responses
         if (data?.code === 504 || data?.message === 'Request timeout') {
-          console.error(`Timeout no lote ${Math.floor(i / BATCH_SIZE) + 1}`);
+          console.error(`Timeout no lote ${index}`);
           originalBatch.forEach((n: string) => errors.push(n));
-          continue;
+          return;
         }
 
         if (!response.ok) {
-          console.error(`Erro HTTP ${response.status}: ${JSON.stringify(data)}`);
+          console.error(`Erro HTTP ${response.status}: ${JSON.stringify(data).slice(0, 200)}`);
           originalBatch.forEach((n: string) => errors.push(n));
-          continue;
+          return;
         }
 
-        const processItem = (item: any, originalNumber: string) => {
-          const hasWhatsApp = item.isInWhatsapp === true || 
-                             item.exists === true || 
-                             item.numberExists === true ||
-                             item.onWhatsapp === true;
-          if (hasWhatsApp) {
-            valid.push(originalNumber);
-          } else {
-            invalid.push(originalNumber);
-          }
-        };
+        const arr = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.numbers)
+          ? data.numbers
+          : Array.isArray(data?.result)
+          ? data.result
+          : null;
 
-        if (Array.isArray(data)) {
-          data.forEach((item: any, idx: number) => {
-            processItem(item, originalBatch[idx] || batch[idx]);
-          });
-        } else if (data.numbers && Array.isArray(data.numbers)) {
-          data.numbers.forEach((item: any, idx: number) => {
-            processItem(item, originalBatch[idx] || batch[idx]);
-          });
-        } else if (data.result && Array.isArray(data.result)) {
-          data.result.forEach((item: any, idx: number) => {
-            processItem(item, originalBatch[idx] || batch[idx]);
-          });
-        } else {
+        if (!arr) {
           console.error(`Formato desconhecido: ${JSON.stringify(data).slice(0, 300)}`);
           originalBatch.forEach((n: string) => errors.push(n));
+          return;
         }
 
-        if (i + BATCH_SIZE < formattedNumbers.length) {
-          await new Promise(r => setTimeout(r, 1000));
-        }
+        arr.forEach((item: any, idx: number) => {
+          processItem(item, originalBatch[idx] || batch[idx]);
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro desconhecido';
-        console.error(`Erro no lote: ${msg}`);
+        console.error(`Erro no lote ${index}: ${msg}`);
         originalBatch.forEach((n: string) => errors.push(n));
+      } finally {
+        clearTimeout(timeoutId);
       }
+    };
+
+    // Process with limited concurrency
+    for (let i = 0; i < batches.length; i += CONCURRENCY) {
+      const slice = batches.slice(i, i + CONCURRENCY);
+      await Promise.all(slice.map(processBatch));
     }
 
     return jsonResponse({
