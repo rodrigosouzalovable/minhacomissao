@@ -143,21 +143,22 @@ export default function MonitorEnvios() {
     }
   };
 
-  const [panicLoading, setPanicLoading] = useState(false);
-  const handlePanicDisableGroups = async () => {
-    if (!confirm('PÂNICO: Desativar webhooks de grupo em TODAS as instâncias UAZAPI?\n\nIsso para o gasto descontrolado de créditos. As DMs continuam funcionando normalmente.')) return;
-    setPanicLoading(true);
+  const [reconfigLoading, setReconfigLoading] = useState(false);
+  const handleReconfigureWebhooks = async () => {
+    if (!confirm('Reconfigurar e REATIVAR o webhook de TODAS as instâncias UAZAPI?\n\nIsso restaura o recebimento de mensagens no Inbox e mantém grupos/broadcasts BLOQUEADOS.')) return;
+    setReconfigLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('uazapi-disable-group-webhooks');
       if (error) throw error;
+      const healthy = data.healthy_after ?? data.success;
       toast({
-        title: '🛡️ Webhooks restritos',
-        description: `${data.success}/${data.total} instâncias blindadas contra grupos. Falhas: ${data.failed}.`,
+        title: '🔧 Webhooks reconfigurados',
+        description: `${healthy}/${data.total} instâncias reativadas e saudáveis. Falhas: ${data.failed}.`,
       });
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message || 'Falha ao reconfigurar webhooks', variant: 'destructive' });
     } finally {
-      setPanicLoading(false);
+      setReconfigLoading(false);
     }
   };
 
@@ -187,14 +188,14 @@ export default function MonitorEnvios() {
               {diagLoading ? 'Diagnosticando...' : 'Diagnosticar Webhooks'}
             </Button>
             <Button
-              variant="destructive"
+              variant="default"
               size="sm"
-              onClick={handlePanicDisableGroups}
-              disabled={panicLoading}
-              title="Desativa webhooks de grupo em todas as instâncias UAZAPI (corte de gasto)"
+              onClick={handleReconfigureWebhooks}
+              disabled={reconfigLoading}
+              title="Reconfigura e reativa o webhook de todas as instâncias UAZAPI (restaura recebimento de mensagens no Inbox)"
             >
-              <ShieldAlert className="h-4 w-4 mr-1" />
-              {panicLoading ? 'Aplicando...' : 'Pânico: Cortar Grupos'}
+              <Wrench className="h-4 w-4 mr-1" />
+              {reconfigLoading ? 'Reconfigurando...' : 'Reconfigurar Webhooks'}
             </Button>
             <Dialog open={configOpen} onOpenChange={setConfigOpen}>
               <DialogTrigger asChild>

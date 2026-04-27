@@ -1,54 +1,42 @@
-# Por que o "oi" não apareceu no Inbox
+## Problema
 
-A mensagem **foi enviada e salva** no banco — só foi parar numa conversa "fantasma" porque a UAZAPI devolveu o seu número **sem o "9"** do celular (`556291672674` em vez de `5562991672674`).
+Os webhooks da UAZAPI estão sendo desativados sozinhos (toggle "Habilitado" OFF). Quando isso acontece, **nenhuma mensagem recebida chega no Inbox**, porque a UAZAPI deixa de chamar o webhook `whatsapp-chatbot`.
 
-O Inbox lista conversas pelo telefone exato, então criou um chat separado de 12 dígitos que você não está olhando. Esse problema vem se repetindo há semanas — a maior parte do seu histórico está com 12 dígitos e algumas mensagens com 13 dígitos, em conversas separadas.
+Hoje o botão "Pânico: Cortar Grupos" no Monitor de Envios chama `uazapi-disable-group-webhooks`, mas essa função **não envia o flag `enabled: true`** no payload — então em algumas versões da UAZAPI o webhook é recriado já desabilitado, exatamente como está acontecendo.
 
-# Correção (2 partes)
+## Solução (manual, sem cron, sem custo extra)
 
-## Parte 1 — Normalizar telefone ao salvar (consertar o bug daqui pra frente)
+### 1. Corrigir `uazapi-disable-group-webhooks`
+Adicionar `enabled: true` no payload e um passo de **verificação pós-POST** (GET `/webhook`) com 1 retry caso o webhook volte desabilitado — mesma lógica resiliente já usada em `whatsapp-qr/reinforceWebhook`.
 
-No `supabase/functions/send-whatsapp/index.ts`, antes de gravar em `whatsapp_mensagens`, aplicar normalização brasileira: se o número tem 12 dígitos começando com `55` + DDD, adicionar o "9" e salvar a forma canônica de 13 dígitos. Mesmo tratamento no `whatsapp-chatbot` (mensagens recebidas) para garantir que entrada e saída caem sempre no mesmo chat.
+Resultado: o botão passa a garantir webhook **ativo + URL correta + grupos/broadcast bloqueados** numa única chamada.
 
-```ts
-function normalizarTelefoneBR(num: string): string {
-  const digits = num.replace(/\D/g, '');
-  // 5562991672674 (13) já ok
-  // 556291672674 (12) → adiciona 9 após DDD
-  if (digits.length === 12 && digits.startsWith('55')) {
-    return digits.slice(0, 4) + '9' + digits.slice(4);
-  }
-  return digits;
-}
-```
+### 2. Renomear/duplicar o botão no Monitor de Envios
+No `MonitorEnvios.tsx`, manter o botão atual mas deixar claro que ele também **reativa** os webhooks desabilitados:
 
-## Parte 2 — Mesclar as conversas duplicadas que já existem
+- Texto: **"Reconfigurar Webhooks de Todas as Instâncias"**
+- Ícone: `Wrench` (chave inglesa) em vez de `ShieldAlert`
+- Variante: `default` (azul) em vez de `destructive`
+- Confirmação atualizada: "Reconfigurar e reativar o webhook de TODAS as instâncias UAZAPI? Isso restaura o recebimento de mensagens no Inbox e mantém grupos/broadcasts bloqueados."
+- Toast: "X/Y instâncias reativadas. Z falharam."
 
-Migração SQL única que percorre `whatsapp_mensagens` e atualiza todos os `telefone_remoto` de 12 dígitos (BR) para 13 dígitos. Com isso, todas as mensagens antigas do seu número (e de qualquer outro cliente afetado) vão se juntar numa só conversa no Inbox.
+O botão **"Diagnosticar Webhooks"** continua existindo do lado para você verificar antes/depois.
 
-```sql
-UPDATE whatsapp_mensagens
-SET telefone_remoto = substring(telefone_remoto, 1, 4) || '9' || substring(telefone_remoto, 5)
-WHERE length(regexp_replace(telefone_remoto, '\D', '', 'g')) = 12
-  AND telefone_remoto LIKE '55%';
-```
+## Detalhes técnicos
 
-Faço o mesmo na tabela `chatbot_conversas` se ela tiver o mesmo padrão de chave por telefone.
+**Arquivos modificados:**
+- `supabase/functions/uazapi-disable-group-webhooks/index.ts`
+  - Adicionar `enabled: true` no `restrictedPayload`
+  - Após POST bem-sucedido, fazer GET `/webhook` para verificar `enabled === true`
+  - Se vier `enabled: false`, fazer 1 retry de POST
+  - Retornar `healthy_after` no JSON de resposta
+- `src/pages/MonitorEnvios.tsx`
+  - Renomear handler `handlePanicDisableGroups` → `handleReconfigureWebhooks`
+  - Trocar texto, ícone, variante e mensagens do botão
 
-# Resultado esperado
+**Sem alterações em:**
+- Banco de dados (nenhuma migration)
+- Cron / pg_cron (nada agendado)
+- Outras edge functions
 
-- O "oi" que você mandou agora vai aparecer junto com o resto do histórico.
-- Toda nova mensagem entrando ou saindo cai no mesmo chat, independente do que a UAZAPI devolver.
-- Sem mais conversas duplicadas com 12/13 dígitos.
-
-# Sobre o impacto na Cloud
-
-Mudança barata: 2 edge functions ajustadas + 1 UPDATE SQL. Sem novos crons, sem novas chamadas externas, sem consumo extra de IA.
-
-# Arquivos afetados
-
-- `supabase/functions/send-whatsapp/index.ts` — normalização ao salvar saída
-- `supabase/functions/whatsapp-chatbot/index.ts` — normalização ao salvar entrada
-- migração SQL — backfill das mensagens antigas
-
-Aprove pra eu aplicar.
+**Custo Lovable Cloud:** zero adicional. A função só roda quando você clicar no botão.
