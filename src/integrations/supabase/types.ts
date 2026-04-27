@@ -158,6 +158,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_usage_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          function_name: string
+          id: string
+          model: string | null
+          prompt_chars: number | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          function_name: string
+          id?: string
+          model?: string | null
+          prompt_chars?: number | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          function_name?: string
+          id?: string
+          model?: string | null
+          prompt_chars?: number | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       aquecimento_contatos_autosave: {
         Row: {
           ativo: boolean
@@ -1552,6 +1585,24 @@ export type Database = {
           valor_primeira_parcela?: number | null
           valor_total?: number | null
           whatsapp_enviado_em?: string | null
+        }
+        Relationships: []
+      }
+      system_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
         }
         Relationships: []
       }
