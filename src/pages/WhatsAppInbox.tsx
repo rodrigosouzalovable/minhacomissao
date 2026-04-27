@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X, Pencil, Settings } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X, Pencil, Settings, Archive } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -44,6 +45,7 @@ interface Contato {
   ultima_mensagem_em: string | null;
   nao_lido: number;
   fixado?: boolean;
+  arquivado?: boolean;
   instancia_nome?: string | null;
 }
 
@@ -77,6 +79,8 @@ export default function WhatsAppInbox() {
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
   const [busca, setBusca] = useState('');
   const [contatos, setContatos] = useState<Contato[]>([]);
+  const [abaAtiva, setAbaAtiva] = useState<'conversas' | 'arquivados'>('conversas');
+  const [arquivadosCount, setArquivadosCount] = useState(0);
   const [contatoAtivo, setContatoAtivo] = useState<Contato | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [enviando, setEnviando] = useState(false);
@@ -189,6 +193,7 @@ export default function WhatsAppInbox() {
 
     if (instanciaIds.length === 0) {
       setContatos([]);
+      setArquivadosCount(0);
       return;
     }
 
@@ -203,6 +208,7 @@ export default function WhatsAppInbox() {
         ultima_mensagem_em,
         nao_lido,
         fixado,
+        arquivado,
         user_whatsapp_instances(nome)
       `)
       .order('ultima_mensagem_em', { ascending: false });
@@ -213,6 +219,9 @@ export default function WhatsAppInbox() {
       query = query.in('instancia_id', instanciaIds);
     }
 
+    // Filtra por aba (Conversas mostra não arquivados; Arquivados mostra arquivados)
+    query = query.eq('arquivado', abaAtiva === 'arquivados');
+
     const { data } = await query;
     if (data) {
       const contatosComNomeInstancia = (data as any[]).map((contato) => ({
@@ -221,7 +230,20 @@ export default function WhatsAppInbox() {
       }));
       setContatos(contatosComNomeInstancia as Contato[]);
     }
-  }, [filtroInstancia, instancias]);
+
+    // Conta total de arquivados (escopo das instâncias visíveis) para o badge da aba
+    let countQuery = supabase
+      .from('whatsapp_contatos')
+      .select('id', { count: 'exact', head: true })
+      .eq('arquivado', true);
+    if (filtroInstancia !== 'todas' && instanciaIds.includes(filtroInstancia)) {
+      countQuery = countQuery.eq('instancia_id', filtroInstancia);
+    } else {
+      countQuery = countQuery.in('instancia_id', instanciaIds);
+    }
+    const { count } = await countQuery;
+    setArquivadosCount(count ?? 0);
+  }, [filtroInstancia, instancias, abaAtiva]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
@@ -587,6 +609,25 @@ export default function WhatsAppInbox() {
     setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, fixado } : c));
   };
 
+  const handleArquivarToggle = async (contatoId: string, arquivado: boolean) => {
+    const { error } = await supabase
+      .from('whatsapp_contatos')
+      .update({ arquivado } as any)
+      .eq('id', contatoId);
+    if (error) {
+      toast({ title: 'Erro ao arquivar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    // Remove da lista atual (sai do escopo da aba aberta) e atualiza contadores
+    setContatos(prev => prev.filter(c => c.id !== contatoId));
+    setArquivadosCount(prev => arquivado ? prev + 1 : Math.max(0, prev - 1));
+    if (contatoAtivo?.id === contatoId) {
+      setContatoAtivo(null);
+      setMensagens([]);
+    }
+    toast({ title: arquivado ? 'Conversa arquivada' : 'Conversa desarquivada' });
+  };
+
   const handleExcluirConversa = async (contatoId: string) => {
     const contato = contatos.find(c => c.id === contatoId);
     if (!contato) return;
@@ -766,6 +807,20 @@ export default function WhatsAppInbox() {
                 </SelectContent>
               </Select>
             )}
+            <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'conversas' | 'arquivados')}>
+              <TabsList className="grid w-full grid-cols-2 h-8">
+                <TabsTrigger value="conversas" className="text-xs">Conversas</TabsTrigger>
+                <TabsTrigger value="arquivados" className="text-xs flex items-center gap-1">
+                  <Archive className="h-3 w-3" />
+                  Arquivados
+                  {arquivadosCount > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-4 min-w-[18px] px-1 text-[10px]">
+                      {arquivadosCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
           <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
@@ -786,10 +841,12 @@ export default function WhatsAppInbox() {
                     etiquetas={etiquetas}
                     contatoEtiquetaIds={etIds}
                     fixado={!!contato.fixado}
+                    arquivado={!!contato.arquivado}
                     onMarcarNaoLida={fetchContatos}
                     onEtiquetaToggle={handleEtiquetaToggle}
                     onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
                     onFixarToggle={handleFixarToggle}
+                    onArquivarToggle={handleArquivarToggle}
                     onExcluirConversa={handleExcluirConversa}
                   >
                     <button

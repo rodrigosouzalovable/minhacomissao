@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/context-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { MailOpen, Tag, Settings, Check, Pin, Trash2 } from 'lucide-react';
+import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore } from 'lucide-react';
 import { GerenciarEtiquetasDialog } from './GerenciarEtiquetasDialog';
 
 interface Etiqueta {
@@ -26,11 +26,13 @@ interface Props {
   etiquetas: Etiqueta[];
   contatoEtiquetaIds: string[];
   fixado: boolean;
+  arquivado?: boolean;
   onMarcarNaoLida: () => void;
   onExcluirConversa: (contatoId: string) => void;
   onEtiquetaToggle: (contatoId: string, etiquetaId: string, ativo: boolean) => void;
   onEtiquetasChange: () => void;
   onFixarToggle: (contatoId: string, fixado: boolean) => void;
+  onArquivarToggle?: (contatoId: string, arquivado: boolean) => void;
 }
 
 export function ConversaContextMenu({
@@ -39,11 +41,13 @@ export function ConversaContextMenu({
   etiquetas,
   contatoEtiquetaIds,
   fixado,
+  arquivado = false,
   onMarcarNaoLida,
   onExcluirConversa,
   onEtiquetaToggle,
   onEtiquetasChange,
   onFixarToggle,
+  onArquivarToggle,
 }: Props) {
   const { toast } = useToast();
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
@@ -93,6 +97,12 @@ export function ConversaContextMenu({
             <Pin className="h-4 w-4 mr-2" />
             {fixado ? 'Desafixar conversa' : 'Fixar conversa'}
           </ContextMenuItem>
+          {onArquivarToggle && (
+            <ContextMenuItem onClick={() => onArquivarToggle(contatoId, !arquivado)}>
+              {arquivado ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
+              {arquivado ? 'Desarquivar conversa' : 'Arquivar conversa'}
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onExcluirConversa(contatoId)} className="text-destructive focus:text-destructive">
             <Trash2 className="h-4 w-4 mr-2" />

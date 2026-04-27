@@ -164,7 +164,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             .from('whatsapp_contatos')
             .select('id', { count: 'exact', head: true })
             .in('instancia_id', ids)
-            .gt('nao_lido', 0);
+            .gt('nao_lido', 0).eq('arquivado', false);
           setInboxUnreadCount(count ?? 0);
           return;
         }
@@ -181,7 +181,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             .from('whatsapp_contatos')
             .select('id', { count: 'exact', head: true })
             .in('instancia_id', ids)
-            .gt('nao_lido', 0);
+            .gt('nao_lido', 0).eq('arquivado', false);
           setInboxUnreadCount(count ?? 0);
           return;
         }
@@ -205,7 +205,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       .from('whatsapp_contatos')
       .select('id', { count: 'exact', head: true })
       .in('instancia_id', instanceIds)
-      .gt('nao_lido', 0);
+      .gt('nao_lido', 0).eq('arquivado', false);
     
     setInboxUnreadCount(count ?? 0);
   }, [user, isAdmin, abasPermitidas]);

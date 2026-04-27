@@ -1681,6 +1681,7 @@ export type Database = {
           ordem: number | null
           robo: boolean
           server_url: string
+          telefone: string | null
           tipo: string | null
           user_id: string
           webhook_configurado_em: string | null
@@ -1701,6 +1702,7 @@ export type Database = {
           ordem?: number | null
           robo?: boolean
           server_url: string
+          telefone?: string | null
           tipo?: string | null
           user_id: string
           webhook_configurado_em?: string | null
@@ -1721,6 +1723,7 @@ export type Database = {
           ordem?: number | null
           robo?: boolean
           server_url?: string
+          telefone?: string | null
           tipo?: string | null
           user_id?: string
           webhook_configurado_em?: string | null
@@ -2289,6 +2292,7 @@ export type Database = {
       }
       whatsapp_contatos: {
         Row: {
+          arquivado: boolean
           criado_em: string
           fixado: boolean
           id: string
@@ -2300,6 +2304,7 @@ export type Database = {
           ultima_mensagem_em: string | null
         }
         Insert: {
+          arquivado?: boolean
           criado_em?: string
           fixado?: boolean
           id?: string
@@ -2311,6 +2316,7 @@ export type Database = {
           ultima_mensagem_em?: string | null
         }
         Update: {
+          arquivado?: boolean
           criado_em?: string
           fixado?: boolean
           id?: string
