@@ -1,59 +1,95 @@
-# Investigação do consumo de Lovable AI ($20 → $0)
+# Proteção de gastos da Lovable AI + alerta no WhatsApp
 
-## O que encontrei
+## Objetivo
 
-Analisei os logs das últimas 48h. **`whatsapp-chatbot` foi chamado 2.273 vezes** (webhook UAZAPI a cada mensagem recebida). Ela própria usa **Ollama (gratuito)**, mas dispara internamente **`teach-chatbot`** que usa **Lovable AI (`google/gemini-2.5-flash-lite`)** sempre que um admin manda mensagem para o número do bot.
+Nunca mais deixar o saldo da Lovable AI ser consumido sem você saber. Vou criar **3 camadas de barreira** + **alertas automáticos no WhatsApp 62991672674**.
 
-Outras funções que consomem Lovable AI mas têm volume baixo:
-- `whatsapp-mentor` (chat manual da Mestra WA) — `gemini-2.5-flash`
-- `daily-report-advanced` (1x/dia) — `gemini-2.5-flash`
-- `gerar-estrategia-cobranca` (sob demanda) — `gemini-3-flash-preview`
-- `extract-acordo-data`, `extract-pdf-acordo`, `transcribe-audio`, `analyze-cobmais-screen`, `process-cobmais-video` — sob demanda
+## Como vai funcionar
 
-### Causa mais provável do gasto rápido
+### Camada 1 — Limites diários rígidos (kill switch automático)
 
-Cada mensagem que chega ao webhook que cai na branch "ensinar IA" / `teach-chatbot` é uma chamada paga. Modelos como `gemini-2.5-flash` no `whatsapp-mentor` também queimam crédito rápido em conversas longas com contexto grande.
+Nova tabela `ai_budget_config` com:
+- `daily_limit_calls` (padrão: **500 chamadas/dia**)
+- `daily_limit_chars` (padrão: **2.000.000 chars de prompt/dia** ≈ ~$2/dia)
+- `hourly_limit_calls` (padrão: **100 chamadas/hora** — pega picos anormais)
+- `alert_phone` = `62991672674`
+- `alert_threshold_pct` = 70 (avisa em 70% e em 100%)
 
-**Importante:** o saldo "$0 Top-up balance" que você viu na imagem é o **AI balance** (separado dos $25 de Cloud). Os $20 viraram tokens consumidos pelas chamadas acima — não há "vazamento", há uso real ocorrendo.
+O helper `ai-guard.ts` (já existe) ganha uma checagem **antes de cada chamada**:
+1. Conta chamadas/chars das últimas 24h e da última hora em `ai_usage_log`
+2. Se passou de 70% → manda alerta WhatsApp (1x por dia, sem spam)
+3. Se passou de 100% → **bloqueia a chamada** (igual ao kill switch global) e manda alerta de bloqueio
+4. Reset automático no virar do dia (BRT)
 
-## Plano de corte de gasto (urgente)
+### Camada 2 — Limite por função
 
-### 1. Kill switch global de IA
-Criar um flag `ai_enabled` na tabela `system_config` (cria se não existir). Toda função que chama `ai.gateway.lovable.dev` checa esse flag antes — se `false`, retorna resposta genérica/erro controlado e **não gasta crédito**.
+Algumas funções gastam mais que outras. Tabela `ai_function_limits`:
+- `whatsapp-mentor`: 50/dia
+- `teach-chatbot`: 100/dia
+- `gerar-estrategia-cobranca`: 30/dia
+- demais: 50/dia (default)
 
-### 2. Trocar todos os modelos para o mais barato
-Substituir em todas as edge functions:
-- `google/gemini-2.5-flash` → `google/gemini-2.5-flash-lite`
-- `google/gemini-3-flash-preview` → `google/gemini-2.5-flash-lite`
-- `openai/gpt-5*` (se houver) → `google/gemini-2.5-flash-lite`
+Quando uma função estoura seu limite individual, é bloqueada **só ela** (resto continua funcionando).
 
-`flash-lite` é o mais barato da família.
+### Camada 3 — Alerta WhatsApp
 
-### 3. Desativar funções não-essenciais por padrão
-- **`teach-chatbot`** (chamada toda vez que admin escreve para o bot): exigir comando explícito `/ensinar` para ativar; caso contrário retorna sem chamar IA.
-- **`whatsapp-mentor`**: limitar a 20 mensagens/dia por usuário (contador em DB).
-- **`daily-report-advanced`**: pausar o cron até você reativar manualmente.
+Nova edge function `ai-budget-alert` que envia para `62991672674` via UAZAPI usando uma das suas instâncias conectadas. Mensagens:
 
-### 4. Reduzir tamanho de contexto
-- `whatsapp-mentor`: enviar só últimas 6 mensagens (hoje envia até 100).
-- `teach-chatbot`: cortar histórico para 10 mensagens.
-- Sem `reasoning` em nenhuma chamada.
+- **70%**: "⚠️ Lovable AI: 70% do limite diário usado (350/500 chamadas). Função top: whatsapp-mentor."
+- **100% (bloqueio)**: "🚨 Lovable AI BLOQUEADA: limite diário atingido. Nenhuma chamada paga será feita até amanhã. Acesse /admin/ia-uso para liberar."
+- **Função bloqueada**: "🛑 Função `teach-chatbot` bloqueada (atingiu 100/dia). Outras funções continuam ativas."
 
-### 5. Painel de monitoramento simples
-Adicionar uma página `/admin/ai-uso` que lê uma nova tabela `ai_usage_log` (cada chamada registra: função, modelo, tokens estimados, user_id, timestamp). Assim você vê em tempo real o que está consumindo.
+Tabela `ai_alerts_sent` para garantir que cada alerta vai 1x por dia (não floda seu WhatsApp).
 
-## Arquivos afetados
+### Camada 4 — Cron de monitoramento (a cada 30 min)
 
-- `supabase/migrations/<novo>.sql` — tabela `system_config`, `ai_usage_log`, e desativar cron `daily-report-advanced`
-- `supabase/functions/teach-chatbot/index.ts` — kill switch + flash-lite + corte de histórico
-- `supabase/functions/whatsapp-mentor/index.ts` — kill switch + flash-lite + limite diário + corte contexto
-- `supabase/functions/daily-report-advanced/index.ts` — kill switch + flash-lite
-- `supabase/functions/gerar-estrategia-cobranca/index.ts` — kill switch + flash-lite
-- `supabase/functions/extract-acordo-data/index.ts`, `extract-pdf-acordo/index.ts`, `extract-texto-acordo/index.ts`, `analyze-cobmais-screen/index.ts`, `process-cobmais-video/index.ts`, `transcribe-audio/index.ts`, `gerar-termo-acordo/index.ts`, `chat-cobmais-knowledge/index.ts`, `process-pos-atendimento/index.ts` — flash-lite + log de uso
-- `supabase/functions/whatsapp-chatbot/index.ts` — só dispara `teach-chatbot` se mensagem começar com `/ensinar`
-- `src/pages/AdminAiUso.tsx` (novo) + rota — painel de monitoramento
-- `src/components/layout/AppLayout.tsx` — link no menu admin
+pg_cron chama `ai-budget-monitor` a cada 30 minutos para:
+- Calcular consumo das últimas 24h
+- Disparar alertas preventivos (caso o uso esteja acelerando)
+- Bloquear automaticamente se passar do limite
+- Registrar snapshot diário em `ai_daily_snapshot` (histórico)
 
-## Resultado esperado
+## Painel `/admin/ia-uso` (extensão do existente)
 
-Com flash-lite + kill switch + limites de contexto + cortar `teach-chatbot` automático, o consumo deve cair **>90%**. Você ainda terá controle total: pode desligar IA inteira pelo painel se notar consumo anormal.
+Adicionar:
+- Card "Orçamento diário": barra de progresso (chamadas + chars) com status verde/amarelo/vermelho
+- Inputs para ajustar limites (chamadas/dia, chars/dia, telefone de alerta, % de alerta)
+- Botão "Resetar contadores agora"
+- Histórico dos últimos 30 dias (gráfico)
+- Lista de alertas enviados
+
+## Detalhes técnicos
+
+**Migrations:**
+- `ai_budget_config` (singleton, 1 linha) — limites globais e telefone
+- `ai_function_limits` (function_name PK, daily_limit) — limites por função
+- `ai_alerts_sent` (data + tipo de alerta) — anti-spam de WhatsApp
+- `ai_daily_snapshot` (data PK, total_calls, total_chars, top_function) — histórico
+- Cron job a cada 30 min chamando `ai-budget-monitor`
+- Seed do telefone `62991672674` e limites padrão
+
+**Edge Functions:**
+- `_shared/ai-guard.ts` (modificar): adicionar `checkBudgetBeforeCall(functionName)` que retorna `{ allowed, reason }`. Todas as 13 funções já integradas chamam isso automaticamente — zero esforço de migração.
+- `ai-budget-monitor` (nova): cron de 30 min que calcula uso, dispara alertas e atualiza snapshot
+- `ai-budget-alert` (nova): envia mensagem WhatsApp via UAZAPI usando a instância principal conectada
+
+**Frontend:**
+- `src/pages/AdminAiUso.tsx`: adicionar seção "Orçamento e Alertas" com inputs editáveis e gráfico de histórico
+
+## Resultado garantido
+
+1. **Impossível** consumir mais que $2-3/dia sem você ser avisado
+2. **Bloqueio automático** se algo sair do controle (não depende de você ver alerta)
+3. **WhatsApp em tempo real** quando consumo passar de 70% ou bloquear
+4. **Você ajusta limites pelo painel** sem precisar editar código
+5. **Histórico de 30 dias** para análise de padrões
+
+## Padrão default conservador
+
+Se nada for ajustado, sistema vem travado em:
+- **500 chamadas/dia** total
+- **2M chars/dia** (~$2)
+- **100 chamadas/hora** (anti-pico)
+- Alerta em 70% e bloqueio em 100%
+
+Você pode liberar mais ou apertar mais pelo `/admin/ia-uso`.
