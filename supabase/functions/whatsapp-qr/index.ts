@@ -355,18 +355,6 @@ async function checkStatus(instanceId: string) {
       const parsed = parseConnectionState(data);
 
       if (parsed.connected) {
-        // Fire-and-forget: persist instance phone for inbox auto-archive feature
-        if (parsed.phone) {
-          const cleanPhone = String(parsed.phone).replace(/\D/g, '');
-          if (cleanPhone.length >= 8) {
-            getSupabaseAdmin()
-              .from('user_whatsapp_instances')
-              .update({ telefone: cleanPhone })
-              .eq('id', instanceId)
-              .then(() => {})
-              .catch?.((e: any) => console.log(`[STATUS] phone persist error: ${e?.message}`));
-          }
-        }
         // Fire-and-forget: reinforce webhook config whenever instance is connected
         reinforceWebhook(instanceId).catch((e) => console.log(`[STATUS] Webhook reinforce error (non-blocking): ${(e as Error).message}`));
         // Fire-and-forget: tentar adicionar ao grupo de aquecimento
