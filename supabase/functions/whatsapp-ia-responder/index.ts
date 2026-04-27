@@ -145,17 +145,20 @@ NUNCA repita a mesma estrutura duas vezes seguidas.${instrucaoEncerramento}`;
 const OLLAMA_MODEL = Deno.env.get("OLLAMA_MODEL") || "gemma4:e4b";
 const OLLAMA_API_KEY = Deno.env.get("OLLAMA_API_KEY") || "";
 
-async function callOllama(messages: { role: string; content: string }[], opts: { timeoutMs?: number; numPredict?: number; temperature?: number } = {}): Promise<string | null> {
+async function callOllama(messages: { role: string; content: string }[], opts: { timeoutMs?: number; numPredict?: number; temperature?: number; auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string; numero_destino?: string } } = {}): Promise<string | null> {
   const ollamaUrl = Deno.env.get("OLLAMA_NGROK_URL");
+  const auditCtx = opts.auditCtx || {};
   if (!ollamaUrl) {
     console.warn("[IA] OLLAMA_NGROK_URL não configurado");
+    auditar({ etapa: 'ollama_call', status: 'falhou', motivo: 'OLLAMA_NGROK_URL ausente', ...auditCtx });
     return null;
   }
   const cleanUrl = ollamaUrl.replace(/\/+$/, "");
-  const timeoutMs = opts.timeoutMs ?? 20000;
+  const timeoutMs = opts.timeoutMs ?? 30000; // subido de 20s → 30s
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const t0 = Date.now();
 
   try {
     const headers: Record<string, string> = {
@@ -179,24 +182,31 @@ async function callOllama(messages: { role: string; content: string }[], opts: {
       signal: controller.signal,
     });
     clearTimeout(timeout);
+    const ms = Date.now() - t0;
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[IA] Ollama ${response.status}: ${errText.substring(0, 200)}`);
+      console.error(`[IA-Ollama] HTTP_ERR ${response.status} ms=${ms}: ${errText.substring(0, 200)}`);
+      auditar({ etapa: 'ollama_call', status: 'falhou', http_status: response.status, tempo_resposta_ms: ms, motivo: errText.substring(0, 200), ...auditCtx });
       return null;
     }
 
     const data = await response.json();
     const content = (data.message?.content || data.response || "").trim();
+    console.log(`[IA-Ollama] OK ms=${ms} model=${OLLAMA_MODEL} len=${content.length}`);
+    auditar({ etapa: 'ollama_call', status: 'ok', http_status: response.status, tempo_resposta_ms: ms, resposta_gerada: content, ...auditCtx });
     return content || null;
   } catch (err) {
     clearTimeout(timeout);
-    console.error("[IA] Ollama erro:", err);
+    const ms = Date.now() - t0;
+    const isTimeout = (err as Error)?.name === 'AbortError';
+    console.error(`[IA-Ollama] ${isTimeout ? 'TIMEOUT' : 'ERRO'} ms=${ms}:`, err);
+    auditar({ etapa: 'ollama_call', status: isTimeout ? 'timeout' : 'falhou', tempo_resposta_ms: ms, motivo: String(err).substring(0, 200), ...auditCtx });
     return null;
   }
 }
 
-async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number): Promise<string> {
+async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number, auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string; numero_destino?: string }): Promise<string> {
   const systemPrompt = buildSystemPrompt(totalTrocas, maxTrocas);
   const messages: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt },
@@ -209,8 +219,9 @@ async function chamarIA(mensagem: string, historico: string, totalTrocas: number
 
   messages.push({ role: "user", content: mensagem });
 
-  const raw = await callOllama(messages, { timeoutMs: 20000, numPredict: 80, temperature: 0.85 });
+  const raw = await callOllama(messages, { timeoutMs: 30000, numPredict: 80, temperature: 0.85, auditCtx });
   if (!raw) {
+    auditar({ etapa: 'cascade_skip', status: 'ignorado', motivo: 'ollama_null_fallback', mensagem_original: mensagem, ...auditCtx });
     return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
   }
 
