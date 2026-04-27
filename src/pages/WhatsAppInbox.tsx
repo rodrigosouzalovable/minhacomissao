@@ -79,6 +79,8 @@ export default function WhatsAppInbox() {
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
   const [busca, setBusca] = useState('');
   const [contatos, setContatos] = useState<Contato[]>([]);
+  const [abaAtiva, setAbaAtiva] = useState<'conversas' | 'arquivados'>('conversas');
+  const [arquivadosCount, setArquivadosCount] = useState(0);
   const [contatoAtivo, setContatoAtivo] = useState<Contato | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [enviando, setEnviando] = useState(false);
