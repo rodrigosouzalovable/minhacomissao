@@ -215,19 +215,19 @@ Deno.serve(async (req) => {
           });
 
           if (contatoId) {
+            const { data: c } = await supabase
+              .from("aquecimento_contatos_autosave")
+              .select("total_usos")
+              .eq("id", contatoId)
+              .maybeSingle();
             await supabase
               .from("aquecimento_contatos_autosave")
               .update({
                 ultimo_uso_em: new Date().toISOString(),
                 respondeu_ultima: false,
+                total_usos: ((c as any)?.total_usos || 0) + 1,
               })
               .eq("id", contatoId);
-            // incrementa total_usos
-            await supabase.rpc("increment", { table_name: "aquecimento_contatos_autosave", row_id: contatoId, column_name: "total_usos" }).then(() => {}, async () => {
-              // fallback se RPC não existir
-              const { data: c } = await supabase.from("aquecimento_contatos_autosave").select("total_usos").eq("id", contatoId).maybeSingle();
-              await supabase.from("aquecimento_contatos_autosave").update({ total_usos: ((c as any)?.total_usos || 0) + 1 }).eq("id", contatoId);
-            });
           }
 
           return { instancia: inst.nome, destino: numeroFinal, origem, status: "enviado", msg: mensagem };
