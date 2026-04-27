@@ -652,55 +652,20 @@ export default function WhatsAppInbox() {
     toast({ title: 'Conversa excluída' });
   };
 
-  const handleNovaConversa = async () => {
-    if (!novoTelefone || !novaInstanciaId || !novaMensagem.trim()) {
-      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
-      return;
-    }
-    const instancia = instancias.find(i => i.id === novaInstanciaId);
-    if (!instancia) return;
-
-    const telefoneFormatado = novoTelefone.replace(/\D/g, '');
-    const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
-
-    setEnviandoNova(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          telefone: telefoneCompleto,
-          mensagem: novaMensagem.trim(),
-          uazapi_server_url: instancia.server_url,
-          uazapi_instance_token: instancia.instance_token,
-          instancia_id: instancia.id,
-        },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
-
-      toast({ title: 'Mensagem enviada', description: 'Conversa iniciada com sucesso' });
-      setNovaConversaOpen(false);
-      setNovoTelefone('');
-      setNovaMensagem('');
-      setNovaInstanciaId('');
-
-      // Wait for realtime to create contact, then try to select it
-      setTimeout(async () => {
-        await fetchContatos();
-        const { data: contatoData } = await supabase
-          .from('whatsapp_contatos')
-          .select('id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, nao_lido, fixado')
-          .eq('instancia_id', instancia.id)
-          .eq('telefone', telefoneCompleto)
-          .maybeSingle();
-        if (contatoData) {
-          handleSelectContato(contatoData as Contato);
-        }
-      }, 2000);
-    } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-    } finally {
-      setEnviandoNova(false);
-    }
+  const handleNovaConversaCriada = (telefoneCompleto: string, instanciaId: string) => {
+    // Aguarda realtime criar o contato e então seleciona
+    setTimeout(async () => {
+      await fetchContatos();
+      const { data: contatoData } = await supabase
+        .from('whatsapp_contatos')
+        .select('id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, nao_lido, fixado')
+        .eq('instancia_id', instanciaId)
+        .eq('telefone', telefoneCompleto)
+        .maybeSingle();
+      if (contatoData) {
+        handleSelectContato(contatoData as Contato);
+      }
+    }, 2000);
   };
 
   return (
