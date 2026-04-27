@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/context-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { MailOpen, Tag, Settings, Check, Pin, Trash2 } from 'lucide-react';
+import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore } from 'lucide-react';
 import { GerenciarEtiquetasDialog } from './GerenciarEtiquetasDialog';
 
 interface Etiqueta {
