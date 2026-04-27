@@ -223,26 +223,60 @@ export default function WhatsAppInbox() {
     query = query.eq('arquivado', abaAtiva === 'arquivados');
 
     const { data } = await query;
+
+    // Sufixos (últimos 8 dígitos) dos telefones das próprias instâncias —
+    // usados para detectar conversas internas (entre meus próprios WhatsApps)
+    const sufixosInternos = new Set(
+      (instancias as any[])
+        .map(i => (i.telefone || '').replace(/\D/g, '').slice(-8))
+        .filter(s => s.length === 8)
+    );
+    const isContatoInterno = (telefone: string | null | undefined) => {
+      const suf = (telefone || '').replace(/\D/g, '').slice(-8);
+      return suf.length === 8 && sufixosInternos.has(suf);
+    };
+
     if (data) {
-      const contatosComNomeInstancia = (data as any[]).map((contato) => ({
-        ...contato,
-        instancia_nome: contato.user_whatsapp_instances?.nome ?? null,
-      }));
+      const contatosComNomeInstancia = (data as any[])
+        .map((contato) => ({
+          ...contato,
+          instancia_nome: contato.user_whatsapp_instances?.nome ?? null,
+        }))
+        // Aba "Conversas": esconde internos. Aba "Arquivados": mostra os internos também.
+        .filter((contato) => {
+          const interno = isContatoInterno(contato.telefone);
+          return abaAtiva === 'arquivados' ? true : !interno;
+        });
       setContatos(contatosComNomeInstancia as Contato[]);
     }
 
-    // Conta total de arquivados (escopo das instâncias visíveis) para o badge da aba
+    // Conta total de arquivados (escopo das instâncias visíveis) para o badge da aba.
+    // Inclui tanto arquivados manuais quanto conversas internas.
     let countQuery = supabase
       .from('whatsapp_contatos')
-      .select('id', { count: 'exact', head: true })
+      .select('id, telefone', { count: 'exact' })
       .eq('arquivado', true);
     if (filtroInstancia !== 'todas' && instanciaIds.includes(filtroInstancia)) {
       countQuery = countQuery.eq('instancia_id', filtroInstancia);
     } else {
       countQuery = countQuery.in('instancia_id', instanciaIds);
     }
-    const { count } = await countQuery;
-    setArquivadosCount(count ?? 0);
+    const { count: countArquivadosManuais } = await countQuery;
+
+    // Conta também os contatos internos não arquivados manualmente
+    let internosQuery = supabase
+      .from('whatsapp_contatos')
+      .select('telefone')
+      .eq('arquivado', false);
+    if (filtroInstancia !== 'todas' && instanciaIds.includes(filtroInstancia)) {
+      internosQuery = internosQuery.eq('instancia_id', filtroInstancia);
+    } else {
+      internosQuery = internosQuery.in('instancia_id', instanciaIds);
+    }
+    const { data: candidatosInternos } = await internosQuery;
+    const internosCount = (candidatosInternos || []).filter(c => isContatoInterno((c as any).telefone)).length;
+
+    setArquivadosCount((countArquivadosManuais ?? 0) + internosCount);
   }, [filtroInstancia, instancias, abaAtiva]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
