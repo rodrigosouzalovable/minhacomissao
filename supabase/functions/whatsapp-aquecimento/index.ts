@@ -224,15 +224,19 @@ Deno.serve(async (req) => {
 
     // ========== PROCESS EACH USER'S INSTANCES SEPARATELY ==========
     for (const [userId, userInstances] of instancesByUser.entries()) {
-      // Filter eligible (not at daily limit)
-      const eligible = userInstances.filter((inst: any) => inst.interacoes_hoje < TARGET_MESSAGES_PER_DAY);
+      // Filter eligible — cada instância tem seu próprio target baseado na fase
+      const eligible = userInstances.filter((inst: any) => {
+        const target = computeTarget(inst.fase || 1);
+        return (inst.interacoes_hoje || 0) < target;
+      });
 
       if (eligible.length < 2) {
         console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis, precisa de 2+. Pulando.`);
         continue;
       }
 
-      console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis de ${userInstances.length}.`);
+      console.log(`[AQUECIMENTO] User ${userId}: ${eligible.length} elegíveis de ${userInstances.length}. ` +
+        eligible.slice(0, 5).map((i: any) => `${i.details?.nome || i.instancia_id}=F${i.fase}(${i.interacoes_hoje || 0}/${computeTarget(i.fase || 1)})`).join(' '));
 
       // ========== GENERATE PAIRS (same user only) ==========
       // Prioriza quem tem MENOS interações hoje (garante cobertura de todas as instâncias)
