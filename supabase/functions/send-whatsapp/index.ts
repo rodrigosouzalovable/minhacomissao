@@ -83,9 +83,15 @@ serve(async (req) => {
     if (!telefone) throw new Error('Telefone não informado');
 
     const telefoneFormatado = telefone.replace(/\D/g, '');
-    const telefoneCompleto = telefoneFormatado.startsWith('55') 
+    let telefoneCompleto = telefoneFormatado.startsWith('55') 
       ? telefoneFormatado 
       : `55${telefoneFormatado}`;
+
+    // Normalização BR: se vier com 12 dígitos (sem o "9" do celular), adiciona.
+    // Ex: 556291672674 -> 5562991672674. Evita conversas duplicadas no Inbox.
+    if (telefoneCompleto.length === 12) {
+      telefoneCompleto = telefoneCompleto.slice(0, 4) + '9' + telefoneCompleto.slice(4);
+    }
 
     console.log('Telefone formatado:', telefoneCompleto);
 
