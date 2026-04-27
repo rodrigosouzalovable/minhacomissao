@@ -158,6 +158,153 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_alerts_sent: {
+        Row: {
+          alert_type: string
+          created_at: string
+          data: string
+          function_name: string | null
+          id: string
+          payload: Json | null
+          phone: string | null
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          data?: string
+          function_name?: string | null
+          id?: string
+          payload?: Json | null
+          phone?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          data?: string
+          function_name?: string | null
+          id?: string
+          payload?: Json | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      ai_budget_config: {
+        Row: {
+          alert_phone: string
+          alert_threshold_pct: number
+          auto_block_on_limit: boolean
+          daily_limit_calls: number
+          daily_limit_chars: number
+          hourly_limit_calls: number
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          alert_phone?: string
+          alert_threshold_pct?: number
+          auto_block_on_limit?: boolean
+          daily_limit_calls?: number
+          daily_limit_chars?: number
+          hourly_limit_calls?: number
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          alert_phone?: string
+          alert_threshold_pct?: number
+          auto_block_on_limit?: boolean
+          daily_limit_calls?: number
+          daily_limit_chars?: number
+          hourly_limit_calls?: number
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_daily_snapshot: {
+        Row: {
+          blocked_calls: number
+          by_function: Json | null
+          data: string
+          top_function: string | null
+          total_calls: number
+          total_chars: number
+          updated_at: string
+        }
+        Insert: {
+          blocked_calls?: number
+          by_function?: Json | null
+          data?: string
+          top_function?: string | null
+          total_calls?: number
+          total_chars?: number
+          updated_at?: string
+        }
+        Update: {
+          blocked_calls?: number
+          by_function?: Json | null
+          data?: string
+          top_function?: string | null
+          total_calls?: number
+          total_chars?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_function_limits: {
+        Row: {
+          daily_limit: number
+          enabled: boolean
+          function_name: string
+          updated_at: string
+        }
+        Insert: {
+          daily_limit?: number
+          enabled?: boolean
+          function_name: string
+          updated_at?: string
+        }
+        Update: {
+          daily_limit?: number
+          enabled?: boolean
+          function_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_usage_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          function_name: string
+          id: string
+          model: string | null
+          prompt_chars: number | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          function_name: string
+          id?: string
+          model?: string | null
+          prompt_chars?: number | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          function_name?: string
+          id?: string
+          model?: string | null
+          prompt_chars?: number | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       aquecimento_contatos_autosave: {
         Row: {
           ativo: boolean
@@ -1552,6 +1699,24 @@ export type Database = {
           valor_primeira_parcela?: number | null
           valor_total?: number | null
           whatsapp_enviado_em?: string | null
+        }
+        Relationships: []
+      }
+      system_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
         }
         Relationships: []
       }
