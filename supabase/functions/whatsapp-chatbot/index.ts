@@ -748,27 +748,6 @@ function getCredorNome(credorSlug: string): string {
   return credorSlug.replace(/_/g, ' ');
 }
 
-// Fast pre-parse fingerprint check on raw body for OBVIOUS group/broadcast payloads.
-// Avoids the cost of JSON.parse on huge UAZAPI payloads (which was saturating workers).
-// We only short-circuit when we are very confident; otherwise, we fall through to the
-// precise post-parse check that protects against false-positives on legitimate DMs.
-function fastPreParseBlock(raw: string): string | null {
-  if (!raw) return null;
-  // Sample only the first 2KB — group identifiers always appear early in the payload.
-  const sample = raw.length > 2048 ? raw.slice(0, 2048) : raw;
-  // Strong group signal: a remoteJid/chatid field whose value clearly ends in @g.us.
-  if (/"(?:chatid|chatId|remoteJid|from)"\s*:\s*"[^"]*@g\.us"/i.test(sample)) {
-    return 'fast:group_jid';
-  }
-  if (/"(?:chatid|chatId|remoteJid|from)"\s*:\s*"status@broadcast"/i.test(sample)) {
-    return 'fast:status_broadcast';
-  }
-  if (/"isGroup"\s*:\s*true/i.test(sample) || /"wa_isGroup"\s*:\s*true/i.test(sample)) {
-    return 'fast:isGroup_flag';
-  }
-  return null;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -776,16 +755,6 @@ serve(async (req) => {
 
   try {
     const rawBody = await req.text();
-
-    // 🚀 FAST-PATH: short-circuit obvious group/broadcast webhooks BEFORE JSON.parse.
-    // This protects worker pool saturation when UAZAPI floods us with group events.
-    const fastBlock = fastPreParseBlock(rawBody);
-    if (fastBlock) {
-      return new Response(JSON.stringify({ success: true, ignored: fastBlock }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     let payload: any;
     try {
       payload = JSON.parse(rawBody);
@@ -799,6 +768,7 @@ serve(async (req) => {
     // false-positives on legitimate DMs whose metadata may mention '@g.us'.
     const blockCheck = isBlockedParsedPayload(payload);
     if (blockCheck.blocked) {
+      console.log(`[CHATBOT] Ignored: ${blockCheck.reason}`);
       return new Response(JSON.stringify({ success: true, ignored: blockCheck.reason }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -1767,12 +1737,7 @@ serve(async (req) => {
       });
     }
 
-    let telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
-    // Normalização BR: UAZAPI/WhatsApp às vezes devolve celular sem o "9".
-    // Padronizamos sempre para 13 dígitos para não criar conversa duplicada no Inbox.
-    if (telefone.length === 12 && telefone.startsWith('55')) {
-      telefone = telefone.slice(0, 4) + '9' + telefone.slice(4);
-    }
+    const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
     let texto = extractTextFromPayload(payload);
 
     // Se não tem texto, verificar se é áudio e transcrever
@@ -2044,18 +2009,8 @@ serve(async (req) => {
         }
       }
 
-      // FALLBACK: encaminhar para teach-chatbot — APENAS quando admin usa o prefixo "/ia"
-      // (corte de custo: antes toda mensagem do admin acionava IA paga)
-      const trimmedTexto = (texto || '').trim();
-      const iaPrefixMatch = /^\/(ia|ensinar|ai)\b\s*/i.exec(trimmedTexto);
-      if (!iaPrefixMatch) {
-        console.log('[ADMIN-FALLBACK] Mensagem do admin sem prefixo /ia — não chama IA. Texto:', trimmedTexto.slice(0, 80));
-        return new Response(JSON.stringify({ success: true, admin_no_ai_prefix: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const textoSemPrefixo = trimmedTexto.slice(iaPrefixMatch[0].length).trim();
-      console.log(`[ADMIN-FALLBACK] Encaminhando mensagem do admin para teach-chatbot: "${textoSemPrefixo}"`);
+      // FALLBACK: encaminhar para teach-chatbot (ensino, perguntas, ações)
+      console.log(`[ADMIN-FALLBACK] Encaminhando mensagem do admin para teach-chatbot: "${texto}"`);
       try {
         // Carregar histórico recente do admin via chat_ia_mensagens
         const { data: adminUser } = await supabase.from('profiles').select('id').eq('email', 'rodrigo@grupoaltum.com.br').maybeSingle();
@@ -2075,8 +2030,7 @@ serve(async (req) => {
         }
 
         // Adicionar mensagem atual do admin
-        // Adicionar mensagem atual do admin (sem o prefixo)
-        historicoMessages.push({ role: 'user', content: textoSemPrefixo });
+        historicoMessages.push({ role: 'user', content: texto });
 
         // Chamar teach-chatbot
         const teachResponse = await fetch(`${supabaseUrl}/functions/v1/teach-chatbot`, {
@@ -2095,7 +2049,7 @@ serve(async (req) => {
           // Persistir mensagens no histórico (admin msg + resposta)
           if (adminUserId) {
             await supabase.from('chat_ia_mensagens').insert([
-              { user_id: adminUserId, role: 'user', content: textoSemPrefixo },
+              { user_id: adminUserId, role: 'user', content: texto },
               { user_id: adminUserId, role: 'assistant', content: reply },
             ]);
           }

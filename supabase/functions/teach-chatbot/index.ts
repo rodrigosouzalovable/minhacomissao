@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { checkBudget, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -115,15 +114,6 @@ serve(async (req) => {
   try {
     const { messages } = await req.json();
 
-    const budget = await checkBudget("teach-chatbot");
-    if (!budget.allowed) {
-      await logAiUsage({ function_name: "teach-chatbot", status: `blocked_${budget.reason}` });
-      return new Response(
-        JSON.stringify({ reply: `IA bloqueada (${budget.reason}). Acesse /admin/ia-uso.`, regra_criada: false, ai_disabled: true }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!lovableApiKey) throw new Error('LOVABLE_API_KEY not configured');
 
@@ -131,15 +121,12 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Limita histórico a 10 últimas mensagens (corte de tokens)
-    const trimmed = (messages ?? []).slice(-10);
-
     // Fetch real conversation context for the AI
     const conversasContext = await fetchConversasContext(supabase);
 
     const aiMessages = [
       { role: 'system', content: buildSystemPrompt(conversasContext) },
-      ...trimmed.map((m: any) => ({
+      ...messages.map((m: any) => ({
         role: m.role,
         content: m.content,
       }))
@@ -152,18 +139,11 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: CHEAP_MODEL,
+        model: 'google/gemini-2.5-flash-lite',
         messages: aiMessages,
         temperature: 0.7,
-        max_tokens: 600,
+        max_tokens: 1000,
       }),
-    });
-
-    await logAiUsage({
-      function_name: "teach-chatbot",
-      model: CHEAP_MODEL,
-      prompt_chars: JSON.stringify(aiMessages).length,
-      status: response.ok ? "ok" : `http_${response.status}`,
     });
 
     if (!response.ok) {

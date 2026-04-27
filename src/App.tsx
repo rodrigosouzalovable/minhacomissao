@@ -43,7 +43,6 @@ import CampanhasVoz from "./pages/CampanhasVoz";
 import WhatsAppInbox from "./pages/WhatsAppInbox";
 import Aquecimento from "./pages/Aquecimento";
 import MonitorEnvios from "./pages/MonitorEnvios";
-import AdminAiUso from "./pages/AdminAiUso";
 
 const queryClient = new QueryClient();
 
@@ -185,7 +184,6 @@ const App = () => (
             <Route path="/campanhas-voz" element={<PermissionRoute><CampanhasVoz /></PermissionRoute>} />
             <Route path="/aquecimento" element={<ProtectedRoute><Aquecimento /></ProtectedRoute>} />
             <Route path="/monitor-envios" element={<PermissionRoute><MonitorEnvios /></PermissionRoute>} />
-            <Route path="/admin/ia-uso" element={<AdminRoute><AdminAiUso /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </VoiceCampaignSendingProvider>

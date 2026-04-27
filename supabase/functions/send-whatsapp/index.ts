@@ -18,22 +18,12 @@ async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone:
   let lastError = null;
   for (const url of endpoints) {
     console.log(`Tentando endpoint: ${url}`);
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'token': instanceToken },
-        body: JSON.stringify({ number: telefone, text: mensagem }),
-        // Hard cap so a hung UAZAPI server can't lock our worker for 150s.
-        signal: AbortSignal.timeout(15000),
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`Endpoint ${url} timed out / network error:`, msg);
-      lastError = { message: `timeout/network: ${msg}` };
-      continue;
-    }
-    const data = await response.json().catch(() => ({}));
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'token': instanceToken },
+      body: JSON.stringify({ number: telefone, text: mensagem }),
+    });
+    const data = await response.json();
     console.log(`Resposta de ${url}:`, JSON.stringify(data));
     if (response.ok) return data;
     
@@ -83,15 +73,9 @@ serve(async (req) => {
     if (!telefone) throw new Error('Telefone não informado');
 
     const telefoneFormatado = telefone.replace(/\D/g, '');
-    let telefoneCompleto = telefoneFormatado.startsWith('55') 
+    const telefoneCompleto = telefoneFormatado.startsWith('55') 
       ? telefoneFormatado 
       : `55${telefoneFormatado}`;
-
-    // Normalização BR: se vier com 12 dígitos (sem o "9" do celular), adiciona.
-    // Ex: 556291672674 -> 5562991672674. Evita conversas duplicadas no Inbox.
-    if (telefoneCompleto.length === 12) {
-      telefoneCompleto = telefoneCompleto.slice(0, 4) + '9' + telefoneCompleto.slice(4);
-    }
 
     console.log('Telefone formatado:', telefoneCompleto);
 

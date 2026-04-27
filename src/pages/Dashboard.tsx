@@ -33,19 +33,10 @@ export default function Dashboard() {
       const inicioAnteriorISO = inicioMesAnterior.toISOString();
       const mesmoDiaAnteriorISO = mesmoDiaMesAnterior.toISOString();
 
-      // Personal data queries (colunas mínimas para reduzir carga no backend)
+      // Personal data queries
       const [acordosRes, pagamentosRes] = await Promise.all([
-        supabase
-          .from('acordos')
-          .select('id, status, valor_total, criado_em, cliente_nome')
-          .eq('user_id', user.id)
-          .order('criado_em', { ascending: false })
-          .limit(500),
-        supabase
-          .from('pagamentos')
-          .select('id, status, comissao_parcela, valor_parcela, data_paga, acordos!inner(user_id)')
-          .eq('acordos.user_id', user.id)
-          .limit(2000),
+        supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', { ascending: false }),
+        supabase.from('pagamentos').select('*, acordos!inner(user_id)').eq('acordos.user_id', user.id),
       ]);
 
       const acordos = acordosRes.data || [];

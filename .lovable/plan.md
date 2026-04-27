@@ -1,83 +1,94 @@
-Diagnóstico imediato
+## Objetivo
 
-O problema principal agora não parece ser senha nem tela de login. O backend de dados está com timeout: uma consulta mínima de saúde (`select now()`) falhou com erro 544 / connection timeout. Isso explica o login não concluir ou travar logo após autenticar, porque o sistema precisa consultar perfil, permissões e dashboard.
+Criar uma aba "Arquivados" no WhatsApp Inbox para isolar as conversas internas entre as próprias instâncias do sistema (números do aquecimento conversando entre si), evitando que poluam a lista lateral principal usada para falar com clientes.
 
-Sobre adicionar US$10: eu não consigo colocar saldo diretamente na Lovable Cloud por você. Isso precisa ser feito na interface da Lovable: Settings → Cloud & AI balance. Aviso importante: adicionar saldo ou aumentar instância pode aumentar seus custos de Cloud. Como regra do projeto, vou priorizar primeiro correções econômicas e redução de carga.
+## Como funciona
 
-Plano de correção urgente
+1. Cada contato (`whatsapp_contatos`) ganha uma flag `arquivado` (boolean, default `false`).
+2. O sistema marca automaticamente como `arquivado = true` qualquer contato cujo telefone corresponda a outra instância ativa do próprio sistema (ou seja, dois WhatsApp da casa conversando entre si pelo aquecimento).
+3. A lista lateral principal passa a esconder os arquivados; eles aparecem apenas na nova aba "Arquivados".
 
-1. Restaurar acesso o mais rápido possível
-- Remover do fluxo de login qualquer consulta não essencial ao banco antes de redirecionar.
-- Manter apenas autenticação + sessão local; validações como `profiles.ativo` passam a rodar depois, sem bloquear a entrada.
-- Adicionar fallback de timeout curto nas checagens de perfil/permissão para o usuário não ficar preso em “Carregando...”.
-- Exibir mensagem clara quando o backend estiver lento, em vez de deixar o sistema parecer quebrado.
+## Detecção de "conversa interna"
 
-2. Criar “modo emergência” temporário de baixa carga
-- Reduzir consultas automáticas e polling enquanto o backend está instável.
-- Evitar carregar dashboards pesados imediatamente após login.
-- Redirecionar após login para uma tela mais leve, ou carregar o dashboard em blocos com fallback.
-- Suspender temporariamente componentes que disparam consultas grandes no carregamento inicial.
+Para identificar que um contato é na verdade outro número da casa:
 
-3. Otimizar pontos pesados já encontrados
-- Dashboard: substituir `select('*')` em acordos/pagamentos por colunas específicas e limites.
-- Dashboard: evitar buscar todos os acordos/pagamentos do usuário só para calcular totais; usar consultas contadas/agregadas ou limites quando possível.
-- Monitor de Envios: limitar a leitura de mensagens do dia e/ou usar consulta agregada em vez de baixar todas as mensagens para contar no frontend.
-- WhatsApp Inbox: limitar contatos carregados inicialmente, remover contagem exata pesada onde não for essencial e evitar `select('*')` nas mensagens.
+- Será adicionada uma coluna `telefone` em `user_whatsapp_instances` (preenchida automaticamente quando a instância conecta via `whatsapp-qr` — o campo `phone` já é retornado pela UAZAPI, só não está sendo persistido).
+- Um job de backfill/normalização preencherá os telefones das 163 instâncias ativas consultando o status da UAZAPI (mesma chamada já usada hoje).
+- Um trigger no `whatsapp_contatos` (INSERT/UPDATE de `telefone`) marca `arquivado = true` automaticamente quando o sufixo de 8 dígitos do contato bate com o telefone de qualquer instância ativa.
+- Um script de backfill marca como arquivados todos os contatos atuais que já se enquadrem na regra.
 
-4. Banco de dados: criar índices de alívio sem apagar dados
-- Adicionar índices para consultas críticas:
-  - `user_roles(user_id)`
-  - `user_permissions(user_id)`
-  - `profiles(id, ativo)` se necessário
-  - `acordos(user_id, criado_em desc)`
-  - `pagamentos(status, data_paga)`
-  - `pagamentos(acordo_id, numero_parcela)`
-  - `whatsapp_mensagens(direcao, timestamp_msg desc)`
-  - `whatsapp_contatos(instancia_id, arquivado, ultima_mensagem_em desc)` já existe, manter/verificar
-- Usar `CREATE INDEX IF NOT EXISTS` para não quebrar se já existir.
-- Não excluir mensagens, acordos, clientes ou pagamentos.
+## Mudanças na UI (`src/pages/WhatsAppInbox.tsx`)
 
-5. Reduzir automações enquanto o login estiver comprometido
-- Revisar jobs automáticos de aquecimento, lembretes, relatórios e filas.
-- Pausar somente tarefas não críticas se estiverem contribuindo para saturação.
-- Não remover funcionalidades; apenas desacelerar/desativar temporariamente automações pesadas até estabilizar.
-- Manter regras essenciais do WhatsApp: não carregar grupos/status, manter mensagens persistidas, manter delays randomizados e respeitar domingo.
+- Acima da lista de conversas, novo `Tabs` com 2 abas: **"Conversas"** (padrão) e **"Arquivados"** (com contador).
+- A query `fetchContatos` filtra `arquivado = false` na aba Conversas e `arquivado = true` na aba Arquivados.
+- Realtime continua funcionando igual; ao mudar de aba, refaz a busca.
+- No menu de contexto da conversa (`ConversaContextMenu`), adicionar a ação **"Arquivar"** / **"Desarquivar"** para permitir override manual.
+- Badge no contador da aba "Arquivados" só aparece se houver não-lidos lá dentro (não devem haver normalmente, mas serve de salvaguarda).
 
-6. Reativação automática dos webhooks UAZAPI depois que o sistema voltar
-- Implementar a correção planejada de auto-heal dos webhooks, mas não como primeiro passo se o banco estiver travando.
-- Primeiro restaurar login e estabilidade; depois automatizar reativação dos webhooks para evitar que o Inbox pare novamente.
+## Mudanças no banco (migration)
 
-7. Validação
-- Testar login no preview e no domínio publicado.
-- Testar consulta básica do backend.
-- Testar carregamento do dashboard.
-- Testar entrada no WhatsApp Inbox sem carregar volume excessivo.
-- Validar TypeScript/build.
+```sql
+-- 1. Coluna de arquivamento
+ALTER TABLE whatsapp_contatos ADD COLUMN arquivado boolean NOT NULL DEFAULT false;
+CREATE INDEX idx_whatsapp_contatos_arquivado ON whatsapp_contatos(instancia_id, arquivado, ultima_mensagem_em DESC);
 
-Plano técnico resumido
+-- 2. Telefone da instância
+ALTER TABLE user_whatsapp_instances ADD COLUMN telefone text;
+CREATE INDEX idx_user_whatsapp_instances_telefone_suffix
+  ON user_whatsapp_instances (right(regexp_replace(telefone,'\D','','g'), 8))
+  WHERE ativo = true AND telefone IS NOT NULL;
 
-Arquivos prováveis:
-- `src/hooks/useAuth.tsx`: login não deve depender de query de perfil antes de entrar; adicionar fallback resiliente.
-- `src/hooks/useUserRole.tsx`: timeout e fallback para `funcionario` sem travar rotas.
-- `src/hooks/useUserPermissions.tsx`: timeout/fallback e cache mais conservador.
-- `src/pages/Dashboard.tsx`: reduzir consultas amplas e carregar blocos separadamente.
-- `src/hooks/useMonitorEnvios.ts`: reduzir/otimizar contagem de mensagens.
-- `src/pages/WhatsAppInbox.tsx`: limitar contatos/mensagens e evitar contagens exatas pesadas.
-- Nova migração: índices de performance e possível pausa temporária de cron jobs não críticos.
+-- 3. Função + trigger de auto-arquivamento
+CREATE OR REPLACE FUNCTION public.auto_arquivar_contato_interno()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  suf text := right(regexp_replace(NEW.telefone,'\D','','g'), 8);
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM user_whatsapp_instances
+    WHERE ativo = true
+      AND telefone IS NOT NULL
+      AND right(regexp_replace(telefone,'\D','','g'), 8) = suf
+      AND id <> NEW.instancia_id
+  ) THEN
+    NEW.arquivado := true;
+  END IF;
+  RETURN NEW;
+END $$;
 
-Risco/custo
+CREATE TRIGGER trg_auto_arquivar_contato_interno
+BEFORE INSERT OR UPDATE OF telefone ON whatsapp_contatos
+FOR EACH ROW EXECUTE FUNCTION auto_arquivar_contato_interno();
+```
 
-- Correções de código e índices: custo Cloud baixo/normal, foco em economia.
-- Pausar automações: pode atrasar aquecimento, relatórios ou envios automáticos enquanto estabiliza.
-- Aumentar instância ou adicionar saldo: pode resolver gargalo de capacidade mais rápido, mas aumenta custo. Eu só recomendo isso se, após aliviar consultas/automações, o backend continuar com timeout.
+Backfill (executado na própria migration, depois que os telefones das instâncias forem preenchidos):
+```sql
+UPDATE whatsapp_contatos c
+SET arquivado = true
+WHERE arquivado = false
+  AND EXISTS (
+    SELECT 1 FROM user_whatsapp_instances i
+    WHERE i.ativo
+      AND i.telefone IS NOT NULL
+      AND right(regexp_replace(i.telefone,'\D','','g'),8) = right(regexp_replace(c.telefone,'\D','','g'),8)
+      AND i.id <> c.instancia_id
+  );
+```
 
-Ordem recomendada
+## Mudanças nas Edge Functions
 
-1. Corrigir login para não bloquear em consultas ao banco.
-2. Reduzir dashboard e polling inicial.
-3. Criar índices de performance.
-4. Se o banco permitir, pausar/desacelerar automações não críticas temporariamente.
-5. Testar acesso.
-6. Implementar auto-heal dos webhooks UAZAPI.
+- `whatsapp-qr`: ao detectar `connected: true` com `phone`, gravar `telefone` na linha de `user_whatsapp_instances`.
+- Nova função `backfill-instance-phones` (one-shot, disparada manualmente por botão admin no Aquecimento) que percorre todas as instâncias ativas, consulta status na UAZAPI e popula a coluna `telefone`. Após esse passo, o backfill SQL acima conclui o arquivamento das conversas internas já existentes.
 
-Se você aprovar, executo esse plano começando pelo caminho mais rápido para voltar o acesso sem apagar dados.
+## Arquivos afetados
+
+- Nova migration SQL (alter + trigger + backfill)
+- `supabase/functions/whatsapp-qr/index.ts` — persistir telefone ao conectar
+- `supabase/functions/backfill-instance-phones/index.ts` (novo)
+- `src/pages/WhatsAppInbox.tsx` — abas Conversas/Arquivados, filtro arquivado, ação manual
+- `src/components/inbox/ConversaContextMenu.tsx` — opção Arquivar/Desarquivar
+- `src/components/aquecimento/AquecimentoDashboard.tsx` — botão "Sincronizar telefones das instâncias" (uma vez)
+
+## Custo Lovable Cloud
+
+Impacto mínimo: 1 coluna boolean + 1 coluna texto + 1 trigger leve em INSERT/UPDATE de contatos (operação O(1) com índice). A função de backfill roda uma única vez. Sem aumento recorrente de consumo.

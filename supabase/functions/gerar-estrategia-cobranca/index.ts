@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { checkBudget, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,18 +40,6 @@ serve(async (req) => {
       });
     }
 
-    const budget = await checkBudget("gerar-estrategia-cobranca");
-    if (!budget.allowed) {
-      await logAiUsage({ function_name: "gerar-estrategia-cobranca", status: `blocked_${budget.reason}` });
-      return aiDisabledResponse(corsHeaders, { reason: budget.reason });
-    }
-    await logAiUsage({
-      function_name: "gerar-estrategia-cobranca",
-      model: CHEAP_MODEL,
-      prompt_chars: (prompt?.length ?? 0) + (resumoCarteira?.length ?? 0),
-      status: "ok",
-    });
-
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
@@ -71,7 +58,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model: "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userMessage },

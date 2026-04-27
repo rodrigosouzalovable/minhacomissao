@@ -92,8 +92,7 @@ export function useMonitorEnvios(limiteDiario: number = 30, delaySegundos: numbe
 
   useEffect(() => {
     fetchStats();
-    // Polling reduzido (30s -> 90s) para aliviar o backend.
-    const interval = setInterval(fetchStats, 90000);
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 

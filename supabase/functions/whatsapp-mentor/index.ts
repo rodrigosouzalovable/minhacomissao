@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { checkBudget, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,15 +44,6 @@ serve(async (req) => {
       });
     }
 
-    const budget = await checkBudget("whatsapp-mentor");
-    if (!budget.allowed) {
-      await logAiUsage({ function_name: "whatsapp-mentor", status: `blocked_${budget.reason}` });
-      return aiDisabledResponse(corsHeaders, { reason: budget.reason });
-    }
-
-    // Limita histórico para reduzir custo
-    const trimmedMessages = messages.slice(-6);
-
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
@@ -90,13 +80,12 @@ ${
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: CHEAP_MODEL,
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: SYSTEM_PROMPT + contextBlock },
-            ...trimmedMessages,
+            ...messages,
           ],
           stream: true,
-          max_tokens: 800,
         }),
       }
     );
@@ -121,13 +110,6 @@ ${
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    await logAiUsage({
-      function_name: "whatsapp-mentor",
-      model: CHEAP_MODEL,
-      prompt_chars: JSON.stringify(trimmedMessages).length + (contextBlock?.length ?? 0),
-      status: "ok",
-    });
 
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
