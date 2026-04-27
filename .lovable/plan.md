@@ -1,43 +1,54 @@
-# Diagnóstico
+# Por que o "oi" não apareceu no Inbox
 
-**O sistema NÃO está travado por causa do crédito de IA zerado.** A IA zerada só desliga respostas automáticas — não afeta login nem carregamento de dados.
+A mensagem **foi enviada e salva** no banco — só foi parar numa conversa "fantasma" porque a UAZAPI devolveu o seu número **sem o "9"** do celular (`556291672674` em vez de `5562991672674`).
 
-A causa real é uma **sobrecarga de webhooks no `whatsapp-chatbot`**, que está saturando os workers da Lovable Cloud e empurrando todas as outras requisições (login, queries do app) para a fila de espera. Por isso aparece "Carregando…" e "O servidor demorou para responder".
+O Inbox lista conversas pelo telefone exato, então criou um chat separado de 12 dígitos que você não está olhando. Esse problema vem se repetindo há semanas — a maior parte do seu histórico está com 12 dígitos e algumas mensagens com 13 dígitos, em conversas separadas.
 
-### Evidências
+# Correção (2 partes)
 
-- **30+ webhooks de grupos/broadcasts em 5 segundos** chegando no `whatsapp-chatbot` (cada um inicia um worker novo, mesmo sendo descartado depois).
-- Múltiplas execuções **estourando 150 segundos** (timeout 504), travando workers inteiros por 2,5 minutos cada.
-- A base tem **716.859 devedores** — qualquer query mal otimizada pesa.
-- Logs do Postgres e Auth limpos: o problema é runtime de Edge Functions.
+## Parte 1 — Normalizar telefone ao salvar (consertar o bug daqui pra frente)
 
-# Plano de correção (3 camadas)
+No `supabase/functions/send-whatsapp/index.ts`, antes de gravar em `whatsapp_mensagens`, aplicar normalização brasileira: se o número tem 12 dígitos começando com `55` + DDD, adicionar o "9" e salvar a forma canônica de 13 dígitos. Mesmo tratamento no `whatsapp-chatbot` (mensagens recebidas) para garantir que entrada e saída caem sempre no mesmo chat.
 
-## Camada 1: Rejeitar grupos/broadcasts ANTES do worker iniciar
+```ts
+function normalizarTelefoneBR(num: string): string {
+  const digits = num.replace(/\D/g, '');
+  // 5562991672674 (13) já ok
+  // 556291672674 (12) → adiciona 9 após DDD
+  if (digits.length === 12 && digits.startsWith('55')) {
+    return digits.slice(0, 4) + '9' + digits.slice(4);
+  }
+  return digits;
+}
+```
 
-Hoje o `whatsapp-chatbot` boota o worker, conecta ao Supabase, e SÓ DEPOIS descarta a mensagem de grupo. Vamos fazer o descarte ser a primeiríssima coisa, sem nenhum import pesado, retornando 200 imediatamente. Isso reduz drasticamente o tempo gasto por webhook descartado.
+## Parte 2 — Mesclar as conversas duplicadas que já existem
 
-## Camada 2: Eliminar travas de 150s no chatbot
+Migração SQL única que percorre `whatsapp_mensagens` e atualiza todos os `telefone_remoto` de 12 dígitos (BR) para 13 dígitos. Com isso, todas as mensagens antigas do seu número (e de qualquer outro cliente afetado) vão se juntar numa só conversa no Inbox.
 
-Adicionar um timeout interno de 20 segundos em qualquer chamada externa (UAZAPI, IA, fetch). Se estourar, retorna 200 e loga o erro — nunca mais um worker preso por 2,5 min.
+```sql
+UPDATE whatsapp_mensagens
+SET telefone_remoto = substring(telefone_remoto, 1, 4) || '9' || substring(telefone_remoto, 5)
+WHERE length(regexp_replace(telefone_remoto, '\D', '', 'g')) = 12
+  AND telefone_remoto LIKE '55%';
+```
 
-## Camada 3: Garantir que send-whatsapp não trave
+Faço o mesmo na tabela `chatbot_conversas` se ela tiver o mesmo padrão de chave por telefone.
 
-A função `send-whatsapp` também apareceu com 504 (150s). Aplicar mesma estratégia: timeout interno em chamadas UAZAPI (15s) e fallback de erro rápido.
+# Resultado esperado
 
-## Camada 4 (opcional, recomendado): Aumentar instância da Cloud
+- O "oi" que você mandou agora vai aparecer junto com o resto do histórico.
+- Toda nova mensagem entrando ou saindo cai no mesmo chat, independente do que a UAZAPI devolver.
+- Sem mais conversas duplicadas com 12/13 dígitos.
 
-Com 716 mil devedores e webhooks intensos, a instância padrão está no limite. Mesmo com as correções acima, recomendo subir o tamanho da instância em **Cloud → Backend → Advanced settings → Upgrade instance**. Isso melhora simultaneidade de Edge Functions e throughput de queries. Faço isso só se você autorizar (custo Cloud sobe um pouco).
+# Sobre o impacto na Cloud
+
+Mudança barata: 2 edge functions ajustadas + 1 UPDATE SQL. Sem novos crons, sem novas chamadas externas, sem consumo extra de IA.
 
 # Arquivos afetados
 
-- `supabase/functions/whatsapp-chatbot/index.ts` — early-return para grupos/broadcasts, timeout em chamadas externas
-- `supabase/functions/send-whatsapp/index.ts` — timeout em chamadas UAZAPI
+- `supabase/functions/send-whatsapp/index.ts` — normalização ao salvar saída
+- `supabase/functions/whatsapp-chatbot/index.ts` — normalização ao salvar entrada
+- migração SQL — backfill das mensagens antigas
 
-# Sobre os créditos de IA
-
-Os $20 zeraram nos últimos dias por causa do consumo descontrolado já corrigido na rodada anterior (kill switch + budget guard + alertas WhatsApp já estão ativos). A barreira já existe — se acontecer de novo, você é avisado no 62991672674 e o sistema bloqueia sozinho.
-
-# Próximo passo
-
-Aprove o plano para eu aplicar as correções nos 2 edge functions. Em ~2 minutos depois do deploy, o login e o carregamento de dados devem voltar ao normal. Se ainda assim ficar lento, partimos para o upgrade de instância.
+Aprove pra eu aplicar.
