@@ -121,6 +121,13 @@ ${
       });
     }
 
+    await logAiUsage({
+      function_name: "whatsapp-mentor",
+      model: CHEAP_MODEL,
+      prompt_chars: JSON.stringify(trimmedMessages).length + (contextBlock?.length ?? 0),
+      status: "ok",
+    });
+
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
