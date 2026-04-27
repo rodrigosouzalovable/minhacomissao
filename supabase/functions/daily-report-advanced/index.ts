@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { isAiEnabled, logAiUsage } from "../_shared/ai-guard.ts";
+import { checkBudget, logAiUsage } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,9 +61,10 @@ async function sendViaUazapi(serverUrl: string, token: string, telefone: string,
 async function gerarSugestoesIA(resumo: Record<string, any>): Promise<string> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) return "✅ Sistema operando normalmente.";
-  if (!(await isAiEnabled())) {
-    await logAiUsage({ function_name: "daily-report-advanced", status: "blocked_killswitch" });
-    return "💡 IA desativada — sugestões pausadas para economia.";
+  const budget = await checkBudget("daily-report-advanced");
+  if (!budget.allowed) {
+    await logAiUsage({ function_name: "daily-report-advanced", status: `blocked_${budget.reason}` });
+    return "💡 IA pausada (limite/kill switch) — sugestões puladas.";
   }
   await logAiUsage({ function_name: "daily-report-advanced", model: "google/gemini-2.5-flash-lite", status: "ok" });
   try {

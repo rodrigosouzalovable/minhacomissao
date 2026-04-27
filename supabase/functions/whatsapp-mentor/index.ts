@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { isAiEnabled, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
+import { checkBudget, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,9 +45,10 @@ serve(async (req) => {
       });
     }
 
-    if (!(await isAiEnabled())) {
-      await logAiUsage({ function_name: "whatsapp-mentor", status: "blocked_killswitch" });
-      return aiDisabledResponse(corsHeaders);
+    const budget = await checkBudget("whatsapp-mentor");
+    if (!budget.allowed) {
+      await logAiUsage({ function_name: "whatsapp-mentor", status: `blocked_${budget.reason}` });
+      return aiDisabledResponse(corsHeaders, { reason: budget.reason });
     }
 
     // Limita histórico para reduzir custo

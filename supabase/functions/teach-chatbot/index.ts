@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { isAiEnabled, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
+import { checkBudget, logAiUsage, aiDisabledResponse, CHEAP_MODEL } from "../_shared/ai-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -115,10 +115,11 @@ serve(async (req) => {
   try {
     const { messages } = await req.json();
 
-    if (!(await isAiEnabled())) {
-      await logAiUsage({ function_name: "teach-chatbot", status: "blocked_killswitch" });
+    const budget = await checkBudget("teach-chatbot");
+    if (!budget.allowed) {
+      await logAiUsage({ function_name: "teach-chatbot", status: `blocked_${budget.reason}` });
       return new Response(
-        JSON.stringify({ reply: "IA temporariamente desativada pelo administrador.", regra_criada: false, ai_disabled: true }),
+        JSON.stringify({ reply: `IA bloqueada (${budget.reason}). Acesse /admin/ia-uso.`, regra_criada: false, ai_disabled: true }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
