@@ -346,29 +346,32 @@ export type Database = {
       }
       aquecimento_envios_autosave: {
         Row: {
-          contato_id: string
+          contato_id: string | null
           enviado_em: string
           id: string
           instancia_id: string
           mensagem_enviada: string
+          numero_destino: string | null
           respondeu: boolean
           resposta_em: string | null
         }
         Insert: {
-          contato_id: string
+          contato_id?: string | null
           enviado_em?: string
           id?: string
           instancia_id: string
           mensagem_enviada: string
+          numero_destino?: string | null
           respondeu?: boolean
           resposta_em?: string | null
         }
         Update: {
-          contato_id?: string
+          contato_id?: string | null
           enviado_em?: string
           id?: string
           instancia_id?: string
           mensagem_enviada?: string
+          numero_destino?: string | null
           respondeu?: boolean
           resposta_em?: string | null
         }
