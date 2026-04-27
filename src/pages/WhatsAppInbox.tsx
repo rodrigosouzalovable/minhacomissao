@@ -807,6 +807,20 @@ export default function WhatsAppInbox() {
                 </SelectContent>
               </Select>
             )}
+            <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'conversas' | 'arquivados')}>
+              <TabsList className="grid w-full grid-cols-2 h-8">
+                <TabsTrigger value="conversas" className="text-xs">Conversas</TabsTrigger>
+                <TabsTrigger value="arquivados" className="text-xs flex items-center gap-1">
+                  <Archive className="h-3 w-3" />
+                  Arquivados
+                  {arquivadosCount > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-4 min-w-[18px] px-1 text-[10px]">
+                      {arquivadosCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
           <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
