@@ -1,69 +1,76 @@
-# Estabilizar banco e reimplementar "Arquivados" sem trigger
+## Otimização do banco — pós upgrade SMALL
 
-## Contexto
+Limpar bloat, recuperar ~600MB de armazenamento e reduzir consumo de CPU/Egress sem tocar em **acordos** ou **pagamentos**.
 
-O sistema voltou após upgrade da instância para SMALL. A causa raiz do travamento foi o trigger `trg_auto_arquivar_contato_interno` na tabela `whatsapp_contatos`, que executava lookups cruzados em `user_whatsapp_instances` a cada INSERT/UPDATE de contato — saturando o pool de conexões sob volume de webhooks.
+### Garantia sobre acordos
 
-A função SQL `auto_arquivar_contato_interno()` ainda existe no banco (vista em `<db-functions>`), mas o trigger pode já ter sido removido. Precisamos garantir limpeza total e implementar a feature "Arquivados" sem qualquer overhead no banco.
+**Nenhuma das 4 etapas abaixo apaga, modifica ou desativa acordos, parcelas (`pagamentos`) ou clientes.** As tabelas tocadas são exclusivamente:
+- `chatbot_conversas` — conversas do robô do WhatsApp (não são acordos)
+- `whatsapp_lembretes_log` — log histórico de envios de lembrete (não são acordos)
+- `devedores` — apenas VACUUM (recupera espaço em disco, não apaga linhas)
+- `user_whatsapp_instances` — apenas VACUUM
 
-## Etapa 1 — Limpeza do banco (migração)
+A função `cleanup-acordos` (que apaga acordos automaticamente após 30 dias sem pagamento) **fica como está**, conforme sua escolha.
 
-Migração SQL idempotente:
+### Etapa 1 — Limpeza de dados antigos (insert tool)
 
 ```sql
-DROP TRIGGER IF EXISTS trg_auto_arquivar_contato_interno ON public.whatsapp_contatos;
-DROP FUNCTION IF EXISTS public.auto_arquivar_contato_interno() CASCADE;
+-- Conversas do chatbot inativas há mais de 30 dias
+DELETE FROM chatbot_conversas
+WHERE ultimo_webhook_em < now() - interval '30 days'
+  AND COALESCE(array_length(mensagens_pendentes, 1), 0) = 0;
+
+-- Logs de lembretes com mais de 60 dias
+DELETE FROM whatsapp_lembretes_log
+WHERE created_at < now() - interval '60 days';
 ```
 
-Isso elimina definitivamente o gargalo. A coluna `arquivado` em `whatsapp_contatos` permanece intacta (continuará sendo usada, agora atualizada manualmente).
+### Etapa 2 — VACUUM FULL (recuperar espaço)
 
-## Etapa 2 — Reimplementar "Arquivados" no frontend (zero custo de DB)
+```sql
+VACUUM FULL public.chatbot_conversas;
+VACUUM FULL public.devedores;
+VACUUM FULL public.user_whatsapp_instances;
+```
 
-A detecção de "conversa interna" (entre minhas próprias instâncias WhatsApp) será feita **no client**, comparando o sufixo (últimos 8 dígitos) do telefone do contato com a lista de telefones das instâncias ativas do usuário — padrão já estabelecido em `mem://technical/whatsapp/phone-suffix-matching-standard`.
+VACUUM **não apaga linhas vivas** — só recupera espaço de tuplas mortas (lixo deixado por updates/deletes anteriores). Acordos e parcelas não são afetados.
 
-**Mudanças em `src/pages/WhatsAppInbox.tsx`:**
+### Etapa 3 — Reduzir frequência do cron
 
-1. Carregar uma única vez a lista de sufixos das instâncias do usuário:
-   ```ts
-   const { data: instancias } = await supabase
-     .from('user_whatsapp_instances')
-     .select('telefone')
-     .eq('user_id', user.id)
-     .eq('ativo', true);
-   const sufixosInternos = new Set(
-     instancias.map(i => (i.telefone || '').replace(/\D/g, '').slice(-8)).filter(s => s.length === 8)
-   );
-   ```
+Alterar `process-acionamento-agendado-v2` de **cada 5 min → cada 10 min**. Reduz invocações de Edge Function pela metade.
 
-2. Função pura `isContatoInterno(telefone)` que retorna `true` se o sufixo bate com algum sufixo interno.
+```sql
+SELECT cron.unschedule('process-acionamento-agendado-v2-5min');
+SELECT cron.schedule(
+  'process-acionamento-agendado-v2-10min',
+  '*/10 * * * *',
+  $$ SELECT net.http_post(...); $$
+);
+```
 
-3. Filtrar a lista lateral de conversas:
-   - Aba **"Conversas"** (lateral principal): exclui contatos onde `isContatoInterno(telefone) === true` OU `arquivado === true`.
-   - Aba **"Arquivados"** (já criada anteriormente): mostra contatos `isContatoInterno(telefone) === true` OU `arquivado === true`.
+### Etapa 4 — Auto-manutenção semanal
 
-4. Manter o item de menu de contexto "Arquivar/Desarquivar" em `ConversaContextMenu.tsx` para arquivamento manual (atualiza coluna `arquivado` diretamente via UPDATE — operação pontual, sem trigger).
+Cron novo todo domingo às 04:00 BRT que repete a Etapa 1 automaticamente (só apaga conversas/logs antigos, **nunca acordos**).
 
-## Etapa 3 — Validação
+```sql
+SELECT cron.schedule(
+  'weekly-cleanup-logs',
+  '0 7 * * 0', -- 04:00 BRT = 07:00 UTC, domingo
+  $$
+    DELETE FROM chatbot_conversas
+    WHERE ultimo_webhook_em < now() - interval '30 days'
+      AND COALESCE(array_length(mensagens_pendentes, 1), 0) = 0;
+    DELETE FROM whatsapp_lembretes_log
+    WHERE created_at < now() - interval '60 days';
+  $$
+);
+```
 
-- Confirmar que a aba "Arquivados" lista corretamente as conversas entre instâncias próprias.
-- Confirmar que a lateral principal só mostra conversas de clientes externos.
-- Confirmar que arquivamento/desarquivamento manual funciona sem disparar trigger.
-- Verificar logs para garantir que o pool de conexões ficou estável.
+### Resultado esperado
 
-## Arquivos a modificar
+- Storage: ~750MB → ~150MB
+- Invocações Edge Function: −50% no acionamento
+- Custo mensal: deve continuar dentro dos $25 grátis
+- **Acordos: 100% intocados**
 
-- **Migração nova** (DROP trigger + função)
-- `src/pages/WhatsAppInbox.tsx` (lógica de filtro lateral)
-
-## O que NÃO será feito
-
-- Nenhum trigger novo no banco.
-- Nenhuma Edge Function nova (sem custo extra de Cloud).
-- Nenhuma alteração na webhook `whatsapp-qr` (já foi limpa anteriormente).
-- Não restaurar a função `auto_arquivar_contato_interno` em hipótese alguma.
-
-## Custo
-
-Zero impacto adicional em Lovable Cloud — a feature passa a rodar 100% no client com dados já carregados.
-
-Aprovar para eu rodar a migração e ajustar o Inbox.
+Aprovar para eu rodar as 4 etapas em sequência.
