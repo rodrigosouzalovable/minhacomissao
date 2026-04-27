@@ -603,7 +603,7 @@ Deno.serve(async (req) => {
         sentAsMedia = mediaResult.sent;
 
         if (!sentAsMedia) {
-          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial);
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, mensagemInicial, { instancia_origem_id, instancia_destino_id });
           if (sent) {
             await logToInbox(sb, instancia_origem_id, numero_destino, mensagemInicial, "saida");
           }
@@ -700,7 +700,7 @@ Deno.serve(async (req) => {
         const historicoTexto = historicoArr.slice(-10)
           .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas);
+        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
 
         const novoHistorico = [
           ...historicoArr,
@@ -713,7 +713,7 @@ Deno.serve(async (req) => {
         }).eq("id", conversa.id);
 
         if (server_url && instance_token && numero_destino) {
-          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento);
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, fraseEncerramento, { instancia_origem_id, instancia_destino_id });
           if (sent) {
             await logToInbox(sb, instancia_origem_id, numero_destino, fraseEncerramento, "saida");
           }
@@ -752,7 +752,7 @@ Deno.serve(async (req) => {
       const historicoTexto = historicoArr.slice(-10)
         .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas);
+      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
 
       const novoHistorico = [
         ...historicoArr,
@@ -783,7 +783,7 @@ Deno.serve(async (req) => {
         const mediaResult = await tentarEnviarMidia(sb, server_url, instance_token, numero_destino, instancia_origem_id, resposta);
         
         if (!mediaResult.sent) {
-          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta);
+          const sent = await enviarMensagemUAZAPI(server_url, instance_token, numero_destino, resposta, { instancia_origem_id, instancia_destino_id });
           if (sent) {
             await logToInbox(sb, instancia_origem_id, numero_destino, resposta, "saida");
           }
