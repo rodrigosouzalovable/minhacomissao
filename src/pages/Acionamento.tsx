@@ -1686,6 +1686,30 @@ export default function Acionamento() {
     setInstances(prev => prev.map(i => i.id === id ? { ...i, ativo } : i));
   };
 
+  const [ativandoTodas, setAtivandoTodas] = useState(false);
+  const handleAtivarTodasInstancias = async () => {
+    const inativas = instances.filter(i => !i.ativo);
+    if (inativas.length === 0) {
+      toast.info('Todas as instâncias já estão ativas.');
+      return;
+    }
+    if (!confirm(`Marcar ${inativas.length} instância(s) inativa(s) como ATIVA(S)?\n\nIsso não reconecta a UAZAPI — apenas habilita o uso pelo sistema.`)) return;
+    setAtivandoTodas(true);
+    const ids = inativas.map(i => i.id);
+    const { error } = await supabase
+      .from('user_whatsapp_instances' as any)
+      .update({ ativo: true } as any)
+      .in('id', ids);
+    if (error) {
+      toast.error(`Erro ao ativar: ${error.message}`);
+      setAtivandoTodas(false);
+      return;
+    }
+    setInstances(prev => prev.map(i => ids.includes(i.id) ? { ...i, ativo: true } : i));
+    toast.success(`${inativas.length} instância(s) ativada(s).`);
+    setAtivandoTodas(false);
+  };
+
   const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
     const updateData: any = { apenas_lembretes };
     if (apenas_lembretes) { updateData.robo = false; updateData.ia_responde = false; }
