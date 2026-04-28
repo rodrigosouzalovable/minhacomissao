@@ -6,33 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const TEMAS_CONVERSA = [
-  "futebol brasileiro, campeonato, jogos recentes",
-  "clima e tempo, calor, chuva, previsão",
-  "comida, receitas, restaurantes, o que almoçou",
-  "filmes e séries que assistiu ou quer assistir",
-  "trabalho, rotina, produtividade",
-  "fim de semana, planos, lazer",
-  "música, shows, festivais",
-  "tecnologia, celular, apps, internet",
-  "viagens, lugares que quer conhecer",
-  "notícias do dia, coisas que viu na internet",
-  "família, filhos, parentes",
-  "exercícios, academia, saúde",
-  "pets, animais de estimação",
-  "jogos, videogame, entretenimento",
-  "memes, coisas engraçadas que viu",
-  "compras, promoções, preços",
-  "carros, motos, trânsito",
-  "feriados, datas comemorativas",
-];
-
-const FALLBACK_RESPOSTAS = [
-  "Kkk verdade! 😂", "Sim sim, com certeza 👍", "Ah legal, massa!",
-  "Entendi haha", "Boa! 🙏", "Aham, concordo", "Pois é né 😄",
-  "Haha boa!", "Show de bola 👍", "Tá certo!", "Demais hein! 😁",
-  "Kkkkk", "Verdade, penso igual", "Top! 🔥",
-];
+// Probabilidade de responder por fase (skip silencioso simulando humano ocupado)
+const PROB_RESPOSTA_POR_FASE: Record<number, number> = { 1: 0.6, 2: 0.8 };
+const FALLBACK_FINAL = "Ah legal!";
 
 function getSupabaseAdmin() {
   return createClient(
