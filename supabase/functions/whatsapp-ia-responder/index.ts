@@ -661,9 +661,10 @@ Deno.serve(async (req) => {
       const LIMITE_DIARIO_REAL = 15;
       const { data: instAquec } = await sb
         .from("whatsapp_aquecimento_instancias")
-        .select("id, interacoes_hoje, interacoes_total")
+        .select("id, interacoes_hoje, interacoes_total, fase")
         .eq("instancia_id", instancia_origem_id)
         .maybeSingle();
+      const faseRespondedor = instAquec?.fase || 1;
 
       if (instAquec && instAquec.interacoes_hoje >= LIMITE_DIARIO_REAL) {
         console.log(`[IA] 🛑 Instância ${instancia_origem_id} atingiu limite diário (${instAquec.interacoes_hoje}/${LIMITE_DIARIO_REAL}). Finalizando conversa.`);
