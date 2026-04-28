@@ -1,98 +1,182 @@
 ## Resumo
 
-Implementar Prioridades 2 (instrumentação do ping-pong de aquecimento) e 4 (rampa de fase real), com validação pós-deploy via Teste IA Manual + leitura da tabela de auditoria.
+Substituir 100% as chamadas Ollama/Gemini no aquecimento por um motor de diálogo baseado em pool curado de mensagens no banco. Zero IA, zero túnel, zero bloqueio. O ping-pong passa a ser orquestrado por palavras-chave (gatilhos), respostas coringa e encerramentos progressivos.
 
 ---
 
-## 1. Migration: `whatsapp_conversas_auditoria`
+## 1. Migration: `whatsapp_dialogos_pool`
 
 ```sql
-CREATE TABLE public.whatsapp_conversas_auditoria (
+CREATE TABLE public.whatsapp_dialogos_pool (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  instancia_origem_id uuid,
-  instancia_destino_id uuid,
-  numero_origem text,
-  numero_destino text,
-  etapa text NOT NULL,        -- 'webhook_in' | 'ollama_call' | 'uazapi_send' | 'cascade_skip'
-  status text NOT NULL,       -- 'ok' | 'falhou' | 'timeout' | 'ignorado'
-  mensagem_original text,
-  resposta_gerada text,
-  motivo text,
-  http_status integer,
-  tempo_resposta_ms integer,
+  tipo text NOT NULL DEFAULT 'texto',           -- texto | audio | imagem (futuro)
+  contexto text NOT NULL,                       -- inicial | resposta | coringa | encerramento
+  gatilho text[] DEFAULT '{}',                  -- palavras-chave (apenas p/ contexto=resposta)
+  resposta text NOT NULL,
+  fase_minima int NOT NULL DEFAULT 1,           -- só usada se instância >= fase_minima
+  peso int NOT NULL DEFAULT 1,                  -- ponderação no sorteio
+  vezes_utilizada int NOT NULL DEFAULT 0,
+  ativo boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_aud_created ON public.whatsapp_conversas_auditoria (created_at DESC);
-CREATE INDEX idx_aud_par ON public.whatsapp_conversas_auditoria
-  (instancia_origem_id, instancia_destino_id, created_at DESC);
 
-ALTER TABLE public.whatsapp_conversas_auditoria ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "admins_read_auditoria" ON public.whatsapp_conversas_auditoria
-  FOR SELECT TO authenticated USING (public.is_admin_user(auth.uid()));
--- Inserts apenas via service_role (edge functions). Sem policy de INSERT para usuários.
+CREATE INDEX idx_dialogos_contexto_ativo
+  ON public.whatsapp_dialogos_pool (contexto, ativo, fase_minima);
+CREATE INDEX idx_dialogos_gatilho_gin
+  ON public.whatsapp_dialogos_pool USING GIN (gatilho);
 
--- Cron de purga 7 dias (03:00 BRT = 06:00 UTC)
+ALTER TABLE public.whatsapp_dialogos_pool ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admins_manage_dialogos" ON public.whatsapp_dialogos_pool
+  FOR ALL TO authenticated
+  USING (public.is_admin_user(auth.uid()))
+  WITH CHECK (public.is_admin_user(auth.uid()));
+
+-- Tabela de controle anti-repetição (resposta x destino, janela 24h)
+CREATE TABLE public.whatsapp_dialogos_uso (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  dialogo_id uuid NOT NULL REFERENCES public.whatsapp_dialogos_pool(id) ON DELETE CASCADE,
+  numero_destino text NOT NULL,
+  usado_em timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_dialogos_uso_dest_time
+  ON public.whatsapp_dialogos_uso (numero_destino, usado_em DESC);
+
+-- Purga 48h
 SELECT cron.schedule(
-  'purge-conversas-auditoria',
-  '0 6 * * *',
-  $$ DELETE FROM public.whatsapp_conversas_auditoria WHERE created_at < now() - interval '7 days'; $$
+  'purge-dialogos-uso',
+  '15 6 * * *',
+  $$ DELETE FROM public.whatsapp_dialogos_uso WHERE usado_em < now() - interval '48 hours'; $$
 );
 ```
+
+Seed inicial (~50 linhas) exatamente como você descreveu: 11 saudações iniciais, blocos de respostas com gatilhos (`tudo bem`, `fazendo/trabalhando`, `legal/bom`, `obrigado/valeu`, `sei não`), 10 coringas, 5 encerramentos.
 
 ---
 
-## 2. `supabase/functions/whatsapp-ia-responder/index.ts`
+## 2. Reescrita: `supabase/functions/whatsapp-ia-responder/index.ts`
 
-- Adicionar helper `auditar(supabase, row)` (try/catch silencioso, nunca quebra fluxo).
-- `callOllama`: medir `Date.now()` antes/depois; logar `[IA-Ollama] OK ms=X model=Y` ou `TIMEOUT/HTTP_ERR`; inserir auditoria etapa=`ollama_call` com `tempo_resposta_ms`, `status` e `resposta_gerada` (truncada 200ch).
-- Subir timeout Ollama de **20s → 30s**.
-- `enviarMensagemUAZAPI`: capturar `res.status`, body curto; auditar etapa=`uazapi_send` com `http_status` e `motivo` em caso de falha; logar qual endpoint funcionou.
-- Auditar `cascade_skip` quando: limite de trocas atingido, número/instância desconectados, fallback usado por Ollama nulo.
+Manter toda a infraestrutura existente (auditoria, typing indicator, envio UAZAPI, log no inbox, helpers de mídia, controle de cooldown, salvar contato). **Remover** apenas:
 
-## 3. `supabase/functions/whatsapp-chatbot/index.ts`
+- `callOllama()`, `OLLAMA_*`, prompts, `TEMAS_CONVERSA`, `FALLBACK_RESPOSTAS`, `buildSystemPrompt()`.
 
-- No topo do handler: `console.log('[CHATBOT] IN from=<jid> instance=<id> isGroup=<bool> textLen=<n>')` antes dos filtros.
-- Quando o `from` corresponde a uma instância ativa em `whatsapp_aquecimento_instancias` (consulta cacheada por execução), inserir auditoria etapa=`webhook_in`, status=`ok`, com `mensagem_original`.
-- Se cair em "no_handler" (não é cliente nem fluxo de aquecimento conhecido): auditar etapa=`cascade_skip`, motivo=`no_handler`. Isso responde "o webhook chegou mas foi ignorado?".
-- **Não** auditar grupos/status (já filtrados, sem custo extra).
-
-## 4. `supabase/functions/whatsapp-aquecimento/index.ts`
-
-Substituir o cálculo global `TARGET_MESSAGES_PER_DAY` por target por instância:
+**Adicionar** motor de diálogo:
 
 ```ts
-const PARES_POR_FASE: Record<number, number> = { 1: 1, 2: 2, 3: 3, 4: 5, 5: 8 };
+// Sorteio ponderado in-memory
+function sorteioPonderado<T extends { peso: number }>(itens: T[]): T {
+  const total = itens.reduce((s, i) => s + Math.max(1, i.peso), 0);
+  let r = Math.random() * total;
+  for (const i of itens) { r -= Math.max(1, i.peso); if (r <= 0) return i; }
+  return itens[itens.length - 1];
+}
 
-const computeTarget = (fase: number, dayOfWeek: number) => {
-  const base = PARES_POR_FASE[fase] ?? 1;
-  const fator = dayOfWeek === 0 ? 0.4 : dayOfWeek === 6 ? 0.6 : 1.0;
-  return Math.max(1, Math.round(base * fator));
-};
+function normalizar(t: string) {
+  return t.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ');
+}
+
+async function gerarMensagemInicialPool(sb, fase: number): Promise<string> {
+  const { data } = await sb.from('whatsapp_dialogos_pool')
+    .select('id,resposta,peso')
+    .eq('contexto', 'inicial').eq('ativo', true).lte('fase_minima', fase);
+  if (!data?.length) return 'Oi! Tudo bem?';
+  const escolhido = sorteioPonderado(data);
+  await sb.from('whatsapp_dialogos_pool').update({ vezes_utilizada: (escolhido.vezes_utilizada ?? 0) + 1 }).eq('id', escolhido.id);
+  return escolhido.resposta;
+}
+
+async function gerarRespostaPool(sb, mensagem: string, fase: number, totalTrocas: number, maxTrocas: number, numeroDestino: string): Promise<string> {
+  // 1) Encerramento progressivo
+  if (totalTrocas >= maxTrocas - 1) {
+    const { data } = await sb.from('whatsapp_dialogos_pool')
+      .select('id,resposta,peso').eq('contexto', 'encerramento').eq('ativo', true).lte('fase_minima', fase);
+    if (data?.length) return registrarUso(sb, sorteioPonderado(data), numeroDestino);
+  }
+
+  // 2) Match por gatilho (overlap com palavras normalizadas)
+  const tokens = normalizar(mensagem).split(/\s+/).filter(Boolean);
+  const { data: respostas } = await sb.from('whatsapp_dialogos_pool')
+    .select('id,resposta,peso,gatilho,vezes_utilizada')
+    .eq('contexto', 'resposta').eq('ativo', true).lte('fase_minima', fase)
+    .overlaps('gatilho', tokens);
+
+  // Filtra repetições recentes para o mesmo destino (24h)
+  const candidatos = await filtrarSemRepetir(sb, respostas ?? [], numeroDestino);
+  if (candidatos.length) return registrarUso(sb, sorteioPonderado(candidatos), numeroDestino);
+
+  // 3) Coringa
+  const { data: coringas } = await sb.from('whatsapp_dialogos_pool')
+    .select('id,resposta,peso,vezes_utilizada')
+    .eq('contexto', 'coringa').eq('ativo', true).lte('fase_minima', fase);
+  const cands = await filtrarSemRepetir(sb, coringas ?? [], numeroDestino);
+  if (cands.length) return registrarUso(sb, sorteioPonderado(cands), numeroDestino);
+
+  return 'Ah legal!';
+}
 ```
 
-- Remover `r = Math.random()` e os ramos `< 0.5 / 0.85`.
-- `eligible = userInstances.filter(i => (i.interacoes_hoje || 0) < computeTarget(i.fase || 1, dayOfWeek))`.
-- Log: `[AQUEC] inst=<nome> fase=<n> target=<n> hoje=<n>`.
-- Manter pausa 12-14h, cron horário, cooldown 2-4h por par e MAX_PAIRS_PER_CYCLE=12.
+`registrarUso()` insere em `whatsapp_dialogos_uso` e incrementa `vezes_utilizada`. `filtrarSemRepetir()` consulta os `dialogo_id` usados nas últimas 24h para aquele destino e remove da lista.
+
+**Probabilidade de responder por fase** (aplicada antes de gerar):
+```ts
+const PROB_RESPOSTA = { 1: 0.6, 2: 0.8 }; // 3+ → 0.95
+const prob = PROB_RESPOSTA[fase] ?? 0.95;
+if (Math.random() > prob) {
+  await auditar({ etapa: 'cascade_skip', status: 'ignorado', motivo: `prob_skip_fase_${fase}`, ... });
+  return; // não responde, encerra cascata silenciosamente
+}
+```
+
+A auditoria continua: `etapa='ollama_call'` é trocada por `etapa='ollama_call', status='ok', motivo='pool'` para preservar o dashboard atual sem migration extra.
+
+---
+
+## 3. Ajustes em `whatsapp-aquecimento/index.ts`
+
+- Onde hoje chama o gerador inicial via Ollama, passar a usar `gerarMensagemInicialPool(sb, fase)`.
+- Manter `PARES_POR_FASE` (1/2/3/5/8), cooldown 2-4h por par, `MAX_PAIRS_PER_CYCLE`, pausa 12-14h.
+- Adicionar config de `MAX_TROCAS_CONVERSA = 6` (range 5-7 sorteado por par).
+
+---
+
+## 4. Limpeza
+
+- Deletar `supabase/functions/diag-ollama/index.ts` (não tem mais função).
+- Manter os secrets `OLLAMA_*` no projeto (não removo pelo agent), apenas paro de ler.
+- `whatsapp-chatbot/index.ts` segue inalterado (apenas auditoria de webhook_in já feita).
 
 ---
 
 ## 5. Validação pós-deploy
 
-1. Disparar `whatsapp-aquecimento` com `action: "manual-test"` em 2 chips conectados (escolho 2 do par âncora ativo).
-2. Aguardar 60s para a cascata rodar.
-3. Rodar query: `SELECT etapa, status, motivo, http_status, tempo_resposta_ms, created_at FROM whatsapp_conversas_auditoria ORDER BY created_at DESC LIMIT 20;`
-4. Te mando análise: onde o ping-pong morreu (Ollama timeout / webhook não chegou / UAZAPI falhou) e recomendação concreta.
+1. Disparar `whatsapp-aquecimento` com `action: "manual-test"` em 2 chips.
+2. Aguardar 90s.
+3. Query: `SELECT etapa, status, motivo, resposta_gerada, created_at FROM whatsapp_conversas_auditoria ORDER BY created_at DESC LIMIT 30;`
+4. Esperado: 0 falhas Ollama, todas as etapas `uazapi_send` com `status=ok`, ping-pong de 5-7 trocas terminando em `encerramento`.
 
 ---
 
-## Custo Lovable Cloud
+## Custos e impacto
 
-- Tabela auditoria: ~5–10k inserts/dia, com purga 7 dias → tamanho estável <100MB.
-- Cron extra: 1 execução/dia, sem custo perceptível.
-- Sem aumento na frequência de envios.
-- **Impacto financeiro estimado: poucos centavos/mês.** Aceito conforme sua aprovação.
+- Lovable Cloud: tabela pool < 1MB, tabela uso < 5MB com purga diária. **Zero custo IA.**
+- Latência: resposta vira ~50-150ms (1 query) em vez de 2-30s (Ollama).
+- Risco: respostas mais previsíveis se o pool for pequeno. **Mitigação:** o anti-repetição 24h + ponderação evita padrões óbvios; pool é facilmente expansível via SQL.
+
+---
 
 ## Memória a atualizar
 
-- Atualizar `mem://features/whatsapp/warming-system-comprehensive` com a nova rampa por fase (1/2/3/5/8 pares/dia).
+- Substituir `mem://features/whatsapp/warming-system-comprehensive`: gerador IA removido, agora pool curado em `whatsapp_dialogos_pool`.
+- Nova memória `mem://features/whatsapp/warming/dialogos-pool`: estrutura da tabela, contextos, regras de gatilho/coringa/encerramento, probabilidade por fase.
+
+---
+
+## Arquivos alterados
+
+- **migration nova** `whatsapp_dialogos_pool.sql` (tabelas + seed + cron)
+- `supabase/functions/whatsapp-ia-responder/index.ts` (reescrita parcial: motor de pool)
+- `supabase/functions/whatsapp-aquecimento/index.ts` (~10 linhas: troca chamada inicial)
+- delete: `supabase/functions/diag-ollama/index.ts`
+- `mem://index.md` + nova memória do pool

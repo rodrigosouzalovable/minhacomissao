@@ -6,33 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const TEMAS_CONVERSA = [
-  "futebol brasileiro, campeonato, jogos recentes",
-  "clima e tempo, calor, chuva, previsão",
-  "comida, receitas, restaurantes, o que almoçou",
-  "filmes e séries que assistiu ou quer assistir",
-  "trabalho, rotina, produtividade",
-  "fim de semana, planos, lazer",
-  "música, shows, festivais",
-  "tecnologia, celular, apps, internet",
-  "viagens, lugares que quer conhecer",
-  "notícias do dia, coisas que viu na internet",
-  "família, filhos, parentes",
-  "exercícios, academia, saúde",
-  "pets, animais de estimação",
-  "jogos, videogame, entretenimento",
-  "memes, coisas engraçadas que viu",
-  "compras, promoções, preços",
-  "carros, motos, trânsito",
-  "feriados, datas comemorativas",
-];
-
-const FALLBACK_RESPOSTAS = [
-  "Kkk verdade! 😂", "Sim sim, com certeza 👍", "Ah legal, massa!",
-  "Entendi haha", "Boa! 🙏", "Aham, concordo", "Pois é né 😄",
-  "Haha boa!", "Show de bola 👍", "Tá certo!", "Demais hein! 😁",
-  "Kkkkk", "Verdade, penso igual", "Top! 🔥",
-];
+// Probabilidade de responder por fase (skip silencioso simulando humano ocupado)
+const PROB_RESPOSTA_POR_FASE: Record<number, number> = { 1: 0.6, 2: 0.8 };
+const FALLBACK_FINAL = "Ah legal!";
 
 function getSupabaseAdmin() {
   return createClient(
@@ -116,149 +92,163 @@ async function enviarTypingIndicator(serverUrl: string, instanceToken: string, n
   }
 }
 
-function buildSystemPrompt(totalTrocas: number, maxTrocas: number): string {
-  const trocasRestantes = maxTrocas - totalTrocas;
-  const estaFinalizando = trocasRestantes <= 3;
+// ========== MOTOR DE DIÁLOGO POR POOL (sem IA externa) ==========
 
-  let instrucaoEncerramento = "";
-  if (estaFinalizando) {
-    if (trocasRestantes <= 1) {
-      instrucaoEncerramento = `\nEsta é sua ÚLTIMA mensagem. Encerre naturalmente, como se tivesse que ir. Ex: "bom, vou nessa, depois a gente se fala!", "tenho que resolver umas coisas, tmj!". NÃO diga "tchau" formalmente.`;
-    } else {
-      instrucaoEncerramento = `\nA conversa está acabando. Dê sinais sutis de que vai sair. Ex: "cara preciso ir daqui a pouco", "tô ficando sem bateria".`;
-    }
-  }
+type DialogoRow = { id: string; resposta: string; peso: number; gatilho?: string[] | null };
 
-  return `Você é um brasileiro comum conversando no WhatsApp com um amigo/conhecido.
-Responda de forma natural, informal e curta como uma pessoa real.
-Use gírias brasileiras (tipo "kkk", "kkkk", "massa", "show", "tmj", "mano", "cara", "bora", "top", "pô").
-Use emojis de vez em quando (👍, 😂, 🙏, 😄, 🔥, 😎, 🤣) mas NÃO em toda mensagem.
-Varie o tamanho BASTANTE: às vezes só "kkk" ou "sério??", às vezes 1-2 frases, raramente 3 frases.
-NÃO use formatação markdown. NÃO se apresente. NÃO seja formal. NÃO use pontuação perfeita.
-Cometa "erros" naturais: abreviações (vc, tb, pq, qd, blz, vlw, ngm, td), minúsculas, sem ponto final.
-Faça perguntas para manter a conversa ("e vc?", "sério? conta mais", "e o trabalho?").
-Mude de assunto naturalmente às vezes.
-NUNCA repita a mesma estrutura duas vezes seguidas.${instrucaoEncerramento}`;
+function normalizarTexto(t: string): string {
+  return (t || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .trim();
 }
 
-// ========== OLLAMA LOCAL (Gemma) — substitui Lovable AI Gateway ==========
-const OLLAMA_MODEL = Deno.env.get("OLLAMA_MODEL") || "gemma4:e4b";
-const OLLAMA_API_KEY = Deno.env.get("OLLAMA_API_KEY") || "";
+function tokensDe(t: string): string[] {
+  return normalizarTexto(t).split(/\s+/).filter(w => w.length >= 2);
+}
 
-async function callOllama(messages: { role: string; content: string }[], opts: { timeoutMs?: number; numPredict?: number; temperature?: number; auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string; numero_destino?: string } } = {}): Promise<string | null> {
-  const ollamaUrl = Deno.env.get("OLLAMA_NGROK_URL");
-  const auditCtx = opts.auditCtx || {};
-  if (!ollamaUrl) {
-    console.warn("[IA] OLLAMA_NGROK_URL não configurado");
-    auditar({ etapa: 'ollama_call', status: 'falhou', motivo: 'OLLAMA_NGROK_URL ausente', ...auditCtx });
-    return null;
+function sorteioPonderado<T extends { peso: number }>(itens: T[]): T {
+  if (itens.length === 1) return itens[0];
+  const total = itens.reduce((s, i) => s + Math.max(1, i.peso || 1), 0);
+  let r = Math.random() * total;
+  for (const it of itens) {
+    r -= Math.max(1, it.peso || 1);
+    if (r <= 0) return it;
   }
-  const cleanUrl = ollamaUrl.replace(/\/+$/, "");
-  const timeoutMs = opts.timeoutMs ?? 30000; // subido de 20s → 30s
+  return itens[itens.length - 1];
+}
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  const t0 = Date.now();
-
+async function filtrarSemRepetir<T extends { id: string }>(sb: any, candidatos: T[], numeroDestino: string): Promise<T[]> {
+  if (!candidatos.length || !numeroDestino) return candidatos;
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true",
-    };
-    if (OLLAMA_API_KEY) headers["Authorization"] = `Bearer ${OLLAMA_API_KEY}`;
+    const dest = numeroDestino.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+    const desde = new Date(Date.now() - 24 * 3600000).toISOString();
+    const { data: usos } = await sb
+      .from("whatsapp_dialogos_uso")
+      .select("dialogo_id")
+      .eq("numero_destino", dest)
+      .gte("usado_em", desde);
+    const usados = new Set((usos || []).map((u: any) => u.dialogo_id));
+    const filtrados = candidatos.filter(c => !usados.has(c.id));
+    return filtrados.length ? filtrados : candidatos;
+  } catch { return candidatos; }
+}
 
-    const response = await fetch(`${cleanUrl}/api/chat`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        messages,
-        stream: false,
-        options: {
-          temperature: opts.temperature ?? 0.8,
-          num_predict: opts.numPredict ?? 80,
-        },
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const ms = Date.now() - t0;
+async function registrarUso(sb: any, dialogo: DialogoRow, numeroDestino: string): Promise<string> {
+  try {
+    const dest = (numeroDestino || "").replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+    if (dest) await sb.from("whatsapp_dialogos_uso").insert({ dialogo_id: dialogo.id, numero_destino: dest });
+  } catch { /* silencioso */ }
+  // Incremento best-effort do contador (read-modify-write — race aceitável)
+  try {
+    const { data: cur } = await sb.from("whatsapp_dialogos_pool").select("vezes_utilizada").eq("id", dialogo.id).single();
+    await sb.from("whatsapp_dialogos_pool").update({ vezes_utilizada: (cur?.vezes_utilizada || 0) + 1 }).eq("id", dialogo.id);
+  } catch { /* silencioso */ }
+  return dialogo.resposta;
+}
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[IA-Ollama] HTTP_ERR ${response.status} ms=${ms}: ${errText.substring(0, 200)}`);
-      auditar({ etapa: 'ollama_call', status: 'falhou', http_status: response.status, tempo_resposta_ms: ms, motivo: errText.substring(0, 200), ...auditCtx });
-      return null;
+async function gerarMensagemInicial(faseOrigem: number = 1): Promise<string> {
+  const sb = getSupabaseAdmin();
+  try {
+    const { data } = await sb
+      .from("whatsapp_dialogos_pool")
+      .select("id,resposta,peso")
+      .eq("contexto", "inicial").eq("ativo", true)
+      .lte("fase_minima", Math.max(1, faseOrigem));
+    if (!data?.length) return "Oi! Tudo bem?";
+    const escolhido = sorteioPonderado(data as DialogoRow[]);
+    console.log(`[IA-Pool] Inicial fase=${faseOrigem}: "${escolhido.resposta}"`);
+    return escolhido.resposta;
+  } catch (e) {
+    console.warn("[IA-Pool] Erro inicial:", e);
+    return "Oi! Tudo bem?";
+  }
+}
+
+async function chamarIA(
+  mensagem: string,
+  _historico: string,
+  totalTrocas: number,
+  maxTrocas: number,
+  auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string; numero_destino?: string },
+  faseOrigem: number = 1,
+): Promise<string> {
+  const sb = getSupabaseAdmin();
+  const t0 = Date.now();
+  const numeroDestino = auditCtx?.numero_destino || "";
+  const fase = Math.max(1, faseOrigem);
+
+  // 1) Encerramento progressivo (última troca)
+  const ehEncerramento = totalTrocas >= (maxTrocas - 1);
+  if (ehEncerramento) {
+    const { data } = await sb
+      .from("whatsapp_dialogos_pool")
+      .select("id,resposta,peso")
+      .eq("contexto", "encerramento").eq("ativo", true)
+      .lte("fase_minima", fase);
+    if (data?.length) {
+      const filt = await filtrarSemRepetir(sb, data as DialogoRow[], numeroDestino);
+      const escolhido = sorteioPonderado(filt);
+      const resp = await registrarUso(sb, escolhido, numeroDestino);
+      const ms = Date.now() - t0;
+      console.log(`[IA-Pool] Encerramento (${totalTrocas + 1}/${maxTrocas}): "${resp}"`);
+      auditar({ etapa: 'ollama_call', status: 'ok', tempo_resposta_ms: ms, resposta_gerada: resp, motivo: 'pool:encerramento', mensagem_original: mensagem, ...(auditCtx || {}) });
+      return resp;
     }
-
-    const data = await response.json();
-    const content = (data.message?.content || data.response || "").trim();
-    console.log(`[IA-Ollama] OK ms=${ms} model=${OLLAMA_MODEL} len=${content.length}`);
-    auditar({ etapa: 'ollama_call', status: 'ok', http_status: response.status, tempo_resposta_ms: ms, resposta_gerada: content, ...auditCtx });
-    return content || null;
-  } catch (err) {
-    clearTimeout(timeout);
-    const ms = Date.now() - t0;
-    const isTimeout = (err as Error)?.name === 'AbortError';
-    console.error(`[IA-Ollama] ${isTimeout ? 'TIMEOUT' : 'ERRO'} ms=${ms}:`, err);
-    auditar({ etapa: 'ollama_call', status: isTimeout ? 'timeout' : 'falhou', tempo_resposta_ms: ms, motivo: String(err).substring(0, 200), ...auditCtx });
-    return null;
   }
+
+  // 2) Match por gatilho (palavras-chave)
+  const tokens = tokensDe(mensagem);
+  let respostaPool: DialogoRow | null = null;
+  let origemMatch = "coringa";
+
+  if (tokens.length) {
+    const { data: respostas } = await sb
+      .from("whatsapp_dialogos_pool")
+      .select("id,resposta,peso,gatilho")
+      .eq("contexto", "resposta").eq("ativo", true)
+      .lte("fase_minima", fase)
+      .overlaps("gatilho", tokens);
+    if (respostas?.length) {
+      const filt = await filtrarSemRepetir(sb, respostas as DialogoRow[], numeroDestino);
+      respostaPool = sorteioPonderado(filt);
+      origemMatch = "resposta";
+    }
+  }
+
+  // 3) Fallback: coringa
+  if (!respostaPool) {
+    const { data: coringas } = await sb
+      .from("whatsapp_dialogos_pool")
+      .select("id,resposta,peso")
+      .eq("contexto", "coringa").eq("ativo", true)
+      .lte("fase_minima", fase);
+    if (coringas?.length) {
+      const filt = await filtrarSemRepetir(sb, coringas as DialogoRow[], numeroDestino);
+      respostaPool = sorteioPonderado(filt);
+      origemMatch = "coringa";
+    }
+  }
+
+  if (!respostaPool) {
+    auditar({ etapa: 'cascade_skip', status: 'ignorado', motivo: 'pool_vazio', mensagem_original: mensagem, ...(auditCtx || {}) });
+    return FALLBACK_FINAL;
+  }
+
+  const resp = await registrarUso(sb, respostaPool, numeroDestino);
+  const ms = Date.now() - t0;
+  console.log(`[IA-Pool] Resposta ${origemMatch} fase=${fase} (${totalTrocas + 1}/${maxTrocas}): "${resp}"`);
+  auditar({ etapa: 'ollama_call', status: 'ok', tempo_resposta_ms: ms, resposta_gerada: resp, motivo: `pool:${origemMatch}`, mensagem_original: mensagem, ...(auditCtx || {}) });
+  return resp;
 }
 
-async function chamarIA(mensagem: string, historico: string, totalTrocas: number, maxTrocas: number, auditCtx?: { instancia_origem_id?: string; instancia_destino_id?: string; numero_destino?: string }): Promise<string> {
-  const systemPrompt = buildSystemPrompt(totalTrocas, maxTrocas);
-  const messages: { role: string; content: string }[] = [
-    { role: "system", content: systemPrompt },
-  ];
-
-  if (historico) {
-    messages.push({ role: "user", content: `Histórico recente da conversa:\n${historico}` });
-    messages.push({ role: "assistant", content: "Ok, entendi o contexto. Vou continuar naturalmente." });
-  }
-
-  messages.push({ role: "user", content: mensagem });
-
-  const raw = await callOllama(messages, { timeoutMs: 30000, numPredict: 80, temperature: 0.85, auditCtx });
-  if (!raw) {
-    auditar({ etapa: 'cascade_skip', status: 'ignorado', motivo: 'ollama_null_fallback', mensagem_original: mensagem, ...auditCtx });
-    return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
-  }
-
-  let resposta = raw.replace(/^["']|["']$/g, "").trim();
-  if (!resposta || resposta.length < 2) {
-    return FALLBACK_RESPOSTAS[Math.floor(Math.random() * FALLBACK_RESPOSTAS.length)];
-  }
-  if (resposta.length > 200) {
-    resposta = resposta.substring(0, 200).replace(/\s\S*$/, "");
-  }
-  console.log(`[IA-Ollama] Resposta (troca ${totalTrocas + 1}/${maxTrocas}): "${resposta}"`);
-  return resposta;
+// Helper: probabilidade de ignorar resposta (humano "ocupado")
+function deveResponderPorFase(fase: number): boolean {
+  const prob = PROB_RESPOSTA_POR_FASE[fase] ?? 0.95;
+  return Math.random() <= prob;
 }
 
-async function gerarMensagemInicial(): Promise<string> {
-  const tema = TEMAS_CONVERSA[Math.floor(Math.random() * TEMAS_CONVERSA.length)];
-
-  const messages = [
-    {
-      role: "system",
-      content: `Você é um brasileiro comum no WhatsApp. Gere UMA mensagem curta e casual para iniciar uma conversa com um amigo sobre: ${tema}. 
-Seja informal, use gírias, abreviações. Pode usar emoji mas com moderação. 
-Exemplos de tom: "e aí mano, viu o jogo ontem?", "cara tô morrendo de calor hj", "vc viu aquele filme novo?", "mano q fome, oq vc almoçou?".
-Responda APENAS com a mensagem, sem explicações.`,
-    },
-    { role: "user", content: "Gere a mensagem inicial." },
-  ];
-
-  const raw = await callOllama(messages, { timeoutMs: 15000, numPredict: 60, temperature: 0.9 });
-  if (!raw) return "e aí, tudo bem? 😊";
-
-  let msg = raw.replace(/^["']|["']$/g, "").trim();
-  if (!msg || msg.length < 2) return "e aí, tudo bem? 😊";
-  if (msg.length > 150) msg = msg.substring(0, 150);
-  console.log(`[IA-Ollama] Mensagem inicial gerada (tema: ${tema}): "${msg}"`);
-  return msg;
-}
 
 async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
@@ -532,7 +522,14 @@ Deno.serve(async (req) => {
         return json({ started: false, reason: "cooldown" });
       }
 
-      const mensagemInicial = await gerarMensagemInicial();
+      // Carrega fase da instância de origem (controla quais frases do pool podem ser usadas)
+      const { data: aquecOrig } = await sb
+        .from("whatsapp_aquecimento_instancias")
+        .select("fase")
+        .eq("instancia_id", instancia_origem_id)
+        .maybeSingle();
+      const faseOrigem = aquecOrig?.fase || 1;
+      const mensagemInicial = await gerarMensagemInicial(faseOrigem);
 
       const maxTrocas = 4 + Math.floor(Math.random() * 5); // 4-8 trocas (realistic short conversation)
       const { data: conversa, error: convError } = await sb
@@ -663,9 +660,10 @@ Deno.serve(async (req) => {
       const LIMITE_DIARIO_REAL = 15;
       const { data: instAquec } = await sb
         .from("whatsapp_aquecimento_instancias")
-        .select("id, interacoes_hoje, interacoes_total")
+        .select("id, interacoes_hoje, interacoes_total, fase")
         .eq("instancia_id", instancia_origem_id)
         .maybeSingle();
+      const faseRespondedor = instAquec?.fase || 1;
 
       if (instAquec && instAquec.interacoes_hoje >= LIMITE_DIARIO_REAL) {
         console.log(`[IA] 🛑 Instância ${instancia_origem_id} atingiu limite diário (${instAquec.interacoes_hoje}/${LIMITE_DIARIO_REAL}). Finalizando conversa.`);
@@ -700,7 +698,7 @@ Deno.serve(async (req) => {
         const historicoTexto = historicoArr.slice(-10)
           .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
+        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino }, faseRespondedor);
 
         const novoHistorico = [
           ...historicoArr,
@@ -752,7 +750,17 @@ Deno.serve(async (req) => {
       const historicoTexto = historicoArr.slice(-10)
         .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
+      // Skip silencioso por fase: simula humano que nem sempre responde
+      if (!deveResponderPorFase(faseRespondedor)) {
+        console.log(`[IA-Pool] Skip por fase ${faseRespondedor} (humano "ocupado")`);
+        await sb.from("whatsapp_conversas_ia").update({
+          ultima_msg_em: new Date().toISOString(),
+          historico: [...((conversa.historico || []) as any[]), { role: "recebida", content: mensagem, ts: new Date().toISOString() }],
+        }).eq("id", conversa.id);
+        return json({ responded: false, reason: "skip_por_fase" });
+      }
+
+      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino }, faseRespondedor);
 
       const novoHistorico = [
         ...historicoArr,
