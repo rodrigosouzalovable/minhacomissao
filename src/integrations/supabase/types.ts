@@ -2625,6 +2625,74 @@ export type Database = {
           },
         ]
       }
+      whatsapp_dialogos_pool: {
+        Row: {
+          ativo: boolean
+          contexto: string
+          created_at: string
+          fase_minima: number
+          gatilho: string[]
+          id: string
+          peso: number
+          resposta: string
+          tipo: string
+          vezes_utilizada: number
+        }
+        Insert: {
+          ativo?: boolean
+          contexto: string
+          created_at?: string
+          fase_minima?: number
+          gatilho?: string[]
+          id?: string
+          peso?: number
+          resposta: string
+          tipo?: string
+          vezes_utilizada?: number
+        }
+        Update: {
+          ativo?: boolean
+          contexto?: string
+          created_at?: string
+          fase_minima?: number
+          gatilho?: string[]
+          id?: string
+          peso?: number
+          resposta?: string
+          tipo?: string
+          vezes_utilizada?: number
+        }
+        Relationships: []
+      }
+      whatsapp_dialogos_uso: {
+        Row: {
+          dialogo_id: string
+          id: string
+          numero_destino: string
+          usado_em: string
+        }
+        Insert: {
+          dialogo_id: string
+          id?: string
+          numero_destino: string
+          usado_em?: string
+        }
+        Update: {
+          dialogo_id?: string
+          id?: string
+          numero_destino?: string
+          usado_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_dialogos_uso_dialogo_id_fkey"
+            columns: ["dialogo_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_dialogos_pool"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_etiquetas: {
         Row: {
           cor: string
