@@ -139,13 +139,12 @@ async function registrarUso(sb: any, dialogo: DialogoRow, numeroDestino: string)
   try {
     const dest = (numeroDestino || "").replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
     if (dest) await sb.from("whatsapp_dialogos_uso").insert({ dialogo_id: dialogo.id, numero_destino: dest });
-    await sb.rpc; // noop
-    sb.from("whatsapp_dialogos_pool")
-      .update({ vezes_utilizada: undefined })
-      .eq("id", dialogo.id); // skipped — handled below via raw increment
   } catch { /* silencioso */ }
-  // Incremento atômico de vezes_utilizada (best-effort, não bloqueia)
-  try { await sb.rpc("increment_dialogo_uso", { p_id: dialogo.id }); } catch { /* fn opcional */ }
+  // Incremento best-effort do contador (read-modify-write — race aceitável)
+  try {
+    const { data: cur } = await sb.from("whatsapp_dialogos_pool").select("vezes_utilizada").eq("id", dialogo.id).single();
+    await sb.from("whatsapp_dialogos_pool").update({ vezes_utilizada: (cur?.vezes_utilizada || 0) + 1 }).eq("id", dialogo.id);
+  } catch { /* silencioso */ }
   return dialogo.resposta;
 }
 
