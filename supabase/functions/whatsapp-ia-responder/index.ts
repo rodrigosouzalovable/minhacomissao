@@ -523,7 +523,14 @@ Deno.serve(async (req) => {
         return json({ started: false, reason: "cooldown" });
       }
 
-      const mensagemInicial = await gerarMensagemInicial();
+      // Carrega fase da instância de origem (controla quais frases do pool podem ser usadas)
+      const { data: aquecOrig } = await sb
+        .from("whatsapp_aquecimento_instancias")
+        .select("fase")
+        .eq("instancia_id", instancia_origem_id)
+        .maybeSingle();
+      const faseOrigem = aquecOrig?.fase || 1;
+      const mensagemInicial = await gerarMensagemInicial(faseOrigem);
 
       const maxTrocas = 4 + Math.floor(Math.random() * 5); // 4-8 trocas (realistic short conversation)
       const { data: conversa, error: convError } = await sb
