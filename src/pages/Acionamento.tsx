@@ -24,7 +24,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock, Download } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock, Download, Power } from 'lucide-react';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -466,27 +466,11 @@ export default function Acionamento() {
       }
     }));
 
-    // Sync ativo flag in database based on real connection status
-    for (const result of results) {
-      const inst = activeOnes.find(i => i.id === result.id);
-      if (!inst) continue;
-      if (!result.connected && inst.ativo) {
-        await supabase.from('user_whatsapp_instances' as any).update({ ativo: false } as any).eq('id', result.id);
-      }
-    }
-    // Also re-activate instances that were marked inactive but are now connected
-    const inactiveOnes = instancesToCheck.filter(i => !i.ativo);
-    for (const inst of inactiveOnes) {
-      try {
-        const { data } = await supabase.functions.invoke('test-uazapi-connection', {
-          body: { server_url: inst.server_url, instance_token: inst.instance_token }
-        });
-        if (data?.ok && data?.data?.status?.connected === true) {
-          await supabase.from('user_whatsapp_instances' as any).update({ ativo: true } as any).eq('id', inst.id);
-          setConnectionStatus(prev => ({ ...prev, [inst.id]: 'connected' }));
-        }
-      } catch {}
-    }
+    // NOTE: Não desativamos/reativamos automaticamente o flag `ativo` no banco com
+    // base no status de conexão da UAZAPI. Falhas temporárias de rede ou da própria
+    // UAZAPI estavam derrubando dezenas de chips de uma vez. O ícone Wi-Fi (em
+    // memória, via connectionStatus) já reflete o status real; o flag `ativo` agora
+    // é controlado **apenas manualmente** (toggle individual ou botão "Ativar todas").
     setCheckingConnections(false);
   }, []);
 
