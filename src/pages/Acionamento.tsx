@@ -2436,6 +2436,16 @@ export default function Acionamento() {
                   <div className="flex flex-wrap gap-2 lg:shrink-0">
                     <Button
                       size="sm"
+                      variant="outline"
+                      onClick={handleAtivarTodasInstancias}
+                      disabled={ativandoTodas || instances.every(i => i.ativo)}
+                      title="Marca todas as instâncias inativas como ativas (não reconecta a UAZAPI)"
+                    >
+                      {ativandoTodas ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Power className="h-4 w-4 mr-1" />}
+                      Ativar todas
+                    </Button>
+                    <Button
+                      size="sm"
                       onClick={() => { setConnectMethod('qr'); handleConnectQr(); }}
                       disabled={qrLoading || qrStep === 'qr'}
                     >
