@@ -699,7 +699,7 @@ Deno.serve(async (req) => {
         const historicoTexto = historicoArr.slice(-10)
           .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
+        const fraseEncerramento = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino }, faseRespondedor);
 
         const novoHistorico = [
           ...historicoArr,
@@ -751,7 +751,17 @@ Deno.serve(async (req) => {
       const historicoTexto = historicoArr.slice(-10)
         .map((m: any) => `${m.role === "enviada" ? "Eu" : "Amigo"}: ${m.content}`).join("\n");
 
-      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino });
+      // Skip silencioso por fase: simula humano que nem sempre responde
+      if (!deveResponderPorFase(faseRespondedor)) {
+        console.log(`[IA-Pool] Skip por fase ${faseRespondedor} (humano "ocupado")`);
+        await sb.from("whatsapp_conversas_ia").update({
+          ultima_msg_em: new Date().toISOString(),
+          historico: [...((conversa.historico || []) as any[]), { role: "recebida", content: mensagem, ts: new Date().toISOString() }],
+        }).eq("id", conversa.id);
+        return json({ responded: false, reason: "skip_por_fase" });
+      }
+
+      const resposta = await chamarIA(mensagem, historicoTexto, conversa.total_trocas, conversa.max_trocas, { instancia_origem_id, instancia_destino_id, numero_destino }, faseRespondedor);
 
       const novoHistorico = [
         ...historicoArr,
