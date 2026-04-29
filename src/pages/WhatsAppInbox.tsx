@@ -326,7 +326,7 @@ export default function WhatsAppInbox() {
     const internosCount = (candidatosInternos || []).filter(c => isContatoInterno((c as any).telefone)).length;
 
     setArquivadosCount((countArquivadosManuais ?? 0) + internosCount);
-  }, [filtroInstancia, instancias, abaAtiva]);
+  }, [filtroInstancia, instancias, abaAtiva, warmingSufixos]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
