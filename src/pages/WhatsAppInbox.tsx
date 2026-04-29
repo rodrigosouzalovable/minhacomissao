@@ -82,6 +82,7 @@ const getMessageIdentity = (msg: Pick<Mensagem, 'direcao' | 'tipo_conteudo' | 'm
 
 export default function WhatsAppInbox() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const { toast } = useToast();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
@@ -211,8 +212,9 @@ export default function WhatsAppInbox() {
 
   // Auto-import last 10 conversations the FIRST time an instance connects.
   // Runs once on mount and once every 60s. Skips instances that already imported.
+  // Restricted to ADMIN users only (avoids cost when employees connect WhatsApp).
   useEffect(() => {
-    if (!user || instancias.length === 0) return;
+    if (!user || !isAdmin || instancias.length === 0) return;
 
     const pendentes = instancias.filter(i => !i.historico_inicial_importado_em);
     if (pendentes.length === 0) return;
