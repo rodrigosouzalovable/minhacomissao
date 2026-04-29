@@ -828,6 +828,15 @@ export default function Acordos() {
     return datas.some(d => d === selectedStr);
   };
 
+  // Helper: check if an acordo was created on the selected date
+  const matchesCriacaoFilter = (acordo: Acordo) => {
+    if (!filtroDataCriacao) return true;
+    if (!acordo.criado_em) return false;
+    const selectedStr = format(filtroDataCriacao, 'yyyy-MM-dd');
+    const criadoStr = format(new Date(acordo.criado_em), 'yyyy-MM-dd');
+    return criadoStr === selectedStr;
+  };
+
   // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
   const cpfDuplicadosMap = (() => {
     const map = new Map<string, Acordo[]>();
