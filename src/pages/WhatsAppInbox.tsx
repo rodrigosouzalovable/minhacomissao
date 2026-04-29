@@ -531,6 +531,7 @@ export default function WhatsAppInbox() {
     setMensagens([]);
     setPaginaAtual(0);
     setTemMaisAnteriores(true);
+    setRespondendoMsg(null);
   };
 
   const handleEnviarTexto = async (texto: string) => {
