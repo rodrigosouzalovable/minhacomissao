@@ -1277,6 +1277,7 @@ export default function WhatsAppInbox() {
                             onApagarParaMim={handleApagarParaMim}
                             onApagarParaTodos={handleApagarParaTodos}
                             onEditar={handleEditarMensagem}
+                            onResponder={(m) => setRespondendoMsg(m as Mensagem)}
                           />
                         </div>
                       );
@@ -1299,6 +1300,12 @@ export default function WhatsAppInbox() {
                   onExternalFileHandled={() => setDroppedFile(null)}
                   mensagensRapidas={mensagensRapidas.filter(m => !m.arquivado)}
                   onBusyChange={setInputBusy}
+                  respondendo={respondendoMsg ? {
+                    id: respondendoMsg.whatsapp_msg_id || respondendoMsg.id,
+                    conteudo: respondendoMsg.conteudo,
+                    direcao: respondendoMsg.direcao,
+                  } : null}
+                  onCancelarResposta={() => setRespondendoMsg(null)}
                 />
               )}
             </>
