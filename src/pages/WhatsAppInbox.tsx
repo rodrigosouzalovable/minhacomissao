@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { MensagensRapidasDialog, type MensagemRapida } from '@/components/inbox/MensagensRapidasDialog';
+import { NovaConversaDialog } from '@/components/inbox/NovaConversaDialog';
 interface Etiqueta {
   id: string;
   nome: string;
@@ -691,7 +692,8 @@ export default function WhatsAppInbox() {
     toast({ title: 'Conversa excluída' });
   };
 
-  const handleNovaConversa = async () => {
+  const handleNovaConversa = async (payload: { telefone: string; instanciaId: string; mensagem: string }) => {
+    const { telefone: novoTelefone, instanciaId: novaInstanciaId, mensagem: novaMensagem } = payload;
     if (!novoTelefone || !novaInstanciaId || !novaMensagem.trim()) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
       return;
@@ -718,9 +720,6 @@ export default function WhatsAppInbox() {
 
       toast({ title: 'Mensagem enviada', description: 'Conversa iniciada com sucesso' });
       setNovaConversaOpen(false);
-      setNovoTelefone('');
-      setNovaMensagem('');
-      setNovaInstanciaId('');
 
       // Wait for realtime to create contact, then try to select it
       setTimeout(async () => {
@@ -1098,76 +1097,13 @@ export default function WhatsAppInbox() {
         </div>
       </div>
 
-      <Dialog open={novaConversaOpen} onOpenChange={setNovaConversaOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nova conversa</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Telefone</Label>
-              <Input
-                placeholder="5511999999999"
-                value={novoTelefone}
-                onChange={e => setNovoTelefone(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">Inclua o código do país (55 para Brasil)</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Instância</Label>
-              <Popover open={instanciaComboOpen} onOpenChange={setInstanciaComboOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={instanciaComboOpen} className="w-full justify-between font-normal">
-                    {novaInstanciaId
-                      ? (instancias.find(i => i.id === novaInstanciaId)?.nome || 'Instância')
-                      : 'Selecione uma instância'}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Buscar instância..." />
-                    <CommandList>
-                      <CommandEmpty>Nenhuma instância encontrada.</CommandEmpty>
-                      <CommandGroup>
-                        {instancias.map(inst => (
-                          <CommandItem
-                            key={inst.id}
-                            value={inst.nome || inst.id}
-                            onSelect={() => {
-                              setNovaInstanciaId(inst.id);
-                              setInstanciaComboOpen(false);
-                            }}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", novaInstanciaId === inst.id ? "opacity-100" : "opacity-0")} />
-                            {inst.nome || 'Instância'}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label>Mensagem</Label>
-              <Textarea
-                placeholder="Digite a primeira mensagem..."
-                value={novaMensagem}
-                onChange={e => setNovaMensagem(e.target.value)}
-                rows={3}
-              />
-            </div>
-            <Button
-              onClick={handleNovaConversa}
-              disabled={enviandoNova || !novoTelefone || !novaInstanciaId || !novaMensagem.trim()}
-              className="w-full"
-            >
-              {enviandoNova ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : 'Iniciar conversa'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <NovaConversaDialog
+        open={novaConversaOpen}
+        onOpenChange={setNovaConversaOpen}
+        instancias={instancias as any}
+        enviando={enviandoNova}
+        onSubmit={handleNovaConversa}
+      />
 
       <Dialog open={editandoMsg !== null} onOpenChange={(open) => !open && setEditandoMsg(null)}>
         <DialogContent className="max-w-md">
