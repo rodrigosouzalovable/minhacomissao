@@ -158,6 +158,55 @@ export default function WhatsAppInbox() {
     fetchInstancias();
   }, [user]);
 
+  // Verifica quais instâncias estão realmente conectadas ao abrir o diálogo "Nova conversa"
+  useEffect(() => {
+    if (!novaConversaOpen) return;
+    if (instancias.length === 0) {
+      setInstanciasConectadas([]);
+      return;
+    }
+
+    let cancelado = false;
+    setVerificandoConexao(true);
+    setInstanciasConectadas([]);
+
+    (async () => {
+      const results = await Promise.allSettled(
+        instancias.map(async (inst) => {
+          try {
+            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
+              body: { server_url: inst.server_url, instance_token: inst.instance_token },
+            });
+            const payload = (data as any)?.data ?? {};
+            const instanceData = payload?.instance ?? payload;
+            const rawStatus = String(instanceData?.status ?? payload?.status ?? '').toLowerCase();
+            const isConnected =
+              (data as any)?.ok === true &&
+              (rawStatus === 'connected' ||
+                rawStatus === 'open' ||
+                rawStatus === 'online' ||
+                instanceData?.connected === true ||
+                payload?.connected === true);
+            return { inst, connected: isConnected };
+          } catch {
+            return { inst, connected: false };
+          }
+        })
+      );
+
+      if (cancelado) return;
+      const conectadas = results
+        .filter((r): r is PromiseFulfilledResult<{ inst: Instancia; connected: boolean }> =>
+          r.status === 'fulfilled' && r.value.connected
+        )
+        .map(r => r.value.inst);
+      setInstanciasConectadas(conectadas);
+      setVerificandoConexao(false);
+    })();
+
+    return () => { cancelado = true; };
+  }, [novaConversaOpen, instancias]);
+
   const fetchEtiquetas = useCallback(async () => {
     const { data } = await supabase
       .from('whatsapp_etiquetas')
