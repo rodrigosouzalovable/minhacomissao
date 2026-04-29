@@ -417,6 +417,7 @@ export default function Acordos() {
   const [selectedUserId, setSelectedUserId] = useState<string>('todos');
   const [rankingAberto, setRankingAberto] = useState(false);
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
+  const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(undefined);
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
 
   // Buscar perfil do operador para nome dinâmico
@@ -827,6 +828,15 @@ export default function Acordos() {
     return datas.some(d => d === selectedStr);
   };
 
+  // Helper: check if an acordo was created on the selected date
+  const matchesCriacaoFilter = (acordo: Acordo) => {
+    if (!filtroDataCriacao) return true;
+    if (!acordo.criado_em) return false;
+    const selectedStr = format(filtroDataCriacao, 'yyyy-MM-dd');
+    const criadoStr = format(new Date(acordo.criado_em), 'yyyy-MM-dd');
+    return criadoStr === selectedStr;
+  };
+
   // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
   const cpfDuplicadosMap = (() => {
     const map = new Map<string, Acordo[]>();
@@ -869,7 +879,7 @@ export default function Acordos() {
     } else {
       matchesStatus = acordo.status === statusFilter;
     }
-    return matchesSearch && matchesStatus && matchesDateFilter(acordo.id);
+    return matchesSearch && matchesStatus && matchesDateFilter(acordo.id) && matchesCriacaoFilter(acordo);
   });
 
   // Acordos Pagos: têm pelo menos 1 parcela paga
@@ -1061,53 +1071,93 @@ export default function Acordos() {
         </CollapsibleContent>
 
         {/* Filtros */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+          <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por cliente ou CPF..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full sm:w-[220px] justify-start text-left font-normal",
-                  !filtroDataVencimento && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {filtroDataVencimento ? format(filtroDataVencimento, "dd/MM/yyyy") : "Filtrar por vencimento"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={filtroDataVencimento}
-                onSelect={setFiltroDataVencimento}
-                locale={ptBR}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-          {filtroDataVencimento && (
-            <Button variant="ghost" size="icon" onClick={() => setFiltroDataVencimento(undefined)} title="Limpar filtro de data">
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="ativo">Ativos</SelectItem>
-              <SelectItem value="concluido">Concluídos</SelectItem>
-              <SelectItem value="cancelado">Cancelados</SelectItem>
-              <SelectItem value="quebrado">Quebrados</SelectItem>
-              <SelectItem value="duplicados">Duplicados (CPF)</SelectItem>
-            </SelectContent>
-          </Select>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Filtro: Data de Vencimento */}
+            <div className="flex items-center gap-1">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full sm:w-[210px] justify-start text-left font-normal",
+                      !filtroDataVencimento && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filtroDataVencimento ? `Vencimento: ${format(filtroDataVencimento, "dd/MM/yyyy")}` : "Filtrar por vencimento"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={filtroDataVencimento}
+                    onSelect={setFiltroDataVencimento}
+                    locale={ptBR}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              {filtroDataVencimento && (
+                <Button variant="ghost" size="icon" onClick={() => setFiltroDataVencimento(undefined)} title="Limpar filtro de vencimento">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Filtro: Data de Criação */}
+            <div className="flex items-center gap-1">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full sm:w-[210px] justify-start text-left font-normal",
+                      !filtroDataCriacao && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filtroDataCriacao ? `Criação: ${format(filtroDataCriacao, "dd/MM/yyyy")}` : "Filtrar por criação"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={filtroDataCriacao}
+                    onSelect={setFiltroDataCriacao}
+                    locale={ptBR}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              {filtroDataCriacao && (
+                <Button variant="ghost" size="icon" onClick={() => setFiltroDataCriacao(undefined)} title="Limpar filtro de criação">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-[170px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="ativo">Ativos</SelectItem>
+                <SelectItem value="concluido">Concluídos</SelectItem>
+                <SelectItem value="cancelado">Cancelados</SelectItem>
+                <SelectItem value="quebrado">Quebrados</SelectItem>
+                <SelectItem value="duplicados">Duplicados (CPF)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Abas de acordos */}
