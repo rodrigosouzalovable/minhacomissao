@@ -405,7 +405,7 @@ export default function EquipeAcordos() {
     }
 
     loadTeamData();
-  }, [user, isAdmin, roleLoading]);
+  }, [user, isAdmin, roleLoading, permLoading, verComoAdmin]);
 
   const filteredAcordos = acordos.filter(acordo => {
     const termo = search.trim().toLowerCase();
