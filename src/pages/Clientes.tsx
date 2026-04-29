@@ -846,6 +846,10 @@ export default function Clientes() {
                           <Download className="h-4 w-4 mr-1" />
                           {exportingPhones ? 'Exportando...' : 'Exportar Telefones'}
                         </Button>
+                        <Button variant="outline" size="sm" onClick={handleExportParcelas} disabled={exportingParcelas}>
+                          <Download className="h-4 w-4 mr-1" />
+                          {exportingParcelas ? 'Exportando...' : 'Exportar Parcelas (Excel)'}
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => setDeleteMode(true)}>
                           <Trash2 className="h-4 w-4 mr-1" />
                           Excluir Contratos
