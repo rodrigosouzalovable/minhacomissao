@@ -98,6 +98,72 @@ export default function ExportarDados() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [sqlMap, setSqlMap] = useState<Record<string, string>>({});
+  const [sqlLoading, setSqlLoading] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [bulkSqlBusy, setBulkSqlBusy] = useState(false);
+
+  const allTables = useMemo(() => CATEGORIES.flatMap(c => c.tables), []);
+
+  const fetchDDL = async (table: string): Promise<string> => {
+    const { data, error } = await (supabase as any).rpc('get_table_ddl', { p_table: table });
+    if (error) throw error;
+    return (data as string) ?? '';
+  };
+
+  const loadSql = async (table: string) => {
+    setSqlLoading(table);
+    try {
+      const ddl = await fetchDDL(table);
+      setSqlMap(prev => ({ ...prev, [table]: ddl }));
+    } catch (e: any) {
+      toast.error(`Erro ao gerar SQL de ${table}: ${e.message ?? e}`);
+    } finally {
+      setSqlLoading(null);
+    }
+  };
+
+  const copyText = async (id: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(id);
+    toast.success('SQL copiado!');
+    setTimeout(() => setCopied(null), 1500);
+  };
+
+  const generateAllSql = async () => {
+    setBulkSqlBusy(true);
+    const parts: string[] = [
+      '-- ============================================',
+      '-- DDL completo (CREATE TABLE + RLS) — public schema',
+      `-- Gerado em ${new Date().toISOString()}`,
+      '-- ============================================',
+      '',
+    ];
+    let ok = 0, fail = 0;
+    for (const t of allTables) {
+      try {
+        const ddl = await fetchDDL(t);
+        parts.push(ddl, '');
+        ok++;
+      } catch {
+        parts.push(`-- ERRO ao gerar DDL para ${t}`, '');
+        fail++;
+      }
+    }
+    setBulkSqlBusy(false);
+    const full = parts.join('\n');
+    const blob = new Blob([full], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `schema_completo_${new Date().toISOString().slice(0,10)}.sql`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Schema gerado: ${ok} tabelas (${fail} falhas)`);
+  };
+
   const [search, setSearch] = useState('');
 
   const filteredCats = useMemo(() => {
