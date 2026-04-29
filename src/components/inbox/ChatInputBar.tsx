@@ -1,16 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Mic, Paperclip, X, Loader2 } from 'lucide-react';
+import { Send, Mic, Paperclip, X, Loader2, Reply } from 'lucide-react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { MensagemRapida } from './MensagensRapidasDialog';
+import { cn } from '@/lib/utils';
 
 interface MediaSentPayload {
   conteudo: string;
   tipo_conteudo: 'imagem' | 'documento';
   media_url: string;
+}
+
+export interface RespondendoMsg {
+  id: string;
+  conteudo: string;
+  direcao: string;
 }
 
 interface ChatInputBarProps {
@@ -25,6 +32,8 @@ interface ChatInputBarProps {
   onExternalFileHandled?: () => void;
   mensagensRapidas?: MensagemRapida[];
   onBusyChange?: (busy: boolean) => void;
+  respondendo?: RespondendoMsg | null;
+  onCancelarResposta?: () => void;
 }
 
 export function ChatInputBar({
@@ -32,6 +41,7 @@ export function ChatInputBar({
   onTextSent, onMediaSent, enviando,
   externalFile, onExternalFileHandled,
   mensagensRapidas, onBusyChange,
+  respondendo, onCancelarResposta,
 }: ChatInputBarProps) {
   const { toast } = useToast();
   const [textoMensagem, setTextoMensagem] = useState('');
