@@ -272,7 +272,7 @@ export default function WhatsAppInbox() {
       cancelado = true;
       clearInterval(interval);
     };
-  }, [user, instancias, toast]);
+  }, [user, isAdmin, instancias, toast]);
 
   const fetchEtiquetas = useCallback(async () => {
     const { data } = await supabase
