@@ -282,6 +282,8 @@ export default function ExportarDados() {
             Baixe em CSV os dados das tabelas do Lovable Cloud. Limite: 100k linhas por tabela.
           </p>
         </div>
+      </div>
+
       <Tabs defaultValue="csv" className="w-full">
         <TabsList>
           <TabsTrigger value="csv"><Download className="h-4 w-4 mr-1" /> CSV (dados)</TabsTrigger>
