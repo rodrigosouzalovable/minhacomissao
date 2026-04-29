@@ -626,6 +626,20 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                               {parcela.pago ? 'Pago' : 'Pendente'}
                             </Badge>
                           </TableCell>
+                          {isMontrealCliente && (
+                            <TableCell className="text-xs">
+                              {(() => {
+                                const c = calcularComissaoLinha(parcela);
+                                if (!c) return <span className="text-muted-foreground">—</span>;
+                                return (
+                                  <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
+                                    <Percent className="h-3 w-3" />
+                                    {c.percentual}% • {fmtBRL(c.valor)}
+                                  </span>
+                                );
+                              })()}
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
                               {editingParcelaId === parcela.id ? (
