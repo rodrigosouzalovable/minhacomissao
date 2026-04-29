@@ -30,7 +30,9 @@ async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone:
     // If the endpoint responded with a real UAZAPI error (not 405 Method Not Allowed),
     // it means the endpoint is correct but the request itself failed (e.g. number not on WhatsApp)
     if (response.status !== 405) {
-      const errMsg = data?.error || data?.message || 'Erro UAZAPI';
+      const errMsg = (typeof data?.message === 'string' && data.message)
+        || (typeof data?.error === 'string' && data.error)
+        || 'Erro UAZAPI';
       throw new Error(errMsg);
     }
     
@@ -150,10 +152,12 @@ serve(async (req) => {
   } catch (error) {
     console.error('Erro na função send-whatsapp:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    const isWhatsAppError = errorMessage.toLowerCase().includes('not on whatsapp') ||
-      errorMessage.toLowerCase().includes('não está no whatsapp');
-    return new Response(JSON.stringify({ success: false, error: errorMessage, fallback: isWhatsAppError }), {
-      status: isWhatsAppError ? 200 : 500,
+    const lower = errorMessage.toLowerCase();
+    const isWhatsAppError = lower.includes('not on whatsapp') || lower.includes('não está no whatsapp');
+    const isDisconnected = lower.includes('disconnected') || lower.includes('desconectad');
+    const fallback = isWhatsAppError || isDisconnected;
+    return new Response(JSON.stringify({ success: false, error: errorMessage, fallback }), {
+      status: fallback ? 200 : 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
