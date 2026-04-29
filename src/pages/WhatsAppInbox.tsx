@@ -36,6 +36,7 @@ interface Instancia {
   nome: string | null;
   server_url: string;
   instance_token: string;
+  historico_inicial_importado_em?: string | null;
 }
 
 interface Contato {
