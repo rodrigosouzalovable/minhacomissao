@@ -105,6 +105,12 @@ export function ConversaContextMenu({
               {arquivado ? 'Desarquivar conversa' : 'Arquivar conversa'}
             </ContextMenuItem>
           )}
+          {onArquivarVarias && !arquivado && (
+            <ContextMenuItem onClick={() => onArquivarVarias(contatoId)}>
+              <Archive className="h-4 w-4 mr-2" />
+              Arquivar várias...
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onExcluirConversa(contatoId)} className="text-destructive focus:text-destructive">
             <Trash2 className="h-4 w-4 mr-2" />
