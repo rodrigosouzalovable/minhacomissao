@@ -129,6 +129,9 @@ serve(async (req) => {
           timestamp_msg: agora,
           lida: true,
           whatsapp_msg_id: whatsappMsgId,
+          quoted_msg_id: quoted?.id || null,
+          quoted_conteudo: quoted?.conteudo ? String(quoted.conteudo).slice(0, 500) : null,
+          quoted_direcao: quoted?.direcao || null,
         });
 
         if (existingContact) {
