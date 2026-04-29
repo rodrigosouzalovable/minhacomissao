@@ -98,6 +98,143 @@ export default function Clientes() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exportingPhones, setExportingPhones] = useState(false);
+  const [exportingParcelas, setExportingParcelas] = useState(false);
+
+  const handleExportParcelas = async () => {
+    if (filteredGrouped.length === 0) {
+      toast.error('Nenhum cliente para exportar.');
+      return;
+    }
+    setExportingParcelas(true);
+    try {
+      // Coleta CPFs únicos (incluindo grupos)
+      const allCpfs: string[] = [];
+      for (const row of filteredGrouped) {
+        if (row.cpfsGrupo) {
+          for (const c of row.cpfsGrupo) allCpfs.push(c.replace(/\D/g, ''));
+        } else {
+          allCpfs.push(row.cpf.replace(/\D/g, ''));
+        }
+      }
+      const uniqueCpfs = Array.from(new Set(allCpfs.filter(Boolean)));
+
+      // Mapa CPF -> nome e credor
+      const cpfToInfo: Record<string, { nome: string; credor: string }> = {};
+      for (const r of rawResults) {
+        const norm = r.cpf.replace(/\D/g, '');
+        if (!cpfToInfo[norm]) cpfToInfo[norm] = { nome: r.nome, credor: r.credor || '' };
+      }
+      for (const row of filteredGrouped) {
+        if (row.cpfsGrupo) {
+          for (const c of row.cpfsGrupo) {
+            const norm = c.replace(/\D/g, '');
+            if (!cpfToInfo[norm]) cpfToInfo[norm] = { nome: row.nome, credor: row.credor || '' };
+          }
+        }
+      }
+
+      // Busca acordos em batches
+      const batchSize = 50;
+      const acordos: any[] = [];
+      for (let i = 0; i < uniqueCpfs.length; i += batchSize) {
+        const batch = uniqueCpfs.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('acordos_devedor' as any)
+          .select('id, devedor_cpf, valor_total, num_parcelas, data_primeiro_vencimento, criado_em, status')
+          .in('devedor_cpf', batch);
+        if (error) throw error;
+        if (data) acordos.push(...data);
+      }
+
+      if (acordos.length === 0) {
+        toast.error('Nenhum acordo encontrado para os clientes listados.');
+        return;
+      }
+
+      // Busca parcelas dos acordos em batches
+      const acordoIds = acordos.map(a => a.id);
+      const acordoMap: Record<string, any> = {};
+      for (const a of acordos) acordoMap[a.id] = a;
+
+      const parcelas: any[] = [];
+      for (let i = 0; i < acordoIds.length; i += batchSize) {
+        const batch = acordoIds.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('parcelas_devedor' as any)
+          .select('acordo_id, numero_parcela, valor, data_vencimento, data_pagamento, pago')
+          .in('acordo_id', batch);
+        if (error) throw error;
+        if (data) parcelas.push(...data);
+      }
+
+      if (parcelas.length === 0) {
+        toast.error('Nenhuma parcela encontrada.');
+        return;
+      }
+
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+
+      const formatDate = (d: string | null) => {
+        if (!d) return '';
+        const dt = new Date(d + 'T00:00:00');
+        return dt.toLocaleDateString('pt-BR');
+      };
+
+      const exportRows = parcelas
+        .sort((a, b) => {
+          if (a.acordo_id !== b.acordo_id) return a.acordo_id.localeCompare(b.acordo_id);
+          return a.numero_parcela - b.numero_parcela;
+        })
+        .map(p => {
+          const acordo = acordoMap[p.acordo_id];
+          const cpfNorm = (acordo?.devedor_cpf || '').replace(/\D/g, '');
+          const info = cpfToInfo[cpfNorm] || { nome: '', credor: '' };
+          let status = 'Pendente';
+          if (p.pago) status = 'Paga';
+          else if (p.data_vencimento && new Date(p.data_vencimento + 'T00:00:00') < hoje) status = 'Atrasada';
+
+          return {
+            cpf: acordo?.devedor_cpf || '',
+            nome: info.nome,
+            credor: info.credor,
+            acordo_id: (acordo?.id || '').slice(0, 8),
+            data_acordo: formatDate(acordo?.criado_em ? acordo.criado_em.split('T')[0] : null),
+            valor_total: Number(acordo?.valor_total || 0),
+            parcela: `${p.numero_parcela}/${acordo?.num_parcelas || '?'}`,
+            valor_parcela: Number(p.valor || 0),
+            data_vencimento: formatDate(p.data_vencimento),
+            data_pagamento: formatDate(p.data_pagamento),
+            status_acordo: acordo?.status || '',
+            status: status,
+          };
+        });
+
+      const colunas = [
+        { chave: 'cpf' as const, titulo: 'CPF' },
+        { chave: 'nome' as const, titulo: 'Cliente' },
+        { chave: 'credor' as const, titulo: 'Credor' },
+        { chave: 'acordo_id' as const, titulo: 'Nº Acordo' },
+        { chave: 'data_acordo' as const, titulo: 'Data Acordo' },
+        { chave: 'valor_total' as const, titulo: 'Valor Total Acordo' },
+        { chave: 'parcela' as const, titulo: 'Parcela' },
+        { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
+        { chave: 'data_vencimento' as const, titulo: 'Vencimento' },
+        { chave: 'data_pagamento' as const, titulo: 'Pagamento' },
+        { chave: 'status_acordo' as const, titulo: 'Status Acordo' },
+        { chave: 'status' as const, titulo: 'Status Parcela' },
+      ];
+
+      const credorSlug = (credor === 'todos' ? 'todos' : credor).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const hojeStr = new Date().toISOString().split('T')[0];
+      exportarParaExcel(exportRows, colunas, `parcelas-clientes-${credorSlug}-${hojeStr}`);
+      toast.success(`${exportRows.length} parcelas exportadas (${acordos.length} acordos).`);
+    } catch (err: any) {
+      toast.error('Erro ao exportar: ' + (err.message || err));
+    } finally {
+      setExportingParcelas(false);
+    }
+  };
 
   const [credores, setCredores] = useState<string[]>(CREDORES_FIXOS);
 
@@ -708,6 +845,10 @@ export default function Clientes() {
                         <Button variant="outline" size="sm" onClick={handleExportTelefones} disabled={exportingPhones}>
                           <Download className="h-4 w-4 mr-1" />
                           {exportingPhones ? 'Exportando...' : 'Exportar Telefones'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleExportParcelas} disabled={exportingParcelas}>
+                          <Download className="h-4 w-4 mr-1" />
+                          {exportingParcelas ? 'Exportando...' : 'Exportar Parcelas (Excel)'}
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => setDeleteMode(true)}>
                           <Trash2 className="h-4 w-4 mr-1" />
