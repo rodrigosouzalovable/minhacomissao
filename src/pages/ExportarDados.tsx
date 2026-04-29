@@ -107,6 +107,9 @@ export default function ExportarDados() {
     })).filter(c => c.tables.length > 0);
   }, [search]);
 
+  // Helper to safely index unknown row objects
+  const getVal = (row: any, key: string) => (row as Record<string, any>)[key];
+
   if (roleLoading) {
     return <div className="p-6 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Carregando...</div>;
   }
