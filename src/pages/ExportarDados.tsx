@@ -60,12 +60,11 @@ const CATEGORIES: { label: string; icon: string; tables: string[] }[] = [
 
 function toCSV(rows: any[]): string {
   if (!rows || rows.length === 0) return '';
-  const headers = Array.from(
-    rows.reduce((set: Set<string>, r) => {
-      Object.keys(r ?? {}).forEach(k => set.add(k));
-      return set;
-    }, new Set<string>())
-  );
+  const headerSet = new Set<string>();
+  for (const r of rows) {
+    Object.keys(r ?? {}).forEach(k => headerSet.add(k));
+  }
+  const headers: string[] = Array.from(headerSet);
   const escape = (val: any) => {
     if (val === null || val === undefined) return '';
     let s = typeof val === 'object' ? JSON.stringify(val) : String(val);
