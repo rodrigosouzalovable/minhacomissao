@@ -297,34 +297,44 @@ export default function CampanhasVoz() {
         },
       });
       if (error) throw error;
-      if (data?.invalid && Array.isArray(data.invalid)) {
-        const invalidSet = new Set(data.invalid.map((n: string) => n.replace(/\D/g, '')));
-        const removidos: { nome: string; telefone: string }[] = [];
-        const mantidos: { id: string; nome: string; telefone: string }[] = [];
-        importedContacts.forEach(c => {
-          const clean = c.telefone.replace(/\D/g, '');
-          const full = clean.startsWith('55') ? clean : `55${clean}`;
-          if (invalidSet.has(clean) || invalidSet.has(full)) {
-            removidos.push({ nome: c.nome, telefone: c.telefone });
-          } else {
-            mantidos.push(c);
-          }
-        });
-        setNumerosInvalidos(removidos);
-        setImportedContacts(mantidos);
-        setSelectedContacts(new Set());
-        setVerificacaoConcluida(true);
-        toast.success(`${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`);
-      } else {
-        setVerificacaoConcluida(true);
-        toast.info('Todos os números parecem válidos');
-      }
+      const invalidArr: string[] = Array.isArray(data?.invalid) ? data.invalid : [];
+      const invalidSet = new Set(invalidArr.map((n: string) => n.replace(/\D/g, '')));
+      const semWa: { nome: string; telefone: string }[] = [];
+      const comWa: { id: string; nome: string; telefone: string }[] = [];
+      importedContacts.forEach(c => {
+        const clean = c.telefone.replace(/\D/g, '');
+        const full = clean.startsWith('55') ? clean : `55${clean}`;
+        if (invalidSet.has(clean) || invalidSet.has(full)) {
+          semWa.push({ nome: c.nome, telefone: c.telefone });
+        } else {
+          comWa.push(c);
+        }
+      });
+      setNumerosInvalidos(semWa);
+      // Mantém apenas os COM WhatsApp na lista que será usada na campanha
+      setImportedContacts(comWa);
+      setSelectedContacts(new Set(comWa.map(c => c.id)));
+      setVerificacaoConcluida(true);
+      toast.success(`${comWa.length} com WhatsApp · ${semWa.length} sem WhatsApp`);
     } catch (err: any) {
       toast.error(`Erro: ${err.message || 'Erro desconhecido'}`);
     } finally {
       setVerificandoWhatsApp(false);
     }
   };
+
+  const exportarSemWhatsApp = () => {
+    if (numerosInvalidos.length === 0) return;
+    exportarParaExcel(
+      numerosInvalidos,
+      [
+        { titulo: 'Nome', chave: 'nome' },
+        { titulo: 'Telefone', chave: 'telefone' },
+      ],
+      'contatos-sem-whatsapp'
+    );
+  };
+
 
   // Multi-audio handling
   const handleAudioFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -732,35 +742,69 @@ export default function CampanhasVoz() {
                         {verificandoWhatsApp ? 'Verificando...' : 'Verificar WhatsApp'}
                       </Button>
                     </div>
-                    {verificacaoConcluida && numerosInvalidos.length > 0 && (
-                      <Alert>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>{numerosInvalidos.length} sem WhatsApp removidos</AlertTitle>
-                        <AlertDescription>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
-                            className="text-xs p-0 h-auto"
-                          >
-                            {mostrarInvalidos ? 'Ocultar' : 'Ver removidos'}
-                          </Button>
-                          {mostrarInvalidos && (
-                            <div className="max-h-32 overflow-y-auto border rounded p-2 mt-1 space-y-0.5">
-                              {numerosInvalidos.map((c, i) => (
-                                <p key={i} className="text-xs text-muted-foreground">{c.nome} — {c.telefone}</p>
-                              ))}
+                    {verificacaoConcluida && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2">
+                          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                            <Check className="h-4 w-4" />
+                            <span className="text-sm font-semibold">
+                              {importedContacts.length} com WhatsApp
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Serão usados na campanha de voz
+                          </p>
+                        </div>
+                        <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                              <AlertTriangle className="h-4 w-4" />
+                              <span className="text-sm font-semibold">
+                                {numerosInvalidos.length} sem WhatsApp
+                              </span>
                             </div>
+                            {numerosInvalidos.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={exportarSemWhatsApp}
+                                className="h-6 px-2 text-xs"
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Baixar
+                              </Button>
+                            )}
+                          </div>
+                          {numerosInvalidos.length > 0 && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
+                                className="text-xs p-0 h-auto mt-1"
+                              >
+                                {mostrarInvalidos ? 'Ocultar lista' : 'Ver lista'}
+                              </Button>
+                              {mostrarInvalidos && (
+                                <div className="max-h-32 overflow-y-auto border rounded p-2 mt-1 space-y-0.5 bg-background">
+                                  {numerosInvalidos.map((c, i) => (
+                                    <p key={i} className="text-xs text-muted-foreground">
+                                      {c.nome} — {c.telefone}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                            </>
                           )}
-                        </AlertDescription>
-                      </Alert>
+                          {numerosInvalidos.length === 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Todos os contatos possuem WhatsApp ✓
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     )}
-                    {verificacaoConcluida && numerosInvalidos.length === 0 && (
-                      <Alert>
-                        <Check className="h-4 w-4" />
-                        <AlertTitle>Todos possuem WhatsApp ✓</AlertTitle>
-                      </Alert>
-                    )}
+
                   </div>
                 )}
               </div>
