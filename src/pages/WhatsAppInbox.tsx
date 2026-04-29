@@ -115,6 +115,7 @@ export default function WhatsAppInbox() {
   const [warmingSufixos, setWarmingSufixos] = useState<Set<string>>(new Set());
   const [selecaoMultiplaAtiva, setSelecaoMultiplaAtiva] = useState(false);
   const [contatosSelecionados, setContatosSelecionados] = useState<Set<string>>(new Set());
+  const [respondendoMsg, setRespondendoMsg] = useState<Mensagem | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
