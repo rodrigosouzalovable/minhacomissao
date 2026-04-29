@@ -1,59 +1,38 @@
-## Objetivo
+## Adicionar filtro por Data de Criação na aba "Meus Acordos"
 
-Na tela **Clientes**, adicionar um botão **"Exportar Parcelas (Excel)"** ao lado do botão "Exportar Telefones" que já existe. Esse botão vai gerar uma planilha Excel com **todas as parcelas (pagas e pendentes)** dos clientes que estão sendo exibidos no resultado atual da busca (respeitando o filtro de credor — ex.: Montreal — e o filtro de estágio).
+Adicionar um novo seletor de data ao lado do filtro "Filtrar por vencimento" para permitir filtrar acordos pela `data de criação` (`criado_em`). O layout será reorganizado para ficar consistente e bonito.
 
-## Comportamento
+### Mudanças em `src/pages/Acordos.tsx`
 
-1. O botão só faz sentido após uma busca, então só aparece quando já houver resultados (`filteredGrouped.length > 0`), igual ao "Exportar Telefones".
-2. Ao clicar:
-   - Coleta todos os CPFs dos clientes listados (incluindo CPFs de Grupos Empresariais).
-   - Busca em `acordos_devedor` os acordos ativos desses CPFs.
-   - Para cada acordo, busca as parcelas em `parcelas_acordo_devedor` (ou tabela equivalente de parcelas dos acordos do devedor).
-   - Gera um Excel com uma linha por parcela.
-3. Mostra toast de progresso/sucesso/erro e estado de "Exportando..." no botão (`exportingParcelas`).
+1. **Novo estado**
+   - Adicionar `const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(undefined);` junto ao `filtroDataVencimento` existente (linha ~419).
 
-## Colunas da planilha
+2. **Lógica de filtro**
+   - Criar helper `matchesCriacaoFilter(acordo)` que compara `format(new Date(acordo.criado_em), 'yyyy-MM-dd')` com a data selecionada.
+   - Incluir essa verificação dentro de `filteredAcordos.filter(...)` (linha ~872), junto com `matchesDateFilter(acordo.id)`.
 
-- CPF
-- Nome do Cliente
-- Credor
-- Nº do Acordo (ID curto)
-- Data do Acordo
-- Valor Total do Acordo
-- Nº da Parcela (ex.: 3/12)
-- Valor da Parcela
-- Data de Vencimento
-- Data de Pagamento (vazio se pendente)
-- Status (Paga / Pendente / Atrasada)
+3. **UI dos filtros (linha ~1064)**
+   - Inserir um novo `Popover` + `Calendar` ao lado do "Filtrar por vencimento":
+     - Botão com ícone `CalendarIcon` e label dinâmica: `"Filtrar por criação"` ou data formatada `dd/MM/yyyy`.
+     - Largura igual à do filtro de vencimento (`sm:w-[220px]`) para alinhamento.
+     - Botão `X` (ghost icon) para limpar, idêntico ao padrão atual.
+   - Reorganizar o container para ficar limpo:
+     - Agrupar os dois date pickers + seus botões "limpar" dentro de uma `div` com `flex flex-wrap items-center gap-2`, separando visualmente do campo de busca e do select de status.
+     - Manter o `Search` ocupando `flex-1` à esquerda e o `Select` de status à direita, garantindo boa quebra em telas menores (`flex-col sm:flex-row`).
 
-Nome do arquivo: `parcelas-clientes-{credor-slug}-{yyyy-mm-dd}.xlsx`.
+4. **Imports**
+   - Já existem `CalendarIcon`, `Calendar`, `Popover`, `format`, `ptBR`, `X`, `cn` — nenhum import novo necessário.
 
-## Detalhes técnicos
+### Layout resultante (desktop)
 
-Arquivo a alterar: `src/pages/Clientes.tsx`.
+```text
+[ 🔍 Buscar por cliente ou CPF...                ] [ 📅 Vencimento ][x] [ 📅 Criação ][x] [ Status ▼ ]
+```
 
-1. Adicionar estado `const [exportingParcelas, setExportingParcelas] = useState(false);`.
-2. Criar função `handleExportParcelas` semelhante à `handleExportTelefones`:
-   - Reutilizar a lógica de coletar CPFs únicos a partir de `filteredGrouped` (incluindo `cpfsGrupo`).
-   - Buscar acordos em batches de 50 CPFs:
-     ```ts
-     supabase.from('acordos_devedor')
-       .select('id, devedor_cpf, valor_total, num_parcelas, data_primeiro_vencimento, criado_em, status')
-       .in('devedor_cpf', batch)
-       .eq('status', 'ativo')
-     ```
-   - Buscar as parcelas desses acordos (verificar nome real da tabela de parcelas — provavelmente `parcelas_acordo_devedor` ou listar via `code--exec` antes de implementar; fallback: usar a tabela `pagamentos` filtrando por `acordo_id` se for o caso).
-   - Construir array de linhas e chamar `exportarParaExcel` com as colunas listadas acima.
-3. Adicionar o botão logo após "Exportar Telefones" (linha ~708):
-   ```tsx
-   <Button variant="outline" size="sm" onClick={handleExportParcelas} disabled={exportingParcelas}>
-     <Download className="h-4 w-4 mr-2" />
-     {exportingParcelas ? 'Exportando...' : 'Exportar Parcelas (Excel)'}
-   </Button>
-   ```
-4. Antes de implementar, vou inspecionar o schema real das tabelas de parcelas dos acordos do devedor (ex.: `parcelas_acordo_devedor`) para garantir os nomes corretos de colunas (`numero_parcela`, `valor_parcela`, `data_vencimento`, `data_pagamento`, `status`).
+Em mobile, os elementos quebram em coluna mantendo espaçamento `gap-2`/`gap-4`.
 
-## Validação
+### Comportamento
 
-- Filtrar por credor "MONTREAL" + Pesquisar todos → clicar em "Exportar Parcelas" → planilha contém todas as parcelas de todos os acordos desses clientes Montreal, com as colunas acima.
-- Caso nenhum cliente listado tenha acordo, mostrar toast "Nenhuma parcela encontrada".
+- Os dois filtros de data são independentes e cumulativos (AND): se ambos estiverem definidos, o acordo deve ter parcela com aquele vencimento **e** ter sido criado naquela data.
+- O filtro afeta todas as abas (Negociados, Pagos, Realizados, Vencidos, Próximas), pois todas derivam de `filteredAcordos`.
+- Limpar com o botão `X` reseta apenas o filtro correspondente.
