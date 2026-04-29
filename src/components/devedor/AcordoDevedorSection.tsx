@@ -678,6 +678,20 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                       ))}
                     </TableBody>
                   </Table>
+
+                  {isMontrealCliente && (
+                    <div className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 px-3 py-2 text-xs">
+                      <span className="text-emerald-900 dark:text-emerald-200">
+                        Comissão Montreal acumulada (parcelas pagas)
+                        {usingFallback && (
+                          <span className="ml-1 text-muted-foreground">(atraso estimado pelo 1º vencimento do acordo)</span>
+                        )}
+                      </span>
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                        {fmtBRL(totalComissaoMontreal)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })}
