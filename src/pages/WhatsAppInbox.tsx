@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X, Pencil, Settings, Archive } from 'lucide-react';
+import { Search, MessageSquare, Phone, ArrowDown, Upload, History, Loader2, Plus, Pin, Tag, X, Pencil, Settings, Archive, ArchiveRestore, Trash2, CheckSquare } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -107,6 +108,9 @@ export default function WhatsAppInbox() {
   const [mensagensRapidasOpen, setMensagensRapidasOpen] = useState(false);
   const [mensagensRapidas, setMensagensRapidas] = useState<MensagemRapida[]>([]);
   const [inputBusy, setInputBusy] = useState(false);
+  const [warmingSufixos, setWarmingSufixos] = useState<Set<string>>(new Set());
+  const [selecaoMultiplaAtiva, setSelecaoMultiplaAtiva] = useState(false);
+  const [contatosSelecionados, setContatosSelecionados] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -181,6 +185,32 @@ export default function WhatsAppInbox() {
 
   useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMensagensRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMensagensRapidas]);
 
+  // Carrega sufixos de números usados no aquecimento (âncoras fixas + pool autosave)
+  // para auto-arquivar conversas iniciadas pelo robô de aquecimento.
+  useEffect(() => {
+    const ANCORAS_PRIORITARIAS = [
+      '5562991672674', '5562981810202', '5562981079590', '5562981865213',
+      '5562982183144', '5562982458447', '5562981079569',
+    ];
+    const carregar = async () => {
+      const sufixos = new Set<string>();
+      ANCORAS_PRIORITARIAS.forEach(n => {
+        const s = n.replace(/\D/g, '').slice(-8);
+        if (s.length === 8) sufixos.add(s);
+      });
+      const { data } = await supabase
+        .from('aquecimento_contatos_autosave')
+        .select('numero')
+        .eq('ativo', true);
+      (data || []).forEach((r: any) => {
+        const s = String(r.numero || '').replace(/\D/g, '').slice(-8);
+        if (s.length === 8) sufixos.add(s);
+      });
+      setWarmingSufixos(sufixos);
+    };
+    carregar();
+  }, []);
+
   const handleEtiquetaToggle = (contatoId: string, etiquetaId: string, ativo: boolean) => {
     setContatoEtiquetas(prev => {
       const ids = prev[contatoId] || [];
@@ -234,7 +264,9 @@ export default function WhatsAppInbox() {
     );
     const isContatoInterno = (telefone: string | null | undefined) => {
       const suf = (telefone || '').replace(/\D/g, '').slice(-8);
-      return suf.length === 8 && sufixosInternos.has(suf);
+      if (suf.length !== 8) return false;
+      // Conversa entre meus próprios números OU contato usado pelo aquecimento
+      return sufixosInternos.has(suf) || warmingSufixos.has(suf);
     };
 
     if (data) {
@@ -243,16 +275,32 @@ export default function WhatsAppInbox() {
           ...contato,
           instancia_nome: contato.user_whatsapp_instances?.nome ?? null,
         }))
-        // Aba "Conversas": esconde internos. Aba "Arquivados": mostra os internos também.
+        // Aba "Conversas": esconde internos+aquecimento. Aba "Arquivados": mostra todos.
         .filter((contato) => {
           const interno = isContatoInterno(contato.telefone);
           return abaAtiva === 'arquivados' ? true : !interno;
         });
       setContatos(contatosComNomeInstancia as Contato[]);
+
+      // Auto-arquiva no banco (em background) os contatos detectados como aquecimento
+      // que ainda estão marcados como arquivado=false, para virem nas próximas cargas
+      // diretamente na aba "Arquivados".
+      if (abaAtiva === 'conversas') {
+        const idsParaArquivar = (data as any[])
+          .filter((c) => isContatoInterno(c.telefone))
+          .map((c) => c.id);
+        if (idsParaArquivar.length > 0) {
+          supabase
+            .from('whatsapp_contatos')
+            .update({ arquivado: true } as any)
+            .in('id', idsParaArquivar)
+            .then(() => {});
+        }
+      }
     }
 
     // Conta total de arquivados (escopo das instâncias visíveis) para o badge da aba.
-    // Inclui tanto arquivados manuais quanto conversas internas.
+    // Inclui tanto arquivados manuais quanto conversas internas/aquecimento.
     let countQuery = supabase
       .from('whatsapp_contatos')
       .select('id, telefone', { count: 'exact' })
@@ -264,7 +312,7 @@ export default function WhatsAppInbox() {
     }
     const { count: countArquivadosManuais } = await countQuery;
 
-    // Conta também os contatos internos não arquivados manualmente
+    // Conta também os contatos internos/aquecimento não arquivados manualmente
     let internosQuery = supabase
       .from('whatsapp_contatos')
       .select('telefone')
@@ -278,7 +326,7 @@ export default function WhatsAppInbox() {
     const internosCount = (candidatosInternos || []).filter(c => isContatoInterno((c as any).telefone)).length;
 
     setArquivadosCount((countArquivadosManuais ?? 0) + internosCount);
-  }, [filtroInstancia, instancias, abaAtiva]);
+  }, [filtroInstancia, instancias, abaAtiva, warmingSufixos]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
@@ -663,6 +711,72 @@ export default function WhatsAppInbox() {
     toast({ title: arquivado ? 'Conversa arquivada' : 'Conversa desarquivada' });
   };
 
+  const toggleSelecaoContato = (contatoId: string) => {
+    setContatosSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(contatoId)) next.delete(contatoId);
+      else next.add(contatoId);
+      return next;
+    });
+  };
+
+  const selecionarTodos = () => {
+    setContatosSelecionados(new Set(contatosFiltrados.map(c => c.id)));
+  };
+
+  const limparSelecao = () => {
+    setContatosSelecionados(new Set());
+  };
+
+  const sairSelecaoMultipla = () => {
+    setSelecaoMultiplaAtiva(false);
+    setContatosSelecionados(new Set());
+  };
+
+  const handleDesarquivarSelecionadas = async () => {
+    const ids = Array.from(contatosSelecionados);
+    if (ids.length === 0) return;
+    const { error } = await supabase
+      .from('whatsapp_contatos')
+      .update({ arquivado: false } as any)
+      .in('id', ids);
+    if (error) {
+      toast({ title: 'Erro ao desarquivar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setContatos(prev => prev.filter(c => !contatosSelecionados.has(c.id)));
+    setArquivadosCount(prev => Math.max(0, prev - ids.length));
+    toast({ title: `${ids.length} ${ids.length === 1 ? 'conversa desarquivada' : 'conversas desarquivadas'}` });
+    sairSelecaoMultipla();
+  };
+
+  const handleExcluirSelecionadas = async () => {
+    const ids = Array.from(contatosSelecionados);
+    if (ids.length === 0) return;
+    if (!confirm(`Excluir ${ids.length} ${ids.length === 1 ? 'conversa' : 'conversas'} permanentemente? Esta ação não pode ser desfeita.`)) return;
+
+    const selecionados = contatos.filter(c => contatosSelecionados.has(c.id));
+    // Apaga mensagens + etiquetas + contatos
+    for (const c of selecionados) {
+      await supabase.from('whatsapp_mensagens').delete()
+        .eq('instancia_id', c.instancia_id).eq('telefone_remoto', c.telefone);
+    }
+    await supabase.from('whatsapp_contato_etiquetas').delete().in('contato_id', ids);
+    const { error } = await supabase.from('whatsapp_contatos').delete().in('id', ids);
+    if (error) {
+      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setContatos(prev => prev.filter(c => !contatosSelecionados.has(c.id)));
+    setArquivadosCount(prev => Math.max(0, prev - ids.length));
+    if (contatoAtivo && contatosSelecionados.has(contatoAtivo.id)) {
+      setContatoAtivo(null);
+      setMensagens([]);
+    }
+    toast({ title: `${ids.length} ${ids.length === 1 ? 'conversa excluída' : 'conversas excluídas'}` });
+    sairSelecaoMultipla();
+  };
+
   const handleExcluirConversa = async (contatoId: string) => {
     const contato = contatos.find(c => c.id === contatoId);
     if (!contato) return;
@@ -840,7 +954,7 @@ export default function WhatsAppInbox() {
                 </SelectContent>
               </Select>
             )}
-            <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'conversas' | 'arquivados')}>
+            <Tabs value={abaAtiva} onValueChange={(v) => { setAbaAtiva(v as 'conversas' | 'arquivados'); sairSelecaoMultipla(); }}>
               <TabsList className="grid w-full grid-cols-2 h-8">
                 <TabsTrigger value="conversas" className="text-xs">Conversas</TabsTrigger>
                 <TabsTrigger value="arquivados" className="text-xs flex items-center gap-1">
@@ -854,6 +968,41 @@ export default function WhatsAppInbox() {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
+            {abaAtiva === 'arquivados' && (
+              selecaoMultiplaAtiva ? (
+                <div className="flex items-center gap-2 p-2 rounded-md bg-accent/40 border border-border">
+                  <span className="text-xs font-medium text-foreground">
+                    {contatosSelecionados.size} selecionada{contatosSelecionados.size === 1 ? '' : 's'}
+                  </span>
+                  <div className="flex-1" />
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={selecionarTodos} title="Selecionar todas">
+                    Todas
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={limparSelecao} title="Limpar seleção">
+                    Limpar
+                  </Button>
+                  <Button size="sm" variant="default" className="h-7 px-2 text-xs gap-1" onClick={handleDesarquivarSelecionadas} disabled={contatosSelecionados.size === 0} title="Desarquivar selecionadas">
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="destructive" className="h-7 px-2 text-xs gap-1" onClick={handleExcluirSelecionadas} disabled={contatosSelecionados.size === 0} title="Excluir selecionadas">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={sairSelecaoMultipla} title="Sair">
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-8 text-xs gap-1.5"
+                  onClick={() => setSelecaoMultiplaAtiva(true)}
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  Selecionar várias
+                </Button>
+              )
+            )}
           </div>
 
           <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
@@ -883,12 +1032,21 @@ export default function WhatsAppInbox() {
                     onExcluirConversa={handleExcluirConversa}
                   >
                     <button
-                      onClick={() => handleSelectContato(contato)}
+                      onClick={() => {
+                        if (selecaoMultiplaAtiva) toggleSelecaoContato(contato.id);
+                        else handleSelectContato(contato);
+                      }}
                       className={cn(
                         'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
-                        contatoAtivo?.id === contato.id && 'bg-accent'
+                        contatoAtivo?.id === contato.id && !selecaoMultiplaAtiva && 'bg-accent',
+                        selecaoMultiplaAtiva && contatosSelecionados.has(contato.id) && 'bg-primary/10'
                       )}
                     >
+                      {selecaoMultiplaAtiva && (
+                        <div className="flex items-center pt-1 shrink-0" onClick={(e) => { e.stopPropagation(); toggleSelecaoContato(contato.id); }}>
+                          <Checkbox checked={contatosSelecionados.has(contato.id)} />
+                        </div>
+                      )}
                       <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                         <Phone className="h-4 w-4 text-primary" />
                       </div>
