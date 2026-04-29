@@ -200,6 +200,30 @@ export function ChatInputBar({
 
   return (
     <div className="border-t border-border bg-card">
+      {respondendo && (
+        <div className="px-3 pt-2 flex items-center gap-2">
+          <div className="flex-1 flex items-stretch gap-2 rounded-md bg-muted/60 border-l-4 border-primary px-3 py-2 overflow-hidden">
+            <Reply className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-medium text-primary leading-tight">
+                Respondendo a {respondendo.direcao === 'saida' ? 'você' : 'esta mensagem'}
+              </p>
+              <p className="text-xs text-muted-foreground truncate leading-tight">
+                {respondendo.conteudo || 'Mídia'}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={onCancelarResposta}
+            title="Cancelar resposta"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       {mensagensRapidas && mensagensRapidas.length > 0 && (
         <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto scrollbar-none">
           {mensagensRapidas.map(atalho => (
