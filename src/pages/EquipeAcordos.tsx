@@ -228,14 +228,14 @@ export default function EquipeAcordos() {
 
   useEffect(() => {
     async function loadTeamData() {
-      if (!user || roleLoading) return;
+      if (!user || roleLoading || permLoading) return;
 
       try {
         let funcionarioIds: string[] = [];
         let validMembers: TeamMember[] = [];
 
-        if (isAdmin) {
-          // Admin vê TODOS os acordos do sistema (incluindo os próprios)
+        if (verComoAdmin) {
+          // Admin (ou funcionário com Acordos Compartilhados) vê TODOS os acordos do sistema
           const { data: allProfiles, error: profilesError } = await supabase
             .from('profiles')
             .select('id, nome, email');
