@@ -1032,12 +1032,21 @@ export default function WhatsAppInbox() {
                     onExcluirConversa={handleExcluirConversa}
                   >
                     <button
-                      onClick={() => handleSelectContato(contato)}
+                      onClick={() => {
+                        if (selecaoMultiplaAtiva) toggleSelecaoContato(contato.id);
+                        else handleSelectContato(contato);
+                      }}
                       className={cn(
                         'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
-                        contatoAtivo?.id === contato.id && 'bg-accent'
+                        contatoAtivo?.id === contato.id && !selecaoMultiplaAtiva && 'bg-accent',
+                        selecaoMultiplaAtiva && contatosSelecionados.has(contato.id) && 'bg-primary/10'
                       )}
                     >
+                      {selecaoMultiplaAtiva && (
+                        <div className="flex items-center pt-1 shrink-0" onClick={(e) => { e.stopPropagation(); toggleSelecaoContato(contato.id); }}>
+                          <Checkbox checked={contatosSelecionados.has(contato.id)} />
+                        </div>
+                      )}
                       <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                         <Phone className="h-4 w-4 text-primary" />
                       </div>
