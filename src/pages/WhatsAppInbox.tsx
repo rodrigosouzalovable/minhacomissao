@@ -264,7 +264,9 @@ export default function WhatsAppInbox() {
     );
     const isContatoInterno = (telefone: string | null | undefined) => {
       const suf = (telefone || '').replace(/\D/g, '').slice(-8);
-      return suf.length === 8 && sufixosInternos.has(suf);
+      if (suf.length !== 8) return false;
+      // Conversa entre meus próprios números OU contato usado pelo aquecimento
+      return sufixosInternos.has(suf) || warmingSufixos.has(suf);
     };
 
     if (data) {
@@ -273,16 +275,32 @@ export default function WhatsAppInbox() {
           ...contato,
           instancia_nome: contato.user_whatsapp_instances?.nome ?? null,
         }))
-        // Aba "Conversas": esconde internos. Aba "Arquivados": mostra os internos também.
+        // Aba "Conversas": esconde internos+aquecimento. Aba "Arquivados": mostra todos.
         .filter((contato) => {
           const interno = isContatoInterno(contato.telefone);
           return abaAtiva === 'arquivados' ? true : !interno;
         });
       setContatos(contatosComNomeInstancia as Contato[]);
+
+      // Auto-arquiva no banco (em background) os contatos detectados como aquecimento
+      // que ainda estão marcados como arquivado=false, para virem nas próximas cargas
+      // diretamente na aba "Arquivados".
+      if (abaAtiva === 'conversas') {
+        const idsParaArquivar = (data as any[])
+          .filter((c) => isContatoInterno(c.telefone))
+          .map((c) => c.id);
+        if (idsParaArquivar.length > 0) {
+          supabase
+            .from('whatsapp_contatos')
+            .update({ arquivado: true } as any)
+            .in('id', idsParaArquivar)
+            .then(() => {});
+        }
+      }
     }
 
     // Conta total de arquivados (escopo das instâncias visíveis) para o badge da aba.
-    // Inclui tanto arquivados manuais quanto conversas internas.
+    // Inclui tanto arquivados manuais quanto conversas internas/aquecimento.
     let countQuery = supabase
       .from('whatsapp_contatos')
       .select('id, telefone', { count: 'exact' })
@@ -294,7 +312,7 @@ export default function WhatsAppInbox() {
     }
     const { count: countArquivadosManuais } = await countQuery;
 
-    // Conta também os contatos internos não arquivados manualmente
+    // Conta também os contatos internos/aquecimento não arquivados manualmente
     let internosQuery = supabase
       .from('whatsapp_contatos')
       .select('telefone')
