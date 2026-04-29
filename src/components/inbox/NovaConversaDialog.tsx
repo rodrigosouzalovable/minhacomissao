@@ -22,9 +22,10 @@ interface NovaConversaDialogProps {
   instancias: Instancia[];
   enviando: boolean;
   onSubmit: (payload: { telefone: string; instanciaId: string; mensagem: string }) => Promise<void> | void;
+  verificandoConexao?: boolean;
 }
 
-function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSubmit }: NovaConversaDialogProps) {
+function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSubmit, verificandoConexao = false }: NovaConversaDialogProps) {
   const [telefone, setTelefone] = useState('');
   const [instanciaId, setInstanciaId] = useState('');
   const [mensagem, setMensagem] = useState('');
