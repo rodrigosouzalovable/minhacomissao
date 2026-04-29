@@ -52,6 +52,10 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [acordos, setAcordos] = useState<AcordoDevedor[]>([]);
   const [parcelas, setParcelas] = useState<Record<string, ParcelaDevedor[]>>({});
   const [loading, setLoading] = useState(true);
+  // Referência de atraso Montreal: data de vencimento mais antiga das dívidas Montreal do CPF.
+  // Quando definida (não-null), exibimos coluna de comissão Montreal nas parcelas pagas.
+  const [vencimentoOriginalMontreal, setVencimentoOriginalMontreal] = useState<string | null>(null);
+  const [isMontrealCliente, setIsMontrealCliente] = useState(false);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
 
