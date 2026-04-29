@@ -111,11 +111,11 @@ export default function ExportarDados() {
   const getVal = (row: any, key: string) => (row as Record<string, any>)[key];
 
   if (roleLoading) {
-    return <div className="p-6 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Carregando...</div>;
+    return <AppLayout><div className="p-6 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Carregando...</div></AppLayout>;
   }
 
   if (!isAdmin) {
-    return <div className="p-6 text-center text-muted-foreground">Acesso restrito a administradores.</div>;
+    return <AppLayout><div className="p-6 text-center text-muted-foreground">Acesso restrito a administradores.</div></AppLayout>;
   }
 
   const toggle = (table: string) => {
