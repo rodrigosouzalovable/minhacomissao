@@ -1,33 +1,59 @@
-## Por que todas as instâncias foram desativadas
+## Objetivo
 
-Encontrei a causa no código de `src/pages/Acionamento.tsx` (linhas 469–489):
+Na tela **Clientes**, adicionar um botão **"Exportar Parcelas (Excel)"** ao lado do botão "Exportar Telefones" que já existe. Esse botão vai gerar uma planilha Excel com **todas as parcelas (pagas e pendentes)** dos clientes que estão sendo exibidos no resultado atual da busca (respeitando o filtro de credor — ex.: Montreal — e o filtro de estágio).
 
-Toda vez que a página de Acionamento abre, roda `checkInstanceConnections`, que faz um teste de conexão UAZAPI em cada instância. Se a UAZAPI responde "desconectado" (ou o endpoint falha por timeout/erro), o código **automaticamente marca `ativo = false` no banco**.
+## Comportamento
 
-Hoje os 175 chips estão quase todos desconectados (você está em fase de aquecimento, sem QR escaneado em massa) e o status_check está respondendo `connected:false` para todos. Resultado: 162 marcados inativos, apenas 13 ativos (a UI mostra "0/107 conectados").
+1. O botão só faz sentido após uma busca, então só aparece quando já houver resultados (`filteredGrouped.length > 0`), igual ao "Exportar Telefones".
+2. Ao clicar:
+   - Coleta todos os CPFs dos clientes listados (incluindo CPFs de Grupos Empresariais).
+   - Busca em `acordos_devedor` os acordos ativos desses CPFs.
+   - Para cada acordo, busca as parcelas em `parcelas_acordo_devedor` (ou tabela equivalente de parcelas dos acordos do devedor).
+   - Gera um Excel com uma linha por parcela.
+3. Mostra toast de progresso/sucesso/erro e estado de "Exportando..." no botão (`exportingParcelas`).
 
-Esse comportamento é abusivo: uma falha temporária de rede ou da UAZAPI desativa instâncias em massa, e elas só voltam se conseguirem responder `connected:true` em um próximo ciclo.
+## Colunas da planilha
 
-## Plano
+- CPF
+- Nome do Cliente
+- Credor
+- Nº do Acordo (ID curto)
+- Data do Acordo
+- Valor Total do Acordo
+- Nº da Parcela (ex.: 3/12)
+- Valor da Parcela
+- Data de Vencimento
+- Data de Pagamento (vazio se pendente)
+- Status (Paga / Pendente / Atrasada)
 
-### 1) Botão "Ativar todas" no diálogo de Configurações WhatsApp
-Adicionar um botão ao lado de "Conectar via QR Code / Código / Manual" no header do diálogo de instâncias UAZAPI, com label **"Ativar todas"**. Ao clicar:
-- Confirmação ("Marcar todas as 175 instâncias como ativas?")
-- `UPDATE user_whatsapp_instances SET ativo = true` (escopado ao `user_id` do admin que abriu)
-- Toast com contagem
-- Recarregar lista
+Nome do arquivo: `parcelas-clientes-{credor-slug}-{yyyy-mm-dd}.xlsx`.
 
-### 2) Parar a desativação automática agressiva
-Remover o bloco que faz `update ativo:false` automaticamente em `checkInstanceConnections` (linhas 469–476 de `Acionamento.tsx`). O `connectionStatus` em memória continua refletindo "desconectado" no ícone Wi‑Fi, mas o flag `ativo` no banco passa a ser controlado **só manualmente** pelo usuário (toggle individual ou novo botão "Ativar todas"). Isso já é coerente com a regra do projeto "Manual Deactivation".
+## Detalhes técnicos
 
-A re‑ativação automática quando volta a conectar (linhas 478–489) também sai, pelo mesmo motivo.
+Arquivo a alterar: `src/pages/Clientes.tsx`.
 
-### 3) Onde colocar o botão
-O componente do diálogo das instâncias está em `src/pages/Acionamento.tsx` (renderiza o "Configurações WhatsApp" da screenshot). Vou inserir o botão `Ativar todas` antes de "Conectar via QR Code", com ícone `Power` e cor outline.
+1. Adicionar estado `const [exportingParcelas, setExportingParcelas] = useState(false);`.
+2. Criar função `handleExportParcelas` semelhante à `handleExportTelefones`:
+   - Reutilizar a lógica de coletar CPFs únicos a partir de `filteredGrouped` (incluindo `cpfsGrupo`).
+   - Buscar acordos em batches de 50 CPFs:
+     ```ts
+     supabase.from('acordos_devedor')
+       .select('id, devedor_cpf, valor_total, num_parcelas, data_primeiro_vencimento, criado_em, status')
+       .in('devedor_cpf', batch)
+       .eq('status', 'ativo')
+     ```
+   - Buscar as parcelas desses acordos (verificar nome real da tabela de parcelas — provavelmente `parcelas_acordo_devedor` ou listar via `code--exec` antes de implementar; fallback: usar a tabela `pagamentos` filtrando por `acordo_id` se for o caso).
+   - Construir array de linhas e chamar `exportarParaExcel` com as colunas listadas acima.
+3. Adicionar o botão logo após "Exportar Telefones" (linha ~708):
+   ```tsx
+   <Button variant="outline" size="sm" onClick={handleExportParcelas} disabled={exportingParcelas}>
+     <Download className="h-4 w-4 mr-2" />
+     {exportingParcelas ? 'Exportando...' : 'Exportar Parcelas (Excel)'}
+   </Button>
+   ```
+4. Antes de implementar, vou inspecionar o schema real das tabelas de parcelas dos acordos do devedor (ex.: `parcelas_acordo_devedor`) para garantir os nomes corretos de colunas (`numero_parcela`, `valor_parcela`, `data_vencimento`, `data_pagamento`, `status`).
 
-### Arquivos a alterar
-- `src/pages/Acionamento.tsx` — adicionar handler `ativarTodasInstancias`, botão no header do diálogo, remover bloco de desativação/reativação automática (linhas 469–489).
+## Validação
 
-### Não vai mexer
-- Webhooks, edge functions de aquecimento, RLS — nada disso muda.
-- Toggle individual por instância continua funcionando igual.
+- Filtrar por credor "MONTREAL" + Pesquisar todos → clicar em "Exportar Parcelas" → planilha contém todas as parcelas de todos os acordos desses clientes Montreal, com as colunas acima.
+- Caso nenhum cliente listado tenha acordo, mostrar toast "Nenhuma parcela encontrada".
