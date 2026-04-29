@@ -42,6 +42,8 @@ interface TeamMember {
 export default function EquipeAcordos() {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { acordosCompartilhados, isLoading: permLoading } = useUserPermissions();
+  const verComoAdmin = isAdmin || acordosCompartilhados;
   const { toast } = useToast();
   const [acordos, setAcordos] = useState<AcordoComFuncionario[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
