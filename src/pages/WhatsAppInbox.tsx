@@ -776,6 +776,8 @@ export default function WhatsAppInbox() {
     setContatosSelecionados(new Set([contatoId]));
     toast({ title: 'Modo de seleção ativado', description: 'Marque as conversas que deseja arquivar e clique em Arquivar selecionadas.' });
   };
+
+  const handleExcluirSelecionadas = async () => {
     const ids = Array.from(contatosSelecionados);
     if (ids.length === 0) return;
     if (!confirm(`Excluir ${ids.length} ${ids.length === 1 ? 'conversa' : 'conversas'} permanentemente? Esta ação não pode ser desfeita.`)) return;
