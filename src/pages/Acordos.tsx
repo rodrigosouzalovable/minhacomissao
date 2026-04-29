@@ -879,7 +879,7 @@ export default function Acordos() {
     } else {
       matchesStatus = acordo.status === statusFilter;
     }
-    return matchesSearch && matchesStatus && matchesDateFilter(acordo.id);
+    return matchesSearch && matchesStatus && matchesDateFilter(acordo.id) && matchesCriacaoFilter(acordo);
   });
 
   // Acordos Pagos: têm pelo menos 1 parcela paga
