@@ -2463,6 +2463,8 @@ export type Database = {
           arquivado: boolean
           criado_em: string
           fixado: boolean
+          foto_atualizada_em: string | null
+          foto_url: string | null
           id: string
           instancia_id: string
           nao_lido: number
@@ -2475,6 +2477,8 @@ export type Database = {
           arquivado?: boolean
           criado_em?: string
           fixado?: boolean
+          foto_atualizada_em?: string | null
+          foto_url?: string | null
           id?: string
           instancia_id: string
           nao_lido?: number
@@ -2487,6 +2491,8 @@ export type Database = {
           arquivado?: boolean
           criado_em?: string
           fixado?: boolean
+          foto_atualizada_em?: string | null
+          foto_url?: string | null
           id?: string
           instancia_id?: string
           nao_lido?: number
@@ -2818,6 +2824,9 @@ export type Database = {
           lida: boolean
           media_url: string | null
           nome_contato: string | null
+          quoted_conteudo: string | null
+          quoted_direcao: string | null
+          quoted_msg_id: string | null
           telefone_remoto: string
           timestamp_msg: string
           tipo_conteudo: string
@@ -2832,6 +2841,9 @@ export type Database = {
           lida?: boolean
           media_url?: string | null
           nome_contato?: string | null
+          quoted_conteudo?: string | null
+          quoted_direcao?: string | null
+          quoted_msg_id?: string | null
           telefone_remoto: string
           timestamp_msg?: string
           tipo_conteudo?: string
@@ -2846,6 +2858,9 @@ export type Database = {
           lida?: boolean
           media_url?: string | null
           nome_contato?: string | null
+          quoted_conteudo?: string | null
+          quoted_direcao?: string | null
+          quoted_msg_id?: string | null
           telefone_remoto?: string
           timestamp_msg?: string
           tipo_conteudo?: string

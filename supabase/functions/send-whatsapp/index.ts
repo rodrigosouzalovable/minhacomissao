@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone: string, mensagem: string) {
+async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone: string, mensagem: string, replyId?: string | null) {
   const cleanUrl = serverUrl.replace(/\/+$/, '');
   const endpoints = [
     `${cleanUrl}/send/text`,
@@ -15,13 +15,19 @@ async function sendViaUazapi(serverUrl: string, instanceToken: string, telefone:
     `${cleanUrl}/sendText`,
   ];
 
+  const baseBody: Record<string, unknown> = { number: telefone, text: mensagem };
+  if (replyId) {
+    baseBody.replyid = replyId;
+    baseBody.quoted = replyId;
+  }
+
   let lastError = null;
   for (const url of endpoints) {
-    console.log(`Tentando endpoint: ${url}`);
+    console.log(`Tentando endpoint: ${url}`, replyId ? `(reply to ${replyId})` : '');
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'token': instanceToken },
-      body: JSON.stringify({ number: telefone, text: mensagem }),
+      body: JSON.stringify(baseBody),
     });
     const data = await response.json();
     console.log(`Resposta de ${url}:`, JSON.stringify(data));
@@ -67,7 +73,7 @@ serve(async (req) => {
   }
 
   try {
-    const { telefone, mensagem, uazapi_server_url, uazapi_instance_token, instancia_id } = await req.json();
+    const { telefone, mensagem, uazapi_server_url, uazapi_instance_token, instancia_id, quoted } = await req.json();
     
     const tokenSuffix = uazapi_instance_token ? uazapi_instance_token.slice(-8) : 'global';
     console.log('Recebendo requisição para enviar WhatsApp:', { telefone, instance: tokenSuffix });
@@ -89,7 +95,7 @@ serve(async (req) => {
       throw new Error('Credenciais UAZAPI não configuradas');
     }
 
-    const data = await sendViaUazapi(serverUrl, instanceToken, telefoneCompleto, mensagem);
+    const data = await sendViaUazapi(serverUrl, instanceToken, telefoneCompleto, mensagem, quoted?.id || null);
 
     // --- INBOX: Salvar mensagem enviada no histórico ---
     try {
@@ -123,6 +129,9 @@ serve(async (req) => {
           timestamp_msg: agora,
           lida: true,
           whatsapp_msg_id: whatsappMsgId,
+          quoted_msg_id: quoted?.id || null,
+          quoted_conteudo: quoted?.conteudo ? String(quoted.conteudo).slice(0, 500) : null,
+          quoted_direcao: quoted?.direcao || null,
         });
 
         if (existingContact) {

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil } from 'lucide-react';
+import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil, Reply, CornerUpLeft } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { WhatsAppAudioPlayer } from './WhatsAppAudioPlayer';
 import {
@@ -28,6 +28,10 @@ interface Mensagem {
   timestamp_msg: string;
   tipo_conteudo?: string;
   media_url?: string | null;
+  whatsapp_msg_id?: string | null;
+  quoted_msg_id?: string | null;
+  quoted_conteudo?: string | null;
+  quoted_direcao?: string | null;
 }
 
 interface ChatMessageProps {
@@ -36,6 +40,7 @@ interface ChatMessageProps {
   onApagarParaMim?: (msgId: string) => void;
   onApagarParaTodos?: (msgId: string) => void;
   onEditar?: (msgId: string, conteudoAtual: string) => void;
+  onResponder?: (msg: Mensagem) => void;
 }
 
 function getMimeFromUrl(url: string): string | undefined {
@@ -63,7 +68,7 @@ function getImageMimeFromUrl(url: string): string {
   return (ext && map[ext]) || 'image/jpeg';
 }
 
-export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar }: ChatMessageProps) {
+export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar, onResponder }: ChatMessageProps) {
   const tipo = msg.tipo_conteudo || 'texto';
   const isSaida = msg.direcao === 'saida';
   const isTemp = msg.id.startsWith('temp-');
@@ -227,21 +232,111 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
     setConfirmDialog(null);
   };
 
-  const messageBubble = (
-    <div className={cn("flex", isSaida ? "justify-end" : "justify-start")}>
+  // Swipe-to-reply (igual ao WhatsApp Web)
+  const swipeRef = useRef<HTMLDivElement>(null);
+  const swipeState = useRef<{ startX: number; active: boolean; pointerId: number | null }>({
+    startX: 0,
+    active: false,
+    pointerId: null,
+  });
+  const [swipeDx, setSwipeDx] = useState(0);
+  const SWIPE_TRIGGER = 60;
+  const SWIPE_MAX = 110;
+
+  const triggerReply = useCallback(() => {
+    if (onResponder && !isTemp) onResponder(msg);
+  }, [onResponder, isTemp, msg]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!onResponder || isTemp) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    swipeState.current = { startX: e.clientX, active: true, pointerId: e.pointerId };
+  };
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!swipeState.current.active) return;
+    let dx = e.clientX - swipeState.current.startX;
+    // Permite arrastar para a direção "natural" do reply do WhatsApp:
+    // - mensagens recebidas (esquerda): arrastar para a direita (dx > 0)
+    // - mensagens enviadas (direita): arrastar para a esquerda (dx < 0)
+    if (isSaida) dx = Math.min(0, Math.max(-SWIPE_MAX, dx));
+    else dx = Math.max(0, Math.min(SWIPE_MAX, dx));
+    setSwipeDx(dx);
+  };
+  const endSwipe = () => {
+    if (!swipeState.current.active) return;
+    const dx = swipeDx;
+    swipeState.current.active = false;
+    swipeState.current.pointerId = null;
+    if (Math.abs(dx) >= SWIPE_TRIGGER) {
+      triggerReply();
+    }
+    setSwipeDx(0);
+  };
+
+  const swipeProgress = Math.min(1, Math.abs(swipeDx) / SWIPE_TRIGGER);
+  const showSwipeIcon = Math.abs(swipeDx) > 8;
+
+  const renderQuoted = () => {
+    if (!msg.quoted_conteudo) return null;
+    const quotedIsSaida = msg.quoted_direcao === 'saida';
+    return (
       <div
         className={cn(
-          "max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm overflow-hidden break-words",
+          'mb-1.5 px-2 py-1 rounded border-l-4 text-xs overflow-hidden',
           isSaida
-            ? "bg-primary text-primary-foreground rounded-br-none"
-            : "bg-card text-card-foreground border border-border rounded-bl-none"
+            ? 'bg-primary-foreground/10 border-primary-foreground/60'
+            : 'bg-muted border-primary',
         )}
       >
+        <p className={cn('font-medium text-[10px] mb-0.5', isSaida ? 'text-primary-foreground/80' : 'text-primary')}>
+          {quotedIsSaida ? 'Você' : 'Contato'}
+        </p>
+        <p className={cn('truncate opacity-80', isSaida ? 'text-primary-foreground' : 'text-foreground')}>
+          {msg.quoted_conteudo}
+        </p>
+      </div>
+    );
+  };
+
+  const messageBubble = (
+    <div
+      ref={swipeRef}
+      className={cn('relative flex select-none', isSaida ? 'justify-end' : 'justify-start')}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endSwipe}
+      onPointerCancel={endSwipe}
+      onDoubleClick={triggerReply}
+      style={{ touchAction: 'pan-y' }}
+    >
+      {showSwipeIcon && (
+        <div
+          className={cn(
+            'absolute top-1/2 -translate-y-1/2 flex items-center justify-center h-9 w-9 rounded-full bg-muted text-muted-foreground transition-opacity',
+            isSaida ? 'right-2' : 'left-2',
+          )}
+          style={{ opacity: swipeProgress }}
+        >
+          <CornerUpLeft className="h-4 w-4" />
+        </div>
+      )}
+      <div
+        className={cn(
+          'max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm overflow-hidden break-words transition-transform',
+          isSaida
+            ? 'bg-primary text-primary-foreground rounded-br-none'
+            : 'bg-card text-card-foreground border border-border rounded-bl-none',
+        )}
+        style={{ transform: `translateX(${swipeDx}px)` }}
+      >
+        {renderQuoted()}
         {renderContent()}
-        <p className={cn(
-          "text-[10px] mt-1 text-right",
-          isSaida ? "text-primary-foreground/70" : "text-muted-foreground"
-        )}>
+        <p
+          className={cn(
+            'text-[10px] mt-1 text-right',
+            isSaida ? 'text-primary-foreground/70' : 'text-muted-foreground',
+          )}
+        >
           {formatMsgTime(msg.timestamp_msg)}
         </p>
       </div>
@@ -258,6 +353,15 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
             {messageBubble}
           </ContextMenuTrigger>
           <ContextMenuContent className="w-52">
+            {onResponder && (
+              <>
+                <ContextMenuItem onClick={triggerReply}>
+                  <Reply className="h-4 w-4 mr-2" />
+                  Responder
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
             {isSaida && tipo === 'texto' && onEditar && (
               <>
                 <ContextMenuItem

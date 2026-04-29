@@ -62,6 +62,10 @@ interface Mensagem {
   lida: boolean;
   tipo_conteudo?: string;
   media_url?: string | null;
+  whatsapp_msg_id?: string | null;
+  quoted_msg_id?: string | null;
+  quoted_conteudo?: string | null;
+  quoted_direcao?: string | null;
 }
 
 interface MediaSentPayload {
@@ -111,6 +115,7 @@ export default function WhatsAppInbox() {
   const [warmingSufixos, setWarmingSufixos] = useState<Set<string>>(new Set());
   const [selecaoMultiplaAtiva, setSelecaoMultiplaAtiva] = useState(false);
   const [contatosSelecionados, setContatosSelecionados] = useState<Set<string>>(new Set());
+  const [respondendoMsg, setRespondendoMsg] = useState<Mensagem | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -526,6 +531,7 @@ export default function WhatsAppInbox() {
     setMensagens([]);
     setPaginaAtual(0);
     setTemMaisAnteriores(true);
+    setRespondendoMsg(null);
   };
 
   const handleEnviarTexto = async (texto: string) => {
@@ -536,6 +542,13 @@ export default function WhatsAppInbox() {
       return;
     }
     setEnviando(true);
+    const quotedSnapshot = respondendoMsg && respondendoMsg.whatsapp_msg_id
+      ? {
+          id: respondendoMsg.whatsapp_msg_id,
+          conteudo: respondendoMsg.conteudo,
+          direcao: respondendoMsg.direcao,
+        }
+      : null;
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
@@ -544,6 +557,7 @@ export default function WhatsAppInbox() {
           uazapi_server_url: instancia.server_url,
           uazapi_instance_token: instancia.instance_token,
           instancia_id: instancia.id,
+          quoted: quotedSnapshot,
         },
       });
       if (error) throw error;
@@ -558,8 +572,12 @@ export default function WhatsAppInbox() {
         direcao: 'saida',
         timestamp_msg: new Date().toISOString(),
         lida: true,
+        quoted_msg_id: quotedSnapshot?.id || null,
+        quoted_conteudo: quotedSnapshot?.conteudo || null,
+        quoted_direcao: quotedSnapshot?.direcao || null,
       };
       setMensagens(prev => [...prev, msgOtimista]);
+      setRespondendoMsg(null);
       setTimeout(() => fetchMensagens(), 1500);
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
@@ -1259,6 +1277,7 @@ export default function WhatsAppInbox() {
                             onApagarParaMim={handleApagarParaMim}
                             onApagarParaTodos={handleApagarParaTodos}
                             onEditar={handleEditarMensagem}
+                            onResponder={(m) => setRespondendoMsg(m as Mensagem)}
                           />
                         </div>
                       );
@@ -1281,6 +1300,12 @@ export default function WhatsAppInbox() {
                   onExternalFileHandled={() => setDroppedFile(null)}
                   mensagensRapidas={mensagensRapidas.filter(m => !m.arquivado)}
                   onBusyChange={setInputBusy}
+                  respondendo={respondendoMsg ? {
+                    id: respondendoMsg.whatsapp_msg_id || respondendoMsg.id,
+                    conteudo: respondendoMsg.conteudo,
+                    direcao: respondendoMsg.direcao,
+                  } : null}
+                  onCancelarResposta={() => setRespondendoMsg(null)}
                 />
               )}
             </>
