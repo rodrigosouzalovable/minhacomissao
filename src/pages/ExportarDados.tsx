@@ -336,12 +336,125 @@ export default function ExportarDados() {
         </div>
       </ScrollArea>
 
+      <Tabs defaultValue="csv" className="w-full">
+        <TabsList>
+          <TabsTrigger value="csv"><Download className="h-4 w-4 mr-1" /> CSV (dados)</TabsTrigger>
+          <TabsTrigger value="sql"><Code2 className="h-4 w-4 mr-1" /> SQL (estrutura)</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="csv" className="space-y-4 mt-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setSelected(new Set())} disabled={totalSelected === 0}>
+              Limpar ({totalSelected})
+            </Button>
+            <Button onClick={exportSelected} disabled={bulkBusy || totalSelected === 0}>
+              {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Exportar selecionadas ({totalSelected})
+            </Button>
+          </div>
+
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar tabela ou categoria..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          </div>
+
+          <ScrollArea className="h-[calc(100vh-340px)]">
+            <div className="grid gap-4 md:grid-cols-2 pr-4">
+              {filteredCats.map(cat => {
+                const allSel = cat.tables.every(t => selected.has(t));
+                return (
+                  <Card key={cat.label}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <span>{cat.icon}</span> {cat.label}
+                        </CardTitle>
+                        <Checkbox checked={allSel} onCheckedChange={() => toggleCategory(cat.tables)} />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-1">
+                      {cat.tables.map(table => (
+                        <div key={table} className="flex items-center justify-between gap-2 py-1 px-2 rounded hover:bg-muted/50">
+                          <label className="flex items-center gap-2 flex-1 cursor-pointer text-sm font-mono">
+                            <Checkbox checked={selected.has(table)} onCheckedChange={() => toggle(table)} />
+                            {table}
+                          </label>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => exportTable(table)}
+                            disabled={busy === table}
+                          >
+                            {busy === table ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="sql" className="space-y-4 mt-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button onClick={generateAllSql} disabled={bulkSqlBusy}>
+              {bulkSqlBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Baixar schema completo (.sql)
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Clique em uma tabela para gerar o <code>CREATE TABLE</code> + RLS, depois copie e cole no novo banco.
+            </p>
+          </div>
+
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar tabela..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          </div>
+
+          <ScrollArea className="h-[calc(100vh-340px)]">
+            <div className="space-y-3 pr-4">
+              {filteredCats.flatMap(cat => cat.tables).map(table => (
+                <Card key={table}>
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-mono">{table}</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="outline" onClick={() => loadSql(table)} disabled={sqlLoading === table}>
+                        {sqlLoading === table ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Code2 className="h-3.5 w-3.5" />}
+                        {sqlMap[table] ? 'Recarregar' : 'Gerar SQL'}
+                      </Button>
+                      {sqlMap[table] && (
+                        <Button size="sm" variant="ghost" onClick={() => copyText(table, sqlMap[table])}>
+                          {copied === table ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                          Copiar
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  {sqlMap[table] && (
+                    <CardContent>
+                      <Textarea
+                        readOnly
+                        value={sqlMap[table]}
+                        className="font-mono text-xs min-h-[200px] max-h-[400px]"
+                        onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                      />
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+      </Tabs>
+
       <Card className="bg-muted/30">
         <CardContent className="pt-4 text-xs text-muted-foreground space-y-1">
           <p><strong>Observações:</strong></p>
           <p>• Auth/Users (auth.users), Storage objects, Secrets e Edge Functions code não ficam em tabelas públicas — não são exportáveis daqui. Use o painel do Cloud para esses itens.</p>
           <p>• Logs (Auth/DB/Edge) ficam em analytics e não em tabelas públicas. Para esses, consulte via "Logs" no Cloud.</p>
-          <p>• Esta página exporta tudo o que sua sessão admin pode ler via RLS.</p>
+          <p>• O SQL gerado inclui <code>CREATE TABLE</code> + políticas RLS, mas não inclui funções auxiliares (ex: <code>has_role</code>) que precisam existir no destino.</p>
         </CardContent>
       </Card>
     </div>
