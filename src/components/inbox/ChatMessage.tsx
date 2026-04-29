@@ -28,6 +28,10 @@ interface Mensagem {
   timestamp_msg: string;
   tipo_conteudo?: string;
   media_url?: string | null;
+  whatsapp_msg_id?: string | null;
+  quoted_msg_id?: string | null;
+  quoted_conteudo?: string | null;
+  quoted_direcao?: string | null;
 }
 
 interface ChatMessageProps {
@@ -36,6 +40,7 @@ interface ChatMessageProps {
   onApagarParaMim?: (msgId: string) => void;
   onApagarParaTodos?: (msgId: string) => void;
   onEditar?: (msgId: string, conteudoAtual: string) => void;
+  onResponder?: (msg: Mensagem) => void;
 }
 
 function getMimeFromUrl(url: string): string | undefined {
