@@ -33,6 +33,7 @@ interface Props {
   onEtiquetasChange: () => void;
   onFixarToggle: (contatoId: string, fixado: boolean) => void;
   onArquivarToggle?: (contatoId: string, arquivado: boolean) => void;
+  onArquivarVarias?: (contatoId: string) => void;
 }
 
 export function ConversaContextMenu({
