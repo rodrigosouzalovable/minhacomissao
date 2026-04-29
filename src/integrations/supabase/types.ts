@@ -2992,6 +2992,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: string
       }
+      get_table_ddl: { Args: { p_table: string }; Returns: string }
       has_inbox_compartilhado: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
