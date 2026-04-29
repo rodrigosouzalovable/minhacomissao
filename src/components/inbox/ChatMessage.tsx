@@ -353,6 +353,15 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
             {messageBubble}
           </ContextMenuTrigger>
           <ContextMenuContent className="w-52">
+            {onResponder && (
+              <>
+                <ContextMenuItem onClick={triggerReply}>
+                  <Reply className="h-4 w-4 mr-2" />
+                  Responder
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
             {isSaida && tipo === 'texto' && onEditar && (
               <>
                 <ContextMenuItem
