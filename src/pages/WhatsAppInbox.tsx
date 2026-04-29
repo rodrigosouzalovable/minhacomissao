@@ -185,6 +185,32 @@ export default function WhatsAppInbox() {
 
   useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMensagensRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMensagensRapidas]);
 
+  // Carrega sufixos de números usados no aquecimento (âncoras fixas + pool autosave)
+  // para auto-arquivar conversas iniciadas pelo robô de aquecimento.
+  useEffect(() => {
+    const ANCORAS_PRIORITARIAS = [
+      '5562991672674', '5562981810202', '5562981079590', '5562981865213',
+      '5562982183144', '5562982458447', '5562981079569',
+    ];
+    const carregar = async () => {
+      const sufixos = new Set<string>();
+      ANCORAS_PRIORITARIAS.forEach(n => {
+        const s = n.replace(/\D/g, '').slice(-8);
+        if (s.length === 8) sufixos.add(s);
+      });
+      const { data } = await supabase
+        .from('aquecimento_contatos_autosave')
+        .select('numero')
+        .eq('ativo', true);
+      (data || []).forEach((r: any) => {
+        const s = String(r.numero || '').replace(/\D/g, '').slice(-8);
+        if (s.length === 8) sufixos.add(s);
+      });
+      setWarmingSufixos(sufixos);
+    };
+    carregar();
+  }, []);
+
   const handleEtiquetaToggle = (contatoId: string, etiquetaId: string, ativo: boolean) => {
     setContatoEtiquetas(prev => {
       const ids = prev[contatoId] || [];
