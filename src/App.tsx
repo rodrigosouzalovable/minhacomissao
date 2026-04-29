@@ -185,7 +185,7 @@ const App = () => (
             <Route path="/campanhas-voz" element={<PermissionRoute><CampanhasVoz /></PermissionRoute>} />
             <Route path="/aquecimento" element={<ProtectedRoute><Aquecimento /></ProtectedRoute>} />
             <Route path="/monitor-envios" element={<PermissionRoute><MonitorEnvios /></PermissionRoute>} />
-            <Route path="/admin/exportar-dados" element={<AdminRoute><ExportarDados /></AdminRoute>} />
+            <Route path="/admin/exportar-dados" element={<PermissionRoute><ExportarDados /></PermissionRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </VoiceCampaignSendingProvider>
