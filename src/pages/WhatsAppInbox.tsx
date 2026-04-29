@@ -954,7 +954,7 @@ export default function WhatsAppInbox() {
                 </SelectContent>
               </Select>
             )}
-            <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as 'conversas' | 'arquivados')}>
+            <Tabs value={abaAtiva} onValueChange={(v) => { setAbaAtiva(v as 'conversas' | 'arquivados'); sairSelecaoMultipla(); }}>
               <TabsList className="grid w-full grid-cols-2 h-8">
                 <TabsTrigger value="conversas" className="text-xs">Conversas</TabsTrigger>
                 <TabsTrigger value="arquivados" className="text-xs flex items-center gap-1">
