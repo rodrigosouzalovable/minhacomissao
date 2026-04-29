@@ -528,6 +528,30 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
             {acordos.map((acordo) => {
               const acordoParcelas = parcelas[acordo.id] || [];
               const pagas = acordoParcelas.filter(p => p.pago).length;
+
+              // Comissão Montreal: calcula por parcela paga usando dias entre data_pagamento
+              // e a data de vencimento original mais antiga das dívidas Montreal do CPF.
+              // Fallback: usa data_primeiro_vencimento do próprio acordo (atraso estimado).
+              const refAtrasoStr = vencimentoOriginalMontreal || acordo.data_primeiro_vencimento;
+              const refAtrasoDate = refAtrasoStr ? new Date(refAtrasoStr + 'T00:00:00') : null;
+              const usingFallback = isMontrealCliente && !vencimentoOriginalMontreal;
+
+              const calcularComissaoLinha = (parcela: ParcelaDevedor) => {
+                if (!isMontrealCliente || !parcela.pago || !parcela.data_pagamento || !refAtrasoDate) {
+                  return null;
+                }
+                const dPag = new Date(parcela.data_pagamento + 'T00:00:00');
+                const dias = differenceInCalendarDays(dPag, refAtrasoDate);
+                return calcularComissaoMontrealParcela(Number(parcela.valor), dias);
+              };
+
+              const totalComissaoMontreal = isMontrealCliente
+                ? acordoParcelas.reduce((sum, p) => {
+                    const c = calcularComissaoLinha(p);
+                    return c ? sum + c.valor : sum;
+                  }, 0)
+                : 0;
+
               return (
                 <div key={acordo.id} className="border rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
