@@ -10,8 +10,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload, Percent } from 'lucide-react';
+import { format, differenceInCalendarDays } from 'date-fns';
+import { calcularComissaoMontrealParcela } from '@/lib/comissao';
 
 interface AcordoDevedor {
   id: string;
