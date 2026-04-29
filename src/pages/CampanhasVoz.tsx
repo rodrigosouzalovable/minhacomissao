@@ -297,33 +297,38 @@ export default function CampanhasVoz() {
         },
       });
       if (error) throw error;
-      if (data?.invalid && Array.isArray(data.invalid)) {
-        const invalidSet = new Set(data.invalid.map((n: string) => n.replace(/\D/g, '')));
-        const removidos: { nome: string; telefone: string }[] = [];
-        const mantidos: { id: string; nome: string; telefone: string }[] = [];
-        importedContacts.forEach(c => {
-          const clean = c.telefone.replace(/\D/g, '');
-          const full = clean.startsWith('55') ? clean : `55${clean}`;
-          if (invalidSet.has(clean) || invalidSet.has(full)) {
-            removidos.push({ nome: c.nome, telefone: c.telefone });
-          } else {
-            mantidos.push(c);
-          }
-        });
-        setNumerosInvalidos(removidos);
-        setImportedContacts(mantidos);
-        setSelectedContacts(new Set());
-        setVerificacaoConcluida(true);
-        toast.success(`${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`);
-      } else {
-        setVerificacaoConcluida(true);
-        toast.info('Todos os números parecem válidos');
-      }
+      const invalidArr: string[] = Array.isArray(data?.invalid) ? data.invalid : [];
+      const invalidSet = new Set(invalidArr.map((n: string) => n.replace(/\D/g, '')));
+      const semWa: { nome: string; telefone: string }[] = [];
+      const comWa: { id: string; nome: string; telefone: string }[] = [];
+      importedContacts.forEach(c => {
+        const clean = c.telefone.replace(/\D/g, '');
+        const full = clean.startsWith('55') ? clean : `55${clean}`;
+        if (invalidSet.has(clean) || invalidSet.has(full)) {
+          semWa.push({ nome: c.nome, telefone: c.telefone });
+        } else {
+          comWa.push(c);
+        }
+      });
+      setNumerosInvalidos(semWa);
+      // Mantém apenas os COM WhatsApp na lista que será usada na campanha
+      setImportedContacts(comWa);
+      setSelectedContacts(new Set(comWa.map(c => c.id)));
+      setVerificacaoConcluida(true);
+      toast.success(`${comWa.length} com WhatsApp · ${semWa.length} sem WhatsApp`);
     } catch (err: any) {
       toast.error(`Erro: ${err.message || 'Erro desconhecido'}`);
     } finally {
       setVerificandoWhatsApp(false);
     }
+  };
+
+  const exportarSemWhatsApp = () => {
+    if (numerosInvalidos.length === 0) return;
+    exportarParaExcel(
+      numerosInvalidos.map(c => ({ Nome: c.nome, Telefone: c.telefone })),
+      'contatos-sem-whatsapp'
+    );
   };
 
   // Multi-audio handling
