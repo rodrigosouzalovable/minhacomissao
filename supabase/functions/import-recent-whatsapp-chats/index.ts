@@ -1,5 +1,5 @@
 // Edge function: Import the most recent 10 individual WhatsApp conversations
-// (no groups, no status, no broadcasts) for an instance, with the last 20 messages each.
+// (no groups, no status, no broadcasts) for an instance, with the last 10 messages each.
 // Marks ALL imported messages as unread (lida=false). Runs at most ONCE per instance,
 // controlled by user_whatsapp_instances.historico_inicial_importado_em.
 
@@ -12,7 +12,7 @@ const corsHeaders = {
 };
 
 const MAX_CHATS = 10;
-const MSGS_PER_CHAT = 20;
+const MSGS_PER_CHAT = 10;
 
 const isGroupOrStatus = (jid: string | null | undefined): boolean => {
   if (!jid) return true;

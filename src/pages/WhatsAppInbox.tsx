@@ -25,6 +25,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { MensagensRapidasDialog, type MensagemRapida } from '@/components/inbox/MensagensRapidasDialog';
 import { NovaConversaDialog } from '@/components/inbox/NovaConversaDialog';
+import { useUserRole } from '@/hooks/useUserRole';
 interface Etiqueta {
   id: string;
   nome: string;
