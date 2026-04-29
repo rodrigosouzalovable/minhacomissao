@@ -691,7 +691,8 @@ export default function WhatsAppInbox() {
     toast({ title: 'Conversa excluída' });
   };
 
-  const handleNovaConversa = async () => {
+  const handleNovaConversa = async (payload: { telefone: string; instanciaId: string; mensagem: string }) => {
+    const { telefone: novoTelefone, instanciaId: novaInstanciaId, mensagem: novaMensagem } = payload;
     if (!novoTelefone || !novaInstanciaId || !novaMensagem.trim()) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
       return;
@@ -718,9 +719,6 @@ export default function WhatsAppInbox() {
 
       toast({ title: 'Mensagem enviada', description: 'Conversa iniciada com sucesso' });
       setNovaConversaOpen(false);
-      setNovoTelefone('');
-      setNovaMensagem('');
-      setNovaInstanciaId('');
 
       // Wait for realtime to create contact, then try to select it
       setTimeout(async () => {
