@@ -33,6 +33,7 @@ interface Props {
   onEtiquetasChange: () => void;
   onFixarToggle: (contatoId: string, fixado: boolean) => void;
   onArquivarToggle?: (contatoId: string, arquivado: boolean) => void;
+  onArquivarVarias?: (contatoId: string) => void;
 }
 
 export function ConversaContextMenu({
@@ -48,6 +49,7 @@ export function ConversaContextMenu({
   onEtiquetasChange,
   onFixarToggle,
   onArquivarToggle,
+  onArquivarVarias,
 }: Props) {
   const { toast } = useToast();
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
@@ -101,6 +103,12 @@ export function ConversaContextMenu({
             <ContextMenuItem onClick={() => onArquivarToggle(contatoId, !arquivado)}>
               {arquivado ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
               {arquivado ? 'Desarquivar conversa' : 'Arquivar conversa'}
+            </ContextMenuItem>
+          )}
+          {onArquivarVarias && !arquivado && (
+            <ContextMenuItem onClick={() => onArquivarVarias(contatoId)}>
+              <Archive className="h-4 w-4 mr-2" />
+              Arquivar várias...
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
