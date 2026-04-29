@@ -326,10 +326,15 @@ export default function CampanhasVoz() {
   const exportarSemWhatsApp = () => {
     if (numerosInvalidos.length === 0) return;
     exportarParaExcel(
-      numerosInvalidos.map(c => ({ Nome: c.nome, Telefone: c.telefone })),
+      numerosInvalidos,
+      [
+        { titulo: 'Nome', chave: 'nome' },
+        { titulo: 'Telefone', chave: 'telefone' },
+      ],
       'contatos-sem-whatsapp'
     );
   };
+
 
   // Multi-audio handling
   const handleAudioFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
