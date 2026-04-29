@@ -10,8 +10,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload, Percent } from 'lucide-react';
+import { format, differenceInCalendarDays } from 'date-fns';
+import { calcularComissaoMontrealParcela } from '@/lib/comissao';
 
 interface AcordoDevedor {
   id: string;
@@ -51,6 +52,10 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [acordos, setAcordos] = useState<AcordoDevedor[]>([]);
   const [parcelas, setParcelas] = useState<Record<string, ParcelaDevedor[]>>({});
   const [loading, setLoading] = useState(true);
+  // Referência de atraso Montreal: data de vencimento mais antiga das dívidas Montreal do CPF.
+  // Quando definida (não-null), exibimos coluna de comissão Montreal nas parcelas pagas.
+  const [vencimentoOriginalMontreal, setVencimentoOriginalMontreal] = useState<string | null>(null);
+  const [isMontrealCliente, setIsMontrealCliente] = useState(false);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
 
@@ -81,6 +86,23 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
   const fetchAcordos = useCallback(async () => {
     setLoading(true);
+
+    // Busca referência Montreal: dívidas do CPF cujo credor seja MONTREAL.
+    // Usamos a data_vencimento mais antiga como referência de "idade" da inadimplência.
+    const { data: dividasMontreal } = await supabase
+      .from('devedores')
+      .select('data_vencimento')
+      .eq('cpf', cpfNorm)
+      .ilike('credor', 'MONTREAL')
+      .order('data_vencimento', { ascending: true, nullsFirst: false })
+      .limit(1);
+
+    const temMontreal = Array.isArray(dividasMontreal) && dividasMontreal.length > 0;
+    setIsMontrealCliente(temMontreal);
+    setVencimentoOriginalMontreal(
+      temMontreal ? (dividasMontreal![0] as { data_vencimento: string | null }).data_vencimento ?? null : null
+    );
+
     const { data: acordosData } = await supabase
       .from('acordos_devedor' as any)
       .select('*')
@@ -506,6 +528,30 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
             {acordos.map((acordo) => {
               const acordoParcelas = parcelas[acordo.id] || [];
               const pagas = acordoParcelas.filter(p => p.pago).length;
+
+              // Comissão Montreal: calcula por parcela paga usando dias entre data_pagamento
+              // e a data de vencimento original mais antiga das dívidas Montreal do CPF.
+              // Fallback: usa data_primeiro_vencimento do próprio acordo (atraso estimado).
+              const refAtrasoStr = vencimentoOriginalMontreal || acordo.data_primeiro_vencimento;
+              const refAtrasoDate = refAtrasoStr ? new Date(refAtrasoStr + 'T00:00:00') : null;
+              const usingFallback = isMontrealCliente && !vencimentoOriginalMontreal;
+
+              const calcularComissaoLinha = (parcela: ParcelaDevedor) => {
+                if (!isMontrealCliente || !parcela.pago || !parcela.data_pagamento || !refAtrasoDate) {
+                  return null;
+                }
+                const dPag = new Date(parcela.data_pagamento + 'T00:00:00');
+                const dias = differenceInCalendarDays(dPag, refAtrasoDate);
+                return calcularComissaoMontrealParcela(Number(parcela.valor), dias);
+              };
+
+              const totalComissaoMontreal = isMontrealCliente
+                ? acordoParcelas.reduce((sum, p) => {
+                    const c = calcularComissaoLinha(p);
+                    return c ? sum + c.valor : sum;
+                  }, 0)
+                : 0;
+
               return (
                 <div key={acordo.id} className="border rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
@@ -551,6 +597,9 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                         <TableHead className="text-xs">Vencimento</TableHead>
                         <TableHead className="text-xs">Valor</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
+                        {isMontrealCliente && (
+                          <TableHead className="text-xs">Comissão Montreal</TableHead>
+                        )}
                         <TableHead className="text-xs text-right">Ação</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -577,6 +626,20 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                               {parcela.pago ? 'Pago' : 'Pendente'}
                             </Badge>
                           </TableCell>
+                          {isMontrealCliente && (
+                            <TableCell className="text-xs">
+                              {(() => {
+                                const c = calcularComissaoLinha(parcela);
+                                if (!c) return <span className="text-muted-foreground">—</span>;
+                                return (
+                                  <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
+                                    <Percent className="h-3 w-3" />
+                                    {c.percentual}% • {fmtBRL(c.valor)}
+                                  </span>
+                                );
+                              })()}
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
                               {editingParcelaId === parcela.id ? (
@@ -615,6 +678,20 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                       ))}
                     </TableBody>
                   </Table>
+
+                  {isMontrealCliente && (
+                    <div className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 px-3 py-2 text-xs">
+                      <span className="text-emerald-900 dark:text-emerald-200">
+                        Comissão Montreal acumulada (parcelas pagas)
+                        {usingFallback && (
+                          <span className="ml-1 text-muted-foreground">(atraso estimado pelo 1º vencimento do acordo)</span>
+                        )}
+                      </span>
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                        {fmtBRL(totalComissaoMontreal)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })}

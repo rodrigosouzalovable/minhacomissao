@@ -1,3 +1,30 @@
+// Tabela de comissões MONTREAL (H.O. / Encargos) baseada em dias de atraso
+export const tabelaComissoesMontreal = [
+  { min: 31, max: 60, percentual: 8 },
+  { min: 61, max: 90, percentual: 15 },
+  { min: 91, max: 180, percentual: 20 },
+  { min: 181, max: 360, percentual: 25 },
+  { min: 361, max: 720, percentual: 30 },
+  { min: 721, max: 1800, percentual: 35 },
+];
+
+export function calcularPercentualComissaoMontreal(diasAtraso: number): number {
+  for (const faixa of tabelaComissoesMontreal) {
+    if (diasAtraso >= faixa.min && diasAtraso <= faixa.max) {
+      return faixa.percentual;
+    }
+  }
+  return 0;
+}
+
+export function calcularComissaoMontrealParcela(valorParcela: number, diasAtraso: number) {
+  const percentual = calcularPercentualComissaoMontreal(diasAtraso);
+  return {
+    percentual,
+    valor: Math.round(valorParcela * (percentual / 100) * 100) / 100,
+  };
+}
+
 // Tabela de juros UME APORTE baseada em dias de atraso
 export const tabelaJurosAporte = [
   { min: 1, max: 30, percentual: 7 },
