@@ -86,6 +86,23 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
   const fetchAcordos = useCallback(async () => {
     setLoading(true);
+
+    // Busca referência Montreal: dívidas do CPF cujo credor seja MONTREAL.
+    // Usamos a data_vencimento mais antiga como referência de "idade" da inadimplência.
+    const { data: dividasMontreal } = await supabase
+      .from('devedores')
+      .select('data_vencimento')
+      .eq('cpf', cpfNorm)
+      .ilike('credor', 'MONTREAL')
+      .order('data_vencimento', { ascending: true, nullsFirst: false })
+      .limit(1);
+
+    const temMontreal = Array.isArray(dividasMontreal) && dividasMontreal.length > 0;
+    setIsMontrealCliente(temMontreal);
+    setVencimentoOriginalMontreal(
+      temMontreal ? (dividasMontreal![0] as { data_vencimento: string | null }).data_vencimento ?? null : null
+    );
+
     const { data: acordosData } = await supabase
       .from('acordos_devedor' as any)
       .select('*')
