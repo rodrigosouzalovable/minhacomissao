@@ -73,7 +73,7 @@ serve(async (req) => {
   }
 
   try {
-    const { telefone, mensagem, uazapi_server_url, uazapi_instance_token, instancia_id } = await req.json();
+    const { telefone, mensagem, uazapi_server_url, uazapi_instance_token, instancia_id, quoted } = await req.json();
     
     const tokenSuffix = uazapi_instance_token ? uazapi_instance_token.slice(-8) : 'global';
     console.log('Recebendo requisição para enviar WhatsApp:', { telefone, instance: tokenSuffix });
