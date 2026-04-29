@@ -268,6 +268,9 @@ export function ChatInputBar({
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               handleEnviarTexto();
+            } else if (e.key === 'Escape' && respondendo) {
+              e.preventDefault();
+              onCancelarResposta?.();
             }
           }}
           onPaste={handlePaste}
