@@ -95,7 +95,7 @@ serve(async (req) => {
       throw new Error('Credenciais UAZAPI não configuradas');
     }
 
-    const data = await sendViaUazapi(serverUrl, instanceToken, telefoneCompleto, mensagem);
+    const data = await sendViaUazapi(serverUrl, instanceToken, telefoneCompleto, mensagem, quoted?.id || null);
 
     // --- INBOX: Salvar mensagem enviada no histórico ---
     try {
