@@ -776,6 +776,8 @@ export default function WhatsAppInbox() {
     toast({ title: `${ids.length} ${ids.length === 1 ? 'conversa excluída' : 'conversas excluídas'}` });
     sairSelecaoMultipla();
   };
+
+  const handleExcluirConversa = async (contatoId: string) => {
     const contato = contatos.find(c => c.id === contatoId);
     if (!contato) return;
 
