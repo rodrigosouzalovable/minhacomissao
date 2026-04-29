@@ -68,7 +68,7 @@ function getImageMimeFromUrl(url: string): string {
   return (ext && map[ext]) || 'image/jpeg';
 }
 
-export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar }: ChatMessageProps) {
+export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar, onResponder }: ChatMessageProps) {
   const tipo = msg.tipo_conteudo || 'texto';
   const isSaida = msg.direcao === 'saida';
   const isTemp = msg.id.startsWith('temp-');
