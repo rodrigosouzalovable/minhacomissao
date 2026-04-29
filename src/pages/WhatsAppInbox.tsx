@@ -711,7 +711,71 @@ export default function WhatsAppInbox() {
     toast({ title: arquivado ? 'Conversa arquivada' : 'Conversa desarquivada' });
   };
 
-  const handleExcluirConversa = async (contatoId: string) => {
+  const toggleSelecaoContato = (contatoId: string) => {
+    setContatosSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(contatoId)) next.delete(contatoId);
+      else next.add(contatoId);
+      return next;
+    });
+  };
+
+  const selecionarTodos = () => {
+    setContatosSelecionados(new Set(contatosFiltrados.map(c => c.id)));
+  };
+
+  const limparSelecao = () => {
+    setContatosSelecionados(new Set());
+  };
+
+  const sairSelecaoMultipla = () => {
+    setSelecaoMultiplaAtiva(false);
+    setContatosSelecionados(new Set());
+  };
+
+  const handleDesarquivarSelecionadas = async () => {
+    const ids = Array.from(contatosSelecionados);
+    if (ids.length === 0) return;
+    const { error } = await supabase
+      .from('whatsapp_contatos')
+      .update({ arquivado: false } as any)
+      .in('id', ids);
+    if (error) {
+      toast({ title: 'Erro ao desarquivar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setContatos(prev => prev.filter(c => !contatosSelecionados.has(c.id)));
+    setArquivadosCount(prev => Math.max(0, prev - ids.length));
+    toast({ title: `${ids.length} ${ids.length === 1 ? 'conversa desarquivada' : 'conversas desarquivadas'}` });
+    sairSelecaoMultipla();
+  };
+
+  const handleExcluirSelecionadas = async () => {
+    const ids = Array.from(contatosSelecionados);
+    if (ids.length === 0) return;
+    if (!confirm(`Excluir ${ids.length} ${ids.length === 1 ? 'conversa' : 'conversas'} permanentemente? Esta ação não pode ser desfeita.`)) return;
+
+    const selecionados = contatos.filter(c => contatosSelecionados.has(c.id));
+    // Apaga mensagens + etiquetas + contatos
+    for (const c of selecionados) {
+      await supabase.from('whatsapp_mensagens').delete()
+        .eq('instancia_id', c.instancia_id).eq('telefone_remoto', c.telefone);
+    }
+    await supabase.from('whatsapp_contato_etiquetas').delete().in('contato_id', ids);
+    const { error } = await supabase.from('whatsapp_contatos').delete().in('id', ids);
+    if (error) {
+      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setContatos(prev => prev.filter(c => !contatosSelecionados.has(c.id)));
+    setArquivadosCount(prev => Math.max(0, prev - ids.length));
+    if (contatoAtivo && contatosSelecionados.has(contatoAtivo.id)) {
+      setContatoAtivo(null);
+      setMensagens([]);
+    }
+    toast({ title: `${ids.length} ${ids.length === 1 ? 'conversa excluída' : 'conversas excluídas'}` });
+    sairSelecaoMultipla();
+  };
     const contato = contatos.find(c => c.id === contatoId);
     if (!contato) return;
 
