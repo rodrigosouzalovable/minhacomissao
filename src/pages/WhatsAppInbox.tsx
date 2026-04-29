@@ -750,7 +750,32 @@ export default function WhatsAppInbox() {
     sairSelecaoMultipla();
   };
 
-  const handleExcluirSelecionadas = async () => {
+  const handleArquivarSelecionadas = async () => {
+    const ids = Array.from(contatosSelecionados);
+    if (ids.length === 0) return;
+    const { error } = await supabase
+      .from('whatsapp_contatos')
+      .update({ arquivado: true } as any)
+      .in('id', ids);
+    if (error) {
+      toast({ title: 'Erro ao arquivar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setContatos(prev => prev.filter(c => !contatosSelecionados.has(c.id)));
+    setArquivadosCount(prev => prev + ids.length);
+    if (contatoAtivo && contatosSelecionados.has(contatoAtivo.id)) {
+      setContatoAtivo(null);
+      setMensagens([]);
+    }
+    toast({ title: `${ids.length} ${ids.length === 1 ? 'conversa arquivada' : 'conversas arquivadas'}` });
+    sairSelecaoMultipla();
+  };
+
+  const iniciarSelecaoArquivar = (contatoId: string) => {
+    setSelecaoMultiplaAtiva(true);
+    setContatosSelecionados(new Set([contatoId]));
+    toast({ title: 'Modo de seleção ativado', description: 'Marque as conversas que deseja arquivar e clique em Arquivar selecionadas.' });
+  };
     const ids = Array.from(contatosSelecionados);
     if (ids.length === 0) return;
     if (!confirm(`Excluir ${ids.length} ${ids.length === 1 ? 'conversa' : 'conversas'} permanentemente? Esta ação não pode ser desfeita.`)) return;
