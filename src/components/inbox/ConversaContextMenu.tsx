@@ -49,6 +49,7 @@ export function ConversaContextMenu({
   onEtiquetasChange,
   onFixarToggle,
   onArquivarToggle,
+  onArquivarVarias,
 }: Props) {
   const { toast } = useToast();
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
