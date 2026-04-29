@@ -1061,6 +1061,7 @@ export default function WhatsAppInbox() {
                     onEtiquetasChange={() => { fetchEtiquetas(); fetchContatoEtiquetas(); }}
                     onFixarToggle={handleFixarToggle}
                     onArquivarToggle={handleArquivarToggle}
+                    onArquivarVarias={iniciarSelecaoArquivar}
                     onExcluirConversa={handleExcluirConversa}
                   >
                     <button
