@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Download, Database, Loader2, Search } from 'lucide-react';
+import { Download, Database, Loader2, Search, Code2, Copy, Check } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 
 // Curated catalog of exportable tables grouped by Cloud category
 const CATEGORIES: { label: string; icon: string; tables: string[] }[] = [
