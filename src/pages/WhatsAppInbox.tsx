@@ -102,6 +102,8 @@ export default function WhatsAppInbox() {
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const [novaConversaOpen, setNovaConversaOpen] = useState(false);
+  const [instanciasConectadas, setInstanciasConectadas] = useState<Instancia[]>([]);
+  const [verificandoConexao, setVerificandoConexao] = useState(false);
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaInstanciaId, setNovaInstanciaId] = useState('');
   const [novaMensagem, setNovaMensagem] = useState('');
