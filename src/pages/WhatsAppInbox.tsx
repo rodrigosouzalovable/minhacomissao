@@ -142,7 +142,7 @@ export default function WhatsAppInbox() {
 
       let query = supabase
         .from('user_whatsapp_instances')
-        .select('id, nome, server_url, instance_token, telefone')
+        .select('id, nome, server_url, instance_token, telefone, historico_inicial_importado_em')
         .eq('ativo', true);
 
       if (compartilhado && concedidoPor) {
