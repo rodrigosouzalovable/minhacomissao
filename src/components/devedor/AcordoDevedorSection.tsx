@@ -597,6 +597,9 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                         <TableHead className="text-xs">Vencimento</TableHead>
                         <TableHead className="text-xs">Valor</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
+                        {isMontrealCliente && (
+                          <TableHead className="text-xs">Comissão Montreal</TableHead>
+                        )}
                         <TableHead className="text-xs text-right">Ação</TableHead>
                       </TableRow>
                     </TableHeader>
