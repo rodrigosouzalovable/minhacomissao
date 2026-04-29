@@ -1367,9 +1367,10 @@ export default function WhatsAppInbox() {
       <NovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}
-        instancias={instancias as any}
+        instancias={instanciasConectadas as any}
         enviando={enviandoNova}
         onSubmit={handleNovaConversa}
+        verificandoConexao={verificandoConexao}
       />
 
       <Dialog open={editandoMsg !== null} onOpenChange={(open) => !open && setEditandoMsg(null)}>
