@@ -1,118 +1,99 @@
-
 ## Objetivo
 
-Aplicar a tabela de comissão da MONTREAL (H.O./Encargos) em cada acordo lançado para clientes da Montreal, exibindo, ao lado de cada parcela marcada como **paga**, o **percentual** e o **valor em reais** da comissão a receber.
+Quando uma instância de WhatsApp conectar pela primeira vez (ou reconectar após estar desconectada), o sistema importa automaticamente as **últimas 10 conversas individuais** (sem grupos / sem status / sem broadcast), pegando as **20 mensagens mais recentes** de cada uma. Tudo entra como **não lido** no WhatsApp Inbox.
 
-## Tabela de comissão Montreal
+## Aviso de custo (regra do projeto)
 
-Faixa de atraso → percentual sobre o valor da parcela paga:
+Cada importação faz ~10 chamadas à UAZAPI + até 200 inserts em `whatsapp_mensagens`. Por instância isso é leve; **se 50 instâncias conectarem ao mesmo tempo, são até 10.000 inserts**. Para conter:
 
-| Atraso (dias) | % Comissão |
-|---|---|
-| 31 – 60 | 8% |
-| 61 – 90 | 15% |
-| 91 – 180 | 20% |
-| 181 – 360 | 25% |
-| 361 – 720 | 30% |
-| 721 – 1800 | 35% |
+- Importação rodará **apenas 1 vez por instância** (controlado por flag persistida no banco — não roda toda vez que reconectar).
+- Cap de 10 conversas × 20 mensagens. Sem retentativa automática se a UAZAPI não suportar.
+- Filtro estrito de grupos/status/broadcast em 3 camadas, conforme regra de memória.
 
-Fora dessas faixas (0–30 dias e acima de 1800): 0%.
+## Limitações da UAZAPI (importante saber antes)
 
-## Onde os "acordos Montreal" vivem hoje
-
-Os acordos da Montreal **não** ficam na tabela `acordos` (que só usa `mundo_da_moda` / `ume_novo_mundo`). Eles ficam em:
-
-- `acordos_devedor` — cabeçalho do acordo (CPF, valor total, nº parcelas, data 1º venc.)
-- `parcelas_devedor` — cada parcela (`valor`, `data_vencimento`, `pago`, `data_pagamento`)
-
-Um acordo é "Montreal" quando o CPF do devedor tem registros em `devedores` com `credor = 'MONTREAL'`. A UI atual está em `src/components/devedor/AcordoDevedorSection.tsx` (renderizada em `DevedorDetalhe`).
-
-## Definição do "atraso em dias" usada no cálculo
-
-Para cada parcela paga, calcular:
-
-```
-diasAtraso = data_pagamento − data_vencimento_original_da_dívida_mais_antiga_do_CPF_na_Montreal
-```
-
-Ou seja, usamos a data de vencimento **original** da dívida (campo `devedores.data_vencimento` mais antigo do CPF naquele credor) como referência — é o que define a "idade" da inadimplência, não a data da parcela do acordo.
-
-Caso não exista dívida Montreal cadastrada para o CPF (acontece em ~1 dos 7 acordos atuais), usar fallback: `diasAtraso = data_pagamento − data_primeiro_vencimento` do próprio acordo. Nesse caso, marcar visualmente como "atraso estimado".
-
-> Se você preferir outra regra (por ex. usar a data de criação do acordo, ou a data de vencimento da própria parcela), me avise antes da implementação que ajusto.
+A função existente `fetch-whatsapp-history` já tenta 7 endpoints e em algumas instâncias **todos retornam 404/405** — a própria função tem uma flag `api_supported: false` para esse caso. Em servidores UAZAPI que não expõem histórico, o resultado da importação será 0 conversas e o usuário verá um toast explicando.
 
 ## Mudanças
 
-### 1. Nova função utilitária — `src/lib/comissao.ts`
+### 1. Migration — flag de "já importou"
 
-Adicionar:
+Nova coluna em `user_whatsapp_instances`:
+
+```sql
+ALTER TABLE user_whatsapp_instances
+  ADD COLUMN IF NOT EXISTS historico_inicial_importado_em timestamptz;
+```
+
+Quando preenchida, a importação automática não roda de novo para essa instância.
+
+### 2. Nova edge function — `import-recent-whatsapp-chats`
+
+`supabase/functions/import-recent-whatsapp-chats/index.ts`. Recebe `{ instancia_id }`, faz:
+
+```text
+1. Lê server_url + instance_token de user_whatsapp_instances
+2. Verifica se historico_inicial_importado_em IS NULL (senão retorna {skipped:true})
+3. Chama UAZAPI /chat/find (e fallbacks) para listar chats da instância
+4. Filtra: descarta @g.us, status@broadcast, qualquer JID de grupo
+5. Ordena por última mensagem desc, pega top 10
+6. Para cada chat: GET /chat/find com count=20 → parseia mensagens
+   (mesmo parser de fetch-whatsapp-history: imageMessage, audioMessage, etc)
+7. Insere em whatsapp_mensagens com lida=false em TODAS as mensagens
+   (entrada e saída — conforme escolhido pelo usuário)
+8. Deduplica por (timestamp_msg, direcao, conteudo[:100])
+9. Marca historico_inicial_importado_em = now() na instância
+10. Retorna { imported_chats, imported_messages, api_supported }
+```
+
+CORS conforme padrão. Erros de UAZAPI desconectada → `HTTP 200 + fallback:true` (regra de memória).
+
+### 3. Trigger automático no frontend
+
+Em `src/pages/WhatsAppInbox.tsx`, no mesmo `useEffect` que já roda o `test-uazapi-connection` quando o dialog "Nova conversa" abre (e em qualquer outro ponto que verifica conexão), quando uma instância passa de **desconectada → conectada**:
 
 ```ts
-export const tabelaComissoesMontreal = [
-  { min: 31, max: 60, percentual: 8 },
-  { min: 61, max: 90, percentual: 15 },
-  { min: 91, max: 180, percentual: 20 },
-  { min: 181, max: 360, percentual: 25 },
-  { min: 361, max: 720, percentual: 30 },
-  { min: 721, max: 1800, percentual: 35 },
-];
-
-export function calcularPercentualComissaoMontreal(diasAtraso: number): number { ... }
-export function calcularComissaoMontrealParcela(valorParcela: number, diasAtraso: number) {
-  const percentual = calcularPercentualComissaoMontreal(diasAtraso);
-  return { percentual, valor: Math.round(valorParcela * percentual / 100 * 100) / 100 };
+// Pseudo:
+if (estavaDesconectada && agoraConectada && !inst.historico_inicial_importado_em) {
+  supabase.functions.invoke('import-recent-whatsapp-chats', {
+    body: { instancia_id: inst.id }
+  }).then(({ data }) => {
+    if (data?.imported_chats > 0) {
+      toast.success(`${data.imported_chats} conversas importadas como não lidas`);
+    } else if (data?.api_supported === false) {
+      toast.info('Esta instância não permite importar histórico');
+    }
+  });
 }
 ```
 
-### 2. Buscar referência de atraso por CPF — `AcordoDevedorSection.tsx`
+Detecção do "estavaDesconectada → conectada" usa estado já mantido em `instanciasConectadas` (introduzido no commit anterior do dialog Nova Conversa). Vou centralizar isso em um pequeno hook `useInstanceConnectionWatcher` para reuso.
 
-Em `fetchAcordos`, após carregar acordos/parcelas, fazer **uma** consulta:
+### 4. Reset manual (opcional, para debug)
 
-```ts
-supabase.from('devedores')
-  .select('data_vencimento, credor')
-  .eq('cpf', cpfNorm)
-  .ilike('credor', 'MONTREAL')
-  .order('data_vencimento', { ascending: true })
-  .limit(1);
-```
+Botão pequeno em ⚙️ da instância: "Reimportar últimas conversas" — limpa `historico_inicial_importado_em` e dispara de novo. Útil pra você testar.
 
-Guardar em estado `vencimentoOriginalMontreal: string | null`. Definir `isMontreal = vencimentoOriginalMontreal !== null` (ou também checar se existe qualquer registro Montreal mesmo sem data, com fallback descrito acima).
+## Arquivos a alterar/criar
 
-### 3. Renderizar comissão na linha de cada parcela paga
+- `supabase/migrations/<timestamp>_historico_importado.sql` — nova coluna.
+- `supabase/functions/import-recent-whatsapp-chats/index.ts` — nova função (reaproveita lógica de parsing de `fetch-whatsapp-history`).
+- `src/pages/WhatsAppInbox.tsx` — disparo automático ao detectar conexão nova.
+- `src/hooks/useInstanceConnectionWatcher.ts` (novo) — encapsula a detecção desconectada→conectada.
 
-Na tabela de parcelas existentes (linhas onde `parcela.pago === true`), adicionar uma nova coluna **"Comissão"** (visível somente quando `isMontreal`):
+## Sem mudanças em
 
-```text
-┌────┬────────────┬───────────┬──────────┬───────────────────┬────────┐
-│ Nº │ Vencimento │ Valor     │ Status   │ Comissão (Montreal)│ Ações │
-├────┼────────────┼───────────┼──────────┼───────────────────┼────────┤
-│  1 │ 10/02/2026 │ R$ 500,00 │ Paga     │ 20% • R$ 100,00   │ ...    │
-│  2 │ 10/03/2026 │ R$ 500,00 │ Pendente │ —                 │ ...    │
-└────┴────────────┴───────────┴──────────┴───────────────────┴────────┘
-```
+- `whatsapp_mensagens` (schema atual já comporta).
+- `fetch-whatsapp-history` (continua existindo para uso pontual de 1 telefone).
+- Webhook em tempo real (mensagens novas continuam chegando como hoje).
 
-Cabeçalho extra: aparece apenas para clientes Montreal. Para parcelas não pagas, mostrar "—".
+## Confirmações que vou seguir conforme você respondeu
 
-### 4. Rodapé do acordo: total de comissão acumulada
+- **Gatilho**: automático ao instância conectar (1× só, controlado por flag no banco).
+- **Profundidade**: 20 mensagens por conversa.
+- **Status leitura**: tudo (entradas + suas próprias saídas) entra como `lida = false`.
 
-Logo abaixo da tabela do acordo (somente Montreal), exibir um pequeno resumo:
+## Coisas que NÃO vou fazer
 
-> "Comissão Montreal acumulada (parcelas pagas): **R$ X,XX**"
-
-Soma de `comissao.valor` de todas as parcelas com `pago = true`.
-
-### 5. Sem mudanças no banco
-
-Como o cálculo é determinístico a partir de dados já existentes (`parcelas_devedor.valor`, `parcelas_devedor.data_pagamento`, `devedores.data_vencimento`), **não é preciso criar coluna nem migration**. Isso mantém custo zero e flexibilidade — se a tabela mudar, recalcula automaticamente.
-
-## Arquivos a alterar
-
-- `src/lib/comissao.ts` — adicionar tabela e helpers Montreal.
-- `src/components/devedor/AcordoDevedorSection.tsx` — buscar vencimento original, renderizar coluna "Comissão" e rodapé de total.
-
-## Pontos a confirmar antes de implementar
-
-1. **Referência de atraso**: usar a data de vencimento original mais antiga da dívida Montreal do CPF (recomendado), ou outra data?
-2. **Faixas 0–30 dias e >1800 dias**: confirmar que comissão = 0% (sua tabela não cobre essas faixas).
-3. **Acordos Montreal lançados em outro lugar?** Se você também lança acordos da Montreal na tela "Novo Acordo" (tabela `acordos`), me avise — hoje essa tela só aceita "MUNDO DA MODA" e "UME | NOVO MUNDO", então assumi que todos os acordos Montreal estão em `acordos_devedor`.
+- Não vou rodar em loop nem em cron — só no momento exato da conexão.
+- Não vou importar grupos, status, broadcasts nem newsletters em hipótese alguma.
+- Não vou criar botão "Importar agora" geral no Inbox (a reimportação fica só no ⚙️ da instância, escondida, pra evitar cliques acidentais que gerem custo).

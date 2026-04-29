@@ -36,6 +36,7 @@ interface Instancia {
   nome: string | null;
   server_url: string;
   instance_token: string;
+  historico_inicial_importado_em?: string | null;
 }
 
 interface Contato {
@@ -141,7 +142,7 @@ export default function WhatsAppInbox() {
 
       let query = supabase
         .from('user_whatsapp_instances')
-        .select('id, nome, server_url, instance_token, telefone')
+        .select('id, nome, server_url, instance_token, telefone, historico_inicial_importado_em')
         .eq('ativo', true);
 
       if (compartilhado && concedidoPor) {
@@ -206,6 +207,69 @@ export default function WhatsAppInbox() {
 
     return () => { cancelado = true; };
   }, [novaConversaOpen, instancias]);
+
+  // Auto-import last 10 conversations the FIRST time an instance connects.
+  // Runs once on mount and once every 60s. Skips instances that already imported.
+  useEffect(() => {
+    if (!user || instancias.length === 0) return;
+
+    const pendentes = instancias.filter(i => !i.historico_inicial_importado_em);
+    if (pendentes.length === 0) return;
+
+    let cancelado = false;
+    const importadasNaSessao = new Set<string>();
+
+    const tentarImportar = async () => {
+      for (const inst of pendentes) {
+        if (cancelado) return;
+        if (importadasNaSessao.has(inst.id)) continue;
+
+        try {
+          // 1. Verify connection
+          const { data: connData } = await supabase.functions.invoke('test-uazapi-connection', {
+            body: { server_url: inst.server_url, instance_token: inst.instance_token },
+          });
+          const payload = (connData as any)?.data ?? {};
+          const instanceData = payload?.instance ?? payload;
+          const rawStatus = String(instanceData?.status ?? payload?.status ?? '').toLowerCase();
+          const isConnected =
+            (connData as any)?.ok === true &&
+            (rawStatus === 'connected' || rawStatus === 'open' || rawStatus === 'online' ||
+              instanceData?.connected === true || payload?.connected === true);
+
+          if (!isConnected) continue;
+
+          // 2. Trigger import (function itself is idempotent via DB flag)
+          importadasNaSessao.add(inst.id);
+          const { data: impData } = await supabase.functions.invoke('import-recent-whatsapp-chats', {
+            body: { instancia_id: inst.id },
+          });
+
+          const result = impData as any;
+          if (result?.imported_chats > 0) {
+            toast({
+              title: `${inst.nome || 'WhatsApp'}: histórico importado`,
+              description: `${result.imported_chats} conversas (${result.imported_messages} mensagens) marcadas como não lidas.`,
+            });
+          } else if (result?.api_supported === false) {
+            // Silent: this UAZAPI server doesn't expose history. Don't spam toasts.
+            console.log(`[auto-import] ${inst.nome}: API não suporta histórico`);
+          }
+        } catch (e) {
+          console.warn(`[auto-import] Falha em ${inst.nome}:`, e);
+        }
+      }
+    };
+
+    // Run once immediately, then poll every 60s for instances still pending
+    tentarImportar();
+    const interval = setInterval(tentarImportar, 60_000);
+
+    return () => {
+      cancelado = true;
+      clearInterval(interval);
+    };
+  }, [user, instancias, toast]);
 
   const fetchEtiquetas = useCallback(async () => {
     const { data } = await supabase

@@ -1842,6 +1842,7 @@ export type Database = {
           apenas_lembretes: boolean
           ativo: boolean
           criado_em: string
+          historico_inicial_importado_em: string | null
           ia_responde: boolean
           id: string
           instance_token: string
@@ -1863,6 +1864,7 @@ export type Database = {
           apenas_lembretes?: boolean
           ativo?: boolean
           criado_em?: string
+          historico_inicial_importado_em?: string | null
           ia_responde?: boolean
           id?: string
           instance_token: string
@@ -1884,6 +1886,7 @@ export type Database = {
           apenas_lembretes?: boolean
           ativo?: boolean
           criado_em?: string
+          historico_inicial_importado_em?: string | null
           ia_responde?: boolean
           id?: string
           instance_token?: string
