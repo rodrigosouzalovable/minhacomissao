@@ -62,6 +62,10 @@ interface Mensagem {
   lida: boolean;
   tipo_conteudo?: string;
   media_url?: string | null;
+  whatsapp_msg_id?: string | null;
+  quoted_msg_id?: string | null;
+  quoted_conteudo?: string | null;
+  quoted_direcao?: string | null;
 }
 
 interface MediaSentPayload {
