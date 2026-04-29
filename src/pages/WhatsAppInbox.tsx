@@ -1094,6 +1094,8 @@ export default function WhatsAppInbox() {
             </>
           )}
         </div>
+      </div>
+
       <NovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}
