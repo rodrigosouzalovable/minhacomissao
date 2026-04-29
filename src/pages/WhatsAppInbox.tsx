@@ -541,6 +541,13 @@ export default function WhatsAppInbox() {
       return;
     }
     setEnviando(true);
+    const quotedSnapshot = respondendoMsg && respondendoMsg.whatsapp_msg_id
+      ? {
+          id: respondendoMsg.whatsapp_msg_id,
+          conteudo: respondendoMsg.conteudo,
+          direcao: respondendoMsg.direcao,
+        }
+      : null;
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
@@ -549,6 +556,7 @@ export default function WhatsAppInbox() {
           uazapi_server_url: instancia.server_url,
           uazapi_instance_token: instancia.instance_token,
           instancia_id: instancia.id,
+          quoted: quotedSnapshot,
         },
       });
       if (error) throw error;
@@ -563,8 +571,12 @@ export default function WhatsAppInbox() {
         direcao: 'saida',
         timestamp_msg: new Date().toISOString(),
         lida: true,
+        quoted_msg_id: quotedSnapshot?.id || null,
+        quoted_conteudo: quotedSnapshot?.conteudo || null,
+        quoted_direcao: quotedSnapshot?.direcao || null,
       };
       setMensagens(prev => [...prev, msgOtimista]);
+      setRespondendoMsg(null);
       setTimeout(() => fetchMensagens(), 1500);
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
