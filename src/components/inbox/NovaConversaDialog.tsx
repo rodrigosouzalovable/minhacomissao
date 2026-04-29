@@ -65,10 +65,16 @@ function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSu
             <Label>Instância</Label>
             <Popover open={comboOpen} onOpenChange={setComboOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={comboOpen} className="w-full justify-between font-normal">
-                  {instanciaId
-                    ? (instancias.find(i => i.id === instanciaId)?.nome || 'Instância')
-                    : 'Selecione uma instância'}
+                <Button variant="outline" role="combobox" aria-expanded={comboOpen} disabled={verificandoConexao || instancias.length === 0} className="w-full justify-between font-normal">
+                  {verificandoConexao ? (
+                    <span className="flex items-center text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" />Verificando instâncias conectadas...</span>
+                  ) : instanciaId ? (
+                    instancias.find(i => i.id === instanciaId)?.nome || 'Instância'
+                  ) : instancias.length === 0 ? (
+                    <span className="text-muted-foreground">Nenhuma instância conectada</span>
+                  ) : (
+                    'Selecione uma instância'
+                  )}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -76,7 +82,7 @@ function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSu
                 <Command>
                   <CommandInput placeholder="Buscar instância..." />
                   <CommandList>
-                    <CommandEmpty>Nenhuma instância encontrada.</CommandEmpty>
+                    <CommandEmpty>Nenhuma instância conectada.</CommandEmpty>
                     <CommandGroup>
                       {instancias.map(inst => (
                         <CommandItem
@@ -96,6 +102,9 @@ function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSu
                 </Command>
               </PopoverContent>
             </Popover>
+            {!verificandoConexao && instancias.length === 0 && (
+              <p className="text-xs text-destructive">Nenhuma instância WhatsApp conectada no momento. Conecte uma instância para iniciar uma conversa.</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Mensagem</Label>
