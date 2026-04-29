@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,8 @@ interface TeamMember {
 export default function EquipeAcordos() {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { acordosCompartilhados, isLoading: permLoading } = useUserPermissions();
+  const verComoAdmin = isAdmin || acordosCompartilhados;
   const { toast } = useToast();
   const [acordos, setAcordos] = useState<AcordoComFuncionario[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -225,14 +228,14 @@ export default function EquipeAcordos() {
 
   useEffect(() => {
     async function loadTeamData() {
-      if (!user || roleLoading) return;
+      if (!user || roleLoading || permLoading) return;
 
       try {
         let funcionarioIds: string[] = [];
         let validMembers: TeamMember[] = [];
 
-        if (isAdmin) {
-          // Admin vê TODOS os acordos do sistema (incluindo os próprios)
+        if (verComoAdmin) {
+          // Admin (ou funcionário com Acordos Compartilhados) vê TODOS os acordos do sistema
           const { data: allProfiles, error: profilesError } = await supabase
             .from('profiles')
             .select('id, nome, email');
@@ -402,7 +405,7 @@ export default function EquipeAcordos() {
     }
 
     loadTeamData();
-  }, [user, isAdmin, roleLoading]);
+  }, [user, isAdmin, roleLoading, permLoading, verComoAdmin]);
 
   const filteredAcordos = acordos.filter(acordo => {
     const termo = search.trim().toLowerCase();
