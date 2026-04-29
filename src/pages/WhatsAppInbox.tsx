@@ -995,41 +995,46 @@ export default function WhatsAppInbox() {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
-            {abaAtiva === 'arquivados' && (
-              selecaoMultiplaAtiva ? (
-                <div className="flex items-center gap-2 p-2 rounded-md bg-accent/40 border border-border">
-                  <span className="text-xs font-medium text-foreground">
-                    {contatosSelecionados.size} selecionada{contatosSelecionados.size === 1 ? '' : 's'}
-                  </span>
-                  <div className="flex-1" />
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={selecionarTodos} title="Selecionar todas">
-                    Todas
+            {selecaoMultiplaAtiva ? (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-accent/40 border border-border flex-wrap">
+                <span className="text-xs font-medium text-foreground">
+                  {contatosSelecionados.size} selecionada{contatosSelecionados.size === 1 ? '' : 's'}
+                </span>
+                <div className="flex-1" />
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={selecionarTodos} title="Selecionar todas">
+                  Todas
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={limparSelecao} title="Limpar seleção">
+                  Limpar
+                </Button>
+                {abaAtiva === 'conversas' ? (
+                  <Button size="sm" variant="default" className="h-7 px-2 text-xs gap-1" onClick={handleArquivarSelecionadas} disabled={contatosSelecionados.size === 0} title="Arquivar selecionadas">
+                    <Archive className="h-3.5 w-3.5" />
+                    Arquivar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={limparSelecao} title="Limpar seleção">
-                    Limpar
-                  </Button>
+                ) : (
                   <Button size="sm" variant="default" className="h-7 px-2 text-xs gap-1" onClick={handleDesarquivarSelecionadas} disabled={contatosSelecionados.size === 0} title="Desarquivar selecionadas">
                     <ArchiveRestore className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="sm" variant="destructive" className="h-7 px-2 text-xs gap-1" onClick={handleExcluirSelecionadas} disabled={contatosSelecionados.size === 0} title="Excluir selecionadas">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={sairSelecaoMultipla} title="Sair">
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full h-8 text-xs gap-1.5"
-                  onClick={() => setSelecaoMultiplaAtiva(true)}
-                >
-                  <CheckSquare className="h-3.5 w-3.5" />
-                  Selecionar várias
+                )}
+                <Button size="sm" variant="destructive" className="h-7 px-2 text-xs gap-1" onClick={handleExcluirSelecionadas} disabled={contatosSelecionados.size === 0} title="Excluir selecionadas">
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
-              )
-            )}
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={sairSelecaoMultipla} title="Sair">
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : abaAtiva === 'arquivados' ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-8 text-xs gap-1.5"
+                onClick={() => setSelecaoMultiplaAtiva(true)}
+              >
+                <CheckSquare className="h-3.5 w-3.5" />
+                Selecionar várias
+              </Button>
+            ) : null}
           </div>
 
           <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
