@@ -137,13 +137,13 @@ serve(async (req) => {
           quoted_direcao: quoted?.direcao || null,
         };
 
-        if (whatsappMsgId) {
-          await supabase.from('whatsapp_mensagens').upsert(payload, {
-            onConflict: 'instancia_id,whatsapp_msg_id',
-            ignoreDuplicates: true,
-          });
-        } else {
-          await supabase.from('whatsapp_mensagens').insert(payload);
+        // Insert direto (índice único parcial não funciona com onConflict do PostgREST).
+        // Em caso de duplicata pelo índice único parcial, ignoramos o erro 23505.
+        const { error: insErr } = await supabase.from('whatsapp_mensagens').insert(payload);
+        if (insErr && insErr.code !== '23505') {
+          console.error('[INBOX] Erro ao inserir mensagem de saída:', insErr);
+        } else if (insErr) {
+          console.log('[INBOX] Mensagem duplicada (ignorada):', whatsappMsgId);
         }
 
         if (existingContact) {
