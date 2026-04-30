@@ -291,6 +291,7 @@ function AcordoCard({
                       {acordo.boleto_enviado ? 'Marcar boleto como NÃO enviado' : 'Marcar boleto como enviado'}
                     </TooltipContent>
                   </Tooltip>
+                  </TooltipProvider>
                 )}
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30" onClick={e => {
                 e.preventDefault();
