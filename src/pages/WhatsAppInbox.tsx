@@ -619,30 +619,90 @@ export default function WhatsAppInbox() {
     }
   }, [contatoAtivo, instancias, carregandoHistorico, fetchMensagens, toast]);
 
+  // Realtime + auto-reconexão + polling incremental para mensagens da conversa aberta
   useEffect(() => {
     if (!contatoAtivo) return;
-    const channel = supabase
-      .channel('whatsapp-mensagens-changes')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
-        const newMsg = payload.new as Mensagem;
-        const suffix = contatoAtivo.telefone.replace(/^55/, '').slice(-8);
-        if (newMsg.instancia_id === contatoAtivo.instancia_id &&
-            newMsg.telefone_remoto.endsWith(suffix)) {
-          setMensagens(prev => {
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-            const newIdentity = getMessageIdentity(newMsg);
-            const filtered = prev.filter(
-              msg => !(msg.id.startsWith('temp-') && getMessageIdentity(msg) === newIdentity)
-            );
-            return [...filtered, newMsg].sort(
-              (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
-            );
-          });
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [contatoAtivo]);
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+
+    const suffix = contatoAtivo.telefone.replace(/^55/, '').slice(-8);
+
+    const handleNew = (newMsg: Mensagem) => {
+      if (newMsg.instancia_id !== contatoAtivo.instancia_id) return;
+      if (!newMsg.telefone_remoto.endsWith(suffix)) return;
+      setMensagens(prev => {
+        if (prev.some(m => m.id === newMsg.id)) return prev;
+        const newIdentity = getMessageIdentity(newMsg);
+        const filtered = prev.filter(
+          msg => !(msg.id.startsWith('temp-') && getMessageIdentity(msg) === newIdentity)
+        );
+        return [...filtered, newMsg].sort(
+          (a, b) => new Date(a.timestamp_msg).getTime() - new Date(b.timestamp_msg).getTime()
+        );
+      });
+    };
+
+    const connect = () => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`whatsapp-mensagens-changes-${Date.now()}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
+          handleNew(payload.new as Mensagem);
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            attempt = 0;
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (channel) { supabase.removeChannel(channel); channel = null; }
+            const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+            attempt++;
+            reconnectTimer = setTimeout(connect, delay);
+          }
+        });
+    };
+    connect();
+
+    // Polling incremental a cada 15s — busca apenas mensagens novas (custo mínimo)
+    const pollMsgs = setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      // Pega timestamp da última mensagem persistida (ignora temp-)
+      const persisted = mensagens.filter(m => !m.id.startsWith('temp-'));
+      const lastTs = persisted.length > 0
+        ? persisted[persisted.length - 1].timestamp_msg
+        : new Date(Date.now() - 60_000).toISOString();
+      const { data } = await supabase
+        .from('whatsapp_mensagens')
+        .select('*')
+        .eq('instancia_id', contatoAtivo.instancia_id)
+        .ilike('telefone_remoto', `%${suffix}`)
+        .gt('timestamp_msg', lastTs)
+        .order('timestamp_msg', { ascending: true })
+        .limit(50);
+      if (data && data.length > 0) {
+        (data as Mensagem[]).forEach(handleNew);
+      }
+    }, 15000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        attempt = 0;
+        connect();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      clearInterval(pollMsgs);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [contatoAtivo, mensagens]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
