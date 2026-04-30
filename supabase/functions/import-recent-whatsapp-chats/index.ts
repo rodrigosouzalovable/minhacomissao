@@ -106,6 +106,12 @@ const parseUazapiMessage = (msg: any): ParsedMessage | null => {
     return null;
   }
 
+  // Normaliza msg_id removendo prefixo "<numero>:" que UAZAPI envia em alguns eventos
+  const rawId = key.id || msg.id || msg.messageid || msg.messageId || null;
+  const whatsapp_msg_id = rawId
+    ? (String(rawId).includes(':') ? String(rawId).split(':').pop() || null : String(rawId))
+    : null;
+
   return {
     conteudo,
     direcao,
@@ -113,6 +119,7 @@ const parseUazapiMessage = (msg: any): ParsedMessage | null => {
     tipo_conteudo,
     media_url,
     nome_contato: msg.pushName || msg.notifyName || null,
+    whatsapp_msg_id,
   };
 };
 
