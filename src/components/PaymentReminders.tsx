@@ -120,12 +120,41 @@ export function PaymentReminders() {
           .single(),
       ]);
       if (instRes.data) {
-        setInstances(instRes.data);
-        const activeIds = new Set(instRes.data.map((i: any) => i.id));
+        // Verifica conexão real via UAZAPI — exibe somente as conectadas
+        setVerificandoConexao(true);
+        setInstances([]);
+        const checks = await Promise.allSettled(
+          (instRes.data as any[]).map(async (inst) => {
+            try {
+              const { data } = await supabase.functions.invoke('test-uazapi-connection', {
+                body: { server_url: inst.server_url, instance_token: inst.instance_token },
+              });
+              const payload = (data as any)?.data ?? {};
+              const instanceData = payload?.instance ?? payload;
+              const rawStatus = String(instanceData?.status ?? payload?.status ?? '').toLowerCase();
+              const isConnected =
+                (data as any)?.ok === true &&
+                (rawStatus === 'connected' ||
+                  rawStatus === 'open' ||
+                  rawStatus === 'online' ||
+                  instanceData?.connected === true ||
+                  payload?.connected === true);
+              return isConnected ? inst : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        const conectadas = checks
+          .map(r => (r.status === 'fulfilled' ? r.value : null))
+          .filter((i): i is any => !!i);
+        setInstances(conectadas);
+        setVerificandoConexao(false);
+        const activeIds = new Set(conectadas.map((i: any) => i.id));
         setSelectedInstanceIds(prev => {
           const filtered = prev.filter(id => activeIds.has(id));
           localStorage.setItem('lembretes-selected-instances', JSON.stringify(filtered));
-          if (instRes.data.length === 1) return [instRes.data[0].id];
+          if (conectadas.length === 1) return [conectadas[0].id];
           return filtered;
         });
       }
