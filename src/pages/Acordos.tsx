@@ -537,6 +537,37 @@ export default function Acordos() {
     setWhatsappDialogAcordo(acordo);
   }, [toast, whatsappInstances]);
 
+  const [togglingBoletoId, setTogglingBoletoId] = useState<string | null>(null);
+  const handleToggleBoletoEnviado = useCallback(async (acordo: Acordo) => {
+    if (togglingBoletoId) return;
+    const novoStatus = !acordo.boleto_enviado;
+    setTogglingBoletoId(acordo.id);
+    // optimistic update
+    setAcordos(prev => prev.map(a => a.id === acordo.id ? { ...a, boleto_enviado: novoStatus } : a));
+    try {
+      const { error } = await supabase
+        .from('acordos')
+        .update({ boleto_enviado: novoStatus })
+        .eq('id', acordo.id);
+      if (error) throw error;
+      toast({
+        title: novoStatus ? 'Boleto marcado como enviado' : 'Boleto marcado como não enviado',
+        description: acordo.cliente_nome,
+      });
+    } catch (err) {
+      console.error('Erro ao atualizar boleto_enviado:', err);
+      // rollback
+      setAcordos(prev => prev.map(a => a.id === acordo.id ? { ...a, boleto_enviado: acordo.boleto_enviado } : a));
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao atualizar',
+        description: 'Não foi possível atualizar o status do boleto.',
+      });
+    } finally {
+      setTogglingBoletoId(null);
+    }
+  }, [togglingBoletoId, toast]);
+
   const handleConfirmarEnvioWhatsApp = useCallback(async () => {
     const acordo = whatsappDialogAcordo;
     if (!acordo) return;
