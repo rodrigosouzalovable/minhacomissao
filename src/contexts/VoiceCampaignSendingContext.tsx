@@ -41,6 +41,8 @@ interface SendingProgress {
   lastSentInstance: string | null;
   nextDelaySec: number | null;
   countdownSec: number | null;
+  nextContact: string | null;
+  nextInstance: string | null;
 }
 
 interface VoiceCampaignSendingContextType {
