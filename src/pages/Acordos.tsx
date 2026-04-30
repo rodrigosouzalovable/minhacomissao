@@ -259,6 +259,7 @@ function AcordoCard({
                   {getStatusLabel(acordo.status)}
                 </Badge>
                 {isNegociado && !isVencido && onToggleBoletoEnviado && (
+                  <TooltipProvider delayDuration={150}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
