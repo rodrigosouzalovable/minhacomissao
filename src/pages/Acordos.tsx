@@ -258,6 +258,39 @@ function AcordoCard({
                 <Badge variant={getStatusVariant(acordo.status)}>
                   {getStatusLabel(acordo.status)}
                 </Badge>
+                {isNegociado && !isVencido && onToggleBoletoEnviado && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-8 w-8",
+                          acordo.boleto_enviado
+                            ? "text-secondary hover:text-secondary hover:bg-secondary/10"
+                            : "text-warning hover:text-warning hover:bg-warning/10"
+                        )}
+                        onClick={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onToggleBoletoEnviado(acordo);
+                        }}
+                        disabled={togglingBoleto}
+                      >
+                        {togglingBoleto ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : acordo.boleto_enviado ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {acordo.boleto_enviado ? 'Marcar boleto como NÃO enviado' : 'Marcar boleto como enviado'}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30" onClick={e => {
                 e.preventDefault();
                 e.stopPropagation();
