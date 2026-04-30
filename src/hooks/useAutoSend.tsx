@@ -54,6 +54,13 @@ const replaceVariables = (template: string, cliente: ClienteData): string =>
 interface AutoSendProgress {
   current: number;
   total: number;
+  currentContact: string | null;
+  currentInstance: string | null;
+  lastSentContact: string | null;
+  lastSentInstance: string | null;
+  nextContact: string | null;
+  nextInstance: string | null;
+  countdownSec: number | null;
 }
 
 interface AutoSendContextType {
