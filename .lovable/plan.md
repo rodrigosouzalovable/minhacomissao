@@ -1,62 +1,79 @@
-## Diagnóstico
+## Objetivo
 
-Verifiquei o banco em tempo real e confirmei:
+Quando estiver enviando mensagens em massa em **Acionamento** e **Campanhas de Voz**, exibir no painel/toggle do canto inferior direito **qual será a próxima instância (número de WhatsApp)** que enviará para o próximo cliente da fila — além do que já é mostrado hoje (último enviado, próximo countdown, etc).
 
-- **As mensagens recebidas dos clientes ESTÃO sendo gravadas corretamente** em `whatsapp_mensagens` (195 textos de entrada nas últimas 6 horas, a mais recente há minutos).
-- A tabela `whatsapp_contatos` também está sendo atualizada (última `ultima_mensagem_em` = agora).
-- O webhook `whatsapp-chatbot` está rodando, processando e gravando normalmente.
+## O que existe hoje
 
-Ou seja, **o problema não é no backend** — é no frontend do Inbox: **o canal Realtime do Supabase para de receber eventos depois de algum tempo** (perda de WebSocket por inatividade, troca de aba, sleep de tela, etc.) e não há reconexão nem polling de fallback. Isso bate com o sintoma "depois de certa hora não vejo nenhuma conversa nova".
+- **Campanhas de Voz**: já tem painel flutuante no canto inferior direito (`fixed bottom-4 right-4`) mostrando: último contato enviado, último número usado e countdown. Falta: próxima instância.
+- **Acionamento**: hoje só mostra "Enviando X/Y..." inline no topo da lista, sem painel flutuante e sem informação de instância. Vou criar um painel flutuante igual ao de Campanhas de Voz, e incluir já a próxima instância.
 
-### Causa raiz no código (`src/pages/WhatsAppInbox.tsx`)
+Ambos usam **round-robin** sobre a lista de instâncias ativas (`instances[i % instances.length]`), então a "próxima instância" é determinística e fácil de calcular.
 
-1. **Canal `whatsapp-contatos-changes` (linhas 469–477)**: assina `INSERT/UPDATE/DELETE` em `whatsapp_contatos` mas:
-   - Não monitora o status do canal (`SUBSCRIBED`, `CHANNEL_ERROR`, `TIMED_OUT`, `CLOSED`).
-   - Não reconecta se o WebSocket cair.
-   - Sem polling periódico — se o realtime morrer, a lista congela permanentemente até refresh manual.
+## Mudanças
 
-2. **Canal `whatsapp-mensagens-changes` (linhas 572–595)**: mesmo problema — só `INSERT`, sem reconexão, sem polling.
+### 1. Campanhas de Voz — `src/contexts/VoiceCampaignSendingContext.tsx`
 
-3. **Aba inativa / sleep**: navegadores suspendem WebSockets em segundo plano. Quando o usuário volta, o canal está "morto" mas o React não sabe.
+- Adicionar campos no `SendingProgress`:
+  - `nextInstance: string | null` — nome da próxima instância (ex.: "Robô 02")
+  - `nextContact: string | null` — nome/telefone do próximo contato (bônus de contexto)
+- Após cada envio, calcular o próximo a partir do índice `i+1`, da lista `instances` e `pendingContacts`, e atualizar o estado.
+- Limpar (`null`) quando for o último contato ou ao cancelar.
 
-4. Não há `visibilitychange` listener para forçar refetch quando a aba volta a ficar visível.
+### 2. Campanhas de Voz — `src/pages/CampanhasVoz.tsx` (painel flutuante já existente)
 
-## Plano de correção
+Adicionar uma linha logo abaixo do bloco "Pelo número …":
 
-### 1. Auto-recuperação dos canais Realtime
-Em ambos os canais (`whatsapp-contatos-changes` e `whatsapp-mensagens-changes`):
-- Capturar o status no `.subscribe((status) => ...)`.
-- Se o status virar `CHANNEL_ERROR`, `TIMED_OUT` ou `CLOSED`, remover o canal e recriar após pequeno backoff (ex.: 2s, 5s, 10s).
-- Ao reconectar, disparar `fetchContatos()` / `fetchMensagens()` para recuperar o que foi perdido enquanto offline.
+```
+➡️ Próxima: <nome do próximo contato> pelo número <próxima instância>
+```
 
-### 2. Polling de fallback (cinto e suspensório, custo zero)
-Adicionar `setInterval` leve:
-- A cada **20 segundos**, chamar `fetchContatos()` em background (já filtra por instâncias do usuário, query rápida e barata).
-- Se a conversa estiver aberta, a cada **15 segundos** buscar apenas mensagens **mais novas que a última no estado** (`gt('timestamp_msg', ultima)`), em vez de recarregar tudo. Isso garante zero perda mesmo se o WebSocket falhar e mantém o custo mínimo.
+Exibida só quando `nextInstance` não for nulo (ou seja, ainda há próximo).
 
-### 3. Reagir ao retorno da aba
-Adicionar listener de `document.visibilitychange`:
-- Quando a aba volta a ficar visível (`document.visibilityState === 'visible'`), chamar imediatamente `fetchContatos()` e `fetchMensagens()`, e re-subscrever os canais.
+### 3. Acionamento — `src/hooks/useAutoSend.tsx`
 
-### 4. Indicador discreto de status
-Pequeno ponto colorido no header do Inbox:
-- Verde = realtime conectado.
-- Amarelo = reconectando / usando polling.
-Para o usuário saber se está em tempo real ou modo degradado, sem assustar.
+Hoje o contexto só expõe `{ current, total }`. Vou estender:
 
-## Arquivos a alterar
+- Mudar `AutoSendProgress` para incluir:
+  - `currentInstance: string | null`
+  - `currentContact: string | null`
+  - `lastSentInstance: string | null`
+  - `lastSentContact: string | null`
+  - `nextInstance: string | null`
+  - `nextContact: string | null`
+  - `countdownSec: number | null`
+- No loop de `startAutoSend`:
+  - Antes de enviar, atualizar `currentInstance` / `currentContact`.
+  - Após cada envio, atualizar `lastSentInstance` / `lastSentContact`.
+  - Calcular `nextInstance` / `nextContact` usando `pendentesSnapshot[i+1]` e o mesmo `roundRobinCounterRef.current` que o próximo iteração usaria (sobre `activeConfigs`).
+  - Iniciar countdown em segundos durante o `setTimeout` do delay (igual ao de Campanhas de Voz).
 
-- `src/pages/WhatsAppInbox.tsx` — adicionar reconexão de canais, polling de fallback, listener de `visibilitychange`, indicador de status. **Nenhuma mudança no banco e nenhuma edge function nova.**
+### 4. Acionamento — `src/pages/Acionamento.tsx`
 
-## O que NÃO muda
+Adicionar um painel flutuante no canto inferior direito (mesmo padrão visual de `CampanhasVoz.tsx`), exibido só quando `autoSending === true`:
 
-- Backend, edge functions, RLS, schema do banco.
-- Lógica de envio, de gravação de mensagens, de mídia, etc.
-- Não cria custo adicional relevante de Lovable Cloud (polling de 20s usa apenas a tabela `whatsapp_contatos` já indexada).
+```
+[spinner] Acionamento em andamento     [X/Y]
+✅ Enviado para <nome>  pelo número <instância>
+⏳ Próximo envio em Ns
+➡️ Próxima: <próximo nome> pelo número <próxima instância>
+[Parar]
+```
 
-## Resultado esperado
+O botão "Parar" duplica a função do botão inline já existente, para conveniência.
 
-- Mensagens de clientes aparecem em tempo real como hoje.
-- **Se o WebSocket cair, em até 20s a lista se atualiza sozinha** via polling.
-- Voltar de outra aba puxa as novidades imediatamente.
-- Nunca mais "depois de certa hora não aparece nada".
+## Detalhes técnicos
+
+- **Cálculo da próxima instância (Acionamento)**: `activeConfigs[(roundRobinCounterRef.current) % activeConfigs.length]` — o `roundRobinCounterRef` já é incrementado após o envio atual, então no momento de calcular o "próximo", basta usá-lo direto, sem `+1`. Filtrando antes pelas instâncias ainda ativas (mesma lógica do loop).
+- **Cálculo da próxima instância (Voz)**: como o índice `i+1` é determinístico, basta `instances[(i+1) % instances.length].nome`.
+- **Label da instância**: usar `instance.nome ?? instance.id.slice(0,8)` (mesmo padrão já usado nos arquivos).
+- **Sem custo extra** de Cloud (apenas estado em memória + render).
+- Sem mudanças em banco, edge functions, RLS ou triggers.
+
+## Arquivos modificados
+
+1. `src/contexts/VoiceCampaignSendingContext.tsx`
+2. `src/pages/CampanhasVoz.tsx` (apenas o painel flutuante linhas ~1086–1122)
+3. `src/hooks/useAutoSend.tsx`
+4. `src/pages/Acionamento.tsx` (adicionar painel flutuante novo no fim do JSX)
+
+Posso prosseguir com a implementação?

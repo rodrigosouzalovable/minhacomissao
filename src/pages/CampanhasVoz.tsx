@@ -1113,6 +1113,17 @@ export default function CampanhasVoz() {
             </div>
           )}
 
+          {sendingProgress.nextInstance && (
+            <div className="text-xs bg-primary/5 border border-primary/20 rounded px-2 py-1.5 space-y-0.5">
+              <p className="text-muted-foreground">
+                ➡️ Próximo: <span className="font-medium text-foreground">{sendingProgress.nextContact}</span>
+              </p>
+              <p className="text-muted-foreground">
+                📲 Pelo número <span className="font-semibold text-primary">{sendingProgress.nextInstance}</span>
+              </p>
+            </div>
+          )}
+
           {sendingProgress.currentContact && sendingProgress.countdownSec === null && (
             <div className="text-xs text-muted-foreground">
               📤 Enviando para <span className="font-medium text-foreground">{sendingProgress.currentContact}</span>...

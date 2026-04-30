@@ -41,6 +41,8 @@ interface SendingProgress {
   lastSentInstance: string | null;
   nextDelaySec: number | null;
   countdownSec: number | null;
+  nextContact: string | null;
+  nextInstance: string | null;
 }
 
 interface VoiceCampaignSendingContextType {
@@ -105,6 +107,8 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
       lastSentInstance: null,
       nextDelaySec: null,
       countdownSec: null,
+      nextContact: pendingContacts[0]?.nome || pendingContacts[0]?.telefone || null,
+      nextInstance: instances[0]?.nome || instances[0]?.id?.slice(0, 8) || null,
     });
 
     (async () => {
@@ -162,12 +166,22 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
         const contactLabel = contact.nome || contact.telefone;
         const instanceLabel = instance.nome || instance.id.slice(0, 8);
 
+        const nextIdx = i + 1;
+        const nextContactObj = pendingContacts[nextIdx];
+        const nextInstanceObj = instances[nextIdx % instances.length];
+        const nextContactLabel = nextContactObj ? (nextContactObj.nome || nextContactObj.telefone) : null;
+        const nextInstanceLabel = nextContactObj
+          ? (nextInstanceObj?.nome || nextInstanceObj?.id?.slice(0, 8) || null)
+          : null;
+
         setSendingProgress(prev => prev ? {
           ...prev,
           sent,
           errors,
           lastSentContact: contactLabel,
           lastSentInstance: instanceLabel,
+          nextContact: nextContactLabel,
+          nextInstance: nextInstanceLabel,
         } : null);
 
         await supabase.from('voice_campaigns').update({ total_sent: sent, total_errors: errors } as any).eq('id', campaignId);

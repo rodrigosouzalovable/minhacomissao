@@ -3244,6 +3244,68 @@ export default function Acionamento() {
           conversa={selectedConversa}
         />
       </div>
+
+      {/* Painel flutuante de envio em andamento */}
+      {autoSending && autoProgress && (
+        <div className="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg p-4 max-w-sm w-80 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm font-semibold">Acionamento em andamento</span>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {autoProgress.current}/{autoProgress.total}
+            </Badge>
+          </div>
+
+          {autoProgress.lastSentContact && (
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              <p>
+                ✅ Enviado para <span className="font-medium text-foreground">{autoProgress.lastSentContact}</span>
+              </p>
+              {autoProgress.lastSentInstance && (
+                <p>
+                  📱 Pelo número <span className="font-medium text-foreground">{autoProgress.lastSentInstance}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {autoProgress.currentContact && (
+            <div className="text-xs text-muted-foreground">
+              📤 Enviando para <span className="font-medium text-foreground">{autoProgress.currentContact}</span>
+              {autoProgress.currentInstance && <> via <span className="font-medium text-foreground">{autoProgress.currentInstance}</span></>}
+              ...
+            </div>
+          )}
+
+          {autoProgress.countdownSec !== null && autoProgress.countdownSec > 0 && (
+            <div className="text-xs bg-muted rounded px-2 py-1.5 text-center">
+              ⏳ Próximo envio em <span className="font-bold text-primary">{autoProgress.countdownSec}s</span>
+            </div>
+          )}
+
+          {autoProgress.nextInstance && (
+            <div className="text-xs bg-primary/5 border border-primary/20 rounded px-2 py-1.5 space-y-0.5">
+              <p className="text-muted-foreground">
+                ➡️ Próximo: <span className="font-medium text-foreground">{autoProgress.nextContact}</span>
+              </p>
+              <p className="text-muted-foreground">
+                📲 Pelo número <span className="font-semibold text-primary">{autoProgress.nextInstance}</span>
+              </p>
+            </div>
+          )}
+
+          <Button
+            size="sm"
+            variant="destructive"
+            className="w-full"
+            onClick={stopAutoSend}
+          >
+            <Square className="h-4 w-4 mr-1" /> Parar envio
+          </Button>
+        </div>
+      )}
     </AppLayout>
   );
 }
