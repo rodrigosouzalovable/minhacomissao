@@ -81,6 +81,8 @@ export function PaymentReminders() {
   // Fila items for status checking from DB
   const [filaItems, setFilaItems] = useState<{ id: string; pagamento_id: string; telefone: string; status: string | null }[]>([]);
 
+  const [verificandoConexao, setVerificandoConexao] = useState(false);
+
   const selectedInstances = instances.filter(i => selectedInstanceIds.includes(i.id));
 
   const toggleInstance = (id: string) => {
