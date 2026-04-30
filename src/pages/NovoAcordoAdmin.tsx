@@ -385,11 +385,12 @@ export default function NovoAcordoAdmin() {
       // Gerar parcelas - lógica diferente para cada empresa
       let parcelas;
       if (empresa === 'mundo_da_moda') {
+        // UME | APORTE: comissão em todas as parcelas
         parcelas = gerarParcelasMundoDaModa(
           new Date(validated.dataPrimeiroPagamento),
           validated.parcelas,
           calculo.valorDemaisParcelas,
-          calculo.comissaoPrimeiraParcela,
+          calculo.comissaoDemaisParcelas,
           calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
           calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
         );
