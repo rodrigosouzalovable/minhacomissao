@@ -289,38 +289,39 @@ export default function NovoAcordo() {
 
     // Lógica diferente para cada empresa
     if (empresa === 'mundo_da_moda') {
-      // MUNDO DA MODA: comissão apenas na 1ª parcela
+      // UME | APORTE: comissão (Honorário) em TODAS as parcelas, % por faixa de atraso
       const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
       if (usarValoresEspecificos) {
         const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
+        const comissaoDemais = valorDemaisParcelas * (percentual / 100);
+        const comissaoTotal = comissaoPrimeira + comissaoDemais * (parcelas - 1);
         return {
           percentual,
           valorTotal,
           valorPrimeiraParcela,
           valorDemaisParcelas,
           comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-          comissaoDemaisParcelas: 0,
-          // Sem comissão nas demais
-          comissaoTotal: Math.round(comissaoPrimeira * 100) / 100,
+          comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
+          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
           usarValoresEspecificos: true as const
         };
       } else {
         const valorParcela = valorTotal / parcelas;
-        const comissaoPrimeiraParcela = valorParcela * (percentual / 100);
+        const comissaoPorParcela = valorParcela * (percentual / 100);
+        const comissaoTotal = comissaoPorParcela * parcelas;
         return {
           percentual,
           valorTotal,
           valorPrimeiraParcela: valorParcela,
           valorDemaisParcelas: valorParcela,
-          comissaoPrimeiraParcela: Math.round(comissaoPrimeiraParcela * 100) / 100,
-          comissaoDemaisParcelas: 0,
-          // Sem comissão nas demais
-          comissaoTotal: Math.round(comissaoPrimeiraParcela * 100) / 100,
+          comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
+          comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
+          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
           usarValoresEspecificos: false as const
         };
       }
     } else {
-      // UME | NOVO MUNDO: comissão em todas as parcelas (comportamento atual)
+      // UME | INADIMPLENTES: comissão fixa de 35% em todas as parcelas
       const {
         percentual
       } = calcularComissao(valorTotal, parcelas, diasAtraso);
