@@ -32,6 +32,7 @@ interface AcordoComFuncionario {
   criado_em: string;
   user_id: string;
   funcionario_nome?: string;
+  empresa?: string;
 }
 
 interface TeamMember {
