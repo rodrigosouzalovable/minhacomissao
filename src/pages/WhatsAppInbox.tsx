@@ -68,6 +68,7 @@ interface Mensagem {
   quoted_msg_id?: string | null;
   quoted_conteudo?: string | null;
   quoted_direcao?: string | null;
+  status_envio?: string | null;
 }
 
 interface MediaSentPayload {
