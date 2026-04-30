@@ -318,15 +318,29 @@ export function ChatInputBar({
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={iniciarGravacao}
-            disabled={isLoading}
-            className="shrink-0"
-          >
-            <Mic className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isLoading}
+                className="shrink-0"
+                title="Gravar áudio"
+              >
+                <Mic className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-56">
+              <DropdownMenuItem onClick={() => iniciarGravacaoModo('audio')}>
+                <AudioLines className="h-4 w-4 mr-2" />
+                Enviar áudio
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => iniciarGravacaoModo('transcrito')}>
+                <FileText className="h-4 w-4 mr-2" />
+                Enviar áudio transcrito
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </div>
