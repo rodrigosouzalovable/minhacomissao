@@ -33,13 +33,15 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, userId, instanceId, phone } = body;
 
+    // setup-webhook-all is an admin/global operation that doesn't require userId
+    if (action === "setup-webhook-all") return await setupWebhookAll();
+
     if (!userId) return json({ error: "userId is required" }, 400);
 
     if (action === "create-instance") return await createInstance(userId);
     if (action === "qr") return await fetchQr(instanceId || await getLatestInstanceId(userId), phone);
     if (action === "status") return await checkStatus(instanceId || await getLatestInstanceId(userId));
     if (action === "setup-webhook") return await setupWebhook(instanceId || await getLatestInstanceId(userId));
-    if (action === "setup-webhook-all") return await setupWebhookAll();
     if (action === "disconnect") return await disconnectInstance(instanceId);
 
     return json({ error: "Unknown action" }, 400);
