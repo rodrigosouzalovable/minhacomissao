@@ -137,13 +137,15 @@ serve(async (req) => {
           quoted_direcao: quoted?.direcao || null,
         };
 
-        // Insert direto (índice único parcial não funciona com onConflict do PostgREST).
-        // Em caso de duplicata pelo índice único parcial, ignoramos o erro 23505.
-        const { error: insErr } = await supabase.from('whatsapp_mensagens').insert(payload);
-        if (insErr && insErr.code !== '23505') {
-          console.error('[INBOX] Erro ao inserir mensagem de saída:', insErr);
-        } else if (insErr) {
-          console.log('[INBOX] Mensagem duplicada (ignorada):', whatsappMsgId);
+        if (whatsappMsgId) {
+          const { error: upErr } = await supabase.from('whatsapp_mensagens').upsert(payload, {
+            onConflict: 'instancia_id,whatsapp_msg_id',
+            ignoreDuplicates: true,
+          });
+          if (upErr) console.error('[INBOX] upsert saída erro:', upErr.message);
+        } else {
+          const { error: insErr } = await supabase.from('whatsapp_mensagens').insert(payload);
+          if (insErr) console.error('[INBOX] insert saída erro:', insErr.message);
         }
 
         if (existingContact) {
