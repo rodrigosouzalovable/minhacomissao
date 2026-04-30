@@ -332,14 +332,36 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       >
         {renderQuoted()}
         {renderContent()}
-        <p
+        <div
           className={cn(
-            'text-[10px] mt-1 text-right',
-            isSaida ? 'text-primary-foreground/70' : 'text-muted-foreground',
+            'flex items-center gap-1 mt-1 justify-end',
           )}
         >
-          {formatMsgTime(msg.timestamp_msg)}
-        </p>
+          <p
+            className={cn(
+              'text-[10px]',
+              isSaida ? 'text-primary-foreground/70' : 'text-muted-foreground',
+            )}
+          >
+            {formatMsgTime(msg.timestamp_msg)}
+          </p>
+          {isSaida && (() => {
+            const status = msg.status_envio || (isTemp ? 'enviando' : 'enviada');
+            if (status === 'erro') {
+              return <AlertCircle className="h-3 w-3 text-red-400" aria-label="Erro ao enviar" />;
+            }
+            if (status === 'enviando') {
+              return <Clock3 className="h-3 w-3 text-primary-foreground/70" aria-label="Enviando" />;
+            }
+            if (status === 'lida') {
+              return <CheckCheck className="h-3.5 w-3.5 text-sky-300" aria-label="Lida" />;
+            }
+            if (status === 'entregue') {
+              return <CheckCheck className="h-3.5 w-3.5 text-primary-foreground/70" aria-label="Entregue" />;
+            }
+            return <Check className="h-3.5 w-3.5 text-primary-foreground/70" aria-label="Enviada" />;
+          })()}
+        </div>
       </div>
     </div>
   );
