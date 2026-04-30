@@ -15,6 +15,7 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
   const [gravando, setGravando] = useState(false);
   const [tempoGravacao, setTempoGravacao] = useState(0);
   const [enviandoAudio, setEnviandoAudio] = useState(false);
+  const [transcrevendo, setTranscrevendo] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -127,6 +128,64 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
     });
   }, [instanciaId, telefone, serverUrl, instanceToken, onSent, toast]);
 
+  const transcreverGravacao = useCallback(async (): Promise<string | null> => {
+    if (!mediaRecorderRef.current) return null;
+    const recorder = mediaRecorderRef.current;
+
+    return new Promise<string | null>((resolve) => {
+      recorder.onstop = async () => {
+        recorder.stream.getTracks().forEach(t => t.stop());
+        if (timerRef.current) clearInterval(timerRef.current);
+        setGravando(false);
+
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
+        chunksRef.current = [];
+
+        if (blob.size === 0) {
+          setTempoGravacao(0);
+          resolve(null);
+          return;
+        }
+
+        setTranscrevendo(true);
+        try {
+          // Convert to base64
+          const arrayBuffer = await blob.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          const chunkSize = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+          }
+          const base64 = btoa(binary);
+
+          const fmt = recorder.mimeType.includes('ogg') ? 'ogg' : 'webm';
+
+          const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+            body: { audio: base64, format: fmt },
+          });
+
+          if (error) throw error;
+          const texto = (data?.text || '').trim();
+
+          if (!texto) {
+            toast({ title: 'Transcrição vazia', description: 'Não foi possível entender o áudio. Tente novamente.', variant: 'destructive' });
+            resolve(null);
+            return;
+          }
+          resolve(texto);
+        } catch (err: any) {
+          toast({ title: 'Erro ao transcrever', description: err.message || 'Falha desconhecida', variant: 'destructive' });
+          resolve(null);
+        } finally {
+          setTranscrevendo(false);
+          setTempoGravacao(0);
+        }
+      };
+      recorder.stop();
+    });
+  }, [toast]);
+
   const formatTempo = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -137,9 +196,11 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
     gravando,
     tempoGravacao,
     enviandoAudio,
+    transcrevendo,
     iniciarGravacao,
     cancelarGravacao,
     enviarGravacao,
+    transcreverGravacao,
     formatTempo,
   };
 }

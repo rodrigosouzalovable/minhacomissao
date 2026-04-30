@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Mic, Paperclip, X, Loader2, Reply } from 'lucide-react';
+import { Send, Mic, Paperclip, X, Loader2, Reply, FileText, AudioLines } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -46,15 +52,32 @@ export function ChatInputBar({
   const { toast } = useToast();
   const [textoMensagem, setTextoMensagem] = useState('');
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
+  const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
-    gravando, tempoGravacao, enviandoAudio,
-    iniciarGravacao, cancelarGravacao, enviarGravacao, formatTempo,
+    gravando, tempoGravacao, enviandoAudio, transcrevendo,
+    iniciarGravacao, cancelarGravacao, enviarGravacao, transcreverGravacao, formatTempo,
   } = useAudioRecorder({
     instanciaId, telefone, serverUrl, instanceToken,
     onSent: () => onMediaSent(),
   });
+
+  const iniciarGravacaoModo = async (modo: 'audio' | 'transcrito') => {
+    setModoGravacao(modo);
+    await iniciarGravacao();
+  };
+
+  const finalizarGravacao = async () => {
+    if (modoGravacao === 'transcrito') {
+      const texto = await transcreverGravacao();
+      if (texto) {
+        await onTextSent(texto);
+      }
+    } else {
+      await enviarGravacao();
+    }
+  };
 
   const handleFileSend = async (file: File) => {
     const isImage = file.type.startsWith('image/');
@@ -145,7 +168,7 @@ export function ChatInputBar({
     await onTextSent(texto);
   };
 
-  const isLoading = enviando || enviandoAudio || enviandoArquivo;
+  const isLoading = enviando || enviandoAudio || enviandoArquivo || transcrevendo;
   const [enviandoAtalho, setEnviandoAtalho] = useState<string | null>(null);
 
   // Report busy state to parent
@@ -181,18 +204,31 @@ export function ChatInputBar({
     }
   };
 
-  if (gravando) {
+  if (gravando || transcrevendo) {
+    const ocupado = enviandoAudio || transcrevendo;
+    const labelModo = modoGravacao === 'transcrito' ? 'Gravando para transcrever' : 'Gravando áudio';
     return (
       <div className="p-3 border-t border-border bg-card flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={cancelarGravacao}>
+        <Button variant="ghost" size="icon" onClick={cancelarGravacao} disabled={ocupado}>
           <X className="h-4 w-4 text-destructive" />
         </Button>
         <div className="flex-1 flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-          <span className="text-sm text-destructive font-medium">Gravando {formatTempo(tempoGravacao)}</span>
+          {transcrevendo ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm text-primary font-medium">Transcrevendo áudio...</span>
+            </>
+          ) : (
+            <>
+              <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+              <span className="text-sm text-destructive font-medium">
+                {labelModo} {formatTempo(tempoGravacao)}
+              </span>
+            </>
+          )}
         </div>
-        <Button size="icon" onClick={enviarGravacao} disabled={enviandoAudio}>
-          {enviandoAudio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        <Button size="icon" onClick={finalizarGravacao} disabled={ocupado}>
+          {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
     );
@@ -282,15 +318,29 @@ export function ChatInputBar({
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={iniciarGravacao}
-            disabled={isLoading}
-            className="shrink-0"
-          >
-            <Mic className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isLoading}
+                className="shrink-0"
+                title="Gravar áudio"
+              >
+                <Mic className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-56">
+              <DropdownMenuItem onClick={() => iniciarGravacaoModo('audio')}>
+                <AudioLines className="h-4 w-4 mr-2" />
+                Enviar áudio
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => iniciarGravacaoModo('transcrito')}>
+                <FileText className="h-4 w-4 mr-2" />
+                Enviar áudio transcrito
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </div>

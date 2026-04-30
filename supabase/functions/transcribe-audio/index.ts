@@ -13,11 +13,13 @@ serve(async (req) => {
   }
 
   try {
-    const { audio } = await req.json();
+    const { audio, format } = await req.json();
 
     if (!audio) {
       throw new Error('No audio data provided');
     }
+
+    const audioFormat = (format || 'wav').toLowerCase();
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -51,7 +53,7 @@ serve(async (req) => {
                 type: 'input_audio',
                 input_audio: {
                   data: audio,
-                  format: 'wav',
+                  format: audioFormat,
                 },
               },
             ],
