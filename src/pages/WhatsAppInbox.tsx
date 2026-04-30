@@ -645,12 +645,21 @@ export default function WhatsAppInbox() {
       });
     };
 
+    const handleUpdate = (updatedMsg: Mensagem) => {
+      if (updatedMsg.instancia_id !== contatoAtivo.instancia_id) return;
+      if (!updatedMsg.telefone_remoto.endsWith(suffix)) return;
+      setMensagens(prev => prev.map(m => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)));
+    };
+
     const connect = () => {
       if (cancelled) return;
       channel = supabase
         .channel(`whatsapp-mensagens-changes-${Date.now()}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
           handleNew(payload.new as Mensagem);
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
+          handleUpdate(payload.new as Mensagem);
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
