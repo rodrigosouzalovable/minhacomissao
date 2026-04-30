@@ -185,31 +185,35 @@ export default function NovoAcordoAdmin() {
 
     // Lógica diferente para cada empresa
     if (empresa === 'mundo_da_moda') {
+      // UME | APORTE: comissão (Honorário) em TODAS as parcelas, % por faixa de atraso
       const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
       
       if (usarValoresEspecificos) {
         const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
+        const comissaoDemais = valorDemaisParcelas * (percentual / 100);
+        const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
         return {
           percentual,
           valorTotal,
           valorPrimeiraParcela,
           valorDemaisParcelas,
           comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-          comissaoDemaisParcelas: 0,
-          comissaoTotal: Math.round(comissaoPrimeira * 100) / 100,
+          comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
+          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
           usarValoresEspecificos: true as const,
         };
       } else {
         const valorParcela = valorTotal / parcelas;
-        const comissaoPrimeiraParcela = valorParcela * (percentual / 100);
+        const comissaoPorParcela = valorParcela * (percentual / 100);
+        const comissaoTotal = comissaoPorParcela * parcelas;
         return {
           percentual,
           valorTotal,
           valorPrimeiraParcela: valorParcela,
           valorDemaisParcelas: valorParcela,
-          comissaoPrimeiraParcela: Math.round(comissaoPrimeiraParcela * 100) / 100,
-          comissaoDemaisParcelas: 0,
-          comissaoTotal: Math.round(comissaoPrimeiraParcela * 100) / 100,
+          comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
+          comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
+          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
           usarValoresEspecificos: false as const,
         };
       }
@@ -276,11 +280,12 @@ export default function NovoAcordoAdmin() {
     const numParcelas = parseInt(form.parcelas) || 1;
     
     if (empresa === 'mundo_da_moda') {
+      // UME | APORTE: comissão em todas as parcelas
       return gerarParcelasMundoDaModa(
         dataPrimeiro,
         numParcelas,
         calculo.valorDemaisParcelas,
-        calculo.comissaoPrimeiraParcela,
+        calculo.comissaoDemaisParcelas,
         calculo.valorPrimeiraParcela,
         calculo.comissaoPrimeiraParcela
       );
@@ -380,11 +385,12 @@ export default function NovoAcordoAdmin() {
       // Gerar parcelas - lógica diferente para cada empresa
       let parcelas;
       if (empresa === 'mundo_da_moda') {
+        // UME | APORTE: comissão em todas as parcelas
         parcelas = gerarParcelasMundoDaModa(
           new Date(validated.dataPrimeiroPagamento),
           validated.parcelas,
           calculo.valorDemaisParcelas,
-          calculo.comissaoPrimeiraParcela,
+          calculo.comissaoDemaisParcelas,
           calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
           calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
         );
@@ -552,7 +558,7 @@ export default function NovoAcordoAdmin() {
                     className="flex-1"
                     onClick={() => setEmpresa('ume_novo_mundo')}
                   >
-                    UME | NOVO MUNDO
+                    UME | INADIMPLENTES
                   </Button>
                   <Button
                     type="button"
@@ -560,12 +566,12 @@ export default function NovoAcordoAdmin() {
                     className="flex-1"
                     onClick={() => setEmpresa('mundo_da_moda')}
                   >
-                    MUNDO DA MODA
+                    UME | APORTE
                   </Button>
                 </div>
                 {empresa === 'mundo_da_moda' && (
                   <p className="text-sm text-muted-foreground">
-                    ⚠️ Comissão calculada apenas sobre a 1ª parcela
+                    Comissão por faixa de atraso (Honorário) aplicada em todas as parcelas.
                   </p>
                 )}
               </div>

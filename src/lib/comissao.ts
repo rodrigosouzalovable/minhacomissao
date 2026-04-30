@@ -49,23 +49,35 @@ export function calcularJurosAporte(valorParcela: number, diasAtraso: number): n
   return Math.round(valorParcela * (1 + percentual / 100) * 100) / 100;
 }
 
-// Tabela de comissões UME | NOVO MUNDO baseada em dias em atraso (comissão em todas as parcelas)
+// UME | INADIMPLENTES (valor no banco: 'ume_novo_mundo')
+// Comissão fixa de 35% sobre toda parcela paga, independente do atraso.
 export const tabelaComissoes = [
-  { min: 1, max: 60, percentual: 2 },
-  { min: 61, max: 90, percentual: 4 },
-  { min: 91, max: 180, percentual: 5 },
-  { min: 181, max: 360, percentual: 7 },
-  { min: 361, max: 720, percentual: 9 },
-  { min: 721, max: 9999, percentual: 13 }
+  { min: 0, max: 999999, percentual: 35 }
 ];
 
-// Tabela de comissões MUNDO DA MODA baseada em dias em atraso (comissão apenas na 1ª parcela)
+// UME | APORTE (valor no banco: 'mundo_da_moda')
+// Comissão (Honorário/Encargo) por faixa de atraso, aplicada em TODAS as parcelas.
 export const tabelaComissoesMundoDaModa = [
-  { min: 1, max: 60, percentual: 2 },
-  { min: 61, max: 90, percentual: 5 },
-  { min: 91, max: 180, percentual: 7 },
-  { min: 181, max: 420, percentual: 9 },
-  { min: 421, max: 9999, percentual: 13 }
+  { min: 1, max: 30, percentual: 7 },
+  { min: 31, max: 60, percentual: 8 },
+  { min: 61, max: 90, percentual: 15 },
+  { min: 91, max: 120, percentual: 20 },
+  { min: 121, max: 150, percentual: 20 },
+  { min: 151, max: 180, percentual: 20 },
+  { min: 181, max: 210, percentual: 27 },
+  { min: 211, max: 240, percentual: 27 },
+  { min: 241, max: 270, percentual: 27 },
+  { min: 271, max: 300, percentual: 27 },
+  { min: 301, max: 330, percentual: 27 },
+  { min: 331, max: 360, percentual: 27 },
+  { min: 361, max: 420, percentual: 36 },
+  { min: 421, max: 480, percentual: 36 },
+  { min: 481, max: 540, percentual: 36 },
+  { min: 541, max: 600, percentual: 36 },
+  { min: 601, max: 660, percentual: 36 },
+  { min: 661, max: 720, percentual: 36 },
+  { min: 721, max: 1800, percentual: 50 },
+  { min: 1801, max: 999999, percentual: 50 }
 ];
 
 // Tabela de comissões da EMPRESA baseada em dias em atraso
@@ -119,52 +131,47 @@ export function calcularPercentualComissaoMundoDaModa(diasAtraso: number): numbe
   return 0;
 }
 
-// Calcula comissão para MUNDO DA MODA (apenas 1ª parcela tem comissão)
+// UME | APORTE: comissão (Honorário) aplicada em TODAS as parcelas, conforme faixa de atraso.
 export function calcularComissaoMundoDaModa(valorTotal: number, parcelas: number, diasAtraso: number) {
   const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
   const valorParcela = valorTotal / parcelas;
-  // Comissão apenas na primeira parcela
-  const comissaoPrimeiraParcela = valorParcela * (percentual / 100);
+  const comissaoPorParcela = valorParcela * (percentual / 100);
+  const comissaoTotal = comissaoPorParcela * parcelas;
 
   return {
     percentual,
     valorParcela: Math.round(valorParcela * 100) / 100,
-    comissaoPrimeiraParcela: Math.round(comissaoPrimeiraParcela * 100) / 100,
-    comissaoTotal: Math.round(comissaoPrimeiraParcela * 100) / 100 // Apenas 1ª parcela
+    comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
+    comissaoTotal: Math.round(comissaoTotal * 100) / 100
   };
 }
 
-// Gera parcelas para MUNDO DA MODA (comissão apenas na 1ª parcela)
+// Gera parcelas para UME | APORTE (comissão em todas as parcelas).
 export function gerarParcelasMundoDaModa(
   dataPrimeiroPagamento: Date,
   numeroParcelas: number,
   valorParcela: number,
-  comissaoPrimeiraParcela: number,
+  comissaoPorParcela: number,
   valorEntrada?: number,
   comissaoEntrada?: number
 ) {
   const parcelas = [];
-  
+
   for (let i = 0; i < numeroParcelas; i++) {
     const dataPrevista = new Date(dataPrimeiroPagamento);
     dataPrevista.setMonth(dataPrevista.getMonth() + i);
-    
-    // Se é a primeira parcela e tem entrada definida, usa os valores de entrada
+
     const isEntrada = i === 0 && valorEntrada !== undefined;
-    const isPrimeiraParcela = i === 0;
-    
+
     parcelas.push({
       numero_parcela: i + 1,
       data_prevista: dataPrevista.toISOString().split('T')[0],
       valor_parcela: isEntrada ? valorEntrada : valorParcela,
-      // Comissão apenas na primeira parcela
-      comissao_parcela: isPrimeiraParcela 
-        ? (isEntrada && comissaoEntrada !== undefined ? comissaoEntrada : comissaoPrimeiraParcela)
-        : 0,
+      comissao_parcela: isEntrada && comissaoEntrada !== undefined ? comissaoEntrada : comissaoPorParcela,
       status: 'pendente' as const
     });
   }
-  
+
   return parcelas;
 }
 
@@ -180,6 +187,25 @@ export function calcularComissao(valorTotal: number, parcelas: number, diasAtras
     comissaoPorParcela: Math.round(comissaoPorParcela * 100) / 100,
     comissaoTotal: Math.round(comissaoTotal * 100) / 100
   };
+}
+
+// Função unificada: dada a empresa do acordo, calcula a comissão de UMA parcela paga.
+// Usada principalmente no recálculo do Excel "Acordos da Equipe" para admins.
+export function calcularComissaoParcelaPorEmpresa(
+  empresa: string | null | undefined,
+  valorParcela: number,
+  diasAtraso: number
+): { percentual: number; valor: number } {
+  let percentual = 0;
+  if (empresa === 'mundo_da_moda') {
+    // UME | APORTE
+    percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
+  } else {
+    // UME | INADIMPLENTES (default) — 35% fixo
+    percentual = calcularPercentualComissao(diasAtraso);
+  }
+  const valor = Math.round(valorParcela * (percentual / 100) * 100) / 100;
+  return { percentual, valor };
 }
 
 export function formatarMoeda(valor: number): string {

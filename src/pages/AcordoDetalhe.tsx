@@ -724,7 +724,7 @@ export default function AcordoDetalhe() {
               <div>
                 <p className="text-sm text-muted-foreground">Empresa</p>
                 <p className="font-medium">
-                  {acordo.empresa === 'mundo_da_moda' ? 'MUNDO DA MODA' : 'UME | NOVO MUNDO'}
+                  {acordo.empresa === 'mundo_da_moda' ? 'UME | APORTE' : 'UME | INADIMPLENTES'}
                 </p>
               </div>
               <div>

@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa, calcularComissaoParcelaPorEmpresa } from '@/lib/comissao';
+import { getEmpresaLabel } from '@/lib/empresaLabels';
 import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -31,6 +32,7 @@ interface AcordoComFuncionario {
   criado_em: string;
   user_id: string;
   funcionario_nome?: string;
+  empresa?: string;
 }
 
 interface TeamMember {
@@ -154,15 +156,29 @@ export default function EquipeAcordos() {
       const acordo = acordosMap.get(pag.acordo_id)!;
       const percentualEmpresa = calcularPercentualComissaoEmpresa(acordo.dias_atraso);
       const comissaoEscritorio = Number(pag.valor_parcela) * percentualEmpresa / 100;
-      
+
+      // Recálculo de comissão do funcionário conforme nova regra (apenas admin)
+      // - UME | INADIMPLENTES (ume_novo_mundo): 35% fixo
+      // - UME | APORTE (mundo_da_moda): tabela de Honorário por faixa de atraso
+      let comissaoFuncionario: number = Number(pag.comissao_parcela) || 0;
+      if (isAdmin) {
+        const recalc = calcularComissaoParcelaPorEmpresa(
+          acordo.empresa,
+          Number(pag.valor_parcela) || 0,
+          acordo.dias_atraso,
+        );
+        comissaoFuncionario = recalc.valor;
+      }
+
       return {
         cpf: acordo.cliente_cpf || '',
         cliente: acordo.cliente_nome,
         funcionario: acordo.funcionario_nome || '',
+        empresa: getEmpresaLabel(acordo.empresa),
         parcela: `${pag.numero_parcela}/${acordo.parcelas}`,
         valor_parcela: pag.valor_parcela,
         data_pagamento: pag.data_paga ? formatarData(pag.data_paga) : '',
-        comissao_funcionario: pag.comissao_parcela,
+        comissao_funcionario: comissaoFuncionario,
         comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
         valor_total_acordo: acordo.valor_total,
         dias_atraso: acordo.dias_atraso,
@@ -176,6 +192,7 @@ export default function EquipeAcordos() {
         cpf: acordo.cliente_cpf || '',
         cliente: acordo.cliente_nome,
         funcionario: acordo.funcionario_nome || '',
+        empresa: getEmpresaLabel(acordo.empresa),
         valor_total: acordo.valor_total,
         parcelas: acordo.parcelas,
         valor_parcela: acordo.valor_parcela,
@@ -188,6 +205,7 @@ export default function EquipeAcordos() {
         { chave: 'cpf' as const, titulo: 'CPF' },
         { chave: 'cliente' as const, titulo: 'Cliente' },
         { chave: 'funcionario' as const, titulo: 'Funcionário' },
+        { chave: 'empresa' as const, titulo: 'Empresa' },
         { chave: 'valor_total' as const, titulo: 'Valor Total' },
         { chave: 'parcelas' as const, titulo: 'Parcelas' },
         { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
@@ -208,10 +226,11 @@ export default function EquipeAcordos() {
       { chave: 'cpf' as const, titulo: 'CPF' },
       { chave: 'cliente' as const, titulo: 'Cliente' },
       { chave: 'funcionario' as const, titulo: 'Funcionário' },
+      { chave: 'empresa' as const, titulo: 'Empresa' },
       { chave: 'parcela' as const, titulo: 'Parcela' },
       { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
       { chave: 'data_pagamento' as const, titulo: 'Data Pagamento' },
-      { chave: 'comissao_funcionario' as const, titulo: 'Comissão Funcionário' },
+      { chave: 'comissao_funcionario' as const, titulo: isAdmin ? 'Comissão Funcionário (Recalc.)' : 'Comissão Funcionário' },
       { chave: 'comissao_escritorio' as const, titulo: 'Comissão Escritório' },
       { chave: 'valor_total_acordo' as const, titulo: 'Valor Total Acordo' },
       { chave: 'dias_atraso' as const, titulo: 'Dias Atraso' },
