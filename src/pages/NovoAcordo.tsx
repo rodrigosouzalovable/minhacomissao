@@ -622,10 +622,10 @@ export default function NovoAcordo() {
                 <Label>Empresa *</Label>
                 <div className="flex gap-3">
                   <Button type="button" variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('ume_novo_mundo')}>
-                    UME | NOVO MUNDO
+                    UME | INADIMPLENTES
                   </Button>
                   <Button type="button" variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('mundo_da_moda')}>
-                    MUNDO DA MODA
+                    UME | APORTE
                   </Button>
                 </div>
                 {empresa === 'mundo_da_moda'}
