@@ -118,21 +118,33 @@ serve(async (req) => {
 
         const telefoneParaSalvar = existingContact?.telefone || telefoneCompleto;
 
-        // Extract WhatsApp message ID from UAZAPI response
-        const whatsappMsgId = data?.key?.id || data?.id || data?.messageId || data?.message?.id || null;
+        // Extract WhatsApp message ID from UAZAPI response (normaliza prefixo "<numero>:")
+        const rawWaId = data?.key?.id || data?.id || data?.messageId || data?.message?.id || null;
+        const whatsappMsgId = rawWaId
+          ? (String(rawWaId).includes(':') ? String(rawWaId).split(':').pop() || null : String(rawWaId))
+          : null;
 
-        await supabase.from('whatsapp_mensagens').insert({
+        const payload = {
           instancia_id: resolvedId,
           telefone_remoto: telefoneParaSalvar,
           conteudo: mensagem,
-          direcao: 'saida',
+          direcao: 'saida' as const,
           timestamp_msg: agora,
           lida: true,
           whatsapp_msg_id: whatsappMsgId,
           quoted_msg_id: quoted?.id || null,
           quoted_conteudo: quoted?.conteudo ? String(quoted.conteudo).slice(0, 500) : null,
           quoted_direcao: quoted?.direcao || null,
-        });
+        };
+
+        if (whatsappMsgId) {
+          await supabase.from('whatsapp_mensagens').upsert(payload, {
+            onConflict: 'instancia_id,whatsapp_msg_id',
+            ignoreDuplicates: true,
+          });
+        } else {
+          await supabase.from('whatsapp_mensagens').insert(payload);
+        }
 
         if (existingContact) {
           await supabase.from('whatsapp_contatos').update({
