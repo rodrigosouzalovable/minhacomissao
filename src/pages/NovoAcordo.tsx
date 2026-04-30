@@ -444,7 +444,10 @@ export default function NovoAcordo() {
       // Gerar parcelas - lógica diferente para cada empresa
       let parcelas;
       if (empresa === 'mundo_da_moda') {
-        parcelas = gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoPrimeiraParcela, calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined, calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined);
+        // UME | APORTE: comissão em todas as parcelas
+        parcelas = calculo.usarValoresEspecificos
+          ? gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas, calculo.valorPrimeiraParcela, calculo.comissaoPrimeiraParcela)
+          : gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas);
       } else {
         parcelas = calculo.usarValoresEspecificos ? gerarParcelas(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas, calculo.valorPrimeiraParcela, calculo.comissaoPrimeiraParcela) : gerarParcelas(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas);
       }
