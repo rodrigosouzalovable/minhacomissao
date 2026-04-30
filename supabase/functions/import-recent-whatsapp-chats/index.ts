@@ -344,16 +344,20 @@ Deno.serve(async (req) => {
           lida: false, // ALL imported messages start as unread (per user choice)
           tipo_conteudo: parsed.tipo_conteudo,
           media_url: parsed.media_url,
+          whatsapp_msg_id: parsed.whatsapp_msg_id,
         });
       }
 
       if (toInsert.length > 0) {
-        const { error: insErr } = await supabase.from("whatsapp_mensagens").insert(toInsert);
+        // Upsert por (instancia_id, whatsapp_msg_id) — índice único garante dedup atômica
+        const { error: insErr } = await supabase
+          .from("whatsapp_mensagens")
+          .upsert(toInsert, { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true });
         if (!insErr) {
           imported_messages += toInsert.length;
           imported_chats += 1;
         } else {
-          console.error("[import-recent] Insert error:", insErr.message);
+          console.error("[import-recent] Upsert error:", insErr.message);
         }
       }
     }
