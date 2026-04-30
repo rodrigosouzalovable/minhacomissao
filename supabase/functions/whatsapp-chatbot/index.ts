@@ -1439,6 +1439,7 @@ serve(async (req) => {
                 ultima_mensagem: inboxConteudo.slice(0, 200),
                 ultima_mensagem_em: agora,
                 nao_lido: (matchedContact.nao_lido || 0) + 1,
+                arquivado: false,
               }).eq('id', matchedContact.id);
             } else {
               await supabase.from('whatsapp_contatos').insert({
