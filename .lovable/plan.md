@@ -1,21 +1,45 @@
-## Objetivo
-No WhatsApp Inbox, garantir que apenas um áudio toque por vez. Ao iniciar a reprodução de um novo áudio, qualquer áudio anterior deve pausar automaticamente.
+## Problema
 
-## Arquivo afetado
-- `src/components/inbox/WhatsAppAudioPlayer.tsx`
+Ao enviar um boleto (PDF) pelo WhatsApp Inbox, o destinatário recebe o arquivo com um nome genérico (ex: `1730412345.pdf`) em vez do nome original (ex: `Boleto_Joao_Silva.pdf`).
 
-## Implementação
-Adicionar um mecanismo simples de "single-player" usando `CustomEvent` no `window`, sem necessidade de Context global:
+## Causa
 
-1. **Ao dar play (`togglePlay`)**: antes de iniciar, disparar `window.dispatchEvent(new CustomEvent('wa-audio-play', { detail: { messageId } }))`.
-2. **No `useEffect` de montagem**: registrar listener para `wa-audio-play`. Se o `detail.messageId` for diferente do `messageId` deste player e o áudio estiver tocando, executar `audio.pause()` e `setPlaying(false)`.
-3. **Listener adicional `pause`/`play` nativos do `<audio>`**: já existem implicitamente, mas vamos sincronizar `playing` com eventos `pause` e `play` para refletir corretamente o estado quando outro player pausar este.
-4. **Cleanup**: remover o listener no unmount.
+Na edge function `send-whatsapp-media`, o campo `file_name` é recebido do frontend mas **nunca é enviado para a UAZAPI**. O body atual contém apenas:
 
-## Comportamento resultante
-- Tocar áudio A → A toca.
-- Tocar áudio B enquanto A toca → A pausa (mantendo posição), B começa do ponto atual.
-- Continua funcionando seek, controle de velocidade e replay.
+```ts
+const body = { number: telefoneCompleto, type, file: media_url };
+```
 
-## Fora de escopo
-- Não altera ChatInputBar (gravação) nem MensagensRapidasDialog (player de prévia separado).
+Sem o campo `docName`, a UAZAPI usa o nome derivado da URL pública do Storage — que é o timestamp gerado no upload (`${Date.now()}.${ext}`).
+
+## Solução
+
+### 1. `supabase/functions/send-whatsapp-media/index.ts`
+Adicionar `docName` ao body enviado para a UAZAPI quando o tipo for `document`:
+
+```ts
+const body: Record<string, unknown> = { number: telefoneCompleto, type, file: media_url };
+if (type === 'document' && file_name) {
+  body.docName = file_name;
+}
+```
+
+### 2. `src/components/inbox/ChatInputBar.tsx` (opcional, melhoria)
+Manter o nome original também no Storage para que, mesmo sem `docName`, a URL pública preserve o nome. Trocar:
+
+```ts
+const fileName = `${instanciaId}/${telefone}/${Date.now()}.${ext}`;
+```
+
+Por um path que mantenha o nome original (sanitizado) com timestamp como prefixo de pasta para evitar colisões:
+
+```ts
+const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+const fileName = `${instanciaId}/${telefone}/${Date.now()}/${safeName}`;
+```
+
+Isso é defensivo — o passo 1 sozinho já resolve o problema relatado.
+
+## Resultado esperado
+
+O boleto enviado pelo Inbox chega no WhatsApp do destinatário com o mesmo nome do arquivo original (ex: `Boleto_Joao_Silva.pdf`), igual ao comportamento do WhatsApp normal.

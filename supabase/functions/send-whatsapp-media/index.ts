@@ -31,7 +31,11 @@ Deno.serve(async (req) => {
 
     const cleanUrl = serverUrl.replace(/\/+$/, '');
     const endpoint = `${cleanUrl}/send/media`;
-    const body = { number: telefoneCompleto, type, file: media_url };
+    const body: Record<string, unknown> = { number: telefoneCompleto, type, file: media_url };
+    if (type === 'document' && file_name) {
+      // Preserva o nome original do arquivo no WhatsApp do destinatário
+      body.docName = file_name;
+    }
 
     console.log(`Enviando ${type} para ${telefoneCompleto} via ${endpoint}`);
 
