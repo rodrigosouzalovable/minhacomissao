@@ -138,12 +138,14 @@ serve(async (req) => {
         };
 
         if (whatsappMsgId) {
-          await supabase.from('whatsapp_mensagens').upsert(payload, {
+          const { error: upErr } = await supabase.from('whatsapp_mensagens').upsert(payload, {
             onConflict: 'instancia_id,whatsapp_msg_id',
             ignoreDuplicates: true,
           });
+          if (upErr) console.error('[INBOX] upsert saída erro:', upErr.message);
         } else {
-          await supabase.from('whatsapp_mensagens').insert(payload);
+          const { error: insErr } = await supabase.from('whatsapp_mensagens').insert(payload);
+          if (insErr) console.error('[INBOX] insert saída erro:', insErr.message);
         }
 
         if (existingContact) {
