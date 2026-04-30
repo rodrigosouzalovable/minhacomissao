@@ -139,6 +139,7 @@ serve(async (req) => {
           quoted_msg_id: quoted?.id || null,
           quoted_conteudo: quoted?.conteudo ? String(quoted.conteudo).slice(0, 500) : null,
           quoted_direcao: quoted?.direcao || null,
+          status_envio: 'enviada',
         };
 
         if (whatsappMsgId) {

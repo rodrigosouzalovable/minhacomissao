@@ -68,6 +68,7 @@ interface Mensagem {
   quoted_msg_id?: string | null;
   quoted_conteudo?: string | null;
   quoted_direcao?: string | null;
+  status_envio?: string | null;
 }
 
 interface MediaSentPayload {
@@ -644,12 +645,21 @@ export default function WhatsAppInbox() {
       });
     };
 
+    const handleUpdate = (updatedMsg: Mensagem) => {
+      if (updatedMsg.instancia_id !== contatoAtivo.instancia_id) return;
+      if (!updatedMsg.telefone_remoto.endsWith(suffix)) return;
+      setMensagens(prev => prev.map(m => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)));
+    };
+
     const connect = () => {
       if (cancelled) return;
       channel = supabase
         .channel(`whatsapp-mensagens-changes-${Date.now()}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
           handleNew(payload.new as Mensagem);
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_mensagens' }, (payload) => {
+          handleUpdate(payload.new as Mensagem);
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
@@ -748,13 +758,14 @@ export default function WhatsAppInbox() {
     markRead();
   }, [contatoAtivo]);
 
-  const hasPendingMessages = enviando || inputBusy || mensagens.some(m => m.id.startsWith('temp-'));
+  // Envio otimista: não bloqueia troca de conversa. Só bloqueia se ainda existirem
+  // mensagens com status 'enviando' (sem confirmação da UAZAPI). Mensagens já enviadas
+  // ou com erro NÃO travam a UI — usuário pode trocar de aba livremente, igual WhatsApp Web.
+  const hasPendingMessages = mensagens.some(
+    m => m.id.startsWith('temp-') && (m.status_envio === 'enviando' || !m.status_envio)
+  );
 
   const handleSelectContato = (contato: Contato) => {
-    if (hasPendingMessages) {
-      toast({ title: 'Aguarde', description: 'Aguardando confirmação do envio da mensagem...', variant: 'default' });
-      return;
-    }
     setContatoAtivo(contato);
     setMensagens([]);
     setPaginaAtual(0);
@@ -763,13 +774,12 @@ export default function WhatsAppInbox() {
   };
 
   const handleEnviarTexto = async (texto: string) => {
-    if (!contatoAtivo || enviando) return;
+    if (!contatoAtivo) return;
     const instancia = instancias.find(i => i.id === contatoAtivo.instancia_id);
     if (!instancia) {
       toast({ title: 'Erro', description: 'Instância não encontrada', variant: 'destructive' });
       return;
     }
-    setEnviando(true);
     const quotedSnapshot = respondendoMsg && respondendoMsg.whatsapp_msg_id
       ? {
           id: respondendoMsg.whatsapp_msg_id,
@@ -777,41 +787,59 @@ export default function WhatsAppInbox() {
           direcao: respondendoMsg.direcao,
         }
       : null;
-    try {
-      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          telefone: contatoAtivo.telefone,
-          mensagem: texto,
-          uazapi_server_url: instancia.server_url,
-          uazapi_instance_token: instancia.instance_token,
-          instancia_id: instancia.id,
-          quoted: quotedSnapshot,
-        },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
 
-      const msgOtimista: Mensagem = {
-        id: `temp-${Date.now()}`,
-        instancia_id: contatoAtivo.instancia_id,
-        telefone_remoto: contatoAtivo.telefone,
-        nome_contato: null,
-        conteudo: texto,
-        direcao: 'saida',
-        timestamp_msg: new Date().toISOString(),
-        lida: true,
-        quoted_msg_id: quotedSnapshot?.id || null,
-        quoted_conteudo: quotedSnapshot?.conteudo || null,
-        quoted_direcao: quotedSnapshot?.direcao || null,
-      };
-      setMensagens(prev => [...prev, msgOtimista]);
-      setRespondendoMsg(null);
-      setTimeout(() => fetchMensagens(), 1500);
-    } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-    } finally {
-      setEnviando(false);
-    }
+    // 1. Adiciona mensagem otimista IMEDIATAMENTE (com status "enviando" → relógio)
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const contatoSnapshot = contatoAtivo;
+    const msgOtimista: Mensagem = {
+      id: tempId,
+      instancia_id: contatoSnapshot.instancia_id,
+      telefone_remoto: contatoSnapshot.telefone,
+      nome_contato: null,
+      conteudo: texto,
+      direcao: 'saida',
+      timestamp_msg: new Date().toISOString(),
+      lida: true,
+      status_envio: 'enviando',
+      quoted_msg_id: quotedSnapshot?.id || null,
+      quoted_conteudo: quotedSnapshot?.conteudo || null,
+      quoted_direcao: quotedSnapshot?.direcao || null,
+    };
+    setMensagens(prev => [...prev, msgOtimista]);
+    setRespondendoMsg(null);
+
+    // 2. Dispara envio em BACKGROUND — não trava a UI
+    supabase.functions.invoke('send-whatsapp', {
+      body: {
+        telefone: contatoSnapshot.telefone,
+        mensagem: texto,
+        uazapi_server_url: instancia.server_url,
+        uazapi_instance_token: instancia.instance_token,
+        instancia_id: instancia.id,
+        quoted: quotedSnapshot,
+      },
+    }).then(({ data, error }) => {
+      if (error || !data?.success) {
+        const errMsg = (error as any)?.message || data?.error || 'Falha ao enviar';
+        // Marca como erro
+        setMensagens(prev => prev.map(m =>
+          m.id === tempId ? { ...m, status_envio: 'erro' } : m
+        ));
+        toast({ title: 'Erro ao enviar', description: errMsg, variant: 'destructive' });
+        return;
+      }
+      // Sucesso: marca como "enviada" (1 check). Reconcilia com a versão persistida.
+      setMensagens(prev => prev.map(m =>
+        m.id === tempId ? { ...m, status_envio: 'enviada' } : m
+      ));
+      // Reconcilia com a row real do banco (merge por identidade já existente)
+      setTimeout(() => fetchMensagens(), 1000);
+    }).catch((err: any) => {
+      setMensagens(prev => prev.map(m =>
+        m.id === tempId ? { ...m, status_envio: 'erro' } : m
+      ));
+      toast({ title: 'Erro ao enviar', description: err?.message || 'Falha de rede', variant: 'destructive' });
+    });
   };
 
   const handleMediaSent = useCallback((payload?: MediaSentPayload) => {
@@ -825,6 +853,7 @@ export default function WhatsAppInbox() {
         direcao: 'saida',
         timestamp_msg: new Date().toISOString(),
         lida: true,
+        status_envio: 'enviada',
         tipo_conteudo: payload.tipo_conteudo,
         media_url: payload.media_url,
       };
@@ -1532,7 +1561,7 @@ export default function WhatsAppInbox() {
                   instanceToken={activeInstancia.instance_token}
                   onTextSent={handleEnviarTexto}
                   onMediaSent={handleMediaSent}
-                  enviando={enviando}
+                  enviando={false}
                   externalFile={droppedFile}
                   onExternalFileHandled={() => setDroppedFile(null)}
                   mensagensRapidas={mensagensRapidas.filter(m => !m.arquivado)}

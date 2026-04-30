@@ -1,77 +1,107 @@
-## Problema identificado
 
-O cliente JOAO VICTOR FERNANDES MOREIRA (acordo `da2f6af5...`) tem a Parcela 1 corretamente marcada como **paga** no banco de dados (`status='pago'`, `data_paga=2026-04-20`), mas aparece na aba **Negociados** em vez de **Pagos**.
+# WhatsApp Inbox: envio estilo WhatsApp Web + checks de status
 
-## Causa raiz
+Hoje, ao enviar uma mensagem na Inbox:
+1. O sistema chama a edge function `send-whatsapp` e **espera** a resposta antes de mostrar a mensagem na conversa.
+2. Enquanto espera (e enquanto a mensagem temporária ainda não foi confirmada pelo `fetchMensagens`), o `hasPendingMessages` bloqueia a troca de conversa, exibindo "Aguarde, aguardando confirmação do envio...".
+3. Não existe nenhum indicador visual de **enviada / entregue / lida** — só aparece a hora.
 
-Em `src/pages/Acordos.tsx` (linha 691), a query que carrega os IDs dos acordos com parcelas pagas é:
+Vou mudar para o comportamento do WhatsApp Web: a mensagem aparece imediatamente na tela com um relógio (⏱), depois vira ✓ (enviada), ✓✓ (entregue) e ✓✓ azul (lida), sem nunca travar a interface.
 
-```ts
-supabase.from('pagamentos').select('acordo_id').eq('status', 'pago')
-```
+---
 
-O Supabase aplica um **limite padrão de 1.000 linhas por query**. Hoje existem **1.304 pagamentos com status `pago`** no banco — ou seja, **304 registros estão sendo silenciosamente cortados**. O acordo desse cliente é um dos cortados, então o `Set` `acordosComPagamentosPagos` não o contém, e a regra de classificação manda para "Negociados".
+## 1. Envio otimista (não bloqueia a UI)
 
-O mesmo bug afeta:
-- Aba **Vencidos** (query de `status='pendente'` com `data_prevista < hoje` na linha 702) — também pode estourar 1.000 linhas conforme o sistema cresce.
-- Cálculo de **Próximas ao Vencimento**.
-- Qualquer outra contagem agregada baseada nessas mesmas queries.
+Em `src/pages/WhatsAppInbox.tsx`, no `handleEnviarTexto`:
 
-Esse problema vai piorar conforme mais pagamentos forem registrados.
+- Inserir a mensagem temporária (`temp-...`) **ANTES** de chamar a edge function, já com `status_envio: 'enviando'`.
+- Limpar o input/respondendo imediatamente.
+- Chamar `supabase.functions.invoke('send-whatsapp', ...)` **sem `await` bloqueante** — usar `.then/.catch` em background.
+- Em sucesso: marcar a mensagem temp como `status_envio: 'enviada'` e disparar `fetchMensagens()` para reconciliar com a versão persistida.
+- Em falha: marcar a mensagem como `status_envio: 'erro'` (com botão "tentar novamente") e mostrar toast.
+- Remover `setEnviando(true/false)` em torno do envio — `enviando` deixa de bloquear globalmente.
+- Atualizar `hasPendingMessages` para considerar **somente** mensagens com `status_envio === 'enviando'` (não bloquear se estiverem `enviada`/`erro`).
+- Permitir `handleSelectContato` trocar de conversa mesmo com envios pendentes — eles continuam em background.
 
-## Correção proposta
+Mesmo tratamento para `handleMediaSent` (áudio, imagem, documento, atalhos).
 
-Substituir as queries que retornam listas grandes de `pagamentos` por **agregações no servidor**, evitando trafegar milhares de linhas e contornando o limite de 1.000:
+## 2. Coluna de status no banco
 
-### 1. Criar uma função RPC no banco (`get_acordo_status_flags`)
-
-Retorna, **para os acordos do usuário logado** (respeitando RLS / acordos compartilhados), três conjuntos:
+Migração para adicionar status persistente nas mensagens enviadas:
 
 ```sql
-create or replace function public.get_acordo_status_flags(p_acordo_ids uuid[])
-returns table (
-  acordo_id uuid,
-  tem_pago boolean,
-  tem_vencida boolean,
-  data_vencida_mais_antiga date,
-  proxima_vencimento date
-)
-language sql stable security invoker
-as $$
-  select
-    a.id as acordo_id,
-    bool_or(p.status = 'pago') as tem_pago,
-    bool_or(p.status = 'pendente' and p.data_prevista < current_date) as tem_vencida,
-    min(p.data_prevista) filter (where p.status = 'pendente' and p.data_prevista < current_date) as data_vencida_mais_antiga,
-    min(p.data_prevista) filter (where p.status = 'pendente' and p.data_prevista >= current_date) as proxima_vencimento
-  from unnest(p_acordo_ids) as a(id)
-  left join pagamentos p on p.acordo_id = a.id
-  group by a.id
-$$;
+ALTER TABLE public.whatsapp_mensagens
+  ADD COLUMN IF NOT EXISTS status_envio text
+    DEFAULT 'enviada'
+    CHECK (status_envio IN ('enviando','enviada','entregue','lida','erro'));
+
+CREATE INDEX IF NOT EXISTS idx_whatsapp_mensagens_status_envio
+  ON public.whatsapp_mensagens(instancia_id, whatsapp_msg_id)
+  WHERE status_envio IN ('enviada','entregue');
 ```
 
-Isso devolve no máximo 1 linha por acordo (centenas, não milhares) e roda totalmente no Postgres.
+Mensagens já existentes ficam como `enviada` (compatível). Mensagens recebidas (`direcao='entrada'`) ignoram esse campo.
 
-### 2. Refatorar `src/pages/Acordos.tsx`
+## 3. Checks (✓ / ✓✓ / ✓✓ azul) no `ChatMessage.tsx`
 
-- Após carregar `todosAcordos`, chamar `supabase.rpc('get_acordo_status_flags', { p_acordo_ids: ids })`.
-- Montar `acordosComPagamentosPagos`, `acordosComParcelasVencidas`, `parcelasVencidasMap` e `proximasVencimentoMap` a partir do retorno único da RPC.
-- Remover as duas queries diretas em `pagamentos` (linhas ~691 e ~702) que sofrem do limite de 1.000.
+Adicionar, abaixo do horário em mensagens com `direcao === 'saida'`:
 
-### 3. Validação
+```text
+[hora]  [ícone de status]
+   00:42 ⏱       (enviando — relógio)
+   00:42 ✓       (enviada — 1 check cinza)
+   00:42 ✓✓      (entregue — 2 checks cinza)
+   00:42 ✓✓      (lida — 2 checks AZUIS)
+   00:42 !       (erro — exclamação vermelha + tooltip "Tocar para reenviar")
+```
 
-- Recarregar a página `/acordos` e confirmar que JOAO VICTOR aparece na aba **Pagos** e some de **Negociados**.
-- Verificar que as contagens de Vencidos / Próximas ao Vencimento continuam corretas.
-- Conferir que nenhum acordo desaparece das abas.
+Usar ícones do `lucide-react`: `Clock3`, `Check`, `CheckCheck`, `AlertCircle`. Cores via classes Tailwind (`text-primary-foreground/70` cinza padrão, `text-sky-300` azul para "lida").
 
-## Arquivos afetados
+## 4. Atualização do status (entregue / lida)
 
-- **Migração SQL**: criar função `public.get_acordo_status_flags`.
-- **`src/pages/Acordos.tsx`**: substituir as duas queries de `pagamentos` pela chamada RPC e ajustar a montagem dos `Set`/`Map`.
+A UAZAPI envia callbacks de ACK (`messages.update` / `status`), mas o projeto **ainda não tem uma edge function de webhook próprio** — os ACKs hoje seriam ignorados.
 
-## Impacto
+Para ter ✓✓ e ✓✓ azul reais, criar uma nova edge function:
 
-- ✅ Corrige a classificação errada em todas as abas (Pagos, Negociados, Vencidos, Próximas).
-- ✅ Reduz drasticamente o volume de dados trafegado (1.300+ linhas → ~N acordos).
-- ✅ Solução à prova de crescimento — não quebra mais ao passar de 1.000 pagamentos.
-- ⚠️ Sem impacto em custo do Lovable Cloud (apenas troca queries por uma RPC mais leve).
+- **`supabase/functions/uazapi-webhook/index.ts`** (público, sem JWT):
+  - Recebe POST da UAZAPI com eventos.
+  - Quando o evento for de status (`messages.update`/`ack`/`status`), extrair `whatsapp_msg_id` e nova status (`DELIVERY_ACK` → `entregue`, `READ` → `lida`).
+  - Atualizar `whatsapp_mensagens.status_envio` via service role.
+  - Suportar também eventos `messages.upsert` / `messages` (mensagens recebidas) para já gravar diretamente no banco — passa a complementar o atual fluxo via histórico.
+- Registrar o webhook nas instâncias UAZAPI usando endpoint `/instance/updateWebhook` (a URL será `https://<project>.functions.supabase.co/uazapi-webhook?instancia_id=<uuid>`).
+- Criar botão admin opcional "Re-registrar webhooks" no painel de instâncias (fora do escopo se você quiser deixar para depois — me avise).
+
+Quando a coluna `status_envio` muda, a Realtime subscription já existente em `whatsapp_mensagens` (ver código atual) vai propagar o update para a UI sem reload.
+
+## 5. Realtime na UI
+
+A página já assina Realtime de `whatsapp_mensagens`. Vou garantir que o handler de UPDATE atualize `status_envio` na lista local sem refetch completo, para os checks transitarem de ✓ → ✓✓ → ✓✓ azul ao vivo.
+
+---
+
+## Detalhes técnicos
+
+- **Arquivos editados**:
+  - `src/pages/WhatsAppInbox.tsx` (envio otimista, troca livre de conversa, propagação de status no realtime).
+  - `src/components/inbox/ChatMessage.tsx` (renderização do ícone de status nas mensagens de saída).
+  - `src/components/inbox/ChatInputBar.tsx` (não bloquear input/troca durante envio; remover spinners globais que travam — o spinner fica apenas dentro do balão).
+  - `supabase/functions/send-whatsapp/index.ts` (gravar `status_envio: 'enviada'` na inserção, sem mudar fluxo).
+  - `supabase/functions/send-whatsapp-media/index.ts`, `send-whatsapp-audio/index.ts`, `send-whatsapp-buttons/index.ts` (mesmo, gravar status inicial).
+
+- **Arquivos criados**:
+  - `supabase/migrations/<timestamp>_add_status_envio_whatsapp.sql`
+  - `supabase/functions/uazapi-webhook/index.ts` (com `verify_jwt = false` em `supabase/config.toml`).
+
+- **Não muda**: tabelas existentes (apenas coluna nova, default compatível), permissões, RLS, fluxo de mídia, fluxo de aquecimento.
+
+- **Custo Lovable Cloud**: a nova função `uazapi-webhook` recebe ~1 chamada por evento (mensagem/ack). Para volume atual é desprezível (estimativa: alguns milhares de invocações/mês), bem abaixo do free tier. Sem novo storage. **Não há aumento relevante de custo.**
+
+## O que o usuário verá depois
+
+- Digitar e apertar Enter: a mensagem aparece **na hora** no balão, com ⏱.
+- Logo vira ✓ (assim que UAZAPI confirma o envio).
+- Trocar de conversa imediatamente, mesmo que o envio anterior ainda esteja em andamento — sem aviso "Aguarde".
+- ✓✓ aparece quando o celular do contato recebe; fica azul quando ele lê — exatamente como WhatsApp Web.
+- Se der erro de envio, ícone vermelho com tooltip explicativo (sem travar a interface).
+
+Aprovar para eu implementar?
