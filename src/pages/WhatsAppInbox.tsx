@@ -1561,7 +1561,7 @@ export default function WhatsAppInbox() {
                   instanceToken={activeInstancia.instance_token}
                   onTextSent={handleEnviarTexto}
                   onMediaSent={handleMediaSent}
-                  enviando={enviando}
+                  enviando={false}
                   externalFile={droppedFile}
                   onExternalFileHandled={() => setDroppedFile(null)}
                   mensagensRapidas={mensagensRapidas.filter(m => !m.arquivado)}
