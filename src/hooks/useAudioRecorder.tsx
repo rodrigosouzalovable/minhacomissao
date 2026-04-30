@@ -15,6 +15,7 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
   const [gravando, setGravando] = useState(false);
   const [tempoGravacao, setTempoGravacao] = useState(0);
   const [enviandoAudio, setEnviandoAudio] = useState(false);
+  const [transcrevendo, setTranscrevendo] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
