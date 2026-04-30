@@ -684,53 +684,38 @@ export default function Acordos() {
         
         setAcordos(todosAcordos);
 
-        // Carregar IDs de acordos que têm parcelas pagas
-        const {
-          data: pagamentosPagos,
-          error: pagamentosError
-        } = await supabase.from('pagamentos').select('acordo_id').eq('status', 'pago');
-        if (pagamentosError) throw pagamentosError;
-        const idsComPagamentos = new Set(pagamentosPagos?.map(p => p.acordo_id) || []);
-        setAcordosComPagamentosPagos(idsComPagamentos);
-
-        // Carregar IDs de acordos que têm parcelas vencidas (pendentes com data_prevista < hoje)
+        // Carregar flags agregadas (pago/vencida/próxima) via RPC
+        // Evita o limite de 1.000 linhas do Supabase ao consultar a tabela `pagamentos` diretamente.
         const hoje = new Date();
         const hojeStr = hoje.toISOString().split('T')[0];
-        const {
-          data: pagamentosPendentes,
-          error: pendentesError
-        } = await supabase.from('pagamentos').select('acordo_id, data_prevista').eq('status', 'pendente').lt('data_prevista', hojeStr);
-        if (pendentesError) throw pendentesError;
-        
-        // Criar Map com menor data por acordo (mais antiga = mais urgente)
-        const vencidasMap = new Map<string, string>();
-        pagamentosPendentes?.forEach(p => {
-          const atual = vencidasMap.get(p.acordo_id);
-          if (!atual || p.data_prevista < atual) {
-            vencidasMap.set(p.acordo_id, p.data_prevista);
-          }
-        });
-        setDataVencidaPorAcordo(vencidasMap);
-        setAcordosComParcelasVencidas(new Set(vencidasMap.keys()));
-
-        // Carregar IDs de acordos que têm parcelas próximas ao vencimento (hoje até +3 dias)
         const tresDias = new Date(hoje);
         tresDias.setDate(tresDias.getDate() + 3);
         const tresDiasStr = tresDias.toISOString().split('T')[0];
-        const {
-          data: parcelasProximas,
-          error: proximasError
-        } = await supabase.from('pagamentos').select('acordo_id, data_prevista').eq('status', 'pendente').gte('data_prevista', hojeStr).lte('data_prevista', tresDiasStr);
-        if (proximasError) throw proximasError;
-        
-        // Criar Map com menor data por acordo (mais próxima primeiro)
+
+        const idsAcordos = todosAcordos.map(a => a.id);
+        const idsComPagamentos = new Set<string>();
+        const vencidasMap = new Map<string, string>();
         const proximasMap = new Map<string, string>();
-        parcelasProximas?.forEach(p => {
-          const atual = proximasMap.get(p.acordo_id);
-          if (!atual || p.data_prevista < atual) {
-            proximasMap.set(p.acordo_id, p.data_prevista);
-          }
-        });
+
+        if (idsAcordos.length > 0) {
+          const { data: flagsData, error: flagsError } = await supabase
+            .rpc('get_acordo_status_flags', { p_acordo_ids: idsAcordos });
+          if (flagsError) throw flagsError;
+
+          (flagsData || []).forEach((row: any) => {
+            if (row.tem_pago) idsComPagamentos.add(row.acordo_id);
+            if (row.tem_vencida && row.data_vencida_mais_antiga) {
+              vencidasMap.set(row.acordo_id, row.data_vencida_mais_antiga);
+            }
+            if (row.proxima_vencimento && row.proxima_vencimento >= hojeStr && row.proxima_vencimento <= tresDiasStr) {
+              proximasMap.set(row.acordo_id, row.proxima_vencimento);
+            }
+          });
+        }
+
+        setAcordosComPagamentosPagos(idsComPagamentos);
+        setDataVencidaPorAcordo(vencidasMap);
+        setAcordosComParcelasVencidas(new Set(vencidasMap.keys()));
         setDataProximaPorAcordo(proximasMap);
         setAcordosComParcelasProximas(new Set(proximasMap.keys()));
 
