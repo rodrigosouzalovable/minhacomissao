@@ -2830,6 +2830,7 @@ export type Database = {
           quoted_conteudo: string | null
           quoted_direcao: string | null
           quoted_msg_id: string | null
+          status_envio: string
           telefone_remoto: string
           timestamp_msg: string
           tipo_conteudo: string
@@ -2847,6 +2848,7 @@ export type Database = {
           quoted_conteudo?: string | null
           quoted_direcao?: string | null
           quoted_msg_id?: string | null
+          status_envio?: string
           telefone_remoto: string
           timestamp_msg?: string
           tipo_conteudo?: string
@@ -2864,6 +2866,7 @@ export type Database = {
           quoted_conteudo?: string | null
           quoted_direcao?: string | null
           quoted_msg_id?: string | null
+          status_envio?: string
           telefone_remoto?: string
           timestamp_msg?: string
           tipo_conteudo?: string
