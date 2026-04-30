@@ -204,18 +204,31 @@ export function ChatInputBar({
     }
   };
 
-  if (gravando) {
+  if (gravando || transcrevendo) {
+    const ocupado = enviandoAudio || transcrevendo;
+    const labelModo = modoGravacao === 'transcrito' ? 'Gravando para transcrever' : 'Gravando áudio';
     return (
       <div className="p-3 border-t border-border bg-card flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={cancelarGravacao}>
+        <Button variant="ghost" size="icon" onClick={cancelarGravacao} disabled={ocupado}>
           <X className="h-4 w-4 text-destructive" />
         </Button>
         <div className="flex-1 flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-          <span className="text-sm text-destructive font-medium">Gravando {formatTempo(tempoGravacao)}</span>
+          {transcrevendo ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm text-primary font-medium">Transcrevendo áudio...</span>
+            </>
+          ) : (
+            <>
+              <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+              <span className="text-sm text-destructive font-medium">
+                {labelModo} {formatTempo(tempoGravacao)}
+              </span>
+            </>
+          )}
         </div>
-        <Button size="icon" onClick={enviarGravacao} disabled={enviandoAudio}>
-          {enviandoAudio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        <Button size="icon" onClick={finalizarGravacao} disabled={ocupado}>
+          {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
     );
