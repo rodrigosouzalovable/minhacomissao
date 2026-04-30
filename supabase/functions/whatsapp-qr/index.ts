@@ -391,6 +391,7 @@ async function setupWebhook(instanceId: string) {
   const payload = JSON.stringify({
     url: webhookUrl,
     events: ["messages"],
+    enabled: true,
     excludeGroupMessages: true,
     excludeBroadcast: true,
   });
@@ -418,7 +419,8 @@ async function setupWebhook(instanceId: string) {
       if (res.ok) {
         let data: any = null;
         try { data = JSON.parse(text); } catch (_) {}
-        return json({ ok: true, webhookUrl, response: data || text });
+        await reinforceWebhook(instanceId);
+        return json({ ok: true, webhookUrl, reinforced: true, response: data || text });
       }
 
       debugLogs.push(`${res.status}: ${text.substring(0, 150)}`);
