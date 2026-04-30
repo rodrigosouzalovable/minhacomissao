@@ -558,7 +558,7 @@ export default function NovoAcordoAdmin() {
                     className="flex-1"
                     onClick={() => setEmpresa('ume_novo_mundo')}
                   >
-                    UME | NOVO MUNDO
+                    UME | INADIMPLENTES
                   </Button>
                   <Button
                     type="button"
@@ -566,12 +566,12 @@ export default function NovoAcordoAdmin() {
                     className="flex-1"
                     onClick={() => setEmpresa('mundo_da_moda')}
                   >
-                    MUNDO DA MODA
+                    UME | APORTE
                   </Button>
                 </div>
                 {empresa === 'mundo_da_moda' && (
                   <p className="text-sm text-muted-foreground">
-                    ⚠️ Comissão calculada apenas sobre a 1ª parcela
+                    Comissão por faixa de atraso (Honorário) aplicada em todas as parcelas.
                   </p>
                 )}
               </div>
