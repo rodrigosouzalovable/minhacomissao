@@ -1138,7 +1138,16 @@ export default function WhatsAppInbox() {
           <div className="p-3 border-b border-border space-y-2">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold text-foreground flex-1">WhatsApp Inbox</h2>
+              <h2 className="font-semibold text-foreground flex-1 flex items-center gap-2">
+                WhatsApp Inbox
+                <span
+                  title={realtimeOk ? 'Tempo real conectado' : 'Reconectando — usando atualização periódica'}
+                  className={cn(
+                    'inline-block h-2 w-2 rounded-full',
+                    realtimeOk ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
+                  )}
+                />
+              </h2>
               <Popover open={etiquetaFilterOpen} onOpenChange={setEtiquetaFilterOpen}>
                 <PopoverTrigger asChild>
                   <Button
