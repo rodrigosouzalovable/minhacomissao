@@ -1343,38 +1343,62 @@ serve(async (req) => {
           // Use the contact's stored phone format if found, otherwise use webhook phone
           const telefoneParaSalvar = matchedContact?.telefone || inboxTelefone;
 
+          // Normaliza msg_id: usa o já limpo (messageId) que remove prefixo "<numero>:"
+          const cleanedMsgId = (messageId && String(messageId).trim()) || null;
+
           if (isFromMe) {
-            // For fromMe: check if send-whatsapp already saved this message (dedup within 30s)
-            const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
-            const { data: existing } = await supabase
-              .from('whatsapp_mensagens')
-              .select('id')
-              .eq('instancia_id', instanciaId)
-              .like('telefone_remoto', `%${phoneSuffix}`)
-              .eq('direcao', 'saida')
-              .gte('timestamp_msg', thirtySecsAgo)
-              .limit(1)
-              .maybeSingle();
-
-            if (existing) {
-              console.log(`[INBOX] fromMe duplicado (já salvo por send-whatsapp): ${telefoneParaSalvar}`);
+            let savedNow = false;
+            if (cleanedMsgId) {
+              // Dedup atômico via índice único (instancia_id, whatsapp_msg_id)
+              const { data: ins, error: insErr } = await supabase
+                .from('whatsapp_mensagens')
+                .upsert({
+                  instancia_id: instanciaId,
+                  telefone_remoto: telefoneParaSalvar,
+                  nome_contato: inboxNomeContato,
+                  conteudo: inboxConteudo,
+                  direcao: 'saida',
+                  timestamp_msg: agora,
+                  lida: true,
+                  tipo_conteudo: inboxTipoConteudo,
+                  media_url: finalMediaUrl,
+                  whatsapp_msg_id: cleanedMsgId,
+                }, { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true })
+                .select('id');
+              if (insErr) console.error('[INBOX] upsert fromMe erro:', insErr.message);
+              savedNow = Array.isArray(ins) && ins.length > 0;
+              if (!savedNow) console.log(`[INBOX] fromMe já existia (msg_id=${cleanedMsgId})`);
             } else {
-              // Manual send from WhatsApp app — save it
-              await supabase.from('whatsapp_mensagens').insert({
-                instancia_id: instanciaId,
-                telefone_remoto: telefoneParaSalvar,
-                nome_contato: inboxNomeContato,
-                conteudo: inboxConteudo,
-                direcao: 'saida',
-                timestamp_msg: agora,
-                lida: true,
-                tipo_conteudo: inboxTipoConteudo,
-                media_url: finalMediaUrl,
-                whatsapp_msg_id: rawMessageId || null,
-              });
-              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo}`);
+              // Sem msg_id: fallback de janela de 30s
+              const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
+              const { data: existing } = await supabase
+                .from('whatsapp_mensagens')
+                .select('id')
+                .eq('instancia_id', instanciaId)
+                .like('telefone_remoto', `%${phoneSuffix}`)
+                .eq('direcao', 'saida')
+                .gte('timestamp_msg', thirtySecsAgo)
+                .limit(1)
+                .maybeSingle();
+              if (!existing) {
+                await supabase.from('whatsapp_mensagens').insert({
+                  instancia_id: instanciaId,
+                  telefone_remoto: telefoneParaSalvar,
+                  nome_contato: inboxNomeContato,
+                  conteudo: inboxConteudo,
+                  direcao: 'saida',
+                  timestamp_msg: agora,
+                  lida: true,
+                  tipo_conteudo: inboxTipoConteudo,
+                  media_url: finalMediaUrl,
+                  whatsapp_msg_id: null,
+                });
+                savedNow = true;
+              }
+            }
 
-              // Update or create contact for manual fromMe
+            if (savedNow) {
+              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo}`);
               if (matchedContact) {
                 await supabase.from('whatsapp_contatos').update({
                   ultima_mensagem: inboxConteudo.slice(0, 200),
@@ -1392,8 +1416,8 @@ serve(async (req) => {
               }
             }
           } else {
-            // Incoming message — always save
-            await supabase.from('whatsapp_mensagens').insert({
+            // Incoming message — upsert para deduplicar via msg_id
+            const { error: insErr } = await supabase.from('whatsapp_mensagens').upsert({
               instancia_id: instanciaId,
               telefone_remoto: telefoneParaSalvar,
               nome_contato: inboxNomeContato,
@@ -1403,8 +1427,11 @@ serve(async (req) => {
               lida: false,
               tipo_conteudo: inboxTipoConteudo,
               media_url: finalMediaUrl,
-              whatsapp_msg_id: rawMessageId || null,
-            });
+              whatsapp_msg_id: cleanedMsgId,
+            }, cleanedMsgId
+              ? { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true }
+              : { ignoreDuplicates: false });
+            if (insErr) console.error('[INBOX] upsert entrada erro:', insErr.message);
 
             if (matchedContact) {
               await supabase.from('whatsapp_contatos').update({

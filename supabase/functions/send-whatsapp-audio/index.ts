@@ -115,16 +115,31 @@ Deno.serve(async (req) => {
 
         const telefoneParaSalvar = existingContact?.telefone || telefoneCompleto;
 
-        await supabase.from('whatsapp_mensagens').insert({
+        const rawWaId = data?.key?.id || data?.id || data?.messageId || data?.message?.id || null;
+        const whatsappMsgId = rawWaId
+          ? (String(rawWaId).includes(':') ? String(rawWaId).split(':').pop() || null : String(rawWaId))
+          : null;
+
+        const audioPayload = {
           instancia_id: resolvedInstanciaId,
           telefone_remoto: telefoneParaSalvar,
           conteudo: '🎵 Áudio enviado',
-          direcao: 'saida',
+          direcao: 'saida' as const,
           timestamp_msg: agora,
           lida: true,
           tipo_conteudo: 'audio',
           media_url: audio_url,
-        });
+          whatsapp_msg_id: whatsappMsgId,
+        };
+
+        if (whatsappMsgId) {
+          await supabase.from('whatsapp_mensagens').upsert(audioPayload, {
+            onConflict: 'instancia_id,whatsapp_msg_id',
+            ignoreDuplicates: true,
+          });
+        } else {
+          await supabase.from('whatsapp_mensagens').insert(audioPayload);
+        }
 
         if (existingContact) {
           await supabase.from('whatsapp_contatos').update({

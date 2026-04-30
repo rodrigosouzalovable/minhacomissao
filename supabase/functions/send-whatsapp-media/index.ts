@@ -83,16 +83,31 @@ Deno.serve(async (req) => {
         const emoji = type === 'image' ? '📷' : '📄';
         const descricao = `${emoji} ${type === 'image' ? 'Imagem enviada' : (file_name || 'Documento enviado')}`;
 
-        await supabase.from('whatsapp_mensagens').insert({
+        const rawWaId = data?.key?.id || data?.id || data?.messageId || data?.message?.id || null;
+        const whatsappMsgId = rawWaId
+          ? (String(rawWaId).includes(':') ? String(rawWaId).split(':').pop() || null : String(rawWaId))
+          : null;
+
+        const mediaPayload = {
           instancia_id: resolvedInstanciaId,
           telefone_remoto: telefoneCompleto,
           conteudo: descricao,
-          direcao: 'saida',
+          direcao: 'saida' as const,
           timestamp_msg: agora,
           lida: true,
           tipo_conteudo: tipoConteudo,
           media_url: media_url,
-        });
+          whatsapp_msg_id: whatsappMsgId,
+        };
+
+        if (whatsappMsgId) {
+          await supabase.from('whatsapp_mensagens').upsert(mediaPayload, {
+            onConflict: 'instancia_id,whatsapp_msg_id',
+            ignoreDuplicates: true,
+          });
+        } else {
+          await supabase.from('whatsapp_mensagens').insert(mediaPayload);
+        }
 
         // Upsert contact
         const { data: existingContact } = await supabase

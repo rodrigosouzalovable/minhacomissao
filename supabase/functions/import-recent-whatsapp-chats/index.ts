@@ -37,6 +37,7 @@ interface ParsedMessage {
   tipo_conteudo: string;
   media_url: string | null;
   nome_contato: string | null;
+  whatsapp_msg_id: string | null;
 }
 
 const parseUazapiMessage = (msg: any): ParsedMessage | null => {
@@ -105,6 +106,12 @@ const parseUazapiMessage = (msg: any): ParsedMessage | null => {
     return null;
   }
 
+  // Normaliza msg_id removendo prefixo "<numero>:" que UAZAPI envia em alguns eventos
+  const rawId = key.id || msg.id || msg.messageid || msg.messageId || null;
+  const whatsapp_msg_id = rawId
+    ? (String(rawId).includes(':') ? String(rawId).split(':').pop() || null : String(rawId))
+    : null;
+
   return {
     conteudo,
     direcao,
@@ -112,6 +119,7 @@ const parseUazapiMessage = (msg: any): ParsedMessage | null => {
     tipo_conteudo,
     media_url,
     nome_contato: msg.pushName || msg.notifyName || null,
+    whatsapp_msg_id,
   };
 };
 
@@ -336,16 +344,20 @@ Deno.serve(async (req) => {
           lida: false, // ALL imported messages start as unread (per user choice)
           tipo_conteudo: parsed.tipo_conteudo,
           media_url: parsed.media_url,
+          whatsapp_msg_id: parsed.whatsapp_msg_id,
         });
       }
 
       if (toInsert.length > 0) {
-        const { error: insErr } = await supabase.from("whatsapp_mensagens").insert(toInsert);
+        // Upsert por (instancia_id, whatsapp_msg_id) — índice único garante dedup atômica
+        const { error: insErr } = await supabase
+          .from("whatsapp_mensagens")
+          .upsert(toInsert, { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true });
         if (!insErr) {
           imported_messages += toInsert.length;
           imported_chats += 1;
         } else {
-          console.error("[import-recent] Insert error:", insErr.message);
+          console.error("[import-recent] Upsert error:", insErr.message);
         }
       }
     }
