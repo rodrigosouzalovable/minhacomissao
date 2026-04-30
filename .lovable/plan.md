@@ -1,71 +1,62 @@
-## Causa raiz das mensagens duplicadas no Inbox
+## Diagnóstico
 
-Olhando os dados do banco, todas as duplicatas (ex: "Aguardo", "Ok certo", "Sim consigo", "Certinho, já envio o boleto") foram inseridas com:
-- O **mesmo `whatsapp_msg_id`** (ex: `3A392F6BEE422341CAEB`)
-- `criado_em` separado por apenas 18-100 ms
+Verifiquei o banco em tempo real e confirmei:
 
-Isso é um **race condition** entre webhooks do UAZAPI: o mesmo evento de mensagem chega 2x quase simultaneamente (eventos `messages.upsert` + `messages.update`, ou retransmissões), e o handler `whatsapp-chatbot` insere ambos porque:
+- **As mensagens recebidas dos clientes ESTÃO sendo gravadas corretamente** em `whatsapp_mensagens` (195 textos de entrada nas últimas 6 horas, a mais recente há minutos).
+- A tabela `whatsapp_contatos` também está sendo atualizada (última `ultima_mensagem_em` = agora).
+- O webhook `whatsapp-chatbot` está rodando, processando e gravando normalmente.
 
-1. Para mensagens **de entrada** (linha 1396 de `whatsapp-chatbot/index.ts`), não há **nenhuma verificação** de duplicidade — sempre faz `insert`.
-2. Para mensagens **fromMe** (linha 1346), só dedup por janela de 30s + direção, sem checar `whatsapp_msg_id`. Pior: UAZAPI manda o mesmo ID com e sem prefixo do número (`3EB0B5AF...` vs `556282038967:3EB0B5AF...`), e dois eventos chegando em paralelo (~750ms entre si) escapam de qualquer dedup baseado em "select-then-insert" devido a race.
-3. Não existe **UNIQUE constraint** em `whatsapp_mensagens` envolvendo `whatsapp_msg_id`, então o banco aceita as duas inserções concorrentes.
+Ou seja, **o problema não é no backend** — é no frontend do Inbox: **o canal Realtime do Supabase para de receber eventos depois de algum tempo** (perda de WebSocket por inatividade, troca de aba, sleep de tela, etc.) e não há reconexão nem polling de fallback. Isso bate com o sintoma "depois de certa hora não vejo nenhuma conversa nova".
+
+### Causa raiz no código (`src/pages/WhatsAppInbox.tsx`)
+
+1. **Canal `whatsapp-contatos-changes` (linhas 469–477)**: assina `INSERT/UPDATE/DELETE` em `whatsapp_contatos` mas:
+   - Não monitora o status do canal (`SUBSCRIBED`, `CHANNEL_ERROR`, `TIMED_OUT`, `CLOSED`).
+   - Não reconecta se o WebSocket cair.
+   - Sem polling periódico — se o realtime morrer, a lista congela permanentemente até refresh manual.
+
+2. **Canal `whatsapp-mensagens-changes` (linhas 572–595)**: mesmo problema — só `INSERT`, sem reconexão, sem polling.
+
+3. **Aba inativa / sleep**: navegadores suspendem WebSockets em segundo plano. Quando o usuário volta, o canal está "morto" mas o React não sabe.
+
+4. Não há `visibilitychange` listener para forçar refetch quando a aba volta a ficar visível.
 
 ## Plano de correção
 
-### 1. Migração: garantir unicidade no banco (defesa final atômica)
+### 1. Auto-recuperação dos canais Realtime
+Em ambos os canais (`whatsapp-contatos-changes` e `whatsapp-mensagens-changes`):
+- Capturar o status no `.subscribe((status) => ...)`.
+- Se o status virar `CHANNEL_ERROR`, `TIMED_OUT` ou `CLOSED`, remover o canal e recriar após pequeno backoff (ex.: 2s, 5s, 10s).
+- Ao reconectar, disparar `fetchContatos()` / `fetchMensagens()` para recuperar o que foi perdido enquanto offline.
 
-Criar índice único parcial em `(instancia_id, whatsapp_msg_id)` quando `whatsapp_msg_id IS NOT NULL`. Antes, normalizar IDs existentes removendo o prefixo `556...:` para tratar `556282038967:3EB0B5AF...` e `3EB0B5AF...` como o mesmo ID, e limpar duplicatas atuais (manter o registro mais antigo).
+### 2. Polling de fallback (cinto e suspensório, custo zero)
+Adicionar `setInterval` leve:
+- A cada **20 segundos**, chamar `fetchContatos()` em background (já filtra por instâncias do usuário, query rápida e barata).
+- Se a conversa estiver aberta, a cada **15 segundos** buscar apenas mensagens **mais novas que a última no estado** (`gt('timestamp_msg', ultima)`), em vez de recarregar tudo. Isso garante zero perda mesmo se o WebSocket falhar e mantém o custo mínimo.
 
-```sql
--- 1. Normalizar IDs existentes: remover prefixo "<numero>:" 
-UPDATE whatsapp_mensagens
-SET whatsapp_msg_id = split_part(whatsapp_msg_id, ':', 2)
-WHERE whatsapp_msg_id ~ '^[0-9]+:';
+### 3. Reagir ao retorno da aba
+Adicionar listener de `document.visibilitychange`:
+- Quando a aba volta a ficar visível (`document.visibilityState === 'visible'`), chamar imediatamente `fetchContatos()` e `fetchMensagens()`, e re-subscrever os canais.
 
--- 2. Apagar duplicatas (mantém a mais antiga por (instancia_id, whatsapp_msg_id))
-DELETE FROM whatsapp_mensagens m
-USING whatsapp_mensagens k
-WHERE m.instancia_id = k.instancia_id
-  AND m.whatsapp_msg_id = k.whatsapp_msg_id
-  AND m.whatsapp_msg_id IS NOT NULL
-  AND m.criado_em > k.criado_em;
-
--- 3. Índice único parcial
-CREATE UNIQUE INDEX whatsapp_mensagens_msgid_unique
-  ON whatsapp_mensagens (instancia_id, whatsapp_msg_id)
-  WHERE whatsapp_msg_id IS NOT NULL;
-```
-
-### 2. `whatsapp-chatbot/index.ts` — dedup por `whatsapp_msg_id` (entrada e saída)
-
-Substituir os dois `insert` (linhas 1363 e 1396) por:
-- Normalizar `rawMessageId` removendo prefixo `^\d+:` antes de salvar.
-- Trocar `insert` por `upsert` em `(instancia_id, whatsapp_msg_id)` com `ignoreDuplicates: true` quando houver `whatsapp_msg_id`.
-- Manter o fallback atual (insert simples) só quando o webhook não trouxer ID.
-
-Isso elimina o race condition mesmo com 2 webhooks paralelos: o índice único garante atomicidade.
-
-### 3. `import-recent-whatsapp-chats/index.ts` — usar mesmo upsert
-
-Hoje a importação histórica também faz `insert` puro com dedup só por chave composta de timestamp+conteúdo. Trocar por `upsert` com `onConflict: 'instancia_id,whatsapp_msg_id'` e normalizar o ID. Isso evita que clicar em "reimportar" gere outra rodada de duplicatas.
-
-### 4. Reabilitar/aplicar dedup também em `send-whatsapp*` (saída manual do sistema)
-
-As funções `send-whatsapp`, `send-whatsapp-audio`, `send-whatsapp-buttons`, `send-whatsapp-media` salvam a mensagem após enviar. Garantir que elas também passem pelo mesmo `upsert` por `whatsapp_msg_id` — assim o eco do webhook (`fromMe`) que chegar depois cai na dedup do índice único, sem precisar da janela frágil de 30s.
+### 4. Indicador discreto de status
+Pequeno ponto colorido no header do Inbox:
+- Verde = realtime conectado.
+- Amarelo = reconectando / usando polling.
+Para o usuário saber se está em tempo real ou modo degradado, sem assustar.
 
 ## Arquivos a alterar
 
-- `supabase/migrations/<novo>.sql` — limpeza + índice único parcial
-- `supabase/functions/whatsapp-chatbot/index.ts` — upsert por `whatsapp_msg_id` para entrada e fromMe (substitui dedup de 30s)
-- `supabase/functions/import-recent-whatsapp-chats/index.ts` — upsert por `whatsapp_msg_id` + normalização de ID
-- `supabase/functions/send-whatsapp/index.ts`, `send-whatsapp-audio/index.ts`, `send-whatsapp-buttons/index.ts`, `send-whatsapp-media/index.ts` — upsert por `whatsapp_msg_id` ao salvar a mensagem enviada
+- `src/pages/WhatsAppInbox.tsx` — adicionar reconexão de canais, polling de fallback, listener de `visibilitychange`, indicador de status. **Nenhuma mudança no banco e nenhuma edge function nova.**
 
 ## O que NÃO muda
 
-- Schema da tabela (só ganha um índice).
-- Comportamento do Inbox no front (não precisa tocar no `WhatsAppInbox.tsx`).
-- Lógica de leitura/não-leitura, etiquetas, mídias, áudio, etc.
+- Backend, edge functions, RLS, schema do banco.
+- Lógica de envio, de gravação de mensagens, de mídia, etc.
+- Não cria custo adicional relevante de Lovable Cloud (polling de 20s usa apenas a tabela `whatsapp_contatos` já indexada).
 
 ## Resultado esperado
 
-Mesmo se o UAZAPI mandar o mesmo evento 2x (ou 3x) em paralelo, o índice único impede a 2ª inserção no nível do banco — não há mais como aparecer mensagem duplicada no Inbox, nem do histórico, nem do tempo real, nem do envio próprio.
+- Mensagens de clientes aparecem em tempo real como hoje.
+- **Se o WebSocket cair, em até 20s a lista se atualiza sozinha** via polling.
+- Voltar de outra aba puxa as novidades imediatamente.
+- Nunca mais "depois de certa hora não aparece nada".
