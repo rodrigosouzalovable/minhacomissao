@@ -52,15 +52,32 @@ export function ChatInputBar({
   const { toast } = useToast();
   const [textoMensagem, setTextoMensagem] = useState('');
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
+  const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
-    gravando, tempoGravacao, enviandoAudio,
-    iniciarGravacao, cancelarGravacao, enviarGravacao, formatTempo,
+    gravando, tempoGravacao, enviandoAudio, transcrevendo,
+    iniciarGravacao, cancelarGravacao, enviarGravacao, transcreverGravacao, formatTempo,
   } = useAudioRecorder({
     instanciaId, telefone, serverUrl, instanceToken,
     onSent: () => onMediaSent(),
   });
+
+  const iniciarGravacaoModo = async (modo: 'audio' | 'transcrito') => {
+    setModoGravacao(modo);
+    await iniciarGravacao();
+  };
+
+  const finalizarGravacao = async () => {
+    if (modoGravacao === 'transcrito') {
+      const texto = await transcreverGravacao();
+      if (texto) {
+        await onTextSent(texto);
+      }
+    } else {
+      await enviarGravacao();
+    }
+  };
 
   const handleFileSend = async (file: File) => {
     const isImage = file.type.startsWith('image/');
