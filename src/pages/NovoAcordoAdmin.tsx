@@ -280,11 +280,12 @@ export default function NovoAcordoAdmin() {
     const numParcelas = parseInt(form.parcelas) || 1;
     
     if (empresa === 'mundo_da_moda') {
+      // UME | APORTE: comissão em todas as parcelas
       return gerarParcelasMundoDaModa(
         dataPrimeiro,
         numParcelas,
         calculo.valorDemaisParcelas,
-        calculo.comissaoPrimeiraParcela,
+        calculo.comissaoDemaisParcelas,
         calculo.valorPrimeiraParcela,
         calculo.comissaoPrimeiraParcela
       );
