@@ -145,6 +145,8 @@ function AcordoCard({
   isQuebraAcordo = false,
   envioStatus,
   cpfDuplicadoOutros = [],
+  onToggleBoletoEnviado,
+  togglingBoleto,
 }: {
   acordo: Acordo;
   onDelete: () => void;
@@ -157,6 +159,8 @@ function AcordoCard({
   isQuebraAcordo?: boolean;
   envioStatus?: 'enviado' | 'erro' | 'enviando';
   cpfDuplicadoOutros?: Array<{ id: string; cliente_nome: string }>;
+  onToggleBoletoEnviado?: (acordo: Acordo) => void;
+  togglingBoleto?: boolean;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   return <Link to={`/acordos/${acordo.id}`}>
