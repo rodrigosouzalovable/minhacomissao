@@ -781,35 +781,6 @@ export default function NovoAcordoAdmin() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">
-                Tabela de Comissões - {empresa === 'ume_novo_mundo' ? 'UME | NOVO MUNDO' : 'MUNDO DA MODA'}
-              </CardTitle>
-              {empresa === 'mundo_da_moda' && (
-                <CardDescription>Comissão paga apenas sobre a 1ª parcela</CardDescription>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className={`grid grid-cols-3 gap-2 text-center text-sm ${empresa === 'ume_novo_mundo' ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
-                {(empresa === 'ume_novo_mundo' ? tabelaComissoes : tabelaComissoesMundoDaModa).map((faixa) => (
-                  <div
-                    key={faixa.min}
-                    className={`p-2 rounded ${
-                      calculo && calculo.percentual === faixa.percentual
-                        ? 'bg-secondary text-secondary-foreground'
-                        : 'bg-muted'
-                    }`}
-                  >
-                    <p className="text-xs text-muted-foreground">
-                      {faixa.min}-{faixa.max === 9999 ? '+' : faixa.max}
-                    </p>
-                    <p className="font-bold">{faixa.percentual}%</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
 
           <div className="flex gap-4">
             <Button
