@@ -1,79 +1,77 @@
-## Objetivo
+## Problema identificado
 
-Quando estiver enviando mensagens em massa em **Acionamento** e **Campanhas de Voz**, exibir no painel/toggle do canto inferior direito **qual será a próxima instância (número de WhatsApp)** que enviará para o próximo cliente da fila — além do que já é mostrado hoje (último enviado, próximo countdown, etc).
+O cliente JOAO VICTOR FERNANDES MOREIRA (acordo `da2f6af5...`) tem a Parcela 1 corretamente marcada como **paga** no banco de dados (`status='pago'`, `data_paga=2026-04-20`), mas aparece na aba **Negociados** em vez de **Pagos**.
 
-## O que existe hoje
+## Causa raiz
 
-- **Campanhas de Voz**: já tem painel flutuante no canto inferior direito (`fixed bottom-4 right-4`) mostrando: último contato enviado, último número usado e countdown. Falta: próxima instância.
-- **Acionamento**: hoje só mostra "Enviando X/Y..." inline no topo da lista, sem painel flutuante e sem informação de instância. Vou criar um painel flutuante igual ao de Campanhas de Voz, e incluir já a próxima instância.
+Em `src/pages/Acordos.tsx` (linha 691), a query que carrega os IDs dos acordos com parcelas pagas é:
 
-Ambos usam **round-robin** sobre a lista de instâncias ativas (`instances[i % instances.length]`), então a "próxima instância" é determinística e fácil de calcular.
-
-## Mudanças
-
-### 1. Campanhas de Voz — `src/contexts/VoiceCampaignSendingContext.tsx`
-
-- Adicionar campos no `SendingProgress`:
-  - `nextInstance: string | null` — nome da próxima instância (ex.: "Robô 02")
-  - `nextContact: string | null` — nome/telefone do próximo contato (bônus de contexto)
-- Após cada envio, calcular o próximo a partir do índice `i+1`, da lista `instances` e `pendingContacts`, e atualizar o estado.
-- Limpar (`null`) quando for o último contato ou ao cancelar.
-
-### 2. Campanhas de Voz — `src/pages/CampanhasVoz.tsx` (painel flutuante já existente)
-
-Adicionar uma linha logo abaixo do bloco "Pelo número …":
-
-```
-➡️ Próxima: <nome do próximo contato> pelo número <próxima instância>
+```ts
+supabase.from('pagamentos').select('acordo_id').eq('status', 'pago')
 ```
 
-Exibida só quando `nextInstance` não for nulo (ou seja, ainda há próximo).
+O Supabase aplica um **limite padrão de 1.000 linhas por query**. Hoje existem **1.304 pagamentos com status `pago`** no banco — ou seja, **304 registros estão sendo silenciosamente cortados**. O acordo desse cliente é um dos cortados, então o `Set` `acordosComPagamentosPagos` não o contém, e a regra de classificação manda para "Negociados".
 
-### 3. Acionamento — `src/hooks/useAutoSend.tsx`
+O mesmo bug afeta:
+- Aba **Vencidos** (query de `status='pendente'` com `data_prevista < hoje` na linha 702) — também pode estourar 1.000 linhas conforme o sistema cresce.
+- Cálculo de **Próximas ao Vencimento**.
+- Qualquer outra contagem agregada baseada nessas mesmas queries.
 
-Hoje o contexto só expõe `{ current, total }`. Vou estender:
+Esse problema vai piorar conforme mais pagamentos forem registrados.
 
-- Mudar `AutoSendProgress` para incluir:
-  - `currentInstance: string | null`
-  - `currentContact: string | null`
-  - `lastSentInstance: string | null`
-  - `lastSentContact: string | null`
-  - `nextInstance: string | null`
-  - `nextContact: string | null`
-  - `countdownSec: number | null`
-- No loop de `startAutoSend`:
-  - Antes de enviar, atualizar `currentInstance` / `currentContact`.
-  - Após cada envio, atualizar `lastSentInstance` / `lastSentContact`.
-  - Calcular `nextInstance` / `nextContact` usando `pendentesSnapshot[i+1]` e o mesmo `roundRobinCounterRef.current` que o próximo iteração usaria (sobre `activeConfigs`).
-  - Iniciar countdown em segundos durante o `setTimeout` do delay (igual ao de Campanhas de Voz).
+## Correção proposta
 
-### 4. Acionamento — `src/pages/Acionamento.tsx`
+Substituir as queries que retornam listas grandes de `pagamentos` por **agregações no servidor**, evitando trafegar milhares de linhas e contornando o limite de 1.000:
 
-Adicionar um painel flutuante no canto inferior direito (mesmo padrão visual de `CampanhasVoz.tsx`), exibido só quando `autoSending === true`:
+### 1. Criar uma função RPC no banco (`get_acordo_status_flags`)
 
+Retorna, **para os acordos do usuário logado** (respeitando RLS / acordos compartilhados), três conjuntos:
+
+```sql
+create or replace function public.get_acordo_status_flags(p_acordo_ids uuid[])
+returns table (
+  acordo_id uuid,
+  tem_pago boolean,
+  tem_vencida boolean,
+  data_vencida_mais_antiga date,
+  proxima_vencimento date
+)
+language sql stable security invoker
+as $$
+  select
+    a.id as acordo_id,
+    bool_or(p.status = 'pago') as tem_pago,
+    bool_or(p.status = 'pendente' and p.data_prevista < current_date) as tem_vencida,
+    min(p.data_prevista) filter (where p.status = 'pendente' and p.data_prevista < current_date) as data_vencida_mais_antiga,
+    min(p.data_prevista) filter (where p.status = 'pendente' and p.data_prevista >= current_date) as proxima_vencimento
+  from unnest(p_acordo_ids) as a(id)
+  left join pagamentos p on p.acordo_id = a.id
+  group by a.id
+$$;
 ```
-[spinner] Acionamento em andamento     [X/Y]
-✅ Enviado para <nome>  pelo número <instância>
-⏳ Próximo envio em Ns
-➡️ Próxima: <próximo nome> pelo número <próxima instância>
-[Parar]
-```
 
-O botão "Parar" duplica a função do botão inline já existente, para conveniência.
+Isso devolve no máximo 1 linha por acordo (centenas, não milhares) e roda totalmente no Postgres.
 
-## Detalhes técnicos
+### 2. Refatorar `src/pages/Acordos.tsx`
 
-- **Cálculo da próxima instância (Acionamento)**: `activeConfigs[(roundRobinCounterRef.current) % activeConfigs.length]` — o `roundRobinCounterRef` já é incrementado após o envio atual, então no momento de calcular o "próximo", basta usá-lo direto, sem `+1`. Filtrando antes pelas instâncias ainda ativas (mesma lógica do loop).
-- **Cálculo da próxima instância (Voz)**: como o índice `i+1` é determinístico, basta `instances[(i+1) % instances.length].nome`.
-- **Label da instância**: usar `instance.nome ?? instance.id.slice(0,8)` (mesmo padrão já usado nos arquivos).
-- **Sem custo extra** de Cloud (apenas estado em memória + render).
-- Sem mudanças em banco, edge functions, RLS ou triggers.
+- Após carregar `todosAcordos`, chamar `supabase.rpc('get_acordo_status_flags', { p_acordo_ids: ids })`.
+- Montar `acordosComPagamentosPagos`, `acordosComParcelasVencidas`, `parcelasVencidasMap` e `proximasVencimentoMap` a partir do retorno único da RPC.
+- Remover as duas queries diretas em `pagamentos` (linhas ~691 e ~702) que sofrem do limite de 1.000.
 
-## Arquivos modificados
+### 3. Validação
 
-1. `src/contexts/VoiceCampaignSendingContext.tsx`
-2. `src/pages/CampanhasVoz.tsx` (apenas o painel flutuante linhas ~1086–1122)
-3. `src/hooks/useAutoSend.tsx`
-4. `src/pages/Acionamento.tsx` (adicionar painel flutuante novo no fim do JSX)
+- Recarregar a página `/acordos` e confirmar que JOAO VICTOR aparece na aba **Pagos** e some de **Negociados**.
+- Verificar que as contagens de Vencidos / Próximas ao Vencimento continuam corretas.
+- Conferir que nenhum acordo desaparece das abas.
 
-Posso prosseguir com a implementação?
+## Arquivos afetados
+
+- **Migração SQL**: criar função `public.get_acordo_status_flags`.
+- **`src/pages/Acordos.tsx`**: substituir as duas queries de `pagamentos` pela chamada RPC e ajustar a montagem dos `Set`/`Map`.
+
+## Impacto
+
+- ✅ Corrige a classificação errada em todas as abas (Pagos, Negociados, Vencidos, Próximas).
+- ✅ Reduz drasticamente o volume de dados trafegado (1.300+ linhas → ~N acordos).
+- ✅ Solução à prova de crescimento — não quebra mais ao passar de 1.000 pagamentos.
+- ⚠️ Sem impacto em custo do Lovable Cloud (apenas troca queries por uma RPC mais leve).

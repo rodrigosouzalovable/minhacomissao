@@ -3006,6 +3006,16 @@ export type Database = {
         Args: { p_importacao_id: string }
         Returns: Json
       }
+      get_acordo_status_flags: {
+        Args: { p_acordo_ids: string[] }
+        Returns: {
+          acordo_id: string
+          data_vencida_mais_antiga: string
+          proxima_vencimento: string
+          tem_pago: boolean
+          tem_vencida: boolean
+        }[]
+      }
       get_acordos_compartilhados_admin: {
         Args: { _user_id: string }
         Returns: string
