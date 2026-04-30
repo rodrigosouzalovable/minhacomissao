@@ -328,7 +328,7 @@ export default function AdminEquipes() {
                                     <div className="flex flex-wrap gap-1">
                                       {credores.map((c: string) => (
                                         <Badge key={c} variant="secondary" className="text-xs">
-                                          {c === 'ume_novo_mundo' ? 'UME' : c === 'mundo_da_moda' ? 'MODA' : 'MONTREAL'}
+                                          {c === 'ume_novo_mundo' ? 'INADIMPLENTES' : c === 'mundo_da_moda' ? 'APORTE' : 'MONTREAL'}
                                         </Badge>
                                       ))}
                                     </div>
