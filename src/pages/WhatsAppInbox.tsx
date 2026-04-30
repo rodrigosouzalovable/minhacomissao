@@ -466,14 +466,64 @@ export default function WhatsAppInbox() {
     setMensagens([]);
   }, [contatoAtivo, instancias]);
 
+  // Realtime + auto-reconexão + polling de fallback (20s) para contatos.
+  // Garante que conversas novas apareçam mesmo se o WebSocket cair.
+  const [realtimeOk, setRealtimeOk] = useState(true);
   useEffect(() => {
-    const channel = supabase
-      .channel('whatsapp-contatos-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_contatos' }, () => {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+
+    const connect = () => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`whatsapp-contatos-changes-${Date.now()}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_contatos' }, () => {
+          fetchContatos();
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            attempt = 0;
+            setRealtimeOk(true);
+            // Recupera o que possa ter sido perdido enquanto offline
+            fetchContatos();
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            setRealtimeOk(false);
+            if (channel) { supabase.removeChannel(channel); channel = null; }
+            const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+            attempt++;
+            reconnectTimer = setTimeout(connect, delay);
+          }
+        });
+    };
+    connect();
+
+    // Polling leve a cada 20s — fallback caso realtime falhe silenciosamente
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchContatos();
+    }, 20000);
+
+    // Refetch imediato quando a aba volta a ficar visível
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
         fetchContatos();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+        // Força reconexão do canal para garantir tempo real após sleep
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        attempt = 0;
+        connect();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [fetchContatos]);
 
   const fetchMensagens = useCallback(async (loadMore = false) => {
