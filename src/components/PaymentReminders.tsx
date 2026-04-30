@@ -838,7 +838,12 @@ export function PaymentReminders() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {instances.map((inst) => (
+                  {verificandoConexao && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Verificando instâncias conectadas...
+                    </span>
+                  )}
+                  {!verificandoConexao && instances.map((inst) => (
                     <button
                       key={inst.id}
                       type="button"
@@ -854,7 +859,7 @@ export function PaymentReminders() {
                       {inst.nome || inst.instance_token.slice(0, 12) + '...'}
                     </button>
                   ))}
-                  {instances.length === 0 && (
+                  {!verificandoConexao && instances.length === 0 && (
                     <span className="text-xs text-muted-foreground">Nenhuma instância conectada</span>
                   )}
                 </div>
