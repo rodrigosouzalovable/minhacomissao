@@ -57,21 +57,38 @@ export function WhatsAppAudioPlayer({ src, isSaida, messageId, mimeType }: Whats
     const onLoaded = () => setDuration(audio.duration);
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onEnded = () => { setPlaying(false); setCurrentTime(0); };
+    const onPause = () => setPlaying(false);
+    const onPlay = () => setPlaying(true);
 
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('durationchange', onLoaded);
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('play', onPlay);
+
+    // Pause this player when another WhatsApp audio starts playing
+    const onOtherPlay = (e: Event) => {
+      const detail = (e as CustomEvent<{ messageId: string }>).detail;
+      if (!detail || detail.messageId === messageId) return;
+      if (!audio.paused) {
+        audio.pause();
+      }
+    };
+    window.addEventListener('wa-audio-play', onOtherPlay);
 
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('durationchange', onLoaded);
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('play', onPlay);
+      window.removeEventListener('wa-audio-play', onOtherPlay);
       audio.pause();
       audio.src = '';
     };
-  }, [src, mimeType]);
+  }, [src, mimeType, messageId]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
