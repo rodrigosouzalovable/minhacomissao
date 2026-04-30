@@ -1332,13 +1332,18 @@ serve(async (req) => {
           const agora = new Date().toISOString();
 
           // Suffix matching: find existing contact by last 8 digits to unify phone formats
+          // IMPORTANT: usar .limit(1) ao invés de .maybeSingle() — quando há contatos duplicados
+          // com o mesmo sufixo (formato 12 vs 13 dígitos com 9 extra), maybeSingle falha silenciosamente
+          // e a mensagem é gravada num telefone novo, ficando "perdida" na UI.
           const phoneSuffix = inboxTelefone.replace(/\D/g, '').slice(-8);
-          const { data: matchedContact } = await supabase
+          const { data: matchedContacts } = await supabase
             .from('whatsapp_contatos')
             .select('id, telefone, nao_lido')
             .eq('instancia_id', instanciaId)
             .like('telefone', `%${phoneSuffix}`)
-            .maybeSingle();
+            .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
+            .limit(1);
+          const matchedContact = matchedContacts && matchedContacts.length > 0 ? matchedContacts[0] : null;
 
           // Use the contact's stored phone format if found, otherwise use webhook phone
           const telefoneParaSalvar = matchedContact?.telefone || inboxTelefone;
