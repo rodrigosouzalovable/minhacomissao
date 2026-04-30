@@ -1416,8 +1416,9 @@ serve(async (req) => {
               }
             }
           } else {
-            // Incoming message — upsert para deduplicar via msg_id
-            const { error: insErr } = await supabase.from('whatsapp_mensagens').upsert({
+            // Incoming message — usa upsert com onConflict apenas quando há msg_id;
+            // sem msg_id, faz insert simples para evitar falhas silenciosas do PostgREST.
+            const baseRow = {
               instancia_id: instanciaId,
               telefone_remoto: telefoneParaSalvar,
               nome_contato: inboxNomeContato,
@@ -1428,10 +1429,19 @@ serve(async (req) => {
               tipo_conteudo: inboxTipoConteudo,
               media_url: finalMediaUrl,
               whatsapp_msg_id: cleanedMsgId,
-            }, cleanedMsgId
-              ? { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true }
-              : { ignoreDuplicates: false });
-            if (insErr) console.error('[INBOX] upsert entrada erro:', insErr.message);
+            };
+            let insErr: any = null;
+            if (cleanedMsgId) {
+              const { error } = await supabase
+                .from('whatsapp_mensagens')
+                .upsert(baseRow, { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true });
+              insErr = error;
+            } else {
+              const { error } = await supabase.from('whatsapp_mensagens').insert(baseRow);
+              insErr = error;
+            }
+            if (insErr) console.error('[INBOX] insert entrada erro:', insErr.message, 'tel=', telefoneParaSalvar, 'msgId=', cleanedMsgId);
+            else console.log(`[INBOX] ✅ Mensagem entrada salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo} len=${inboxConteudo.length}`);
 
             if (matchedContact) {
               await supabase.from('whatsapp_contatos').update({
