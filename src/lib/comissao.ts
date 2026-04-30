@@ -131,52 +131,47 @@ export function calcularPercentualComissaoMundoDaModa(diasAtraso: number): numbe
   return 0;
 }
 
-// Calcula comissão para MUNDO DA MODA (apenas 1ª parcela tem comissão)
+// UME | APORTE: comissão (Honorário) aplicada em TODAS as parcelas, conforme faixa de atraso.
 export function calcularComissaoMundoDaModa(valorTotal: number, parcelas: number, diasAtraso: number) {
   const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
   const valorParcela = valorTotal / parcelas;
-  // Comissão apenas na primeira parcela
-  const comissaoPrimeiraParcela = valorParcela * (percentual / 100);
+  const comissaoPorParcela = valorParcela * (percentual / 100);
+  const comissaoTotal = comissaoPorParcela * parcelas;
 
   return {
     percentual,
     valorParcela: Math.round(valorParcela * 100) / 100,
-    comissaoPrimeiraParcela: Math.round(comissaoPrimeiraParcela * 100) / 100,
-    comissaoTotal: Math.round(comissaoPrimeiraParcela * 100) / 100 // Apenas 1ª parcela
+    comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
+    comissaoTotal: Math.round(comissaoTotal * 100) / 100
   };
 }
 
-// Gera parcelas para MUNDO DA MODA (comissão apenas na 1ª parcela)
+// Gera parcelas para UME | APORTE (comissão em todas as parcelas).
 export function gerarParcelasMundoDaModa(
   dataPrimeiroPagamento: Date,
   numeroParcelas: number,
   valorParcela: number,
-  comissaoPrimeiraParcela: number,
+  comissaoPorParcela: number,
   valorEntrada?: number,
   comissaoEntrada?: number
 ) {
   const parcelas = [];
-  
+
   for (let i = 0; i < numeroParcelas; i++) {
     const dataPrevista = new Date(dataPrimeiroPagamento);
     dataPrevista.setMonth(dataPrevista.getMonth() + i);
-    
-    // Se é a primeira parcela e tem entrada definida, usa os valores de entrada
+
     const isEntrada = i === 0 && valorEntrada !== undefined;
-    const isPrimeiraParcela = i === 0;
-    
+
     parcelas.push({
       numero_parcela: i + 1,
       data_prevista: dataPrevista.toISOString().split('T')[0],
       valor_parcela: isEntrada ? valorEntrada : valorParcela,
-      // Comissão apenas na primeira parcela
-      comissao_parcela: isPrimeiraParcela 
-        ? (isEntrada && comissaoEntrada !== undefined ? comissaoEntrada : comissaoPrimeiraParcela)
-        : 0,
+      comissao_parcela: isEntrada && comissaoEntrada !== undefined ? comissaoEntrada : comissaoPorParcela,
       status: 'pendente' as const
     });
   }
-  
+
   return parcelas;
 }
 
@@ -192,6 +187,25 @@ export function calcularComissao(valorTotal: number, parcelas: number, diasAtras
     comissaoPorParcela: Math.round(comissaoPorParcela * 100) / 100,
     comissaoTotal: Math.round(comissaoTotal * 100) / 100
   };
+}
+
+// Função unificada: dada a empresa do acordo, calcula a comissão de UMA parcela paga.
+// Usada principalmente no recálculo do Excel "Acordos da Equipe" para admins.
+export function calcularComissaoParcelaPorEmpresa(
+  empresa: string | null | undefined,
+  valorParcela: number,
+  diasAtraso: number
+): { percentual: number; valor: number } {
+  let percentual = 0;
+  if (empresa === 'mundo_da_moda') {
+    // UME | APORTE
+    percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
+  } else {
+    // UME | INADIMPLENTES (default) — 35% fixo
+    percentual = calcularPercentualComissao(diasAtraso);
+  }
+  const valor = Math.round(valorParcela * (percentual / 100) * 100) / 100;
+  return { percentual, valor };
 }
 
 export function formatarMoeda(valor: number): string {
