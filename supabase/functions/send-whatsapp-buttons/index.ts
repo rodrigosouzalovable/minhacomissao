@@ -91,15 +91,30 @@ Deno.serve(async (req) => {
         const buttonLabels = choices.map((c: string) => c.split('|')[0]).join(', ');
         const resumo = `📋 ${texto.substring(0, 80)}... [Botões: ${buttonLabels}]`;
 
-        await supabase.from('whatsapp_mensagens').insert({
+        const rawWaId = data?.key?.id || data?.id || data?.messageId || data?.message?.id || null;
+        const whatsappMsgId = rawWaId
+          ? (String(rawWaId).includes(':') ? String(rawWaId).split(':').pop() || null : String(rawWaId))
+          : null;
+
+        const btnPayload = {
           instancia_id: resolvedInstanciaId,
           telefone_remoto: telefoneParaSalvar,
           conteudo: resumo,
-          direcao: 'saida',
+          direcao: 'saida' as const,
           timestamp_msg: agora,
           lida: true,
           tipo_conteudo: 'texto',
-        });
+          whatsapp_msg_id: whatsappMsgId,
+        };
+
+        if (whatsappMsgId) {
+          await supabase.from('whatsapp_mensagens').upsert(btnPayload, {
+            onConflict: 'instancia_id,whatsapp_msg_id',
+            ignoreDuplicates: true,
+          });
+        } else {
+          await supabase.from('whatsapp_mensagens').insert(btnPayload);
+        }
 
         if (existingContact) {
           await supabase.from('whatsapp_contatos').update({
