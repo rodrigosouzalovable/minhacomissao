@@ -45,8 +45,8 @@ const AVAILABLE_TABS = [
 ];
 
 const CREDORES = [
-  { value: 'ume_novo_mundo', label: 'UME / NOVO MUNDO' },
-  { value: 'mundo_da_moda', label: 'MUNDO DA MODA' },
+  { value: 'ume_novo_mundo', label: 'UME | INADIMPLENTES' },
+  { value: 'mundo_da_moda', label: 'UME | APORTE' },
   { value: 'montreal', label: 'MONTREAL' },
 ];
 
