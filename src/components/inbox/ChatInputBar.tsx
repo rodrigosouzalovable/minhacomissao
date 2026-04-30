@@ -168,7 +168,7 @@ export function ChatInputBar({
     await onTextSent(texto);
   };
 
-  const isLoading = enviando || enviandoAudio || enviandoArquivo;
+  const isLoading = enviando || enviandoAudio || enviandoArquivo || transcrevendo;
   const [enviandoAtalho, setEnviandoAtalho] = useState<string | null>(null);
 
   // Report busy state to parent
