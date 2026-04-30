@@ -279,6 +279,12 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
     const run = async () => {
       let lastDelay = -1;
       let activeConfigs = [...uazapiConfigs];
+      let countdownInterval: ReturnType<typeof setInterval> | null = null;
+
+      const labelForConfig = (cfg: UazapiInstance | null): string | null => {
+        if (!cfg) return null;
+        return cfg.nome || cfg.server_url?.split('/').pop() || (cfg.id ? cfg.id.slice(0, 8) : 'global');
+      };
 
       for (let i = 0; i < pendentesSnapshot.length; i++) {
         if (!autoSendingRef.current) break;
@@ -286,19 +292,44 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
         // Filter out disabled instances
         activeConfigs = activeConfigs.filter(c => !disabledInstancesRef.current.has(getInstanceKey(c)));
 
-        setAutoProgress({ current: i + 1, total: pendentesSnapshot.length });
-
         const cliente = pendentesSnapshot[i];
-        
+
         // Round-robin: pick config from active configs
         const currentConfig = activeConfigs.length > 0
           ? activeConfigs[roundRobinCounterRef.current % activeConfigs.length]
           : null;
         roundRobinCounterRef.current++;
 
+        // Compute next contact + next instance (after this iteration's RR increment)
+        const nextCliente = pendentesSnapshot[i + 1];
+        const nextConfig = nextCliente && activeConfigs.length > 0
+          ? activeConfigs[roundRobinCounterRef.current % activeConfigs.length]
+          : null;
+
+        setAutoProgress({
+          current: i + 1,
+          total: pendentesSnapshot.length,
+          currentContact: cliente.nome || cliente.telefone,
+          currentInstance: labelForConfig(currentConfig),
+          lastSentContact: null,
+          lastSentInstance: null,
+          nextContact: nextCliente ? (nextCliente.nome || nextCliente.telefone) : null,
+          nextInstance: labelForConfig(nextConfig),
+          countdownSec: null,
+        });
+
         const configLabel = currentConfig?.nome || currentConfig?.server_url?.split('/').pop() || 'global';
         console.log(`[AutoSend] Enviando para ${cliente.telefone} via instância "${configLabel}" (RR #${roundRobinCounterRef.current})`);
         await sendSingle(cliente, cliente.originalIndex, mensagensSalvas, currentConfig, historicoId, userId);
+
+        // After send: mark last sent + keep next info
+        setAutoProgress(prev => prev ? {
+          ...prev,
+          lastSentContact: cliente.nome || cliente.telefone,
+          lastSentInstance: labelForConfig(currentConfig),
+          currentContact: null,
+          currentInstance: null,
+        } : null);
 
         if (i < pendentesSnapshot.length - 1 && autoSendingRef.current) {
           let delay: number;
@@ -306,9 +337,27 @@ export function AutoSendProvider({ children }: { children: ReactNode }) {
             delay = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
           } while (delay === lastDelay && maxSec - minSec >= 1);
           lastDelay = delay;
+
+          // Start countdown
+          let remaining = delay;
+          setAutoProgress(prev => prev ? { ...prev, countdownSec: remaining } : null);
+          if (countdownInterval) clearInterval(countdownInterval);
+          countdownInterval = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+              if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+              setAutoProgress(prev => prev ? { ...prev, countdownSec: null } : null);
+            } else {
+              setAutoProgress(prev => prev ? { ...prev, countdownSec: remaining } : null);
+            }
+          }, 1000);
+
           await new Promise(resolve => setTimeout(resolve, delay * 1000));
+          if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
         }
       }
+
+      if (countdownInterval) clearInterval(countdownInterval);
 
       autoSendingRef.current = false;
       setAutoSending(false);
