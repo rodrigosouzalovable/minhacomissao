@@ -94,13 +94,15 @@ export function WhatsAppAudioPlayer({ src, isSaida, messageId, mimeType }: Whats
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
+      // Notify other audio players to pause
+      window.dispatchEvent(new CustomEvent('wa-audio-play', { detail: { messageId } }));
       audio.play().catch(() => {});
       setPlaying(true);
     } else {
       audio.pause();
       setPlaying(false);
     }
-  }, []);
+  }, [messageId]);
 
   const cycleSpeed = useCallback(() => {
     const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
