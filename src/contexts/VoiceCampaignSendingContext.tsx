@@ -107,6 +107,8 @@ export function VoiceCampaignSendingProvider({ children }: { children: ReactNode
       lastSentInstance: null,
       nextDelaySec: null,
       countdownSec: null,
+      nextContact: pendingContacts[0]?.nome || pendingContacts[0]?.telefone || null,
+      nextInstance: instances[0]?.nome || instances[0]?.id?.slice(0, 8) || null,
     });
 
     (async () => {
