@@ -108,13 +108,17 @@ serve(async (req) => {
 
       if (resolvedId) {
         // Find existing contact to use the correct phone format
+        // IMPORTANT: usar .limit(1) ao invés de .maybeSingle() — quando há mais de um contato
+        // com o mesmo sufixo, maybeSingle retorna null e cria contato duplicado.
         const suffix = telefoneCompleto.slice(-8);
-        const { data: existingContact } = await supabase
+        const { data: existingContacts } = await supabase
           .from('whatsapp_contatos')
           .select('id, telefone')
           .eq('instancia_id', resolvedId)
           .like('telefone', `%${suffix}`)
-          .maybeSingle();
+          .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
+          .limit(1);
+        const existingContact = existingContacts && existingContacts.length > 0 ? existingContacts[0] : null;
 
         const telefoneParaSalvar = existingContact?.telefone || telefoneCompleto;
 

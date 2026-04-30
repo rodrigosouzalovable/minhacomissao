@@ -106,12 +106,14 @@ Deno.serve(async (req) => {
       if (resolvedInstanciaId) {
         const agora = new Date().toISOString();
         const suffix = telefoneCompleto.slice(-8);
-        const { data: existingContact } = await supabase
+        const { data: existingContacts } = await supabase
           .from('whatsapp_contatos')
           .select('id, telefone')
           .eq('instancia_id', resolvedInstanciaId)
           .like('telefone', `%${suffix}`)
-          .maybeSingle();
+          .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
+          .limit(1);
+        const existingContact = existingContacts && existingContacts.length > 0 ? existingContacts[0] : null;
 
         const telefoneParaSalvar = existingContact?.telefone || telefoneCompleto;
 
