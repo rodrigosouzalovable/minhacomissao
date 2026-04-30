@@ -37,6 +37,7 @@ interface ParsedMessage {
   tipo_conteudo: string;
   media_url: string | null;
   nome_contato: string | null;
+  whatsapp_msg_id: string | null;
 }
 
 const parseUazapiMessage = (msg: any): ParsedMessage | null => {
