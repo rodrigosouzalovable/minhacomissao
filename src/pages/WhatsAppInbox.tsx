@@ -1361,10 +1361,13 @@ export default function WhatsAppInbox() {
                         if (selecaoMultiplaAtiva) toggleSelecaoContato(contato.id);
                         else handleSelectContato(contato);
                       }}
+                      disabled={envioEmAndamento && contatoAtivo?.id !== contato.id && !selecaoMultiplaAtiva}
+                      title={envioEmAndamento && contatoAtivo?.id !== contato.id ? 'Aguarde o envio terminar' : undefined}
                       className={cn(
                         'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
                         contatoAtivo?.id === contato.id && !selecaoMultiplaAtiva && 'bg-accent',
-                        selecaoMultiplaAtiva && contatosSelecionados.has(contato.id) && 'bg-primary/10'
+                        selecaoMultiplaAtiva && contatosSelecionados.has(contato.id) && 'bg-primary/10',
+                        envioEmAndamento && contatoAtivo?.id !== contato.id && !selecaoMultiplaAtiva && 'opacity-60 cursor-not-allowed'
                       )}
                     >
                       {selecaoMultiplaAtiva && (
