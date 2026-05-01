@@ -54,6 +54,18 @@ export function ChatInputBar({
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
   const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea up to ~4 lines
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const max = 96; // ~4 linhas com leading-5 + padding
+    const next = Math.min(ta.scrollHeight, max);
+    ta.style.height = `${next}px`;
+    ta.style.overflowY = ta.scrollHeight > max ? 'auto' : 'hidden';
+  }, [textoMensagem]);
 
   const {
     gravando, tempoGravacao, enviandoAudio, transcrevendo,
