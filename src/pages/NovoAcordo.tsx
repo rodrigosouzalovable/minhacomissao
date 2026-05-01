@@ -138,6 +138,13 @@ export default function NovoAcordo() {
       }
     }
 
+    // Aplica credor detectado pela IA (NM-AP / NM-I)
+    let credorDetectadoLabel = '';
+    if (data.empresa === 'mundo_da_moda' || data.empresa === 'ume_novo_mundo') {
+      setEmpresa(data.empresa);
+      credorDetectadoLabel = data.empresa === 'mundo_da_moda' ? 'UME | APORTE' : 'UME | INADIMPLENTES';
+    }
+
     setForm({
       clienteNome: data.cliente_nome || '',
       clienteCpf: formattedCpf,
@@ -156,7 +163,9 @@ export default function NovoAcordo() {
 
     toast({
       title: 'Dados extraídos!',
-      description: 'Revise as informações na aba "Preencher Manualmente" antes de salvar.',
+      description: credorDetectadoLabel
+        ? `Credor detectado: ${credorDetectadoLabel}. Revise os dados antes de salvar.`
+        : 'Revise as informações na aba "Preencher Manualmente" antes de salvar.',
     });
   };
 

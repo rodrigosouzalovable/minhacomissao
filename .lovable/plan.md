@@ -1,50 +1,30 @@
 ## Objetivo
 
-Permitir que, ao **editar um acordo**, o usuário também consiga alterar o credor entre **UME | INADIMPLENTES** e **UME | APORTE** — exatamente o mesmo seletor que já existe na tela de "Novo Acordo".
+Fazer com que a extração por IA (Novo Acordo > "Preencher com IA") leia as siglas do credor no print e selecione automaticamente o credor correto:
 
-## Contexto técnico
+- **NM-AP** → UME | APORTE (`mundo_da_moda`)
+- **NM-I** ou **NM-AP-I** / **NM-INAD** → UME | INADIMPLENTES (`ume_novo_mundo`)
 
-Na tabela `acordos`, o credor é representado pela coluna `empresa`:
-
-- `ume_novo_mundo` → exibido como **UME | INADIMPLENTES**
-- `mundo_da_moda` → exibido como **UME | APORTE** (nome legado no banco)
-
-Em `EditarAcordo.tsx` o estado `empresa` já é carregado do banco (linha 67 e 111), porém:
-1. Não existe nenhum seletor na UI para alterá-lo.
-2. O `update` enviado ao Supabase no submit (linhas 171–186) **não inclui** o campo `empresa`, então qualquer alteração seria descartada.
+Hoje a IA extrai os dados do cliente/parcelas, mas o credor sempre fica no padrão "UME | INADIMPLENTES" e o usuário precisa trocar manualmente.
 
 ## Mudanças
 
-### `src/pages/EditarAcordo.tsx`
+### 1. `supabase/functions/extract-acordo-data/index.ts`
+- Acrescentar instrução no `systemPrompt` ensinando a IA a procurar pelas siglas (geralmente aparecem ao lado do número do contrato, ex.: "NM-AP - Atraso: 171" ou "NM-I - Atraso: 171") e mapeá-las:
+  - `NM-AP` → `mundo_da_moda`
+  - `NM-I` → `ume_novo_mundo`
+  - Se não encontrar nenhuma sigla, retornar `null` (o front mantém o padrão atual).
+- Adicionar o campo `empresa` no schema do tool call (`extract_acordo_data`) como string opcional com enum `["ume_novo_mundo", "mundo_da_moda"]`.
 
-1. **Adicionar o seletor de Empresa no formulário**, dentro do card "Dados do Cliente" (logo após o telefone), idêntico ao de `NovoAcordo.tsx`:
+### 2. `src/components/ImageDataExtractor.tsx`
+- Adicionar `empresa: 'ume_novo_mundo' | 'mundo_da_moda' | null` à interface `ExtractedData`.
 
-   ```tsx
-   <div className="space-y-2">
-     <Label>Empresa *</Label>
-     <div className="flex gap-3">
-       <Button type="button"
-         variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'}
-         className="flex-1"
-         onClick={() => setEmpresa('ume_novo_mundo')}>
-         UME | INADIMPLENTES
-       </Button>
-       <Button type="button"
-         variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'}
-         className="flex-1"
-         onClick={() => setEmpresa('mundo_da_moda')}>
-         UME | APORTE
-       </Button>
-     </div>
-   </div>
-   ```
+### 3. `src/pages/NovoAcordo.tsx`
+- No `handleDataExtracted`, se `data.empresa` vier preenchido, chamar `setEmpresa(data.empresa)` antes do `setForm`.
+- Mostrar no toast qual credor foi detectado (ex.: "Credor detectado: UME | APORTE") para o usuário poder validar.
 
-2. **Incluir `empresa: empresa` no payload do `update`** dos acordos (junto com os demais campos), garantindo que a troca seja persistida.
+## Observações
 
-3. Manter o seletor habilitado mesmo quando há parcelas pagas (a alteração de credor é apenas reclassificação, não regenera parcelas).
-
-## Itens fora do escopo
-
-- Não mexer em recálculo de comissões nem em parcelas já pagas.
-- Não alterar regras de Montreal (foi explicitamente pedido para deixar como está).
-- Não alterar `NovoAcordo.tsx`, `NovoAcordoAdmin.tsx` nem permissões — o seletor já existe na criação.
+- Não muda a UI: o seletor de credor continua manual e editável depois da extração.
+- Não afeta acordos existentes nem a edição (que já permite trocar o credor).
+- Não há custo adicional relevante na chamada de IA — apenas um campo a mais no mesmo tool call.

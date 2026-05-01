@@ -14,6 +14,7 @@ export interface ExtractedData {
   valor_parcela: number | null;
   data_primeiro_pagamento: string | null;
   dias_atraso: number | null;
+  empresa?: 'ume_novo_mundo' | 'mundo_da_moda' | null;
 }
 
 interface ImageDataExtractorProps {
