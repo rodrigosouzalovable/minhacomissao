@@ -315,10 +315,12 @@ function AcordoCard({
                 <p className="text-sm text-muted-foreground">Valor Total</p>
                 <p className="font-semibold">{formatarMoeda(acordo.valor_total)}</p>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Comissão</p>
-                <p className="font-semibold text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
-              </div>
+              {isAdmin && (
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Comissão</p>
+                  <p className="font-semibold text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
