@@ -669,29 +669,33 @@ export default function AcordoDetalhe() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Check className="h-8 w-8 text-secondary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Comissão Recebida</p>
-                  <p className="text-xl font-bold text-secondary">{formatarMoeda(comissaoRecebida)}</p>
+          {isAdmin && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <Check className="h-8 w-8 text-secondary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Comissão Recebida</p>
+                    <p className="text-xl font-bold text-secondary">{formatarMoeda(comissaoRecebida)}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Clock className="h-8 w-8 text-warning" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Comissão Pendente</p>
-                  <p className="text-xl font-bold text-warning">{formatarMoeda(comissaoPendente)}</p>
+          {isAdmin && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-8 w-8 text-warning" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Comissão Pendente</p>
+                    <p className="text-xl font-bold text-warning">{formatarMoeda(comissaoPendente)}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Detalhes do acordo */}
