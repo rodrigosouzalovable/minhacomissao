@@ -709,18 +709,22 @@ export default function AcordoDetalhe() {
                 <p className="text-sm text-muted-foreground">Dias em Atraso</p>
                 <p className="font-medium">{acordo.dias_atraso} dias</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Percentual de Comissão</p>
-                <p className="font-medium">{acordo.percentual_comissao}%</p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Percentual de Comissão</p>
+                  <p className="font-medium">{acordo.percentual_comissao}%</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Valor por Parcela</p>
                 <p className="font-medium">{formatarMoeda(acordo.valor_parcela)}</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Comissão por Parcela</p>
-                <p className="font-medium">{formatarMoeda(acordo.comissao_total / acordo.parcelas)}</p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Comissão por Parcela</p>
+                  <p className="font-medium">{formatarMoeda(acordo.comissao_total / acordo.parcelas)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Primeiro Pagamento</p>
                 <p className="font-medium">{formatarData(acordo.data_primeiro_pagamento)}</p>
