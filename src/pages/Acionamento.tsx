@@ -278,6 +278,7 @@ export default function Acionamento() {
   const [numerosInvalidos, setNumerosInvalidos] = useState<ClienteData[]>([]);
   const [mostrarInvalidos, setMostrarInvalidos] = useState(false);
   const [verificacaoConcluida, setVerificacaoConcluida] = useState(false);
+  const [numerosNaoVerificados, setNumerosNaoVerificados] = useState<ClienteData[]>([]);
   
   // Scheduling state
   const [agendamentos, setAgendamentos] = useState<Array<{ id: string; agendado_para: string; status: string; total_enviados: number; total_erros: number; historico_data: any }>>([]);
