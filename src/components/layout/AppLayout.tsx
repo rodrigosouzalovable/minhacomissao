@@ -72,7 +72,7 @@ const navItems: NavItem[] = [
   { href: '/retornos', label: 'Retornos', icon: RotateCcw },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/meta', label: 'Meta', icon: Target },
-  { href: '/comissoes', label: 'Minhas Comissões', icon: DollarSign },
+  { href: '/comissoes', label: 'Comissões', icon: DollarSign, adminOnly: true },
   { href: '/equipe/acordos', label: 'Acordos da Equipe', icon: Users, gestorOnly: true },
   { href: '/admin/usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
   { href: '/admin/equipes', label: 'Equipes', icon: UsersRound, adminOnly: true },
