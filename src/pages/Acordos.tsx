@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useWhatsAppSending } from '@/contexts/WhatsAppSendingContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -147,6 +148,7 @@ function AcordoCard({
   cpfDuplicadoOutros = [],
   onToggleBoletoEnviado,
   togglingBoleto,
+  isAdmin = false,
 }: {
   acordo: Acordo;
   onDelete: () => void;
@@ -161,6 +163,7 @@ function AcordoCard({
   cpfDuplicadoOutros?: Array<{ id: string; cliente_nome: string }>;
   onToggleBoletoEnviado?: (acordo: Acordo) => void;
   togglingBoleto?: boolean;
+  isAdmin?: boolean;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   return <Link to={`/acordos/${acordo.id}`}>
@@ -312,10 +315,12 @@ function AcordoCard({
                 <p className="text-sm text-muted-foreground">Valor Total</p>
                 <p className="font-semibold">{formatarMoeda(acordo.valor_total)}</p>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Comissão</p>
-                <p className="font-semibold text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
-              </div>
+              {isAdmin && (
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Comissão</p>
+                  <p className="font-semibold text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -436,6 +441,7 @@ export default function Acordos() {
   const {
     user
   } = useAuth();
+  const { isAdmin } = useUserRole();
   const {
     toast
   } = useToast();
@@ -846,13 +852,13 @@ export default function Acordos() {
     }, {
       chave: 'valor_total',
       titulo: 'Valor Total (R$)'
-    }, {
-      chave: 'comissao_total',
+    }, ...(isAdmin ? [{
+      chave: 'comissao_total' as const,
       titulo: 'Comissão Total (R$)'
     }, {
-      chave: 'percentual_comissao',
+      chave: 'percentual_comissao' as const,
       titulo: '% Comissão'
-    }, {
+    }] : []), {
       chave: 'dias_atraso',
       titulo: 'Dias em Atraso'
     }, {
@@ -1237,13 +1243,13 @@ export default function Acordos() {
 
           <TabsContent value="negociados">
             {acordosNegociados.length > 0 ? <div className="grid gap-4">
-                {acordosNegociados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isNegociado={true} isVencido={acordosComParcelasVencidas.has(acordo.id)} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} />)}
+                {acordosNegociados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isNegociado={true} isVencido={acordosComParcelasVencidas.has(acordo.id)} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} isAdmin={isAdmin} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} />}
           </TabsContent>
 
           <TabsContent value="pagos">
             {acordosPagos.length > 0 ? <div className="grid gap-4">
-                {acordosPagos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} />)}
+                {acordosPagos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} isAdmin={isAdmin} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo com pagamentos realizados" />}
           </TabsContent>
 
@@ -1258,7 +1264,7 @@ export default function Acordos() {
               onCancelSending={cancelSending}
             />
             {acordosProximos.length > 0 ? <div className="grid gap-4">
-                {acordosProximos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} />)}
+                {acordosProximos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} isAdmin={isAdmin} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela próxima ao vencimento" />}
           </TabsContent>
 
@@ -1273,7 +1279,7 @@ export default function Acordos() {
               onCancelSending={cancelSending}
             />
             {acordosRealizados.length > 0 ? <div className="grid gap-4">
-                {acordosRealizados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} />)}
+                {acordosRealizados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} isAdmin={isAdmin} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo realizado sem pagamentos" />}
           </TabsContent>
 
@@ -1288,7 +1294,7 @@ export default function Acordos() {
               onCancelSending={cancelSending}
             />
             {acordosVencidos.length > 0 ? <div className="grid gap-4">
-                {acordosVencidos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} />)}
+                {acordosVencidos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} isAdmin={isAdmin} />)}
               </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela vencida encontrada" />}
           </TabsContent>
         </Tabs>

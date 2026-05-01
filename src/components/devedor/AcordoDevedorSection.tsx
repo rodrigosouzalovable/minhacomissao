@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload, Percent } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { calcularComissaoMontrealParcela } from '@/lib/comissao';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface AcordoDevedor {
   id: string;

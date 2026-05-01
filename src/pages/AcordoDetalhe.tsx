@@ -669,29 +669,33 @@ export default function AcordoDetalhe() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Check className="h-8 w-8 text-secondary" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Comissão Recebida</p>
-                  <p className="text-xl font-bold text-secondary">{formatarMoeda(comissaoRecebida)}</p>
+          {isAdmin && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <Check className="h-8 w-8 text-secondary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Comissão Recebida</p>
+                    <p className="text-xl font-bold text-secondary">{formatarMoeda(comissaoRecebida)}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Clock className="h-8 w-8 text-warning" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Comissão Pendente</p>
-                  <p className="text-xl font-bold text-warning">{formatarMoeda(comissaoPendente)}</p>
+          {isAdmin && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-8 w-8 text-warning" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Comissão Pendente</p>
+                    <p className="text-xl font-bold text-warning">{formatarMoeda(comissaoPendente)}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Detalhes do acordo */}
@@ -705,18 +709,22 @@ export default function AcordoDetalhe() {
                 <p className="text-sm text-muted-foreground">Dias em Atraso</p>
                 <p className="font-medium">{acordo.dias_atraso} dias</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Percentual de Comissão</p>
-                <p className="font-medium">{acordo.percentual_comissao}%</p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Percentual de Comissão</p>
+                  <p className="font-medium">{acordo.percentual_comissao}%</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Valor por Parcela</p>
                 <p className="font-medium">{formatarMoeda(acordo.valor_parcela)}</p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Comissão por Parcela</p>
-                <p className="font-medium">{formatarMoeda(acordo.comissao_total / acordo.parcelas)}</p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Comissão por Parcela</p>
+                  <p className="font-medium">{formatarMoeda(acordo.comissao_total / acordo.parcelas)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Primeiro Pagamento</p>
                 <p className="font-medium">{formatarData(acordo.data_primeiro_pagamento)}</p>
@@ -727,10 +735,12 @@ export default function AcordoDetalhe() {
                   {acordo.empresa === 'mundo_da_moda' ? 'UME | APORTE' : 'UME | INADIMPLENTES'}
                 </p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Comissão Total</p>
-                <p className="font-medium text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Comissão Total</p>
+                  <p className="font-medium text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
+                </div>
+              )}
             </div>
             {(acordo.cliente_cpf || acordo.cliente_telefone) && (
               <div className="mt-4 pt-4 border-t">
@@ -904,7 +914,7 @@ export default function AcordoDetalhe() {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="font-medium">{formatarMoeda(pagamento.valor_parcela)}</p>
-                      {editandoComissao === pagamento.id ? (
+                      {isAdmin && (editandoComissao === pagamento.id ? (
                         <div className="flex items-center gap-1 justify-end">
                           <span className="text-sm text-muted-foreground">R$</span>
                           <Input
@@ -942,21 +952,19 @@ export default function AcordoDetalhe() {
                       ) : (
                         <p className="text-sm text-secondary flex items-center gap-1 justify-end">
                           Comissão: {formatarMoeda(pagamento.comissao_parcela)}
-                          {isAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 w-5 p-0"
-                              onClick={() => {
-                                setEditandoComissao(pagamento.id);
-                                setNovaComissao(String(pagamento.comissao_parcela).replace('.', ','));
-                              }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0"
+                            onClick={() => {
+                              setEditandoComissao(pagamento.id);
+                              setNovaComissao(String(pagamento.comissao_parcela).replace('.', ','));
+                            }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
                         </p>
-                      )}
+                      ))}
                     </div>
                     {isAdmin && (
                       <AlertDialog>

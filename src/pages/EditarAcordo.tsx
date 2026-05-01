@@ -440,7 +440,7 @@ export default function EditarAcordo() {
           </Card>
 
           {/* Preview do cálculo */}
-          {calculo && (
+          {calculo && isAdmin && (
             <Card className="border-secondary/50 bg-secondary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-secondary">
@@ -472,7 +472,7 @@ export default function EditarAcordo() {
           )}
 
           {/* Tabela de referência */}
-          {(!hasParcelasPagas || isAdmin) && (
+          {isAdmin && (!hasParcelasPagas || isAdmin) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">Tabela de Comissões</CardTitle>

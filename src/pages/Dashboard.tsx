@@ -146,7 +146,7 @@ export default function Dashboard() {
           <ComparativoMensal data={data.comparativo} diaAtual={data.diaAtual} />
         )}
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Total de Acordos</CardTitle>
@@ -167,57 +167,63 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Pendente</CardTitle>
-              <DollarSign className="h-4 w-4 text-warning" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-warning">
-                {formatarMoeda(data?.comissaoPendente || 0)}
-              </div>
-            </CardContent>
-          </Card>
+          {isAdmin && (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Pendente</CardTitle>
+                  <DollarSign className="h-4 w-4 text-warning" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-warning">
+                    {formatarMoeda(data?.comissaoPendente || 0)}
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Recebida</CardTitle>
-              <CheckCircle className="h-4 w-4 text-secondary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-secondary">
-                {formatarMoeda(data?.comissaoRecebida || 0)}
-              </div>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Comissão Recebida</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-secondary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-secondary">
+                    {formatarMoeda(data?.comissaoRecebida || 0)}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Comissões por Mês</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data?.comissoesPorMes && data.comissoesPorMes.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={data.comissoesPorMes}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="mes" className="text-xs" />
-                    <YAxis className="text-xs" />
-                    <Tooltip
-                      formatter={(value: number) => formatarMoeda(value)}
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                    />
-                    <Bar dataKey="valor" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-[250px] text-muted-foreground">
-                  Nenhuma comissão recebida ainda
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Comissões por Mês</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data?.comissoesPorMes && data.comissoesPorMes.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={data.comissoesPorMes}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="mes" className="text-xs" />
+                      <YAxis className="text-xs" />
+                      <Tooltip
+                        formatter={(value: number) => formatarMoeda(value)}
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                      />
+                      <Bar dataKey="valor" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[250px] text-muted-foreground">
+                    Nenhuma comissão recebida ainda
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
