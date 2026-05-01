@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, Mic, Paperclip, X, Loader2, Reply, FileText, AudioLines } from 'lucide-react';
 import {
