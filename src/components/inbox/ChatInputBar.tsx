@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, Mic, Paperclip, X, Loader2, Reply, FileText, AudioLines } from 'lucide-react';
 import {
@@ -54,6 +54,18 @@ export function ChatInputBar({
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
   const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea up to ~4 lines
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const max = 96; // ~4 linhas com leading-5 + padding
+    const next = Math.min(ta.scrollHeight, max);
+    ta.style.height = `${next}px`;
+    ta.style.overflowY = ta.scrollHeight > max ? 'auto' : 'hidden';
+  }, [textoMensagem]);
 
   const {
     gravando, tempoGravacao, enviandoAudio, transcrevendo,
@@ -281,7 +293,7 @@ export function ChatInputBar({
           ))}
         </div>
       )}
-      <div className="p-3 flex gap-2">
+      <div className="p-3 flex gap-2 items-end">
         <input
           type="file"
           ref={fileInputRef}
@@ -298,7 +310,9 @@ export function ChatInputBar({
         >
           {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
         </Button>
-        <Input
+        <Textarea
+          ref={textareaRef}
+          rows={1}
           placeholder="Digite uma mensagem..."
           value={textoMensagem}
           onChange={e => setTextoMensagem(e.target.value)}
@@ -313,7 +327,7 @@ export function ChatInputBar({
           }}
           onPaste={handlePaste}
           disabled={isLoading}
-          className="flex-1"
+          className="flex-1 min-h-[40px] max-h-[96px] resize-none py-2 leading-5"
         />
         {textoMensagem.trim() ? (
           <Button onClick={handleEnviarTexto} disabled={isLoading} size="icon" className="shrink-0">

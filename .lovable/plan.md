@@ -1,30 +1,31 @@
 ## Objetivo
 
-Fazer com que a extração por IA (Novo Acordo > "Preencher com IA") leia as siglas do credor no print e selecione automaticamente o credor correto:
+No WhatsApp Inbox, o campo de digitação de mensagem hoje usa um `<Input>` (linha única), então textos longos rolam horizontalmente. Vamos trocar por um `<Textarea>` que cresce automaticamente conforme o usuário digita, até no máximo 4 linhas — depois disso, ativa scroll vertical interno.
 
-- **NM-AP** → UME | APORTE (`mundo_da_moda`)
-- **NM-I** ou **NM-AP-I** / **NM-INAD** → UME | INADIMPLENTES (`ume_novo_mundo`)
+## Arquivo afetado
 
-Hoje a IA extrai os dados do cliente/parcelas, mas o credor sempre fica no padrão "UME | INADIMPLENTES" e o usuário precisa trocar manualmente.
+- `src/components/inbox/ChatInputBar.tsx`
 
 ## Mudanças
 
-### 1. `supabase/functions/extract-acordo-data/index.ts`
-- Acrescentar instrução no `systemPrompt` ensinando a IA a procurar pelas siglas (geralmente aparecem ao lado do número do contrato, ex.: "NM-AP - Atraso: 171" ou "NM-I - Atraso: 171") e mapeá-las:
-  - `NM-AP` → `mundo_da_moda`
-  - `NM-I` → `ume_novo_mundo`
-  - Se não encontrar nenhuma sigla, retornar `null` (o front mantém o padrão atual).
-- Adicionar o campo `empresa` no schema do tool call (`extract_acordo_data`) como string opcional com enum `["ume_novo_mundo", "mundo_da_moda"]`.
+1. **Trocar `Input` por `Textarea`** (`@/components/ui/textarea`) no campo de digitação principal.
+2. **Auto-resize**: usar `useRef` no textarea + `useEffect` que recalcula `style.height`:
+   - Reseta para `auto`, mede `scrollHeight`, aplica como height.
+   - Limita a 4 linhas (≈ 4 × line-height; calcular dinamicamente via `lineHeight` computado, ou fixar `maxHeight: 96px` assumindo line-height ~24px).
+   - Quando excede o máximo, define `overflow-y: auto`; abaixo, `overflow: hidden`.
+3. **Comportamento de Enter**:
+   - `Enter` (sem Shift) → envia mensagem (igual hoje).
+   - `Shift+Enter` → quebra de linha (comportamento natural do textarea).
+   - `Escape` → cancela resposta (igual hoje).
+4. **Visual**: começar com 1 linha (`rows={1}`), padding e bordas iguais ao Input atual; `resize-none` para o usuário não arrastar manualmente; `flex-1` mantido.
+5. **Reset de altura** após enviar (quando `textoMensagem` volta para `''`), para o textarea voltar a 1 linha.
 
-### 2. `src/components/ImageDataExtractor.tsx`
-- Adicionar `empresa: 'ume_novo_mundo' | 'mundo_da_moda' | null` à interface `ExtractedData`.
+## Detalhes técnicos
 
-### 3. `src/pages/NovoAcordo.tsx`
-- No `handleDataExtracted`, se `data.empresa` vier preenchido, chamar `setEmpresa(data.empresa)` antes do `setForm`.
-- Mostrar no toast qual credor foi detectado (ex.: "Credor detectado: UME | APORTE") para o usuário poder validar.
+- Altura máxima: 4 linhas. Com `text-sm` (14px) e line-height ~20px + padding vertical (~8px topo + 8px base) ≈ `maxHeight: 96px`. Vou ajustar empiricamente, mas o cap principal é via `Math.min(scrollHeight, maxHeight)`.
+- Manter `onPaste` (cola de imagem) e `disabled={isLoading}`.
+- Botão de enviar/microfone permanece alinhado verticalmente (usar `items-end` no container do input para que os botões fiquem alinhados à base do textarea quando ele crescer).
 
-## Observações
+## Fora do escopo
 
-- Não muda a UI: o seletor de credor continua manual e editável depois da extração.
-- Não afeta acordos existentes nem a edição (que já permite trocar o credor).
-- Não há custo adicional relevante na chamada de IA — apenas um campo a mais no mesmo tool call.
+- Não mudar comportamento de envio, atalhos, gravação de áudio nem barra de respondendo/quick replies.
