@@ -705,7 +705,7 @@ export default function NovoAcordo() {
           </Card>
 
           {/* Preview do cálculo */}
-          {calculo && <Card className="border-secondary/50 bg-secondary/5">
+          {calculo && isAdmin && <Card className="border-secondary/50 bg-secondary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-secondary">
                   <Calculator className="h-5 w-5" />
