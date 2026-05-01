@@ -70,7 +70,7 @@ function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSu
             <Input
               placeholder="5511999999999"
               value={telefone}
-              onChange={e => setTelefone(e.target.value)}
+              onChange={e => handleTelefoneChange(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">Inclua o código do país (55 para Brasil)</p>
           </div>
