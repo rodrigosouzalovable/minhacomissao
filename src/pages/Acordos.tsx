@@ -441,6 +441,7 @@ export default function Acordos() {
   const {
     user
   } = useAuth();
+  const { isAdmin } = useUserRole();
   const {
     toast
   } = useToast();
