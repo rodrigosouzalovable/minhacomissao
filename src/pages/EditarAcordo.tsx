@@ -171,6 +171,7 @@ export default function EditarAcordo() {
       let updateQuery = supabase
         .from('acordos')
         .update({
+          empresa: empresa,
           cliente_nome: validated.clienteNome,
           cliente_cpf: validated.clienteCpf || null,
           cliente_telefone: validated.clienteTelefone || null,
