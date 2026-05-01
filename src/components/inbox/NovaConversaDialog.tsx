@@ -26,14 +26,27 @@ interface NovaConversaDialogProps {
 }
 
 function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSubmit, verificandoConexao = false }: NovaConversaDialogProps) {
-  const [telefone, setTelefone] = useState('');
+  const [telefone, setTelefone] = useState('55');
   const [instanciaId, setInstanciaId] = useState('');
   const [mensagem, setMensagem] = useState('');
   const [comboOpen, setComboOpen] = useState(false);
 
+  const handleTelefoneChange = (value: string) => {
+    // Mantém apenas dígitos e garante que sempre comece com '55' (DDI Brasil)
+    let digits = value.replace(/\D/g, '');
+    if (digits.startsWith('55')) {
+      // ok
+    } else if (digits.length > 0) {
+      digits = '55' + digits;
+    } else {
+      digits = '55';
+    }
+    setTelefone(digits);
+  };
+
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      setTelefone('');
+      setTelefone('55');
       setInstanciaId('');
       setMensagem('');
       setComboOpen(false);
