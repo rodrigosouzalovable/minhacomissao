@@ -1443,7 +1443,18 @@ export default function WhatsAppInbox() {
           ) : (
             <>
               <div className="p-3 border-b border-border flex items-center gap-3 bg-card">
-                <button className="md:hidden text-muted-foreground" onClick={() => setContatoAtivo(null)}>
+                <button
+                  className="md:hidden text-muted-foreground disabled:opacity-50"
+                  disabled={envioEmAndamento}
+                  title={envioEmAndamento ? 'Aguarde o envio terminar' : undefined}
+                  onClick={() => {
+                    if (envioEmAndamento) {
+                      toast({ title: 'Aguarde o envio terminar', description: 'Termine de enviar a mensagem atual antes de sair da conversa.' });
+                      return;
+                    }
+                    setContatoAtivo(null);
+                  }}
+                >
                   <ArrowDown className="h-5 w-5 rotate-90" />
                 </button>
                 <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
