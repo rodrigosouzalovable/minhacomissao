@@ -130,7 +130,7 @@ function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSu
           </div>
           <Button
             onClick={handleSubmit}
-            disabled={enviando || !telefone || !instanciaId || !mensagem.trim()}
+            disabled={enviando || telefone.replace(/\D/g, '').length <= 4 || !instanciaId || !mensagem.trim()}
             className="w-full"
           >
             {enviando ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : 'Iniciar conversa'}
