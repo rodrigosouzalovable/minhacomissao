@@ -735,10 +735,12 @@ export default function AcordoDetalhe() {
                   {acordo.empresa === 'mundo_da_moda' ? 'UME | APORTE' : 'UME | INADIMPLENTES'}
                 </p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Comissão Total</p>
-                <p className="font-medium text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Comissão Total</p>
+                  <p className="font-medium text-secondary">{formatarMoeda(acordo.comissao_total)}</p>
+                </div>
+              )}
             </div>
             {(acordo.cliente_cpf || acordo.cliente_telefone) && (
               <div className="mt-4 pt-4 border-t">
