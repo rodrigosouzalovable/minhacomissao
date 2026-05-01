@@ -1,71 +1,48 @@
-## Objetivo
+## Problema
 
-No WhatsApp Inbox, impedir que o usuário troque para outra conversa enquanto houver mensagens em envio (status "enviando" / relógio) ou enquanto o `ChatInputBar` estiver ocupado (gravando áudio, enviando mídia, transcrevendo, enviando atalho).
+Ao clicar em "Verificar WhatsApp" com 50 números, o sistema mostrou "Todos os números possuem WhatsApp" mesmo havendo telefones inválidos.
 
-Hoje a regra é o oposto: o comentário em `WhatsAppInbox.tsx` (linha 761) diz explicitamente que envio otimista **não** bloqueia troca. Vamos inverter esse comportamento.
+## Causa raiz (confirmada nos logs)
 
-## Sinais de "envio em andamento" (já existem)
+Os logs da edge function `check-whatsapp-numbers` mostram:
 
-- `hasPendingMessages` (linha 764): mensagens com `id` começando em `temp-` e `status_envio === 'enviando'` — relógio do otimista, ainda sem confirmação da UAZAPI.
-- `inputBusy` (linha 120, alimentado por `onBusyChange` do `ChatInputBar`): cobre upload de mídia, gravação/envio de áudio, transcrição e envio de atalhos.
-
-Definir um único booleano derivado:
-
-```ts
-const envioEmAndamento = hasPendingMessages || inputBusy;
+```
+INFO  Verificando lote 1: 50 números
+ERROR Erro no lote 1: The signal has been aborted
 ```
 
-## Mudanças
+A UAZAPI estourou o timeout de 25s ao validar 50 números de uma vez. Quando isso acontece:
 
-### 1. `src/pages/WhatsAppInbox.tsx`
+1. A edge function joga os 50 números no array `errors` (não `invalid`).
+2. O frontend (`handleVerificarWhatsApp` em `src/pages/Acionamento.tsx`) **só olha para `data.invalid`** e ignora completamente `data.errors`.
+3. Como `invalid` veio vazio, a UI assume sucesso total e mostra "Todos os números possuem WhatsApp ✓" — falso positivo.
 
-**a) `handleSelectContato`** — bloquear a troca quando houver envio em andamento:
+## Correções
 
-```ts
-const handleSelectContato = (contato: Contato) => {
-  if (contato.id === contatoAtivo?.id) return;
-  if (envioEmAndamento) {
-    toast({
-      title: 'Aguarde o envio terminar',
-      description: 'Termine de enviar a mensagem atual antes de trocar de conversa.',
-    });
-    return;
-  }
-  setContatoAtivo(contato);
-  setMensagens([]);
-  setPaginaAtual(0);
-  setTemMaisAnteriores(true);
-  setRespondendoMsg(null);
-};
-```
+### 1. Edge function `supabase/functions/check-whatsapp-numbers/index.ts`
 
-**b) Bloquear seleção múltipla / limpar conversa ativa** durante envio:
-- Botão "voltar" no header mobile (linha 1435 — `setContatoAtivo(null)`): também checar `envioEmAndamento`.
-- Botão de filtro de etiqueta que pode esconder a conversa atual: manter livre (não fecha o chat ativo).
+- Reduzir `BATCH_SIZE` de 50 → **15** (UAZAPI responde rápido com lotes menores).
+- Aumentar `REQUEST_TIMEOUT_MS` de 25s → **45s** por lote.
+- Adicionar **1 retry automático** quando o lote dá timeout/abort, antes de marcar como erro.
+- Reduzir `CONCURRENCY` de 5 → **3** para não sobrecarregar a instância.
+- Logar contagem final (`valid/invalid/errors`) para diagnóstico.
 
-**c) Feedback visual na lista de contatos** (linha ~1351): quando `envioEmAndamento` for `true` e o contato do botão **não** for o ativo, aplicar:
-- `disabled` no `<button>`,
-- classes `opacity-60 cursor-not-allowed`,
-- `title="Aguarde o envio terminar"`.
+### 2. Frontend `src/pages/Acionamento.tsx` (`handleVerificarWhatsApp`)
 
-O contato ativo continua clicável (sem efeito).
+- Tratar `data.errors` como **caso de falha visível**, não como sucesso silencioso.
+- Se `errors.length > 0`:
+  - Mostrar toast de aviso: "X números não puderam ser verificados (timeout). Tente novamente."
+  - **Não** marcar `verificacaoConcluida = true` se TODOS caíram em erro (evita o falso "Todos possuem WhatsApp").
+  - Se parte foi verificada e parte falhou, manter os válidos/inválidos processados e avisar sobre os pendentes.
+- Adicionar os números em erro a uma nova lista `numerosNaoVerificados` exibida em um Alert amarelo, com botão "Tentar novamente" que reenvia só esses números.
 
-### 2. Remover comentário antigo enganoso (linhas 761–763)
+### 3. Validação visual
 
-Trocar por:
-```ts
-// Bloqueia troca de conversa enquanto há mensagem em envio (relógio) ou
-// o input está ocupado (mídia, áudio, transcrição, atalho).
-```
+Após a correção, o usuário deve:
+- Ver os 2 números sem WhatsApp removidos corretamente, OU
+- Ver um aviso claro caso a UAZAPI continue lenta, em vez do falso "todos válidos".
 
-## Não muda
+## Arquivos alterados
 
-- `ChatInputBar.tsx`: já reporta `onBusyChange` corretamente — nada a alterar.
-- Atualização de `status_envio` para `enviado`/`erro` continua liberando o `hasPendingMessages` automaticamente, destravando a troca assim que o WhatsApp confirma.
-- Mensagens com erro (`status_envio === 'erro'`) **não** bloqueiam — usuário pode trocar de conversa e tentar de novo depois.
-
-## Resultado
-
-- Clicou em enviar → relógio aparece → lista de conversas fica esmaecida → ao confirmar (check), pode trocar.
-- Gravando áudio ou subindo PDF → idem, lista travada até finalizar.
-- Já enviado (✓) ou erro → troca livre, como hoje.
+- `supabase/functions/check-whatsapp-numbers/index.ts`
+- `src/pages/Acionamento.tsx`
