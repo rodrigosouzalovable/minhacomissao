@@ -1987,7 +1987,7 @@ export default function Acionamento() {
                 </AlertDescription>
               </Alert>
             )}
-            {verificacaoConcluida && numerosInvalidos.length === 0 && (
+            {verificacaoConcluida && numerosInvalidos.length === 0 && numerosNaoVerificados.length === 0 && (
               <Alert>
                 <Check className="h-4 w-4" />
                 <AlertTitle>Todos os números possuem WhatsApp ✓</AlertTitle>
@@ -2000,6 +2000,33 @@ export default function Acionamento() {
                   >
                     <Download className="h-4 w-4" />
                     Baixar planilha ({clientes.length})
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            {numerosNaoVerificados.length > 0 && (
+              <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950/30">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertTitle className="text-amber-900 dark:text-amber-200">
+                  {numerosNaoVerificados.length} número(s) não puderam ser verificados
+                </AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm">
+                    A instância WhatsApp demorou demais para responder. Esses números continuam na lista mas o status com WhatsApp é desconhecido.
+                  </p>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleVerificarWhatsApp}
+                    disabled={verificandoWhatsApp}
+                    className="gap-1"
+                  >
+                    {verificandoWhatsApp ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    Tentar verificar novamente
                   </Button>
                 </AlertDescription>
               </Alert>
