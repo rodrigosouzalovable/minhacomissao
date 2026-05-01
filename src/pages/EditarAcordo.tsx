@@ -472,7 +472,7 @@ export default function EditarAcordo() {
           )}
 
           {/* Tabela de referência */}
-          {(!hasParcelasPagas || isAdmin) && (
+          {isAdmin && (!hasParcelasPagas || isAdmin) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">Tabela de Comissões</CardTitle>
