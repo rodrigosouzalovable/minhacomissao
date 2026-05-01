@@ -26,14 +26,27 @@ interface NovaConversaDialogProps {
 }
 
 function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSubmit, verificandoConexao = false }: NovaConversaDialogProps) {
-  const [telefone, setTelefone] = useState('');
+  const [telefone, setTelefone] = useState('55');
   const [instanciaId, setInstanciaId] = useState('');
   const [mensagem, setMensagem] = useState('');
   const [comboOpen, setComboOpen] = useState(false);
 
+  const handleTelefoneChange = (value: string) => {
+    // Mantém apenas dígitos e garante que sempre comece com '55' (DDI Brasil)
+    let digits = value.replace(/\D/g, '');
+    if (digits.startsWith('55')) {
+      // ok
+    } else if (digits.length > 0) {
+      digits = '55' + digits;
+    } else {
+      digits = '55';
+    }
+    setTelefone(digits);
+  };
+
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      setTelefone('');
+      setTelefone('55');
       setInstanciaId('');
       setMensagem('');
       setComboOpen(false);
@@ -57,7 +70,7 @@ function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSu
             <Input
               placeholder="5511999999999"
               value={telefone}
-              onChange={e => setTelefone(e.target.value)}
+              onChange={e => handleTelefoneChange(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">Inclua o código do país (55 para Brasil)</p>
           </div>
@@ -117,7 +130,7 @@ function NovaConversaDialogImpl({ open, onOpenChange, instancias, enviando, onSu
           </div>
           <Button
             onClick={handleSubmit}
-            disabled={enviando || !telefone || !instanciaId || !mensagem.trim()}
+            disabled={enviando || telefone.replace(/\D/g, '').length <= 4 || !instanciaId || !mensagem.trim()}
             className="w-full"
           >
             {enviando ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</> : 'Iniciar conversa'}
