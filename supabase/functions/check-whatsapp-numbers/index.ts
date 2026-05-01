@@ -147,6 +147,8 @@ Deno.serve(async (req) => {
       await Promise.all(slice.map(processBatch));
     }
 
+    console.log(`Resultado final: total=${numbers.length} valid=${valid.length} invalid=${invalid.length} errors=${errors.length}`);
+
     return jsonResponse({
       valid,
       invalid,
