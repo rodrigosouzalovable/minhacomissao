@@ -685,6 +685,7 @@ export default function Acionamento() {
     setVerificandoWhatsApp(true);
     setVerificacaoProgresso({ checked: 0, total: clientes.length });
     setNumerosInvalidos([]);
+    setNumerosNaoVerificados([]);
     setVerificacaoConcluida(false);
 
     try {
@@ -699,40 +700,64 @@ export default function Acionamento() {
 
       if (error) throw error;
 
-      if (data?.invalid && Array.isArray(data.invalid)) {
-        const invalidSet = new Set(data.invalid.map((n: string) => n.replace(/\D/g, '')));
-        const removidos: ClienteData[] = [];
-        const mantidos: ClienteData[] = [];
+      const invalidArr: string[] = Array.isArray(data?.invalid) ? data.invalid : [];
+      const errorsArr: string[] = Array.isArray(data?.errors) ? data.errors : [];
 
-        clientes.forEach(c => {
-          const cleanPhone = c.telefone.replace(/\D/g, '');
-          const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-          if (invalidSet.has(cleanPhone) || invalidSet.has(fullPhone)) {
-            removidos.push(c);
-          } else {
-            mantidos.push(c);
-          }
-        });
+      const invalidSet = new Set(invalidArr.map((n: string) => n.replace(/\D/g, '')));
+      const errorSet = new Set(errorsArr.map((n: string) => n.replace(/\D/g, '')));
 
-        setNumerosInvalidos(removidos);
-        setClientes(mantidos);
-        setSendStatus({});
-        setManualChecked(new Set());
-        setSendTimestamps({});
+      const removidos: ClienteData[] = [];
+      const naoVerificados: ClienteData[] = [];
+      const mantidos: ClienteData[] = [];
 
-        // Update historico
-        if (activeHistoricoId) {
-          const updated = historico.map(h =>
-            h.id === activeHistoricoId ? { ...h, clientes: mantidos, qtdClientes: mantidos.length } : h
-          );
-          saveHistorico(updated);
+      clientes.forEach(c => {
+        const cleanPhone = c.telefone.replace(/\D/g, '');
+        const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+        if (invalidSet.has(cleanPhone) || invalidSet.has(fullPhone)) {
+          removidos.push(c);
+        } else if (errorSet.has(cleanPhone) || errorSet.has(fullPhone)) {
+          naoVerificados.push(c);
+        } else {
+          mantidos.push(c);
         }
+      });
 
-        setVerificacaoConcluida(true);
-        toast.success(`Verificação concluída: ${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`);
+      // Caso TODOS tenham caído em erro: não dá para confiar — não marcar concluída
+      if (naoVerificados.length === clientes.length && removidos.length === 0) {
+        setNumerosNaoVerificados(naoVerificados);
+        toast.error(
+          `Não foi possível verificar nenhum número (${naoVerificados.length}). ` +
+          `A instância WhatsApp pode estar lenta. Tente novamente em alguns segundos.`
+        );
+        return;
+      }
+
+      setNumerosInvalidos(removidos);
+      setNumerosNaoVerificados(naoVerificados);
+      setClientes(mantidos);
+      setSendStatus({});
+      setManualChecked(new Set());
+      setSendTimestamps({});
+
+      // Update historico
+      if (activeHistoricoId) {
+        const updated = historico.map(h =>
+          h.id === activeHistoricoId ? { ...h, clientes: mantidos, qtdClientes: mantidos.length } : h
+        );
+        saveHistorico(updated);
+      }
+
+      setVerificacaoConcluida(true);
+
+      if (naoVerificados.length > 0) {
+        toast.warning(
+          `Verificação parcial: ${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos, ` +
+          `${naoVerificados.length} não puderam ser verificados (timeout).`
+        );
       } else {
-        toast.info('Verificação concluída — todos os números parecem válidos');
-        setVerificacaoConcluida(true);
+        toast.success(
+          `Verificação concluída: ${mantidos.length} válidos, ${removidos.length} sem WhatsApp removidos`
+        );
       }
     } catch (err: any) {
       toast.error(`Erro na verificação: ${err.message || 'Erro desconhecido'}`);
