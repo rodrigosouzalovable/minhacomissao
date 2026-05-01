@@ -386,6 +386,24 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
                 <ContextMenuSeparator />
               </>
             )}
+            {msg.conteudo && (
+              <>
+                <ContextMenuItem
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(msg.conteudo);
+                      toast({ title: 'Copiado', description: 'Mensagem copiada para a área de transferência.' });
+                    } catch {
+                      toast({ title: 'Erro ao copiar', variant: 'destructive' });
+                    }
+                  }}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
             {isSaida && tipo === 'texto' && onEditar && (
               <>
                 <ContextMenuItem
