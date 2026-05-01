@@ -36,9 +36,10 @@ Deno.serve(async (req) => {
     const invalid: string[] = [];
     const errors: string[] = [];
 
-    const BATCH_SIZE = 50;
-    const CONCURRENCY = 5;
-    const REQUEST_TIMEOUT_MS = 25000;
+    const BATCH_SIZE = 15;
+    const CONCURRENCY = 3;
+    const REQUEST_TIMEOUT_MS = 45000;
+    const MAX_RETRIES = 1;
 
     // Build all batches
     const batches: { batch: string[]; originalBatch: string[]; index: number }[] = [];
