@@ -758,14 +758,22 @@ export default function WhatsAppInbox() {
     markRead();
   }, [contatoAtivo]);
 
-  // Envio otimista: não bloqueia troca de conversa. Só bloqueia se ainda existirem
-  // mensagens com status 'enviando' (sem confirmação da UAZAPI). Mensagens já enviadas
-  // ou com erro NÃO travam a UI — usuário pode trocar de aba livremente, igual WhatsApp Web.
+  // Bloqueia troca de conversa enquanto há mensagem em envio (relógio) ou
+  // o input está ocupado (mídia, áudio, transcrição, atalho).
   const hasPendingMessages = mensagens.some(
     m => m.id.startsWith('temp-') && (m.status_envio === 'enviando' || !m.status_envio)
   );
+  const envioEmAndamento = hasPendingMessages || inputBusy;
 
   const handleSelectContato = (contato: Contato) => {
+    if (contato.id === contatoAtivo?.id) return;
+    if (envioEmAndamento) {
+      toast({
+        title: 'Aguarde o envio terminar',
+        description: 'Termine de enviar a mensagem atual antes de trocar de conversa.',
+      });
+      return;
+    }
     setContatoAtivo(contato);
     setMensagens([]);
     setPaginaAtual(0);
@@ -1353,10 +1361,13 @@ export default function WhatsAppInbox() {
                         if (selecaoMultiplaAtiva) toggleSelecaoContato(contato.id);
                         else handleSelectContato(contato);
                       }}
+                      disabled={envioEmAndamento && contatoAtivo?.id !== contato.id && !selecaoMultiplaAtiva}
+                      title={envioEmAndamento && contatoAtivo?.id !== contato.id ? 'Aguarde o envio terminar' : undefined}
                       className={cn(
                         'w-full flex items-start gap-3 p-3 hover:bg-accent/50 transition-colors text-left border-b border-border/50 overflow-hidden',
                         contatoAtivo?.id === contato.id && !selecaoMultiplaAtiva && 'bg-accent',
-                        selecaoMultiplaAtiva && contatosSelecionados.has(contato.id) && 'bg-primary/10'
+                        selecaoMultiplaAtiva && contatosSelecionados.has(contato.id) && 'bg-primary/10',
+                        envioEmAndamento && contatoAtivo?.id !== contato.id && !selecaoMultiplaAtiva && 'opacity-60 cursor-not-allowed'
                       )}
                     >
                       {selecaoMultiplaAtiva && (
@@ -1432,7 +1443,18 @@ export default function WhatsAppInbox() {
           ) : (
             <>
               <div className="p-3 border-b border-border flex items-center gap-3 bg-card">
-                <button className="md:hidden text-muted-foreground" onClick={() => setContatoAtivo(null)}>
+                <button
+                  className="md:hidden text-muted-foreground disabled:opacity-50"
+                  disabled={envioEmAndamento}
+                  title={envioEmAndamento ? 'Aguarde o envio terminar' : undefined}
+                  onClick={() => {
+                    if (envioEmAndamento) {
+                      toast({ title: 'Aguarde o envio terminar', description: 'Termine de enviar a mensagem atual antes de sair da conversa.' });
+                      return;
+                    }
+                    setContatoAtivo(null);
+                  }}
+                >
                   <ArrowDown className="h-5 w-5 rotate-90" />
                 </button>
                 <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
