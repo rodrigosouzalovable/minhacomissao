@@ -148,6 +148,7 @@ function AcordoCard({
   cpfDuplicadoOutros = [],
   onToggleBoletoEnviado,
   togglingBoleto,
+  isAdmin = false,
 }: {
   acordo: Acordo;
   onDelete: () => void;
@@ -162,6 +163,7 @@ function AcordoCard({
   cpfDuplicadoOutros?: Array<{ id: string; cliente_nome: string }>;
   onToggleBoletoEnviado?: (acordo: Acordo) => void;
   togglingBoleto?: boolean;
+  isAdmin?: boolean;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   return <Link to={`/acordos/${acordo.id}`}>
