@@ -758,14 +758,22 @@ export default function WhatsAppInbox() {
     markRead();
   }, [contatoAtivo]);
 
-  // Envio otimista: não bloqueia troca de conversa. Só bloqueia se ainda existirem
-  // mensagens com status 'enviando' (sem confirmação da UAZAPI). Mensagens já enviadas
-  // ou com erro NÃO travam a UI — usuário pode trocar de aba livremente, igual WhatsApp Web.
+  // Bloqueia troca de conversa enquanto há mensagem em envio (relógio) ou
+  // o input está ocupado (mídia, áudio, transcrição, atalho).
   const hasPendingMessages = mensagens.some(
     m => m.id.startsWith('temp-') && (m.status_envio === 'enviando' || !m.status_envio)
   );
+  const envioEmAndamento = hasPendingMessages || inputBusy;
 
   const handleSelectContato = (contato: Contato) => {
+    if (contato.id === contatoAtivo?.id) return;
+    if (envioEmAndamento) {
+      toast({
+        title: 'Aguarde o envio terminar',
+        description: 'Termine de enviar a mensagem atual antes de trocar de conversa.',
+      });
+      return;
+    }
     setContatoAtivo(contato);
     setMensagens([]);
     setPaginaAtual(0);
