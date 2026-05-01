@@ -37,6 +37,10 @@ Analise a imagem fornecida com atenção e extraia as seguintes informações:
 6. Valor de cada parcela - extraia do parcelamento (ex: 7x R$ 122,60 = parcela de 122.60)
 7. Data do primeiro pagamento - formato DD/MM/AAAA, procure por "Data:", "1ª Parcela:", "Vencimento:"
 8. Dias em atraso - procure por "Atraso:", "Dias em atraso:", geralmente é um número
+9. Empresa/Credor - procure por uma sigla próxima ao número do contrato ou ao lado de "Atraso:" (ex.: "NM-AP - Atraso: 171" ou "NM-I - Atraso: 171"). Mapeie assim:
+   - "NM-AP" (Novo Mundo Aporte) => "mundo_da_moda"
+   - "NM-I" ou "NM-INAD" (Novo Mundo Inadimplentes) => "ume_novo_mundo"
+   - Se não encontrar nenhuma sigla clara, retorne null para empresa.
 
 Se algum campo não for encontrado claramente, retorne null para esse campo.
 Retorne os valores numéricos sem formatação (sem R$, sem pontos de milhar).
@@ -110,6 +114,11 @@ Para datas, mantenha o formato DD/MM/AAAA.`;
                 dias_atraso: { 
                   type: "number",
                   description: "Número de dias em atraso"
+                },
+                empresa: {
+                  type: "string",
+                  enum: ["ume_novo_mundo", "mundo_da_moda"],
+                  description: "Credor identificado pela sigla: NM-AP => mundo_da_moda (UME Aporte); NM-I/NM-INAD => ume_novo_mundo (UME Inadimplentes). Omita se não encontrar."
                 }
               },
               required: ["cliente_nome", "cliente_cpf", "valor_total", "parcelas", "valor_parcela", "data_primeiro_pagamento", "dias_atraso"]
