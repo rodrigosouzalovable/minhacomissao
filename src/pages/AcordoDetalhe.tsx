@@ -914,7 +914,7 @@ export default function AcordoDetalhe() {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="font-medium">{formatarMoeda(pagamento.valor_parcela)}</p>
-                      {editandoComissao === pagamento.id ? (
+                      {isAdmin && (editandoComissao === pagamento.id ? (
                         <div className="flex items-center gap-1 justify-end">
                           <span className="text-sm text-muted-foreground">R$</span>
                           <Input
@@ -952,21 +952,19 @@ export default function AcordoDetalhe() {
                       ) : (
                         <p className="text-sm text-secondary flex items-center gap-1 justify-end">
                           Comissão: {formatarMoeda(pagamento.comissao_parcela)}
-                          {isAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 w-5 p-0"
-                              onClick={() => {
-                                setEditandoComissao(pagamento.id);
-                                setNovaComissao(String(pagamento.comissao_parcela).replace('.', ','));
-                              }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0"
+                            onClick={() => {
+                              setEditandoComissao(pagamento.id);
+                              setNovaComissao(String(pagamento.comissao_parcela).replace('.', ','));
+                            }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
                         </p>
-                      )}
+                      ))}
                     </div>
                     {isAdmin && (
                       <AlertDialog>
