@@ -171,6 +171,7 @@ export default function EditarAcordo() {
       let updateQuery = supabase
         .from('acordos')
         .update({
+          empresa: empresa,
           cliente_nome: validated.clienteNome,
           cliente_cpf: validated.clienteCpf || null,
           cliente_telefone: validated.clienteTelefone || null,
@@ -351,6 +352,29 @@ export default function EditarAcordo() {
                     onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
                     maxLength={15}
                   />
+                </div>
+              </div>
+
+              {/* Seletor de Empresa (credor) */}
+              <div className="space-y-2">
+                <Label>Empresa *</Label>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setEmpresa('ume_novo_mundo')}
+                  >
+                    UME | INADIMPLENTES
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setEmpresa('mundo_da_moda')}
+                  >
+                    UME | APORTE
+                  </Button>
                 </div>
               </div>
             </CardContent>
