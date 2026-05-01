@@ -281,7 +281,7 @@ export function ChatInputBar({
           ))}
         </div>
       )}
-      <div className="p-3 flex gap-2">
+      <div className="p-3 flex gap-2 items-end">
         <input
           type="file"
           ref={fileInputRef}
@@ -298,7 +298,9 @@ export function ChatInputBar({
         >
           {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
         </Button>
-        <Input
+        <Textarea
+          ref={textareaRef}
+          rows={1}
           placeholder="Digite uma mensagem..."
           value={textoMensagem}
           onChange={e => setTextoMensagem(e.target.value)}
@@ -313,7 +315,7 @@ export function ChatInputBar({
           }}
           onPaste={handlePaste}
           disabled={isLoading}
-          className="flex-1"
+          className="flex-1 min-h-[40px] max-h-[96px] resize-none py-2 leading-5"
         />
         {textoMensagem.trim() ? (
           <Button onClick={handleEnviarTexto} disabled={isLoading} size="icon" className="shrink-0">
