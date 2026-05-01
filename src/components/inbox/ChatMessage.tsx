@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil, Reply, CornerUpLeft, Check, CheckCheck, Clock3, AlertCircle } from 'lucide-react';
+import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil, Reply, CornerUpLeft, Check, CheckCheck, Clock3, AlertCircle, Copy } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 import { createPortal } from 'react-dom';
 import { WhatsAppAudioPlayer } from './WhatsAppAudioPlayer';
 import {
