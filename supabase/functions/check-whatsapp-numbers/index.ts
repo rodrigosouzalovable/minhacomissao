@@ -63,11 +63,11 @@ Deno.serve(async (req) => {
       }
     };
 
-    const processBatch = async ({ batch, originalBatch, index }: { batch: string[]; originalBatch: string[]; index: number }) => {
+    const tryFetchBatch = async ({ batch, originalBatch, index }: { batch: string[]; originalBatch: string[]; index: number }, attempt: number): Promise<'ok' | 'retry' | 'fail'> => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
-        console.log(`Verificando lote ${index}: ${batch.length} números`);
+        console.log(`Verificando lote ${index} (tentativa ${attempt + 1}): ${batch.length} números`);
         const response = await fetch(`${cleanUrl}/chat/check`, {
           method: 'POST',
           headers: {
@@ -83,21 +83,19 @@ Deno.serve(async (req) => {
         try {
           data = JSON.parse(text);
         } catch {
-          console.error(`Resposta não-JSON: ${text.slice(0, 200)}`);
-          originalBatch.forEach((n: string) => errors.push(n));
-          return;
+          console.error(`Lote ${index}: resposta não-JSON: ${text.slice(0, 200)}`);
+          return 'retry';
         }
 
         if (data?.code === 504 || data?.message === 'Request timeout') {
-          console.error(`Timeout no lote ${index}`);
-          originalBatch.forEach((n: string) => errors.push(n));
-          return;
+          console.error(`Lote ${index}: timeout reportado pela UAZAPI`);
+          return 'retry';
         }
 
         if (!response.ok) {
-          console.error(`Erro HTTP ${response.status}: ${JSON.stringify(data).slice(0, 200)}`);
-          originalBatch.forEach((n: string) => errors.push(n));
-          return;
+          console.error(`Lote ${index}: HTTP ${response.status} ${JSON.stringify(data).slice(0, 200)}`);
+          // 4xx is unlikely to recover; 5xx may
+          return response.status >= 500 ? 'retry' : 'fail';
         }
 
         const arr = Array.isArray(data)
@@ -109,21 +107,38 @@ Deno.serve(async (req) => {
           : null;
 
         if (!arr) {
-          console.error(`Formato desconhecido: ${JSON.stringify(data).slice(0, 300)}`);
-          originalBatch.forEach((n: string) => errors.push(n));
-          return;
+          console.error(`Lote ${index}: formato desconhecido ${JSON.stringify(data).slice(0, 300)}`);
+          return 'fail';
         }
 
         arr.forEach((item: any, idx: number) => {
           processItem(item, originalBatch[idx] || batch[idx]);
         });
+        return 'ok';
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro desconhecido';
-        console.error(`Erro no lote ${index}: ${msg}`);
-        originalBatch.forEach((n: string) => errors.push(n));
+        const aborted = msg.includes('aborted') || msg.includes('abort');
+        console.error(`Lote ${index} tentativa ${attempt + 1}: ${msg}`);
+        return aborted ? 'retry' : 'fail';
       } finally {
         clearTimeout(timeoutId);
       }
+    };
+
+    const processBatch = async (b: { batch: string[]; originalBatch: string[]; index: number }) => {
+      let attempt = 0;
+      while (attempt <= MAX_RETRIES) {
+        const result = await tryFetchBatch(b, attempt);
+        if (result === 'ok') return;
+        if (result === 'fail') break;
+        attempt++;
+        if (attempt <= MAX_RETRIES) {
+          // small backoff before retry
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+      console.error(`Lote ${b.index}: marcando ${b.originalBatch.length} números como erro após ${attempt} tentativas`);
+      b.originalBatch.forEach((n: string) => errors.push(n));
     };
 
     // Process with limited concurrency
