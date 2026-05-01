@@ -852,13 +852,13 @@ export default function Acordos() {
     }, {
       chave: 'valor_total',
       titulo: 'Valor Total (R$)'
-    }, {
-      chave: 'comissao_total',
+    }, ...(isAdmin ? [{
+      chave: 'comissao_total' as const,
       titulo: 'Comissão Total (R$)'
     }, {
-      chave: 'percentual_comissao',
+      chave: 'percentual_comissao' as const,
       titulo: '% Comissão'
-    }, {
+    }] : []), {
       chave: 'dias_atraso',
       titulo: 'Dias em Atraso'
     }, {
