@@ -1278,18 +1278,16 @@ export default function Acionamento() {
     setBulkUpdateConfirmOpen(false);
     bulkCancelRef.current = false;
 
-    // Get connected instances excluding the current one
-    const connectedOthers = instances.filter(
-      i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected'
-    );
+    // Use manually selected instances
+    const selected = instances.filter(i => bulkSelectedInstanceIds.has(i.id));
 
-    if (connectedOthers.length === 0) {
-      toast.error('Nenhuma outra instância conectada encontrada');
+    if (selected.length === 0) {
+      toast.error('Selecione ao menos uma instância');
       return;
     }
 
     // Shuffle for randomized order
-    const shuffled = [...connectedOthers].sort(() => Math.random() - 0.5);
+    const shuffled = [...selected].sort(() => Math.random() - 0.5);
 
     const log = shuffled.map(i => ({ id: i.id, nome: i.nome || 'Sem nome', status: 'pending' as const }));
     setBulkUpdateLog(log);
@@ -1312,6 +1310,7 @@ export default function Acionamento() {
 
       try {
         const cleanUrl = inst.server_url.replace(/\/+$/, '');
+        let didStep = false;
 
         // Update name
         if (bulkUpdateApplyName && profileName.trim()) {
@@ -1321,27 +1320,20 @@ export default function Acionamento() {
             body: JSON.stringify({ name: profileName }),
           });
           if (!nameRes.ok) throw new Error('Falha ao alterar nome');
-          // Cache in DB
           await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_name: profileName } as any).eq('id', inst.id);
           setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, whatsapp_profile_name: profileName } : i));
-        }
-
-        // Pause between name and photo
-        if (bulkUpdateApplyName && bulkUpdateApplyPhoto && profileName.trim()) {
-          await sleep(randomDelay(10000, 20000));
-          if (bulkCancelRef.current) break;
+          didStep = true;
         }
 
         // Update photo
         if (bulkUpdateApplyPhoto && currentProfilePhotoUrl) {
-          // Need to get photo as base64 — use the cached preview or fetch from URL
+          if (didStep) { await sleep(randomDelay(5000, 10000)); if (bulkCancelRef.current) break; }
           let base64Image = '';
           if (profilePhotoPreview) {
             base64Image = profilePhotoPreview.includes(',') ? profilePhotoPreview.split(',')[1] : profilePhotoPreview;
           } else if (currentProfilePhotoUrl.startsWith('data:')) {
             base64Image = currentProfilePhotoUrl.split(',')[1];
           } else {
-            // Fetch the URL and convert to base64
             try {
               const imgRes = await fetch(currentProfilePhotoUrl);
               const blob = await imgRes.blob();
@@ -1365,9 +1357,28 @@ export default function Acionamento() {
             body: JSON.stringify({ image: base64Image }),
           });
           if (!photoRes.ok) throw new Error('Falha ao alterar foto');
-          // Cache in DB
           await supabase.from('user_whatsapp_instances' as any).update({ whatsapp_profile_photo_url: currentProfilePhotoUrl } as any).eq('id', inst.id);
           setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, whatsapp_profile_photo_url: currentProfilePhotoUrl } : i));
+          didStep = true;
+        }
+
+        // Update business data (description / address / email)
+        const businessPayload: Record<string, string> = {};
+        const businessDbUpdate: Record<string, string> = {};
+        if (bulkUpdateApplyDescription) { businessPayload.description = profileDescription; businessDbUpdate.whatsapp_profile_description = profileDescription; }
+        if (bulkUpdateApplyAddress) { businessPayload.address = profileAddress; businessDbUpdate.whatsapp_profile_address = profileAddress; }
+        if (bulkUpdateApplyEmail) { businessPayload.email = profileEmail; businessDbUpdate.whatsapp_profile_email = profileEmail; }
+
+        if (Object.keys(businessPayload).length > 0) {
+          if (didStep) { await sleep(randomDelay(5000, 10000)); if (bulkCancelRef.current) break; }
+          const bizRes = await fetch(`${cleanUrl}/business/update/profile`, {
+            method: 'POST',
+            headers: { 'token': inst.instance_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify(businessPayload),
+          });
+          if (!bizRes.ok) throw new Error('Falha ao alterar dados comerciais');
+          await supabase.from('user_whatsapp_instances' as any).update(businessDbUpdate as any).eq('id', inst.id);
+          setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, ...businessDbUpdate } : i));
         }
 
         setBulkUpdateLog(prev => prev.map(l => l.id === inst.id ? { ...l, status: 'success' } : l));
@@ -1380,9 +1391,9 @@ export default function Acionamento() {
         continue;
       }
 
-      // Delay before next instance (60-180s)
+      // Delay before next instance (10-30s)
       if (idx < shuffled.length - 1 && !bulkCancelRef.current) {
-        await sleep(randomDelay(20000, 40000));
+        await sleep(randomDelay(10000, 30000));
       }
     }
 
