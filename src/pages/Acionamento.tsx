@@ -2887,52 +2887,97 @@ export default function Acionamento() {
                               size="sm"
                               variant="outline"
                               className="h-8 text-xs w-full"
-                              onClick={() => setBulkUpdateConfirmOpen(true)}
-                              disabled={bulkUpdateRunning || (!profileName.trim() && !currentProfilePhotoUrl)}
+                              onClick={() => {
+                                // Pre-select all connected others
+                                const eligible = instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected');
+                                setBulkSelectedInstanceIds(new Set(eligible.map(i => i.id)));
+                                setBulkUpdateConfirmOpen(true);
+                              }}
+                              disabled={bulkUpdateRunning || (!profileName.trim() && !currentProfilePhotoUrl && !profileDescription.trim() && !profileAddress.trim() && !profileEmail.trim())}
                             >
                               <Copy className="h-3 w-3 mr-1" />
-                              Aplicar perfil em todas as instâncias
+                              Aplicar perfil em instâncias
                             </Button>
                             <p className="text-[10px] text-muted-foreground text-center">
-                              Atualiza nome e/ou foto gradativamente, uma instância por vez (Atualiza nome e/ou foto gradativamente, uma instância por vez (20-40s entre cada))
+                              Atualiza foto, nome, descrição, endereço e e-mail gradativamente, uma instância por vez (10–30s entre cada)
                             </p>
                           </div>
 
                           {/* Bulk update confirmation dialog */}
                           <Dialog open={bulkUpdateConfirmOpen} onOpenChange={setBulkUpdateConfirmOpen}>
-                            <DialogContent className="max-w-md">
+                            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                               <DialogHeader>
                                 <DialogTitle>Aplicar perfil em massa</DialogTitle>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <p className="text-sm text-muted-foreground">
-                                  O perfil será aplicado gradualmente em {instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length} instância(s) conectada(s), com intervalos aleatórios para segurança.
+                                  Selecione os campos e instâncias que receberão a atualização. O envio é gradual com intervalos aleatórios para segurança.
                                 </p>
                                 <div className="space-y-2">
+                                  <p className="text-xs font-semibold">Campos</p>
                                   <div className="flex items-center gap-2">
-                                    <Checkbox
-                                      id="bulk-name"
-                                      checked={bulkUpdateApplyName}
-                                      onCheckedChange={(c) => setBulkUpdateApplyName(!!c)}
-                                    />
-                                    <Label htmlFor="bulk-name" className="text-sm">Aplicar nome: <strong>{profileName || '(vazio)'}</strong></Label>
+                                    <Checkbox id="bulk-name" checked={bulkUpdateApplyName} onCheckedChange={(c) => setBulkUpdateApplyName(!!c)} />
+                                    <Label htmlFor="bulk-name" className="text-sm">Nome: <strong>{profileName || '(vazio)'}</strong></Label>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <Checkbox
-                                      id="bulk-photo"
-                                      checked={bulkUpdateApplyPhoto}
-                                      onCheckedChange={(c) => setBulkUpdateApplyPhoto(!!c)}
-                                    />
-                                    <Label htmlFor="bulk-photo" className="text-sm">Aplicar foto</Label>
+                                    <Checkbox id="bulk-photo" checked={bulkUpdateApplyPhoto} onCheckedChange={(c) => setBulkUpdateApplyPhoto(!!c)} />
+                                    <Label htmlFor="bulk-photo" className="text-sm">Foto</Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox id="bulk-desc" checked={bulkUpdateApplyDescription} onCheckedChange={(c) => setBulkUpdateApplyDescription(!!c)} />
+                                    <Label htmlFor="bulk-desc" className="text-sm">Descrição: <strong>{profileDescription || '(vazio)'}</strong></Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox id="bulk-addr" checked={bulkUpdateApplyAddress} onCheckedChange={(c) => setBulkUpdateApplyAddress(!!c)} />
+                                    <Label htmlFor="bulk-addr" className="text-sm">Endereço: <strong>{profileAddress || '(vazio)'}</strong></Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox id="bulk-email" checked={bulkUpdateApplyEmail} onCheckedChange={(c) => setBulkUpdateApplyEmail(!!c)} />
+                                    <Label htmlFor="bulk-email" className="text-sm">E-mail: <strong>{profileEmail || '(vazio)'}</strong></Label>
                                   </div>
                                 </div>
+
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold">Instâncias ({bulkSelectedInstanceIds.size} selecionada(s))</p>
+                                    <div className="flex gap-1">
+                                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => {
+                                        const eligible = instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected');
+                                        setBulkSelectedInstanceIds(new Set(eligible.map(i => i.id)));
+                                      }}>Todas</Button>
+                                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setBulkSelectedInstanceIds(new Set())}>Limpar</Button>
+                                    </div>
+                                  </div>
+                                  <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
+                                    {instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').map(i => (
+                                      <div key={i.id} className="flex items-center gap-2">
+                                        <Checkbox
+                                          id={`bulk-inst-${i.id}`}
+                                          checked={bulkSelectedInstanceIds.has(i.id)}
+                                          onCheckedChange={(c) => {
+                                            setBulkSelectedInstanceIds(prev => {
+                                              const next = new Set(prev);
+                                              if (c) next.add(i.id); else next.delete(i.id);
+                                              return next;
+                                            });
+                                          }}
+                                        />
+                                        <Label htmlFor={`bulk-inst-${i.id}`} className="text-xs cursor-pointer flex-1 truncate">{i.nome || 'Sem nome'}</Label>
+                                      </div>
+                                    ))}
+                                    {instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length === 0 && (
+                                      <p className="text-[11px] text-muted-foreground text-center py-2">Nenhuma outra instância conectada</p>
+                                    )}
+                                  </div>
+                                </div>
+
                                 {(() => {
-                                  const count = instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length;
-                                  const minMin = Math.ceil(count * 1);
-                                  const maxMin = Math.ceil(count * 3);
+                                  const count = bulkSelectedInstanceIds.size;
+                                  const minMin = Math.max(1, Math.ceil(count * 0.5));
+                                  const maxMin = Math.max(1, Math.ceil(count * 1.5));
                                   return (
                                     <p className="text-xs text-muted-foreground">
-                                      ⏱ Tempo estimado: ~{minMin} a {maxMin} minutos
+                                      ⏱ Tempo estimado: ~{minMin} a {maxMin} minuto(s)
                                     </p>
                                   );
                                 })()}
@@ -2941,7 +2986,10 @@ export default function Acionamento() {
                                   <Button
                                     size="sm"
                                     onClick={handleBulkProfileUpdate}
-                                    disabled={!bulkUpdateApplyName && !bulkUpdateApplyPhoto}
+                                    disabled={
+                                      bulkSelectedInstanceIds.size === 0 ||
+                                      (!bulkUpdateApplyName && !bulkUpdateApplyPhoto && !bulkUpdateApplyDescription && !bulkUpdateApplyAddress && !bulkUpdateApplyEmail)
+                                    }
                                   >
                                     <Play className="h-3 w-3 mr-1" /> Iniciar
                                   </Button>
