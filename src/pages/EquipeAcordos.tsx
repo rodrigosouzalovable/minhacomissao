@@ -12,12 +12,17 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa, calcularComissaoParcelaPorEmpresa } from '@/lib/comissao';
 import { getEmpresaLabel } from '@/lib/empresaLabels';
-import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle, AlertTriangle } from 'lucide-react';
+import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle, AlertTriangle, Calendar as CalendarIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { useToast } from '@/hooks/use-toast';
 import { DateRangePicker } from '@/components/DateRangePicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
