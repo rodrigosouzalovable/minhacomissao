@@ -12,12 +12,17 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa, calcularComissaoParcelaPorEmpresa } from '@/lib/comissao';
 import { getEmpresaLabel } from '@/lib/empresaLabels';
-import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle, AlertTriangle } from 'lucide-react';
+import { Search, FileText, Users, DollarSign, Clock, Building2, Eye, EyeOff, Download, MessageCircle, AlertTriangle, Calendar as CalendarIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { useToast } from '@/hooks/use-toast';
 import { DateRangePicker } from '@/components/DateRangePicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
@@ -66,6 +71,8 @@ export default function EquipeAcordos() {
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
   const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
   const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos' | 'quebra_acordo'>('todos');
+  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
+  const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
 
   const handleEnviarRelatorio = async () => {
     try {
@@ -350,7 +357,7 @@ export default function EquipeAcordos() {
         if (funcionarioIds.length > 0) {
           const { data: pagamentosPagos, error: pagamentosError } = await supabase
             .from('pagamentos')
-            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, numero_parcela, acordos!inner(user_id)')
+            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, data_prevista, numero_parcela, acordos!inner(user_id)')
             .in('acordos.user_id', funcionarioIds)
             .eq('status', 'pago')
             .range(0, 9999);
@@ -398,14 +405,27 @@ export default function EquipeAcordos() {
               }
             });
             
-            // Agrupar por acordo_id e pegar a MAX data_prevista de cada
+            // Agrupar por acordo_id e pegar a MAX data_prevista de cada (para quebra)
+            // E também construir mapa com TODAS as datas (pendentes + pagas) para filtro
             const ultimaParcelaPorAcordo = new Map<string, string>();
+            const allDatesMap = new Map<string, string[]>();
             todasParcelasPendentes.forEach(p => {
               const atual = ultimaParcelaPorAcordo.get(p.acordo_id);
               if (!atual || p.data_prevista > atual) {
                 ultimaParcelaPorAcordo.set(p.acordo_id, p.data_prevista);
               }
+              const arr = allDatesMap.get(p.acordo_id) || [];
+              arr.push(p.data_prevista);
+              allDatesMap.set(p.acordo_id, arr);
             });
+            // Incluir datas das parcelas pagas
+            (pagamentosPagos || []).forEach((p: any) => {
+              if (!p.data_prevista) return;
+              const arr = allDatesMap.get(p.acordo_id) || [];
+              arr.push(p.data_prevista);
+              allDatesMap.set(p.acordo_id, arr);
+            });
+            setTodasDatasPorAcordo(allDatesMap);
             
             // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
             ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
@@ -463,7 +483,15 @@ export default function EquipeAcordos() {
       (viewFilter === 'com_pagos' && acordosComParcelasPagas.has(acordo.id)) ||
       (viewFilter === 'quebra_acordo' && acordosComQuebraAcordo.has(acordo.id));
     
-    return matchesSearch && matchesStatus && matchesMember && matchesDate && matchesViewFilter;
+    // Filtro por data de vencimento de boleto
+    let matchesVencimento = true;
+    if (filtroDataVencimento) {
+      const datas = todasDatasPorAcordo.get(acordo.id) || [];
+      const selectedStr = format(filtroDataVencimento, 'yyyy-MM-dd');
+      matchesVencimento = datas.some(d => d === selectedStr);
+    }
+    
+    return matchesSearch && matchesStatus && matchesMember && matchesDate && matchesViewFilter && matchesVencimento;
   });
 
   // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
@@ -691,6 +719,38 @@ export default function EquipeAcordos() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
               />
+            </div>
+            {/* Filtro: Data de Vencimento do Boleto */}
+            <div className="flex items-center gap-1">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full sm:w-[210px] justify-start text-left font-normal",
+                      !filtroDataVencimento && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filtroDataVencimento ? `Vencimento: ${format(filtroDataVencimento, "dd/MM/yyyy")}` : "Filtrar por vencimento"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={filtroDataVencimento}
+                    onSelect={setFiltroDataVencimento}
+                    locale={ptBR}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              {filtroDataVencimento && (
+                <Button variant="ghost" size="icon" onClick={() => setFiltroDataVencimento(undefined)} title="Limpar filtro de vencimento">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           <Select value={memberFilter} onValueChange={setMemberFilter}>
             <SelectTrigger className="w-full sm:w-[200px]">
