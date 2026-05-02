@@ -71,6 +71,8 @@ export default function EquipeAcordos() {
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
   const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
   const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos' | 'quebra_acordo'>('todos');
+  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
+  const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
 
   const handleEnviarRelatorio = async () => {
     try {
