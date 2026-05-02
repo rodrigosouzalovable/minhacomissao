@@ -483,7 +483,15 @@ export default function EquipeAcordos() {
       (viewFilter === 'com_pagos' && acordosComParcelasPagas.has(acordo.id)) ||
       (viewFilter === 'quebra_acordo' && acordosComQuebraAcordo.has(acordo.id));
     
-    return matchesSearch && matchesStatus && matchesMember && matchesDate && matchesViewFilter;
+    // Filtro por data de vencimento de boleto
+    let matchesVencimento = true;
+    if (filtroDataVencimento) {
+      const datas = todasDatasPorAcordo.get(acordo.id) || [];
+      const selectedStr = format(filtroDataVencimento, 'yyyy-MM-dd');
+      matchesVencimento = datas.some(d => d === selectedStr);
+    }
+    
+    return matchesSearch && matchesStatus && matchesMember && matchesDate && matchesViewFilter && matchesVencimento;
   });
 
   // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
