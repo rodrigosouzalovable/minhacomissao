@@ -720,6 +720,38 @@ export default function EquipeAcordos() {
                 className="pl-10"
               />
             </div>
+            {/* Filtro: Data de Vencimento do Boleto */}
+            <div className="flex items-center gap-1">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full sm:w-[210px] justify-start text-left font-normal",
+                      !filtroDataVencimento && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filtroDataVencimento ? `Vencimento: ${format(filtroDataVencimento, "dd/MM/yyyy")}` : "Filtrar por vencimento"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={filtroDataVencimento}
+                    onSelect={setFiltroDataVencimento}
+                    locale={ptBR}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              {filtroDataVencimento && (
+                <Button variant="ghost" size="icon" onClick={() => setFiltroDataVencimento(undefined)} title="Limpar filtro de vencimento">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           <Select value={memberFilter} onValueChange={setMemberFilter}>
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Funcionário" />
