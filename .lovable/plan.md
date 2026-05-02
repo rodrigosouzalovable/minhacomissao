@@ -1,26 +1,42 @@
 ## Objetivo
 
-No WhatsApp Inbox, sempre que o usuário abrir uma conversa, o campo de digitação (`Textarea` em `ChatInputBar.tsx`) deve receber foco automaticamente, permitindo digitar imediatamente sem precisar clicar.
+Expandir o botão "Aplicar perfil em todas as instâncias" (na aba Acionamento → editar instância → seção Perfil WhatsApp) para:
 
-## Arquivo afetado
+1. Aplicar **todos os campos** do perfil de uma vez (foto, nome, descrição, endereço, e-mail) — não apenas nome e foto.
+2. Permitir **selecionar quais instâncias** receberão a atualização (uma, várias ou todas), em vez de aplicar a todas as conectadas.
+3. Reduzir o intervalo aleatório entre instâncias de **20–40s para 10–30s**.
 
-- `src/components/inbox/ChatInputBar.tsx`
+## Mudanças em `src/pages/Acionamento.tsx`
 
-## Mudanças
+### Estado novo
+- `bulkUpdateApplyDescription`, `bulkUpdateApplyAddress`, `bulkUpdateApplyEmail` (booleans, default `true`).
+- `bulkSelectedInstanceIds: Set<string>` — IDs marcados manualmente para receber a atualização.
+- Inicialização: ao abrir o diálogo, pré-selecionar todas as outras instâncias conectadas.
 
-1. Adicionar um `useEffect` que dá `.focus()` no `textareaRef.current` quando:
-   - A conversa muda — disparado por mudança em `telefone` e/ou `instanciaId` (props que identificam unicamente a conversa aberta).
-   - O componente sai do estado desabilitado/gravando (ex.: termina de enviar, cancela gravação).
-2. Garantir que o foco só ocorra quando o textarea está habilitado (não disparar enquanto `isLoading`, `gravando` ou `transcrevendo`).
-3. Pequeno `setTimeout(..., 0)` ou `requestAnimationFrame` para garantir foco após a renderização (caso o textarea acabou de voltar do modo de gravação).
+### Diálogo de confirmação `bulkUpdateConfirmOpen`
+- Adicionar três checkboxes: "Aplicar descrição", "Aplicar endereço", "Aplicar e-mail" (com prévia do valor atual entre `<strong>`).
+- Adicionar uma seção "Selecione as instâncias" com:
+  - Botões "Selecionar todas" / "Limpar".
+  - Lista rolável (max-h ~48) das instâncias `ativo && connectionStatus==='connected'` (excluindo a editada), cada uma com `Checkbox` controlando `bulkSelectedInstanceIds`.
+- Estimativa de tempo recalculada com base em `bulkSelectedInstanceIds.size` e novo range (10–30s ⇒ ~0,5 a 1,5 min por instância).
+- Botão "Iniciar" desabilitado se nenhum campo marcado **ou** nenhuma instância selecionada.
 
-## Comportamento resultante
+### `handleBulkProfileUpdate`
+- Trocar `connectedOthers` por `instances.filter(i => bulkSelectedInstanceIds.has(i.id))`.
+- Para cada instância selecionada, dentro do try:
+  - Manter blocos de nome e foto existentes.
+  - Adicionar bloco para dados comerciais quando qualquer um dos três (descrição/endereço/e-mail) estiver marcado: um único POST a `${cleanUrl}/business/update/profile` enviando apenas os campos marcados (mesmos valores usados em `handleSaveProfileBusiness`), seguido de update no DB (`whatsapp_profile_description/address/email`) e em `setInstances`.
+  - Inserir pequenas pausas randomizadas (5–10s) entre as três sub-etapas (nome → foto → dados comerciais) quando mais de uma estiver ativa, mantendo o padrão atual de pausa entre nome e foto.
+- Trocar o delay entre instâncias: `randomDelay(20000, 40000)` → `randomDelay(10000, 30000)`.
+- Ajustar condição `disabled` do botão "Aplicar perfil em todas as instâncias" para considerar também `profileDescription`, `profileAddress`, `profileEmail`.
 
-- Abriu conversa do cliente A → cursor já piscando no campo, pronto pra digitar.
-- Trocou pra conversa do cliente B → foco move pro campo da nova conversa.
-- Saiu do modo de gravação de áudio → foco volta pro campo.
+### Texto auxiliar
+- Atualizar a frase informativa abaixo do botão (atualmente diz "20-40s entre cada" e está duplicada): trocar para texto único "Atualiza foto, nome, descrição, endereço e e-mail gradativamente, uma instância por vez (10–30s entre cada)".
 
-## Fora do escopo
+## Memória
+Atualizar `mem://features/whatsapp/bulk-profile-update-anti-ban` para refletir o novo intervalo (10–30s) e a cobertura completa de campos + seleção manual de instâncias.
 
-- Não mexer em layout, atalhos, gravação, anexos, respondendo ou quick replies.
-- Não alterar `WhatsAppInbox.tsx`.
+## Não muda
+- Endpoints UAZAPI usados (`/profile/name`, `/profile/image`, `/business/update/profile`).
+- Lógica de cache em `user_whatsapp_instances`.
+- Pausa de 5 minutos em caso de erro entre instâncias.

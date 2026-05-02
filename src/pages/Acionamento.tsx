@@ -236,6 +236,10 @@ export default function Acionamento() {
   const [bulkUpdateConfirmOpen, setBulkUpdateConfirmOpen] = useState(false);
   const [bulkUpdateApplyName, setBulkUpdateApplyName] = useState(true);
   const [bulkUpdateApplyPhoto, setBulkUpdateApplyPhoto] = useState(true);
+  const [bulkUpdateApplyDescription, setBulkUpdateApplyDescription] = useState(true);
+  const [bulkUpdateApplyAddress, setBulkUpdateApplyAddress] = useState(true);
+  const [bulkUpdateApplyEmail, setBulkUpdateApplyEmail] = useState(true);
+  const [bulkSelectedInstanceIds, setBulkSelectedInstanceIds] = useState<Set<string>>(new Set());
   const [bulkUpdateRunning, setBulkUpdateRunning] = useState(false);
   const [bulkUpdateProgress, setBulkUpdateProgress] = useState<{ current: number; total: number } | null>(null);
   const [bulkUpdateLog, setBulkUpdateLog] = useState<Array<{ id: string; nome: string; status: 'pending' | 'running' | 'success' | 'error'; message?: string }>>([]);
