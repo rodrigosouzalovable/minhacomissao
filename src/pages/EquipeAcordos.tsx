@@ -357,7 +357,7 @@ export default function EquipeAcordos() {
         if (funcionarioIds.length > 0) {
           const { data: pagamentosPagos, error: pagamentosError } = await supabase
             .from('pagamentos')
-            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, numero_parcela, acordos!inner(user_id)')
+            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, data_prevista, numero_parcela, acordos!inner(user_id)')
             .in('acordos.user_id', funcionarioIds)
             .eq('status', 'pago')
             .range(0, 9999);
