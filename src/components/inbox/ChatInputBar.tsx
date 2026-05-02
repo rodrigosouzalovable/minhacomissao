@@ -67,6 +67,16 @@ export function ChatInputBar({
     ta.style.overflowY = ta.scrollHeight > max ? 'auto' : 'hidden';
   }, [textoMensagem]);
 
+  // Auto-focus no campo ao abrir/trocar de conversa
+  useEffect(() => {
+    if (!telefone || !instanciaId) return;
+    const id = requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta && !ta.disabled) ta.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [telefone, instanciaId]);
+
   const {
     gravando, tempoGravacao, enviandoAudio, transcrevendo,
     iniciarGravacao, cancelarGravacao, enviarGravacao, transcreverGravacao, formatTempo,
