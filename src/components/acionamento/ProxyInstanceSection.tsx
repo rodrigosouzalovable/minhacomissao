@@ -128,7 +128,7 @@ export function ProxyInstanceSection({ instanceId }: Props) {
         </h5>
         <div className="flex items-center gap-2">
           {statusBadge()}
-          <Switch checked={data.proxy_enabled} onCheckedChange={(v) => setData(d => ({ ...d, proxy_enabled: v }))} />
+          <Switch checked={data.proxy_enabled} onCheckedChange={handleToggleEnabled} />
         </div>
       </div>
 
