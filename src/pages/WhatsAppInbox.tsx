@@ -26,6 +26,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { MensagensRapidasDialog, type MensagemRapida } from '@/components/inbox/MensagensRapidasDialog';
 import { NovaConversaDialog } from '@/components/inbox/NovaConversaDialog';
 import { useUserRole } from '@/hooks/useUserRole';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 interface Etiqueta {
   id: string;
   nome: string;
