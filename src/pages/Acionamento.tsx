@@ -25,7 +25,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock, Download, Power } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock, Download, Power, Network } from 'lucide-react';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -213,7 +213,7 @@ export default function Acionamento() {
   const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -356,7 +356,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email')
+        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
         .eq('user_id', user.id)
         .order('ordem' as any, { ascending: true })
         .order('criado_em', { ascending: false });
@@ -3123,6 +3123,16 @@ export default function Acionamento() {
                                     {inst.ia_responde && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
                                         IA Responde
+                                      </Badge>
+                                    )}
+                                    {inst.proxy_enabled && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] px-1.5 py-0 shrink-0 border-purple-500 text-purple-600 gap-1"
+                                        title={inst.proxy_host ? `Proxy: ${inst.proxy_host}` : 'Proxy ativo'}
+                                      >
+                                        <Network className="h-3 w-3" />
+                                        Proxy
                                       </Badge>
                                     )}
                                   </div>
