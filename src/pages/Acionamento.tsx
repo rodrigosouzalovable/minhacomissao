@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
 import LembreteMensagensDialog from '@/components/LembreteMensagensDialog';
+import { ProxyInstanceSection } from '@/components/acionamento/ProxyInstanceSection';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
