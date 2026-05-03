@@ -69,6 +69,7 @@ export function ProxyInstanceSection({ instanceId, onChanged }: Props) {
     } as any).eq('id', instanceId);
     setSaving(false);
     if (error) { toast.error('Erro: ' + error.message); return false; }
+    onChanged?.({ proxy_enabled: !!merged.proxy_enabled, proxy_host: merged.proxy_host || null });
     return true;
   }
 
