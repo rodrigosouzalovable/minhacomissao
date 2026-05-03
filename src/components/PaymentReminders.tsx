@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { Link } from 'react-router-dom';
 import { Bell, AlertTriangle, AlertCircle, Check, History, RotateCcw, Phone, XCircle, Maximize2, Play, Loader2, Ban, RefreshCw, Clock, Send, CheckCircle, MessageSquare, Volume2, Square } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
@@ -125,24 +126,8 @@ export function PaymentReminders() {
         setInstances([]);
         const checks = await Promise.allSettled(
           (instRes.data as any[]).map(async (inst) => {
-            try {
-              const { data } = await supabase.functions.invoke('test-uazapi-connection', {
-                body: { server_url: inst.server_url, instance_token: inst.instance_token },
-              });
-              const payload = (data as any)?.data ?? {};
-              const instanceData = payload?.instance ?? payload;
-              const rawStatus = String(instanceData?.status ?? payload?.status ?? '').toLowerCase();
-              const isConnected =
-                (data as any)?.ok === true &&
-                (rawStatus === 'connected' ||
-                  rawStatus === 'open' ||
-                  rawStatus === 'online' ||
-                  instanceData?.connected === true ||
-                  payload?.connected === true);
-              return isConnected ? inst : null;
-            } catch {
-              return null;
-            }
+            const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
+            return isResultConnected(data) ? inst : null;
           })
         );
         const conectadas = checks

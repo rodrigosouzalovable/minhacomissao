@@ -26,6 +26,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { MensagensRapidasDialog, type MensagemRapida } from '@/components/inbox/MensagensRapidasDialog';
 import { NovaConversaDialog } from '@/components/inbox/NovaConversaDialog';
 import { useUserRole } from '@/hooks/useUserRole';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 interface Etiqueta {
   id: string;
   nome: string;
@@ -177,24 +178,8 @@ export default function WhatsAppInbox() {
     (async () => {
       const results = await Promise.allSettled(
         instancias.map(async (inst) => {
-          try {
-            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
-              body: { server_url: inst.server_url, instance_token: inst.instance_token },
-            });
-            const payload = (data as any)?.data ?? {};
-            const instanceData = payload?.instance ?? payload;
-            const rawStatus = String(instanceData?.status ?? payload?.status ?? '').toLowerCase();
-            const isConnected =
-              (data as any)?.ok === true &&
-              (rawStatus === 'connected' ||
-                rawStatus === 'open' ||
-                rawStatus === 'online' ||
-                instanceData?.connected === true ||
-                payload?.connected === true);
-            return { inst, connected: isConnected };
-          } catch {
-            return { inst, connected: false };
-          }
+          const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
+          return { inst, connected: isResultConnected(data) };
         })
       );
 
@@ -230,18 +215,8 @@ export default function WhatsAppInbox() {
 
         try {
           // 1. Verify connection
-          const { data: connData } = await supabase.functions.invoke('test-uazapi-connection', {
-            body: { server_url: inst.server_url, instance_token: inst.instance_token },
-          });
-          const payload = (connData as any)?.data ?? {};
-          const instanceData = payload?.instance ?? payload;
-          const rawStatus = String(instanceData?.status ?? payload?.status ?? '').toLowerCase();
-          const isConnected =
-            (connData as any)?.ok === true &&
-            (rawStatus === 'connected' || rawStatus === 'open' || rawStatus === 'online' ||
-              instanceData?.connected === true || payload?.connected === true);
-
-          if (!isConnected) continue;
+          const connData = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
+          if (!isResultConnected(connData)) continue;
 
           // 2. Trigger import (function itself is idempotent via DB flag)
           importadasNaSessao.add(inst.id);
@@ -256,7 +231,6 @@ export default function WhatsAppInbox() {
               description: `${result.imported_chats} conversas (${result.imported_messages} mensagens) marcadas como não lidas.`,
             });
           } else if (result?.api_supported === false) {
-            // Silent: this UAZAPI server doesn't expose history. Don't spam toasts.
             console.log(`[auto-import] ${inst.nome}: API não suporta histórico`);
           }
         } catch (e) {
@@ -265,13 +239,12 @@ export default function WhatsAppInbox() {
       }
     };
 
-    // Run once immediately, then poll every 60s for instances still pending
+    // Run once only — the function is idempotent and uses a DB flag.
+    // Removed 60s polling to cut Cloud cost (was generating ~100 invocations/hour).
     tentarImportar();
-    const interval = setInterval(tentarImportar, 60_000);
 
     return () => {
       cancelado = true;
-      clearInterval(interval);
     };
   }, [user, isAdmin, instancias, toast]);
 

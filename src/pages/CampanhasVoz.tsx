@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -178,27 +179,8 @@ export default function CampanhasVoz() {
     const checkAll = async () => {
       const results = await Promise.allSettled(
         allInstances.map(async (inst) => {
-          try {
-            const { data } = await supabase.functions.invoke('test-uazapi-connection', {
-              body: { server_url: inst.server_url, instance_token: inst.instance_token },
-            });
-            // UAZAPI returns ok=true even when disconnected; inspect real status
-            const payload = data?.data ?? {};
-            const instanceData = payload?.instance ?? payload;
-            const rawStatus = String(
-              instanceData?.status ?? payload?.status ?? ''
-            ).toLowerCase();
-            const isConnected =
-              data?.ok === true &&
-              (rawStatus === 'connected' ||
-                rawStatus === 'open' ||
-                rawStatus === 'online' ||
-                instanceData?.connected === true ||
-                payload?.connected === true);
-            return { id: inst.id, connected: isConnected };
-          } catch {
-            return { id: inst.id, connected: false };
-          }
+          const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
+          return { id: inst.id, connected: isResultConnected(data) };
         })
       );
 
