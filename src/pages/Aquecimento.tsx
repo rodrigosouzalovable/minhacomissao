@@ -435,10 +435,19 @@ export default function Aquecimento() {
           >
             <Phone className="h-4 w-4" /> Contatos Auto-Save
           </Button>
+          <Button
+            variant={activeTab === 'proxies' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('proxies')}
+            className="gap-1"
+          >
+            <Network className="h-4 w-4" /> Proxies
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
         {activeTab === 'autosave' && <AquecimentoAutoSaveTab />}
+        {activeTab === 'proxies' && <AquecimentoProxiesTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
