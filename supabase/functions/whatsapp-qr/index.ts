@@ -132,6 +132,11 @@ async function createInstance(userId: string) {
     return json({ ok: false, error: "Failed to save instance: " + dbError.message }, 500);
   }
 
+  // Aplicar proxy padrão (se ativado em system_settings) — fire-and-forget
+  applyDefaultProxyIfEnabled(inserted.id, instanceUrl, token).catch((e) =>
+    console.log(`[CREATE] Default proxy apply error (non-blocking): ${(e as Error).message}`)
+  );
+
   // Fire-and-forget: já pré-configura o webhook na UAZAPI assim que a instância existe.
   // Quando o usuário escanear o QR e conectar, o webhook já estará ativo.
   reinforceWebhook(inserted.id).catch((e) =>
