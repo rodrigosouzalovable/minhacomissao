@@ -3125,6 +3125,16 @@ export default function Acionamento() {
                                         IA Responde
                                       </Badge>
                                     )}
+                                    {inst.proxy_enabled && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] px-1.5 py-0 shrink-0 border-purple-500 text-purple-600 gap-1"
+                                        title={inst.proxy_host ? `Proxy: ${inst.proxy_host}` : 'Proxy ativo'}
+                                      >
+                                        <Network className="h-3 w-3" />
+                                        Proxy
+                                      </Badge>
+                                    )}
                                   </div>
                                   <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
                                 </div>
