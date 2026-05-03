@@ -1,83 +1,37 @@
-# Plano: Proxy SOCKS5 nas instâncias UAZAPI
+# Plano: Configurar Proxy por instância no editor de Acionamento
 
-## Status atual
-**Não há nada de proxy implementado** no projeto hoje (busquei em todo o código — frontend, edge functions, banco — zero referências). Vamos construir do zero.
+## Objetivo
+Adicionar uma seção **"Proxy SOCKS5 / HTTP"** dentro do formulário "Editar instância" em **Acionamento → Configuração WhatsApp**, permitindo configurar e aplicar o proxy diretamente naquele card, sem precisar ir até a aba Proxies do Aquecimento.
 
-## O que será entregue
+## O que será feito
 
-1. **Banco**: novas colunas em `user_whatsapp_instances` para guardar credenciais de proxy.
-2. **Edge function** que aplica o proxy na UAZAPI por instância.
-3. **UI nova** dentro de **Aquecimento → aba "Proxies"** (ou Configurações WhatsApp) com:
-   - Formulário individual por instância (host, porta, user, senha, ativar/desativar).
-   - **Botão "Aplicar proxy em massa"** com seleção de instâncias (todas / selecionar / só ativas).
-   - Indicador de status (proxy aplicado ✅ / pendente ⚠️ / erro ❌).
-4. **Aplicação automática em novas conexões**: ao criar instância via QR, se houver "proxy padrão" salvo, aplica antes de gerar QR.
+### 1) Novo componente `src/components/acionamento/ProxyInstanceSection.tsx`
+Recebe `instanceId` como prop. Carrega do banco as colunas já existentes (`proxy_enabled`, `proxy_type`, `proxy_host`, `proxy_port`, `proxy_username`, `proxy_password`, `proxy_aplicado_em`, `proxy_ultimo_erro`).
 
-## Detalhes técnicos
+Renderiza um bloco compacto com:
+- Switch ativar/desativar
+- Campos: Tipo (SOCKS5/HTTP) · Host · Porta · Usuário · Senha (com olho mostrar/ocultar)
+- Badge de status (Desativado / Pendente / Aplicado / Erro)
+- Mensagem do último erro (se houver)
+- Dois botões: **Salvar** (só persiste no banco) e **Salvar e aplicar na UAZAPI** (chama edge function `uazapi-set-proxy` já existente)
 
-### 1) Migration (schema)
-Adicionar em `user_whatsapp_instances`:
+### 2) Integração em `src/pages/Acionamento.tsx`
+Inserir `<ProxyInstanceSection instanceId={editingInstance.id} />` dentro do formulário de edição, **logo abaixo do bloco "Perfil WhatsApp"** (após o `</div>` da linha 3053) e antes dos botões "Salvar/Cancelar" da linha 3055.
+
+A seção só aparece quando `editingInstance.id` existe (instância já salva), pois precisa do ID para aplicar.
+
+### 3) Reaproveitamento total
+- Edge function `uazapi-set-proxy`: já existe, sem mudanças.
+- Schema: já existe, sem migration nova.
+- Aba "Proxies" no Aquecimento continua existindo para visão em massa.
+
+## Arquivos
 ```text
-proxy_enabled       boolean default false
-proxy_type          text default 'socks5'  -- 'socks5' | 'http'
-proxy_host          text
-proxy_port          integer
-proxy_username      text
-proxy_password      text
-proxy_aplicado_em   timestamptz
-proxy_ultimo_erro   text
-```
-RLS: já existe na tabela (owner). Sem mudança de policy.
-
-### 2) Edge function `uazapi-set-proxy`
-- Input: `{ instance_id }` ou `{ server_url, instance_token, proxy: {...} }`.
-- Fluxo:
-  1. Lê linha da instância (se receber `instance_id`).
-  2. Chama UAZAPI: `POST {server_url}/instance/updateProxy` com headers `token` + body `{ enabled, type, host, port, username, password }`. (UAZAPI suporta SOCKS5 nativamente.)
-  3. Em sucesso, atualiza `proxy_aplicado_em = now()`, limpa `proxy_ultimo_erro`.
-  4. Em erro, grava `proxy_ultimo_erro` e retorna 200 com `fallback:true` (segue regra global de erros UAZAPI).
-- Modo lote: aceitar `{ instance_ids: [...] }` e processar com **delay 1–3s entre chamadas** (anti-rate-limit), retornando relatório `{ ok, falhas }`.
-
-### 3) UI — nova aba "Proxies" em `/aquecimento`
-Componente `ProxiesTab.tsx`:
-- Tabela das 103 instâncias com colunas: Nome | Host | Porta | User | Status | Ações.
-- Edição inline (click → input).
-- Botão "Aplicar agora" por linha → chama `uazapi-set-proxy`.
-- **Toolbar superior**:
-  - Checkbox "Selecionar todas".
-  - Inputs para "Aplicar mesmo proxy em todas selecionadas" (cola host:porta:user:senha de uma vez).
-  - Botão "Aplicar em massa" → mostra progress bar (X/103).
-- Toggle global: "Aplicar proxy automaticamente em novas instâncias".
-
-### 4) Integração com criação de instância
-Em `supabase/functions/whatsapp-qr/index.ts`, após `instance/init` e antes do `instance/connect`:
-- Se houver proxy padrão configurado (lido de uma nova tabela `system_settings` chave `default_proxy`) **e** o toggle global estiver ligado, chama `updateProxy` antes do connect.
-
-### 5) Segurança
-- Senha de proxy fica no banco (não há como evitar — UAZAPI exige), protegida por RLS de owner.
-- Mascarar senha na UI (`••••`) com botão "mostrar".
-- Não logar `proxy_password` em edge function.
-
-## Arquivos a criar/alterar
-```text
-NOVO  supabase/functions/uazapi-set-proxy/index.ts
-NOVO  src/components/aquecimento/ProxiesTab.tsx
-EDIT  src/pages/Aquecimento.tsx                  (adicionar nova tab)
-EDIT  supabase/functions/whatsapp-qr/index.ts    (aplicar proxy padrão em novas)
-MIG   ALTER TABLE user_whatsapp_instances ADD COLUMN proxy_*
-MIG   CREATE TABLE system_settings (key text PK, value jsonb)  -- p/ proxy padrão
+NOVO  src/components/acionamento/ProxyInstanceSection.tsx
+EDIT  src/pages/Acionamento.tsx  (1 import + 1 linha JSX no editor)
 ```
 
-## Custo Lovable Cloud
-- **Aplicação inicial nas 103**: ~103 invocações **uma vez** (≈ $0.01).
-- **Recorrente**: zero — só roda quando você pedir.
-- Sem cron novo, sem polling. **Impacto desprezível.**
+## Custo Cloud
+Zero adicional. A edge function só é invocada quando o usuário clica em "Aplicar".
 
-## Ordem de execução
-1. Migration (schema + tabela settings).
-2. Edge function `uazapi-set-proxy` (modo single + lote).
-3. UI `ProxiesTab` integrada em Aquecimento.
-4. Hook em `whatsapp-qr` para novas conexões.
-5. Você cola um proxy de teste em 1 instância → valida → aplica em massa.
-
-Aprovar para eu executar?
+Aprovar para eu implementar?
