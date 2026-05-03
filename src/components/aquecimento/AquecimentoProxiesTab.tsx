@@ -40,6 +40,7 @@ export default function AquecimentoProxiesTab() {
 
   // bulk apply form
   const [bulk, setBulk] = useState({ host: '', port: '', username: '', password: '', type: 'socks5' });
+  const [pasteList, setPasteList] = useState('');
 
   // global default
   const [globalEnabled, setGlobalEnabled] = useState(false);
@@ -156,6 +157,55 @@ export default function AquecimentoProxiesTab() {
     await load();
   }
 
+  // Distribui uma lista colada (host:port:user:pass por linha) em round-robin nas selecionadas
+  async function distributePastedList() {
+    if (selected.size === 0) { toast.error('Selecione ao menos uma instância'); return; }
+    const lines = pasteList.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const proxies = lines.map((l) => {
+      const parts = l.split(':');
+      if (parts.length < 2) return null;
+      const [host, port, username = '', password = ''] = parts;
+      const portNum = parseInt(port, 10);
+      if (!host || !portNum) return null;
+      return { host, port: portNum, username, password };
+    }).filter(Boolean) as { host: string; port: number; username: string; password: string }[];
+
+    if (proxies.length === 0) { toast.error('Nenhuma proxy válida. Use host:port:user:pass por linha'); return; }
+
+    const ids = Array.from(selected);
+    setApplying(true);
+    setProgress({ done: 0, total: ids.length });
+
+    // 1) salvar config round-robin
+    await Promise.all(ids.map((id, i) => {
+      const p = proxies[i % proxies.length];
+      return supabase.from('user_whatsapp_instances').update({
+        proxy_enabled: true,
+        proxy_type: 'socks5',
+        proxy_host: p.host,
+        proxy_port: p.port,
+        proxy_username: p.username || null,
+        proxy_password: p.password || null,
+      } as any).eq('id', id);
+    }));
+
+    // 2) aplicar na UAZAPI em chunks
+    const CHUNK = 5;
+    let done = 0;
+    let okTotal = 0;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const { data, error } = await supabase.functions.invoke('uazapi-set-proxy', { body: { instance_ids: chunk } });
+      if (!error && data) okTotal += data.ok || 0;
+      done += chunk.length;
+      setProgress({ done, total: ids.length });
+    }
+    setApplying(false);
+    toast.success(`Distribuído ${proxies.length} proxies em ${ids.length} instâncias. Aplicados: ${okTotal}`);
+    setSelected(new Set());
+    await load();
+  }
+
   async function saveGlobalDefault() {
     const value = {
       enabled: globalEnabled,
@@ -227,6 +277,33 @@ export default function AquecimentoProxiesTab() {
             </Button>
           </div>
           {applying && <Progress value={progress.total ? (progress.done / progress.total) * 100 : 0} />}
+        </CardContent>
+      </Card>
+
+      {/* Distribuir lista colada (round-robin) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Distribuir lista de proxies (round-robin)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-xs text-muted-foreground">
+            Cole uma proxy por linha no formato <code className="font-mono">host:port:user:pass</code>. Cada proxy será distribuída entre as instâncias selecionadas (round-robin se houver menos proxies que instâncias).
+          </div>
+          <textarea
+            className="w-full min-h-[120px] rounded-md border border-input bg-background p-2 text-sm font-mono"
+            placeholder={'144.225.3.4:12323:user:pass\n144.225.3.49:12323:user:pass'}
+            value={pasteList}
+            onChange={(e) => setPasteList(e.target.value)}
+          />
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              {pasteList.split(/\r?\n/).filter(l => l.trim()).length} linhas · {selected.size} instâncias selecionadas
+            </div>
+            <Button onClick={distributePastedList} disabled={applying || selected.size === 0 || !pasteList.trim()} className="gap-2">
+              <Zap className="h-4 w-4" />
+              {applying ? `Aplicando ${progress.done}/${progress.total}...` : 'Distribuir e aplicar'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

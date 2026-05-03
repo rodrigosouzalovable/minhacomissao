@@ -487,18 +487,15 @@ async function applyDefaultProxyIfEnabled(instanceId: string, serverUrl: string,
   if (!cfg || !cfg.enabled || !cfg.host || !cfg.port) return;
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   try {
-    const res = await fetch(`${cleanUrl}/instance/updateProxy`, {
+    const res = await fetch(`${cleanUrl}/instance/proxy`, {
       method: "POST",
       headers: { "Content-Type": "application/json", token },
       body: JSON.stringify({
-        enabled: true,
-        proxy: {
-          type: cfg.type || "socks5",
-          host: cfg.host,
-          port: Number(cfg.port),
-          username: cfg.username || "",
-          password: cfg.password || "",
-        },
+        host: cfg.host,
+        port: Number(cfg.port),
+        protocol: cfg.type || "socks5",
+        username: cfg.username || "",
+        password: cfg.password || "",
       }),
     });
     const ok = res.ok;

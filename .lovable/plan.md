@@ -1,37 +1,34 @@
-# Plano: Configurar Proxy por instância no editor de Acionamento
+## Causa do erro
 
-## Objetivo
-Adicionar uma seção **"Proxy SOCKS5 / HTTP"** dentro do formulário "Editar instância" em **Acionamento → Configuração WhatsApp**, permitindo configurar e aplicar o proxy diretamente naquele card, sem precisar ir até a aba Proxies do Aquecimento.
+O erro **"Method Not Allowed"** vem direto da UAZAPI. Nossa edge function `uazapi-set-proxy` está chamando um endpoint que **não existe** na API v2:
 
-## O que será feito
+- Atual (errado): `POST /instance/updateProxy` com body `{ enabled, proxy: {...} }`
+- Correto na UAZAPI v2:
+  - `POST /instance/proxy` → cadastrar/alterar proxy (body **plano**)
+  - `DELETE /instance/proxy` → remover proxy
+  - `GET /instance/proxy` → consultar
 
-### 1) Novo componente `src/components/acionamento/ProxyInstanceSection.tsx`
-Recebe `instanceId` como prop. Carrega do banco as colunas já existentes (`proxy_enabled`, `proxy_type`, `proxy_host`, `proxy_port`, `proxy_username`, `proxy_password`, `proxy_aplicado_em`, `proxy_ultimo_erro`).
+Como o caminho `/instance/updateProxy` não aceita POST, o servidor responde **405 Method Not Allowed**. Por isso todas as instâncias falham igual, independente da credencial. Suas proxies (`144.225.3.4:12323:14a3a2169e1ed:dca71c87d7` etc.) estão em formato `host:port:user:pass` e estão corretas — o problema é só no endpoint.
 
-Renderiza um bloco compacto com:
-- Switch ativar/desativar
-- Campos: Tipo (SOCKS5/HTTP) · Host · Porta · Usuário · Senha (com olho mostrar/ocultar)
-- Badge de status (Desativado / Pendente / Aplicado / Erro)
-- Mensagem do último erro (se houver)
-- Dois botões: **Salvar** (só persiste no banco) e **Salvar e aplicar na UAZAPI** (chama edge function `uazapi-set-proxy` já existente)
-
-### 2) Integração em `src/pages/Acionamento.tsx`
-Inserir `<ProxyInstanceSection instanceId={editingInstance.id} />` dentro do formulário de edição, **logo abaixo do bloco "Perfil WhatsApp"** (após o `</div>` da linha 3053) e antes dos botões "Salvar/Cancelar" da linha 3055.
-
-A seção só aparece quando `editingInstance.id` existe (instância já salva), pois precisa do ID para aplicar.
-
-### 3) Reaproveitamento total
-- Edge function `uazapi-set-proxy`: já existe, sem mudanças.
-- Schema: já existe, sem migration nova.
-- Aba "Proxies" no Aquecimento continua existindo para visão em massa.
-
-## Arquivos
-```text
-NOVO  src/components/acionamento/ProxyInstanceSection.tsx
-EDIT  src/pages/Acionamento.tsx  (1 import + 1 linha JSX no editor)
+Body correto esperado pela UAZAPI:
+```json
+{ "host": "144.225.3.4", "port": 12323, "protocol": "socks5", "username": "14a3a2169e1ed", "password": "dca71c87d7" }
 ```
 
-## Custo Cloud
-Zero adicional. A edge function só é invocada quando o usuário clica em "Aplicar".
+## O que será alterado
 
-Aprovar para eu implementar?
+### 1. `supabase/functions/uazapi-set-proxy/index.ts`
+- Quando `enabled = true`: `POST /instance/proxy` com `{ host, port, protocol, username, password }` (campo correto é `protocol`, não `type`).
+- Quando `enabled = false` (ou desativando): `DELETE /instance/proxy` para remover o proxy da instância na UAZAPI.
+- Manter persistência em `user_whatsapp_instances` (`proxy_aplicado_em`, `proxy_ultimo_erro`) e o delay 1–3s entre instâncias.
+- Continuar tratando `disconnected/timeout` como `fallback:true` com HTTP 200 (regra do projeto).
+
+### 2. `whatsapp-qr` (auto-aplicação do proxy padrão em novas instâncias)
+- Atualizar a chamada para usar `POST /instance/proxy` com o mesmo body plano.
+
+### 3. Importação rápida (qualidade de vida — opcional, no mesmo passo)
+- Adicionar no componente `AquecimentoProxiesTab.tsx` um campo "Colar lista" que aceita linhas no formato `host:port:user:pass` e distribui automaticamente entre as instâncias selecionadas (round-robin) — útil para suas 5 proxies acima. Se preferir manter como está hoje (digitação manual / aplicar a mesma em massa), basta avisar e eu pulo este item.
+
+## Após o deploy
+- Abrir a instância "62981941073 MEMU 21 15/04" → preencher `144.225.3.4 / 12323 / 14a3a2169e1ed / dca71c87d7` → "Salvar e aplicar na UAZAPI".
+- O badge deve passar de "Erro: Method Not Allowed" para "Aplicado".

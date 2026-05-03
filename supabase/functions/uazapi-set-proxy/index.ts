@@ -29,28 +29,28 @@ interface ProxyConfig {
 
 async function applyToUazapi(serverUrl: string, token: string, p: ProxyConfig) {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
-  // UAZAPI: POST /instance/updateProxy with token header
-  const body = {
-    enabled: p.enabled,
-    proxy: p.enabled
-      ? {
-          type: p.type,
-          host: p.host,
-          port: Number(p.port),
-          username: p.username || "",
-          password: p.password || "",
-        }
-      : null,
-  };
+  // UAZAPI v2: POST /instance/proxy (cadastrar/alterar) ou DELETE /instance/proxy (remover)
+  // Body plano: { host, port, protocol, username, password }
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 25000);
   try {
-    const res = await fetch(`${cleanUrl}/instance/updateProxy`, {
-      method: "POST",
+    const url = `${cleanUrl}/instance/proxy`;
+    const method = p.enabled ? "POST" : "DELETE";
+    const init: RequestInit = {
+      method,
       headers: { "Content-Type": "application/json", token },
-      body: JSON.stringify(body),
       signal: ctrl.signal,
-    });
+    };
+    if (p.enabled) {
+      init.body = JSON.stringify({
+        host: p.host,
+        port: Number(p.port),
+        protocol: p.type || "socks5",
+        username: p.username || "",
+        password: p.password || "",
+      });
+    }
+    const res = await fetch(url, init);
     const txt = await res.text();
     let data: any = null;
     try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 300) }; }
