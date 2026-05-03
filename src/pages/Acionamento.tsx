@@ -458,11 +458,8 @@ export default function Acionamento() {
 
     const results = await Promise.all(activeOnes.map(async (inst) => {
       try {
-        const { data, error } = await supabase.functions.invoke('test-uazapi-connection', {
-          body: { server_url: inst.server_url, instance_token: inst.instance_token }
-        });
-        if (error) throw error;
-        const isConnected = data?.ok && data?.data?.status?.connected === true;
+        const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
+        const isConnected = isResultConnected(data);
         setConnectionStatus(prev => ({ ...prev, [inst.id]: isConnected ? 'connected' : 'disconnected' }));
         return { id: inst.id, connected: isConnected };
       } catch {
