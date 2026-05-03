@@ -40,6 +40,7 @@ export default function AquecimentoProxiesTab() {
 
   // bulk apply form
   const [bulk, setBulk] = useState({ host: '', port: '', username: '', password: '', type: 'socks5' });
+  const [pasteList, setPasteList] = useState('');
 
   // global default
   const [globalEnabled, setGlobalEnabled] = useState(false);
