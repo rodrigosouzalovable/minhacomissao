@@ -10,9 +10,10 @@ import { toast } from 'sonner';
 
 interface Props {
   instanceId: string;
+  onChanged?: (patch: { proxy_enabled: boolean; proxy_host: string | null }) => void;
 }
 
-export function ProxyInstanceSection({ instanceId }: Props) {
+export function ProxyInstanceSection({ instanceId, onChanged }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
