@@ -125,24 +125,8 @@ export function PaymentReminders() {
         setInstances([]);
         const checks = await Promise.allSettled(
           (instRes.data as any[]).map(async (inst) => {
-            try {
-              const { data } = await supabase.functions.invoke('test-uazapi-connection', {
-                body: { server_url: inst.server_url, instance_token: inst.instance_token },
-              });
-              const payload = (data as any)?.data ?? {};
-              const instanceData = payload?.instance ?? payload;
-              const rawStatus = String(instanceData?.status ?? payload?.status ?? '').toLowerCase();
-              const isConnected =
-                (data as any)?.ok === true &&
-                (rawStatus === 'connected' ||
-                  rawStatus === 'open' ||
-                  rawStatus === 'online' ||
-                  instanceData?.connected === true ||
-                  payload?.connected === true);
-              return isConnected ? inst : null;
-            } catch {
-              return null;
-            }
+            const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
+            return isResultConnected(data) ? inst : null;
           })
         );
         const conectadas = checks
