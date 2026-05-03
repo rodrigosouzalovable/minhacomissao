@@ -356,7 +356,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email')
+        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
         .eq('user_id', user.id)
         .order('ordem' as any, { ascending: true })
         .order('criado_em', { ascending: false });
