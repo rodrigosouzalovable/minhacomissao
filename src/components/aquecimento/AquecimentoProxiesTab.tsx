@@ -280,6 +280,33 @@ export default function AquecimentoProxiesTab() {
         </CardContent>
       </Card>
 
+      {/* Distribuir lista colada (round-robin) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Distribuir lista de proxies (round-robin)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-xs text-muted-foreground">
+            Cole uma proxy por linha no formato <code className="font-mono">host:port:user:pass</code>. Cada proxy será distribuída entre as instâncias selecionadas (round-robin se houver menos proxies que instâncias).
+          </div>
+          <textarea
+            className="w-full min-h-[120px] rounded-md border border-input bg-background p-2 text-sm font-mono"
+            placeholder={'144.225.3.4:12323:user:pass\n144.225.3.49:12323:user:pass'}
+            value={pasteList}
+            onChange={(e) => setPasteList(e.target.value)}
+          />
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              {pasteList.split(/\r?\n/).filter(l => l.trim()).length} linhas · {selected.size} instâncias selecionadas
+            </div>
+            <Button onClick={distributePastedList} disabled={applying || selected.size === 0 || !pasteList.trim()} className="gap-2">
+              <Zap className="h-4 w-4" />
+              {applying ? `Aplicando ${progress.done}/${progress.total}...` : 'Distribuir e aplicar'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Proxy padrão global */}
       <Card>
         <CardHeader className="pb-3">
