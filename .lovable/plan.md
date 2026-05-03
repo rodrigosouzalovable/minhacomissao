@@ -1,89 +1,83 @@
-## Diagnóstico: o que está consumindo Cloud agora
+# Plano: Proxy SOCKS5 nas instâncias UAZAPI
 
-Levantei o consumo real das **últimas 24h** via logs de Edge Functions:
+## Status atual
+**Não há nada de proxy implementado** no projeto hoje (busquei em todo o código — frontend, edge functions, banco — zero referências). Vamos construir do zero.
 
-| Função | Chamadas/24h | Tempo médio | Problema |
-|---|---|---|---|
-| `whatsapp-chatbot` (webhook UAZAPI) | **3.405** | 67ms | Recebe milhares de mensagens de **grupos/broadcast** e só faz `Ignored` — gasta boot + execução à toa |
-| `test-uazapi-connection` | **1.959** | **414ms** | Chamada **1× por instância** (são 103 ativas!) toda vez que alguém abre Inbox / Acionamento / Campanhas Voz / Lembretes |
-| Outras | ~2 | — | Insignificante |
+## O que será entregue
 
-**Total: ~5.400 invocações/dia, ~17 min de CPU**, dominado por dois vilões. Crons rodando muito frequente também contribuem.
+1. **Banco**: novas colunas em `user_whatsapp_instances` para guardar credenciais de proxy.
+2. **Edge function** que aplica o proxy na UAZAPI por instância.
+3. **UI nova** dentro de **Aquecimento → aba "Proxies"** (ou Configurações WhatsApp) com:
+   - Formulário individual por instância (host, porta, user, senha, ativar/desativar).
+   - **Botão "Aplicar proxy em massa"** com seleção de instâncias (todas / selecionar / só ativas).
+   - Indicador de status (proxy aplicado ✅ / pendente ⚠️ / erro ❌).
+4. **Aplicação automática em novas conexões**: ao criar instância via QR, se houver "proxy padrão" salvo, aplica antes de gerar QR.
 
-## Plano de cortes (do mais barato para o mais técnico)
+## Detalhes técnicos
 
-### 1. Bloquear webhooks de grupo na UAZAPI (corta ~3.400 chamadas/dia)
-
-Sua memória já diz *"Never load group messages"*, e o código de fato ignora — mas a função **boota e executa** mesmo assim. A função `uazapi-disable-group-webhooks` já existe. Vou:
-
-- Rodá-la em **todas as 103 instâncias ativas** uma vez para reconfigurar webhooks na UAZAPI excluindo grupos/broadcast desde a origem.
-- Adicionar uma flag no `whatsapp-qr` para nunca registrar webhook de grupos em novas conexões (já está, mas vou validar).
-
-**Ganho esperado:** −60% das invocações totais.
-
-### 2. Cachear status de conexão das instâncias (corta ~1.700 chamadas/dia)
-
-Hoje `test-uazapi-connection` é chamada **1× por instância** ao abrir 4 páginas diferentes. Com 103 instâncias = 103 chamadas a cada abertura.
-
-Vou:
-
-- Criar um cache em memória (sessionStorage) por instância com **TTL de 5 minutos**. Se o status foi checado nos últimos 5 min, reusa.
-- Em **`PaymentReminders.tsx`**, **`CampanhasVoz.tsx`** e **`WhatsAppInbox.tsx` (diálogo nova conversa)** → usar cache.
-- Em **`Acionamento.tsx`** → manter o check no carregamento, mas com cache de 5 min entre re-renders.
-- Remover o **polling de 60s** em `WhatsAppInbox.tsx` (linha 270) que tenta importar histórico — substituir por **1 tentativa única** (já é idempotente).
-
-**Ganho esperado:** −80% das chamadas de `test-uazapi-connection`.
-
-### 3. Reduzir frequência de crons não-críticos (corta ~50% do consumo de cron)
-
-Hoje:
-- `process-acionamento-agendado-v2`: a cada 10 min (10h–23h) = **84×/dia**
-- `process-whatsapp-queue-10min`: a cada 10 min = **84×/dia**
-- `aquecimento-auto-diario`: a cada 30 min = **48×/dia**
-- `ai-budget-monitor-30min`: a cada 30 min = **48×/dia**
-
-Proposta:
-- `process-acionamento-agendado-v2` → **a cada 15 min** (de 10h às 22h) = 48×/dia
-- `process-whatsapp-queue-10min` → **a cada 15 min** = 48×/dia
-- `ai-budget-monitor-30min` → **a cada 60 min** = 24×/dia (suficiente, monitor)
-- `aquecimento-auto-diario` → manter (é o coração do anti-ban)
-
-**Ganho esperado:** −150 invocações/dia + menos compute do banco.
-
-### 4. Confirmar antes de executar
-
-Antes de mexer eu vou pedir sua confirmação explícita em **3 itens** que afetam comportamento visível:
-- (a) Reconfigurar webhook das 103 instâncias (uma vez, 5–10 min).
-- (b) Cache de 5 min no status de conexão (você verá um indicador "verificado há X min" se preferir).
-- (c) Reduzir frequência dos crons listados acima.
-
-## O que NÃO vou mexer (para não quebrar nada)
-- Lembretes automáticos das 09:20 BRT — segue intacto.
-- Aquecimento (07h–21h ping-pong) — segue intacto.
-- Realtime do Inbox, fluxo de envio de WhatsApp manual.
-- Dashboards, comissões, financeiro — sem impacto.
-
-## Detalhe técnico (resumo)
-
+### 1) Migration (schema)
+Adicionar em `user_whatsapp_instances`:
 ```text
-Arquivos a alterar (frontend):
-  src/pages/WhatsAppInbox.tsx       — remover polling 60s, usar cache
-  src/pages/CampanhasVoz.tsx        — usar cache
-  src/components/PaymentReminders.tsx — usar cache
-  src/pages/Acionamento.tsx         — usar cache nas 2 chamadas
-  src/lib/uazapiConnectionCache.ts  — NOVO (cache em memória + sessionStorage TTL 5min)
+proxy_enabled       boolean default false
+proxy_type          text default 'socks5'  -- 'socks5' | 'http'
+proxy_host          text
+proxy_port          integer
+proxy_username      text
+proxy_password      text
+proxy_aplicado_em   timestamptz
+proxy_ultimo_erro   text
+```
+RLS: já existe na tabela (owner). Sem mudança de policy.
 
-Backend:
-  Migration: UPDATE cron.job SET schedule = ... (3 jobs)
-  Invocação manual: uazapi-disable-group-webhooks p/ cada instância ativa
+### 2) Edge function `uazapi-set-proxy`
+- Input: `{ instance_id }` ou `{ server_url, instance_token, proxy: {...} }`.
+- Fluxo:
+  1. Lê linha da instância (se receber `instance_id`).
+  2. Chama UAZAPI: `POST {server_url}/instance/updateProxy` com headers `token` + body `{ enabled, type, host, port, username, password }`. (UAZAPI suporta SOCKS5 nativamente.)
+  3. Em sucesso, atualiza `proxy_aplicado_em = now()`, limpa `proxy_ultimo_erro`.
+  4. Em erro, grava `proxy_ultimo_erro` e retorna 200 com `fallback:true` (segue regra global de erros UAZAPI).
+- Modo lote: aceitar `{ instance_ids: [...] }` e processar com **delay 1–3s entre chamadas** (anti-rate-limit), retornando relatório `{ ok, falhas }`.
+
+### 3) UI — nova aba "Proxies" em `/aquecimento`
+Componente `ProxiesTab.tsx`:
+- Tabela das 103 instâncias com colunas: Nome | Host | Porta | User | Status | Ações.
+- Edição inline (click → input).
+- Botão "Aplicar agora" por linha → chama `uazapi-set-proxy`.
+- **Toolbar superior**:
+  - Checkbox "Selecionar todas".
+  - Inputs para "Aplicar mesmo proxy em todas selecionadas" (cola host:porta:user:senha de uma vez).
+  - Botão "Aplicar em massa" → mostra progress bar (X/103).
+- Toggle global: "Aplicar proxy automaticamente em novas instâncias".
+
+### 4) Integração com criação de instância
+Em `supabase/functions/whatsapp-qr/index.ts`, após `instance/init` e antes do `instance/connect`:
+- Se houver proxy padrão configurado (lido de uma nova tabela `system_settings` chave `default_proxy`) **e** o toggle global estiver ligado, chama `updateProxy` antes do connect.
+
+### 5) Segurança
+- Senha de proxy fica no banco (não há como evitar — UAZAPI exige), protegida por RLS de owner.
+- Mascarar senha na UI (`••••`) com botão "mostrar".
+- Não logar `proxy_password` em edge function.
+
+## Arquivos a criar/alterar
+```text
+NOVO  supabase/functions/uazapi-set-proxy/index.ts
+NOVO  src/components/aquecimento/ProxiesTab.tsx
+EDIT  src/pages/Aquecimento.tsx                  (adicionar nova tab)
+EDIT  supabase/functions/whatsapp-qr/index.ts    (aplicar proxy padrão em novas)
+MIG   ALTER TABLE user_whatsapp_instances ADD COLUMN proxy_*
+MIG   CREATE TABLE system_settings (key text PK, value jsonb)  -- p/ proxy padrão
 ```
 
-## Ordem de execução proposta
-1. Criar cache + atualizar 4 arquivos frontend → corte imediato no polling.
-2. Migration para reagendar 3 crons.
-3. Script único para chamar `uazapi-disable-group-webhooks` em todas as 103 instâncias.
-4. Monitorar 24h e reportar nova baseline.
+## Custo Lovable Cloud
+- **Aplicação inicial nas 103**: ~103 invocações **uma vez** (≈ $0.01).
+- **Recorrente**: zero — só roda quando você pedir.
+- Sem cron novo, sem polling. **Impacto desprezível.**
 
-**Estimativa de redução total:** ~70–80% das invocações de Edge Functions e proporcionalmente do consumo Cloud.
+## Ordem de execução
+1. Migration (schema + tabela settings).
+2. Edge function `uazapi-set-proxy` (modo single + lote).
+3. UI `ProxiesTab` integrada em Aquecimento.
+4. Hook em `whatsapp-qr` para novas conexões.
+5. Você cola um proxy de teste em 1 instância → valida → aplica em massa.
 
 Aprovar para eu executar?
