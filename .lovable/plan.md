@@ -1,42 +1,89 @@
-## Objetivo
+## Diagnóstico: o que está consumindo Cloud agora
 
-Expandir o botão "Aplicar perfil em todas as instâncias" (na aba Acionamento → editar instância → seção Perfil WhatsApp) para:
+Levantei o consumo real das **últimas 24h** via logs de Edge Functions:
 
-1. Aplicar **todos os campos** do perfil de uma vez (foto, nome, descrição, endereço, e-mail) — não apenas nome e foto.
-2. Permitir **selecionar quais instâncias** receberão a atualização (uma, várias ou todas), em vez de aplicar a todas as conectadas.
-3. Reduzir o intervalo aleatório entre instâncias de **20–40s para 10–30s**.
+| Função | Chamadas/24h | Tempo médio | Problema |
+|---|---|---|---|
+| `whatsapp-chatbot` (webhook UAZAPI) | **3.405** | 67ms | Recebe milhares de mensagens de **grupos/broadcast** e só faz `Ignored` — gasta boot + execução à toa |
+| `test-uazapi-connection` | **1.959** | **414ms** | Chamada **1× por instância** (são 103 ativas!) toda vez que alguém abre Inbox / Acionamento / Campanhas Voz / Lembretes |
+| Outras | ~2 | — | Insignificante |
 
-## Mudanças em `src/pages/Acionamento.tsx`
+**Total: ~5.400 invocações/dia, ~17 min de CPU**, dominado por dois vilões. Crons rodando muito frequente também contribuem.
 
-### Estado novo
-- `bulkUpdateApplyDescription`, `bulkUpdateApplyAddress`, `bulkUpdateApplyEmail` (booleans, default `true`).
-- `bulkSelectedInstanceIds: Set<string>` — IDs marcados manualmente para receber a atualização.
-- Inicialização: ao abrir o diálogo, pré-selecionar todas as outras instâncias conectadas.
+## Plano de cortes (do mais barato para o mais técnico)
 
-### Diálogo de confirmação `bulkUpdateConfirmOpen`
-- Adicionar três checkboxes: "Aplicar descrição", "Aplicar endereço", "Aplicar e-mail" (com prévia do valor atual entre `<strong>`).
-- Adicionar uma seção "Selecione as instâncias" com:
-  - Botões "Selecionar todas" / "Limpar".
-  - Lista rolável (max-h ~48) das instâncias `ativo && connectionStatus==='connected'` (excluindo a editada), cada uma com `Checkbox` controlando `bulkSelectedInstanceIds`.
-- Estimativa de tempo recalculada com base em `bulkSelectedInstanceIds.size` e novo range (10–30s ⇒ ~0,5 a 1,5 min por instância).
-- Botão "Iniciar" desabilitado se nenhum campo marcado **ou** nenhuma instância selecionada.
+### 1. Bloquear webhooks de grupo na UAZAPI (corta ~3.400 chamadas/dia)
 
-### `handleBulkProfileUpdate`
-- Trocar `connectedOthers` por `instances.filter(i => bulkSelectedInstanceIds.has(i.id))`.
-- Para cada instância selecionada, dentro do try:
-  - Manter blocos de nome e foto existentes.
-  - Adicionar bloco para dados comerciais quando qualquer um dos três (descrição/endereço/e-mail) estiver marcado: um único POST a `${cleanUrl}/business/update/profile` enviando apenas os campos marcados (mesmos valores usados em `handleSaveProfileBusiness`), seguido de update no DB (`whatsapp_profile_description/address/email`) e em `setInstances`.
-  - Inserir pequenas pausas randomizadas (5–10s) entre as três sub-etapas (nome → foto → dados comerciais) quando mais de uma estiver ativa, mantendo o padrão atual de pausa entre nome e foto.
-- Trocar o delay entre instâncias: `randomDelay(20000, 40000)` → `randomDelay(10000, 30000)`.
-- Ajustar condição `disabled` do botão "Aplicar perfil em todas as instâncias" para considerar também `profileDescription`, `profileAddress`, `profileEmail`.
+Sua memória já diz *"Never load group messages"*, e o código de fato ignora — mas a função **boota e executa** mesmo assim. A função `uazapi-disable-group-webhooks` já existe. Vou:
 
-### Texto auxiliar
-- Atualizar a frase informativa abaixo do botão (atualmente diz "20-40s entre cada" e está duplicada): trocar para texto único "Atualiza foto, nome, descrição, endereço e e-mail gradativamente, uma instância por vez (10–30s entre cada)".
+- Rodá-la em **todas as 103 instâncias ativas** uma vez para reconfigurar webhooks na UAZAPI excluindo grupos/broadcast desde a origem.
+- Adicionar uma flag no `whatsapp-qr` para nunca registrar webhook de grupos em novas conexões (já está, mas vou validar).
 
-## Memória
-Atualizar `mem://features/whatsapp/bulk-profile-update-anti-ban` para refletir o novo intervalo (10–30s) e a cobertura completa de campos + seleção manual de instâncias.
+**Ganho esperado:** −60% das invocações totais.
 
-## Não muda
-- Endpoints UAZAPI usados (`/profile/name`, `/profile/image`, `/business/update/profile`).
-- Lógica de cache em `user_whatsapp_instances`.
-- Pausa de 5 minutos em caso de erro entre instâncias.
+### 2. Cachear status de conexão das instâncias (corta ~1.700 chamadas/dia)
+
+Hoje `test-uazapi-connection` é chamada **1× por instância** ao abrir 4 páginas diferentes. Com 103 instâncias = 103 chamadas a cada abertura.
+
+Vou:
+
+- Criar um cache em memória (sessionStorage) por instância com **TTL de 5 minutos**. Se o status foi checado nos últimos 5 min, reusa.
+- Em **`PaymentReminders.tsx`**, **`CampanhasVoz.tsx`** e **`WhatsAppInbox.tsx` (diálogo nova conversa)** → usar cache.
+- Em **`Acionamento.tsx`** → manter o check no carregamento, mas com cache de 5 min entre re-renders.
+- Remover o **polling de 60s** em `WhatsAppInbox.tsx` (linha 270) que tenta importar histórico — substituir por **1 tentativa única** (já é idempotente).
+
+**Ganho esperado:** −80% das chamadas de `test-uazapi-connection`.
+
+### 3. Reduzir frequência de crons não-críticos (corta ~50% do consumo de cron)
+
+Hoje:
+- `process-acionamento-agendado-v2`: a cada 10 min (10h–23h) = **84×/dia**
+- `process-whatsapp-queue-10min`: a cada 10 min = **84×/dia**
+- `aquecimento-auto-diario`: a cada 30 min = **48×/dia**
+- `ai-budget-monitor-30min`: a cada 30 min = **48×/dia**
+
+Proposta:
+- `process-acionamento-agendado-v2` → **a cada 15 min** (de 10h às 22h) = 48×/dia
+- `process-whatsapp-queue-10min` → **a cada 15 min** = 48×/dia
+- `ai-budget-monitor-30min` → **a cada 60 min** = 24×/dia (suficiente, monitor)
+- `aquecimento-auto-diario` → manter (é o coração do anti-ban)
+
+**Ganho esperado:** −150 invocações/dia + menos compute do banco.
+
+### 4. Confirmar antes de executar
+
+Antes de mexer eu vou pedir sua confirmação explícita em **3 itens** que afetam comportamento visível:
+- (a) Reconfigurar webhook das 103 instâncias (uma vez, 5–10 min).
+- (b) Cache de 5 min no status de conexão (você verá um indicador "verificado há X min" se preferir).
+- (c) Reduzir frequência dos crons listados acima.
+
+## O que NÃO vou mexer (para não quebrar nada)
+- Lembretes automáticos das 09:20 BRT — segue intacto.
+- Aquecimento (07h–21h ping-pong) — segue intacto.
+- Realtime do Inbox, fluxo de envio de WhatsApp manual.
+- Dashboards, comissões, financeiro — sem impacto.
+
+## Detalhe técnico (resumo)
+
+```text
+Arquivos a alterar (frontend):
+  src/pages/WhatsAppInbox.tsx       — remover polling 60s, usar cache
+  src/pages/CampanhasVoz.tsx        — usar cache
+  src/components/PaymentReminders.tsx — usar cache
+  src/pages/Acionamento.tsx         — usar cache nas 2 chamadas
+  src/lib/uazapiConnectionCache.ts  — NOVO (cache em memória + sessionStorage TTL 5min)
+
+Backend:
+  Migration: UPDATE cron.job SET schedule = ... (3 jobs)
+  Invocação manual: uazapi-disable-group-webhooks p/ cada instância ativa
+```
+
+## Ordem de execução proposta
+1. Criar cache + atualizar 4 arquivos frontend → corte imediato no polling.
+2. Migration para reagendar 3 crons.
+3. Script único para chamar `uazapi-disable-group-webhooks` em todas as 103 instâncias.
+4. Monitorar 24h e reportar nova baseline.
+
+**Estimativa de redução total:** ~70–80% das invocações de Edge Functions e proporcionalmente do consumo Cloud.
+
+Aprovar para eu executar?
