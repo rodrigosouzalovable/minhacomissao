@@ -1723,6 +1723,27 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       team_members: {
         Row: {
           criado_em: string
@@ -1848,6 +1869,14 @@ export type Database = {
           instance_token: string
           nome: string | null
           ordem: number | null
+          proxy_aplicado_em: string | null
+          proxy_enabled: boolean
+          proxy_host: string | null
+          proxy_password: string | null
+          proxy_port: number | null
+          proxy_type: string
+          proxy_ultimo_erro: string | null
+          proxy_username: string | null
           robo: boolean
           server_url: string
           telefone: string | null
@@ -1870,6 +1899,14 @@ export type Database = {
           instance_token: string
           nome?: string | null
           ordem?: number | null
+          proxy_aplicado_em?: string | null
+          proxy_enabled?: boolean
+          proxy_host?: string | null
+          proxy_password?: string | null
+          proxy_port?: number | null
+          proxy_type?: string
+          proxy_ultimo_erro?: string | null
+          proxy_username?: string | null
           robo?: boolean
           server_url: string
           telefone?: string | null
@@ -1892,6 +1929,14 @@ export type Database = {
           instance_token?: string
           nome?: string | null
           ordem?: number | null
+          proxy_aplicado_em?: string | null
+          proxy_enabled?: boolean
+          proxy_host?: string | null
+          proxy_password?: string | null
+          proxy_port?: number | null
+          proxy_type?: string
+          proxy_ultimo_erro?: string | null
+          proxy_username?: string | null
           robo?: boolean
           server_url?: string
           telefone?: string | null

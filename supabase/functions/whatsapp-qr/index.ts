@@ -132,6 +132,11 @@ async function createInstance(userId: string) {
     return json({ ok: false, error: "Failed to save instance: " + dbError.message }, 500);
   }
 
+  // Aplicar proxy padrão (se ativado em system_settings) — fire-and-forget
+  applyDefaultProxyIfEnabled(inserted.id, instanceUrl, token).catch((e) =>
+    console.log(`[CREATE] Default proxy apply error (non-blocking): ${(e as Error).message}`)
+  );
+
   // Fire-and-forget: já pré-configura o webhook na UAZAPI assim que a instância existe.
   // Quando o usuário escanear o QR e conectar, o webhook já estará ativo.
   reinforceWebhook(inserted.id).catch((e) =>
@@ -475,6 +480,44 @@ async function disconnectInstance(instanceId: string) {
 }
 
 // ── REINFORCE WEBHOOK (fire-and-forget helper, com retry + verify) ──
+async function applyDefaultProxyIfEnabled(instanceId: string, serverUrl: string, token: string) {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.from("system_settings").select("value").eq("key", "default_proxy").maybeSingle();
+  const cfg: any = data?.value;
+  if (!cfg || !cfg.enabled || !cfg.host || !cfg.port) return;
+  const cleanUrl = serverUrl.replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${cleanUrl}/instance/updateProxy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token },
+      body: JSON.stringify({
+        enabled: true,
+        proxy: {
+          type: cfg.type || "socks5",
+          host: cfg.host,
+          port: Number(cfg.port),
+          username: cfg.username || "",
+          password: cfg.password || "",
+        },
+      }),
+    });
+    const ok = res.ok;
+    await sb.from("user_whatsapp_instances").update({
+      proxy_enabled: true,
+      proxy_type: cfg.type || "socks5",
+      proxy_host: cfg.host,
+      proxy_port: Number(cfg.port),
+      proxy_username: cfg.username || null,
+      proxy_password: cfg.password || null,
+      proxy_aplicado_em: ok ? new Date().toISOString() : null,
+      proxy_ultimo_erro: ok ? null : `HTTP ${res.status}`,
+    }).eq("id", instanceId);
+    console.log(`[CREATE] Default proxy applied to ${instanceId}: ${ok}`);
+  } catch (e) {
+    console.log(`[CREATE] Default proxy error: ${(e as Error).message}`);
+  }
+}
+
 async function reinforceWebhook(instanceId: string) {
   const instance = await getInstanceById(instanceId);
   if (!instance) return;
