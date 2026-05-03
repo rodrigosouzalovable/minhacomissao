@@ -3053,6 +3053,11 @@ export default function Acionamento() {
                         </div>
                       )}
 
+                      {/* Proxy configuration */}
+                      {editingInstance.id && (
+                        <ProxyInstanceSection instanceId={editingInstance.id} />
+                      )}
+
                       <div className="flex gap-2">
                         <Button onClick={handleSaveInstance} disabled={savingInstance} size="sm">
                           {savingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
