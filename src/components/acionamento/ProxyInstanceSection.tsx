@@ -178,7 +178,7 @@ export function ProxyInstanceSection({ instanceId }: Props) {
       )}
 
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" className="h-8 text-xs flex-1" onClick={save} disabled={saving}>
+        <Button size="sm" variant="outline" className="h-8 text-xs flex-1" onClick={handleSaveClick} disabled={saving}>
           {saving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
           Salvar
         </Button>
