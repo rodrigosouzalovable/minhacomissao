@@ -55,20 +55,32 @@ export function ProxyInstanceSection({ instanceId }: Props) {
     return () => { cancel = true; };
   }, [instanceId]);
 
-  async function save() {
+  async function save(overrides?: Partial<typeof data>) {
+    const merged = { ...data, ...(overrides || {}) };
     setSaving(true);
     const { error } = await supabase.from('user_whatsapp_instances' as any).update({
-      proxy_enabled: data.proxy_enabled,
-      proxy_type: data.proxy_type,
-      proxy_host: data.proxy_host || null,
-      proxy_port: data.proxy_port === '' ? null : Number(data.proxy_port),
-      proxy_username: data.proxy_username || null,
-      proxy_password: data.proxy_password || null,
+      proxy_enabled: merged.proxy_enabled,
+      proxy_type: merged.proxy_type,
+      proxy_host: merged.proxy_host || null,
+      proxy_port: merged.proxy_port === '' ? null : Number(merged.proxy_port),
+      proxy_username: merged.proxy_username || null,
+      proxy_password: merged.proxy_password || null,
     } as any).eq('id', instanceId);
     setSaving(false);
     if (error) { toast.error('Erro: ' + error.message); return false; }
-    toast.success('Proxy salvo');
     return true;
+  }
+
+  // Auto-salva quando o switch é alternado (evita que o usuário perca o estado ao sair sem clicar em Salvar)
+  async function handleToggleEnabled(v: boolean) {
+    setData(d => ({ ...d, proxy_enabled: v }));
+    const ok = await save({ proxy_enabled: v });
+    if (ok) toast.success(v ? 'Proxy ativado' : 'Proxy desativado');
+  }
+
+  async function handleSaveClick() {
+    const ok = await save();
+    if (ok) toast.success('Proxy salvo');
   }
 
   async function applyNow() {
@@ -116,7 +128,7 @@ export function ProxyInstanceSection({ instanceId }: Props) {
         </h5>
         <div className="flex items-center gap-2">
           {statusBadge()}
-          <Switch checked={data.proxy_enabled} onCheckedChange={(v) => setData(d => ({ ...d, proxy_enabled: v }))} />
+          <Switch checked={data.proxy_enabled} onCheckedChange={handleToggleEnabled} />
         </div>
       </div>
 
@@ -166,7 +178,7 @@ export function ProxyInstanceSection({ instanceId }: Props) {
       )}
 
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" className="h-8 text-xs flex-1" onClick={save} disabled={saving}>
+        <Button size="sm" variant="outline" className="h-8 text-xs flex-1" onClick={handleSaveClick} disabled={saving}>
           {saving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
           Salvar
         </Button>
