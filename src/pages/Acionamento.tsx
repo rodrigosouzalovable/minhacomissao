@@ -213,7 +213,7 @@ export default function Acionamento() {
   const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
