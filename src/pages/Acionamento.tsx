@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { User, Building2, Mail, MapPin, ImageIcon } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { QrCode, Smartphone, GripVertical } from 'lucide-react';
