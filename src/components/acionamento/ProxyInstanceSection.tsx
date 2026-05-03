@@ -10,9 +10,10 @@ import { toast } from 'sonner';
 
 interface Props {
   instanceId: string;
+  onChanged?: (patch: { proxy_enabled: boolean; proxy_host: string | null }) => void;
 }
 
-export function ProxyInstanceSection({ instanceId }: Props) {
+export function ProxyInstanceSection({ instanceId, onChanged }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -68,6 +69,7 @@ export function ProxyInstanceSection({ instanceId }: Props) {
     } as any).eq('id', instanceId);
     setSaving(false);
     if (error) { toast.error('Erro: ' + error.message); return false; }
+    onChanged?.({ proxy_enabled: !!merged.proxy_enabled, proxy_host: merged.proxy_host || null });
     return true;
   }
 
