@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
 import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSaveTab';
+import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
