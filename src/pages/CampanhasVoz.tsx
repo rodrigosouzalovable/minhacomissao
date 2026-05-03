@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
