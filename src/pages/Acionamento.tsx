@@ -3055,7 +3055,12 @@ export default function Acionamento() {
 
                       {/* Proxy configuration */}
                       {editingInstance.id && (
-                        <ProxyInstanceSection instanceId={editingInstance.id} />
+                        <ProxyInstanceSection
+                          instanceId={editingInstance.id}
+                          onChanged={(patch) => {
+                            setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, proxy_enabled: patch.proxy_enabled, proxy_host: patch.proxy_host } : i));
+                          }}
+                        />
                       )}
 
                       <div className="flex gap-2">
