@@ -227,7 +227,41 @@ export default function AquecimentoAutoSaveTab() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Taxa Sucesso 24h</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{taxaSucesso}%</div></CardContent></Card>
       </div>
 
-      {/* Configuração */}
+      {/* Top 10 chips silenciosos (Unanswered Counter) */}
+      <Card className="border-amber-500/40">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            Top 10 Chips Silenciosos
+            <Badge variant="outline" className="ml-2 text-xs">Unanswered Counter</Badge>
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Chips sem resposta acumulada. ≥8: limite reduzido. ≥20: pausa automática.</p>
+        </CardHeader>
+        <CardContent>
+          <div className="border rounded-md overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Instância</TableHead><TableHead className="text-right">Sem resposta</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {silenciosos.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-4">Nenhum dado.</TableCell></TableRow>}
+                {silenciosos.map(s => (
+                  <TableRow key={s.instancia_id}>
+                    <TableCell className="text-xs">{instancias.get(s.instancia_id) || s.instancia_id.slice(0, 8)}</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant={s.mensagens_sem_resposta >= 20 ? 'destructive' : s.mensagens_sem_resposta >= 8 ? 'secondary' : 'outline'}>
+                        {s.mensagens_sem_resposta}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {s.pausado_por_silencio ? <Badge variant="destructive">Pausado por silêncio</Badge> : <span className="text-muted-foreground">{s.status}</span>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><Settings className="h-4 w-4" />Configuração do Auto-Save</CardTitle>
