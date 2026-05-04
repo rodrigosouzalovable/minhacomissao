@@ -1,34 +1,58 @@
-## Causa do erro
+Encontrei sinais fortes de consumo automático no backend, não de IA.
 
-O erro **"Method Not Allowed"** vem direto da UAZAPI. Nossa edge function `uazapi-set-proxy` está chamando um endpoint que **não existe** na API v2:
+Pelo print, o saldo que caiu foi o saldo de Cloud: `Top-ups used $9.66`. A parte de AI está praticamente zerada (`$0` de top-up usado). Então o problema não parece ser Gemini/IA, e sim execução de backend, automações, funções e armazenamento.
 
-- Atual (errado): `POST /instance/updateProxy` com body `{ enabled, proxy: {...} }`
-- Correto na UAZAPI v2:
-  - `POST /instance/proxy` → cadastrar/alterar proxy (body **plano**)
-  - `DELETE /instance/proxy` → remover proxy
-  - `GET /instance/proxy` → consultar
+O que encontrei agora:
 
-Como o caminho `/instance/updateProxy` não aceita POST, o servidor responde **405 Method Not Allowed**. Por isso todas as instâncias falham igual, independente da credencial. Suas proxies (`144.225.3.4:12323:14a3a2169e1ed:dca71c87d7` etc.) estão em formato `host:port:user:pass` e estão corretas — o problema é só no endpoint.
+- Tráfego do site está baixo: 6 visitantes e 13 pageviews ontem. Não parece ser pico de usuários.
+- Existem muitos jobs automáticos ativos no backend.
+- Nas últimas 24h, os maiores agendamentos rodaram mesmo sem trabalho útil:
+  - `process-whatsapp-queue-10min`: 70 execuções.
+  - `process-acionamento-agendado-v2`: 70 execuções.
+  - `ai-budget-monitor-30min`: 34 execuções recentes, e o código dessa função nem existe no repositório atual, ou seja, está chamando endpoint inútil.
+  - `aquecimento-auto-diario`: 30 execuções.
+  - `aquecimento-autosave-horario`: 15 execuções.
+- O aquecimento tem 166 registros, mas 0 ativos. Mesmo assim ainda existem jobs de aquecimento rodando automaticamente.
+- A tela de configuração do WhatsApp também está cara: ao abrir `/admin/acionamento`, ela testa conexão de todas as instâncias ativas. Hoje há 103 instâncias ativas, e os logs mostraram 360 chamadas recentes para `test-uazapi-connection`.
+- Armazenamento atual: `inbox-media` tem 4.916 arquivos, cerca de 404 MB. Não é o principal vilão sozinho, mas contribui.
 
-Body correto esperado pela UAZAPI:
-```json
-{ "host": "144.225.3.4", "port": 12323, "protocol": "socks5", "username": "14a3a2169e1ed", "password": "dca71c87d7" }
-```
+Plano para cortar agora, em modo emergência:
 
-## O que será alterado
+1. Pausar imediatamente jobs automáticos não essenciais
+   - Desativar os agendamentos que disparam funções externas sem necessidade imediata:
+     - `ai-budget-monitor-30min`
+     - `aquecimento-auto-diario`
+     - `aquecimento-autosave-horario`
+     - `aquecimento-promocao-fase-diaria`
+     - `daily-report-aquecimento-20h`
+     - `daily-whatsapp-report`
+     - `process-whatsapp-queue-10min`
+     - `process-acionamento-agendado-v2`
+   - Efeito: corta o consumo automático recorrente. Envios manuais continuam funcionando, mas filas/agendamentos/relatórios/aquecimento automáticos ficam pausados até reativarmos.
 
-### 1. `supabase/functions/uazapi-set-proxy/index.ts`
-- Quando `enabled = true`: `POST /instance/proxy` com `{ host, port, protocol, username, password }` (campo correto é `protocol`, não `type`).
-- Quando `enabled = false` (ou desativando): `DELETE /instance/proxy` para remover o proxy da instância na UAZAPI.
-- Manter persistência em `user_whatsapp_instances` (`proxy_aplicado_em`, `proxy_ultimo_erro`) e o delay 1–3s entre instâncias.
-- Continuar tratando `disconnected/timeout` como `fallback:true` com HTTP 200 (regra do projeto).
+2. Remover o job quebrado/inútil
+   - Remover definitivamente o agendamento `ai-budget-monitor-30min`, porque ele chama uma função que não existe no código atual.
 
-### 2. `whatsapp-qr` (auto-aplicação do proxy padrão em novas instâncias)
-- Atualizar a chamada para usar `POST /instance/proxy` com o mesmo body plano.
+3. Corrigir a tela de WhatsApp para não gastar ao abrir
+   - Alterar `/admin/acionamento` para não testar automaticamente as 100+ instâncias ao carregar a tela.
+   - Manter o status em cache e colocar a verificação atrás de ação manual, como botão `Verificar conexões` ou teste individual por instância.
+   - Isso evita centenas de chamadas `test-uazapi-connection` sempre que a tela abre ou re-renderiza.
 
-### 3. Importação rápida (qualidade de vida — opcional, no mesmo passo)
-- Adicionar no componente `AquecimentoProxiesTab.tsx` um campo "Colar lista" que aceita linhas no formato `host:port:user:pass` e distribui automaticamente entre as instâncias selecionadas (round-robin) — útil para suas 5 proxies acima. Se preferir manter como está hoje (digitação manual / aplicar a mesma em massa), basta avisar e eu pulo este item.
+4. Preservar funções manuais importantes
+   - Não remover funções de envio manual, QR Code, inbox ou configuração de proxy.
+   - Não apagar mensagens do banco.
+   - Não mexer em permissões nem em dados de clientes/acordos.
 
-## Após o deploy
-- Abrir a instância "62981941073 MEMU 21 15/04" → preencher `144.225.3.4 / 12323 / 14a3a2169e1ed / dca71c87d7` → "Salvar e aplicar na UAZAPI".
-- O badge deve passar de "Erro: Method Not Allowed" para "Aplicado".
+5. Verificar depois do corte
+   - Conferir a lista de agendamentos ativos.
+   - Confirmar que não há mais execução automática frequente.
+   - Conferir logs recentes para garantir que as chamadas automáticas pararam.
+
+Impacto esperado:
+
+- Corte imediato das execuções automáticas mais suspeitas.
+- Redução grande de chamadas à UAZAPI ao abrir a configuração do WhatsApp.
+- Automação de aquecimento, relatórios e filas/agendamentos ficam pausados temporariamente.
+- Você ainda poderá enviar manualmente e usar as telas principais.
+
+Se aprovar, eu aplico agora o modo emergência para parar o gasto recorrente.
