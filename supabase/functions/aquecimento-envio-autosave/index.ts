@@ -49,11 +49,7 @@ function pickMsg(): string {
   return MENSAGENS[Math.floor(Math.random() * MENSAGENS.length)];
 }
 
-function limiteDiarioPorFase(fase: number): number {
-  if (fase <= 2) return 3;
-  if (fase <= 4) return 5;
-  return 7;
-}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
