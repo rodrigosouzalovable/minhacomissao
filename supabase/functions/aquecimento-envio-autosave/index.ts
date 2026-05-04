@@ -1,5 +1,5 @@
 // Aquecimento Externo Auto-Save - sem IA, custo zero por envio
-// Prioriza envios para números âncora (70%) + pool de contatos externos (30%)
+// Prioriza envios para números âncora (configurável) + pool de contatos externos
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { salvarContatoAgendaCacheado } from "../_shared/agenda-contatos.ts";
 
@@ -9,7 +9,6 @@ const corsHeaders = {
 };
 
 // Números âncora (destinos prioritários — sempre online, respondem manualmente)
-// Formato: 55 + DDD + número
 const ANCORAS_PRIORITARIAS = [
   "5562991672674",
   "5562981810202",
@@ -20,10 +19,9 @@ const ANCORAS_PRIORITARIAS = [
   "5562981079569",
 ];
 
-const ANCORA_PROBABILITY = 0.7; // 70% âncoras, 30% pool externa
+const DEFAULT_ANCORA_PROBABILITY = 0.7;
 
 const MENSAGENS = [
-  // Originais (30)
   "Oi", "Olá", "Bom dia", "Boa tarde", "Boa noite",
   "E aí", "Salve", "Tudo bem?", "Tudo certo?", "Tudo bom?",
   "Como vai?", "Beleza?", "Oi, tudo bem?", "Olá, tudo bem?",
@@ -31,7 +29,6 @@ const MENSAGENS = [
   "Tudo joia?", "Tudo tranquilo?", "Como está?", "Oie",
   "Eai", "Opa", "Opa, tudo bem?", "Salve salve",
   "Tudo na paz?", "E aí, tudo certo?", "Boa!", "Olá!",
-  // Novas (20+) — variações naturais com emojis discretos
   "Hey, tudo joia? 👋", "Coe, firmeza?", "Bão?",
   "Fala chefe", "E aí, tranquilo?", "Suave?",
   "Oi, quanto tempo!", "Lembrou de mim?", "Passando pra dar um oi 👋",
@@ -59,21 +56,27 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
+    // Lê config (kill-switch + proporção âncora)
+    const { data: cfg } = await supabase
+      .from("aquecimento_autosave_config")
+      .select("ancora_probability, ativo")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (cfg && cfg.ativo === false) {
+      return json({ message: "Auto-save desativado via config", skipped: true });
+    }
+    const ancoraProb = typeof cfg?.ancora_probability === "number" ? cfg.ancora_probability : DEFAULT_ANCORA_PROBABILITY;
+
     // Horário comercial (07-21h BRT) e pausa de almoço (12-14h BRT)
     const now = new Date();
     const sp = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = sp.getHours();
     const dow = sp.getDay();
-    if (hour < 7 || hour >= 21) {
-      return json({ message: "Fora do horário", skipped: true });
-    }
-    if (hour >= 12 && hour < 14) {
-      return json({ message: "Pausa de almoço", skipped: true });
-    }
-    // Fator fim de semana: domingo 40%, sábado 60%, demais 100%
+    if (hour < 7 || hour >= 21) return json({ message: "Fora do horário", skipped: true });
+    if (hour >= 12 && hour < 14) return json({ message: "Pausa de almoço", skipped: true });
     const fatorDia = dow === 0 ? 0.4 : dow === 6 ? 0.6 : 1.0;
 
-    // Instâncias em aquecimento
     const { data: aquecInsts } = await supabase
       .from("whatsapp_aquecimento_instancias")
       .select("id, instancia_id, fase, status")
@@ -94,12 +97,10 @@ Deno.serve(async (req) => {
     const corte30dIso = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const corte7dIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
-    // Processa todas as instâncias EM PARALELO (cada uma é independente)
     const tasks = aquecInsts.map(async (aquec: any) => {
       const inst = instMap.get(aquec.instancia_id);
       if (!inst) return { status: "sem_instancia" };
 
-      // Aplica fator fim-de-semana (mín 1) ao limite da fase
       const limiteBase = limiteDiarioPorFase(aquec.fase || 1);
       const limite = Math.max(1, Math.floor(limiteBase * fatorDia));
 
@@ -107,21 +108,20 @@ Deno.serve(async (req) => {
         .from("aquecimento_envios_autosave")
         .select("id", { count: "exact", head: true })
         .eq("instancia_id", aquec.instancia_id)
+        .eq("status", "enviado")
         .gte("enviado_em", inicioDiaIso);
 
       if ((enviosHoje || 0) >= limite) {
         return { instancia: inst.nome, status: "limite_atingido", enviosHoje };
       }
 
-      // === Seleciona destino: 70% âncora, 30% pool externa ===
-      const useAncora = Math.random() < ANCORA_PROBABILITY;
+      const useAncora = Math.random() < ancoraProb;
       let numeroFinal: string | null = null;
       let contatoId: string | null = null;
       let nomeContato: string | null = null;
       let origem: "ancora" | "pool" = "ancora";
 
       if (useAncora) {
-        // Rodízio justo entre âncoras: pega a que esta instância MENOS usou nos últimos 7 dias
         const { data: usosAncora } = await supabase
           .from("aquecimento_envios_autosave")
           .select("numero_destino")
@@ -134,13 +134,11 @@ Deno.serve(async (req) => {
         (usosAncora || []).forEach((r: any) => {
           if (r.numero_destino) counts.set(r.numero_destino, (counts.get(r.numero_destino) || 0) + 1);
         });
-        // Ordena por menor uso e desempate aleatório
         const ordenados = [...counts.entries()].sort((a, b) => a[1] - b[1] || Math.random() - 0.5);
         numeroFinal = ordenados[0][0];
         nomeContato = `Âncora ${numeroFinal.slice(-4)}`;
         origem = "ancora";
       } else {
-        // Pool externa — lógica original (rotaciona por menor uso e exclui últimos 30 dias)
         const { data: usadosRecentes } = await supabase
           .from("aquecimento_envios_autosave")
           .select("contato_id")
@@ -159,7 +157,6 @@ Deno.serve(async (req) => {
 
         const contato = (candidatos || []).find((c: any) => !excluir.has(c.id));
         if (!contato) {
-          // Fallback: se a pool acabou, manda pra âncora
           const ancora = ANCORAS_PRIORITARIAS[Math.floor(Math.random() * ANCORAS_PRIORITARIAS.length)];
           numeroFinal = ancora;
           nomeContato = `Âncora ${ancora.slice(-4)}`;
@@ -174,25 +171,28 @@ Deno.serve(async (req) => {
       }
 
       if (!numeroFinal) {
+        // registra falha de seleção
+        await supabase.from("aquecimento_envios_autosave").insert({
+          instancia_id: aquec.instancia_id,
+          numero_destino: null,
+          mensagem_enviada: "(sem destino)",
+          status: "erro",
+          erro_detalhe: "sem_destino",
+          origem,
+        });
         return { instancia: inst.nome, status: "sem_destino" };
       }
 
       const mensagem = pickMsg();
 
       try {
-        // PRE-SAVE: salva contato na agenda física antes de enviar (cacheado)
         try {
           await salvarContatoAgendaCacheado(
-            supabase,
-            aquec.instancia_id,
-            inst.server_url,
-            inst.instance_token,
-            numeroFinal,
-            nomeContato || `Contato ${numeroFinal}`,
+            supabase, aquec.instancia_id, inst.server_url, inst.instance_token,
+            numeroFinal, nomeContato || `Contato ${numeroFinal}`,
           );
-        } catch (_) { /* não bloqueia envio se falhar */ }
+        } catch (_) { /* não bloqueia envio */ }
 
-        // Timeout de 20s por envio para evitar travamento
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 20000);
 
@@ -212,6 +212,8 @@ Deno.serve(async (req) => {
             contato_id: contatoId,
             numero_destino: numeroFinal,
             mensagem_enviada: mensagem,
+            status: "enviado",
+            origem,
           });
 
           if (contatoId) {
@@ -232,9 +234,29 @@ Deno.serve(async (req) => {
 
           return { instancia: inst.nome, destino: numeroFinal, origem, status: "enviado", msg: mensagem };
         } else {
+          // ⛔ REGISTRA FALHA HTTP
+          await supabase.from("aquecimento_envios_autosave").insert({
+            instancia_id: aquec.instancia_id,
+            contato_id: contatoId,
+            numero_destino: numeroFinal,
+            mensagem_enviada: mensagem,
+            status: "erro",
+            erro_detalhe: respText.substring(0, 250),
+            origem,
+          });
           return { instancia: inst.nome, destino: numeroFinal, origem, status: "erro", detalhe: respText.substring(0, 150) };
         }
       } catch (e) {
+        // ⛔ REGISTRA EXCEÇÃO
+        await supabase.from("aquecimento_envios_autosave").insert({
+          instancia_id: aquec.instancia_id,
+          contato_id: contatoId,
+          numero_destino: numeroFinal,
+          mensagem_enviada: mensagem,
+          status: "exception",
+          erro_detalhe: String(e).substring(0, 250),
+          origem,
+        });
         return { instancia: inst.nome, status: "exception", erro: String(e).substring(0, 150) };
       }
     });
@@ -243,12 +265,12 @@ Deno.serve(async (req) => {
     const enviados = resultados.filter((r: any) => r.status === "enviado").length;
     const enviadosAncora = resultados.filter((r: any) => r.status === "enviado" && r.origem === "ancora").length;
     const enviadosPool = resultados.filter((r: any) => r.status === "enviado" && r.origem === "pool").length;
+    const erros = resultados.filter((r: any) => r.status === "erro" || r.status === "exception").length;
 
     return json({
       success: true,
-      enviados,
-      enviadosAncora,
-      enviadosPool,
+      enviados, enviadosAncora, enviadosPool, erros,
+      ancora_probability: ancoraProb,
       total_instancias: aquecInsts.length,
       resultados,
     });
