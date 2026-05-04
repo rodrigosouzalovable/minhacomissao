@@ -19,7 +19,14 @@ const ANCORAS_PRIORITARIAS = [
   "5562981079569",
 ];
 
-const DEFAULT_ANCORA_PROBABILITY = 0.7;
+const DEFAULT_ANCORA_PROBABILITY = 1.0;
+
+// Limites reduzidos (CRISE 2026) — chips conservadores enquanto taxa de resposta < 25%
+function limiteDiarioPorFase(fase: number): number {
+  if (fase <= 2) return 3;
+  if (fase <= 4) return 6;
+  return 10;
+}
 
 const MENSAGENS = [
   "Oi", "Olá", "Bom dia", "Boa tarde", "Boa noite",
@@ -42,11 +49,7 @@ function pickMsg(): string {
   return MENSAGENS[Math.floor(Math.random() * MENSAGENS.length)];
 }
 
-function limiteDiarioPorFase(fase: number): number {
-  if (fase <= 2) return 3;
-  if (fase <= 4) return 5;
-  return 7;
-}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -185,6 +188,37 @@ Deno.serve(async (req) => {
 
       const mensagem = pickMsg();
 
+      // ⚡ PRÉ-CHECK CONEXÃO: evita martelar chips desconectados
+      try {
+        const ctrlChk = new AbortController();
+        const tChk = setTimeout(() => ctrlChk.abort(), 8000);
+        const chk = await fetch(`${inst.server_url}/instance/status`, {
+          method: "GET",
+          headers: { token: inst.instance_token },
+          signal: ctrlChk.signal,
+        });
+        clearTimeout(tChk);
+        const chkText = await chk.text();
+        const lower = chkText.toLowerCase();
+        const conectado = chk.ok && (lower.includes('"connected":true') || lower.includes('"connected"') === false ? lower.includes('"status":"connected"') || lower.includes('"status":"open"') || lower.includes('"status":"online"') : true);
+        const desconectado = lower.includes('disconnected') || lower.includes('not reconnectable') || lower.includes('"status":"closed"') || lower.includes('"status":"disconnected"');
+        if (desconectado || !chk.ok) {
+          await supabase.from("aquecimento_envios_autosave").insert({
+            instancia_id: aquec.instancia_id,
+            numero_destino: numeroFinal,
+            mensagem_enviada: mensagem,
+            status: "skipped_disconnected",
+            erro_detalhe: chkText.substring(0, 250),
+            origem,
+          });
+          // Pausar instância morta
+          await supabase.from("whatsapp_aquecimento_instancias")
+            .update({ status: "PAUSADO", pausado_por_silencio: false, updated_at: new Date().toISOString() })
+            .eq("instancia_id", aquec.instancia_id);
+          return { instancia: inst.nome, status: "skipped_disconnected" };
+        }
+      } catch (_) { /* se check falhar, segue tentativa normal */ }
+
       try {
         try {
           await salvarContatoAgendaCacheado(
@@ -216,6 +250,23 @@ Deno.serve(async (req) => {
             origem,
           });
 
+          // Incrementa contador de silêncio (resposta zera no webhook)
+          const { data: aquecRow } = await supabase
+            .from("whatsapp_aquecimento_instancias")
+            .select("id, mensagens_sem_resposta")
+            .eq("instancia_id", aquec.instancia_id)
+            .maybeSingle();
+          if (aquecRow) {
+            const novo = (aquecRow.mensagens_sem_resposta || 0) + 1;
+            const updates: any = { mensagens_sem_resposta: novo };
+            if (novo >= 20) {
+              updates.status = "PAUSADO";
+              updates.pausado_por_silencio = true;
+              updates.updated_at = new Date().toISOString();
+            }
+            await supabase.from("whatsapp_aquecimento_instancias").update(updates).eq("id", aquecRow.id);
+          }
+
           if (contatoId) {
             const { data: c } = await supabase
               .from("aquecimento_contatos_autosave")
@@ -234,17 +285,22 @@ Deno.serve(async (req) => {
 
           return { instancia: inst.nome, destino: numeroFinal, origem, status: "enviado", msg: mensagem };
         } else {
-          // ⛔ REGISTRA FALHA HTTP
+          const desc = respText.toLowerCase().includes('not reconnectable') || respText.toLowerCase().includes('disconnected');
           await supabase.from("aquecimento_envios_autosave").insert({
             instancia_id: aquec.instancia_id,
             contato_id: contatoId,
             numero_destino: numeroFinal,
             mensagem_enviada: mensagem,
-            status: "erro",
+            status: desc ? "skipped_disconnected" : "erro",
             erro_detalhe: respText.substring(0, 250),
             origem,
           });
-          return { instancia: inst.nome, destino: numeroFinal, origem, status: "erro", detalhe: respText.substring(0, 150) };
+          if (desc) {
+            await supabase.from("whatsapp_aquecimento_instancias")
+              .update({ status: "PAUSADO", updated_at: new Date().toISOString() })
+              .eq("instancia_id", aquec.instancia_id);
+          }
+          return { instancia: inst.nome, destino: numeroFinal, origem, status: desc ? "skipped_disconnected" : "erro", detalhe: respText.substring(0, 150) };
         }
       } catch (e) {
         // ⛔ REGISTRA EXCEÇÃO

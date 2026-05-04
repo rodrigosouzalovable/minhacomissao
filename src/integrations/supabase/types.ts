@@ -2341,6 +2341,8 @@ export type Database = {
           interacoes_hoje: number
           interacoes_total: number
           limite_diario: number
+          mensagens_sem_resposta: number
+          pausado_por_silencio: boolean
           respostas_recebidas: number
           status: string
           ultima_interacao: string | null
@@ -2358,6 +2360,8 @@ export type Database = {
           interacoes_hoje?: number
           interacoes_total?: number
           limite_diario?: number
+          mensagens_sem_resposta?: number
+          pausado_por_silencio?: boolean
           respostas_recebidas?: number
           status?: string
           ultima_interacao?: string | null
@@ -2375,6 +2379,8 @@ export type Database = {
           interacoes_hoje?: number
           interacoes_total?: number
           limite_diario?: number
+          mensagens_sem_resposta?: number
+          pausado_por_silencio?: boolean
           respostas_recebidas?: number
           status?: string
           ultima_interacao?: string | null

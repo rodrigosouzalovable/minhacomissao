@@ -1637,6 +1637,36 @@ serve(async (req) => {
       } catch (aquecErr) {
         console.error('[AQUECIMENTO] Erro ao verificar resposta de aquecimento:', aquecErr);
       }
+
+      // --- AUTOSAVE: marcar resposta de âncora/pool ---
+      try {
+        if (instanciaId) {
+          const last8 = inboxTelefone.replace(/\D/g, '').slice(-8);
+          const corte24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+          const { data: envios } = await supabase
+            .from('aquecimento_envios_autosave')
+            .select('id, numero_destino')
+            .eq('instancia_id', instanciaId)
+            .eq('status', 'enviado')
+            .eq('respondeu', false)
+            .gte('enviado_em', corte24h)
+            .order('enviado_em', { ascending: false })
+            .limit(20);
+          const match = (envios || []).find((e: any) => (e.numero_destino || '').replace(/\D/g, '').slice(-8) === last8);
+          if (match) {
+            await supabase.from('aquecimento_envios_autosave')
+              .update({ respondeu: true, resposta_em: new Date().toISOString() })
+              .eq('id', match.id);
+            // Zera contador de silêncio na instância
+            await supabase.from('whatsapp_aquecimento_instancias')
+              .update({ mensagens_sem_resposta: 0, pausado_por_silencio: false })
+              .eq('instancia_id', instanciaId);
+            console.log(`[AUTOSAVE] ✅ Resposta capturada de ${inboxTelefone} para envio ${match.id}`);
+          }
+        }
+      } catch (asErr) {
+        console.error('[AUTOSAVE] Erro ao marcar resposta:', asErr);
+      }
     }
 
     // --- INBOX-ONLY MODE: Não responder automaticamente ---
