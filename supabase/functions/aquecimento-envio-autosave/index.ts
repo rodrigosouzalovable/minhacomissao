@@ -19,7 +19,14 @@ const ANCORAS_PRIORITARIAS = [
   "5562981079569",
 ];
 
-const DEFAULT_ANCORA_PROBABILITY = 0.7;
+const DEFAULT_ANCORA_PROBABILITY = 1.0;
+
+// Limites reduzidos (CRISE 2026) — chips conservadores enquanto taxa de resposta < 25%
+function limiteDiarioPorFase(fase: number): number {
+  if (fase <= 2) return 3;
+  if (fase <= 4) return 6;
+  return 10;
+}
 
 const MENSAGENS = [
   "Oi", "Olá", "Bom dia", "Boa tarde", "Boa noite",
