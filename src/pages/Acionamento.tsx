@@ -478,12 +478,10 @@ export default function Acionamento() {
     setCheckingConnections(false);
   }, []);
 
-  // Check connections when instances are loaded
-  useEffect(() => {
-    if (instances.length > 0) {
-      checkInstanceConnections(instances);
-    }
-  }, [instances, checkInstanceConnections]);
+  // ECONOMIA: NÃO testar conexão de todas as instâncias automaticamente.
+  // Cada chamada vira invocação da edge function `test-uazapi-connection`.
+  // Use o botão "Verificar conexões" ou o botão individual por instância.
+  // Mantém apenas indicação visual neutra até o usuário pedir verificação.
 
   const disconnectedInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'disconnected'),
