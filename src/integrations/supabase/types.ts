@@ -305,6 +305,30 @@ export type Database = {
         }
         Relationships: []
       }
+      aquecimento_autosave_config: {
+        Row: {
+          ancora_probability: number
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          id: number
+        }
+        Insert: {
+          ancora_probability?: number
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: number
+        }
+        Update: {
+          ancora_probability?: number
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: number
+        }
+        Relationships: []
+      }
       aquecimento_contatos_autosave: {
         Row: {
           ativo: boolean
@@ -348,32 +372,41 @@ export type Database = {
         Row: {
           contato_id: string | null
           enviado_em: string
+          erro_detalhe: string | null
           id: string
           instancia_id: string
           mensagem_enviada: string
           numero_destino: string | null
+          origem: string | null
           respondeu: boolean
           resposta_em: string | null
+          status: string
         }
         Insert: {
           contato_id?: string | null
           enviado_em?: string
+          erro_detalhe?: string | null
           id?: string
           instancia_id: string
           mensagem_enviada: string
           numero_destino?: string | null
+          origem?: string | null
           respondeu?: boolean
           resposta_em?: string | null
+          status?: string
         }
         Update: {
           contato_id?: string | null
           enviado_em?: string
+          erro_detalhe?: string | null
           id?: string
           instancia_id?: string
           mensagem_enviada?: string
           numero_destino?: string | null
+          origem?: string | null
           respondeu?: boolean
           resposta_em?: string | null
+          status?: string
         }
         Relationships: [
           {
