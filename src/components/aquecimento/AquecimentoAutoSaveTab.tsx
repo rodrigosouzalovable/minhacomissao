@@ -122,13 +122,13 @@ export default function AquecimentoAutoSaveTab() {
   }, []);
 
   useEffect(() => { carregarEnvios(); }, [carregarEnvios]);
-  useEffect(() => { carregarConfig(); carregarInstancias(); carregarStats(); }, [carregarConfig, carregarInstancias, carregarStats]);
+  useEffect(() => { carregarConfig(); carregarInstancias(); carregarStats(); carregarSilenciosos(); }, [carregarConfig, carregarInstancias, carregarStats, carregarSilenciosos]);
 
-  // Polling 30s para envios e stats
+  // Polling 30s para envios, stats e silenciosos
   useEffect(() => {
-    const t = setInterval(() => { carregarEnvios(); carregarStats(); }, 30000);
+    const t = setInterval(() => { carregarEnvios(); carregarStats(); carregarSilenciosos(); }, 30000);
     return () => clearInterval(t);
-  }, [carregarEnvios, carregarStats]);
+  }, [carregarEnvios, carregarStats, carregarSilenciosos]);
 
   const salvarConfig = async () => {
     setSavingConfig(true);
