@@ -1,50 +1,40 @@
 ## Diagnóstico
 
-O `aquecimento-envio-autosave` **NÃO está rodando automaticamente**. Estado atual:
+O badge mostra "0/100 conectados" mesmo havendo chips ativos. Causa raiz identificada em `src/pages/Acionamento.tsx`:
 
-- Cron jobs ativos do aquecimento: apenas `whatsapp-aquecimento` (IA ping-pong, 1x/hora 08-20h) e `aquecimento-promocao-fase` (1x/dia)
-- **`aquecimento-envio-autosave` foi desligado** no corte emergencial e nunca foi reativado
-- **43 instâncias** em `EM_AQUECIMENTO`/`AQUECIDO` aguardando envios externos
-- **984 contatos ativos** na pool externa + 7 âncoras (celulares pessoais) prontos
-- **Último envio: hoje 10:00 UTC** (07h BRT) — apenas 29 envios em 24h, todos disparos manuais residuais
-- Sem cron, os chips ficam presos no cluster fechado IA-IA, exatamente o oposto do objetivo
+- `connectedCount` (linha 491) conta apenas instâncias com `connectionStatus[i.id] === 'connected'`.
+- `connectionStatus` só é populado quando `checkInstanceConnections()` roda.
+- Por economia de custo, a verificação automática ao montar a página foi removida (comentário linhas 481-484). Hoje só roda em dois cenários:
+  1. Logo após uma nova conexão via QR (linha 1528)
+  2. Clique manual no botão "Verificar conexões" (linha 1870)
 
-## Objetivo
+Resultado: ao abrir o diálogo "Configurações WhatsApp → Instâncias UAZAPI", nenhuma verificação foi disparada, então o status fica em `undefined` para todas as 100 instâncias e o badge mostra `0/100`. Os números/instâncias **estão lá no banco** — apenas o status visual não foi consultado.
 
-Reativar o cron do autosave para que **cada uma das 43 instâncias envie 1-7 mensagens/dia** para números externos (70% âncoras, 30% pool de 985), quebrando o cluster fechado.
+Confirma com o screenshot enviado: badge verde "0/100 conectados" com 100 instâncias listadas.
 
-## Plano
+## Correção proposta
 
-### 1. Criar cron job `aquecimento-autosave-horario`
+**1 alteração mínima em `src/pages/Acionamento.tsx`:**
 
-Migração SQL agendando a função 1x por hora, das **08h às 20h BRT** (11-23 UTC), mesma janela do ping-pong para máxima economia:
+Adicionar um `useEffect` que dispara `checkInstanceConnections(instances)` automaticamente quando `configDialogOpen` passa de `false` para `true`, **apenas se** ainda não há nenhum status carregado (evita re-verificar a cada abertura do diálogo). Como o `checkUazapiConnection` já tem cache de 5 min em `sessionStorage` (`src/lib/uazapiConnectionCache.ts`), reaberturas seguidas não geram custo extra.
 
-```text
-schedule: '0 11-23 * * *'  → 13 execuções/dia
-target:   /functions/v1/aquecimento-envio-autosave
+```ts
+useEffect(() => {
+  if (!configDialogOpen) return;
+  if (instances.length === 0) return;
+  // Só verifica se ainda não temos nenhum status (cache vazio nesta sessão)
+  const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
+  if (!jaTemAlgumStatus) checkInstanceConnections(instances);
+}, [configDialogOpen, instances, connectionStatus, checkInstanceConnections]);
 ```
 
-A própria função já tem proteções internas: respeita 07-21h BRT, pula 12-14h (almoço), aplica fator fim-de-semana (sáb 60%, dom 40%), respeita limite diário por fase (3-7 msg/instância) e faz rodízio justo entre âncoras.
+## Custo
 
-### 2. Estimativa de custo
+- Primeira abertura por sessão: 1 chamada `test-uazapi-connection` por instância ativa (~100), depois cacheada por 5 min.
+- Reaberturas dentro de 5 min: **0 chamadas** (cache).
+- Aumento mensal estimado: < US$ 0,10 (respeita a regra "Cloud Cost Awareness").
 
-| Item | Cálculo | Custo/mês |
-|---|---|---|
-| Invocações Edge | 13 exec/dia × 30 = 390/mês | ~US$ 0,02 |
-| Compute (Promise.all 43 instâncias, ~5-15s) | ~390 × 10s | ~US$ 0,15 |
-| DB writes (~100-300 inserts/dia em `aquecimento_envios_autosave` + updates pool) | ~6.000/mês | ~US$ 0,10 |
-| UAZAPI calls | externos (sem custo Lovable) | R$ 0 |
+## Fora de escopo
 
-**Total estimado: ~US$ 0,30 a 0,80/mês** (muito barato — sem IA, é só HTTP POST)
-
-Custo somado com o que já roda: **~US$ 3,30 a 5,80/mês total** (dentro da faixa econômica aprovada).
-
-### 3. Validação após aplicar
-
-- Disparar manualmente pelo botão "Disparar ciclo agora" na aba Auto-Save para confirmar
-- Verificar em 1-2h se contador "Envios Hoje" sobe naturalmente
-- Conferir distribuição 70/30 âncoras/pool no JSON de retorno
-
-## O que NÃO será reativado
-
-Mantidos desligados (economia): `process-whatsapp-queue`, `process-acionamento-agendado`, `daily-report-aquecimento-20h`, `cleanup-inbox-media-daily`, `ai-budget-monitor`. Reativar só sob pedido específico.
+- Não tocar em `checkInstanceConnections`, `connectedCount` ou no badge — a lógica está correta, só falta dispará-la.
+- Não restaurar a verificação automática ao montar a página (manter economia).

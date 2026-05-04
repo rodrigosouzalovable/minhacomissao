@@ -478,10 +478,17 @@ export default function Acionamento() {
     setCheckingConnections(false);
   }, []);
 
-  // ECONOMIA: NÃO testar conexão de todas as instâncias automaticamente.
+  // ECONOMIA: NÃO testar conexão de todas as instâncias automaticamente ao montar a página.
   // Cada chamada vira invocação da edge function `test-uazapi-connection`.
-  // Use o botão "Verificar conexões" ou o botão individual por instância.
-  // Mantém apenas indicação visual neutra até o usuário pedir verificação.
+  // Mas ao abrir o diálogo "Configurações WhatsApp" disparamos uma verificação
+  // (com cache de 5 min em sessionStorage), para que o badge "X/N conectados"
+  // reflita o estado real em vez de mostrar 0/N.
+  useEffect(() => {
+    if (!configDialogOpen) return;
+    if (instances.length === 0) return;
+    const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
+    if (!jaTemAlgumStatus) checkInstanceConnections(instances);
+  }, [configDialogOpen, instances, connectionStatus, checkInstanceConnections]);
 
   const disconnectedInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'disconnected'),
