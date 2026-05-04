@@ -112,7 +112,15 @@ export default function AquecimentoAutoSaveTab() {
     });
   }, []);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  const carregarSilenciosos = useCallback(async () => {
+    const { data } = await supabase
+      .from('whatsapp_aquecimento_instancias' as any)
+      .select('instancia_id, mensagens_sem_resposta, status, pausado_por_silencio')
+      .order('mensagens_sem_resposta', { ascending: false })
+      .limit(10);
+    if (data) setSilenciosos(data as any);
+  }, []);
+
   useEffect(() => { carregarEnvios(); }, [carregarEnvios]);
   useEffect(() => { carregarConfig(); carregarInstancias(); carregarStats(); }, [carregarConfig, carregarInstancias, carregarStats]);
 
