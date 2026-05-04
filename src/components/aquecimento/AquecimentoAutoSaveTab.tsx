@@ -52,6 +52,7 @@ export default function AquecimentoAutoSaveTab() {
   const [busca, setBusca] = useState('');
   const [enviosHoje, setEnviosHoje] = useState(0);
   const [stats24h, setStats24h] = useState({ ancora: 0, pool: 0, erros: 0, total: 0 });
+  const [silenciosos, setSilenciosos] = useState<Array<{ instancia_id: string; mensagens_sem_resposta: number; status: string; pausado_por_silencio: boolean }>>([]);
   const [config, setConfig] = useState<Config>({ ancora_probability: 0.7, ativo: true });
   const [configDirty, setConfigDirty] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
