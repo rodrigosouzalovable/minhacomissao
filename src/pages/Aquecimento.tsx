@@ -18,6 +18,7 @@ import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotific
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
 import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSaveTab';
 import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTab';
+import AquecimentoStatusTab from '@/components/aquecimento/AquecimentoStatusTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
