@@ -222,7 +222,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       );
     }
 
-    return <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>;
+    return <p className="whitespace-pre-wrap break-words select-text cursor-text">{msg.conteudo}</p>;
   };
 
   const handleConfirmDelete = () => {
