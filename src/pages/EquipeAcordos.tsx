@@ -135,6 +135,16 @@ export default function EquipeAcordos() {
     pagamentosEquipe.map(p => p.acordo_id)
   );
 
+  // Mapa: acordo_id -> última parcela paga (maior numero_parcela)
+  const ultimaParcelaPagaPorAcordo = new Map<string, { numero: number; data_paga: string }>();
+  pagamentosEquipe.forEach(p => {
+    if (p.numero_parcela == null || !p.data_paga) return;
+    const atual = ultimaParcelaPagaPorAcordo.get(p.acordo_id);
+    if (!atual || p.numero_parcela > atual.numero) {
+      ultimaParcelaPagaPorAcordo.set(p.acordo_id, { numero: p.numero_parcela, data_paga: p.data_paga });
+    }
+  });
+
   // IDs de acordos que possuem parcelas pagas dentro do período filtrado
   const acordosComPagamentoNoPeriodo = new Set(
     pagamentosFiltradosPorPeriodo.map(p => p.acordo_id)
