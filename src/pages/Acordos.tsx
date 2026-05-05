@@ -232,6 +232,11 @@ function AcordoCard({
                 <p className="text-xs text-muted-foreground mt-1">
                   Criado em {formatarData(acordo.criado_em)}
                 </p>
+                {ultimaParcelaPaga && (
+                  <p className="text-xs text-secondary mt-1">
+                    Última parcela paga: Parcela {ultimaParcelaPaga.numero} em {formatarData(ultimaParcelaPaga.data_paga)}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground my-[5px]">
                   Vencimento: {formatarData(acordo.data_primeiro_pagamento)}
                 </p>
