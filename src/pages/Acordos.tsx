@@ -750,7 +750,7 @@ export default function Acordos() {
         // Buscar TODAS as parcelas (pagas e pendentes) paginando para evitar limite de 1000 linhas do Supabase
         // Pendentes -> usadas para detectar quebra (>10 dias) e para datas futuras no filtro
         // Pagas -> usadas no filtro por data de vencimento (cliente que pagou na data ainda deve aparecer)
-        const todasParcelasPendentes: { acordo_id: string; data_prevista: string; status: string }[] = [];
+        const todasParcelasPendentes: { acordo_id: string; data_prevista: string; status: string; numero_parcela: number | null; data_paga: string | null }[] = [];
         const PAGE_SIZE = 1000;
         let pageStart = 0;
         let quebraError: any = null;
@@ -758,12 +758,12 @@ export default function Acordos() {
         while (true) {
           const { data: lote, error: loteError } = await supabase
             .from('pagamentos')
-            .select('acordo_id, data_prevista, status')
+            .select('acordo_id, data_prevista, status, numero_parcela, data_paga')
             .order('acordo_id', { ascending: true })
             .range(pageStart, pageStart + PAGE_SIZE - 1);
           if (loteError) { quebraError = loteError; break; }
           if (!lote || lote.length === 0) break;
-          todasParcelasPendentes.push(...lote);
+          todasParcelasPendentes.push(...lote as any);
           if (lote.length < PAGE_SIZE) break;
           pageStart += PAGE_SIZE;
         }
@@ -772,6 +772,7 @@ export default function Acordos() {
           // Agrupar por acordo_id: MAX data_prevista (apenas pendentes p/ quebra) e TODAS as datas (p/ filtro)
           const ultimaParcelaPendentePorAcordo = new Map<string, string>();
           const allDatesMap = new Map<string, string[]>();
+          const ultimaPagaMap = new Map<string, { numero: number; data_paga: string }>();
           todasParcelasPendentes.forEach(p => {
             // Para o filtro por vencimento: incluir parcelas pagas e pendentes
             const existing = allDatesMap.get(p.acordo_id) || [];
@@ -785,8 +786,17 @@ export default function Acordos() {
                 ultimaParcelaPendentePorAcordo.set(p.acordo_id, p.data_prevista);
               }
             }
+
+            // Última parcela paga (maior numero_parcela com status pago)
+            if (p.status === 'pago' && p.numero_parcela != null && p.data_paga) {
+              const atual = ultimaPagaMap.get(p.acordo_id);
+              if (!atual || p.numero_parcela > atual.numero) {
+                ultimaPagaMap.set(p.acordo_id, { numero: p.numero_parcela, data_paga: p.data_paga });
+              }
+            }
           });
           setTodasDatasPorAcordo(allDatesMap);
+          setUltimaParcelaPagaPorAcordo(ultimaPagaMap);
 
           // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
           ultimaParcelaPendentePorAcordo.forEach((ultimaData, acordoId) => {
