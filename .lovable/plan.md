@@ -1,53 +1,38 @@
-## Objetivo
+## Problema
 
-Em cada card de acordo nas páginas **Meus Acordos** (`src/pages/Acordos.tsx`) e **Acordos da Equipe** (`src/pages/EquipeAcordos.tsx`), exibir uma nova linha logo abaixo de "Criado em ..." com a última parcela marcada como paga, no formato:
+No `WhatsApp Inbox`, não é possível selecionar o texto das mensagens com o mouse. Só funciona o menu de contexto (botão direito → copiar).
 
-```
-Última parcela paga: Parcela 3 em 04/05/2026
-```
+A causa está em `src/components/inbox/ChatMessage.tsx`:
 
-Quando o acordo ainda não tiver nenhuma parcela paga, a linha não aparece (para não poluir o card).
+1. O wrapper externo do balão tem a classe `select-none` (CSS `user-select: none`), que impede a seleção de texto em todos os filhos.
+2. Os handlers de swipe-to-reply (`onPointerDown/Move/Up`) capturam o gesto do mouse antes que o navegador consiga iniciar uma seleção de texto, então arrastar dentro do balão move o balão em vez de selecionar.
 
-## Como será implementado
+## Mudanças
 
-### 1) `src/pages/Acordos.tsx`
+Arquivo único: `src/components/inbox/ChatMessage.tsx`
 
-- Criar novo state `ultimaParcelaPagaPorAcordo: Map<string, { numero: number; data_paga: string }>`.
-- Dentro do `loadAcordos` (linhas ~692–790), após carregar acordos, executar uma query paginada (mesmo padrão já usado para `pagamentos`):
-  - `select('acordo_id, numero_parcela, data_paga')`
-  - `.eq('status','pago')`
-  - `.in('acordo_id', idsAcordos)` (em chunks de 200 para evitar URL longa)
-  - paginação por `range` em lotes de 1000.
-- Reduzir o resultado pegando, por `acordo_id`, a parcela com **maior `numero_parcela`** (e `data_paga` correspondente). Salvar no map.
-- No `AcordoCard` (linhas ~227–235), adicionar nova `<p>` logo após a linha "Criado em":
-  ```tsx
-  {ultimaParcelaPaga && (
-    <p className="text-xs text-secondary mt-1">
-      Última parcela paga: Parcela {ultimaParcelaPaga.numero} em {formatarData(ultimaParcelaPaga.data_paga)}
-    </p>
-  )}
-  ```
-- Passar a prop `ultimaParcelaPaga` do pai para o `AcordoCard` em todos os locais onde ele é renderizado (abas Em Andamento, Realizados Pagos, Realizados Sem Pagamento, etc.).
+### 1) Remover `select-none` do wrapper, manter apenas onde precisa
 
-### 2) `src/pages/EquipeAcordos.tsx`
+- Remover `select-none` do `<div ref={swipeRef} ...>` externo.
+- Aplicar `select-text` (ou simplesmente não bloquear) na `<div>` interna do balão (a que renderiza `renderQuoted()` + `renderContent()`), garantindo que parágrafos de texto fiquem selecionáveis.
+- O ícone de swipe (CornerUpLeft) e o rodapé com horário/checks continuam com `select-none` para não atrapalhar o highlight.
 
-- Já existe `pagamentosEquipe` com `numero_parcela` e `data_paga` (linhas 372–381). **Nenhuma query nova** é necessária.
-- Construir um `useMemo` que reduz `pagamentosEquipe` para `Map<acordo_id, { numero, data_paga }>` (maior `numero_parcela`).
-- No bloco de renderização do card (linhas 845–851), adicionar logo após o `<p>Criado em ...</p>`:
-  ```tsx
-  {ultima && (
-    <p className="text-xs text-secondary mt-1">
-      Última parcela paga: Parcela {ultima.numero} em {formatarData(ultima.data_paga)}
-    </p>
-  )}
-  ```
+### 2) Swipe-to-reply só pelas bordas / em telas touch
 
-## Custo (Lovable Cloud)
+Para não conflitar com a seleção de texto via mouse, ajustar `handlePointerDown`:
 
-- **EquipeAcordos**: zero requisições adicionais (reusa dados já carregados).
-- **Acordos**: 1 query paginada extra de `pagamentos` filtrada por `status='pago'` e pelos IDs do usuário. Em volume típico (centenas de parcelas pagas por usuário), 1–2 chamadas SELECT por carregamento da página. Impacto mensal estimado < US$ 0,05. Respeita a regra **Cloud Cost Awareness**.
+- Se `e.pointerType === 'mouse'`: **não iniciar swipe** quando o clique cair sobre conteúdo de texto/imagem do balão. O swipe só inicia em mouse via duplo clique (que já dispara `triggerReply`) ou pelo menu de contexto → "Responder". Em mouse, o `onPointerDown` simplesmente não arma `swipeState.active`.
+- Se `e.pointerType === 'touch'` ou `'pen'`: comportamento atual mantido (swipe lateral funciona normalmente em mobile).
+
+Isso preserva o gesto de responder no celular (que é onde o swipe é útil) e libera a seleção natural com mouse no desktop.
+
+### 3) Pequenos ajustes
+
+- O elemento `<p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>` em `renderContent()` recebe `select-text cursor-text` para deixar claro ao usuário que o texto é selecionável.
+- O `ContextMenuTrigger` continua funcionando: o menu de contexto do Radix abre tanto em clique-direito sobre texto selecionado quanto em texto não selecionado.
 
 ## Fora de escopo
 
-- Não alterar lógica de quebra de acordo, vencidos, comissões ou filtros.
-- Não tocar no card de DevedorDetalhe (a parcela paga já é visível por lá).
+- Não mexer em outros componentes de chat (ex.: `ChatHistoryDialog`).
+- Não alterar o comportamento de swipe em mobile.
+- Sem mudanças de banco de dados, edge functions ou custo de Cloud.

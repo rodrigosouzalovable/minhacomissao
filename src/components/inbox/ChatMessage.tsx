@@ -222,7 +222,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       );
     }
 
-    return <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>;
+    return <p className="whitespace-pre-wrap break-words select-text cursor-text">{msg.conteudo}</p>;
   };
 
   const handleConfirmDelete = () => {
@@ -251,7 +251,9 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!onResponder || isTemp) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // No desktop (mouse), não interceptamos o gesto para permitir seleção de texto.
+    // Swipe-to-reply continua disponível em touch/pen (mobile).
+    if (e.pointerType === 'mouse') return;
     swipeState.current = { startX: e.clientX, active: true, pointerId: e.pointerId };
   };
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -303,7 +305,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   const messageBubble = (
     <div
       ref={swipeRef}
-      className={cn('relative flex select-none', isSaida ? 'justify-end' : 'justify-start')}
+      className={cn('relative flex', isSaida ? 'justify-end' : 'justify-start')}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endSwipe}
