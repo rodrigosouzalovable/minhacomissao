@@ -45,6 +45,18 @@ serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
 
+    // ⚠ COST CONTROL: drop group/broadcast/status events imediatamente.
+    const _bodyStr = JSON.stringify(body).substring(0, 4096);
+    if (
+      /"(chatid|chatId|remoteJid|from|wa_chatid)"\s*:\s*"[^"]*@g\.us"/i.test(_bodyStr) ||
+      /"(chatid|chatId|remoteJid|from|wa_chatid)"\s*:\s*"status@broadcast"/i.test(_bodyStr) ||
+      /"(isGroup|wa_isGroup)"\s*:\s*true/i.test(_bodyStr)
+    ) {
+      return new Response(JSON.stringify({ ok: true, ignored: 'group_or_broadcast' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // UAZAPI envia eventos de tipos diversos — tentamos extrair de forma tolerante.
     const eventType = String(body?.event || body?.type || body?.EventType || body?.action || '').toLowerCase();
 
