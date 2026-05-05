@@ -858,6 +858,14 @@ export default function EquipeAcordos() {
                           <p className="text-xs text-muted-foreground mt-1">
                             Criado em {formatarData(acordo.criado_em)}
                           </p>
+                          {(() => {
+                            const ultima = ultimaParcelaPagaPorAcordo.get(acordo.id);
+                            return ultima ? (
+                              <p className="text-xs text-secondary mt-1">
+                                Última parcela paga: Parcela {ultima.numero} em {formatarData(ultima.data_paga)}
+                              </p>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                       <div className="flex flex-col sm:items-end gap-2">
