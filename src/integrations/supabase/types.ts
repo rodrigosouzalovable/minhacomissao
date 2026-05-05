@@ -2475,28 +2475,40 @@ export type Database = {
         Row: {
           conteudo: string | null
           conteudo_url: string | null
+          erro: string | null
           id: string
+          imagem_id: string | null
           instancia_id: string
           postado_em: string
+          proximo_post_em: string | null
           resultado: string
+          status: string
           tipo: string
         }
         Insert: {
           conteudo?: string | null
           conteudo_url?: string | null
+          erro?: string | null
           id?: string
+          imagem_id?: string | null
           instancia_id: string
           postado_em?: string
+          proximo_post_em?: string | null
           resultado?: string
+          status?: string
           tipo?: string
         }
         Update: {
           conteudo?: string | null
           conteudo_url?: string | null
+          erro?: string | null
           id?: string
+          imagem_id?: string | null
           instancia_id?: string
           postado_em?: string
+          proximo_post_em?: string | null
           resultado?: string
+          status?: string
           tipo?: string
         }
         Relationships: [
