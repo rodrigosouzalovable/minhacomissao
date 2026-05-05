@@ -251,7 +251,9 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!onResponder || isTemp) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // No desktop (mouse), não interceptamos o gesto para permitir seleção de texto.
+    // Swipe-to-reply continua disponível em touch/pen (mobile).
+    if (e.pointerType === 'mouse') return;
     swipeState.current = { startX: e.clientX, active: true, pointerId: e.pointerId };
   };
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
