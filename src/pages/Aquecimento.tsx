@@ -444,11 +444,20 @@ export default function Aquecimento() {
           >
             <Network className="h-4 w-4" /> Proxies
           </Button>
+          <Button
+            variant={activeTab === 'status' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('status')}
+            className="gap-1"
+          >
+            <Zap className="h-4 w-4" /> Status Auto
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
         {activeTab === 'autosave' && <AquecimentoAutoSaveTab />}
         {activeTab === 'proxies' && <AquecimentoProxiesTab />}
+        {activeTab === 'status' && <AquecimentoStatusTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
