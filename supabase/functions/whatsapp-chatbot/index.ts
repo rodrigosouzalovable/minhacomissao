@@ -755,6 +755,29 @@ serve(async (req) => {
 
   try {
     const rawBody = await req.text();
+
+    // ⚠ COST CONTROL (pre-parse): bloqueio super barato por substring antes de
+    // gastar CPU com JSON.parse de payloads de grupo (que podem ter 100KB+).
+    // Procura sinais de grupo/broadcast/status diretamente no texto bruto.
+    const _rawSlice = rawBody.length > 4096 ? rawBody.substring(0, 4096) : rawBody;
+    if (
+      _rawSlice.includes('@g.us') ||
+      _rawSlice.includes('status@broadcast') ||
+      _rawSlice.includes('@broadcast') ||
+      _rawSlice.includes('"isGroup":true') ||
+      _rawSlice.includes('"wa_isGroup":true')
+    ) {
+      // Confirmação rápida: se o JID principal é grupo, dropar sem parse completo.
+      // Match em chatid/remoteJid/from terminando em @g.us
+      if (/"(chatid|chatId|remoteJid|from|wa_chatid)"\s*:\s*"[^"]*@g\.us"/i.test(_rawSlice)
+          || /"(chatid|chatId|remoteJid|from|wa_chatid)"\s*:\s*"status@broadcast"/i.test(_rawSlice)
+          || /"(isGroup|wa_isGroup)"\s*:\s*true/i.test(_rawSlice)) {
+        return new Response(JSON.stringify({ success: true, ignored: 'pre_parse_group' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     let payload: any;
     try {
       payload = JSON.parse(rawBody);
@@ -764,23 +787,20 @@ serve(async (req) => {
       });
     }
 
-    // ⚠ COST CONTROL (post-parse, precise): block groups/broadcasts/noise without
-    // false-positives on legitimate DMs whose metadata may mention '@g.us'.
+    // ⚠ COST CONTROL (post-parse, precise): block groups/broadcasts/noise.
     const blockCheck = isBlockedParsedPayload(payload);
     if (blockCheck.blocked) {
-      console.log(`[CHATBOT] Ignored: ${blockCheck.reason}`);
       return new Response(JSON.stringify({ success: true, ignored: blockCheck.reason }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 🔬 DEBUG: log full raw payload for any non-group webhook so we can see
-    // exactly what UAZAPI is sending for legitimate DMs (helps diagnose silent drops).
-    const _dmFrom = payload?.chatid || payload?.remoteJid || payload?.from || payload?.message?.key?.remoteJid || payload?.message?.chatid || payload?.chat?.wa_chatid || 'unknown';
-    const _dmFromMe = payload?.message?.fromMe ?? payload?.fromMe ?? payload?.key?.fromMe ?? false;
-    const _dmType = payload?.message?.messageType || payload?.messageType || payload?.type || 'unknown';
-    console.log(`[CHATBOT-DM] from=${_dmFrom} fromMe=${_dmFromMe} type=${_dmType}`);
-    console.log('[CHATBOT-DM] raw:', JSON.stringify(payload).substring(0, 800));
+    // 🔬 DEBUG opcional: ativar com env DEBUG_DM=true.
+    if (Deno.env.get('DEBUG_DM') === 'true') {
+      const _dmFrom = payload?.chatid || payload?.remoteJid || payload?.from || payload?.message?.key?.remoteJid || 'unknown';
+      const _dmType = payload?.message?.messageType || payload?.type || 'unknown';
+      console.log(`[CHATBOT-DM] from=${_dmFrom} type=${_dmType}`);
+    }
 
     // --- VOICE CALL EVENT HANDLING ---
     const eventType = payload?.event || payload?.type || payload?.action || '';
