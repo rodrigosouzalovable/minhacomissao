@@ -471,6 +471,7 @@ export default function Acordos() {
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
   const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(undefined);
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
+  const [ultimaParcelaPagaPorAcordo, setUltimaParcelaPagaPorAcordo] = useState<Map<string, { numero: number; data_paga: string }>>(new Map());
 
   // Buscar perfil do operador para nome dinâmico
   const { data: profile } = useQuery({
