@@ -1,38 +1,52 @@
-## Problema
+## Objetivo
 
-No `WhatsApp Inbox`, não é possível selecionar o texto das mensagens com o mouse. Só funciona o menu de contexto (botão direito → copiar).
+Ao filtrar/pesquisar em **Meus Acordos** ou **Acordos da Equipe**, abrir um card e voltar (botão Voltar do navegador ou navegação interna) deve restaurar **exatamente** os filtros, busca, aba ativa e seleção de funcionário/membro — e a posição de scroll.
 
-A causa está em `src/components/inbox/ChatMessage.tsx`:
+## Estratégia
 
-1. O wrapper externo do balão tem a classe `select-none` (CSS `user-select: none`), que impede a seleção de texto em todos os filhos.
-2. Os handlers de swipe-to-reply (`onPointerDown/Move/Up`) capturam o gesto do mouse antes que o navegador consiga iniciar uma seleção de texto, então arrastar dentro do balão move o balão em vez de selecionar.
+Persistir o estado de filtragem em `sessionStorage` (chave por página). Hidratar uma única vez no mount (lazy initial state) e gravar a cada mudança. `sessionStorage` mantém os filtros enquanto a aba do navegador estiver aberta e zera ao fechar — exatamente o comportamento esperado.
+
+Sem custos de Lovable Cloud (zero requisições novas).
 
 ## Mudanças
 
-Arquivo único: `src/components/inbox/ChatMessage.tsx`
+### 1) `src/pages/Acordos.tsx`
 
-### 1) Remover `select-none` do wrapper, manter apenas onde precisa
+Chave: `acordos:filters:v1`
 
-- Remover `select-none` do `<div ref={swipeRef} ...>` externo.
-- Aplicar `select-text` (ou simplesmente não bloquear) na `<div>` interna do balão (a que renderiza `renderQuoted()` + `renderContent()`), garantindo que parágrafos de texto fiquem selecionáveis.
-- O ícone de swipe (CornerUpLeft) e o rodapé com horário/checks continuam com `select-none` para não atrapalhar o highlight.
+Persistir:
+- `search` (string)
+- `statusFilter` (string)
+- `abaAtiva` ('pagos' | 'negociados' | 'proximas' | 'acordos_realizados' | 'vencidos')
+- `selectedUserId` (string)
+- `filtroDataVencimento` (ISO string ou null)
+- `filtroDataCriacao` (ISO string ou null)
+- `scrollY` (number) — salvo no `beforeunload` e ao clicar num card; restaurado após `loading=false`.
 
-### 2) Swipe-to-reply só pelas bordas / em telas touch
+Implementação:
+- Helpers locais `loadState()` / `saveState(partial)` no topo do componente.
+- Cada `useState` inicializa via função lazy lendo de `loadState()`. Datas viram `new Date(iso)`.
+- Um `useEffect` que observa todos os campos persistidos e chama `saveState({...})` com debounce (200 ms) usando `setTimeout`.
+- `useEffect` de scroll: ao montar, se houver `scrollY`, faz `window.scrollTo(0, scrollY)` após o primeiro render com dados. Ao navegar para um card (handler que abre `/acordo/:id`), salva `scrollY` antes do `navigate`.
 
-Para não conflitar com a seleção de texto via mouse, ajustar `handlePointerDown`:
+### 2) `src/pages/EquipeAcordos.tsx`
 
-- Se `e.pointerType === 'mouse'`: **não iniciar swipe** quando o clique cair sobre conteúdo de texto/imagem do balão. O swipe só inicia em mouse via duplo clique (que já dispara `triggerReply`) ou pelo menu de contexto → "Responder". Em mouse, o `onPointerDown` simplesmente não arma `swipeState.active`.
-- Se `e.pointerType === 'touch'` ou `'pen'`: comportamento atual mantido (swipe lateral funciona normalmente em mobile).
+Chave: `equipe-acordos:filters:v1`
 
-Isso preserva o gesto de responder no celular (que é onde o swipe é útil) e libera a seleção natural com mouse no desktop.
+Persistir:
+- `search`, `statusFilter`, `memberFilter`, `viewFilter`, `showEmpresaCards`
+- `startDate`, `endDate`, `filtroDataVencimento` (ISO ou null)
+- `scrollY`
 
-### 3) Pequenos ajustes
+Mesma técnica (lazy init + effect de save + restauração de scroll).
 
-- O elemento `<p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>` em `renderContent()` recebe `select-text cursor-text` para deixar claro ao usuário que o texto é selecionável.
-- O `ContextMenuTrigger` continua funcionando: o menu de contexto do Radix abre tanto em clique-direito sobre texto selecionado quanto em texto não selecionado.
+### 3) Detalhes técnicos
+
+- Usar try/catch em volta de `JSON.parse` para tolerar storage corrompido.
+- Versionar a chave (`:v1`) para permitir invalidar no futuro.
+- Não persistir nada sensível — são apenas strings/datas de UI.
 
 ## Fora de escopo
 
-- Não mexer em outros componentes de chat (ex.: `ChatHistoryDialog`).
-- Não alterar o comportamento de swipe em mobile.
-- Sem mudanças de banco de dados, edge functions ou custo de Cloud.
+- Não persistir filtros de outras páginas (Clientes, Acionamento etc.) — mesma técnica pode ser aplicada depois sob demanda.
+- Não usar `localStorage` (manteria filtros entre sessões, o que pode confundir o usuário).
