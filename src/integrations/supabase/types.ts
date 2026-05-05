@@ -2471,6 +2471,39 @@ export type Database = {
           },
         ]
       }
+      whatsapp_aquecimento_status_imagens: {
+        Row: {
+          ativo: boolean
+          caption: string | null
+          criado_em: string
+          id: string
+          nome: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          caption?: string | null
+          criado_em?: string
+          id?: string
+          nome: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          caption?: string | null
+          criado_em?: string
+          id?: string
+          nome?: string
+          public_url?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       whatsapp_aquecimento_status_log: {
         Row: {
           conteudo: string | null
