@@ -453,12 +453,27 @@ export default function Acordos() {
     toast
   } = useToast();
   const { isSending, statusMap, startSending, cancelSending } = useWhatsAppSending();
+  // Persistência de filtros entre navegação (sessionStorage)
+  const FILTERS_KEY = 'acordos:filters:v1';
+  const loadFilters = (): any => {
+    try {
+      const raw = sessionStorage.getItem(FILTERS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  };
+  const initial = loadFilters();
+  const parseDate = (v: any): Date | undefined => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+
   const [acordos, setAcordos] = useState<Acordo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [search, setSearch] = useState<string>(initial.search ?? '');
+  const [statusFilter, setStatusFilter] = useState<string>(initial.statusFilter ?? 'todos');
   const [acordoParaExcluir, setAcordoParaExcluir] = useState<Acordo | null>(null);
-  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'proximas' | 'acordos_realizados' | 'vencidos'>('negociados');
+  const [abaAtiva, setAbaAtiva] = useState<'pagos' | 'negociados' | 'proximas' | 'acordos_realizados' | 'vencidos'>(initial.abaAtiva ?? 'negociados');
   const [acordosComPagamentosPagos, setAcordosComPagamentosPagos] = useState<Set<string>>(new Set());
   const [acordosComParcelasVencidas, setAcordosComParcelasVencidas] = useState<Set<string>>(new Set());
   const [acordosComParcelasProximas, setAcordosComParcelasProximas] = useState<Set<string>>(new Set());
@@ -466,12 +481,40 @@ export default function Acordos() {
   const [dataProximaPorAcordo, setDataProximaPorAcordo] = useState<Map<string, string>>(new Map());
   const [dataVencidaPorAcordo, setDataVencidaPorAcordo] = useState<Map<string, string>>(new Map());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string>('todos');
+  const [selectedUserId, setSelectedUserId] = useState<string>(initial.selectedUserId ?? 'todos');
   const [rankingAberto, setRankingAberto] = useState(false);
-  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
-  const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(undefined);
+  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
+  const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(parseDate(initial.filtroDataCriacao));
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
   const [ultimaParcelaPagaPorAcordo, setUltimaParcelaPagaPorAcordo] = useState<Map<string, { numero: number; data_paga: string }>>(new Map());
+
+  // Salvar filtros sempre que mudarem
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({
+        search,
+        statusFilter,
+        abaAtiva,
+        selectedUserId,
+        filtroDataVencimento: filtroDataVencimento ? filtroDataVencimento.toISOString() : null,
+        filtroDataCriacao: filtroDataCriacao ? filtroDataCriacao.toISOString() : null,
+      }));
+    } catch {}
+  }, [search, statusFilter, abaAtiva, selectedUserId, filtroDataVencimento, filtroDataCriacao]);
+
+  // Restaurar scrollY após carregar lista
+  useEffect(() => {
+    if (loading) return;
+    const y = Number(sessionStorage.getItem('acordos:scrollY') || '0');
+    if (y > 0) {
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    }
+  }, [loading]);
+  useEffect(() => {
+    const save = () => sessionStorage.setItem('acordos:scrollY', String(window.scrollY));
+    window.addEventListener('beforeunload', save);
+    return () => { save(); window.removeEventListener('beforeunload', save); };
+  }, []);
 
   // Buscar perfil do operador para nome dinâmico
   const { data: profile } = useQuery({
