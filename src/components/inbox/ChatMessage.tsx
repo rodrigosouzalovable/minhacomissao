@@ -305,7 +305,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   const messageBubble = (
     <div
       ref={swipeRef}
-      className={cn('relative flex select-none', isSaida ? 'justify-end' : 'justify-start')}
+      className={cn('relative flex', isSaida ? 'justify-end' : 'justify-start')}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endSwipe}
