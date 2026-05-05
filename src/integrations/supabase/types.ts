@@ -2471,32 +2471,77 @@ export type Database = {
           },
         ]
       }
+      whatsapp_aquecimento_status_imagens: {
+        Row: {
+          ativo: boolean
+          caption: string | null
+          criado_em: string
+          id: string
+          nome: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          caption?: string | null
+          criado_em?: string
+          id?: string
+          nome: string
+          public_url: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          caption?: string | null
+          criado_em?: string
+          id?: string
+          nome?: string
+          public_url?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       whatsapp_aquecimento_status_log: {
         Row: {
           conteudo: string | null
           conteudo_url: string | null
+          erro: string | null
           id: string
+          imagem_id: string | null
           instancia_id: string
           postado_em: string
+          proximo_post_em: string | null
           resultado: string
+          status: string
           tipo: string
         }
         Insert: {
           conteudo?: string | null
           conteudo_url?: string | null
+          erro?: string | null
           id?: string
+          imagem_id?: string | null
           instancia_id: string
           postado_em?: string
+          proximo_post_em?: string | null
           resultado?: string
+          status?: string
           tipo?: string
         }
         Update: {
           conteudo?: string | null
           conteudo_url?: string | null
+          erro?: string | null
           id?: string
+          imagem_id?: string | null
           instancia_id?: string
           postado_em?: string
+          proximo_post_em?: string | null
           resultado?: string
+          status?: string
           tipo?: string
         }
         Relationships: [

@@ -18,6 +18,7 @@ import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotific
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
 import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSaveTab';
 import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTab';
+import AquecimentoStatusTab from '@/components/aquecimento/AquecimentoStatusTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -139,7 +140,7 @@ export default function Aquecimento() {
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies' | 'status'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
@@ -443,11 +444,20 @@ export default function Aquecimento() {
           >
             <Network className="h-4 w-4" /> Proxies
           </Button>
+          <Button
+            variant={activeTab === 'status' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('status')}
+            className="gap-1"
+          >
+            <Zap className="h-4 w-4" /> Status Auto
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
         {activeTab === 'autosave' && <AquecimentoAutoSaveTab />}
         {activeTab === 'proxies' && <AquecimentoProxiesTab />}
+        {activeTab === 'status' && <AquecimentoStatusTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
