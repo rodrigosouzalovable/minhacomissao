@@ -52,15 +52,30 @@ export default function EquipeAcordos() {
   const { acordosCompartilhados, isLoading: permLoading } = useUserPermissions();
   const verComoAdmin = isAdmin || acordosCompartilhados;
   const { toast } = useToast();
+  // Persistência de filtros (sessionStorage)
+  const FILTERS_KEY = 'equipe-acordos:filters:v1';
+  const loadFilters = (): any => {
+    try {
+      const raw = sessionStorage.getItem(FILTERS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  };
+  const initial = loadFilters();
+  const parseDate = (v: any): Date | undefined => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+
   const [acordos, setAcordos] = useState<AcordoComFuncionario[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('todos');
-  const [memberFilter, setMemberFilter] = useState<string>('todos');
-  const [showEmpresaCards, setShowEmpresaCards] = useState(false);
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [search, setSearch] = useState<string>(initial.search ?? '');
+  const [statusFilter, setStatusFilter] = useState<string>(initial.statusFilter ?? 'todos');
+  const [memberFilter, setMemberFilter] = useState<string>(initial.memberFilter ?? 'todos');
+  const [showEmpresaCards, setShowEmpresaCards] = useState<boolean>(initial.showEmpresaCards ?? false);
+  const [startDate, setStartDate] = useState<Date | undefined>(parseDate(initial.startDate));
+  const [endDate, setEndDate] = useState<Date | undefined>(parseDate(initial.endDate));
   const [pagamentosEquipe, setPagamentosEquipe] = useState<Array<{
     comissao_parcela: number;
     valor_parcela: number;
@@ -70,9 +85,34 @@ export default function EquipeAcordos() {
   }>>([]);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
   const [acordosComQuebraAcordo, setAcordosComQuebraAcordo] = useState<Set<string>>(new Set());
-  const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos' | 'quebra_acordo'>('todos');
-  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(undefined);
+  const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos' | 'quebra_acordo'>(initial.viewFilter ?? 'todos');
+  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
+
+  // Salvar filtros sempre que mudarem
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({
+        search, statusFilter, memberFilter, showEmpresaCards, viewFilter,
+        startDate: startDate ? startDate.toISOString() : null,
+        endDate: endDate ? endDate.toISOString() : null,
+        filtroDataVencimento: filtroDataVencimento ? filtroDataVencimento.toISOString() : null,
+      }));
+    } catch {}
+  }, [search, statusFilter, memberFilter, showEmpresaCards, viewFilter, startDate, endDate, filtroDataVencimento]);
+
+  // Restaurar / salvar scroll
+  useEffect(() => {
+    if (loading) return;
+    const y = Number(sessionStorage.getItem('equipe-acordos:scrollY') || '0');
+    if (y > 0) requestAnimationFrame(() => window.scrollTo(0, y));
+  }, [loading]);
+  useEffect(() => {
+    const save = () => sessionStorage.setItem('equipe-acordos:scrollY', String(window.scrollY));
+    window.addEventListener('beforeunload', save);
+    return () => { save(); window.removeEventListener('beforeunload', save); };
+  }, []);
+
 
   const handleEnviarRelatorio = async () => {
     try {
