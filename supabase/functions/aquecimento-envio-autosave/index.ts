@@ -59,6 +59,16 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
+    // TRAVA GLOBAL: aquecimento entre números suspenso
+    const { data: pausaRow } = await supabase
+      .from("whatsapp_aquecimento_config")
+      .select("valor")
+      .eq("chave", "aquecimento_pausado")
+      .maybeSingle();
+    if (pausaRow?.valor === true || pausaRow?.valor === "true") {
+      return json({ message: "Aquecimento pausado globalmente", paused: true });
+    }
+
     // Lê config (kill-switch + proporção âncora)
     const { data: cfg } = await supabase
       .from("aquecimento_autosave_config")

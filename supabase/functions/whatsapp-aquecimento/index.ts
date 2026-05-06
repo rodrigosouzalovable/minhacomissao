@@ -19,6 +19,17 @@ Deno.serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch (_) {}
 
+    // ========== TRAVA GLOBAL: aquecimento entre números suspenso ==========
+    const { data: pausaRow } = await supabase
+      .from("whatsapp_aquecimento_config")
+      .select("valor")
+      .eq("chave", "aquecimento_pausado")
+      .maybeSingle();
+    if (pausaRow?.valor === true || pausaRow?.valor === "true") {
+      console.log("[AQUECIMENTO] PAUSADO globalmente — abortando.");
+      return json({ message: "Aquecimento entre números pausado", paused: true });
+    }
+
     // ========== MANUAL TEST MODE ==========
     if (body?.action === "manual-test") {
       return await handleManualTest(supabase, body, supabaseUrl, supabaseKey);

@@ -362,6 +362,15 @@ export default function Aquecimento() {
   return (
     <AppLayout>
       <div className="space-y-6">
+        {/* Banner: aquecimento entre números pausado */}
+        <div className="rounded-lg border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm">
+          <p className="font-bold text-amber-700 dark:text-amber-300">⏸️ Aquecimento entre números PAUSADO</p>
+          <p className="text-amber-700/80 dark:text-amber-300/80 mt-1">
+            Os envios automáticos entre os WhatsApps estão suspensos (estavam causando bloqueios). Apenas o <strong>Status Auto</strong> permanece ativo.
+            Nova estratégia: todos os números conversarão dentro de um único grupo. Avise quando quiser reativar.
+          </p>
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
