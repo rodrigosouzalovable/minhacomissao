@@ -1,52 +1,39 @@
+# Suspender Aquecimento entre Números
+
 ## Objetivo
+Pausar imediatamente toda conversa automática **entre os WhatsApps** (que está causando bloqueios), mantendo a estrutura intacta para reativar depois quando você definir o grupo único.
 
-Ao filtrar/pesquisar em **Meus Acordos** ou **Acordos da Equipe**, abrir um card e voltar (botão Voltar do navegador ou navegação interna) deve restaurar **exatamente** os filtros, busca, aba ativa e seleção de funcionário/membro — e a posição de scroll.
+## O que será SUSPENSO
 
-## Estratégia
+1. **Cron `aquecimento-auto-horario-economico`** (a cada hora, 11h-23h UTC) → dispara `whatsapp-aquecimento` (motor ping-pong entre instâncias).
+2. **Cron `aquecimento-autosave-horario`** (a cada hora) → dispara `aquecimento-envio-autosave` (envios para âncoras + pool de 985).
+3. **Cron `aquecimento-promocao-fase-diaria`** (06h diário) → promoção de fase (sem envios, mas inútil sem o motor; pausar evita mudanças de status indevidas).
+4. **Flag `aquecimento_habilitado`** em `whatsapp_aquecimento_config` → setar `false` como trava redundante (mesmo se algo disparar manualmente, o motor recusa).
+5. **Botão de teste manual no Dashboard de Aquecimento** → adicionar aviso visual "PAUSADO — nova estratégia em definição" e desabilitar o disparo manual.
 
-Persistir o estado de filtragem em `sessionStorage` (chave por página). Hidratar uma única vez no mount (lazy initial state) e gravar a cada mudança. `sessionStorage` mantém os filtros enquanto a aba do navegador estiver aberta e zera ao fechar — exatamente o comportamento esperado.
+## O que CONTINUA funcionando
 
-Sem custos de Lovable Cloud (zero requisições novas).
+- **Status Auto** (postagem de status a cada 48-72h) → mantém aquecimento "passivo" via stories, sem risco de ban por troca de mensagens.
+- **Grupo de Aquecimento** (cadastro e UI) → preservado, será reaproveitado quando você ativar a nova estratégia.
+- **Inbox, robôs de cobrança, lembretes, campanhas** → sem qualquer impacto.
+- **Tabelas, logs, configurações, pool de mensagens, âncoras** → tudo preservado.
 
-## Mudanças
+## Como reativar depois (futuro)
 
-### 1) `src/pages/Acordos.tsx`
+Quando você terminar de limpar os grupos e definir o grupo único, basta me pedir "reativar aquecimento via grupo único". Eu então:
+- Religo os crons (ou crio nova versão focada em grupo).
+- Reescrevo o motor para enviar **apenas para o JID do grupo cadastrado** em vez de DMs entre instâncias.
+- Mantenho limites diários e horário comercial.
 
-Chave: `acordos:filters:v1`
+## Detalhes técnicos
 
-Persistir:
-- `search` (string)
-- `statusFilter` (string)
-- `abaAtiva` ('pagos' | 'negociados' | 'proximas' | 'acordos_realizados' | 'vencidos')
-- `selectedUserId` (string)
-- `filtroDataVencimento` (ISO string ou null)
-- `filtroDataCriacao` (ISO string ou null)
-- `scrollY` (number) — salvo no `beforeunload` e ao clicar num card; restaurado após `loading=false`.
-
-Implementação:
-- Helpers locais `loadState()` / `saveState(partial)` no topo do componente.
-- Cada `useState` inicializa via função lazy lendo de `loadState()`. Datas viram `new Date(iso)`.
-- Um `useEffect` que observa todos os campos persistidos e chama `saveState({...})` com debounce (200 ms) usando `setTimeout`.
-- `useEffect` de scroll: ao montar, se houver `scrollY`, faz `window.scrollTo(0, scrollY)` após o primeiro render com dados. Ao navegar para um card (handler que abre `/acordo/:id`), salva `scrollY` antes do `navigate`.
-
-### 2) `src/pages/EquipeAcordos.tsx`
-
-Chave: `equipe-acordos:filters:v1`
-
-Persistir:
-- `search`, `statusFilter`, `memberFilter`, `viewFilter`, `showEmpresaCards`
-- `startDate`, `endDate`, `filtroDataVencimento` (ISO ou null)
-- `scrollY`
-
-Mesma técnica (lazy init + effect de save + restauração de scroll).
-
-### 3) Detalhes técnicos
-
-- Usar try/catch em volta de `JSON.parse` para tolerar storage corrompido.
-- Versionar a chave (`:v1`) para permitir invalidar no futuro.
-- Não persistir nada sensível — são apenas strings/datas de UI.
+- Migration usando `cron.unschedule('nome')` para os 3 jobs acima (idempotente, com `IF EXISTS` lógico via DO block).
+- `UPDATE whatsapp_aquecimento_config SET aquecimento_habilitado = false`.
+- Edit em `src/components/aquecimento/AquecimentoDashboard.tsx` (ou similar) adicionando banner âmbar "Aquecimento entre números PAUSADO" no topo.
+- **Não** mexer em: `whatsapp-aquecimento-status` (cron `aquecimento-status-30min`), `add-to-warming-group`, tabelas de log.
+- Atualizar memória `mem://features/whatsapp/warming-system-comprehensive` marcando estado como SUSPENSO.
 
 ## Fora de escopo
-
-- Não persistir filtros de outras páginas (Clientes, Acionamento etc.) — mesma técnica pode ser aplicada depois sob demanda.
-- Não usar `localStorage` (manteria filtros entre sessões, o que pode confundir o usuário).
+- Apagar grupos de WhatsApp (você está fazendo manualmente).
+- Implementar o modo "grupo único" agora.
+- Remover código/tabelas do sistema atual.
