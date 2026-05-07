@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -101,6 +101,18 @@ export default function NovoAcordo() {
     });
   };
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
+  const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('user_whatsapp_instances')
+      .select('id, nome, telefone')
+      .eq('user_id', user.id)
+      .eq('ativo', true)
+      .order('ordem', { ascending: true })
+      .then(({ data }) => setInstancias((data as any) || []));
+  }, [user]);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
     clienteNome: '',
@@ -446,8 +458,9 @@ export default function NovoAcordo() {
         percentual_comissao: calculo.percentual,
         comissao_total: calculo.comissaoTotal,
         observacoes: validated.observacoes || null,
-        empresa: empresa
-      }).select().single();
+        empresa: empresa,
+        instancia_negociacao_id: instanciaNegociacaoId || null
+      } as any).select().single();
       if (acordoError) throw acordoError;
 
       // Gerar parcelas - lógica diferente para cada empresa
@@ -638,6 +651,36 @@ export default function NovoAcordo() {
                   </Button>
                 </div>
                 {empresa === 'mundo_da_moda'}
+              </div>
+
+              {/* Seletor de Instância WhatsApp da negociação */}
+              <div className="space-y-2">
+                <Label>Instância WhatsApp da negociação</Label>
+                {instancias.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setInstanciaNegociacaoId('')}
+                    >
+                      Não informar
+                    </Button>
+                    {instancias.map((inst) => (
+                      <Button
+                        key={inst.id}
+                        type="button"
+                        variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setInstanciaNegociacaoId(inst.id)}
+                      >
+                        {inst.nome || inst.telefone || 'Instância'}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

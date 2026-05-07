@@ -1,31 +1,21 @@
-## Adicionar coluna "Comissão Montreal" no export de parcelas
+## Adicionar seleção de instância WhatsApp ao criar acordo
 
-No arquivo `src/pages/Clientes.tsx` (função de "Exportar Parcelas (Excel)"), adicionar 2 novas colunas após "Valor Parcela":
+Adicionar uma nova seção logo abaixo do seletor de "Empresa" (credor) na tela **Novo Acordo** para que você selecione qual das suas instâncias WhatsApp foi usada para negociar com o cliente.
 
-- **% Comissão** — percentual aplicado sobre a parcela paga
-- **Comissão Montreal (R$)** — valor da comissão calculado
+### O que muda
 
-### Regra de cálculo
+**1. Banco de dados**
+- Nova coluna opcional `instancia_negociacao_id` na tabela `acordos` referenciando `user_whatsapp_instances(id)`.
+- Sem alteração de RLS — herda das políticas existentes.
 
-Usar `calcularComissaoMontrealParcela(valor_parcela, diasAtraso)` de `src/lib/comissao.ts`, onde `diasAtraso = data_pagamento - data_vencimento` (em dias corridos).
+**2. UI — `src/pages/NovoAcordo.tsx`**
+- Novo bloco logo abaixo do seletor "Empresa", com Label "Instância WhatsApp da negociação" e botões (mesma estética dos botões de empresa) listando as instâncias ativas do usuário (`user_whatsapp_instances` filtrando `user_id = auth.uid()` e `ativo = true`), exibindo `nome` (ou `telefone` como fallback).
+- Campo opcional — pode ficar sem seleção.
+- O id selecionado é salvo em `instancia_negociacao_id` no insert do acordo.
 
-Tabela MONTREAL já existente:
-- 31–60 dias → 8%
-- 61–90 → 15%
-- 91–180 → 20%
-- 181–360 → 25%
-- 361–720 → 30%
-- 721–1800 → 35%
-- Fora dessas faixas (≤30 dias ou parcela não paga) → 0% / vazio
+**3. UI — `src/pages/NovoAcordoAdmin.tsx`**
+- Mesmo seletor adicionado na tela de admin (lista todas as instâncias ativas, sem filtro de user_id), para consistência. Se preferir só na tela do funcionário, me avise.
 
-### Comportamento
-
-- Parcela **Paga**: calcula `% e valor` com base no atraso real (pagamento − vencimento).
-- Parcela **Pendente/Atrasada**: colunas ficam vazias ("—" ou em branco).
-- Aplica somente quando o credor exportado for **MONTREAL** (filtro já existente). Para "todos", calcular apenas nas linhas do credor MONTREAL; demais ficam vazias.
-
-### Arquivos afetados
-
-- `src/pages/Clientes.tsx` — adicionar 2 campos no `exportRows.map(...)` e 2 entradas no array `colunas`.
-
-Sem mudanças de backend, schema ou outras telas.
+### Fora do escopo
+- Não exibir/editar o campo em outras telas (detalhe, edição, listagens) — pode ser feito em pedido futuro.
+- Não usar a instância automaticamente para envios — é apenas registro de qual número negociou.

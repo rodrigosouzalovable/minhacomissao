@@ -70,6 +70,7 @@ export type Database = {
           duplicado_verificado: boolean
           empresa: string
           id: string
+          instancia_negociacao_id: string | null
           observacoes: string | null
           parcelas: number
           percentual_comissao: number
@@ -91,6 +92,7 @@ export type Database = {
           duplicado_verificado?: boolean
           empresa?: string
           id?: string
+          instancia_negociacao_id?: string | null
           observacoes?: string | null
           parcelas: number
           percentual_comissao: number
@@ -112,6 +114,7 @@ export type Database = {
           duplicado_verificado?: boolean
           empresa?: string
           id?: string
+          instancia_negociacao_id?: string | null
           observacoes?: string | null
           parcelas?: number
           percentual_comissao?: number
@@ -120,7 +123,15 @@ export type Database = {
           valor_parcela?: number
           valor_total?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "acordos_instancia_negociacao_id_fkey"
+            columns: ["instancia_negociacao_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       acordos_devedor: {
         Row: {
