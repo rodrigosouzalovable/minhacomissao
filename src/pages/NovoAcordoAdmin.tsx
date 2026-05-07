@@ -104,6 +104,18 @@ export default function NovoAcordoAdmin() {
   };
   
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
+  const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from('user_whatsapp_instances')
+      .select('id, nome, telefone')
+      .eq('user_id', userId)
+      .eq('ativo', true)
+      .order('ordem', { ascending: true })
+      .then(({ data }) => setInstancias((data as any) || []));
+  }, [userId]);
   
   const [form, setForm] = useState({
     clienteNome: '',
