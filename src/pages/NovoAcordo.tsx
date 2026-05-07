@@ -458,8 +458,9 @@ export default function NovoAcordo() {
         percentual_comissao: calculo.percentual,
         comissao_total: calculo.comissaoTotal,
         observacoes: validated.observacoes || null,
-        empresa: empresa
-      }).select().single();
+        empresa: empresa,
+        instancia_negociacao_id: instanciaNegociacaoId || null
+      } as any).select().single();
       if (acordoError) throw acordoError;
 
       // Gerar parcelas - lógica diferente para cada empresa
