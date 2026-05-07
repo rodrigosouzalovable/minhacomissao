@@ -101,6 +101,18 @@ export default function NovoAcordo() {
     });
   };
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
+  const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('user_whatsapp_instances')
+      .select('id, nome, telefone')
+      .eq('user_id', user.id)
+      .eq('ativo', true)
+      .order('ordem', { ascending: true })
+      .then(({ data }) => setInstancias((data as any) || []));
+  }, [user]);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
     clienteNome: '',
