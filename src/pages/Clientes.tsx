@@ -19,6 +19,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { exportarParaExcel } from '@/lib/exportExcel';
+import { calcularComissaoMontrealParcela } from '@/lib/comissao';
 
 interface ClienteRow {
   id: string;
@@ -194,6 +195,19 @@ export default function Clientes() {
           if (p.pago) status = 'Paga';
           else if (p.data_vencimento && new Date(p.data_vencimento + 'T00:00:00') < hoje) status = 'Atrasada';
 
+          // Comissão MONTREAL: calcula apenas para parcelas pagas de credor MONTREAL
+          let comissaoPct: number | string = '';
+          let comissaoValor: number | string = '';
+          const credorUpper = (info.credor || '').toUpperCase();
+          if (p.pago && credorUpper.includes('MONTREAL') && p.data_pagamento && p.data_vencimento) {
+            const venc = new Date(p.data_vencimento + 'T00:00:00');
+            const pag = new Date(p.data_pagamento + 'T00:00:00');
+            const dias = Math.floor((pag.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+            const c = calcularComissaoMontrealParcela(Number(p.valor || 0), dias);
+            comissaoPct = c.percentual;
+            comissaoValor = c.valor;
+          }
+
           return {
             cpf: acordo?.devedor_cpf || '',
             nome: info.nome,
@@ -207,6 +221,8 @@ export default function Clientes() {
             data_pagamento: formatDate(p.data_pagamento),
             status_acordo: acordo?.status || '',
             status: status,
+            comissao_pct: comissaoPct,
+            comissao_valor: comissaoValor,
           };
         });
 
@@ -223,6 +239,8 @@ export default function Clientes() {
         { chave: 'data_pagamento' as const, titulo: 'Pagamento' },
         { chave: 'status_acordo' as const, titulo: 'Status Acordo' },
         { chave: 'status' as const, titulo: 'Status Parcela' },
+        { chave: 'comissao_pct' as const, titulo: '% Comissão Montreal' },
+        { chave: 'comissao_valor' as const, titulo: 'Comissão Montreal (R$)' },
       ];
 
       const credorSlug = (credor === 'todos' ? 'todos' : credor).toLowerCase().replace(/[^a-z0-9]+/g, '-');
