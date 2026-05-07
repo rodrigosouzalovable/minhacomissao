@@ -652,6 +652,36 @@ export default function NovoAcordo() {
                 </div>
                 {empresa === 'mundo_da_moda'}
               </div>
+
+              {/* Seletor de Instância WhatsApp da negociação */}
+              <div className="space-y-2">
+                <Label>Instância WhatsApp da negociação</Label>
+                {instancias.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setInstanciaNegociacaoId('')}
+                    >
+                      Não informar
+                    </Button>
+                    {instancias.map((inst) => (
+                      <Button
+                        key={inst.id}
+                        type="button"
+                        variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setInstanciaNegociacaoId(inst.id)}
+                      >
+                        {inst.nome || inst.telefone || 'Instância'}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
