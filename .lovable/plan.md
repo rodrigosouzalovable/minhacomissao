@@ -1,62 +1,46 @@
-## Plano B — Diagnóstico de performance (somente leitura)
+## Objetivo
 
-Objetivo: descobrir EXATAMENTE o que deixa o sistema lento e entregar um relatório com prioridades, **sem alterar dados, acordos, WhatsApps ou criar/excluir tabelas**. Só depois você decide o que aplicar.
+Fazer com que funcionários com **Acordos Compartilhados** ativado vejam exatamente a mesma tela `/equipe/acordos` que o admin vê hoje — listando **todos os acordos lançados no sistema**, de qualquer funcionário, não apenas os do admin que concedeu acesso.
 
-### Sintomas conhecidos (já mapeados)
-- `WhatsAppInbox.tsx` com 1624 linhas, 49 efeitos/canais/queries — Realtime + polling 20s + visibilitychange.
-- `Acordos.tsx` com 1439 linhas, 15 efeitos/queries.
-- `Aquecimento.tsx` com 861 linhas, 22 efeitos/queries.
-- Bundle único, sem code-split por rota (todas as 30+ páginas carregam de uma vez).
-- Sem `React.lazy`/`Suspense` em nenhum lugar.
-- Dependências pesadas no bundle inicial: `xlsx`, `jspdf`, `recharts`, `embla-carousel`, `react-markdown`, `react-day-picker`.
-- Queries com `cpf_normalize()` e `LIKE '%suffix%'` (telefones) sem índices funcionais.
-- Realtime ligado em várias tabelas grandes (mensagens, contatos, fila).
+## Situação atual (diagnóstico)
 
-### Etapas do diagnóstico
+1. **Frontend (`EquipeAcordos.tsx`)**: já existe a lógica `verComoAdmin = isAdmin || acordosCompartilhados`. Quando ligada, o código tenta buscar **todos** os perfis e acordos do sistema. ✅
+2. **Sidebar (`AppLayout.tsx`)**: o item "Acordos da Equipe" está marcado como `gestorOnly`. Funcionários comuns não enxergam o link, mesmo com `acordosCompartilhados = true`. ❌
+3. **Banco (RLS de `acordos`, `pagamentos`, `profiles`)**: as policies de "Acordos compartilhados" hoje só liberam **os acordos do admin que concedeu** (`get_acordos_compartilhados_admin`). Não liberam os acordos de outros funcionários do sistema. Resultado: mesmo se o frontend pedir, o banco devolve apenas um subconjunto. ❌
 
-**1. Profile real do navegador (na sua sessão)**
-- Rodar `browser--performance_profile` na home, em `/inbox`, `/acordos`, `/aquecimento`, `/dashboard`.
-- Coletar: Web Vitals (LCP/INP/CLS), long tasks, scripts mais lentos, contagem de DOM.
-- Rodar `browser--start_profiling` → interagir 10s → `browser--stop_profiling` para achar funções que mais consomem CPU.
+Ou seja: a interface está pronta, mas o link some no menu e o banco bloqueia a visão completa.
 
-**2. Análise do bundle (sem build manual)**
-- Mapear quais libs entram em cada rota (xlsx/jspdf/recharts são usadas só em poucas telas).
-- Estimar ganho de code-split por rota e lazy-load de libs pesadas.
+## O que precisa mudar
 
-**3. Diagnóstico do banco (somente SELECT)**
-- Listar índices existentes nas tabelas críticas: `whatsapp_mensagens`, `whatsapp_contatos`, `whatsapp_fila`, `devedores`, `acordos`, `pagamentos`, `whatsapp_aquecimento_*`.
-- Identificar consultas lentas usando `pg_stat_statements` (se ativo) e logs do Supabase.
-- Apontar onde faltam índices (ex.: `cpf_normalize(cpf)`, sufixo de telefone, `instancia_id+timestamp_msg`, `acordo_id+status`).
+### 1. Banco de dados (migration — somente leitura, nada é apagado)
 
-**4. Inventário de Realtime / polling**
-- Listar todos os `supabase.channel(...)` e `setInterval` no frontend.
-- Marcar quais são realmente necessários vs. quais podem virar `refetchOnWindowFocus` do React Query.
+Criar uma função auxiliar e novas policies de **SELECT** para usuários com `acordos_compartilhados = true`:
 
-**5. Carga de dados por tela**
-- Tamanho médio de payload em `/inbox` (mensagens carregadas por contato), `/acordos` (com filtros default), `/aquecimento`.
-- Detectar queries que retornam centenas/milhares de linhas sem paginação.
+- `has_acordos_compartilhados(_user_id uuid) returns boolean` — `SECURITY DEFINER`, lê `user_permissions`.
+- Nova policy em `public.acordos`: SELECT liberado para qualquer linha quando `has_acordos_compartilhados(auth.uid())` for verdadeiro.
+- Nova policy em `public.pagamentos`: SELECT liberado para qualquer linha quando o usuário tem acordos compartilhados.
+- Nova policy em `public.profiles`: SELECT liberado para qualquer perfil quando o usuário tem acordos compartilhados (necessário para mostrar o nome do funcionário em cada acordo).
 
-**6. Compute do Lovable Cloud**
-- Verificar status atual e se há sinais de saturação (timeouts, latência alta, erros 5xx em logs).
-- Avaliar se faz sentido subir o tamanho da instância (Backend → Advanced settings → Upgrade instance).
+Importante: **somente SELECT**. As policies de UPDATE/DELETE existentes continuam intactas — funcionários compartilhados não ganham poder de editar acordos de terceiros.
 
-### Entrega final do diagnóstico (relatório em chat)
-Ao final você recebe:
-1. **Top 5 gargalos** ordenados por impacto x esforço.
-2. **Ganho estimado** de cada correção (ex.: "code-split de rotas → -60% no JS inicial").
-3. **Plano C de execução** com fases pequenas e seguras (cada fase só refatora código, nunca toca em dados).
-4. **Recomendação sobre instância** do Lovable Cloud.
+### 2. Frontend (`src/components/layout/AppLayout.tsx`)
 
-### Garantias de segurança
-- **Nenhuma migration**, nenhum `INSERT/UPDATE/DELETE`.
-- Não toca em `acordos`, `pagamentos`, `devedores`, `user_whatsapp_instances`, `whatsapp_mensagens` etc.
-- Não desconecta WhatsApps, não altera webhooks, não mexe em crons.
-- Tudo é leitura: profiling no navegador + `SELECT` no banco + leitura de arquivos.
+Ajustar o filtro do menu lateral para que o item **"Acordos da Equipe"** apareça também quando `acordosCompartilhados === true`, não apenas para gestores/admin.
 
-### O que fica fora deste plano (será decidido depois, com sua aprovação)
-- Code-splitting por rota com `React.lazy`.
-- Lazy-load de `xlsx`/`jspdf`/`recharts`.
-- Quebra de `WhatsAppInbox.tsx` em componentes menores.
-- Criação de índices no banco (migration separada e revisada).
-- Substituir polling por Realtime focado.
-- Upgrade da instância Cloud, se necessário.
+Como `/equipe/acordos` já está em `AVAILABLE_TABS` e é incluído por padrão em `abasPermitidas`, o `PermissionRoute` já permite o acesso. Falta apenas tornar o link visível.
+
+## Garantias
+
+- ✅ **Nenhum dado é apagado nem alterado**. Apenas novas policies de leitura.
+- ✅ **WhatsApps e acordos fechados intactos**. Nada toca em instâncias, mensagens, contatos, parcelas pagas ou status.
+- ✅ **Funcionários compartilhados continuam sem poder editar/apagar** acordos de outros — só visualizar.
+- ✅ **Admin continua com tudo igual**.
+
+## Arquivos afetados
+
+- Migration nova (função + 3 policies de SELECT).
+- `src/components/layout/AppLayout.tsx` (1 linha no filtro do menu).
+
+## Próximo passo
+
+Aprovar para eu executar a migration e o ajuste do menu.

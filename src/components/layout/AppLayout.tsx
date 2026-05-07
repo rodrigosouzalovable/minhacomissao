@@ -113,7 +113,7 @@ function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavIte
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
-  const { abasPermitidas } = useUserPermissions();
+  const { abasPermitidas, acordosCompartilhados } = useUserPermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -245,7 +245,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       return abasPermitidas.includes(item.href);
     }
     if (item.adminOnly) return false;
-    if (item.gestorOnly && !isGestor) return false;
+    if (item.gestorOnly && !isGestor && !acordosCompartilhados) return false;
     return true;
   });
 
