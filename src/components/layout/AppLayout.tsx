@@ -245,7 +245,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       return abasPermitidas.includes(item.href);
     }
     if (item.adminOnly) return false;
-    if (item.gestorOnly && !isGestor) return false;
+    if (item.gestorOnly && !isGestor && !acordosCompartilhados) return false;
     return true;
   });
 
