@@ -388,7 +388,8 @@ export default function NovoAcordoAdmin() {
           comissao_total: calculo.comissaoTotal,
           observacoes: validated.observacoes || null,
           empresa: empresa,
-        })
+          instancia_negociacao_id: instanciaNegociacaoId || null,
+        } as any)
         .select()
         .single();
 
