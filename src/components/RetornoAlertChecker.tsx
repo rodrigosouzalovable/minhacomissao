@@ -75,8 +75,20 @@ export function RetornoAlertChecker() {
     // Check immediately
     checkRetornos();
 
-    const interval = setInterval(checkRetornos, 30000);
-    return () => clearInterval(interval);
+    // Poll every 2 minutes; pause when tab is hidden to save CPU/network.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') checkRetornos();
+    }, 120000);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkRetornos();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [user, checkRetornos]);
 
   return (
