@@ -1,39 +1,62 @@
-# Suspender Aquecimento entre Números
+## Plano B — Diagnóstico de performance (somente leitura)
 
-## Objetivo
-Pausar imediatamente toda conversa automática **entre os WhatsApps** (que está causando bloqueios), mantendo a estrutura intacta para reativar depois quando você definir o grupo único.
+Objetivo: descobrir EXATAMENTE o que deixa o sistema lento e entregar um relatório com prioridades, **sem alterar dados, acordos, WhatsApps ou criar/excluir tabelas**. Só depois você decide o que aplicar.
 
-## O que será SUSPENSO
+### Sintomas conhecidos (já mapeados)
+- `WhatsAppInbox.tsx` com 1624 linhas, 49 efeitos/canais/queries — Realtime + polling 20s + visibilitychange.
+- `Acordos.tsx` com 1439 linhas, 15 efeitos/queries.
+- `Aquecimento.tsx` com 861 linhas, 22 efeitos/queries.
+- Bundle único, sem code-split por rota (todas as 30+ páginas carregam de uma vez).
+- Sem `React.lazy`/`Suspense` em nenhum lugar.
+- Dependências pesadas no bundle inicial: `xlsx`, `jspdf`, `recharts`, `embla-carousel`, `react-markdown`, `react-day-picker`.
+- Queries com `cpf_normalize()` e `LIKE '%suffix%'` (telefones) sem índices funcionais.
+- Realtime ligado em várias tabelas grandes (mensagens, contatos, fila).
 
-1. **Cron `aquecimento-auto-horario-economico`** (a cada hora, 11h-23h UTC) → dispara `whatsapp-aquecimento` (motor ping-pong entre instâncias).
-2. **Cron `aquecimento-autosave-horario`** (a cada hora) → dispara `aquecimento-envio-autosave` (envios para âncoras + pool de 985).
-3. **Cron `aquecimento-promocao-fase-diaria`** (06h diário) → promoção de fase (sem envios, mas inútil sem o motor; pausar evita mudanças de status indevidas).
-4. **Flag `aquecimento_habilitado`** em `whatsapp_aquecimento_config` → setar `false` como trava redundante (mesmo se algo disparar manualmente, o motor recusa).
-5. **Botão de teste manual no Dashboard de Aquecimento** → adicionar aviso visual "PAUSADO — nova estratégia em definição" e desabilitar o disparo manual.
+### Etapas do diagnóstico
 
-## O que CONTINUA funcionando
+**1. Profile real do navegador (na sua sessão)**
+- Rodar `browser--performance_profile` na home, em `/inbox`, `/acordos`, `/aquecimento`, `/dashboard`.
+- Coletar: Web Vitals (LCP/INP/CLS), long tasks, scripts mais lentos, contagem de DOM.
+- Rodar `browser--start_profiling` → interagir 10s → `browser--stop_profiling` para achar funções que mais consomem CPU.
 
-- **Status Auto** (postagem de status a cada 48-72h) → mantém aquecimento "passivo" via stories, sem risco de ban por troca de mensagens.
-- **Grupo de Aquecimento** (cadastro e UI) → preservado, será reaproveitado quando você ativar a nova estratégia.
-- **Inbox, robôs de cobrança, lembretes, campanhas** → sem qualquer impacto.
-- **Tabelas, logs, configurações, pool de mensagens, âncoras** → tudo preservado.
+**2. Análise do bundle (sem build manual)**
+- Mapear quais libs entram em cada rota (xlsx/jspdf/recharts são usadas só em poucas telas).
+- Estimar ganho de code-split por rota e lazy-load de libs pesadas.
 
-## Como reativar depois (futuro)
+**3. Diagnóstico do banco (somente SELECT)**
+- Listar índices existentes nas tabelas críticas: `whatsapp_mensagens`, `whatsapp_contatos`, `whatsapp_fila`, `devedores`, `acordos`, `pagamentos`, `whatsapp_aquecimento_*`.
+- Identificar consultas lentas usando `pg_stat_statements` (se ativo) e logs do Supabase.
+- Apontar onde faltam índices (ex.: `cpf_normalize(cpf)`, sufixo de telefone, `instancia_id+timestamp_msg`, `acordo_id+status`).
 
-Quando você terminar de limpar os grupos e definir o grupo único, basta me pedir "reativar aquecimento via grupo único". Eu então:
-- Religo os crons (ou crio nova versão focada em grupo).
-- Reescrevo o motor para enviar **apenas para o JID do grupo cadastrado** em vez de DMs entre instâncias.
-- Mantenho limites diários e horário comercial.
+**4. Inventário de Realtime / polling**
+- Listar todos os `supabase.channel(...)` e `setInterval` no frontend.
+- Marcar quais são realmente necessários vs. quais podem virar `refetchOnWindowFocus` do React Query.
 
-## Detalhes técnicos
+**5. Carga de dados por tela**
+- Tamanho médio de payload em `/inbox` (mensagens carregadas por contato), `/acordos` (com filtros default), `/aquecimento`.
+- Detectar queries que retornam centenas/milhares de linhas sem paginação.
 
-- Migration usando `cron.unschedule('nome')` para os 3 jobs acima (idempotente, com `IF EXISTS` lógico via DO block).
-- `UPDATE whatsapp_aquecimento_config SET aquecimento_habilitado = false`.
-- Edit em `src/components/aquecimento/AquecimentoDashboard.tsx` (ou similar) adicionando banner âmbar "Aquecimento entre números PAUSADO" no topo.
-- **Não** mexer em: `whatsapp-aquecimento-status` (cron `aquecimento-status-30min`), `add-to-warming-group`, tabelas de log.
-- Atualizar memória `mem://features/whatsapp/warming-system-comprehensive` marcando estado como SUSPENSO.
+**6. Compute do Lovable Cloud**
+- Verificar status atual e se há sinais de saturação (timeouts, latência alta, erros 5xx em logs).
+- Avaliar se faz sentido subir o tamanho da instância (Backend → Advanced settings → Upgrade instance).
 
-## Fora de escopo
-- Apagar grupos de WhatsApp (você está fazendo manualmente).
-- Implementar o modo "grupo único" agora.
-- Remover código/tabelas do sistema atual.
+### Entrega final do diagnóstico (relatório em chat)
+Ao final você recebe:
+1. **Top 5 gargalos** ordenados por impacto x esforço.
+2. **Ganho estimado** de cada correção (ex.: "code-split de rotas → -60% no JS inicial").
+3. **Plano C de execução** com fases pequenas e seguras (cada fase só refatora código, nunca toca em dados).
+4. **Recomendação sobre instância** do Lovable Cloud.
+
+### Garantias de segurança
+- **Nenhuma migration**, nenhum `INSERT/UPDATE/DELETE`.
+- Não toca em `acordos`, `pagamentos`, `devedores`, `user_whatsapp_instances`, `whatsapp_mensagens` etc.
+- Não desconecta WhatsApps, não altera webhooks, não mexe em crons.
+- Tudo é leitura: profiling no navegador + `SELECT` no banco + leitura de arquivos.
+
+### O que fica fora deste plano (será decidido depois, com sua aprovação)
+- Code-splitting por rota com `React.lazy`.
+- Lazy-load de `xlsx`/`jspdf`/`recharts`.
+- Quebra de `WhatsAppInbox.tsx` em componentes menores.
+- Criação de índices no banco (migration separada e revisada).
+- Substituir polling por Realtime focado.
+- Upgrade da instância Cloud, se necessário.
