@@ -57,10 +57,20 @@ export function RoboStreamViewer({ serverUrl, roboOnline }: RoboStreamViewerProp
   useEffect(() => {
     if (isStreaming && serverUrl) {
       fetchScreenshot();
-      intervalRef.current = setInterval(fetchScreenshot, 1000);
+      // Poll every 3s; pause when tab is hidden.
+      intervalRef.current = setInterval(() => {
+        if (document.visibilityState === 'visible') fetchScreenshot();
+      }, 3000);
     }
+    const onVisible = () => {
+      if (isStreaming && serverUrl && document.visibilityState === 'visible') {
+        fetchScreenshot();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [isStreaming, serverUrl, fetchScreenshot]);
 

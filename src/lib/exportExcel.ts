@@ -1,15 +1,16 @@
-import * as XLSX from 'xlsx';
-
+// Lazy-load xlsx (~400KB) only when an export is actually triggered.
 interface ColunaExport<T> {
   chave: keyof T;
   titulo: string;
 }
 
-export function exportarParaExcel<T extends Record<string, any>>(
+export async function exportarParaExcel<T extends Record<string, any>>(
   dados: T[],
   colunas: ColunaExport<T>[],
   nomeArquivo: string
 ) {
+  const XLSX = await import('xlsx');
+
   const dadosFormatados = dados.map(item => {
     const linha: Record<string, any> = {};
     colunas.forEach(col => {
