@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,42 +11,46 @@ import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
 import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
 
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Acordos from "./pages/Acordos";
-import NovoAcordo from "./pages/NovoAcordo";
-import AcordoDetalhe from "./pages/AcordoDetalhe";
-import EditarAcordo from "./pages/EditarAcordo";
-import Comissoes from "./pages/Comissoes";
-import AdminUsuarios from "./pages/AdminUsuarios";
-import AdminEquipes from "./pages/AdminEquipes";
-import EquipeAcordos from "./pages/EquipeAcordos";
-import MinhaConta from "./pages/MinhaConta";
-import UsuarioComissoes from "./pages/UsuarioComissoes";
-import NovoAcordoAdmin from "./pages/NovoAcordoAdmin";
-import Retornos from "./pages/Retornos";
-import Auditoria from "./pages/Auditoria";
-import Financeiro from "./pages/Financeiro";
-import NotFound from "./pages/NotFound";
-import PortalConsulta from "./pages/PortalConsulta";
-import ConsultaResultado from "./pages/ConsultaResultado";
-import ImportarDevedores from "./pages/ImportarDevedores";
-import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
-import AntifraudePage from "./pages/Antifraude";
-import Clientes from "./pages/Clientes";
-import DevedorDetalhe from "./pages/DevedorDetalhe";
-
-import CredorDashboard from "./pages/CredorDashboard";
-import Acionamento from "./pages/Acionamento";
-import MetaPessoal from "./pages/MetaPessoal";
-import AutomacaoCobMais from "./pages/AutomacaoCobMais";
-import CampanhasVoz from "./pages/CampanhasVoz";
-import WhatsAppInbox from "./pages/WhatsAppInbox";
-import Aquecimento from "./pages/Aquecimento";
-import MonitorEnvios from "./pages/MonitorEnvios";
-import ExportarDados from "./pages/ExportarDados";
+// Code-split: each route becomes its own chunk to reduce initial bundle.
+const Auth = lazy(() => import("./pages/Auth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Acordos = lazy(() => import("./pages/Acordos"));
+const NovoAcordo = lazy(() => import("./pages/NovoAcordo"));
+const AcordoDetalhe = lazy(() => import("./pages/AcordoDetalhe"));
+const EditarAcordo = lazy(() => import("./pages/EditarAcordo"));
+const Comissoes = lazy(() => import("./pages/Comissoes"));
+const AdminUsuarios = lazy(() => import("./pages/AdminUsuarios"));
+const AdminEquipes = lazy(() => import("./pages/AdminEquipes"));
+const EquipeAcordos = lazy(() => import("./pages/EquipeAcordos"));
+const MinhaConta = lazy(() => import("./pages/MinhaConta"));
+const UsuarioComissoes = lazy(() => import("./pages/UsuarioComissoes"));
+const NovoAcordoAdmin = lazy(() => import("./pages/NovoAcordoAdmin"));
+const Retornos = lazy(() => import("./pages/Retornos"));
+const Auditoria = lazy(() => import("./pages/Auditoria"));
+const Financeiro = lazy(() => import("./pages/Financeiro"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const PortalConsulta = lazy(() => import("./pages/PortalConsulta"));
+const ConsultaResultado = lazy(() => import("./pages/ConsultaResultado"));
+const ImportarDevedores = lazy(() => import("./pages/ImportarDevedores"));
+const PoliticaPrivacidade = lazy(() => import("./pages/PoliticaPrivacidade"));
+const AntifraudePage = lazy(() => import("./pages/Antifraude"));
+const Clientes = lazy(() => import("./pages/Clientes"));
+const DevedorDetalhe = lazy(() => import("./pages/DevedorDetalhe"));
+const CredorDashboard = lazy(() => import("./pages/CredorDashboard"));
+const Acionamento = lazy(() => import("./pages/Acionamento"));
+const MetaPessoal = lazy(() => import("./pages/MetaPessoal"));
+const AutomacaoCobMais = lazy(() => import("./pages/AutomacaoCobMais"));
+const CampanhasVoz = lazy(() => import("./pages/CampanhasVoz"));
+const WhatsAppInbox = lazy(() => import("./pages/WhatsAppInbox"));
+const Aquecimento = lazy(() => import("./pages/Aquecimento"));
+const MonitorEnvios = lazy(() => import("./pages/MonitorEnvios"));
+const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 
 const queryClient = new QueryClient();
+
+const PageFallback = () => (
+  <div className="min-h-screen flex items-center justify-center">Carregando...</div>
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -152,6 +157,7 @@ const App = () => (
           <AutoSendProvider>
           <WhatsAppSendingProvider>
           <VoiceCampaignSendingProvider>
+          <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/inbox" element={<PermissionRoute><WhatsAppInbox /></PermissionRoute>} />
@@ -188,6 +194,7 @@ const App = () => (
             <Route path="/admin/exportar-dados" element={<PermissionRoute><ExportarDados /></PermissionRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           </VoiceCampaignSendingProvider>
           </WhatsAppSendingProvider>
           </AutoSendProvider>
