@@ -113,7 +113,7 @@ function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavIte
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
-  const { abasPermitidas } = useUserPermissions();
+  const { abasPermitidas, acordosCompartilhados } = useUserPermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
