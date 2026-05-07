@@ -3153,6 +3153,10 @@ export type Database = {
         Returns: string
       }
       get_table_ddl: { Args: { p_table: string }; Returns: string }
+      has_acordos_compartilhados: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       has_inbox_compartilhado: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
