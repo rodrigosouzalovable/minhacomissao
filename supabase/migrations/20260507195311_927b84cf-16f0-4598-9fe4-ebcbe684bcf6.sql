@@ -1,0 +1,1 @@
+ALTER TABLE public.acordos ADD COLUMN IF NOT EXISTS instancia_negociacao_id uuid REFERENCES public.user_whatsapp_instances(id) ON DELETE SET NULL;
