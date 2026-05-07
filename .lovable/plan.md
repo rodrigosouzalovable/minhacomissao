@@ -1,46 +1,31 @@
-## Objetivo
+## Adicionar coluna "Comissão Montreal" no export de parcelas
 
-Fazer com que funcionários com **Acordos Compartilhados** ativado vejam exatamente a mesma tela `/equipe/acordos` que o admin vê hoje — listando **todos os acordos lançados no sistema**, de qualquer funcionário, não apenas os do admin que concedeu acesso.
+No arquivo `src/pages/Clientes.tsx` (função de "Exportar Parcelas (Excel)"), adicionar 2 novas colunas após "Valor Parcela":
 
-## Situação atual (diagnóstico)
+- **% Comissão** — percentual aplicado sobre a parcela paga
+- **Comissão Montreal (R$)** — valor da comissão calculado
 
-1. **Frontend (`EquipeAcordos.tsx`)**: já existe a lógica `verComoAdmin = isAdmin || acordosCompartilhados`. Quando ligada, o código tenta buscar **todos** os perfis e acordos do sistema. ✅
-2. **Sidebar (`AppLayout.tsx`)**: o item "Acordos da Equipe" está marcado como `gestorOnly`. Funcionários comuns não enxergam o link, mesmo com `acordosCompartilhados = true`. ❌
-3. **Banco (RLS de `acordos`, `pagamentos`, `profiles`)**: as policies de "Acordos compartilhados" hoje só liberam **os acordos do admin que concedeu** (`get_acordos_compartilhados_admin`). Não liberam os acordos de outros funcionários do sistema. Resultado: mesmo se o frontend pedir, o banco devolve apenas um subconjunto. ❌
+### Regra de cálculo
 
-Ou seja: a interface está pronta, mas o link some no menu e o banco bloqueia a visão completa.
+Usar `calcularComissaoMontrealParcela(valor_parcela, diasAtraso)` de `src/lib/comissao.ts`, onde `diasAtraso = data_pagamento - data_vencimento` (em dias corridos).
 
-## O que precisa mudar
+Tabela MONTREAL já existente:
+- 31–60 dias → 8%
+- 61–90 → 15%
+- 91–180 → 20%
+- 181–360 → 25%
+- 361–720 → 30%
+- 721–1800 → 35%
+- Fora dessas faixas (≤30 dias ou parcela não paga) → 0% / vazio
 
-### 1. Banco de dados (migration — somente leitura, nada é apagado)
+### Comportamento
 
-Criar uma função auxiliar e novas policies de **SELECT** para usuários com `acordos_compartilhados = true`:
+- Parcela **Paga**: calcula `% e valor` com base no atraso real (pagamento − vencimento).
+- Parcela **Pendente/Atrasada**: colunas ficam vazias ("—" ou em branco).
+- Aplica somente quando o credor exportado for **MONTREAL** (filtro já existente). Para "todos", calcular apenas nas linhas do credor MONTREAL; demais ficam vazias.
 
-- `has_acordos_compartilhados(_user_id uuid) returns boolean` — `SECURITY DEFINER`, lê `user_permissions`.
-- Nova policy em `public.acordos`: SELECT liberado para qualquer linha quando `has_acordos_compartilhados(auth.uid())` for verdadeiro.
-- Nova policy em `public.pagamentos`: SELECT liberado para qualquer linha quando o usuário tem acordos compartilhados.
-- Nova policy em `public.profiles`: SELECT liberado para qualquer perfil quando o usuário tem acordos compartilhados (necessário para mostrar o nome do funcionário em cada acordo).
+### Arquivos afetados
 
-Importante: **somente SELECT**. As policies de UPDATE/DELETE existentes continuam intactas — funcionários compartilhados não ganham poder de editar acordos de terceiros.
+- `src/pages/Clientes.tsx` — adicionar 2 campos no `exportRows.map(...)` e 2 entradas no array `colunas`.
 
-### 2. Frontend (`src/components/layout/AppLayout.tsx`)
-
-Ajustar o filtro do menu lateral para que o item **"Acordos da Equipe"** apareça também quando `acordosCompartilhados === true`, não apenas para gestores/admin.
-
-Como `/equipe/acordos` já está em `AVAILABLE_TABS` e é incluído por padrão em `abasPermitidas`, o `PermissionRoute` já permite o acesso. Falta apenas tornar o link visível.
-
-## Garantias
-
-- ✅ **Nenhum dado é apagado nem alterado**. Apenas novas policies de leitura.
-- ✅ **WhatsApps e acordos fechados intactos**. Nada toca em instâncias, mensagens, contatos, parcelas pagas ou status.
-- ✅ **Funcionários compartilhados continuam sem poder editar/apagar** acordos de outros — só visualizar.
-- ✅ **Admin continua com tudo igual**.
-
-## Arquivos afetados
-
-- Migration nova (função + 3 policies de SELECT).
-- `src/components/layout/AppLayout.tsx` (1 linha no filtro do menu).
-
-## Próximo passo
-
-Aprovar para eu executar a migration e o ajuste do menu.
+Sem mudanças de backend, schema ou outras telas.
