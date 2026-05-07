@@ -19,6 +19,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { exportarParaExcel } from '@/lib/exportExcel';
+import { calcularComissaoMontrealParcela } from '@/lib/comissao';
 
 interface ClienteRow {
   id: string;
