@@ -656,31 +656,57 @@ export default function NovoAcordo() {
 
               {/* Seletor de Instância WhatsApp da negociação */}
               <div className="space-y-2">
-                <Label>Instância WhatsApp da negociação</Label>
-                {instancias.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setInstanciaNegociacaoId('')}
-                    >
-                      Não informar
-                    </Button>
-                    {instancias.map((inst) => (
+                <div className="flex items-center justify-between">
+                  <Label>Instância WhatsApp da negociação</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      const next = !instanciasMinimizado;
+                      setInstanciasMinimizado(next);
+                      localStorage.setItem('novoAcordo:instanciasMinimizado', next ? '1' : '0');
+                    }}
+                  >
+                    {instanciasMinimizado ? (
+                      <><ChevronDown className="h-4 w-4 mr-1" /> Maximizar</>
+                    ) : (
+                      <><ChevronUp className="h-4 w-4 mr-1" /> Minimizar</>
+                    )}
+                  </Button>
+                </div>
+                {!instanciasMinimizado && (
+                  instancias.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
                       <Button
-                        key={inst.id}
                         type="button"
-                        variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                        variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => setInstanciaNegociacaoId(inst.id)}
+                        onClick={() => setInstanciaNegociacaoId('')}
                       >
-                        {inst.nome || inst.telefone || 'Instância'}
+                        Não informar
                       </Button>
-                    ))}
-                  </div>
+                      {instancias.map((inst) => (
+                        <Button
+                          key={inst.id}
+                          type="button"
+                          variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setInstanciaNegociacaoId(inst.id)}
+                        >
+                          {inst.nome || inst.telefone || 'Instância'}
+                        </Button>
+                      ))}
+                    </div>
+                  )
+                )}
+                {instanciasMinimizado && instanciaNegociacaoId && (
+                  <p className="text-xs text-muted-foreground">
+                    Selecionada: {instancias.find(i => i.id === instanciaNegociacaoId)?.nome || instancias.find(i => i.id === instanciaNegociacaoId)?.telefone || 'Instância'}
+                  </p>
                 )}
               </div>
             </CardContent>
