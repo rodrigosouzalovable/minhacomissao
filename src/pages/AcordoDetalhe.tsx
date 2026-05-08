@@ -41,6 +41,7 @@ export default function AcordoDetalhe() {
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [funcionarioNome, setFuncionarioNome] = useState<string | null>(null);
+  const [instanciaInfo, setInstanciaInfo] = useState<{ nome: string | null; telefone: string | null } | null>(null);
   const [editandoDataPagamento, setEditandoDataPagamento] = useState<string | null>(null);
   const [novaDataPagamento, setNovaDataPagamento] = useState<string>('');
   const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
@@ -84,6 +85,20 @@ export default function AcordoDetalhe() {
           if (profileData) {
             setFuncionarioNome(profileData.nome);
           }
+        }
+
+        // Buscar instância vinculada ao acordo (se houver)
+        const instId = (acordoData as any).instancia_negociacao_id as string | null | undefined;
+        if (instId) {
+          const { data: instData } = await supabase
+            .from('user_whatsapp_instances')
+            .select('nome, telefone')
+            .eq('id', instId)
+            .maybeSingle();
+          if (instData) setInstanciaInfo({ nome: instData.nome, telefone: instData.telefone });
+          else setInstanciaInfo(null);
+        } else {
+          setInstanciaInfo(null);
         }
 
         const { data: pagamentosData, error: pagamentosError } = await supabase
@@ -772,9 +787,23 @@ export default function AcordoDetalhe() {
                           <p className="font-medium">{acordo.cliente_telefone}</p>
                           <CopyButton value={acordo.cliente_telefone} label="Telefone" />
                         </div>
-                      </div>
-                    </div>
-                  )}
+                </div>
+              </div>
+            )}
+            {instanciaInfo && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium mb-2">Instância WhatsApp</p>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">{instanciaInfo.nome || 'Instância'}</p>
+                    {instanciaInfo.telefone && (
+                      <p className="text-xs text-muted-foreground">{instanciaInfo.telefone}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
                 </div>
               </div>
             )}
