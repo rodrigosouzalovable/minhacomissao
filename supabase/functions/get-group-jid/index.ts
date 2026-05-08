@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
     const token = inst.instance_token;
 
     const attempts = [
+      { method: "POST", path: "/group/list", body: { force: true } },
+      { method: "GET", path: "/group/list?force=true" },
       { method: "GET", path: "/group/list" },
       { method: "POST", path: "/group/list", body: {} },
       { method: "GET", path: "/group/fetchAllGroups" },
