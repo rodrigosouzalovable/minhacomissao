@@ -101,9 +101,10 @@ Deno.serve(async (req) => {
   const { data: cfgRow } = await supabase
     .from("whatsapp_aquecimento_config")
     .select("valor")
-    .eq("chave", "status_habilitado")
+    .eq("chave", "postar_status_auto")
     .maybeSingle();
-  const habilitado = cfgRow?.valor === true || cfgRow?.valor === "true" || cfgRow?.valor === null;
+  // Habilitado por padrão se a row não existir; só desabilita se valor for explicitamente false
+  const habilitado = !cfgRow || cfgRow.valor === true || cfgRow.valor === "true" || cfgRow.valor === null;
   if (!habilitado && !isManualTest) {
     return new Response(JSON.stringify({ ok: true, skipped: "disabled" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
