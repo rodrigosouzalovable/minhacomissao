@@ -35,6 +35,9 @@ interface Membro {
   tentativas: number;
   adicionado_em: string | null;
   ultima_tentativa_em: string | null;
+  promovido_admin?: boolean;
+  promovido_em?: string | null;
+  promocao_erro?: string | null;
 }
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "destructive" | "secondary" | "outline" }> = {
@@ -144,6 +147,23 @@ export default function GrupoAquecimentoCard() {
       const { data, error } = await supabase.functions.invoke("add-to-warming-group", { body: { instancia_id: instanciaId } });
       if (error) throw error;
       toast({ title: "Tentativa enviada", description: JSON.stringify(data?.results?.[0] || {}).substring(0, 200) });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    }
+  }
+
+  async function promoverAgora(instanciaId: string) {
+    try {
+      const { data, error } = await supabase.functions.invoke("add-to-warming-group", {
+        body: { instancia_id: instanciaId, action: "promote" },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast({ title: "Promovida a admin", description: `${data.promovido} promovida por ${data.por}` });
+      } else {
+        toast({ title: "Falhou", description: data?.error?.substring(0, 200) || "Erro desconhecido", variant: "destructive" });
+      }
       await load();
     } catch (e: any) {
       toast({ title: "Erro", description: e.message, variant: "destructive" });
@@ -271,6 +291,14 @@ export default function GrupoAquecimentoCard() {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Badge variant={sl.variant} className="text-[10px]">{sl.label}</Badge>
+                      {m.promovido_admin && (
+                        <Badge variant="default" className="text-[10px] bg-amber-500 hover:bg-amber-500">Admin</Badge>
+                      )}
+                      {m.status === "ok" && !m.promovido_admin && (
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => promoverAgora(m.instancia_id)}>
+                          Promover
+                        </Button>
+                      )}
                       {m.status !== "ok" && m.status !== "removido_manualmente" && (
                         <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => tentarAgora(m.instancia_id)}>
                           Tentar

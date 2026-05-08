@@ -2252,6 +2252,9 @@ export type Database = {
           id: string
           instancia_id: string
           invite_link: string | null
+          promocao_erro: string | null
+          promovido_admin: boolean
+          promovido_em: string | null
           status: string
           tentativas: number
           ultima_tentativa_em: string | null
@@ -2267,6 +2270,9 @@ export type Database = {
           id?: string
           instancia_id: string
           invite_link?: string | null
+          promocao_erro?: string | null
+          promovido_admin?: boolean
+          promovido_em?: string | null
           status?: string
           tentativas?: number
           ultima_tentativa_em?: string | null
@@ -2282,6 +2288,9 @@ export type Database = {
           id?: string
           instancia_id?: string
           invite_link?: string | null
+          promocao_erro?: string | null
+          promovido_admin?: boolean
+          promovido_em?: string | null
           status?: string
           tentativas?: number
           ultima_tentativa_em?: string | null
