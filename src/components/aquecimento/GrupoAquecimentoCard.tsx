@@ -153,6 +153,23 @@ export default function GrupoAquecimentoCard() {
     }
   }
 
+  async function promoverAgora(instanciaId: string) {
+    try {
+      const { data, error } = await supabase.functions.invoke("add-to-warming-group", {
+        body: { instancia_id: instanciaId, action: "promote" },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast({ title: "Promovida a admin", description: `${data.promovido} promovida por ${data.por}` });
+      } else {
+        toast({ title: "Falhou", description: data?.error?.substring(0, 200) || "Erro desconhecido", variant: "destructive" });
+      }
+      await load();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    }
+  }
+
   if (loading) return <div className="text-sm text-muted-foreground py-4">Carregando grupo de aquecimento...</div>;
 
   const instanciasAtivas = instancias.filter(i => i.ativo);
