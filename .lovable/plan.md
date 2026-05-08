@@ -1,21 +1,9 @@
-## Problema
+O Antônio não aparece porque a consulta de pagamentos pagos na aba **Acordos da Equipe** está limitada a `.range(0, 9999)` e não ordena/filtra pelo período selecionado. Como já existem mais de 1.000 pagamentos pagos e o pagamento do Antônio cai depois de muitos registros, ele pode ficar fora do lote carregado no navegador; então o filtro local nunca encontra o `acordo_id` dele, mesmo a parcela paga existindo em 05/05/2026.
 
-Na aba "Acordos da Equipe", o filtro De/Até está olhando a **data de vencimento** da parcela (`data_prevista`). No caso do Antônio Martins Marra, a parcela foi **paga em 05/05/2026** mas vence em **10/05/2026**, então fica fora do intervalo 01/05–08/05 e o acordo desaparece.
+Plano de correção urgente:
 
-## Solução
-
-Voltar o filtro De/Até para usar a **data de pagamento** (`data_paga`) da parcela, considerando apenas parcelas com `status = 'pago'`.
-
-## Alterações em `src/pages/EquipeAcordos.tsx`
-
-1. **`pagamentosFiltradosPorPeriodo`** — voltar a filtrar por `pag.data_paga` (apenas pagamentos com `status = 'pago'` e `data_paga` dentro do intervalo).
-2. **`acordosComVencimentoNoPeriodo`** → renomear para `acordosComPagamentoNoPeriodo`. Construir a partir de `pagamentosFiltradosPorPeriodo` (set dos `acordo_id` que têm pelo menos uma parcela paga no período).
-3. **Linha 532** — usar `acordosComPagamentoNoPeriodo.has(acordo.id)`.
-4. Totais "recebido no período" continuam corretos automaticamente (já usam `pagamentosFiltradosPorPeriodo`).
-5. O filtro separado **"Filtrar por vencimento"** (popover de data única) permanece como está, para quem precisar buscar por vencimento.
-
-Sem mudanças em schema, RLS, edge functions ou outras telas.
-
-## Resultado
-
-Com 01/05/2026–08/05/2026, o Antônio aparecerá pois sua parcela foi paga em 05/05/2026.
+1. Ajustar a busca de `pagamentos` em `src/pages/EquipeAcordos.tsx` para carregar todos os pagamentos pagos de forma paginada, igual já é feito com `acordos`, evitando limite/truncamento silencioso.
+2. Manter o filtro principal **De/Até** usando `data_paga`, conforme aprovado anteriormente.
+3. Garantir que o `Set` de acordos com pagamento no período seja montado a partir de todos os pagamentos pagos carregados, incluindo o acordo `967ba068-cff5-4ea8-8d1c-1f22cf938690` do Antônio.
+4. Preservar o filtro separado **Filtrar por vencimento** sem alteração.
+5. Verificar depois da alteração que o fluxo não depende mais do limite fixo `9999` para pagamentos pagos.
