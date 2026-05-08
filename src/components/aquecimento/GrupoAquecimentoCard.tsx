@@ -291,6 +291,14 @@ export default function GrupoAquecimentoCard() {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Badge variant={sl.variant} className="text-[10px]">{sl.label}</Badge>
+                      {m.promovido_admin && (
+                        <Badge variant="default" className="text-[10px] bg-amber-500 hover:bg-amber-500">Admin</Badge>
+                      )}
+                      {m.status === "ok" && !m.promovido_admin && (
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => promoverAgora(m.instancia_id)}>
+                          Promover
+                        </Button>
+                      )}
                       {m.status !== "ok" && m.status !== "removido_manualmente" && (
                         <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => tentarAgora(m.instancia_id)}>
                           Tentar
