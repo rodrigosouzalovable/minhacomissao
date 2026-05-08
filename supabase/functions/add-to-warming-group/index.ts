@@ -297,10 +297,11 @@ async function fetchGroupAdmins(reader: any, groupJid: string, activeByPhoneSuff
   const adminInsts: any[] = [];
   const seen = new Set<string>();
   for (const p of participants) {
-    const isAdmin = p.IsAdmin || p.isAdmin || p.admin === "admin" || p.admin === "superadmin";
+    const isAdmin = p.IsAdmin || p.isAdmin || p.IsSuperAdmin || p.admin === "admin" || p.admin === "superadmin";
     if (!isAdmin) continue;
-    const jid: string = p.JID || p.jid || p.id || "";
-    const num = jid.replace(/[^0-9]/g, "");
+    // Prioriza PhoneNumber (formato 556282...@s.whatsapp.net) sobre JID (que pode ser @lid sem telefone)
+    const phoneSrc: string = p.PhoneNumber || p.phoneNumber || p.JID || p.jid || p.id || "";
+    const num = phoneSrc.replace(/[^0-9]/g, "");
     if (!num) continue;
     const suffix = num.slice(-8);
     const inst = activeByPhoneSuffix.get(suffix);
