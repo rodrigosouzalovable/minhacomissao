@@ -103,14 +103,14 @@ export default function NovoAcordo() {
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
   const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
-  const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
+  const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null; ativo: boolean }>>([]);
+  const [instanciaBusca, setInstanciaBusca] = useState('');
   useEffect(() => {
     if (!user) return;
     supabase
       .from('user_whatsapp_instances')
-      .select('id, nome, telefone')
-      .eq('user_id', user.id)
-      .eq('ativo', true)
+      .select('id, nome, telefone, ativo')
+      .order('ativo', { ascending: false })
       .order('ordem', { ascending: true })
       .then(({ data }) => setInstancias((data as any) || []));
   }, [user]);
@@ -678,28 +678,48 @@ export default function NovoAcordo() {
                 </div>
                 {!instanciasMinimizado && (
                   instancias.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                    <p className="text-sm text-muted-foreground">Nenhuma instância cadastrada.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setInstanciaNegociacaoId('')}
-                      >
-                        Não informar
-                      </Button>
-                      {instancias.map((inst) => (
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="Pesquisar instância pelo nome ou telefone..."
+                        value={instanciaBusca}
+                        onChange={(e) => setInstanciaBusca(e.target.value)}
+                        className="h-9"
+                      />
+                      <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto">
                         <Button
-                          key={inst.id}
                           type="button"
-                          variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                          variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => setInstanciaNegociacaoId(inst.id)}
+                          onClick={() => setInstanciaNegociacaoId('')}
                         >
-                          {inst.nome || inst.telefone || 'Instância'}
+                          Não informar
                         </Button>
-                      ))}
+                        {instancias
+                          .filter((inst) => {
+                            const q = instanciaBusca.trim().toLowerCase();
+                            if (!q) return true;
+                            return (
+                              (inst.nome || '').toLowerCase().includes(q) ||
+                              (inst.telefone || '').toLowerCase().includes(q)
+                            );
+                          })
+                          .map((inst) => (
+                            <Button
+                              key={inst.id}
+                              type="button"
+                              variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setInstanciaNegociacaoId(inst.id)}
+                              className={!inst.ativo ? 'opacity-60' : ''}
+                              title={inst.ativo ? 'Conectada' : 'Desconectada'}
+                            >
+                              <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${inst.ativo ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />
+                              {inst.nome || inst.telefone || 'Instância'}
+                            </Button>
+                          ))}
+                      </div>
                     </div>
                   )
                 )}
