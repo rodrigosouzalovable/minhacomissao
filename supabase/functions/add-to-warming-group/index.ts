@@ -235,6 +235,27 @@ Deno.serve(async (req) => {
               });
               results.push({ grupo: grupo.nome, target: target.nome, adder: chosenAdder.inst.nome, status: "ok" });
               addedThisCall++;
+
+              // Auto-promote: aguarda 8-15s e promove o recém-adicionado a admin
+              const targetPhone = fullPhone;
+              const promoteDelay = 8000 + Math.floor(Math.random() * 7000);
+              await new Promise(r => setTimeout(r, promoteDelay));
+              const promoteRes = await promoteParticipant(chosenAdder.inst, grupo.group_jid, targetPhone);
+              if (promoteRes.ok) {
+                await supabase
+                  .from("whatsapp_aquecimento_grupo_membros")
+                  .update({ promovido_admin: true, promovido_em: new Date().toISOString(), promocao_erro: null })
+                  .eq("grupo_id", grupo.id)
+                  .eq("instancia_id", target.id);
+                results.push({ grupo: grupo.nome, target: target.nome, status: "promovido_admin" });
+              } else {
+                await supabase
+                  .from("whatsapp_aquecimento_grupo_membros")
+                  .update({ promocao_erro: promoteRes.error?.substring(0, 300) || "erro desconhecido" })
+                  .eq("grupo_id", grupo.id)
+                  .eq("instancia_id", target.id);
+                results.push({ grupo: grupo.nome, target: target.nome, status: "promocao_falhou", detail: promoteRes.error?.substring(0, 100) });
+              }
             }
           } else if (isBlocked) {
             // Coloca o ADDER em cooldown 24h
