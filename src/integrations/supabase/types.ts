@@ -2243,7 +2243,9 @@ export type Database = {
       whatsapp_aquecimento_grupo_membros: {
         Row: {
           adicionado_em: string | null
+          adicionado_por_instancia_id: string | null
           atualizado_em: string
+          bloqueado_ate: string | null
           criado_em: string
           erro_mensagem: string | null
           grupo_id: string
@@ -2256,7 +2258,9 @@ export type Database = {
         }
         Insert: {
           adicionado_em?: string | null
+          adicionado_por_instancia_id?: string | null
           atualizado_em?: string
+          bloqueado_ate?: string | null
           criado_em?: string
           erro_mensagem?: string | null
           grupo_id: string
@@ -2269,7 +2273,9 @@ export type Database = {
         }
         Update: {
           adicionado_em?: string | null
+          adicionado_por_instancia_id?: string | null
           atualizado_em?: string
+          bloqueado_ate?: string | null
           criado_em?: string
           erro_mensagem?: string | null
           grupo_id?: string
