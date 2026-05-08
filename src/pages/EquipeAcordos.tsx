@@ -81,6 +81,7 @@ export default function EquipeAcordos() {
     valor_parcela: number;
     acordo_id: string;
     data_paga: string | null;
+    data_prevista: string | null;
     numero_parcela: number;
   }>>([]);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
