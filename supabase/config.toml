@@ -113,3 +113,6 @@ verify_jwt = false
 
 [functions.daily-report-advanced]
 verify_jwt = false
+
+[functions.get-group-jid]
+verify_jwt = false
