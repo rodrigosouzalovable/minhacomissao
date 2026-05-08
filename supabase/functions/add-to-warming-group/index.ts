@@ -372,6 +372,80 @@ async function upsertMember(
   }
 }
 
+async function promoteParticipant(adder: any, groupJid: string, fullPhone: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const url = `${adder.server_url.replace(/\/$/, "")}/group/updateParticipants`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token: adder.instance_token },
+      body: JSON.stringify({ groupjid: groupJid, action: "promote", participants: [fullPhone] }),
+    });
+    const text = await res.text();
+    const lower = text.toLowerCase();
+    if (!res.ok || lower.includes("\"error\"") || lower.includes("not allowed") || lower.includes("blocked-integrity")) {
+      return { ok: false, error: text.substring(0, 300) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+async function handleManualPromote(supabase: any, instanciaId: string): Promise<Response> {
+  const { data: grupo } = await supabase
+    .from("whatsapp_aquecimento_grupos")
+    .select("*")
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+  if (!grupo) return json({ error: "Nenhum grupo ativo" }, 400);
+
+  const { data: target } = await supabase
+    .from("user_whatsapp_instances")
+    .select("id, nome, server_url, instance_token")
+    .eq("id", instanciaId)
+    .maybeSingle();
+  if (!target) return json({ error: "Instância não encontrada" }, 400);
+
+  const phone = target.nome?.match(/\d+/)?.[0];
+  if (!phone) return json({ error: "Sem telefone no nome da instância" }, 400);
+  const fullPhone = phone.startsWith("55") ? phone : `55${phone}`;
+
+  // Procura um adder admin
+  const { data: allActive } = await supabase
+    .from("user_whatsapp_instances")
+    .select("id, nome, server_url, instance_token, ativo")
+    .eq("ativo", true);
+  const activeByPhoneSuffix = new Map<string, any>();
+  for (const i of allActive || []) {
+    const p = (i.nome || "").match(/\d+/)?.[0];
+    if (p) activeByPhoneSuffix.set(p.slice(-8), i);
+  }
+  const reader = (allActive || []).find((i: any) => i.id === grupo.instancia_admin_id);
+  if (!reader) return json({ error: "Reader admin inativo" }, 400);
+
+  const adminInsts = await fetchGroupAdmins(reader, grupo.group_jid, activeByPhoneSuffix);
+  const adder = adminInsts.find((a) => a.id !== target.id);
+  if (!adder) return json({ error: "Nenhum admin disponível para promover" }, 400);
+
+  const r = await promoteParticipant(adder, grupo.group_jid, fullPhone);
+  if (r.ok) {
+    await supabase
+      .from("whatsapp_aquecimento_grupo_membros")
+      .update({ promovido_admin: true, promovido_em: new Date().toISOString(), promocao_erro: null })
+      .eq("grupo_id", grupo.id)
+      .eq("instancia_id", target.id);
+    return json({ success: true, promovido: target.nome, por: adder.nome });
+  } else {
+    await supabase
+      .from("whatsapp_aquecimento_grupo_membros")
+      .update({ promocao_erro: r.error?.substring(0, 300) })
+      .eq("grupo_id", grupo.id)
+      .eq("instancia_id", target.id);
+    return json({ success: false, error: r.error }, 200);
+  }
+}
+
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
