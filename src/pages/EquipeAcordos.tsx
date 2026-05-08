@@ -81,6 +81,7 @@ export default function EquipeAcordos() {
     valor_parcela: number;
     acordo_id: string;
     data_paga: string | null;
+    data_prevista: string | null;
     numero_parcela: number;
   }>>([]);
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
@@ -145,30 +146,27 @@ export default function EquipeAcordos() {
     }
   };
 
-  // Filtrar pagamentos por data de pagamento (data_paga)
-  // Se não há filtro de data, incluir TODOS os pagamentos pagos
+  // Helpers de data local YYYY-MM-DD
+  const startLocalStr = startDate
+    ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`
+    : null;
+  const endLocalStr = endDate
+    ? `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
+    : null;
+
+  const dataNoPeriodo = (dateStr: string | null | undefined) => {
+    if (!dateStr) return false;
+    const d = dateStr.split('T')[0];
+    if (startLocalStr && d < startLocalStr) return false;
+    if (endLocalStr && d > endLocalStr) return false;
+    return true;
+  };
+
+  // Filtrar pagamentos pagos por data de VENCIMENTO (data_prevista) da parcela.
+  // Se não há filtro de data, incluir TODOS os pagamentos pagos.
   const pagamentosFiltradosPorPeriodo = (startDate || endDate)
-    ? pagamentosEquipe.filter(pag => {
-        if (!pag.data_paga) return false;
-        
-        // Extrair apenas a parte da data (YYYY-MM-DD) para evitar problemas de fuso horário
-        const dataPagamentoStr = pag.data_paga.split('T')[0];
-        
-        if (startDate) {
-          // Formatar startDate para YYYY-MM-DD no fuso local
-          const startLocal = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-          if (dataPagamentoStr < startLocal) return false;
-        }
-        
-        if (endDate) {
-          // Formatar endDate para YYYY-MM-DD no fuso local
-          const endLocal = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-          if (dataPagamentoStr > endLocal) return false;
-        }
-        
-        return true;
-      })
-    : pagamentosEquipe; // Quando não há filtro de data, usar todos os pagamentos
+    ? pagamentosEquipe.filter(pag => dataNoPeriodo((pag as any).data_prevista))
+    : pagamentosEquipe;
 
   // IDs de acordos que possuem pelo menos uma parcela paga
   const acordosComParcelasPagas = new Set(
@@ -185,10 +183,16 @@ export default function EquipeAcordos() {
     }
   });
 
-  // IDs de acordos que possuem parcelas pagas dentro do período filtrado
-  const acordosComPagamentoNoPeriodo = new Set(
-    pagamentosFiltradosPorPeriodo.map(p => p.acordo_id)
-  );
+  // IDs de acordos que possuem QUALQUER parcela (paga ou pendente) com
+  // vencimento dentro do período filtrado.
+  const acordosComVencimentoNoPeriodo = new Set<string>();
+  if (startDate || endDate) {
+    todasDatasPorAcordo.forEach((datas, acordoId) => {
+      if (datas.some(d => dataNoPeriodo(d))) {
+        acordosComVencimentoNoPeriodo.add(acordoId);
+      }
+    });
+  }
 
   const handleExportar = (acordosParaExportar: AcordoComFuncionario[]) => {
     if (acordosParaExportar.length === 0) {
@@ -426,6 +430,7 @@ export default function EquipeAcordos() {
               valor_parcela: p.valor_parcela,
               acordo_id: p.acordo_id,
               data_paga: p.data_paga,
+              data_prevista: p.data_prevista,
               numero_parcela: p.numero_parcela,
             }));
             setPagamentosEquipe(pagamentosNormalizados);
@@ -524,7 +529,7 @@ export default function EquipeAcordos() {
     if (startDate || endDate) {
       // Se há filtro de data, incluir apenas acordos que possuem
       // pelo menos uma parcela paga dentro do período
-      matchesDate = acordosComPagamentoNoPeriodo.has(acordo.id);
+      matchesDate = acordosComVencimentoNoPeriodo.has(acordo.id);
     }
 
     // Filtro de visualização (todos vs com parcelas pagas)
