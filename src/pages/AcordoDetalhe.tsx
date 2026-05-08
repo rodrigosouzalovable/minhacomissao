@@ -41,6 +41,7 @@ export default function AcordoDetalhe() {
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [funcionarioNome, setFuncionarioNome] = useState<string | null>(null);
+  const [instanciaInfo, setInstanciaInfo] = useState<{ nome: string | null; telefone: string | null } | null>(null);
   const [editandoDataPagamento, setEditandoDataPagamento] = useState<string | null>(null);
   const [novaDataPagamento, setNovaDataPagamento] = useState<string>('');
   const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
