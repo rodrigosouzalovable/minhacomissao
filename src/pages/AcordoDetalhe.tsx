@@ -87,6 +87,20 @@ export default function AcordoDetalhe() {
           }
         }
 
+        // Buscar instância vinculada ao acordo (se houver)
+        const instId = (acordoData as any).instancia_negociacao_id as string | null | undefined;
+        if (instId) {
+          const { data: instData } = await supabase
+            .from('user_whatsapp_instances')
+            .select('nome, telefone')
+            .eq('id', instId)
+            .maybeSingle();
+          if (instData) setInstanciaInfo({ nome: instData.nome, telefone: instData.telefone });
+          else setInstanciaInfo(null);
+        } else {
+          setInstanciaInfo(null);
+        }
+
         const { data: pagamentosData, error: pagamentosError } = await supabase
           .from('pagamentos')
           .select('*')
