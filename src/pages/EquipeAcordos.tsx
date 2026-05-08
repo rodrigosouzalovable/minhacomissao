@@ -860,7 +860,7 @@ export default function EquipeAcordos() {
         ) : filteredAcordos.length > 0 ? (
           <div className="grid gap-4">
             {filteredAcordos.map((acordo) => (
-              <Link key={acordo.id} to={`/acordos/${acordo.id}`}>
+              <Link key={acordo.id} to={`/acordos/${acordo.id}`} onClick={() => { try { sessionStorage.setItem('acordo-detalhe:origem', '/equipe/acordos'); } catch {} }}>
                 <Card className="hover:border-primary/50 transition-colors cursor-pointer">
                   <CardContent className="p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
