@@ -69,17 +69,21 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Reader: instância oficial do grupo (apenas para chamar /group/info)
-      const reader = activeById.get(grupo.instancia_admin_id);
-      if (!reader) {
-        results.push({ grupo: grupo.nome, skipped: "instancia_admin_id não está ativa" });
-        continue;
+      // Reader: tenta a instância oficial; se desconectada, tenta outras ativas
+      const readerCandidates: any[] = [];
+      const officialReader = activeById.get(grupo.instancia_admin_id);
+      if (officialReader) readerCandidates.push(officialReader);
+      for (const i of allActive || []) {
+        if (i.id !== grupo.instancia_admin_id) readerCandidates.push(i);
       }
 
-      // 1) Buscar admins reais do grupo via UAZAPI
-      const adminInsts = await fetchGroupAdmins(reader, grupo.group_jid, activeByPhoneSuffix);
+      let adminInsts: any[] = [];
+      for (const r of readerCandidates) {
+        adminInsts = await fetchGroupAdmins(r, grupo.group_jid, activeByPhoneSuffix);
+        if (adminInsts.length > 0) break;
+      }
       if (adminInsts.length === 0) {
-        results.push({ grupo: grupo.nome, skipped: "nenhum admin ativo encontrado no grupo" });
+        results.push({ grupo: grupo.nome, skipped: "nenhum admin ativo encontrado no grupo (todos readers falharam)" });
         continue;
       }
 
