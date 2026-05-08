@@ -35,6 +35,9 @@ interface Membro {
   tentativas: number;
   adicionado_em: string | null;
   ultima_tentativa_em: string | null;
+  promovido_admin?: boolean;
+  promovido_em?: string | null;
+  promocao_erro?: string | null;
 }
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "destructive" | "secondary" | "outline" }> = {
