@@ -103,14 +103,14 @@ export default function NovoAcordo() {
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
   const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
-  const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
+  const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null; ativo: boolean }>>([]);
+  const [instanciaBusca, setInstanciaBusca] = useState('');
   useEffect(() => {
     if (!user) return;
     supabase
       .from('user_whatsapp_instances')
-      .select('id, nome, telefone')
-      .eq('user_id', user.id)
-      .eq('ativo', true)
+      .select('id, nome, telefone, ativo')
+      .order('ativo', { ascending: false })
       .order('ordem', { ascending: true })
       .then(({ data }) => setInstancias((data as any) || []));
   }, [user]);
