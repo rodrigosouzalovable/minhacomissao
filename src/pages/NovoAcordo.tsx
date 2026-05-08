@@ -102,6 +102,7 @@ export default function NovoAcordo() {
   };
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
+  const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
   const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
   useEffect(() => {
     if (!user) return;
