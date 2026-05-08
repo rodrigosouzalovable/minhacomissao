@@ -404,12 +404,27 @@ export default function EquipeAcordos() {
 
         // Buscar pagamentos pagos via join com acordos (evita URL longa com muitos IDs)
         if (funcionarioIds.length > 0) {
-          const { data: pagamentosPagos, error: pagamentosError } = await supabase
-            .from('pagamentos')
-            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, data_prevista, numero_parcela, acordos!inner(user_id)')
-            .in('acordos.user_id', funcionarioIds)
-            .eq('status', 'pago')
-            .range(0, 9999);
+          // Buscar TODOS os pagamentos pagos paginando para evitar limite silencioso
+          let pagamentosPagos: any[] = [];
+          let pagamentosError: any = null;
+          {
+            const PAGE = 1000;
+            let offset = 0;
+            while (true) {
+              const { data, error } = await supabase
+                .from('pagamentos')
+                .select('comissao_parcela, valor_parcela, acordo_id, data_paga, data_prevista, numero_parcela, acordos!inner(user_id)')
+                .in('acordos.user_id', funcionarioIds)
+                .eq('status', 'pago')
+                .order('data_paga', { ascending: false, nullsFirst: false })
+                .range(offset, offset + PAGE - 1);
+              if (error) { pagamentosError = error; break; }
+              if (!data || data.length === 0) break;
+              pagamentosPagos = pagamentosPagos.concat(data);
+              if (data.length < PAGE) break;
+              offset += PAGE;
+            }
+          }
 
           if (pagamentosError) {
             console.error('Erro ao buscar pagamentos pagos:', pagamentosError);
