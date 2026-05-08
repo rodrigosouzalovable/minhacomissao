@@ -430,6 +430,7 @@ export default function EquipeAcordos() {
               valor_parcela: p.valor_parcela,
               acordo_id: p.acordo_id,
               data_paga: p.data_paga,
+              data_prevista: p.data_prevista,
               numero_parcela: p.numero_parcela,
             }));
             setPagamentosEquipe(pagamentosNormalizados);
