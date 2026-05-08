@@ -550,7 +550,12 @@ export default function AcordoDetalhe() {
     <AppLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(isOwner ? '/acordos' : '/equipe/acordos')}>
+          <Button variant="ghost" size="icon" onClick={() => {
+            let origem: string | null = null;
+            try { origem = sessionStorage.getItem('acordo-detalhe:origem'); } catch {}
+            try { sessionStorage.removeItem('acordo-detalhe:origem'); } catch {}
+            navigate(origem || (isOwner ? '/acordos' : '/equipe/acordos'));
+          }}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
