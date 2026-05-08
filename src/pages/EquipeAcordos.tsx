@@ -527,7 +527,7 @@ export default function EquipeAcordos() {
     if (startDate || endDate) {
       // Se há filtro de data, incluir apenas acordos que possuem
       // pelo menos uma parcela paga dentro do período
-      matchesDate = acordosComPagamentoNoPeriodo.has(acordo.id);
+      matchesDate = acordosComVencimentoNoPeriodo.has(acordo.id);
     }
 
     // Filtro de visualização (todos vs com parcelas pagas)
