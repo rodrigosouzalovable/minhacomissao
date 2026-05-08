@@ -787,9 +787,23 @@ export default function AcordoDetalhe() {
                           <p className="font-medium">{acordo.cliente_telefone}</p>
                           <CopyButton value={acordo.cliente_telefone} label="Telefone" />
                         </div>
-                      </div>
-                    </div>
-                  )}
+                </div>
+              </div>
+            )}
+            {instanciaInfo && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium mb-2">Instância WhatsApp</p>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">{instanciaInfo.nome || 'Instância'}</p>
+                    {instanciaInfo.telefone && (
+                      <p className="text-xs text-muted-foreground">{instanciaInfo.telefone}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
                 </div>
               </div>
             )}
