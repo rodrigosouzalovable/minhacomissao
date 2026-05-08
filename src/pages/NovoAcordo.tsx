@@ -678,28 +678,48 @@ export default function NovoAcordo() {
                 </div>
                 {!instanciasMinimizado && (
                   instancias.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                    <p className="text-sm text-muted-foreground">Nenhuma instância cadastrada.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setInstanciaNegociacaoId('')}
-                      >
-                        Não informar
-                      </Button>
-                      {instancias.map((inst) => (
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="Pesquisar instância pelo nome ou telefone..."
+                        value={instanciaBusca}
+                        onChange={(e) => setInstanciaBusca(e.target.value)}
+                        className="h-9"
+                      />
+                      <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto">
                         <Button
-                          key={inst.id}
                           type="button"
-                          variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                          variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => setInstanciaNegociacaoId(inst.id)}
+                          onClick={() => setInstanciaNegociacaoId('')}
                         >
-                          {inst.nome || inst.telefone || 'Instância'}
+                          Não informar
                         </Button>
-                      ))}
+                        {instancias
+                          .filter((inst) => {
+                            const q = instanciaBusca.trim().toLowerCase();
+                            if (!q) return true;
+                            return (
+                              (inst.nome || '').toLowerCase().includes(q) ||
+                              (inst.telefone || '').toLowerCase().includes(q)
+                            );
+                          })
+                          .map((inst) => (
+                            <Button
+                              key={inst.id}
+                              type="button"
+                              variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setInstanciaNegociacaoId(inst.id)}
+                              className={!inst.ativo ? 'opacity-60' : ''}
+                              title={inst.ativo ? 'Conectada' : 'Desconectada'}
+                            >
+                              <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${inst.ativo ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />
+                              {inst.nome || inst.telefone || 'Instância'}
+                            </Button>
+                          ))}
+                      </div>
                     </div>
                   )
                 )}
