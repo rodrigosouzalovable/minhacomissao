@@ -162,10 +162,10 @@ export default function EquipeAcordos() {
     return true;
   };
 
-  // Filtrar pagamentos pagos por data de VENCIMENTO (data_prevista) da parcela.
+  // Filtrar pagamentos pagos por data de PAGAMENTO (data_paga) da parcela.
   // Se não há filtro de data, incluir TODOS os pagamentos pagos.
   const pagamentosFiltradosPorPeriodo = (startDate || endDate)
-    ? pagamentosEquipe.filter(pag => dataNoPeriodo((pag as any).data_prevista))
+    ? pagamentosEquipe.filter(pag => !!pag.data_paga && dataNoPeriodo(pag.data_paga))
     : pagamentosEquipe;
 
   // IDs de acordos que possuem pelo menos uma parcela paga
@@ -183,16 +183,11 @@ export default function EquipeAcordos() {
     }
   });
 
-  // IDs de acordos que possuem QUALQUER parcela (paga ou pendente) com
-  // vencimento dentro do período filtrado.
-  const acordosComVencimentoNoPeriodo = new Set<string>();
-  if (startDate || endDate) {
-    todasDatasPorAcordo.forEach((datas, acordoId) => {
-      if (datas.some(d => dataNoPeriodo(d))) {
-        acordosComVencimentoNoPeriodo.add(acordoId);
-      }
-    });
-  }
+  // IDs de acordos que possuem pelo menos uma parcela paga
+  // dentro do período filtrado (por data de pagamento).
+  const acordosComPagamentoNoPeriodo = new Set<string>(
+    pagamentosFiltradosPorPeriodo.map(p => p.acordo_id)
+  );
 
   const handleExportar = (acordosParaExportar: AcordoComFuncionario[]) => {
     if (acordosParaExportar.length === 0) {
@@ -529,7 +524,7 @@ export default function EquipeAcordos() {
     if (startDate || endDate) {
       // Se há filtro de data, incluir apenas acordos que possuem
       // pelo menos uma parcela paga dentro do período
-      matchesDate = acordosComVencimentoNoPeriodo.has(acordo.id);
+      matchesDate = acordosComPagamentoNoPeriodo.has(acordo.id);
     }
 
     // Filtro de visualização (todos vs com parcelas pagas)
