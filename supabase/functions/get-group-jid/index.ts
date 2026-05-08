@@ -16,13 +16,16 @@ const json = (data: any, status = 200) =>
   });
 
 function normalizeGroup(g: any) {
-  const jid = g?.jid || g?.id || g?.groupJid || g?.group_id || g?.remoteJid || g?.chatId || "";
-  const nome = g?.name || g?.subject || g?.nome || g?.groupName || g?.title || "";
-  const participants = g?.participants || g?.members || g?.participantsList || [];
+  const jid = g?.JID || g?.jid || g?.id || g?.groupJid || g?.group_id || g?.remoteJid || g?.chatId || "";
+  const nome = g?.Name || g?.name || g?.subject || g?.Subject || g?.nome || g?.groupName || g?.title || "";
+  const participants = g?.Participants || g?.participants || g?.members || [];
   const participants_count =
-    g?.size ?? g?.participantsCount ?? g?.participants_count ?? (Array.isArray(participants) ? participants.length : undefined);
-  const is_admin = g?.isAdmin ?? g?.iAmAdmin ?? g?.is_admin ?? undefined;
-  return { jid, nome, participants_count, is_admin, raw: undefined as any };
+    g?.ParticipantCount || g?.size || g?.participantsCount || g?.participants_count ||
+    (Array.isArray(participants) ? participants.length : 0);
+  const is_admin = Array.isArray(participants)
+    ? participants.some((p: any) => p?.IsAdmin || p?.IsSuperAdmin || p?.isAdmin)
+    : undefined;
+  return { jid, nome, participants_count, is_admin };
 }
 
 function extractGroupArray(parsed: any): any[] {
