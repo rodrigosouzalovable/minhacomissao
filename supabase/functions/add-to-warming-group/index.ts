@@ -137,8 +137,18 @@ Deno.serve(async (req) => {
           try { parsed = JSON.parse(text); } catch {}
 
           const lower = text.toLowerCase();
+          // Detecta erros REAIS (mensagem de top-level), ignorando "Error":0 dentro de Participants
+          const hasRealError =
+            (parsed && typeof parsed.error === "string" && parsed.error.length > 0) ||
+            parsed?.success === false ||
+            lower.includes("\"message\":\"error") ||
+            lower.includes("blocked-integrity-enforcement") ||
+            lower.includes("not admin") ||
+            lower.includes("not_admin") ||
+            lower.includes("disconnected") ||
+            lower.includes("not connected");
 
-          if (res.ok && !lower.includes("error") && !lower.includes("not admin")) {
+          if (res.ok && !hasRealError) {
             // Verifica se UAZAPI retornou invite link (privacy)
             const inviteMatch = text.match(/https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+/);
             if (inviteMatch) {
