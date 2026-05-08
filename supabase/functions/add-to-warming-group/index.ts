@@ -22,7 +22,13 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const instanciaId: string | undefined = body.instancia_id;
     const forceAdderId: string | undefined = body.adder_instance_id; // manual override
-    const isManual = !!instanciaId;
+    const action: string = body.action || "add"; // "add" | "promote"
+    const isManual = !!instanciaId || action === "promote";
+
+    // Manual promote mode: promove a instancia_id como admin do grupo
+    if (action === "promote" && instanciaId) {
+      return await handleManualPromote(supabase, instanciaId);
+    }
 
     const { data: grupos } = await supabase
       .from("whatsapp_aquecimento_grupos")
