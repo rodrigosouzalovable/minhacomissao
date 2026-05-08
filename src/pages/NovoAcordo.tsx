@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { calcularComissao, calcularComissaoMundoDaModa, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa } from '@/lib/comissao';
 import { z } from 'zod';
-import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText } from 'lucide-react';
+import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageDataExtractor, ExtractedData } from '@/components/ImageDataExtractor';
