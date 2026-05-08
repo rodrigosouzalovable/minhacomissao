@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { calcularComissao, calcularComissaoMundoDaModa, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa } from '@/lib/comissao';
 import { z } from 'zod';
-import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText } from 'lucide-react';
+import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageDataExtractor, ExtractedData } from '@/components/ImageDataExtractor';
@@ -102,6 +102,7 @@ export default function NovoAcordo() {
   };
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
+  const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
   const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
   useEffect(() => {
     if (!user) return;
@@ -655,31 +656,57 @@ export default function NovoAcordo() {
 
               {/* Seletor de Instância WhatsApp da negociação */}
               <div className="space-y-2">
-                <Label>Instância WhatsApp da negociação</Label>
-                {instancias.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setInstanciaNegociacaoId('')}
-                    >
-                      Não informar
-                    </Button>
-                    {instancias.map((inst) => (
+                <div className="flex items-center justify-between">
+                  <Label>Instância WhatsApp da negociação</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      const next = !instanciasMinimizado;
+                      setInstanciasMinimizado(next);
+                      localStorage.setItem('novoAcordo:instanciasMinimizado', next ? '1' : '0');
+                    }}
+                  >
+                    {instanciasMinimizado ? (
+                      <><ChevronDown className="h-4 w-4 mr-1" /> Maximizar</>
+                    ) : (
+                      <><ChevronUp className="h-4 w-4 mr-1" /> Minimizar</>
+                    )}
+                  </Button>
+                </div>
+                {!instanciasMinimizado && (
+                  instancias.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
                       <Button
-                        key={inst.id}
                         type="button"
-                        variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                        variant={instanciaNegociacaoId === '' ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => setInstanciaNegociacaoId(inst.id)}
+                        onClick={() => setInstanciaNegociacaoId('')}
                       >
-                        {inst.nome || inst.telefone || 'Instância'}
+                        Não informar
                       </Button>
-                    ))}
-                  </div>
+                      {instancias.map((inst) => (
+                        <Button
+                          key={inst.id}
+                          type="button"
+                          variant={instanciaNegociacaoId === inst.id ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setInstanciaNegociacaoId(inst.id)}
+                        >
+                          {inst.nome || inst.telefone || 'Instância'}
+                        </Button>
+                      ))}
+                    </div>
+                  )
+                )}
+                {instanciasMinimizado && instanciaNegociacaoId && (
+                  <p className="text-xs text-muted-foreground">
+                    Selecionada: {instancias.find(i => i.id === instanciaNegociacaoId)?.nome || instancias.find(i => i.id === instanciaNegociacaoId)?.telefone || 'Instância'}
+                  </p>
                 )}
               </div>
             </CardContent>
