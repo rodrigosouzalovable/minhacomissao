@@ -165,7 +165,7 @@ export default function EquipeAcordos() {
   // Filtrar pagamentos pagos por data de PAGAMENTO (data_paga) da parcela.
   // Se não há filtro de data, incluir TODOS os pagamentos pagos.
   const pagamentosFiltradosPorPeriodo = (startDate || endDate)
-    ? pagamentosEquipe.filter(pag => pag.status === 'pago' && dataNoPeriodo(pag.data_paga))
+    ? pagamentosEquipe.filter(pag => !!pag.data_paga && dataNoPeriodo(pag.data_paga))
     : pagamentosEquipe;
 
   // IDs de acordos que possuem pelo menos uma parcela paga
