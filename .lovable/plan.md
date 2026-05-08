@@ -1,21 +1,22 @@
-## Adicionar seleção de instância WhatsApp ao criar acordo
+## Filtro de datas em "Acordos da Equipe" passa a usar Vencimento da parcela
 
-Adicionar uma nova seção logo abaixo do seletor de "Empresa" (credor) na tela **Novo Acordo** para que você selecione qual das suas instâncias WhatsApp foi usada para negociar com o cliente.
+Hoje o intervalo De/Até filtra acordos pela **data de pagamento** das parcelas. Vou trocar para filtrar pela **data de vencimento** (`data_prevista`) de qualquer parcela do acordo (paga ou pendente). Assim, ao buscar o cliente Antônio Martins Marra entre 01/05/2026 e 08/05/2026, o acordo aparece se houver qualquer parcela com vencimento nesse intervalo.
 
-### O que muda
+### Mudanças em `src/pages/EquipeAcordos.tsx`
 
-**1. Banco de dados**
-- Nova coluna opcional `instancia_negociacao_id` na tabela `acordos` referenciando `user_whatsapp_instances(id)`.
-- Sem alteração de RLS — herda das políticas existentes.
+1. **Lista de acordos (filtro principal)**
+   - Substituir o uso de `acordosComPagamentoNoPeriodo` (baseado em `data_paga`) por um novo `Set` `acordosComVencimentoNoPeriodo` construído a partir do mapa já existente `todasDatasPorAcordo` (que contém `data_prevista` de parcelas pagas + pendentes).
+   - Acordo entra na lista quando pelo menos uma data em `todasDatasPorAcordo.get(acordo.id)` cair entre `startDate` e `endDate` (comparação por string `YYYY-MM-DD` no fuso local, mesmo padrão já usado no arquivo).
 
-**2. UI — `src/pages/NovoAcordo.tsx`**
-- Novo bloco logo abaixo do seletor "Empresa", com Label "Instância WhatsApp da negociação" e botões (mesma estética dos botões de empresa) listando as instâncias ativas do usuário (`user_whatsapp_instances` filtrando `user_id = auth.uid()` e `ativo = true`), exibindo `nome` (ou `telefone` como fallback).
-- Campo opcional — pode ficar sem seleção.
-- O id selecionado é salvo em `instancia_negociacao_id` no insert do acordo.
+2. **Totais e cards "recebido no período"**
+   - Conforme a opção escolhida, os totais de pagamentos passam a considerar parcelas pagas cujo **vencimento** caia no intervalo (não mais a data em que foi pago).
+   - Ajustar `pagamentosFiltradosPorPeriodo` para filtrar `pag.data_prevista` em vez de `pag.data_paga`, mantendo o requisito de `status = 'pago'` para os totais financeiros.
 
-**3. UI — `src/pages/NovoAcordoAdmin.tsx`**
-- Mesmo seletor adicionado na tela de admin (lista todas as instâncias ativas, sem filtro de user_id), para consistência. Se preferir só na tela do funcionário, me avise.
+3. **Compatibilidade**
+   - Sem filtro de datas: comportamento inalterado (todos os acordos).
+   - Filtro existente "Vencimento" (data única, popover ao lado) continua funcionando como hoje.
+   - Sem mudanças de schema, RLS ou edge functions.
 
 ### Fora do escopo
-- Não exibir/editar o campo em outras telas (detalhe, edição, listagens) — pode ser feito em pedido futuro.
-- Não usar a instância automaticamente para envios — é apenas registro de qual número negociou.
+- Demais abas (Meus Acordos, Acordos gerais) permanecem inalteradas.
+- Exportação Excel já usa o conjunto filtrado, então herda o novo comportamento automaticamente.
