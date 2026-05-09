@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
   const instIds = Array.from(new Set(pendentes.map((p: any) => p.instancia_id)));
   const { data: instancias } = await supabase
     .from("user_whatsapp_instances")
-    .select("id, nome, server_url, instance_token, ativo, numero")
+    .select("id, nome, server_url, instance_token, ativo, telefone")
     .in("id", instIds);
   const instMap = new Map((instancias || []).map((i: any) => [i.id, i]));
 
