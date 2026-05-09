@@ -76,7 +76,7 @@ async function uazapiSend(
   }
 }
 
-async function processarGrupo(supa: any, grupo: any, config: any): Promise<{ enviados: number; erros: number; pulado?: string }> {
+async function processarGrupo(supa: any, grupo: any, config: any, forcar = false): Promise<{ enviados: number; erros: number; pulado?: string }> {
   const inicioBrt = new Date(brtNow().toDateString());
   const inicioIso = new Date(Date.now() - 24 * 3600 * 1000).toISOString(); // últimas 24h
   const hojeIso = inicioBrt.toISOString();
