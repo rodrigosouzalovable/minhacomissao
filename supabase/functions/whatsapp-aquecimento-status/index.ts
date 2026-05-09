@@ -34,12 +34,21 @@ function pickImage(images: any[], recentIds: Set<string>): any | null {
   return final[Math.floor(Math.random() * final.length)];
 }
 
+function extractMsgId(raw: any): string | null {
+  if (!raw) return null;
+  const id = raw.id || raw.messageId || raw.msgId || raw.key?.id ||
+    raw.message?.id || raw.message?.key?.id || raw.data?.id || null;
+  if (!id) return null;
+  const s = String(id);
+  return s.includes(":") ? s.split(":").pop() || s : s;
+}
+
 async function postStatus(
   serverUrl: string,
   token: string,
   imageUrl: string,
   caption: string | null,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; msgId?: string | null }> {
   const base = serverUrl.replace(/\/+$/, "");
   // UAZAPI: POST /send/media com number = "status@broadcast"
   const body = {
@@ -60,9 +69,91 @@ async function postStatus(
     clearTimeout(t);
     const txt = await res.text();
     if (!res.ok) return { ok: false, error: `${res.status}: ${txt.substring(0, 200)}` };
-    return { ok: true };
+    let msgId: string | null = null;
+    try { msgId = extractMsgId(JSON.parse(txt)); } catch { /* ignore */ }
+    return { ok: true, msgId };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// Agenda interações (visualizado/reação/resposta) das outras instâncias num status recém-postado
+async function agendarInteracoes(
+  supabase: any,
+  statusLogId: string,
+  authorInstanciaId: string,
+) {
+  try {
+    // Confere se engajamento está habilitado
+    const { data: cfgRow } = await supabase
+      .from("whatsapp_aquecimento_config")
+      .select("valor")
+      .eq("chave", "engajamento_status_auto")
+      .maybeSingle();
+    const habilitado = !cfgRow || cfgRow.valor === true || cfgRow.valor === "true";
+    if (!habilitado) return;
+
+    // Outras instâncias ativas (qualquer uma, não só aquecimento)
+    const { data: instances } = await supabase
+      .from("user_whatsapp_instances")
+      .select("id")
+      .eq("ativo", true)
+      .neq("id", authorInstanciaId);
+    if (!instances || instances.length === 0) return;
+
+    const ids: string[] = instances.map((i: any) => i.id);
+    // Embaralha
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+
+    const nReacoes = 3 + Math.floor(Math.random() * 4); // 3-6
+    const nRespostas = 1 + Math.floor(Math.random() * 2); // 1-2
+    const reacaoIds = ids.slice(0, Math.min(nReacoes, ids.length));
+    const restantes = ids.filter((x) => !reacaoIds.includes(x));
+    const respostaIds = restantes.slice(0, Math.min(nRespostas, restantes.length));
+
+    const now = Date.now();
+    const rndMin = (minMin: number, maxMin: number) =>
+      new Date(now + (minMin + Math.random() * (maxMin - minMin)) * 60_000).toISOString();
+
+    const rows: any[] = [];
+    // Visualizado: TODAS as instâncias, em 5-90min
+    for (const id of ids) {
+      rows.push({
+        status_log_id: statusLogId,
+        instancia_id: id,
+        tipo: "visualizado",
+        agendado_para: rndMin(5, 90),
+      });
+    }
+    // Reações: 3-6, em 10-180min
+    for (const id of reacaoIds) {
+      rows.push({
+        status_log_id: statusLogId,
+        instancia_id: id,
+        tipo: "reacao",
+        agendado_para: rndMin(10, 180),
+      });
+    }
+    // Respostas: 1-2, em 30-240min
+    for (const id of respostaIds) {
+      rows.push({
+        status_log_id: statusLogId,
+        instancia_id: id,
+        tipo: "resposta",
+        agendado_para: rndMin(30, 240),
+      });
+    }
+
+    if (rows.length > 0) {
+      await supabase
+        .from("whatsapp_aquecimento_status_interacoes")
+        .insert(rows);
+    }
+  } catch (e) {
+    console.error("[agendarInteracoes] erro:", e);
   }
 }
 
