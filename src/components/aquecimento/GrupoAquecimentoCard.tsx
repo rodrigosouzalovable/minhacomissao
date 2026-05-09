@@ -52,10 +52,13 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "destr
 export default function GrupoAquecimentoCard() {
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [grupo, setGrupo] = useState<Grupo | null>(null);
+  const [outrosGrupos, setOutrosGrupos] = useState<Grupo[]>([]);
+  const [contagemMembros, setContagemMembros] = useState<Record<string, number>>({});
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sweeping, setSweeping] = useState(false);
+  const [descobrindo, setDescobrindo] = useState(false);
 
   // Form
   const [groupJid, setGroupJid] = useState("");
@@ -70,27 +73,73 @@ export default function GrupoAquecimentoCard() {
 
   async function load() {
     setLoading(true);
-    const [instRes, grupoRes] = await Promise.all([
+    const [instRes, gruposRes] = await Promise.all([
       supabase.from("user_whatsapp_instances").select("id, nome, ativo").order("nome"),
-      supabase.from("whatsapp_aquecimento_grupos" as any).select("*").limit(1).maybeSingle(),
+      supabase.from("whatsapp_aquecimento_grupos" as any).select("*").order("criado_em", { ascending: true }),
     ]);
     setInstancias((instRes.data as Instancia[]) || []);
-    if (grupoRes.data) {
-      const g = grupoRes.data as any as Grupo;
-      setGrupo(g);
-      setGroupJid(g.group_jid);
-      setNome(g.nome);
-      setAdminId(g.instancia_admin_id);
-      setAutoAdd(g.auto_add_novas);
-      setAtivo(g.ativo);
+    const todos = ((gruposRes.data as any[]) || []) as Grupo[];
+    const principal = todos[0] || null;
+    setGrupo(principal);
+    setOutrosGrupos(todos.slice(1));
+
+    if (principal) {
+      setGroupJid(principal.group_jid);
+      setNome(principal.nome);
+      setAdminId(principal.instancia_admin_id);
+      setAutoAdd(principal.auto_add_novas);
+      setAtivo(principal.ativo);
       const memRes = await supabase
         .from("whatsapp_aquecimento_grupo_membros" as any)
         .select("*")
-        .eq("grupo_id", g.id)
+        .eq("grupo_id", principal.id)
         .order("criado_em", { ascending: false });
       setMembros((memRes.data as any) || []);
     }
+
+    // contagem de membros para os "outros" grupos
+    if (todos.length > 1) {
+      const ids = todos.slice(1).map(g => g.id);
+      const { data: ms } = await supabase.from("whatsapp_aquecimento_grupo_membros" as any)
+        .select("grupo_id, status").in("grupo_id", ids);
+      const cont: Record<string, number> = {};
+      for (const m of (ms as any[]) || []) {
+        if (m.status === "ok") cont[m.grupo_id] = (cont[m.grupo_id] || 0) + 1;
+      }
+      setContagemMembros(cont);
+    } else {
+      setContagemMembros({});
+    }
+
     setLoading(false);
+  }
+
+  async function descobrirGrupos() {
+    setDescobrindo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("aquecimento-grupos-descobrir-e-registrar", {
+        body: { name_contains: "Família Souza e Ribeiro" },
+      });
+      if (error) throw error;
+      if (!data?.ok) {
+        toast({ title: "Erro", description: data?.error || "Falha na descoberta", variant: "destructive" });
+      } else {
+        toast({
+          title: `${data.grupos_encontrados} grupo(s) registrados`,
+          description: `${data.total_membros_inseridos} novos membros adicionados`,
+        });
+        await load();
+      }
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    } finally {
+      setDescobrindo(false);
+    }
+  }
+
+  async function toggleGrupoAtivo(g: Grupo, novoValor: boolean) {
+    await supabase.from("whatsapp_aquecimento_grupos" as any).update({ ativo: novoValor }).eq("id", g.id);
+    await load();
   }
 
   async function salvar() {
