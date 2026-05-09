@@ -239,6 +239,21 @@ export default function GrupoAquecimentoCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Descobrir grupos "Família Souza e Ribeiro"</p>
+              <p className="text-[11px] text-muted-foreground">
+                Lê os grupos de cada instância via WhatsApp, registra os que tiverem "Família Souza e Ribeiro" no nome (ex: 1, 2, ..., 7) e popula os membros automaticamente. Cada grupo conversará 15-25 msgs/dia entre seus membros.
+              </p>
+            </div>
+            <Button onClick={descobrirGrupos} disabled={descobrindo} size="sm">
+              {descobrindo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+              Descobrir e registrar
+            </Button>
+          </div>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs font-semibold">JID do Grupo (WhatsApp)</Label>
