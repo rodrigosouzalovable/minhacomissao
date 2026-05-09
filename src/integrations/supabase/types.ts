@@ -2240,6 +2240,146 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_aquecimento_grupo_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          carencia_horas: number
+          grupo_id: string
+          max_audios_por_instancia_dia: number
+          max_imagens_por_instancia_dia: number
+          max_msgs_por_instancia_dia: number
+          mix_audio: number
+          mix_imagem: number
+          mix_texto: number
+          msgs_max_dia: number
+          msgs_min_dia: number
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          carencia_horas?: number
+          grupo_id: string
+          max_audios_por_instancia_dia?: number
+          max_imagens_por_instancia_dia?: number
+          max_msgs_por_instancia_dia?: number
+          mix_audio?: number
+          mix_imagem?: number
+          mix_texto?: number
+          msgs_max_dia?: number
+          msgs_min_dia?: number
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          carencia_horas?: number
+          grupo_id?: string
+          max_audios_por_instancia_dia?: number
+          max_imagens_por_instancia_dia?: number
+          max_msgs_por_instancia_dia?: number
+          mix_audio?: number
+          mix_imagem?: number
+          mix_texto?: number
+          msgs_max_dia?: number
+          msgs_min_dia?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_grupo_config_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_aquecimento_grupos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_aquecimento_grupo_conversas_log: {
+        Row: {
+          conteudo_preview: string | null
+          contexto: string | null
+          enviado_em: string
+          erro: string | null
+          grupo_id: string
+          id: string
+          instancia_id: string
+          sucesso: boolean
+          tipo: string
+        }
+        Insert: {
+          conteudo_preview?: string | null
+          contexto?: string | null
+          enviado_em?: string
+          erro?: string | null
+          grupo_id: string
+          id?: string
+          instancia_id: string
+          sucesso?: boolean
+          tipo: string
+        }
+        Update: {
+          conteudo_preview?: string | null
+          contexto?: string | null
+          enviado_em?: string
+          erro?: string | null
+          grupo_id?: string
+          id?: string
+          instancia_id?: string
+          sucesso?: boolean
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_grupo_conversas_log_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_aquecimento_grupos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_aquecimento_grupo_conversas_log_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_aquecimento_grupo_dialogos_pool: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          contexto: string
+          created_at: string
+          id: string
+          ordem_na_cena: number
+          peso: number
+          tipo: string
+          vezes_utilizada: number
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          contexto: string
+          created_at?: string
+          id?: string
+          ordem_na_cena?: number
+          peso?: number
+          tipo?: string
+          vezes_utilizada?: number
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          contexto?: string
+          created_at?: string
+          id?: string
+          ordem_na_cena?: number
+          peso?: number
+          tipo?: string
+          vezes_utilizada?: number
+        }
+        Relationships: []
+      }
       whatsapp_aquecimento_grupo_membros: {
         Row: {
           adicionado_em: string | null
