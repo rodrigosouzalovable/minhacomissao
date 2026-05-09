@@ -98,7 +98,7 @@ async function processarGrupo(supa: any, grupo: any, config: any, forcar = false
   const restante = target - (enviadasHoje || 0);
   // Multiplicador 1.4 para dar folga (cenas tem 2-4 msgs)
   const probDisparar = Math.min(1, (restante * 1.4) / ciclosRestantes / 3);
-  if (Math.random() > probDisparar) return { enviados: 0, erros: 0, pulado: "prob não disparou" };
+  if (!forcar && Math.random() > probDisparar) return { enviados: 0, erros: 0, pulado: "prob não disparou" };
 
   // Membros elegíveis: status=ok, instância ativa, fora da carência
   const carenciaIso = new Date(Date.now() - config.carencia_horas * 3600 * 1000).toISOString();
