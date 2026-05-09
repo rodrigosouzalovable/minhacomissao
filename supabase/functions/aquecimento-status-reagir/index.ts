@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       id, status_log_id, instancia_id, tipo, agendado_para,
       whatsapp_aquecimento_status_log!inner(
         id, postado_em, whatsapp_msg_id, instancia_id,
-        autor:user_whatsapp_instances!whatsapp_aquecimento_status_log_instancia_id_fkey(numero)
+        autor:user_whatsapp_instances!whatsapp_aquecimento_status_log_instancia_id_fkey(telefone)
       )
     `)
     .is("executado_em", null)
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
   for (const p of pendentes as any[]) {
     const inst = instMap.get(p.instancia_id);
     const log = p.whatsapp_aquecimento_status_log;
-    const autorPhone = log?.autor?.numero;
+    const autorPhone = log?.autor?.telefone;
     const msgId = log?.whatsapp_msg_id;
 
     let sucesso = false;
