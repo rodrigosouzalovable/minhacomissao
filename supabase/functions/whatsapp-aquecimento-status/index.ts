@@ -276,20 +276,29 @@ Deno.serve(async (req) => {
     const img = pickImage(images, recentIds);
     if (!img) continue;
 
-    const { ok, error } = await postStatus(inst.server_url, inst.instance_token, img.public_url, img.caption);
+    const { ok, error, msgId } = await postStatus(inst.server_url, inst.instance_token, img.public_url, img.caption);
 
     const proximo = isManualTest ? null : nextSlotIso();
 
-    await supabase.from("whatsapp_aquecimento_status_log").insert({
-      instancia_id: inst.id,
-      imagem_id: img.id,
-      status: ok ? "enviado" : "erro",
-      erro: ok ? null : error?.substring(0, 500),
-      postado_em: new Date().toISOString(),
-      proximo_post_em: proximo,
-    });
+    const { data: insertedLog } = await supabase
+      .from("whatsapp_aquecimento_status_log")
+      .insert({
+        instancia_id: inst.id,
+        imagem_id: img.id,
+        status: ok ? "enviado" : "erro",
+        erro: ok ? null : error?.substring(0, 500),
+        postado_em: new Date().toISOString(),
+        proximo_post_em: proximo,
+        whatsapp_msg_id: msgId || null,
+      })
+      .select("id")
+      .single();
 
-    results.push({ instancia: inst.nome, ok, erro: error });
+    if (ok && insertedLog?.id) {
+      await agendarInteracoes(supabase, insertedLog.id, inst.id);
+    }
+
+    results.push({ instancia: inst.nome, ok, erro: error, msgId });
 
     // Espaçamento 60-180s entre instâncias para evitar burst
     if (!isManualTest && elegibles.length > 1) {
