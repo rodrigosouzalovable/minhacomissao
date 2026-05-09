@@ -12,13 +12,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer, Settings, Network } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer, Settings, Network, Heart } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
 import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSaveTab';
 import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTab';
 import AquecimentoStatusTab from '@/components/aquecimento/AquecimentoStatusTab';
+import EngajamentoStatusTab from '@/components/aquecimento/EngajamentoStatusTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -140,7 +141,7 @@ export default function Aquecimento() {
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies' | 'status'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies' | 'status' | 'engajamento'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
@@ -461,12 +462,21 @@ export default function Aquecimento() {
           >
             <Zap className="h-4 w-4" /> Status Auto
           </Button>
+          <Button
+            variant={activeTab === 'engajamento' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('engajamento')}
+            className="gap-1"
+          >
+            <Heart className="h-4 w-4" /> Engajamento
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
         {activeTab === 'autosave' && <AquecimentoAutoSaveTab />}
         {activeTab === 'proxies' && <AquecimentoProxiesTab />}
         {activeTab === 'status' && <AquecimentoStatusTab />}
+        {activeTab === 'engajamento' && <EngajamentoStatusTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
