@@ -2637,6 +2637,30 @@ export type Database = {
           },
         ]
       }
+      whatsapp_aquecimento_status_emojis_pool: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          emoji: string
+          id: string
+          ordem: number
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          emoji: string
+          id?: string
+          ordem?: number
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          emoji?: string
+          id?: string
+          ordem?: number
+        }
+        Relationships: []
+      }
       whatsapp_aquecimento_status_imagens: {
         Row: {
           ativo: boolean
@@ -2670,6 +2694,60 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_aquecimento_status_interacoes: {
+        Row: {
+          agendado_para: string
+          conteudo: string | null
+          criado_em: string
+          erro: string | null
+          executado_em: string | null
+          id: string
+          instancia_id: string
+          status_log_id: string
+          sucesso: boolean | null
+          tipo: string
+        }
+        Insert: {
+          agendado_para?: string
+          conteudo?: string | null
+          criado_em?: string
+          erro?: string | null
+          executado_em?: string | null
+          id?: string
+          instancia_id: string
+          status_log_id: string
+          sucesso?: boolean | null
+          tipo: string
+        }
+        Update: {
+          agendado_para?: string
+          conteudo?: string | null
+          criado_em?: string
+          erro?: string | null
+          executado_em?: string | null
+          id?: string
+          instancia_id?: string
+          status_log_id?: string
+          sucesso?: boolean | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_aquecimento_status_interacoes_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_aquecimento_status_interacoes_status_log_id_fkey"
+            columns: ["status_log_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_aquecimento_status_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_aquecimento_status_log: {
         Row: {
           conteudo: string | null
@@ -2683,6 +2761,7 @@ export type Database = {
           resultado: string
           status: string
           tipo: string
+          whatsapp_msg_id: string | null
         }
         Insert: {
           conteudo?: string | null
@@ -2696,6 +2775,7 @@ export type Database = {
           resultado?: string
           status?: string
           tipo?: string
+          whatsapp_msg_id?: string | null
         }
         Update: {
           conteudo?: string | null
@@ -2709,6 +2789,7 @@ export type Database = {
           resultado?: string
           status?: string
           tipo?: string
+          whatsapp_msg_id?: string | null
         }
         Relationships: [
           {
@@ -2719,6 +2800,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_aquecimento_status_respostas_pool: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          id: string
+          texto: string
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          texto: string
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          texto?: string
+        }
+        Relationships: []
       }
       whatsapp_contato_etiquetas: {
         Row: {
