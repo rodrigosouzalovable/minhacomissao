@@ -140,17 +140,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  let elegibles = rawInstances;
-
-  if (!isManualTest) {
-    // Cruza com aquecimento (apenas EM_AQUECIMENTO ou AQUECIDO)
-    const { data: warming } = await supabase
-      .from("whatsapp_aquecimento_instancias")
-      .select("instancia_id, status")
-      .in("status", ["EM_AQUECIMENTO", "AQUECIDO"]);
-    const warmIds = new Set((warming || []).map((w: any) => w.instancia_id));
-    elegibles = rawInstances.filter((i) => warmIds.has(i.id));
-  }
+  // Postagem diária para TODAS as instâncias ativas/conectadas
+  // (sem filtrar por status de aquecimento)
+  const elegibles = rawInstances;
 
   // Para cada instância, checar se já está no horário do próximo post agendado
   const nowIso = new Date().toISOString();
