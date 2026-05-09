@@ -34,6 +34,30 @@ function extractGroupArray(parsed: any): any[] {
   return [];
 }
 
+async function fetchGroupParticipants(serverUrl: string, token: string, groupJid: string): Promise<any[]> {
+  const base = serverUrl.replace(/\/+$/, "");
+  const headers = { token, "Content-Type": "application/json" };
+  const attempts = [
+    { url: `${base}/group/info`, method: "POST", body: JSON.stringify({ groupjid: groupJid }) },
+    { url: `${base}/group/info?groupjid=${encodeURIComponent(groupJid)}`, method: "GET" },
+    { url: `${base}/group/getParticipants`, method: "POST", body: JSON.stringify({ groupjid: groupJid }) },
+  ];
+  for (const a of attempts) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(a.url, { method: a.method, headers, body: (a as any).body, signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) continue;
+      const txt = await res.text();
+      const j = JSON.parse(txt);
+      const parts = j?.Participants || j?.participants || j?.group?.participants || j?.data?.participants || [];
+      if (Array.isArray(parts) && parts.length > 0) return parts;
+    } catch { /* try next */ }
+  }
+  return [];
+}
+
 async function fetchGroups(serverUrl: string, token: string): Promise<any[]> {
   const base = serverUrl.replace(/\/+$/, "");
   const attempts = [
