@@ -326,6 +326,8 @@ export default function GrupoAquecimentoCard() {
             </p>
           </div>
         )}
+
+        {grupo && <ConversaGrupoPanel grupoId={grupo.id} grupoNome={grupo.nome} />}
       </CardContent>
     </Card>
   );
