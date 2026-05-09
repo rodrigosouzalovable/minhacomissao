@@ -15,8 +15,8 @@ function brtNow(): Date {
 }
 
 function nextSlotIso(): string {
-  // Sorteia 48-72h à frente, com hora 9-18 BRT, minuto aleatório
-  const baseMs = Date.now() + (48 + Math.random() * 24) * 3600 * 1000;
+  // Sorteia 20-24h à frente (post diário), com hora 9-18 BRT, minuto aleatório
+  const baseMs = Date.now() + (20 + Math.random() * 4) * 3600 * 1000;
   const d = new Date(baseMs);
   const brt = new Date(d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   brt.setHours(9 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 60), 0, 0);
