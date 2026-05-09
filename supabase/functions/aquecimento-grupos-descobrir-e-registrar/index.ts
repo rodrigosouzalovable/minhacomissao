@@ -121,6 +121,8 @@ Deno.serve(async (req) => {
     // Limita paralelismo
     const CHUNK = 8;
     const list = instancias || [];
+    // jid -> instâncias capazes de ler (para fetch de participants em fallback)
+    const jidReaders = new Map<string, Array<{ server_url: string; instance_token: string; id: string }>>();
     for (let off = 0; off < list.length; off += CHUNK) {
       await Promise.all(list.slice(off, off + CHUNK).map(async (inst: any) => {
         const arr = await fetchGroups(inst.server_url, inst.instance_token);
@@ -131,15 +133,35 @@ Deno.serve(async (req) => {
           cur.nome = cur.nome || g.nome;
           if (Array.isArray(g.participants)) {
             for (const p of g.participants) {
-              const pid = String(p?.id || p?.JID || p?.jid || "");
-              const num = pid.split("@")[0];
-              const suf = suffix8(num);
+              const phoneSrc: string = p?.PhoneNumber || p?.phoneNumber || p?.id || p?.JID || p?.jid || "";
+              const num = String(phoneSrc).replace(/[^0-9]/g, "");
+              const suf = num.slice(-8);
               if (suf) cur.participantes.add(suf);
             }
           }
           grupos.set(g.jid, cur);
+          const readers = jidReaders.get(g.jid) || [];
+          readers.push({ server_url: inst.server_url, instance_token: inst.instance_token, id: inst.id });
+          jidReaders.set(g.jid, readers);
         }
       }));
+    }
+
+    // Fallback: para cada grupo sem participantes, buscar via /group/info usando readers conhecidos
+    for (const [jid, info] of grupos.entries()) {
+      if (info.participantes.size > 0) continue;
+      const readers = jidReaders.get(jid) || [];
+      for (const r of readers.slice(0, 3)) {
+        const parts = await fetchGroupParticipants(r.server_url, r.instance_token, jid);
+        if (parts.length === 0) continue;
+        for (const p of parts) {
+          const phoneSrc: string = (p as any)?.PhoneNumber || (p as any)?.phoneNumber || (p as any)?.id || (p as any)?.JID || (p as any)?.jid || "";
+          const num = String(phoneSrc).replace(/[^0-9]/g, "");
+          const suf = num.slice(-8);
+          if (suf) info.participantes.add(suf);
+        }
+        if (info.participantes.size > 0) break;
+      }
     }
 
     if (grupos.size === 0) {
