@@ -15,8 +15,8 @@ function brtNow(): Date {
 }
 
 function nextSlotIso(): string {
-  // Sorteia 48-72h à frente, com hora 9-18 BRT, minuto aleatório
-  const baseMs = Date.now() + (48 + Math.random() * 24) * 3600 * 1000;
+  // Sorteia 20-24h à frente (post diário), com hora 9-18 BRT, minuto aleatório
+  const baseMs = Date.now() + (20 + Math.random() * 4) * 3600 * 1000;
   const d = new Date(baseMs);
   const brt = new Date(d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   brt.setHours(9 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 60), 0, 0);
@@ -140,17 +140,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  let elegibles = rawInstances;
-
-  if (!isManualTest) {
-    // Cruza com aquecimento (apenas EM_AQUECIMENTO ou AQUECIDO)
-    const { data: warming } = await supabase
-      .from("whatsapp_aquecimento_instancias")
-      .select("instancia_id, status")
-      .in("status", ["EM_AQUECIMENTO", "AQUECIDO"]);
-    const warmIds = new Set((warming || []).map((w: any) => w.instancia_id));
-    elegibles = rawInstances.filter((i) => warmIds.has(i.id));
-  }
+  // Postagem diária para TODAS as instâncias ativas/conectadas
+  // (sem filtrar por status de aquecimento)
+  const elegibles = rawInstances;
 
   // Para cada instância, checar se já está no horário do próximo post agendado
   const nowIso = new Date().toISOString();
