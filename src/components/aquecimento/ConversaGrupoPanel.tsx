@@ -83,8 +83,9 @@ export default function ConversaGrupoPanel({ grupoId, grupoNome }: Props) {
     setLogs(((logRaw as any) || []).map((l: any) => ({ ...l, inst_nome: nameMap.get(l.instancia_id) || l.instancia_id.slice(0, 8) })));
     setPoolCount(pc || 0);
 
-    const stats = { total: tipoHoje?.length || 0, texto: 0, audio: 0, imagem: 0 };
-    for (const t of tipoHoje || []) (stats as any)[t.tipo] = ((stats as any)[t.tipo] || 0) + 1;
+    const tipoArr = (tipoHoje as any[]) || [];
+    const stats = { total: tipoArr.length, texto: 0, audio: 0, imagem: 0 };
+    for (const t of tipoArr) (stats as any)[t.tipo] = ((stats as any)[t.tipo] || 0) + 1;
     setStatsHoje(stats);
 
     setLoading(false);
