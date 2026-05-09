@@ -392,6 +392,33 @@ export default function GrupoAquecimentoCard() {
         )}
 
         {grupo && <ConversaGrupoPanel grupoId={grupo.id} grupoNome={grupo.nome} />}
+
+        {outrosGrupos.length > 0 && (
+          <div className="space-y-3 pt-4 border-t">
+            <h4 className="text-sm font-semibold flex items-center gap-2">
+              <Users className="h-4 w-4 text-amber-600" />
+              Outros grupos registrados ({outrosGrupos.length})
+            </h4>
+            {outrosGrupos.map(g => (
+              <div key={g.id} className="rounded border bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{g.nome}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {g.group_jid} · {contagemMembros[g.id] || 0} membros ativos
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Label className="text-xs">Ativo</Label>
+                    <Switch checked={g.ativo} onCheckedChange={(v) => toggleGrupoAtivo(g, v)} />
+                  </div>
+                </div>
+                {g.ativo && <ConversaGrupoPanel grupoId={g.id} grupoNome={g.nome} />}
+              </div>
+            ))}
+          </div>
+        )}
+
       </CardContent>
     </Card>
   );
