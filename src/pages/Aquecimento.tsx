@@ -19,6 +19,7 @@ import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab'
 import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSaveTab';
 import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTab';
 import AquecimentoStatusTab from '@/components/aquecimento/AquecimentoStatusTab';
+import EngajamentoStatusTab from '@/components/aquecimento/EngajamentoStatusTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -461,12 +462,21 @@ export default function Aquecimento() {
           >
             <Zap className="h-4 w-4" /> Status Auto
           </Button>
+          <Button
+            variant={activeTab === 'engajamento' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('engajamento')}
+            className="gap-1"
+          >
+            <Heart className="h-4 w-4" /> Engajamento
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
         {activeTab === 'autosave' && <AquecimentoAutoSaveTab />}
         {activeTab === 'proxies' && <AquecimentoProxiesTab />}
         {activeTab === 'status' && <AquecimentoStatusTab />}
+        {activeTab === 'engajamento' && <EngajamentoStatusTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
