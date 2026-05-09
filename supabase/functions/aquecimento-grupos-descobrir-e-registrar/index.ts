@@ -108,11 +108,21 @@ Deno.serve(async (req) => {
       .eq("ativo", true);
     if (errInst) throw errInst;
 
-    // sufixo -> instancia
+    // sufixo -> instancia (telefone OU dígitos extraídos do nome)
     const sufToInst = new Map<string, { id: string; nome: string }>();
     for (const i of instancias || []) {
-      const s = suffix8(i.telefone);
-      if (s) sufToInst.set(s, { id: i.id, nome: i.nome || "" });
+      const candidatos: string[] = [];
+      if (i.telefone) candidatos.push(String(i.telefone));
+      // extrai todas as sequências de dígitos com 10+ no nome
+      const matches = String(i.nome || "").match(/\d{10,}/g) || [];
+      candidatos.push(...matches);
+      // também tenta padrão (62)98245-8554
+      const compact = String(i.nome || "").replace(/\D/g, "");
+      if (compact.length >= 10) candidatos.push(compact);
+      for (const c of candidatos) {
+        const s = suffix8(c);
+        if (s && !sufToInst.has(s)) sufToInst.set(s, { id: i.id, nome: i.nome || "" });
+      }
     }
 
     // jid -> { nome, participants_set, first_finder_inst_id }

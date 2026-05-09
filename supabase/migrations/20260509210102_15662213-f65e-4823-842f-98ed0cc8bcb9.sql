@@ -1,0 +1,2 @@
+UPDATE whatsapp_aquecimento_grupos SET ativo=false WHERE nome='Família Souza e Ribeiro' AND group_jid='120363428864023323@g.us';
+UPDATE whatsapp_aquecimento_grupo_config SET ativo=false WHERE grupo_id IN (SELECT id FROM whatsapp_aquecimento_grupos WHERE nome='Família Souza e Ribeiro' AND group_jid='120363428864023323@g.us');
