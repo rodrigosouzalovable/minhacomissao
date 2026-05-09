@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
         erro = "limite_respostas_dia";
       } else {
         const autorJid = jidFromInstancePhone(autorPhone);
-        const statusJid = `${String(autorPhone).replace(/\D/g, "")}@status@broadcast`;
+        const statusJid = "status@broadcast";
 
         if (p.tipo === "visualizado") {
           // Múltiplos endpoints UAZAPI possíveis — tenta os mais comuns
