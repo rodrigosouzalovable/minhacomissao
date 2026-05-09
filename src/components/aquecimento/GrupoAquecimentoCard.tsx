@@ -317,16 +317,10 @@ export default function GrupoAquecimentoCard() {
             {grupo ? "Atualizar" : "Cadastrar"}
           </Button>
           {grupo && (
-            <>
-              <Button variant="outline" onClick={executarSweep} disabled={sweeping}>
-                {sweeping ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                Adicionar pendentes agora
-              </Button>
-              <Button variant="destructive" onClick={excluir}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                Excluir
-              </Button>
-            </>
+            <Button variant="destructive" onClick={excluir}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </Button>
           )}
         </div>
 
