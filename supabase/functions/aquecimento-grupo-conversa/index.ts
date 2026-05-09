@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
     const ativos = (grupos || []).filter((g: any) => g.whatsapp_aquecimento_grupo_config?.ativo);
     const resultados: any[] = [];
     for (const g of ativos) {
-      const r = await processarGrupo(supa, g, g.whatsapp_aquecimento_grupo_config);
+      const r = await processarGrupo(supa, g, g.whatsapp_aquecimento_grupo_config, forcar);
       resultados.push({ grupo: g.nome, ...r });
     }
 
