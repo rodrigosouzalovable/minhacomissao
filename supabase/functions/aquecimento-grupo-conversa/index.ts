@@ -276,9 +276,10 @@ Deno.serve(async (req) => {
     const dia = agora.getDay();
 
     if (!forcar) {
-      if (dia === 0) return new Response(JSON.stringify({ pulado: "domingo" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Conversa em grupo roda todos os dias (incluindo domingo), apenas dentro da janela 07-21h BRT.
       if (hora < 7 || hora >= 21) return new Response(JSON.stringify({ pulado: `fora da janela (${hora}h BRT)` }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    void dia;
 
     let q = supa.from("whatsapp_aquecimento_grupos")
       .select("id, group_jid, nome, ativo, whatsapp_aquecimento_grupo_config!inner(*)")
