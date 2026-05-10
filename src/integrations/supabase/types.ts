@@ -3321,6 +3321,36 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_perfil_completacao_log: {
+        Row: {
+          acao: string
+          criado_em: string
+          erro: string | null
+          id: string
+          instancia_id: string
+          status: string
+          valor_aplicado: string | null
+        }
+        Insert: {
+          acao: string
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id: string
+          status?: string
+          valor_aplicado?: string | null
+        }
+        Update: {
+          acao?: string
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string
+          status?: string
+          valor_aplicado?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
