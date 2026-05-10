@@ -1,3 +1,33 @@
+// ============================================================
+// Tabela de comissão do FUNCIONÁRIO (NÃO confundir com escritório)
+// Esta é a única tabela que pode ser exibida para funcionários.
+// Máximo 7% a partir de 721 dias.
+// ============================================================
+export const tabelaComissoesFuncionario = [
+  { min: 1,   max: 90,    percentual: 2 },
+  { min: 91,  max: 180,   percentual: 4 },
+  { min: 181, max: 360,   percentual: 5 },
+  { min: 361, max: 720,   percentual: 6 },
+  { min: 721, max: 999999, percentual: 7 },
+];
+
+export function calcularPercentualComissaoFuncionario(diasAtraso: number): number {
+  for (const faixa of tabelaComissoesFuncionario) {
+    if (diasAtraso >= faixa.min && diasAtraso <= faixa.max) {
+      return faixa.percentual;
+    }
+  }
+  return 0;
+}
+
+export function calcularComissaoFuncionarioParcela(valorParcela: number, diasAtraso: number) {
+  const percentual = calcularPercentualComissaoFuncionario(diasAtraso);
+  return {
+    percentual,
+    valor: Math.round(Number(valorParcela) * (percentual / 100) * 100) / 100,
+  };
+}
+
 // Tabela de comissões MONTREAL (H.O. / Encargos) baseada em dias de atraso
 export const tabelaComissoesMontreal = [
   { min: 31, max: 60, percentual: 8 },
