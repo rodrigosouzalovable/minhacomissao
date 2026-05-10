@@ -100,9 +100,17 @@ export default function Comissoes() {
     return true;
   });
 
+  // Mapa rápido de dias_atraso por acordo (para calcular comissão do funcionário)
+  const diasAtrasoPorAcordo = new Map<string, number>();
+  acordos?.forEach(a => diasAtrasoPorAcordo.set(a.id, a.dias_atraso || 0));
+
+  // Comissão de funcionário por parcela (NUNCA usa comissao_parcela do banco — esse é do escritório)
+  const comissaoFuncionarioParcela = (p: Pagamento) =>
+    calcularComissaoFuncionarioParcela(Number(p.valor_parcela), diasAtrasoPorAcordo.get(p.acordo_id) || 0).valor;
+
   // Calcular totais (apenas parcelas pagas no período)
   const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
-  const totalPaga = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+  const totalPaga = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
   const totalValorParcelasPagas = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
   // Normalizar CPF (apenas dígitos)
