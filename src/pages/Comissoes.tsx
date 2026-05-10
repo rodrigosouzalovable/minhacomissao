@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { formatarMoeda, formatarData, calcularComissaoFuncionarioParcela } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Clock, CheckCircle, Download, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
@@ -100,9 +100,17 @@ export default function Comissoes() {
     return true;
   });
 
+  // Mapa rápido de dias_atraso por acordo (para calcular comissão do funcionário)
+  const diasAtrasoPorAcordo = new Map<string, number>();
+  acordos?.forEach(a => diasAtrasoPorAcordo.set(a.id, a.dias_atraso || 0));
+
+  // Comissão de funcionário por parcela (NUNCA usa comissao_parcela do banco — esse é do escritório)
+  const comissaoFuncionarioParcela = (p: Pagamento) =>
+    calcularComissaoFuncionarioParcela(Number(p.valor_parcela), diasAtrasoPorAcordo.get(p.acordo_id) || 0).valor;
+
   // Calcular totais (apenas parcelas pagas no período)
   const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
-  const totalPaga = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+  const totalPaga = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
   const totalValorParcelasPagas = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
   // Normalizar CPF (apenas dígitos)
@@ -187,7 +195,7 @@ export default function Comissoes() {
         valor_parcela: parcela.valor_parcela,
         data_pagamento: formatarData(parcela.data_paga),
         numero_parcela: parcela.numero_parcela,
-        comissao_funcionario: parcela.comissao_parcela,
+        comissao_funcionario: comissaoFuncionarioParcela(parcela),
         dias_atraso: acordo?.dias_atraso || 0,
       };
     });
@@ -303,7 +311,9 @@ export default function Comissoes() {
                       <Accordion type="multiple" className="w-full">
                         {acordosDoCpf.map((acordo) => {
                           const pagamentosAcordo = getPagamentosDoAcordo(acordo.id);
-                          const comissaoAcordo = pagamentosAcordo.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+                          const comissaoAcordo = pagamentosAcordo.reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
+                          const comissaoTotalAcordoFuncionario = (pagamentos?.filter(p => p.acordo_id === acordo.id) || [])
+                            .reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
                           
                           if (filtro === 'pagas' && pagamentosAcordo.length === 0) {
                             return null;
@@ -327,7 +337,7 @@ export default function Comissoes() {
                                   )}
                                   <Badge variant="outline">{acordo.parcelas} parcelas</Badge>
                                   <Badge variant="secondary">Total: {formatarMoeda(acordo.valor_total)}</Badge>
-                                  <Badge>Comissão: {formatarMoeda(acordo.comissao_total)}</Badge>
+                                  <Badge>Comissão: {formatarMoeda(comissaoTotalAcordoFuncionario)}</Badge>
                                 </div>
                               </AccordionTrigger>
                               <AccordionContent>
@@ -349,7 +359,7 @@ export default function Comissoes() {
                                           <TableRow key={pagamento.id}>
                                             <TableCell>{pagamento.numero_parcela}/{acordo.parcelas}</TableCell>
                                             <TableCell>{formatarMoeda(pagamento.valor_parcela)}</TableCell>
-                                            <TableCell className="font-medium">{formatarMoeda(pagamento.comissao_parcela)}</TableCell>
+                                            <TableCell className="font-medium">{formatarMoeda(comissaoFuncionarioParcela(pagamento))}</TableCell>
                                             <TableCell>{formatarData(pagamento.data_prevista)}</TableCell>
                                             <TableCell>
                                               {pagamento.data_paga ? formatarData(pagamento.data_paga) : '-'}
