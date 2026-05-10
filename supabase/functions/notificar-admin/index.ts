@@ -74,12 +74,12 @@ Deno.serve(async (req) => {
         .eq("tipo_evento", "desconexao")
         .gte("registrado_em", corte24h);
 
-      // Chips sem proxy
+      // Chips sem proxy ativo
       const { data: instsAtivas } = await supabase
         .from("user_whatsapp_instances")
-        .select("id, nome, proxy_url")
+        .select("id, nome, proxy_host, proxy_enabled")
         .eq("ativo", true);
-      const semProxy = (instsAtivas || []).filter((i: any) => !i.proxy_url || String(i.proxy_url).trim() === "");
+      const semProxy = (instsAtivas || []).filter((i: any) => !i.proxy_enabled || !i.proxy_host);
 
       const taxaErro = (envHoje || 0) > 0
         ? Math.round(((errosHoje || 0) / ((envHoje || 0) + (errosHoje || 0))) * 100)
