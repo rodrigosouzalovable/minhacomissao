@@ -179,15 +179,19 @@ Deno.serve(async (req) => {
       let origem: "ancora" | "pool" = "ancora";
 
       if (useAncora) {
+        const ancorasDisponiveis = ANCORAS_PRIORITARIAS.filter((a) => !destinosBloqueados.has(a));
+        if (ancorasDisponiveis.length === 0) {
+          return { instancia: inst.nome, status: "carencia_48h_todas_ancoras" };
+        }
         const { data: usosAncora } = await supabase
           .from("aquecimento_envios_autosave")
           .select("numero_destino")
           .eq("instancia_id", aquec.instancia_id)
           .gte("enviado_em", corte7dIso)
-          .in("numero_destino", ANCORAS_PRIORITARIAS);
+          .in("numero_destino", ancorasDisponiveis);
 
         const counts = new Map<string, number>();
-        ANCORAS_PRIORITARIAS.forEach((n) => counts.set(n, 0));
+        ancorasDisponiveis.forEach((n) => counts.set(n, 0));
         (usosAncora || []).forEach((r: any) => {
           if (r.numero_destino) counts.set(r.numero_destino, (counts.get(r.numero_destino) || 0) + 1);
         });
@@ -212,9 +216,19 @@ Deno.serve(async (req) => {
           .order("ultimo_uso_em", { ascending: true, nullsFirst: true })
           .limit(50);
 
-        const contato = (candidatos || []).find((c: any) => !excluir.has(c.id));
+        // Filtra por contato não usado em 30d E número não bloqueado pela carência 48h
+        const contato = (candidatos || []).find((c: any) => {
+          if (excluir.has(c.id)) return false;
+          const numeroLimpo = String(c.numero).replace(/\D/g, "");
+          const numeroFmt = numeroLimpo.startsWith("55") ? numeroLimpo : `55${numeroLimpo}`;
+          return !destinosBloqueados.has(numeroFmt);
+        });
         if (!contato) {
-          const ancora = ANCORAS_PRIORITARIAS[Math.floor(Math.random() * ANCORAS_PRIORITARIAS.length)];
+          const ancorasDisponiveis = ANCORAS_PRIORITARIAS.filter((a) => !destinosBloqueados.has(a));
+          if (ancorasDisponiveis.length === 0) {
+            return { instancia: inst.nome, status: "carencia_48h_sem_destino" };
+          }
+          const ancora = ancorasDisponiveis[Math.floor(Math.random() * ancorasDisponiveis.length)];
           numeroFinal = ancora;
           nomeContato = `Âncora ${ancora.slice(-4)}`;
           origem = "ancora";
