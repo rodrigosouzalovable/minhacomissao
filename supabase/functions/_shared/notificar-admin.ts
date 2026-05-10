@@ -57,43 +57,57 @@ export async function notificarAdmin(
       const ultIdx = insts.findIndex((i: any) => i.id === cfg.ultima_instancia_id);
       idx = (ultIdx + 1) % insts.length;
     }
-    const inst: any = insts[idx];
 
     const numero = String(cfg.admin_phone).replace(/\D/g, "");
     const numeroFinal = numero.startsWith("55") ? numero : `55${numero}`;
-
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15000);
     const mensagemFinal = `🤖 *Aviso Sistema*\n\n${params.mensagem}`;
 
-    const res = await fetch(`${inst.server_url}/send/text`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", token: inst.instance_token },
-      body: JSON.stringify({ number: numeroFinal, text: mensagemFinal }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(timer);
-
-    const respText = await res.text();
-    const ok = res.ok;
+    // Tenta até N instâncias em round-robin (pula desconectadas)
+    const maxTent = Math.min(insts.length, 10);
+    let ultimoErro = "sem_tentativas";
+    for (let t = 0; t < maxTent; t++) {
+      const inst: any = insts[(idx + t) % insts.length];
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        const res = await fetch(`${inst.server_url}/send/text`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", token: inst.instance_token },
+          body: JSON.stringify({ number: numeroFinal, text: mensagemFinal }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        const respText = await res.text();
+        const desconectado = respText.toLowerCase().includes("disconnected") || respText.toLowerCase().includes("not reconnectable");
+        if (res.ok) {
+          await supabase.from("admin_notificacoes_log").insert({
+            tipo: params.tipo,
+            chave_idempotencia: params.chaveIdempotencia ?? null,
+            mensagem: params.mensagem,
+            instancia_envio_id: inst.id,
+            status: "enviado",
+          });
+          await supabase
+            .from("admin_notificacoes_config")
+            .update({ ultima_instancia_id: inst.id, updated_at: new Date().toISOString() })
+            .eq("id", 1);
+          return { success: true };
+        }
+        ultimoErro = respText.substring(0, 200);
+        if (!desconectado) break;
+      } catch (e) {
+        ultimoErro = String(e).substring(0, 200);
+      }
+    }
 
     await supabase.from("admin_notificacoes_log").insert({
       tipo: params.tipo,
       chave_idempotencia: params.chaveIdempotencia ?? null,
       mensagem: params.mensagem,
-      instancia_envio_id: inst.id,
-      status: ok ? "enviado" : "erro",
-      erro_detalhe: ok ? null : respText.substring(0, 250),
+      status: "erro",
+      erro_detalhe: ultimoErro,
     });
-
-    if (ok) {
-      await supabase
-        .from("admin_notificacoes_config")
-        .update({ ultima_instancia_id: inst.id, updated_at: new Date().toISOString() })
-        .eq("id", 1);
-    }
-
-    return ok ? { success: true } : { success: false, error: respText.substring(0, 150) };
+    return { success: false, error: ultimoErro };
   } catch (e) {
     return { success: false, error: String(e).substring(0, 200) };
   }
