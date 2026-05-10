@@ -195,7 +195,7 @@ export default function Comissoes() {
         valor_parcela: parcela.valor_parcela,
         data_pagamento: formatarData(parcela.data_paga),
         numero_parcela: parcela.numero_parcela,
-        comissao_funcionario: parcela.comissao_parcela,
+        comissao_funcionario: comissaoFuncionarioParcela(parcela),
         dias_atraso: acordo?.dias_atraso || 0,
       };
     });
