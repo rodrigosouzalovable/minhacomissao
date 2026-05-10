@@ -92,6 +92,14 @@ Deno.serve(async (req) => {
     if (hour >= 12 && hour < 14) return json({ message: "Pausa de almoço", skipped: true });
     const fatorDia = dow === 0 ? 0.4 : dow === 6 ? 0.6 : 1.0;
 
+    // Reativa chips com auto-pausa expirada
+    await supabase
+      .from("whatsapp_aquecimento_instancias")
+      .update({ status: "EM_AQUECIMENTO", pausado_ate: null, pausado_motivo: null, updated_at: new Date().toISOString() })
+      .eq("status", "PAUSADO")
+      .not("pausado_ate", "is", null)
+      .lte("pausado_ate", new Date().toISOString());
+
     const { data: aquecInsts } = await supabase
       .from("whatsapp_aquecimento_instancias")
       .select("id, instancia_id, fase, status")
