@@ -169,6 +169,75 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_notificacoes_config: {
+        Row: {
+          admin_phone: string
+          created_at: string
+          id: number
+          notificar_chip_desconectado: boolean
+          notificar_chip_pausado: boolean
+          notificar_proxies_faltando: boolean
+          notificar_resumo_diario: boolean
+          ultima_instancia_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_phone?: string
+          created_at?: string
+          id?: number
+          notificar_chip_desconectado?: boolean
+          notificar_chip_pausado?: boolean
+          notificar_proxies_faltando?: boolean
+          notificar_resumo_diario?: boolean
+          ultima_instancia_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_phone?: string
+          created_at?: string
+          id?: number
+          notificar_chip_desconectado?: boolean
+          notificar_chip_pausado?: boolean
+          notificar_proxies_faltando?: boolean
+          notificar_resumo_diario?: boolean
+          ultima_instancia_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      admin_notificacoes_log: {
+        Row: {
+          chave_idempotencia: string | null
+          enviado_em: string
+          erro_detalhe: string | null
+          id: string
+          instancia_envio_id: string | null
+          mensagem: string
+          status: string
+          tipo: string
+        }
+        Insert: {
+          chave_idempotencia?: string | null
+          enviado_em?: string
+          erro_detalhe?: string | null
+          id?: string
+          instancia_envio_id?: string | null
+          mensagem: string
+          status?: string
+          tipo: string
+        }
+        Update: {
+          chave_idempotencia?: string | null
+          enviado_em?: string
+          erro_detalhe?: string | null
+          id?: string
+          instancia_envio_id?: string | null
+          mensagem?: string
+          status?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
       ai_alerts_sent: {
         Row: {
           alert_type: string
@@ -2508,6 +2577,8 @@ export type Database = {
           interacoes_total: number
           limite_diario: number
           mensagens_sem_resposta: number
+          pausado_ate: string | null
+          pausado_motivo: string | null
           pausado_por_silencio: boolean
           respostas_recebidas: number
           status: string
@@ -2527,6 +2598,8 @@ export type Database = {
           interacoes_total?: number
           limite_diario?: number
           mensagens_sem_resposta?: number
+          pausado_ate?: string | null
+          pausado_motivo?: string | null
           pausado_por_silencio?: boolean
           respostas_recebidas?: number
           status?: string
@@ -2546,6 +2619,8 @@ export type Database = {
           interacoes_total?: number
           limite_diario?: number
           mensagens_sem_resposta?: number
+          pausado_ate?: string | null
+          pausado_motivo?: string | null
           pausado_por_silencio?: boolean
           respostas_recebidas?: number
           status?: string
@@ -2819,6 +2894,30 @@ export type Database = {
           criado_em?: string
           id?: string
           texto?: string
+        }
+        Relationships: []
+      }
+      whatsapp_chip_eventos: {
+        Row: {
+          detalhe: string | null
+          id: string
+          instancia_id: string
+          registrado_em: string
+          tipo_evento: string
+        }
+        Insert: {
+          detalhe?: string | null
+          id?: string
+          instancia_id: string
+          registrado_em?: string
+          tipo_evento: string
+        }
+        Update: {
+          detalhe?: string | null
+          id?: string
+          instancia_id?: string
+          registrado_em?: string
+          tipo_evento?: string
         }
         Relationships: []
       }
