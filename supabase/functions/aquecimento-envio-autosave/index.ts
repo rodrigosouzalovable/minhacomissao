@@ -114,11 +114,26 @@ Deno.serve(async (req) => {
       .in("id", ids)
       .eq("ativo", true);
 
+    // Lê dias de carência (padrão 2 dias = 48h sem repetir destino)
+    const { data: cfgCar } = await supabase
+      .from("whatsapp_aquecimento_config")
+      .select("valor")
+      .eq("chave", "dias_carencia")
+      .maybeSingle();
+    const diasCarencia = Number(cfgCar?.valor ?? 2) || 2;
+    const corteCarenciaIso = new Date(Date.now() - diasCarencia * 24 * 3600 * 1000).toISOString();
+
     const instMap = new Map((insts || []).map((i: any) => [i.id, i]));
     const inicioDia = new Date(sp); inicioDia.setHours(0, 0, 0, 0);
     const inicioDiaIso = inicioDia.toISOString();
     const corte30dIso = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const corte7dIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+
+    // Janela de envio efetiva (07-21h, menos pausa 12-14h) = 12 horas úteis
+    // Cron roda a cada ~30min => 24 ciclos no dia. Probabilidade de disparar é ajustada
+    // para distribuir envios aleatoriamente ao longo do dia em vez de saírem todos no início.
+    const horasRestantes = (hour < 12 ? 12 - hour : 21 - hour) + (hour < 12 ? 7 : 0); // aprox horas úteis restantes
+    const ciclosRestantes = Math.max(1, horasRestantes * 2); // 2 ciclos por hora
 
     const tasks = aquecInsts.map(async (aquec: any) => {
       const inst = instMap.get(aquec.instancia_id);
@@ -137,6 +152,25 @@ Deno.serve(async (req) => {
       if ((enviosHoje || 0) >= limite) {
         return { instancia: inst.nome, status: "limite_atingido", enviosHoje };
       }
+
+      // 🎲 RANDOMIZAÇÃO TEMPORAL: distribui envios aleatoriamente ao longo do dia
+      // probabilidade = (envios_restantes / ciclos_restantes) * jitter 0.7-1.3
+      const restantes = limite - (enviosHoje || 0);
+      const jitter = 0.7 + Math.random() * 0.6;
+      const probDisparar = Math.min(1, (restantes / ciclosRestantes) * jitter);
+      if (Math.random() > probDisparar) {
+        return { instancia: inst.nome, status: "aguardando_proximo_ciclo", probDisparar: probDisparar.toFixed(2) };
+      }
+
+      // 📵 CARÊNCIA 48h: lista de destinos já contatados por este chip nas últimas 48h
+      const { data: enviosCarencia } = await supabase
+        .from("aquecimento_envios_autosave")
+        .select("numero_destino")
+        .eq("instancia_id", aquec.instancia_id)
+        .eq("status", "enviado")
+        .gte("enviado_em", corteCarenciaIso)
+        .not("numero_destino", "is", null);
+      const destinosBloqueados = new Set((enviosCarencia || []).map((r: any) => r.numero_destino));
 
       const useAncora = Math.random() < ancoraProb;
       let numeroFinal: string | null = null;
