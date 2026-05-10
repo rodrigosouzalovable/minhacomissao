@@ -301,6 +301,15 @@ Deno.serve(async (req) => {
               updates.updated_at = new Date().toISOString();
             }
             await supabase.from("whatsapp_aquecimento_instancias").update(updates).eq("id", aquecRow.id);
+            if (novo >= 20) {
+              const dataChave = new Date().toISOString().slice(0, 10);
+              notificarAdmin(supabase, {
+                tipo: "chip_pausado_silencio",
+                mensagem: `⏸️ Chip *${inst.nome}* pausado por silêncio (20 msgs sem resposta).\nReative manualmente após verificar saúde.`,
+                chaveIdempotencia: `${aquec.instancia_id}_${dataChave}`,
+                forcarFlag: "notificar_chip_pausado",
+              }).catch(() => {});
+            }
           }
 
           if (contatoId) {
