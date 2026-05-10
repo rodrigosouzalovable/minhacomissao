@@ -337,7 +337,7 @@ export default function Comissoes() {
                                   )}
                                   <Badge variant="outline">{acordo.parcelas} parcelas</Badge>
                                   <Badge variant="secondary">Total: {formatarMoeda(acordo.valor_total)}</Badge>
-                                  <Badge>Comissão: {formatarMoeda(acordo.comissao_total)}</Badge>
+                                  <Badge>Comissão: {formatarMoeda(comissaoTotalAcordoFuncionario)}</Badge>
                                 </div>
                               </AccordionTrigger>
                               <AccordionContent>
