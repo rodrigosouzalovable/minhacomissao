@@ -2,6 +2,7 @@
 // Prioriza envios para números âncora (configurável) + pool de contatos externos
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { salvarContatoAgendaCacheado } from "../_shared/agenda-contatos.ts";
+import { notificarAdmin } from "../_shared/notificar-admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,7 @@ const ANCORAS_PRIORITARIAS = [
   "5562982183144",
   "5562982458447",
   "5562981079569",
+  "5562981727082",
 ];
 
 const DEFAULT_ANCORA_PROBABILITY = 1.0;
