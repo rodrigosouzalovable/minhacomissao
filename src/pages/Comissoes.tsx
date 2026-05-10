@@ -311,7 +311,9 @@ export default function Comissoes() {
                       <Accordion type="multiple" className="w-full">
                         {acordosDoCpf.map((acordo) => {
                           const pagamentosAcordo = getPagamentosDoAcordo(acordo.id);
-                          const comissaoAcordo = pagamentosAcordo.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+                          const comissaoAcordo = pagamentosAcordo.reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
+                          const comissaoTotalAcordoFuncionario = (pagamentos?.filter(p => p.acordo_id === acordo.id) || [])
+                            .reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
                           
                           if (filtro === 'pagas' && pagamentosAcordo.length === 0) {
                             return null;
