@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { formatarMoeda, formatarData, calcularComissaoFuncionarioParcela } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Clock, CheckCircle, Download, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
