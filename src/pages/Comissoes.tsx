@@ -359,7 +359,7 @@ export default function Comissoes() {
                                           <TableRow key={pagamento.id}>
                                             <TableCell>{pagamento.numero_parcela}/{acordo.parcelas}</TableCell>
                                             <TableCell>{formatarMoeda(pagamento.valor_parcela)}</TableCell>
-                                            <TableCell className="font-medium">{formatarMoeda(pagamento.comissao_parcela)}</TableCell>
+                                            <TableCell className="font-medium">{formatarMoeda(comissaoFuncionarioParcela(pagamento))}</TableCell>
                                             <TableCell>{formatarData(pagamento.data_prevista)}</TableCell>
                                             <TableCell>
                                               {pagamento.data_paga ? formatarData(pagamento.data_paga) : '-'}
