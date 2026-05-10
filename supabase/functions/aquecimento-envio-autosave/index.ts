@@ -2,6 +2,7 @@
 // Prioriza envios para números âncora (configurável) + pool de contatos externos
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { salvarContatoAgendaCacheado } from "../_shared/agenda-contatos.ts";
+import { notificarAdmin } from "../_shared/notificar-admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,7 @@ const ANCORAS_PRIORITARIAS = [
   "5562982183144",
   "5562982458447",
   "5562981079569",
+  "5562981727082",
 ];
 
 const DEFAULT_ANCORA_PROBABILITY = 1.0;
@@ -89,6 +91,14 @@ Deno.serve(async (req) => {
     if (hour < 7 || hour >= 21) return json({ message: "Fora do horário", skipped: true });
     if (hour >= 12 && hour < 14) return json({ message: "Pausa de almoço", skipped: true });
     const fatorDia = dow === 0 ? 0.4 : dow === 6 ? 0.6 : 1.0;
+
+    // Reativa chips com auto-pausa expirada
+    await supabase
+      .from("whatsapp_aquecimento_instancias")
+      .update({ status: "EM_AQUECIMENTO", pausado_ate: null, pausado_motivo: null, updated_at: new Date().toISOString() })
+      .eq("status", "PAUSADO")
+      .not("pausado_ate", "is", null)
+      .lte("pausado_ate", new Date().toISOString());
 
     const { data: aquecInsts } = await supabase
       .from("whatsapp_aquecimento_instancias")
@@ -221,10 +231,34 @@ Deno.serve(async (req) => {
             erro_detalhe: chkText.substring(0, 250),
             origem,
           });
-          // Pausar instância morta
+          await supabase.from("whatsapp_chip_eventos").insert({
+            instancia_id: aquec.instancia_id,
+            tipo_evento: "desconexao",
+            detalhe: "pre-check status",
+          });
+          // Auto-pause inteligente: 2+ desconexões em 24h → pausa 72h
+          const corte24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+          const { count: quedasRecentes } = await supabase
+            .from("whatsapp_chip_eventos")
+            .select("id", { count: "exact", head: true })
+            .eq("instancia_id", aquec.instancia_id)
+            .eq("tipo_evento", "desconexao")
+            .gte("registrado_em", corte24h);
+          const updates: any = { status: "PAUSADO", pausado_por_silencio: false, updated_at: new Date().toISOString() };
+          if ((quedasRecentes || 0) >= 2) {
+            updates.pausado_ate = new Date(Date.now() + 72 * 3600 * 1000).toISOString();
+            updates.pausado_motivo = `auto-pause 72h: ${quedasRecentes} quedas em 24h`;
+          }
           await supabase.from("whatsapp_aquecimento_instancias")
-            .update({ status: "PAUSADO", pausado_por_silencio: false, updated_at: new Date().toISOString() })
-            .eq("instancia_id", aquec.instancia_id);
+            .update(updates).eq("instancia_id", aquec.instancia_id);
+          // Notifica admin (idempotência por chip+dia)
+          const dataChave = new Date().toISOString().slice(0, 10);
+          notificarAdmin(supabase, {
+            tipo: "chip_desconectado",
+            mensagem: `📡 Chip *${inst.nome}* caiu (quedas 24h: ${quedasRecentes || 1})${updates.pausado_ate ? "\n⏸️ Auto-pausa 72h aplicada" : ""}`,
+            chaveIdempotencia: `${aquec.instancia_id}_${dataChave}`,
+            forcarFlag: "notificar_chip_desconectado",
+          }).catch(() => {});
           return { instancia: inst.nome, status: "skipped_disconnected" };
         }
       } catch (_) { /* se check falhar, segue tentativa normal */ }
@@ -275,6 +309,15 @@ Deno.serve(async (req) => {
               updates.updated_at = new Date().toISOString();
             }
             await supabase.from("whatsapp_aquecimento_instancias").update(updates).eq("id", aquecRow.id);
+            if (novo >= 20) {
+              const dataChave = new Date().toISOString().slice(0, 10);
+              notificarAdmin(supabase, {
+                tipo: "chip_pausado_silencio",
+                mensagem: `⏸️ Chip *${inst.nome}* pausado por silêncio (20 msgs sem resposta).\nReative manualmente após verificar saúde.`,
+                chaveIdempotencia: `${aquec.instancia_id}_${dataChave}`,
+                forcarFlag: "notificar_chip_pausado",
+              }).catch(() => {});
+            }
           }
 
           if (contatoId) {
