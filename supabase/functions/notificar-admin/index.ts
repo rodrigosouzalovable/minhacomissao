@@ -114,9 +114,9 @@ Deno.serve(async (req) => {
     if (tipo === "proxies_faltando") {
       const { data: insts } = await supabase
         .from("user_whatsapp_instances")
-        .select("id, nome, proxy_url")
+        .select("id, nome, proxy_host, proxy_enabled")
         .eq("ativo", true);
-      const semProxy = (insts || []).filter((i: any) => !i.proxy_url || String(i.proxy_url).trim() === "");
+      const semProxy = (insts || []).filter((i: any) => !i.proxy_enabled || !i.proxy_host);
       if (!semProxy.length) return json({ success: true, skipped: "todos_com_proxy" });
 
       const dataChave = new Date().toISOString().slice(0, 10);
