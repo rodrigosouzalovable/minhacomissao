@@ -223,10 +223,34 @@ Deno.serve(async (req) => {
             erro_detalhe: chkText.substring(0, 250),
             origem,
           });
-          // Pausar instância morta
+          await supabase.from("whatsapp_chip_eventos").insert({
+            instancia_id: aquec.instancia_id,
+            tipo_evento: "desconexao",
+            detalhe: "pre-check status",
+          });
+          // Auto-pause inteligente: 2+ desconexões em 24h → pausa 72h
+          const corte24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+          const { count: quedasRecentes } = await supabase
+            .from("whatsapp_chip_eventos")
+            .select("id", { count: "exact", head: true })
+            .eq("instancia_id", aquec.instancia_id)
+            .eq("tipo_evento", "desconexao")
+            .gte("registrado_em", corte24h);
+          const updates: any = { status: "PAUSADO", pausado_por_silencio: false, updated_at: new Date().toISOString() };
+          if ((quedasRecentes || 0) >= 2) {
+            updates.pausado_ate = new Date(Date.now() + 72 * 3600 * 1000).toISOString();
+            updates.pausado_motivo = `auto-pause 72h: ${quedasRecentes} quedas em 24h`;
+          }
           await supabase.from("whatsapp_aquecimento_instancias")
-            .update({ status: "PAUSADO", pausado_por_silencio: false, updated_at: new Date().toISOString() })
-            .eq("instancia_id", aquec.instancia_id);
+            .update(updates).eq("instancia_id", aquec.instancia_id);
+          // Notifica admin (idempotência por chip+dia)
+          const dataChave = new Date().toISOString().slice(0, 10);
+          notificarAdmin(supabase, {
+            tipo: "chip_desconectado",
+            mensagem: `📡 Chip *${inst.nome}* caiu (quedas 24h: ${quedasRecentes || 1})${updates.pausado_ate ? "\n⏸️ Auto-pausa 72h aplicada" : ""}`,
+            chaveIdempotencia: `${aquec.instancia_id}_${dataChave}`,
+            forcarFlag: "notificar_chip_desconectado",
+          }).catch(() => {});
           return { instancia: inst.nome, status: "skipped_disconnected" };
         }
       } catch (_) { /* se check falhar, segue tentativa normal */ }
