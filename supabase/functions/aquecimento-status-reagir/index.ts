@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
 
     if (!inst || !inst.ativo) {
       erro = "instancia_inativa";
-    } else if (!autorPhone) {
+    } else if (p.tipo !== "reacao" && !autorPhone) {
       erro = "autor_sem_numero";
     } else if (p.tipo !== "visualizado" && !msgId) {
       erro = "sem_msg_id";
