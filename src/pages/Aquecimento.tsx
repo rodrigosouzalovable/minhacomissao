@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer, Settings, Network, Heart } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer, Settings, Network, Heart, CalendarDays } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
@@ -20,6 +20,7 @@ import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSave
 import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTab';
 import AquecimentoStatusTab from '@/components/aquecimento/AquecimentoStatusTab';
 import EngajamentoStatusTab from '@/components/aquecimento/EngajamentoStatusTab';
+import AquecimentoCalendarioTab from '@/components/aquecimento/AquecimentoCalendarioTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -141,7 +142,7 @@ export default function Aquecimento() {
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies' | 'status' | 'engajamento'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies' | 'status' | 'engajamento' | 'calendario'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
@@ -208,7 +209,7 @@ export default function Aquecimento() {
   }
 
   async function loadInstancias() {
-    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, criado_em, ativo');
+    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, criado_em, ativo, personalidade' as any);
     setAllInstances(instances || []);
 
     const activeInstanceIds = (instances || []).filter((i: any) => i.ativo).map((i: any) => i.id);
@@ -218,12 +219,13 @@ export default function Aquecimento() {
       const mapped = (data as any[])
         .filter((d: any) => activeInstanceIds.includes(d.instancia_id))
         .map((d: any) => {
-          const inst = instances.find((i: any) => i.id === d.instancia_id);
+          const inst: any = instances.find((i: any) => i.id === d.instancia_id);
           const diasConectado = inst ? Math.floor((Date.now() - new Date(inst.criado_em).getTime()) / 86400000) : 0;
           return {
             ...d,
             instance_name: inst?.nome || 'Sem nome',
             dias_conectado: diasConectado,
+            personalidade: inst?.personalidade || 'equilibrado',
           };
         });
       setInstancias(mapped);
@@ -470,6 +472,14 @@ export default function Aquecimento() {
           >
             <Heart className="h-4 w-4" /> Engajamento
           </Button>
+          <Button
+            variant={activeTab === 'calendario' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('calendario')}
+            className="gap-1"
+          >
+            <CalendarDays className="h-4 w-4" /> Calendário
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
@@ -477,6 +487,7 @@ export default function Aquecimento() {
         {activeTab === 'proxies' && <AquecimentoProxiesTab />}
         {activeTab === 'status' && <AquecimentoStatusTab />}
         {activeTab === 'engajamento' && <EngajamentoStatusTab />}
+        {activeTab === 'calendario' && <AquecimentoCalendarioTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">

@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { salvarContatoAgendaCacheado } from "../_shared/agenda-contatos.ts";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
+import { getCalendarioHoje, fatorPersonalidade } from "../_shared/calendario-aquecimento.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,14 +84,16 @@ Deno.serve(async (req) => {
     }
     const ancoraProb = typeof cfg?.ancora_probability === "number" ? cfg.ancora_probability : DEFAULT_ANCORA_PROBABILITY;
 
-    // Horário comercial (07-21h BRT) e pausa de almoço (12-14h BRT)
+    // 📅 Calendário centralizado (substitui hardcode 07-21h, pausa 12-14h, fator dia)
+    const cal = await getCalendarioHoje(supabase);
+    if (!cal.dentroJanela) {
+      return json({ message: `Skip: ${cal.motivoSkip}`, skipped: true, calendario: cal });
+    }
     const now = new Date();
     const sp = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = sp.getHours();
     const dow = sp.getDay();
-    if (hour < 7 || hour >= 21) return json({ message: "Fora do horário", skipped: true });
-    if (hour >= 12 && hour < 14) return json({ message: "Pausa de almoço", skipped: true });
-    const fatorDia = dow === 0 ? 0.4 : dow === 6 ? 0.6 : 1.0;
+    const fatorDia = cal.fator;
 
     // Reativa chips com auto-pausa expirada
     await supabase
@@ -110,7 +113,7 @@ Deno.serve(async (req) => {
     const ids = aquecInsts.map((i: any) => i.instancia_id);
     const { data: insts } = await supabase
       .from("user_whatsapp_instances")
-      .select("id, nome, server_url, instance_token, ativo")
+      .select("id, nome, server_url, instance_token, ativo, personalidade")
       .in("id", ids)
       .eq("ativo", true);
 
@@ -154,12 +157,13 @@ Deno.serve(async (req) => {
       }
 
       // 🎲 RANDOMIZAÇÃO TEMPORAL: distribui envios aleatoriamente ao longo do dia
-      // probabilidade = (envios_restantes / ciclos_restantes) * jitter 0.7-1.3
+      // probabilidade = (envios_restantes / ciclos_restantes) * jitter 0.7-1.3 * fator_personalidade
       const restantes = limite - (enviosHoje || 0);
       const jitter = 0.7 + Math.random() * 0.6;
-      const probDisparar = Math.min(1, (restantes / ciclosRestantes) * jitter);
+      const fatorPers = fatorPersonalidade(inst.personalidade);
+      const probDisparar = Math.min(1, (restantes / ciclosRestantes) * jitter * fatorPers);
       if (Math.random() > probDisparar) {
-        return { instancia: inst.nome, status: "aguardando_proximo_ciclo", probDisparar: probDisparar.toFixed(2) };
+        return { instancia: inst.nome, status: "aguardando_proximo_ciclo", probDisparar: probDisparar.toFixed(2), personalidade: inst.personalidade };
       }
 
       // 📵 CARÊNCIA 48h: lista de destinos já contatados por este chip nas últimas 48h

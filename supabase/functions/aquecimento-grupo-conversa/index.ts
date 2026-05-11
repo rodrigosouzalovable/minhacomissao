@@ -12,6 +12,7 @@
 // - Anti-duplicação de cena: evita rodar o mesmo contexto em outro grupo nas últimas 6h.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { getCalendarioHoje } from "../_shared/calendario-aquecimento.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -295,9 +296,12 @@ Deno.serve(async (req) => {
     const hora = agora.getHours();
 
     if (!forcar) {
-      // Janela mais conservadora: 09h-19h BRT (todos os dias)
-      if (hora < 9 || hora >= 19) {
-        return new Response(JSON.stringify({ pulado: `fora da janela (${hora}h BRT)` }), {
+      // Janela vinda do calendário centralizado (preserva 09-19 como mínimo conservador)
+      const cal = await getCalendarioHoje(supa);
+      const hIni = Math.max(9, parseInt((cal.config?.horario_inicio || "09:00").split(":")[0]));
+      const hFim = Math.min(19, parseInt((cal.config?.horario_fim || "19:00").split(":")[0]));
+      if (!cal.dentroJanela || hora < hIni || hora >= hFim) {
+        return new Response(JSON.stringify({ pulado: `fora da janela (${hora}h BRT) — ${cal.motivoSkip ?? "ok"}` }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
