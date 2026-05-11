@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer, Settings, Network, Heart } from 'lucide-react';
+import { Flame, Phone, Activity, Clock, CheckCircle, Play, Pause, BarChart3, List, RefreshCw, Zap, PlayCircle, FlaskConical, Timer, Settings, Network, Heart, CalendarDays } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import AquecimentoNotificacoes from '@/components/aquecimento/AquecimentoNotificacoes';
 import AquecimentoConfigTab from '@/components/aquecimento/AquecimentoConfigTab';
@@ -20,6 +20,7 @@ import AquecimentoAutoSaveTab from '@/components/aquecimento/AquecimentoAutoSave
 import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTab';
 import AquecimentoStatusTab from '@/components/aquecimento/AquecimentoStatusTab';
 import EngajamentoStatusTab from '@/components/aquecimento/EngajamentoStatusTab';
+import AquecimentoCalendarioTab from '@/components/aquecimento/AquecimentoCalendarioTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
