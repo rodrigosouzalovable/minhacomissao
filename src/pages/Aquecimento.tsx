@@ -209,7 +209,7 @@ export default function Aquecimento() {
   }
 
   async function loadInstancias() {
-    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, criado_em, ativo');
+    const { data: instances } = await supabase.from('user_whatsapp_instances').select('id, nome, criado_em, ativo, personalidade' as any);
     setAllInstances(instances || []);
 
     const activeInstanceIds = (instances || []).filter((i: any) => i.ativo).map((i: any) => i.id);
@@ -219,12 +219,13 @@ export default function Aquecimento() {
       const mapped = (data as any[])
         .filter((d: any) => activeInstanceIds.includes(d.instancia_id))
         .map((d: any) => {
-          const inst = instances.find((i: any) => i.id === d.instancia_id);
+          const inst: any = instances.find((i: any) => i.id === d.instancia_id);
           const diasConectado = inst ? Math.floor((Date.now() - new Date(inst.criado_em).getTime()) / 86400000) : 0;
           return {
             ...d,
             instance_name: inst?.nome || 'Sem nome',
             dias_conectado: diasConectado,
+            personalidade: inst?.personalidade || 'equilibrado',
           };
         });
       setInstancias(mapped);
