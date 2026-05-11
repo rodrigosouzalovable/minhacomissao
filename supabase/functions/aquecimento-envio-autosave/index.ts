@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { salvarContatoAgendaCacheado } from "../_shared/agenda-contatos.ts";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
+import { getCalendarioHoje, fatorPersonalidade } from "../_shared/calendario-aquecimento.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
