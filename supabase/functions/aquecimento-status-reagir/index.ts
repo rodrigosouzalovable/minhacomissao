@@ -7,6 +7,7 @@
 // Limites por instância/dia: 8 reações + 3 respostas (visualização sem limite).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { getCalendarioHoje } from "../_shared/calendario-aquecimento.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
