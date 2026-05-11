@@ -1,42 +1,37 @@
 ## Objetivo
-Desativar TODOS os módulos de aquecimento (envios diretos, conversas em grupo, engajamento em status de outros, completar perfil, descoberta de grupos, promoção de fase, IA ping-pong) e manter ativa APENAS a **postagem automática de status** nos próprios chips. Em seguida, postar imediatamente uma imagem do pool no status da instância **62982115479 MEMU 37 02/05** como confirmação.
+Ativar **apenas reações** (sem visualização e sem resposta privada) no engajamento de status entre as instâncias conectadas, e testar reagindo ao status que o **MEMU 37** acabou de postar (`msgId 3EB08681F233A4EA4392F6`).
 
-## Motivo
-Alguns números foram restringidos/banidos sem terem enviado mensagens. Reduzir a superfície de risco mantendo apenas a atividade mais "passiva" e natural (status/stories), que historicamente não dispara banimentos.
+## Diagnóstico do estado atual
+- `engajamento_status_auto = false` → nenhum agendamento de interação foi criado para o status recém-postado (`whatsapp_aquecimento_status_interacoes` vazio para esse log).
+- A função `agendarInteracoes` em `whatsapp-aquecimento-status` agenda 3 tipos: `visualizado`, `reacao`, `resposta`. Precisa ficar só `reacao`.
+- A função `aquecimento-status-reagir` exige `autorPhone` para qualquer tipo (inclusive reação), mas a coluna `user_whatsapp_instances.telefone` está NULL em todas as instâncias. Reação na verdade é enviada para `status@broadcast`, não precisa do número do autor — basta o `whatsapp_msg_id`. Esse bloqueio precisa ser relaxado para `reacao`.
+- Outros módulos (envio direto, conversa em grupo, ping-pong, perfil, descoberta, promoção) continuam pausados — sem alterações.
 
-## O que será desligado
-Todos via flags em `whatsapp_aquecimento_config` (chave/valor):
-- `aquecimento_pausado` = true (mestre — derruba envio autosave + grupo conversa + IA ping-pong)
-- `engajamento_status_auto` = false (zera visualizações/reações/respostas em status alheios)
-- `grupo_conversa_habilitado` = false
-- `perfil_completacao_auto` = false
-- `descoberta_grupos_auto` = false
-- `promocao_fase_auto` = false
-- `ia_pingpong_habilitado` = false (se existir)
+## Alterações
+1. **Config**: upsert em `whatsapp_aquecimento_config`:
+   - `engajamento_status_auto = true`
 
-Cron jobs continuam disparando, mas cada edge function checa a flag e retorna `skipped`. Custo Lovable Cloud: ~zero (apenas no-op de cron).
+2. **Edge `whatsapp-aquecimento-status`** (função `agendarInteracoes`):
+   - Pular criação das linhas `visualizado` e `resposta`. Manter só `reacao` (3-6 instâncias aleatórias, agendadas em 10-180 min).
 
-## O que permanece ativo
-- `postar_status_auto` = true (já é o padrão)
-- `status_habilitado` = true
-- Cron `whatsapp-aquecimento-status` continua rodando: cada chip posta a cada 48-72h, janela 09-19h BRT, nunca aos domingos, sem repetir as últimas 3 imagens.
+3. **Edge `aquecimento-status-reagir`**:
+   - Só checar `autorPhone` quando `tipo === 'visualizado' || tipo === 'resposta'`. Para `reacao` basta `msgId`.
+   - Nada mais muda (limites diários de 8 reações/dia/instância, espaçamento, pool de emojis).
 
-## Teste imediato (instância MEMU 37)
-1. Resolver `instancia_id` via `user_whatsapp_instances` onde `nome ILIKE '%62982115479%'` ou `%MEMU 37%`.
-2. Invocar `whatsapp-aquecimento-status` com `{ action: "test", instancia_id: "<id>" }` — isso ignora cooldown, janela horária e domingo.
-3. Validar resposta: `ok: true`, `results[0].ok = true` e `msgId` retornado.
-4. Conferir registro novo em `whatsapp_aquecimento_status_log` com `status='enviado'`.
-5. Como engajamento foi desativado, NÃO serão agendadas visualizações/reações de outros chips nesse status (comportamento esperado e desejado para reduzir risco).
+4. **Backfill de teste imediato**:
+   - Selecionar 4 instâncias ativas aleatórias diferentes do MEMU 37.
+   - Inserir 4 linhas em `whatsapp_aquecimento_status_interacoes` com `tipo='reacao'`, `status_log_id='c97ba772-5e2e-49da-93b3-eb38eb496e1a'`, `agendado_para = now()` (já vencido, para o cron pegar).
+   - Invocar `aquecimento-status-reagir` com `{ action: "test" }` para ignorar janela e processar imediatamente.
+   - Validar: `select tipo, sucesso, erro from whatsapp_aquecimento_status_interacoes where status_log_id = 'c97ba772-...'`. Esperado: 4 linhas com `sucesso=true` e emoji em `conteudo`.
 
 ## Validação pós-implementação
-- `select chave, valor from whatsapp_aquecimento_config where chave in (...)` mostra todas as flags corretas.
-- Logs de `aquecimento-envio-autosave`, `aquecimento-grupo-conversa`, `aquecimento-status-reagir` mostram `skipped: paused/disabled` na próxima execução.
-- Log de `whatsapp-aquecimento-status` mostra postagem bem-sucedida do MEMU 37.
-
-## Detalhes técnicos
-- Atualização das flags via `supabase.from('whatsapp_aquecimento_config').upsert(...)` (sem migração — são linhas de configuração, não schema).
-- `whatsapp-aquecimento-status` já suporta modo teste manual (linhas com `isManualTest`), portanto não precisa alterar código de edge function.
-- Nenhum arquivo do frontend será modificado nesta etapa; o usuário pode reativar módulos individualmente pelas abas existentes em `/aquecimento` quando quiser.
+- Logs do `aquecimento-status-reagir` mostram `processed: 4` com `sucesso: true`.
+- No celular MEMU 37, o status mostra 4 reações distintas (❤️/🔥/etc.) das outras instâncias.
+- Para qualquer status novo postado depois, a função `whatsapp-aquecimento-status` agendará automaticamente 3-6 reações (sem visualização/resposta) que o cron `aquecimento-status-reagir` (rodando a cada 5 min, 08-21h, exceto domingo) executará.
 
 ## Reversão
-Para retomar qualquer módulo: voltar a flag correspondente para `true`/`false` invertido na aba de configuração, ou eu faço sob comando.
+- Para desligar de novo: `engajamento_status_auto = false`.
+- Para reabilitar visualização/resposta: reverter o filtro em `agendarInteracoes` e o relaxamento em `aquecimento-status-reagir`.
+
+## Custo
+Praticamente zero: apenas 4 chamadas extras ao UAZAPI no teste. Em regime, 3-6 reações por status postado (~1 status a cada 48-72h por instância).

@@ -1,0 +1,2 @@
+UPDATE whatsapp_aquecimento_config SET valor='false'::jsonb WHERE chave='engajamento_status_auto';
+DELETE FROM whatsapp_aquecimento_status_interacoes WHERE status_log_id='c97ba772-5e2e-49da-93b3-eb38eb496e1a';

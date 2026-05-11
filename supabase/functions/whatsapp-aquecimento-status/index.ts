@@ -109,41 +109,20 @@ async function agendarInteracoes(
     }
 
     const nReacoes = 3 + Math.floor(Math.random() * 4); // 3-6
-    const nRespostas = 1 + Math.floor(Math.random() * 2); // 1-2
     const reacaoIds = ids.slice(0, Math.min(nReacoes, ids.length));
-    const restantes = ids.filter((x) => !reacaoIds.includes(x));
-    const respostaIds = restantes.slice(0, Math.min(nRespostas, restantes.length));
 
     const now = Date.now();
     const rndMin = (minMin: number, maxMin: number) =>
       new Date(now + (minMin + Math.random() * (maxMin - minMin)) * 60_000).toISOString();
 
     const rows: any[] = [];
-    // Visualizado: TODAS as instâncias, em 5-90min
-    for (const id of ids) {
-      rows.push({
-        status_log_id: statusLogId,
-        instancia_id: id,
-        tipo: "visualizado",
-        agendado_para: rndMin(5, 90),
-      });
-    }
-    // Reações: 3-6, em 10-180min
+    // APENAS reações: 3-6, em 10-180min (visualização e resposta privada desativadas para reduzir risco de banimento)
     for (const id of reacaoIds) {
       rows.push({
         status_log_id: statusLogId,
         instancia_id: id,
         tipo: "reacao",
         agendado_para: rndMin(10, 180),
-      });
-    }
-    // Respostas: 1-2, em 30-240min
-    for (const id of respostaIds) {
-      rows.push({
-        status_log_id: statusLogId,
-        instancia_id: id,
-        tipo: "resposta",
-        agendado_para: rndMin(30, 240),
       });
     }
 

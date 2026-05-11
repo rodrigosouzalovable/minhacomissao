@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
 
     if (!inst || !inst.ativo) {
       erro = "instancia_inativa";
-    } else if (!autorPhone) {
+    } else if (p.tipo !== "reacao" && !autorPhone) {
       erro = "autor_sem_numero";
     } else if (p.tipo !== "visualizado" && !msgId) {
       erro = "sem_msg_id";
@@ -213,13 +213,17 @@ Deno.serve(async (req) => {
             .update({ conteudo: emoji })
             .eq("id", p.id);
 
-          let r = await uazPost(inst.server_url, inst.instance_token, "/message/reactMessage", {
-            number: statusJid, messageId: msgId, reaction: emoji,
-          });
-          if (!r.ok) {
-            r = await uazPost(inst.server_url, inst.instance_token, "/send/reaction", {
-              number: statusJid, messageId: msgId, text: emoji,
-            });
+          // UAZAPI endpoint para reação: tenta variações conhecidas
+          const reactAttempts = [
+            { path: "/message/reaction", body: { number: statusJid, id: msgId, text: emoji } },
+            { path: "/message/react", body: { number: statusJid, id: msgId, text: emoji } },
+            { path: "/send/reaction", body: { number: statusJid, id: msgId, text: emoji } },
+            { path: "/message/reactMessage", body: { number: statusJid, messageId: msgId, reaction: emoji } },
+          ];
+          let r: any = { ok: false, status: 0, text: "no attempt" };
+          for (const attempt of reactAttempts) {
+            r = await uazPost(inst.server_url, inst.instance_token, attempt.path, attempt.body);
+            if (r.ok) break;
           }
           sucesso = r.ok;
           erro = r.ok ? null : `${r.status}: ${r.text}`;
