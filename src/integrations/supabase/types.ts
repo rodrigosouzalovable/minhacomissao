@@ -1982,6 +1982,9 @@ export type Database = {
           instance_token: string
           nome: string | null
           ordem: number | null
+          personalidade:
+            | Database["public"]["Enums"]["personalidade_chip"]
+            | null
           proxy_aplicado_em: string | null
           proxy_enabled: boolean
           proxy_host: string | null
@@ -2012,6 +2015,9 @@ export type Database = {
           instance_token: string
           nome?: string | null
           ordem?: number | null
+          personalidade?:
+            | Database["public"]["Enums"]["personalidade_chip"]
+            | null
           proxy_aplicado_em?: string | null
           proxy_enabled?: boolean
           proxy_host?: string | null
@@ -2042,6 +2048,9 @@ export type Database = {
           instance_token?: string
           nome?: string | null
           ordem?: number | null
+          personalidade?:
+            | Database["public"]["Enums"]["personalidade_chip"]
+            | null
           proxy_aplicado_em?: string | null
           proxy_enabled?: boolean
           proxy_host?: string | null
@@ -2251,6 +2260,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_aquecimento_calendario: {
+        Row: {
+          ativo: boolean
+          dia_semana: number
+          fator_volume: number
+          horario_fim: string
+          horario_inicio: string
+          pausa_fim: string | null
+          pausa_inicio: string | null
+          quantidade_status: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          dia_semana: number
+          fator_volume?: number
+          horario_fim: string
+          horario_inicio: string
+          pausa_fim?: string | null
+          pausa_inicio?: string | null
+          quantidade_status?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          dia_semana?: number
+          fator_volume?: number
+          horario_fim?: string
+          horario_inicio?: string
+          pausa_fim?: string | null
+          pausa_inicio?: string | null
+          quantidade_status?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       whatsapp_aquecimento_config: {
         Row: {
@@ -3605,6 +3650,7 @@ export type Database = {
     }
     Enums: {
       app_role: "funcionario" | "gestor" | "admin"
+      personalidade_chip: "rapido" | "equilibrado" | "reflexivo" | "noturno"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3733,6 +3779,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["funcionario", "gestor", "admin"],
+      personalidade_chip: ["rapido", "equilibrado", "reflexivo", "noturno"],
     },
   },
 } as const
