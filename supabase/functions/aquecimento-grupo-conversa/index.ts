@@ -12,6 +12,7 @@
 // - Anti-duplicação de cena: evita rodar o mesmo contexto em outro grupo nas últimas 6h.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { getCalendarioHoje } from "../_shared/calendario-aquecimento.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
