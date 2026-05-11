@@ -471,6 +471,14 @@ export default function Aquecimento() {
           >
             <Heart className="h-4 w-4" /> Engajamento
           </Button>
+          <Button
+            variant={activeTab === 'calendario' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('calendario')}
+            className="gap-1"
+          >
+            <CalendarDays className="h-4 w-4" /> Calendário
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
@@ -478,6 +486,7 @@ export default function Aquecimento() {
         {activeTab === 'proxies' && <AquecimentoProxiesTab />}
         {activeTab === 'status' && <AquecimentoStatusTab />}
         {activeTab === 'engajamento' && <EngajamentoStatusTab />}
+        {activeTab === 'calendario' && <AquecimentoCalendarioTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
