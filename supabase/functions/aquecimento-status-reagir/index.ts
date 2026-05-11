@@ -76,15 +76,13 @@ Deno.serve(async (req) => {
   const dow = brt.getDay();
   const hour = brt.getHours();
 
-  if (!isManual && dow === 0) {
-    return new Response(JSON.stringify({ ok: true, skipped: "sunday" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  if (!isManual && (hour < 8 || hour >= 21)) {
-    return new Response(JSON.stringify({ ok: true, skipped: "out_of_window", hour }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  if (!isManual) {
+    const cal = await getCalendarioHoje(supabase);
+    if (!cal.dentroJanela) {
+      return new Response(JSON.stringify({ ok: true, skipped: cal.motivoSkip, hour, dow }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   }
 
   // Verifica habilitado
