@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
     const ids = aquecInsts.map((i: any) => i.instancia_id);
     const { data: insts } = await supabase
       .from("user_whatsapp_instances")
-      .select("id, nome, server_url, instance_token, ativo")
+      .select("id, nome, server_url, instance_token, ativo, personalidade")
       .in("id", ids)
       .eq("ativo", true);
 
