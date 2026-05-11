@@ -84,14 +84,16 @@ Deno.serve(async (req) => {
     }
     const ancoraProb = typeof cfg?.ancora_probability === "number" ? cfg.ancora_probability : DEFAULT_ANCORA_PROBABILITY;
 
-    // Horário comercial (07-21h BRT) e pausa de almoço (12-14h BRT)
+    // 📅 Calendário centralizado (substitui hardcode 07-21h, pausa 12-14h, fator dia)
+    const cal = await getCalendarioHoje(supabase);
+    if (!cal.dentroJanela) {
+      return json({ message: `Skip: ${cal.motivoSkip}`, skipped: true, calendario: cal });
+    }
     const now = new Date();
     const sp = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hour = sp.getHours();
     const dow = sp.getDay();
-    if (hour < 7 || hour >= 21) return json({ message: "Fora do horário", skipped: true });
-    if (hour >= 12 && hour < 14) return json({ message: "Pausa de almoço", skipped: true });
-    const fatorDia = dow === 0 ? 0.4 : dow === 6 ? 0.6 : 1.0;
+    const fatorDia = cal.fator;
 
     // Reativa chips com auto-pausa expirada
     await supabase
