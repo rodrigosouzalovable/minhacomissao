@@ -157,12 +157,13 @@ Deno.serve(async (req) => {
       }
 
       // 🎲 RANDOMIZAÇÃO TEMPORAL: distribui envios aleatoriamente ao longo do dia
-      // probabilidade = (envios_restantes / ciclos_restantes) * jitter 0.7-1.3
+      // probabilidade = (envios_restantes / ciclos_restantes) * jitter 0.7-1.3 * fator_personalidade
       const restantes = limite - (enviosHoje || 0);
       const jitter = 0.7 + Math.random() * 0.6;
-      const probDisparar = Math.min(1, (restantes / ciclosRestantes) * jitter);
+      const fatorPers = fatorPersonalidade(inst.personalidade);
+      const probDisparar = Math.min(1, (restantes / ciclosRestantes) * jitter * fatorPers);
       if (Math.random() > probDisparar) {
-        return { instancia: inst.nome, status: "aguardando_proximo_ciclo", probDisparar: probDisparar.toFixed(2) };
+        return { instancia: inst.nome, status: "aguardando_proximo_ciclo", probDisparar: probDisparar.toFixed(2), personalidade: inst.personalidade };
       }
 
       // 📵 CARÊNCIA 48h: lista de destinos já contatados por este chip nas últimas 48h
