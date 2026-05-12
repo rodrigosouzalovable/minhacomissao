@@ -21,6 +21,7 @@ import AquecimentoProxiesTab from '@/components/aquecimento/AquecimentoProxiesTa
 import AquecimentoStatusTab from '@/components/aquecimento/AquecimentoStatusTab';
 import EngajamentoStatusTab from '@/components/aquecimento/EngajamentoStatusTab';
 import AquecimentoCalendarioTab from '@/components/aquecimento/AquecimentoCalendarioTab';
+import MarketBetTestTab from '@/components/aquecimento/MarketBetTestTab';
 import { format } from 'date-fns';
 
 interface AquecimentoInstancia {
@@ -142,7 +143,7 @@ export default function Aquecimento() {
   const [allInstances, setAllInstances] = useState<any[]>([]);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies' | 'status' | 'engajamento' | 'calendario'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'log' | 'config' | 'autosave' | 'proxies' | 'status' | 'engajamento' | 'calendario' | 'marketbet'>('dashboard');
   const [logFilterStatus, setLogFilterStatus] = useState<string>('todos');
   const [logFilterDate, setLogFilterDate] = useState<string>('');
   const [metrics, setMetrics] = useState({ total: 0, emAquecimento: 0, aquecidos: 0, interacoesHoje: 0, taxaSucesso: 0, porFase: {} as Record<number, number>, statusHoje: 0, contatosSalvosMes: 0 });
@@ -480,6 +481,14 @@ export default function Aquecimento() {
           >
             <CalendarDays className="h-4 w-4" /> Calendário
           </Button>
+          <Button
+            variant={activeTab === 'marketbet' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('marketbet')}
+            className="gap-1"
+          >
+            <Network className="h-4 w-4" /> MarketBet
+          </Button>
         </div>
 
         {activeTab === 'config' && <AquecimentoConfigTab />}
@@ -488,6 +497,7 @@ export default function Aquecimento() {
         {activeTab === 'status' && <AquecimentoStatusTab />}
         {activeTab === 'engajamento' && <EngajamentoStatusTab />}
         {activeTab === 'calendario' && <AquecimentoCalendarioTab />}
+        {activeTab === 'marketbet' && <MarketBetTestTab />}
 
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
