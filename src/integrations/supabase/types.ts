@@ -1452,6 +1452,89 @@ export type Database = {
           },
         ]
       }
+      marketbet_proxies_gerados: {
+        Row: {
+          aplicado_em: string | null
+          aplicado_em_instancia: string | null
+          cidade: string | null
+          criado_em: string
+          estado: string | null
+          host: string
+          id: string
+          password: string
+          porta: number
+          proxy_string: string
+          tipo: string | null
+          username: string
+        }
+        Insert: {
+          aplicado_em?: string | null
+          aplicado_em_instancia?: string | null
+          cidade?: string | null
+          criado_em?: string
+          estado?: string | null
+          host: string
+          id?: string
+          password: string
+          porta: number
+          proxy_string: string
+          tipo?: string | null
+          username: string
+        }
+        Update: {
+          aplicado_em?: string | null
+          aplicado_em_instancia?: string | null
+          cidade?: string | null
+          criado_em?: string
+          estado?: string | null
+          host?: string
+          id?: string
+          password?: string
+          porta?: number
+          proxy_string?: string
+          tipo?: string | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketbet_proxies_gerados_aplicado_em_instancia_fkey"
+            columns: ["aplicado_em_instancia"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketbet_proxy_log: {
+        Row: {
+          acao: string
+          criado_em: string
+          id: string
+          payload: Json | null
+          resposta: Json | null
+          sucesso: boolean | null
+          user_id: string | null
+        }
+        Insert: {
+          acao: string
+          criado_em?: string
+          id?: string
+          payload?: Json | null
+          resposta?: Json | null
+          sucesso?: boolean | null
+          user_id?: string | null
+        }
+        Update: {
+          acao?: string
+          criado_em?: string
+          id?: string
+          payload?: Json | null
+          resposta?: Json | null
+          sucesso?: boolean | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       mentor_conversas: {
         Row: {
           content: string
