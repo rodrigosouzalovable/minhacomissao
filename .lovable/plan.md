@@ -1,37 +1,116 @@
-## Objetivo
-Ativar **apenas reações** (sem visualização e sem resposta privada) no engajamento de status entre as instâncias conectadas, e testar reagindo ao status que o **MEMU 37** acabou de postar (`msgId 3EB08681F233A4EA4392F6`).
 
-## Diagnóstico do estado atual
-- `engajamento_status_auto = false` → nenhum agendamento de interação foi criado para o status recém-postado (`whatsapp_aquecimento_status_interacoes` vazio para esse log).
-- A função `agendarInteracoes` em `whatsapp-aquecimento-status` agenda 3 tipos: `visualizado`, `reacao`, `resposta`. Precisa ficar só `reacao`.
-- A função `aquecimento-status-reagir` exige `autorPhone` para qualquer tipo (inclusive reação), mas a coluna `user_whatsapp_instances.telefone` está NULL em todas as instâncias. Reação na verdade é enviada para `status@broadcast`, não precisa do número do autor — basta o `whatsapp_msg_id`. Esse bloqueio precisa ser relaxado para `reacao`.
-- Outros módulos (envio direto, conversa em grupo, ping-pong, perfil, descoberta, promoção) continuam pausados — sem alterações.
+# Integração MarketBet — modo TESTE CONTROLADO
 
-## Alterações
-1. **Config**: upsert em `whatsapp_aquecimento_config`:
-   - `engajamento_status_auto = true`
+Concordo com o protocolo do DeepSeek. Implementação enxuta, sem cron de rotação automática nesta fase — só geração + aplicação manual + monitoramento. Se sticky de 10–30 min derrubar a sessão UAZAPI, descobrimos em horas, não em dias.
 
-2. **Edge `whatsapp-aquecimento-status`** (função `agendarInteracoes`):
-   - Pular criação das linhas `visualizado` e `resposta`. Manter só `reacao` (3-6 instâncias aleatórias, agendadas em 10-180 min).
+## Etapa 0 — Secret
 
-3. **Edge `aquecimento-status-reagir`**:
-   - Só checar `autorPhone` quando `tipo === 'visualizado' || tipo === 'resposta'`. Para `reacao` basta `msgId`.
-   - Nada mais muda (limites diários de 8 reações/dia/instância, espaçamento, pool de emojis).
+- Adicionar secret `MARKETBET_API_KEY` = `mb_live_7fd354ad43a2af611d638f7edbab1ba7` (será solicitado via tool `add_secret`).
 
-4. **Backfill de teste imediato**:
-   - Selecionar 4 instâncias ativas aleatórias diferentes do MEMU 37.
-   - Inserir 4 linhas em `whatsapp_aquecimento_status_interacoes` com `tipo='reacao'`, `status_log_id='c97ba772-5e2e-49da-93b3-eb38eb496e1a'`, `agendado_para = now()` (já vencido, para o cron pegar).
-   - Invocar `aquecimento-status-reagir` com `{ action: "test" }` para ignorar janela e processar imediatamente.
-   - Validar: `select tipo, sucesso, erro from whatsapp_aquecimento_status_interacoes where status_log_id = 'c97ba772-...'`. Esperado: 4 linhas com `sucesso=true` e emoji em `conteudo`.
+## Etapa 1 — Edge function `marketbet-proxy-manager`
 
-## Validação pós-implementação
-- Logs do `aquecimento-status-reagir` mostram `processed: 4` com `sucesso: true`.
-- No celular MEMU 37, o status mostra 4 reações distintas (❤️/🔥/etc.) das outras instâncias.
-- Para qualquer status novo postado depois, a função `whatsapp-aquecimento-status` agendará automaticamente 3-6 reações (sem visualização/resposta) que o cron `aquecimento-status-reagir` (rodando a cada 5 min, 08-21h, exceto domingo) executará.
+Arquivo: `supabase/functions/marketbet-proxy-manager/index.ts` (`verify_jwt = false` no `config.toml`).
 
-## Reversão
-- Para desligar de novo: `engajamento_status_auto = false`.
-- Para reabilitar visualização/resposta: reverter o filtro em `agendarInteracoes` e o relaxamento em `aquecimento-status-reagir`.
+Roteamento por `action` no body JSON (uma única função, mais simples que múltiplas):
 
-## Custo
-Praticamente zero: apenas 4 chamadas extras ao UAZAPI no teste. Em regime, 3-6 reações por status postado (~1 status a cada 48-72h por instância).
+| action | Faz | Chamada upstream |
+|---|---|---|
+| `saldo` | Consulta saldo em GB | `GET /api/v1/proxy/saldo.php` |
+| `locais` | Lista estados BR disponíveis | `GET /api/v1/proxy/locais.php?country=br` |
+| `gerar` | Gera N proxies (default 1, tipo `fixo`, country `br`, state opcional) | `POST /api/v1/proxy/gerar.php` |
+| `aplicar` | Recebe `instance_id` + string de proxy `host:port:user:pass`, parseia, salva em `user_whatsapp_instances` (`proxy_*` colunas) e invoca `uazapi-set-proxy` | DB + chamada interna |
+
+Parser do formato MarketBet: `74.81.81.81:11000:usuario__cr.br;state.saopaulo;city.saopaulo:senha123`
+- Split por `:` em 4 partes (host, porta, user com modificadores, senha).
+- O `user` inteiro (incluindo `__cr.br;state.x`) vai literal para `proxy_username` — é assim que o roteador da MarketBet seleciona localização.
+
+CORS padrão do projeto. Validação Zod do body. Tratamento `disconnected → fallback:true` quando aplicar.
+
+Audit log: insert em uma nova tabela `marketbet_proxy_log` (acao, payload, resposta, criado_em, user_id).
+
+## Etapa 2 — Tabelas (migration)
+
+```sql
+create table marketbet_proxy_log (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id),
+  acao text not null,           -- 'saldo'|'gerar'|'aplicar'
+  payload jsonb,
+  resposta jsonb,
+  sucesso boolean,
+  criado_em timestamptz default now()
+);
+-- RLS: só admin lê/escreve
+
+create table marketbet_proxies_gerados (
+  id uuid primary key default gen_random_uuid(),
+  proxy_string text not null,   -- string crua retornada
+  host text, porta int, username text, password text,
+  estado text, cidade text, tipo text,
+  aplicado_em_instancia uuid references user_whatsapp_instances(id),
+  aplicado_em timestamptz,
+  criado_em timestamptz default now()
+);
+-- RLS: só admin
+```
+
+## Etapa 3 — UI: aba "MarketBet" em `/aquecimento`
+
+Novo componente `src/components/aquecimento/MarketBetTestTab.tsx`. Adicionar tab no `Aquecimento.tsx`.
+
+Layout (1 coluna, denso, viewport 1117px):
+
+```text
+┌────────────────────────────────────────────────────────┐
+│ Saldo MarketBet            [Consultar saldo]           │
+│ Total: 1 GB · Usado: 0.15 GB · Disponível: 0.85 GB     │
+├────────────────────────────────────────────────────────┤
+│ Gerar proxies de teste                                 │
+│ Estado: [Goiás ▾] Quantidade: [5] [Gerar]              │
+├────────────────────────────────────────────────────────┤
+│ Proxies disponíveis (não aplicados)                    │
+│  74.81.81.81:11000:user__cr.br;state.goias:pwd  [Apl…] │
+│  74.81.81.81:11001:user__cr.br;state.goias:pwd  [Apl…] │
+│  ...                                                   │
+├────────────────────────────────────────────────────────┤
+│ Aplicados — monitor                                    │
+│ Chip                  Proxy        Status   Aplicado   │
+│ MEMU 37 (62982115479) 74.81…11000  Conec.   há 2h      │
+│ MEMU 12 (62991…)      74.81…11001  Caiu     há 12min   │
+└────────────────────────────────────────────────────────┘
+```
+
+- Botão "Aplicar" abre dropdown com instâncias ativas que ainda não têm proxy MarketBet aplicado.
+- Coluna Status puxa do `uazapi-set-proxy` + `test-uazapi-connection` (cache existente em `uazapiConnectionCache`).
+- Tudo usa tokens de design (sem cores hardcoded).
+
+## Etapa 4 — Protocolo de teste (você executa, sem código)
+
+1. Consultar saldo (confirma que a integração funciona).
+2. Gerar 5 proxies em GO (ou SP se GO não existir — botão `Listar estados` no dev tools).
+3. Escolher 5 chips de teste (idealmente já maduros, ≥ 7 dias, sem dor recente).
+4. Aplicar 1 proxy/chip pelo botão.
+5. Observar por 24 h:
+   - Sessão UAZAPI cai a cada 10–30 min? → sticky curto demais, descartar.
+   - Chip mantém conectado mas sem banir? → continuar até 7 dias.
+6. Ao fim de 7 dias, comparar taxa de banimento dos 5 chips com proxy vs chips sem proxy.
+
+## Etapa 5 — Sem cron, sem rotação automática (por enquanto)
+
+Confirmado contigo da rodada anterior: **adiar #3 (pool/rotação)**. Esta entrega cobre só #1 (consumir API) e #2 (aplicar manual). Cron de rotação fica para depois do veredicto do teste.
+
+## Custos Lovable Cloud
+
+- 1 edge function nova, invocada manualmente (saldo + 1 gerar + 5 aplicar = ~7 invocações no teste).
+- 2 tabelas pequenas, RLS admin-only.
+- **Custo desprezível.** Já alinhado com a regra "Cloud Cost Awareness".
+
+## Riscos a vigiar
+
+1. Sticky 10–30 min é o ponto mais sensível. Se o `uazapi-set-proxy` precisar reaplicar a cada renovação interna do IP, vai derrubar a sessão. **Hipótese a validar no teste**: a MarketBet pode renovar IP "por baixo" mantendo o mesmo `host:port:user:pass` (como faz com proxy fixo). Se sim, não precisamos reaplicar nada.
+2. Strings de proxy contêm `;` e `_` — precisa testar se a UAZAPI aceita o `username` com esses caracteres no `POST /instance/proxy`. Se não aceitar, fazer URL-encode.
+3. Latência: todo tráfego do chip vai passar pelo proxy → pode aumentar timeout em envios. O fallback `disconnected:true` já trata.
+
+## Próximo passo
+
+Vou pedir o secret `MARKETBET_API_KEY` e, ao receber confirmação, implementar etapas 1–3. Você executa o protocolo da etapa 4.
