@@ -150,6 +150,8 @@ function AcordoCard({
   togglingBoleto,
   isAdmin = false,
   ultimaParcelaPaga,
+  canEdit = true,
+  lancadoPor,
 }: {
   acordo: Acordo;
   onDelete: () => void;
@@ -166,6 +168,8 @@ function AcordoCard({
   togglingBoleto?: boolean;
   isAdmin?: boolean;
   ultimaParcelaPaga?: { numero: number; data_paga: string };
+  canEdit?: boolean;
+  lancadoPor?: string | null;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   return <Link to={`/acordos/${acordo.id}`}>
