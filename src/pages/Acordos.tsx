@@ -235,6 +235,12 @@ function AcordoCard({
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Criado em {formatarData(acordo.criado_em)}
+                  {lancadoPor && (
+                    <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-foreground/80 font-medium">
+                      <User className="h-3 w-3" />
+                      Lançado por: {lancadoPor}
+                    </span>
+                  )}
                 </p>
                 {ultimaParcelaPaga && (
                   <p className="text-xs text-secondary mt-1">
