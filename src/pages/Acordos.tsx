@@ -278,7 +278,7 @@ function AcordoCard({
                 <Badge variant={getStatusVariant(acordo.status)}>
                   {getStatusLabel(acordo.status)}
                 </Badge>
-                {isNegociado && !isVencido && onToggleBoletoEnviado && (
+                {canEdit && isNegociado && !isVencido && onToggleBoletoEnviado && (
                   <TooltipProvider delayDuration={150}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -313,20 +313,24 @@ function AcordoCard({
                   </Tooltip>
                   </TooltipProvider>
                 )}
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30" onClick={e => {
-                e.preventDefault();
-                e.stopPropagation();
-                onEnviarWhatsApp(acordo);
-              }} disabled={isEnviando || !acordo.cliente_telefone} title={acordo.cliente_telefone ? "Enviar WhatsApp" : "Telefone não cadastrado"}>
-                  {isEnviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={e => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDelete();
-              }}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canEdit && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30" onClick={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEnviarWhatsApp(acordo);
+                }} disabled={isEnviando || !acordo.cliente_telefone} title={acordo.cliente_telefone ? "Enviar WhatsApp" : "Telefone não cadastrado"}>
+                    {isEnviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                  </Button>
+                )}
+                {canEdit && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Valor Total</p>
