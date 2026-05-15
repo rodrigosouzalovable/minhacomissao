@@ -1320,7 +1320,7 @@ export default function Acordos() {
 
           <TabsContent value="proximas">
             <BulkSendPanel
-              acordos={acordosProximos}
+              acordos={isAdmin ? acordosProximos : acordosProximos.filter(a => a.user_id === user?.id)}
               instances={whatsappInstances || []}
               templates={lembreteTemplates || []}
               operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
@@ -1335,7 +1335,7 @@ export default function Acordos() {
 
           <TabsContent value="acordos_realizados">
             <BulkSendPanel
-              acordos={acordosRealizados}
+              acordos={isAdmin ? acordosRealizados : acordosRealizados.filter(a => a.user_id === user?.id)}
               instances={whatsappInstances || []}
               templates={lembreteTemplates || []}
               operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
@@ -1350,7 +1350,7 @@ export default function Acordos() {
 
           <TabsContent value="vencidos">
             <BulkSendPanel
-              acordos={acordosVencidos}
+              acordos={isAdmin ? acordosVencidos : acordosVencidos.filter(a => a.user_id === user?.id)}
               instances={whatsappInstances || []}
               templates={lembreteTemplates || []}
               operadorNome={profile?.nome ? toTitleCase(profile.nome) : 'Operador'}
