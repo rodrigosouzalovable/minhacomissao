@@ -719,42 +719,31 @@ export default function Acordos() {
     async function loadAcordos() {
       if (!user) return;
       try {
-        // Carregar acordos próprios
+        // Carregar TODOS os acordos do sistema (somente leitura para acordos de outros)
         const {
           data: acordosData,
           error: acordosError
-        } = await supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', {
+        } = await supabase.from('acordos').select('*').order('criado_em', {
           ascending: false
         });
         if (acordosError) throw acordosError;
-        
-        // Verificar se tem acordos compartilhados
-        const { data: perms } = await supabase
-          .from('user_permissions')
-          .select('acordos_compartilhados, concedido_por')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        
-        const temCompartilhados = (perms as any)?.acordos_compartilhados === true;
-        const adminId = (perms as any)?.concedido_por as string | null;
-        
-        let todosAcordos = acordosData || [];
-        
-        if (temCompartilhados && adminId) {
-          const { data: acordosAdmin } = await supabase
-            .from('acordos')
-            .select('*')
-            .eq('user_id', adminId)
-            .order('criado_em', { ascending: false });
-          if (acordosAdmin) {
-            // Marcar acordos do admin e combinar (sem duplicatas)
-            const idsExistentes = new Set(todosAcordos.map(a => a.id));
-            const novos = acordosAdmin.filter(a => !idsExistentes.has(a.id));
-            todosAcordos = [...todosAcordos, ...novos];
-          }
-        }
-        
+
+        const todosAcordos = acordosData || [];
         setAcordos(todosAcordos);
+
+        // Carregar nomes dos usuários que lançaram acordos (para badge "Lançado por")
+        const userIds = Array.from(new Set(todosAcordos.map(a => a.user_id).filter(Boolean)));
+        if (userIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, nome')
+            .in('id', userIds);
+          const map = new Map<string, string>();
+          (profilesData || []).forEach((p: any) => {
+            if (p?.id && p?.nome) map.set(p.id, p.nome);
+          });
+          setProfilesMap(map);
+        }
 
         // Carregar flags agregadas (pago/vencida/próxima) via RPC
         // Evita o limite de 1.000 linhas do Supabase ao consultar a tabela `pagamentos` diretamente.
