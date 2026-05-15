@@ -1,116 +1,44 @@
+## Objetivo
 
-# Integração MarketBet — modo TESTE CONTROLADO
+Na aba **Meus Acordos**, qualquer usuário logado passa a ver **todos os acordos do sistema** (próprios + de outros), em modo **somente leitura** para os que não são dele. Comissões, ranking e dashboard continuam pessoais.
 
-Concordo com o protocolo do DeepSeek. Implementação enxuta, sem cron de rotação automática nesta fase — só geração + aplicação manual + monitoramento. Se sticky de 10–30 min derrubar a sessão UAZAPI, descobrimos em horas, não em dias.
+## Mudanças
 
-## Etapa 0 — Secret
+### 1. Backend (RLS na tabela `acordos` e `pagamentos`)
 
-- Adicionar secret `MARKETBET_API_KEY` = `mb_live_7fd354ad43a2af611d638f7edbab1ba7` (será solicitado via tool `add_secret`).
+Adicionar política de SELECT global para qualquer usuário autenticado:
 
-## Etapa 1 — Edge function `marketbet-proxy-manager`
+- `acordos`: nova policy `"Authenticated users can view all acordos"` — `FOR SELECT TO authenticated USING (true)`.
+- `pagamentos`: nova policy equivalente, para que as parcelas dos acordos alheios também carreguem (necessário para o card mostrar status, vencidas, próximas).
 
-Arquivo: `supabase/functions/marketbet-proxy-manager/index.ts` (`verify_jwt = false` no `config.toml`).
+As policies existentes de INSERT/UPDATE/DELETE **não mudam** — continuam restritas ao dono ou admin. Isso garante o "somente leitura".
 
-Roteamento por `action` no body JSON (uma única função, mais simples que múltiplas):
+### 2. Frontend — `src/pages/Acordos.tsx`
 
-| action | Faz | Chamada upstream |
-|---|---|---|
-| `saldo` | Consulta saldo em GB | `GET /api/v1/proxy/saldo.php` |
-| `locais` | Lista estados BR disponíveis | `GET /api/v1/proxy/locais.php?country=br` |
-| `gerar` | Gera N proxies (default 1, tipo `fixo`, country `br`, state opcional) | `POST /api/v1/proxy/gerar.php` |
-| `aplicar` | Recebe `instance_id` + string de proxy `host:port:user:pass`, parseia, salva em `user_whatsapp_instances` (`proxy_*` colunas) e invoca `uazapi-set-proxy` | DB + chamada interna |
+- Trocar `from('acordos').select('*').eq('user_id', user.id)` por `select('*')` sem o filtro de `user_id`, mantendo a ordenação por `criado_em desc`.
+- Remover o bloco de "acordos compartilhados" (vira redundante já que todos veem tudo); a permissão `acordos_compartilhados` continua existindo no banco mas não precisa ser consultada aqui.
+- Buscar `profiles (id, nome)` numa única query e juntar em memória para exibir, em cada card, um pequeno selo **"Lançado por: <nome>"** quando `acordo.user_id !== user.id`.
+- Bloquear ações de escrita para acordos de outros usuários (não-admin):
+  - Botões **Excluir**, **Transferir**, **Marcar como pago**, **Editar parcelas inline**, **Disparar lembrete WhatsApp**, **Cancelar/Quebrar** ficam ocultos ou desabilitados quando `acordo.user_id !== user.id` e o usuário não é admin.
+  - Admin mantém acesso total como hoje.
+- Manter o link de **Detalhes** funcionando para todos (apenas leitura na página de detalhe também — ver item 3).
 
-Parser do formato MarketBet: `74.81.81.81:11000:usuario__cr.br;state.saopaulo;city.saopaulo:senha123`
-- Split por `:` em 4 partes (host, porta, user com modificadores, senha).
-- O `user` inteiro (incluindo `__cr.br;state.x`) vai literal para `proxy_username` — é assim que o roteador da MarketBet seleciona localização.
+### 3. Página de detalhe — `src/pages/AcordoDetalhe.tsx`
 
-CORS padrão do projeto. Validação Zod do body. Tratamento `disconnected → fallback:true` quando aplicar.
+Mesma regra: se `acordo.user_id !== user.id` e não-admin, esconder botões de edição/exclusão/marcar pago/enviar WhatsApp; só leitura.
 
-Audit log: insert em uma nova tabela `marketbet_proxy_log` (acao, payload, resposta, criado_em, user_id).
+### 4. Dashboard, Comissões e Ranking — sem mudança
 
-## Etapa 2 — Tabelas (migration)
+- `Dashboard.tsx`, `Comissoes.tsx`, `RankingMensal` continuam filtrando por `user_id` próprio. Como as RLS de SELECT ficam abertas, as queries pessoais permanecem corretas porque elas mesmas filtram por `user_id`.
 
-```sql
-create table marketbet_proxy_log (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id),
-  acao text not null,           -- 'saldo'|'gerar'|'aplicar'
-  payload jsonb,
-  resposta jsonb,
-  sucesso boolean,
-  criado_em timestamptz default now()
-);
--- RLS: só admin lê/escreve
+## Detalhes técnicos
 
-create table marketbet_proxies_gerados (
-  id uuid primary key default gen_random_uuid(),
-  proxy_string text not null,   -- string crua retornada
-  host text, porta int, username text, password text,
-  estado text, cidade text, tipo text,
-  aplicado_em_instancia uuid references user_whatsapp_instances(id),
-  aplicado_em timestamptz,
-  criado_em timestamptz default now()
-);
--- RLS: só admin
-```
+- A migração só adiciona policies; não remove as existentes nem altera colunas, então é não-destrutiva e reversível.
+- As queries de `pagamentos` em outras telas (comissões, dashboard) continuam filtradas por `acordos!inner(user_id).eq('acordos.user_id', user.id)`, então não mudam de comportamento.
+- Custo Lovable Cloud: aumento marginal — a aba passa a trazer N acordos em vez de N do usuário. Para times pequenos é desprezível; se a tabela crescer muito, podemos paginar depois.
 
-## Etapa 3 — UI: aba "MarketBet" em `/aquecimento`
+## Fora de escopo
 
-Novo componente `src/components/aquecimento/MarketBetTestTab.tsx`. Adicionar tab no `Aquecimento.tsx`.
-
-Layout (1 coluna, denso, viewport 1117px):
-
-```text
-┌────────────────────────────────────────────────────────┐
-│ Saldo MarketBet            [Consultar saldo]           │
-│ Total: 1 GB · Usado: 0.15 GB · Disponível: 0.85 GB     │
-├────────────────────────────────────────────────────────┤
-│ Gerar proxies de teste                                 │
-│ Estado: [Goiás ▾] Quantidade: [5] [Gerar]              │
-├────────────────────────────────────────────────────────┤
-│ Proxies disponíveis (não aplicados)                    │
-│  74.81.81.81:11000:user__cr.br;state.goias:pwd  [Apl…] │
-│  74.81.81.81:11001:user__cr.br;state.goias:pwd  [Apl…] │
-│  ...                                                   │
-├────────────────────────────────────────────────────────┤
-│ Aplicados — monitor                                    │
-│ Chip                  Proxy        Status   Aplicado   │
-│ MEMU 37 (62982115479) 74.81…11000  Conec.   há 2h      │
-│ MEMU 12 (62991…)      74.81…11001  Caiu     há 12min   │
-└────────────────────────────────────────────────────────┘
-```
-
-- Botão "Aplicar" abre dropdown com instâncias ativas que ainda não têm proxy MarketBet aplicado.
-- Coluna Status puxa do `uazapi-set-proxy` + `test-uazapi-connection` (cache existente em `uazapiConnectionCache`).
-- Tudo usa tokens de design (sem cores hardcoded).
-
-## Etapa 4 — Protocolo de teste (você executa, sem código)
-
-1. Consultar saldo (confirma que a integração funciona).
-2. Gerar 5 proxies em GO (ou SP se GO não existir — botão `Listar estados` no dev tools).
-3. Escolher 5 chips de teste (idealmente já maduros, ≥ 7 dias, sem dor recente).
-4. Aplicar 1 proxy/chip pelo botão.
-5. Observar por 24 h:
-   - Sessão UAZAPI cai a cada 10–30 min? → sticky curto demais, descartar.
-   - Chip mantém conectado mas sem banir? → continuar até 7 dias.
-6. Ao fim de 7 dias, comparar taxa de banimento dos 5 chips com proxy vs chips sem proxy.
-
-## Etapa 5 — Sem cron, sem rotação automática (por enquanto)
-
-Confirmado contigo da rodada anterior: **adiar #3 (pool/rotação)**. Esta entrega cobre só #1 (consumir API) e #2 (aplicar manual). Cron de rotação fica para depois do veredicto do teste.
-
-## Custos Lovable Cloud
-
-- 1 edge function nova, invocada manualmente (saldo + 1 gerar + 5 aplicar = ~7 invocações no teste).
-- 2 tabelas pequenas, RLS admin-only.
-- **Custo desprezível.** Já alinhado com a regra "Cloud Cost Awareness".
-
-## Riscos a vigiar
-
-1. Sticky 10–30 min é o ponto mais sensível. Se o `uazapi-set-proxy` precisar reaplicar a cada renovação interna do IP, vai derrubar a sessão. **Hipótese a validar no teste**: a MarketBet pode renovar IP "por baixo" mantendo o mesmo `host:port:user:pass` (como faz com proxy fixo). Se sim, não precisamos reaplicar nada.
-2. Strings de proxy contêm `;` e `_` — precisa testar se a UAZAPI aceita o `username` com esses caracteres no `POST /instance/proxy`. Se não aceitar, fazer URL-encode.
-3. Latência: todo tráfego do chip vai passar pelo proxy → pode aumentar timeout em envios. O fallback `disconnected:true` já trata.
-
-## Próximo passo
-
-Vou pedir o secret `MARKETBET_API_KEY` e, ao receber confirmação, implementar etapas 1–3. Você executa o protocolo da etapa 4.
+- Não mexer em comissão/ranking/dashboard.
+- Não conceder edição cruzada para não-admins.
+- Não alterar página de **Equipe / Acordos** (que já tem sua própria lógica de gestor).
