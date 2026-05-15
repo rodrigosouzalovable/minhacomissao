@@ -501,6 +501,7 @@ export default function Acordos() {
   const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(parseDate(initial.filtroDataCriacao));
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
   const [ultimaParcelaPagaPorAcordo, setUltimaParcelaPagaPorAcordo] = useState<Map<string, { numero: number; data_paga: string }>>(new Map());
+  const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
 
   // Salvar filtros sempre que mudarem
   useEffect(() => {
