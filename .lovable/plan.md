@@ -1,44 +1,64 @@
 ## Objetivo
 
-Na aba **Meus Acordos**, qualquer usuário logado passa a ver **todos os acordos do sistema** (próprios + de outros), em modo **somente leitura** para os que não são dele. Comissões, ranking e dashboard continuam pessoais.
+Parar TODAS as automações de aquecimento de WhatsApp para evitar mais banimentos. Nenhum chip será mais usado automaticamente pelo sistema para status, conversas em grupo, reações, completar perfil ou adicionar membros a grupos.
 
-## Mudanças
+## O que será desativado
 
-### 1. Backend (RLS na tabela `acordos` e `pagamentos`)
+### 1. Cron jobs (param de rodar imediatamente)
 
-Adicionar política de SELECT global para qualquer usuário autenticado:
+Os 5 cron jobs de aquecimento serão **desagendados** (`cron.unschedule`):
 
-- `acordos`: nova policy `"Authenticated users can view all acordos"` — `FOR SELECT TO authenticated USING (true)`.
-- `pagamentos`: nova policy equivalente, para que as parcelas dos acordos alheios também carreguem (necessário para o card mostrar status, vencidas, próximas).
+| Job | Frequência atual | O que fazia |
+|---|---|---|
+| `aquecimento-status-30min` | a cada 30min, 12-21h | Postava status automáticos |
+| `add-to-warming-group-30min` | a cada 30min | Adicionava números em grupos de aquecimento |
+| `aquecimento-grupo-conversa-15min` | a cada 15min | Disparava conversas automáticas em grupos |
+| `aquecimento-status-reagir-5min` | a cada 5min | Visualizava/reagia em status de outros chips |
+| `aquecimento-perfil-completar-diario` | diário 11:30 BRT | Aplicava foto/nome/sobre nos chips |
 
-As policies existentes de INSERT/UPDATE/DELETE **não mudam** — continuam restritas ao dono ou admin. Isso garante o "somente leitura".
+### 2. Flags de configuração
 
-### 2. Frontend — `src/pages/Acordos.tsx`
+Também serão setadas como `false` na tabela `whatsapp_aquecimento_config` (cinto e suspensório — caso alguém invoque manualmente as edge functions, elas respeitam essas flags e abortam):
 
-- Trocar `from('acordos').select('*').eq('user_id', user.id)` por `select('*')` sem o filtro de `user_id`, mantendo a ordenação por `criado_em desc`.
-- Remover o bloco de "acordos compartilhados" (vira redundante já que todos veem tudo); a permissão `acordos_compartilhados` continua existindo no banco mas não precisa ser consultada aqui.
-- Buscar `profiles (id, nome)` numa única query e juntar em memória para exibir, em cada card, um pequeno selo **"Lançado por: <nome>"** quando `acordo.user_id !== user.id`.
-- Bloquear ações de escrita para acordos de outros usuários (não-admin):
-  - Botões **Excluir**, **Transferir**, **Marcar como pago**, **Editar parcelas inline**, **Disparar lembrete WhatsApp**, **Cancelar/Quebrar** ficam ocultos ou desabilitados quando `acordo.user_id !== user.id` e o usuário não é admin.
-  - Admin mantém acesso total como hoje.
-- Manter o link de **Detalhes** funcionando para todos (apenas leitura na página de detalhe também — ver item 3).
+- `postar_status_auto`
+- `engajamento_status_auto`
+- E quaisquer outras chaves de automação de aquecimento existentes
 
-### 3. Página de detalhe — `src/pages/AcordoDetalhe.tsx`
+### 3. Pausar instâncias em aquecimento
 
-Mesma regra: se `acordo.user_id !== user.id` e não-admin, esconder botões de edição/exclusão/marcar pago/enviar WhatsApp; só leitura.
+`UPDATE whatsapp_aquecimento_instancias SET status = 'PAUSADO'` em todas as linhas com status `EM_AQUECIMENTO` ou `AQUECIDO`, para que mesmo execuções manuais residuais não disparem nada.
 
-### 4. Dashboard, Comissões e Ranking — sem mudança
+## O que NÃO será mexido
 
-- `Dashboard.tsx`, `Comissoes.tsx`, `RankingMensal` continuam filtrando por `user_id` próprio. Como as RLS de SELECT ficam abertas, as queries pessoais permanecem corretas porque elas mesmas filtram por `user_id`.
+- **Código das edge functions** permanece no repositório (não deleta), apenas para de ser chamado. Se um dia você quiser reativar, basta recriar os crons. Posso deletar depois se preferir.
+- **Envio manual de lembretes de acordos / mensagens em massa / inbox** — continua funcionando normalmente. Isso NÃO é aquecimento.
+- **Relatórios diários (19h/20h BRT), notificações admin, chatbot, robôs de acionamento** — continuam.
+- **Tabelas de aquecimento, calendário, diálogos, imagens de status, grupos cadastrados** — preservadas (dados intactos, só não rodam).
 
-## Detalhes técnicos
+## Como será executado
 
-- A migração só adiciona policies; não remove as existentes nem altera colunas, então é não-destrutiva e reversível.
-- As queries de `pagamentos` em outras telas (comissões, dashboard) continuam filtradas por `acordos!inner(user_id).eq('acordos.user_id', user.id)`, então não mudam de comportamento.
-- Custo Lovable Cloud: aumento marginal — a aba passa a trazer N acordos em vez de N do usuário. Para times pequenos é desprezível; se a tabela crescer muito, podemos paginar depois.
+Via `supabase--insert` (operação de dados, não migração):
 
-## Fora de escopo
+```sql
+SELECT cron.unschedule('aquecimento-status-30min');
+SELECT cron.unschedule('add-to-warming-group-30min');
+SELECT cron.unschedule('aquecimento-grupo-conversa-15min');
+SELECT cron.unschedule('aquecimento-status-reagir-5min');
+SELECT cron.unschedule('aquecimento-perfil-completar-diario');
 
-- Não mexer em comissão/ranking/dashboard.
-- Não conceder edição cruzada para não-admins.
-- Não alterar página de **Equipe / Acordos** (que já tem sua própria lógica de gestor).
+UPDATE whatsapp_aquecimento_config
+SET valor = 'false'
+WHERE chave IN ('postar_status_auto','engajamento_status_auto', ...);
+
+UPDATE whatsapp_aquecimento_instancias
+SET status = 'PAUSADO', updated_at = now()
+WHERE status IN ('EM_AQUECIMENTO','AQUECIDO','AGUARDANDO_MATURACAO');
+```
+
+## Resultado
+
+A partir da aprovação: zero ações automáticas vindas dos chips. Você passa a controlar 100% manualmente o que cada número envia.
+
+## Pergunta opcional
+
+Quer que eu também **remova os botões/abas de aquecimento** do menu da página `/aquecimento` (esconder a UI), ou deixar a UI visível só pra você consultar histórico? Por padrão vou **manter a UI visível** (somente leitura na prática, já que nada roda).
