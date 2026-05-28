@@ -198,6 +198,23 @@ export default function Relatorios() {
     load();
   };
 
+  const salvarTentativas = async (hora: string) => {
+    const v = Math.max(0, Math.floor(Number(tentativasInput.replace(',', '.')) || 0));
+    const anterior = linhas[hora]?.tentativas ?? 0;
+    const { error } = await supabase
+      .from('relatorio_acionamentos' as any)
+      .upsert({ data: dataStr, hora, tentativas: v } as any, { onConflict: 'data,hora' });
+    if (error) { toast.error(error.message); return; }
+    await supabase.from('relatorio_acionamentos_log' as any).insert({
+      acao: 'edicao_tentativas', data: dataStr, hora,
+      valor_anterior: anterior, valor_novo: v,
+    } as any);
+    setEditingTentativas(null);
+    toast.success('Tentativas atualizadas');
+    load();
+  };
+
+
   const exportCSV = () => {
     const rows = [
       ['HORA','TENTATIVAS','ALO','CPC','CPC-A','$ ACORDOS','% ALO','% CPC','% CONVERSAO'],
