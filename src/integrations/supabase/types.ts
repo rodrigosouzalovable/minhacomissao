@@ -1767,6 +1767,102 @@ export type Database = {
         }
         Relationships: []
       }
+      relatorio_acionamentos: {
+        Row: {
+          acordos_valor: number
+          alo: number
+          atualizado_em: string
+          atualizado_por: string | null
+          cpc: number
+          cpca: number
+          criado_em: string
+          data: string
+          hora: string
+          id: string
+          tentativas: number
+        }
+        Insert: {
+          acordos_valor?: number
+          alo?: number
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cpc?: number
+          cpca?: number
+          criado_em?: string
+          data: string
+          hora: string
+          id?: string
+          tentativas?: number
+        }
+        Update: {
+          acordos_valor?: number
+          alo?: number
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cpc?: number
+          cpca?: number
+          criado_em?: string
+          data?: string
+          hora?: string
+          id?: string
+          tentativas?: number
+        }
+        Relationships: []
+      }
+      relatorio_acionamentos_log: {
+        Row: {
+          acao: string
+          created_at: string
+          data: string
+          hora: string | null
+          id: string
+          usuario_id: string | null
+          valor_anterior: number | null
+          valor_novo: number | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string
+          data: string
+          hora?: string | null
+          id?: string
+          usuario_id?: string | null
+          valor_anterior?: number | null
+          valor_novo?: number | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string
+          data?: string
+          hora?: string | null
+          id?: string
+          usuario_id?: string | null
+          valor_anterior?: number | null
+          valor_novo?: number | null
+        }
+        Relationships: []
+      }
+      relatorio_acionamentos_meta: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          data: string
+          meta_valor: number
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          data: string
+          meta_valor?: number
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          data?: string
+          meta_valor?: number
+        }
+        Relationships: []
+      }
       relatorio_diario_config: {
         Row: {
           ativo: boolean
@@ -3689,6 +3785,28 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      incrementar_metrica_acionamento: {
+        Args: { p_coluna: string; p_data: string; p_hora: string }
+        Returns: {
+          acordos_valor: number
+          alo: number
+          atualizado_em: string
+          atualizado_por: string | null
+          cpc: number
+          cpca: number
+          criado_em: string
+          data: string
+          hora: string
+          id: string
+          tentativas: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "relatorio_acionamentos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       is_admin_user: { Args: { uid: string }; Returns: boolean }
       listar_credores_distintos: {

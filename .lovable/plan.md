@@ -1,64 +1,63 @@
-## Objetivo
+# Nova aba "Relatórios" — Acionamentos hora a hora
 
-Parar TODAS as automações de aquecimento de WhatsApp para evitar mais banimentos. Nenhum chip será mais usado automaticamente pelo sistema para status, conversas em grupo, reações, completar perfil ou adicionar membros a grupos.
+## Visão geral
+Criar nova página `/relatorios` no menu lateral com tabela horária (8h-19h) de métricas de acionamento, integrada com criação de acordos para somar valores automaticamente.
 
-## O que será desativado
+## Banco de dados (migração)
 
-### 1. Cron jobs (param de rodar imediatamente)
+**Tabela `relatorio_acionamentos`**
+- `data` (DATE), `hora` (TEXT: '8h-9h'...'18h-19h')
+- `tentativas`, `alo`, `cpc`, `cpca` (INTEGER default 0)
+- `acordos_valor` (NUMERIC default 0)
+- `atualizado_por` (UUID → profiles), `atualizado_em`
+- UNIQUE (data, hora)
 
-Os 5 cron jobs de aquecimento serão **desagendados** (`cron.unschedule`):
+**Tabela `relatorio_acionamentos_log`**
+- `usuario_id`, `acao`, `data`, `hora`, `valor_anterior`, `valor_novo`, `created_at`
 
-| Job | Frequência atual | O que fazia |
-|---|---|---|
-| `aquecimento-status-30min` | a cada 30min, 12-21h | Postava status automáticos |
-| `add-to-warming-group-30min` | a cada 30min | Adicionava números em grupos de aquecimento |
-| `aquecimento-grupo-conversa-15min` | a cada 15min | Disparava conversas automáticas em grupos |
-| `aquecimento-status-reagir-5min` | a cada 5min | Visualizava/reagia em status de outros chips |
-| `aquecimento-perfil-completar-diario` | diário 11:30 BRT | Aplicava foto/nome/sobre nos chips |
+**Tabela `relatorio_acionamentos_meta`**
+- `data` (DATE PK), `meta_valor` (NUMERIC), atualizado_por
 
-### 2. Flags de configuração
+**Função RPC `incrementar_metrica_acionamento(p_data, p_hora, p_coluna)`**
+- SECURITY DEFINER. Faz upsert + incremento atômico + grava log. Cooldown server-side opcional (rejeita se mesmo usuário/coluna/hora em <2s).
 
-Também serão setadas como `false` na tabela `whatsapp_aquecimento_config` (cinto e suspensório — caso alguém invoque manualmente as edge functions, elas respeitam essas flags e abortam):
+**Trigger em `acordos` (AFTER INSERT)**
+- Calcula faixa horária a partir de `criado_em` (timezone America/Sao_Paulo)
+- Se entre 8h-19h: upsert + soma `valor_total` em `acordos_valor` da linha correspondente
+- Insere log com `acao='acordo_criado_auto'`
 
-- `postar_status_auto`
-- `engajamento_status_auto`
-- E quaisquer outras chaves de automação de aquecimento existentes
+**RLS / GRANT**
+- `authenticated`: SELECT em todas; INSERT/UPDATE apenas via RPC (security definer)
+- Admin: UPDATE direto em `acordos_valor` e `meta_valor`
+- Log: SELECT só admin; INSERT via função
 
-### 3. Pausar instâncias em aquecimento
+## Frontend
 
-`UPDATE whatsapp_aquecimento_instancias SET status = 'PAUSADO'` em todas as linhas com status `EM_AQUECIMENTO` ou `AQUECIDO`, para que mesmo execuções manuais residuais não disparem nada.
+**`src/pages/Relatorios.tsx`** (nova rota lazy em `App.tsx` dentro de `PermissionRoute`)
+- Header: título com data atual formatada (pt-BR) + subtítulo
+- Card de progresso: "Acordos hoje", "Meta", "% atingido" (barra de progresso)
+- Botões topo: Resetar dia (admin, com confirm), Exportar CSV, Ver relatório anterior (date picker)
+- Tabela 11 linhas + 2 linhas rodapé (TOTAL e MÉDIA)
+  - Células com botão `+` (lucide `Plus`) ao lado do número para tentativas/alo/cpc/cpca
+  - Cooldown client-side 2s por célula (state local com timestamps)
+  - Coluna `$ ACORDOS`: formato R$, editável inline só para admin
+  - Colunas %: calculadas em memória, 2 casas decimais, "0%" quando divisor zero
+  - Destaque 🏆 na hora com maior `acordos_valor`
+- Gráfico de barras (recharts, já no projeto) `acordos_valor` por hora
+- Realtime: subscribe em `postgres_changes` da tabela do dia para atualizar todos clientes
 
-## O que NÃO será mexido
+**Sidebar** (`src/components/layout/AppLayout.tsx`): adicionar item "Relatórios" com ícone (ex.: `BarChart3`), apontando para `/relatorios`. Considerar em `useUserPermissions` para gating não-admin.
 
-- **Código das edge functions** permanece no repositório (não deleta), apenas para de ser chamado. Se um dia você quiser reativar, basta recriar os crons. Posso deletar depois se preferir.
-- **Envio manual de lembretes de acordos / mensagens em massa / inbox** — continua funcionando normalmente. Isso NÃO é aquecimento.
-- **Relatórios diários (19h/20h BRT), notificações admin, chatbot, robôs de acionamento** — continuam.
-- **Tabelas de aquecimento, calendário, diálogos, imagens de status, grupos cadastrados** — preservadas (dados intactos, só não rodam).
+**CSV export**: gerar localmente com as linhas do dia (sem precisar de lib extra).
 
-## Como será executado
+## Pontos de atenção
+- Trigger no `acordos` deve usar timezone `America/Sao_Paulo` para a faixa horária
+- RPC de incremento é única via de escrita do funcionário (mantém log e atomicidade)
+- Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.relatorio_acionamentos;`
+- Médias ignoram horas com divisor zero (média apenas das horas com valor válido)
 
-Via `supabase--insert` (operação de dados, não migração):
-
-```sql
-SELECT cron.unschedule('aquecimento-status-30min');
-SELECT cron.unschedule('add-to-warming-group-30min');
-SELECT cron.unschedule('aquecimento-grupo-conversa-15min');
-SELECT cron.unschedule('aquecimento-status-reagir-5min');
-SELECT cron.unschedule('aquecimento-perfil-completar-diario');
-
-UPDATE whatsapp_aquecimento_config
-SET valor = 'false'
-WHERE chave IN ('postar_status_auto','engajamento_status_auto', ...);
-
-UPDATE whatsapp_aquecimento_instancias
-SET status = 'PAUSADO', updated_at = now()
-WHERE status IN ('EM_AQUECIMENTO','AQUECIDO','AGUARDANDO_MATURACAO');
-```
-
-## Resultado
-
-A partir da aprovação: zero ações automáticas vindas dos chips. Você passa a controlar 100% manualmente o que cada número envia.
-
-## Pergunta opcional
-
-Quer que eu também **remova os botões/abas de aquecimento** do menu da página `/aquecimento` (esconder a UI), ou deixar a UI visível só pra você consultar histórico? Por padrão vou **manter a UI visível** (somente leitura na prática, já que nada roda).
+## Arquivos
+- `supabase/migrations/<novo>.sql` — tabelas, GRANTs, RLS, RPC, trigger, publication
+- `src/pages/Relatorios.tsx` — nova página
+- `src/App.tsx` — rota lazy
+- `src/components/layout/AppLayout.tsx` — item de menu

@@ -46,6 +46,8 @@ const Aquecimento = lazy(() => import("./pages/Aquecimento"));
 const MonitorEnvios = lazy(() => import("./pages/MonitorEnvios"));
 const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 
+const Relatorios = lazy(() => import("./pages/Relatorios"));
+
 const queryClient = new QueryClient();
 
 const PageFallback = () => (
@@ -192,6 +194,7 @@ const App = () => (
             <Route path="/aquecimento" element={<ProtectedRoute><Aquecimento /></ProtectedRoute>} />
             <Route path="/monitor-envios" element={<PermissionRoute><MonitorEnvios /></PermissionRoute>} />
             <Route path="/admin/exportar-dados" element={<PermissionRoute><ExportarDados /></PermissionRoute>} />
+            <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
