@@ -25,7 +25,8 @@ import {
   Volume2,
   Flame,
   Activity,
-  Download
+  Download,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -86,6 +87,7 @@ const navItems: NavItem[] = [
   { href: '/aquecimento', label: 'Aquecimento', icon: Flame },
   { href: '/monitor-envios', label: 'Monitor Envios', icon: Activity, adminOnly: true },
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },
+  { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
