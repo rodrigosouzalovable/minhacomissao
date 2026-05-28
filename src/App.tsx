@@ -46,9 +46,10 @@ const Aquecimento = lazy(() => import("./pages/Aquecimento"));
 const MonitorEnvios = lazy(() => import("./pages/MonitorEnvios"));
 const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 
-const queryClient = new QueryClient();
-const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 const Relatorios = lazy(() => import("./pages/Relatorios"));
+
+const queryClient = new QueryClient();
+
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center">Carregando...</div>
 );
