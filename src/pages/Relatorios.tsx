@@ -375,15 +375,36 @@ export default function Relatorios() {
                       </td>
                       {(['tentativas','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
                         <td key={col} className="p-2">
-                          <div className="flex items-center gap-1">
-                            <span className="tabular-nums w-10">{l[col]}</span>
-                            <Button
-                              size="icon" variant="outline" className="h-6 w-6"
-                              onClick={() => incrementar(h, col)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          {col === 'tentativas' && editingTentativas === h && isAdmin ? (
+                            <div className="flex gap-1">
+                              <Input
+                                type="number" value={tentativasInput}
+                                onChange={(e) => setTentativasInput(e.target.value)}
+                                className="w-20 h-7" autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') salvarTentativas(h);
+                                  if (e.key === 'Escape') setEditingTentativas(null);
+                                }}
+                              />
+                              <Button size="sm" className="h-7" onClick={() => salvarTentativas(h)}>OK</Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <span className="tabular-nums w-10">{l[col]}</span>
+                              <Button
+                                size="icon" variant="outline" className="h-6 w-6"
+                                onClick={() => incrementar(h, col)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                              {col === 'tentativas' && isAdmin && (
+                                <Button size="icon" variant="ghost" className="h-6 w-6"
+                                  onClick={() => { setTentativasInput(String(l.tentativas)); setEditingTentativas(h); }}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       ))}
                       <td className="p-2">
