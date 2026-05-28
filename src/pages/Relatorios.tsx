@@ -58,6 +58,8 @@ export default function Relatorios() {
   const [metaInput, setMetaInput] = useState('');
   const [editingValor, setEditingValor] = useState<string | null>(null);
   const [valorInput, setValorInput] = useState('');
+  const [editingTentativas, setEditingTentativas] = useState<string | null>(null);
+  const [tentativasInput, setTentativasInput] = useState('');
   const cooldownRef = useRef<Record<string, number>>({});
 
   const dataStr = toDateStr(data);
@@ -195,6 +197,23 @@ export default function Relatorios() {
     setEditingValor(null);
     load();
   };
+
+  const salvarTentativas = async (hora: string) => {
+    const v = Math.max(0, Math.floor(Number(tentativasInput.replace(',', '.')) || 0));
+    const anterior = linhas[hora]?.tentativas ?? 0;
+    const { error } = await supabase
+      .from('relatorio_acionamentos' as any)
+      .upsert({ data: dataStr, hora, tentativas: v } as any, { onConflict: 'data,hora' });
+    if (error) { toast.error(error.message); return; }
+    await supabase.from('relatorio_acionamentos_log' as any).insert({
+      acao: 'edicao_tentativas', data: dataStr, hora,
+      valor_anterior: anterior, valor_novo: v,
+    } as any);
+    setEditingTentativas(null);
+    toast.success('Tentativas atualizadas');
+    load();
+  };
+
 
   const exportCSV = () => {
     const rows = [
@@ -356,15 +375,36 @@ export default function Relatorios() {
                       </td>
                       {(['tentativas','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
                         <td key={col} className="p-2">
-                          <div className="flex items-center gap-1">
-                            <span className="tabular-nums w-10">{l[col]}</span>
-                            <Button
-                              size="icon" variant="outline" className="h-6 w-6"
-                              onClick={() => incrementar(h, col)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          {col === 'tentativas' && editingTentativas === h && isAdmin ? (
+                            <div className="flex gap-1">
+                              <Input
+                                type="number" value={tentativasInput}
+                                onChange={(e) => setTentativasInput(e.target.value)}
+                                className="w-20 h-7" autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') salvarTentativas(h);
+                                  if (e.key === 'Escape') setEditingTentativas(null);
+                                }}
+                              />
+                              <Button size="sm" className="h-7" onClick={() => salvarTentativas(h)}>OK</Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <span className="tabular-nums w-10">{l[col]}</span>
+                              <Button
+                                size="icon" variant="outline" className="h-6 w-6"
+                                onClick={() => incrementar(h, col)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                              {col === 'tentativas' && isAdmin && (
+                                <Button size="icon" variant="ghost" className="h-6 w-6"
+                                  onClick={() => { setTentativasInput(String(l.tentativas)); setEditingTentativas(h); }}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       ))}
                       <td className="p-2">
