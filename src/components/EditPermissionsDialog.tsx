@@ -42,6 +42,7 @@ const AVAILABLE_TABS = [
   { path: '/campanhas-voz', label: 'Campanhas de Voz' },
   { path: '/inbox', label: 'WhatsApp Inbox' },
   { path: '/aquecimento', label: 'Aquecimento' },
+  { path: '/relatorios', label: 'Relatórios' },
 ];
 
 const CREDORES = [
