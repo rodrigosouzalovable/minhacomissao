@@ -114,8 +114,12 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
 
   const confirmar = async () => {
     if (!resumo || !dataAlvo) return;
-    const iniIdx = HORAS.indexOf(faixaIni);
-    const fimIdx = HORAS.indexOf(faixaFim);
+    if (horaFim <= horaIni) {
+      toast.error('Hora final deve ser maior que a hora inicial');
+      return;
+    }
+    const iniIdx = horaIni - 8;
+    const fimIdx = horaFim - 1 - 8;
     if (iniIdx < 0 || fimIdx < 0 || iniIdx > fimIdx) {
       toast.error('Intervalo de horários inválido');
       return;
