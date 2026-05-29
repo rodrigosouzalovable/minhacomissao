@@ -220,11 +220,11 @@ export default function Relatorios() {
 
   const exportCSV = () => {
     const rows = [
-      ['HORA','TENTATIVAS','ALO','CPC','CPC-A','$ ACORDOS','% ALO','% CPC','% CONVERSAO'],
+      ['HORA','TENTATIVAS','WHATSAPP','ALO','CPC','CPC-A','$ ACORDOS','% ALO','% CPC','% CONVERSAO'],
       ...HORAS.map(h => {
         const l = linhas[h];
         return [
-          h, l.tentativas, l.alo, l.cpc, l.cpca,
+          h, l.tentativas, l.whatsapp, l.alo, l.cpc, l.cpca,
           l.acordos_valor.toFixed(2).replace('.', ','),
           fmtPct(l.alo, l.tentativas),
           fmtPct(l.cpc, l.alo),
