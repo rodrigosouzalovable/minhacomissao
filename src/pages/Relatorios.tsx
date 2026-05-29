@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ImportarLigacoesDialog } from '@/components/relatorios/ImportarLigacoesDialog';
 
 const HORAS = [
   '8h-9h', '9h-10h', '10h-11h', '11h-12h', '12h-13h', '13h-14h',
