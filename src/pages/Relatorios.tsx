@@ -375,18 +375,18 @@ export default function Relatorios() {
                       </td>
                       {(['tentativas','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
                         <td key={col} className="p-2">
-                          {col === 'tentativas' && editingTentativas === h && isAdmin ? (
+                          {editingCol?.hora === h && editingCol?.col === col && isAdmin ? (
                             <div className="flex gap-1">
                               <Input
-                                type="number" value={tentativasInput}
-                                onChange={(e) => setTentativasInput(e.target.value)}
+                                type="number" value={colInput}
+                                onChange={(e) => setColInput(e.target.value)}
                                 className="w-20 h-7" autoFocus
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') salvarTentativas(h);
-                                  if (e.key === 'Escape') setEditingTentativas(null);
+                                  if (e.key === 'Enter') salvarColuna(h, col);
+                                  if (e.key === 'Escape') setEditingCol(null);
                                 }}
                               />
-                              <Button size="sm" className="h-7" onClick={() => salvarTentativas(h)}>OK</Button>
+                              <Button size="sm" className="h-7" onClick={() => salvarColuna(h, col)}>OK</Button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-1">
@@ -397,9 +397,9 @@ export default function Relatorios() {
                               >
                                 <Plus className="h-3 w-3" />
                               </Button>
-                              {col === 'tentativas' && isAdmin && (
+                              {isAdmin && (
                                 <Button size="icon" variant="ghost" className="h-6 w-6"
-                                  onClick={() => { setTentativasInput(String(l.tentativas)); setEditingTentativas(h); }}>
+                                  onClick={() => { setColInput(String(l[col])); setEditingCol({ hora: h, col }); }}>
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                               )}
