@@ -130,6 +130,7 @@ export default function Relatorios() {
     const arr = HORAS.map(h => linhas[h]).filter(Boolean);
     return {
       tentativas: arr.reduce((s, l) => s + l.tentativas, 0),
+      whatsapp: arr.reduce((s, l) => s + l.whatsapp, 0),
       alo: arr.reduce((s, l) => s + l.alo, 0),
       cpc: arr.reduce((s, l) => s + l.cpc, 0),
       cpca: arr.reduce((s, l) => s + l.cpca, 0),
