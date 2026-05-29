@@ -281,6 +281,7 @@ export default function Relatorios() {
             <Button variant="outline" size="sm" onClick={exportCSV}>
               <Download className="h-4 w-4 mr-2" /> Exportar CSV
             </Button>
+            {isAdmin && <ImportarLigacoesDialog onDone={load} />}
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
