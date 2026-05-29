@@ -51,15 +51,15 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
   const [loading, setLoading] = useState(false);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [dataAlvo, setDataAlvo] = useState('');
-  const [faixaIni, setFaixaIni] = useState('8h-9h');
-  const [faixaFim, setFaixaFim] = useState('18h-19h');
+  const [horaIni, setHoraIni] = useState(8);
+  const [horaFim, setHoraFim] = useState(19);
   const [modo, setModo] = useState<'substituir' | 'somar'>('substituir');
 
   const reset = () => {
     setResumo(null);
     setDataAlvo('');
-    setFaixaIni('8h-9h');
-    setFaixaFim('18h-19h');
+    setHoraIni(8);
+    setHoraFim(19);
     setModo('substituir');
   };
 
@@ -114,8 +114,12 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
 
   const confirmar = async () => {
     if (!resumo || !dataAlvo) return;
-    const iniIdx = HORAS.indexOf(faixaIni);
-    const fimIdx = HORAS.indexOf(faixaFim);
+    if (horaFim <= horaIni) {
+      toast.error('Hora final deve ser maior que a hora inicial');
+      return;
+    }
+    const iniIdx = horaIni - 8;
+    const fimIdx = horaFim - 1 - 8;
     if (iniIdx < 0 || fimIdx < 0 || iniIdx > fimIdx) {
       toast.error('Intervalo de horários inválido');
       return;
@@ -244,20 +248,24 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
                 <Input type="date" value={dataAlvo} onChange={(e) => setDataAlvo(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">Faixa inicial</Label>
-                <Select value={faixaIni} onValueChange={setFaixaIni}>
+                <Label className="text-xs">Hora inicial</Label>
+                <Select value={String(horaIni)} onValueChange={(v) => setHoraIni(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {HORAS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                    {[8,9,10,11,12,13,14,15,16,17,18].map(h => (
+                      <SelectItem key={h} value={String(h)}>{String(h).padStart(2,'0')}h</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Faixa final</Label>
-                <Select value={faixaFim} onValueChange={setFaixaFim}>
+                <Label className="text-xs">Hora final</Label>
+                <Select value={String(horaFim)} onValueChange={(v) => setHoraFim(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {HORAS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                    {[9,10,11,12,13,14,15,16,17,18,19].map(h => (
+                      <SelectItem key={h} value={String(h)}>{String(h).padStart(2,'0')}h</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
