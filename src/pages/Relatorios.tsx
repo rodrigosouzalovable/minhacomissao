@@ -58,8 +58,8 @@ export default function Relatorios() {
   const [metaInput, setMetaInput] = useState('');
   const [editingValor, setEditingValor] = useState<string | null>(null);
   const [valorInput, setValorInput] = useState('');
-  const [editingTentativas, setEditingTentativas] = useState<string | null>(null);
-  const [tentativasInput, setTentativasInput] = useState('');
+  const [editingCol, setEditingCol] = useState<{ hora: string; col: ColunaIncr } | null>(null);
+  const [colInput, setColInput] = useState('');
   const cooldownRef = useRef<Record<string, number>>({});
 
   const dataStr = toDateStr(data);
@@ -198,19 +198,19 @@ export default function Relatorios() {
     load();
   };
 
-  const salvarTentativas = async (hora: string) => {
-    const v = Math.max(0, Math.floor(Number(tentativasInput.replace(',', '.')) || 0));
-    const anterior = linhas[hora]?.tentativas ?? 0;
+  const salvarColuna = async (hora: string, col: ColunaIncr) => {
+    const v = Math.max(0, Math.floor(Number(colInput.replace(',', '.')) || 0));
+    const anterior = (linhas[hora]?.[col] as number) ?? 0;
     const { error } = await supabase
       .from('relatorio_acionamentos' as any)
-      .upsert({ data: dataStr, hora, tentativas: v } as any, { onConflict: 'data,hora' });
+      .upsert({ data: dataStr, hora, [col]: v } as any, { onConflict: 'data,hora' });
     if (error) { toast.error(error.message); return; }
     await supabase.from('relatorio_acionamentos_log' as any).insert({
-      acao: 'edicao_tentativas', data: dataStr, hora,
+      acao: 'edicao_' + col, data: dataStr, hora,
       valor_anterior: anterior, valor_novo: v,
     } as any);
-    setEditingTentativas(null);
-    toast.success('Tentativas atualizadas');
+    setEditingCol(null);
+    toast.success('Valor atualizado');
     load();
   };
 
@@ -375,18 +375,18 @@ export default function Relatorios() {
                       </td>
                       {(['tentativas','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
                         <td key={col} className="p-2">
-                          {col === 'tentativas' && editingTentativas === h && isAdmin ? (
+                          {editingCol?.hora === h && editingCol?.col === col && isAdmin ? (
                             <div className="flex gap-1">
                               <Input
-                                type="number" value={tentativasInput}
-                                onChange={(e) => setTentativasInput(e.target.value)}
+                                type="number" value={colInput}
+                                onChange={(e) => setColInput(e.target.value)}
                                 className="w-20 h-7" autoFocus
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') salvarTentativas(h);
-                                  if (e.key === 'Escape') setEditingTentativas(null);
+                                  if (e.key === 'Enter') salvarColuna(h, col);
+                                  if (e.key === 'Escape') setEditingCol(null);
                                 }}
                               />
-                              <Button size="sm" className="h-7" onClick={() => salvarTentativas(h)}>OK</Button>
+                              <Button size="sm" className="h-7" onClick={() => salvarColuna(h, col)}>OK</Button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-1">
@@ -397,9 +397,9 @@ export default function Relatorios() {
                               >
                                 <Plus className="h-3 w-3" />
                               </Button>
-                              {col === 'tentativas' && isAdmin && (
+                              {isAdmin && (
                                 <Button size="icon" variant="ghost" className="h-6 w-6"
-                                  onClick={() => { setTentativasInput(String(l.tentativas)); setEditingTentativas(h); }}>
+                                  onClick={() => { setColInput(String(l[col])); setEditingCol({ hora: h, col }); }}>
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                               )}
