@@ -1,0 +1,300 @@
+import { useState } from 'react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Upload, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+
+const HORAS = [
+  '8h-9h', '9h-10h', '10h-11h', '11h-12h', '12h-13h', '13h-14h',
+  '14h-15h', '15h-16h', '16h-17h', '17h-18h', '18h-19h',
+];
+
+const horaParaFaixa = (h: number) => `${h}h-${h + 1}h`;
+
+type Resumo = {
+  total: number;
+  validas: number;
+  ignoradas: number;
+  foraExpediente: number;
+  dataDetectada: string; // yyyy-MM-dd
+  contagem: Record<string, number>; // faixa -> count
+};
+
+type Props = {
+  onDone: () => void;
+};
+
+// Parse "DD/MM/YYYY HH:MM:SS" → {date: yyyy-mm-dd, hour: number}
+function parseCallDate(raw: string): { dataIso: string; hora: number } | null {
+  if (!raw) return null;
+  const s = String(raw).trim().replace(/^"|"$/g, '');
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh] = m;
+  return {
+    dataIso: `${yyyy}-${mm}-${dd}`,
+    hora: parseInt(hh, 10),
+  };
+}
+
+export function ImportarLigacoesDialog({ onDone }: Props) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [resumo, setResumo] = useState<Resumo | null>(null);
+  const [dataAlvo, setDataAlvo] = useState('');
+  const [faixaIni, setFaixaIni] = useState('8h-9h');
+  const [faixaFim, setFaixaFim] = useState('18h-19h');
+  const [modo, setModo] = useState<'substituir' | 'somar'>('substituir');
+
+  const reset = () => {
+    setResumo(null);
+    setDataAlvo('');
+    setFaixaIni('8h-9h');
+    setFaixaFim('18h-19h');
+    setModo('substituir');
+  };
+
+  const handleFile = async (file: File) => {
+    setLoading(true);
+    try {
+      const XLSX = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', raw: true, FS: ';' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      if (rows.length < 2) {
+        toast.error('Planilha vazia');
+        return;
+      }
+
+      const header = rows[0].map((c: any) => String(c).trim().toLowerCase());
+      let idx = header.findIndex(h => h === 'call_date' || h === 'calldate' || h === 'data_chamada');
+      if (idx < 0) idx = 37; // fallback: coluna AL
+
+      let total = 0, validas = 0, ignoradas = 0, foraExp = 0;
+      const contagem: Record<string, number> = {};
+      HORAS.forEach(h => { contagem[h] = 0; });
+      const datasMap: Record<string, number> = {};
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+        total++;
+        const raw = row[idx];
+        const parsed = parseCallDate(String(raw ?? ''));
+        if (!parsed) { ignoradas++; continue; }
+        validas++;
+        datasMap[parsed.dataIso] = (datasMap[parsed.dataIso] || 0) + 1;
+        if (parsed.hora < 8 || parsed.hora > 18) {
+          foraExp++;
+        } else {
+          contagem[horaParaFaixa(parsed.hora)]++;
+        }
+      }
+
+      const dataDetectada = Object.entries(datasMap).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+      setResumo({ total, validas, ignoradas, foraExpediente: foraExp, dataDetectada, contagem });
+      setDataAlvo(dataDetectada);
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Erro ao ler planilha: ' + (e?.message ?? 'desconhecido'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmar = async () => {
+    if (!resumo || !dataAlvo) return;
+    const iniIdx = HORAS.indexOf(faixaIni);
+    const fimIdx = HORAS.indexOf(faixaFim);
+    if (iniIdx < 0 || fimIdx < 0 || iniIdx > fimIdx) {
+      toast.error('Intervalo de horários inválido');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Carrega valores atuais para "somar" e para log
+      const { data: existentes } = await supabase
+        .from('relatorio_acionamentos' as any)
+        .select('hora, tentativas')
+        .eq('data', dataAlvo);
+      const atuais: Record<string, number> = {};
+      (existentes as any[] | null)?.forEach(r => { atuais[r.hora] = r.tentativas ?? 0; });
+
+      let faixasAtualizadas = 0;
+      let totalLigacoes = 0;
+
+      for (let i = iniIdx; i <= fimIdx; i++) {
+        const h = HORAS[i];
+        const importado = resumo.contagem[h] ?? 0;
+        const anterior = atuais[h] ?? 0;
+        const novo = modo === 'substituir' ? importado : anterior + importado;
+        if (novo === anterior) continue;
+
+        const { error } = await supabase
+          .from('relatorio_acionamentos' as any)
+          .upsert({ data: dataAlvo, hora: h, tentativas: novo } as any, { onConflict: 'data,hora' });
+        if (error) throw error;
+
+        await supabase.from('relatorio_acionamentos_log' as any).insert({
+          acao: 'importacao_planilha_tentativas',
+          data: dataAlvo, hora: h,
+          valor_anterior: anterior, valor_novo: novo,
+        } as any);
+        faixasAtualizadas++;
+        totalLigacoes += importado;
+      }
+
+      toast.success(`${faixasAtualizadas} faixa(s) atualizada(s) — ${totalLigacoes} ligações importadas`);
+      setOpen(false);
+      reset();
+      onDone();
+    } catch (e: any) {
+      toast.error('Erro ao salvar: ' + (e?.message ?? 'desconhecido'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Upload className="h-4 w-4 mr-2" /> Importar planilha
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Importar planilha de ligações</DialogTitle>
+        </DialogHeader>
+
+        {!resumo ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Envie o arquivo <strong>.csv</strong> ou <strong>.xlsx</strong> da operação.
+              O sistema lê a coluna <code>call_date</code> (coluna AL) e conta as ligações por faixa horária.
+            </p>
+            <Input
+              type="file" accept=".csv,.xlsx,.xls"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+              disabled={loading}
+            />
+            {loading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Processando planilha...
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="rounded border p-2">
+                <p className="text-muted-foreground text-xs">Total de linhas</p>
+                <p className="font-bold">{resumo.total}</p>
+              </div>
+              <div className="rounded border p-2">
+                <p className="text-muted-foreground text-xs">Válidas</p>
+                <p className="font-bold text-green-600">{resumo.validas}</p>
+              </div>
+              <div className="rounded border p-2">
+                <p className="text-muted-foreground text-xs">Ignoradas</p>
+                <p className="font-bold text-yellow-600">{resumo.ignoradas}</p>
+              </div>
+              <div className="rounded border p-2">
+                <p className="text-muted-foreground text-xs">Fora do expediente</p>
+                <p className="font-bold text-orange-600">{resumo.foraExpediente}</p>
+              </div>
+            </div>
+
+            <div className="rounded border max-h-48 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="p-2 text-left">Faixa</th>
+                    <th className="p-2 text-right">Ligações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {HORAS.map(h => (
+                    <tr key={h} className="border-t">
+                      <td className="p-2">{h}</td>
+                      <td className="p-2 text-right tabular-nums">{resumo.contagem[h]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">Data alvo</Label>
+                <Input type="date" value={dataAlvo} onChange={(e) => setDataAlvo(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Faixa inicial</Label>
+                <Select value={faixaIni} onValueChange={setFaixaIni}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {HORAS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Faixa final</Label>
+                <Select value={faixaFim} onValueChange={setFaixaFim}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {HORAS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Modo de gravação</Label>
+              <RadioGroup value={modo} onValueChange={(v) => setModo(v as any)} className="flex gap-4 mt-2">
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="substituir" id="m-sub" />
+                  <Label htmlFor="m-sub" className="font-normal cursor-pointer">
+                    Substituir (define o valor exato)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="somar" id="m-som" />
+                  <Label htmlFor="m-som" className="font-normal cursor-pointer">
+                    Somar ao valor atual
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          {resumo && (
+            <>
+              <Button variant="ghost" onClick={reset} disabled={loading}>Trocar arquivo</Button>
+              <Button onClick={confirmar} disabled={loading || !dataAlvo}>
+                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Confirmar importação
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
