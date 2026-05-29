@@ -32,13 +32,14 @@ type Linha = {
   data: string;
   hora: string;
   tentativas: number;
+  whatsapp: number;
   alo: number;
   cpc: number;
   cpca: number;
   acordos_valor: number;
 };
 
-type ColunaIncr = 'tentativas' | 'alo' | 'cpc' | 'cpca';
+type ColunaIncr = 'tentativas' | 'whatsapp' | 'alo' | 'cpc' | 'cpca';
 
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
