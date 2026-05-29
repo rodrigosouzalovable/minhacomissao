@@ -248,20 +248,24 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
                 <Input type="date" value={dataAlvo} onChange={(e) => setDataAlvo(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">Faixa inicial</Label>
-                <Select value={faixaIni} onValueChange={setFaixaIni}>
+                <Label className="text-xs">Hora inicial</Label>
+                <Select value={String(horaIni)} onValueChange={(v) => setHoraIni(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {HORAS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                    {[8,9,10,11,12,13,14,15,16,17,18].map(h => (
+                      <SelectItem key={h} value={String(h)}>{String(h).padStart(2,'0')}h</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Faixa final</Label>
-                <Select value={faixaFim} onValueChange={setFaixaFim}>
+                <Label className="text-xs">Hora final</Label>
+                <Select value={String(horaFim)} onValueChange={(v) => setHoraFim(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {HORAS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                    {[9,10,11,12,13,14,15,16,17,18,19].map(h => (
+                      <SelectItem key={h} value={String(h)}>{String(h).padStart(2,'0')}h</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
