@@ -357,6 +357,7 @@ export default function Relatorios() {
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="p-2">HORA</th>
                   <th className="p-2">TENTATIVAS</th>
+                  <th className="p-2">WHATSAPP</th>
                   <th className="p-2">ALO</th>
                   <th className="p-2">CPC</th>
                   <th className="p-2">CPC-A</th>
