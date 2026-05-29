@@ -378,7 +378,7 @@ export default function Relatorios() {
                         {isTop && <Trophy className="inline h-4 w-4 mr-1 text-yellow-500" />}
                         {h}
                       </td>
-                      {(['tentativas','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
+                      {(['tentativas','whatsapp','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
                         <td key={col} className="p-2">
                           {editingCol?.hora === h && editingCol?.col === col && isAdmin ? (
                             <div className="flex gap-1">
