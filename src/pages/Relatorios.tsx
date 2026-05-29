@@ -58,8 +58,8 @@ export default function Relatorios() {
   const [metaInput, setMetaInput] = useState('');
   const [editingValor, setEditingValor] = useState<string | null>(null);
   const [valorInput, setValorInput] = useState('');
-  const [editingTentativas, setEditingTentativas] = useState<string | null>(null);
-  const [tentativasInput, setTentativasInput] = useState('');
+  const [editingCol, setEditingCol] = useState<{ hora: string; col: ColunaIncr } | null>(null);
+  const [colInput, setColInput] = useState('');
   const cooldownRef = useRef<Record<string, number>>({});
 
   const dataStr = toDateStr(data);
