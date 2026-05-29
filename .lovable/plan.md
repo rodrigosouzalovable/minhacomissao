@@ -1,63 +1,41 @@
-# Nova aba "Relatórios" — Acionamentos hora a hora
+## Importação de planilha de ligações na aba Relatórios
 
-## Visão geral
-Criar nova página `/relatorios` no menu lateral com tabela horária (8h-19h) de métricas de acionamento, integrada com criação de acordos para somar valores automaticamente.
+Sim, é totalmente possível. A planilha (CSV separado por `;`) tem a coluna **`call_date`** (coluna AL) no formato `"29/05/2026 07:59:58"` — basta o sistema ler essa coluna, agrupar por faixa horária e gravar na coluna **TENTATIVAS** do dia.
 
-## Banco de dados (migração)
+### O que vou adicionar (somente admin)
 
-**Tabela `relatorio_acionamentos`**
-- `data` (DATE), `hora` (TEXT: '8h-9h'...'18h-19h')
-- `tentativas`, `alo`, `cpc`, `cpca` (INTEGER default 0)
-- `acordos_valor` (NUMERIC default 0)
-- `atualizado_por` (UUID → profiles), `atualizado_em`
-- UNIQUE (data, hora)
+Na página `/relatorios`, novo botão **"Importar planilha de ligações"** ao lado dos botões existentes (Exportar CSV / Resetar dia).
 
-**Tabela `relatorio_acionamentos_log`**
-- `usuario_id`, `acao`, `data`, `hora`, `valor_anterior`, `valor_novo`, `created_at`
+### Fluxo ao clicar no botão
 
-**Tabela `relatorio_acionamentos_meta`**
-- `data` (DATE PK), `meta_valor` (NUMERIC), atualizado_por
+1. Abre um dialog para escolher arquivo (`.csv`, `.xlsx`, `.xls`).
+2. Sistema lê o arquivo **no navegador** (usa `xlsx` que já está no projeto e suporta CSV com `;`).
+3. Detecta automaticamente a coluna `call_date` (fallback: coluna AL / índice 37 se o cabeçalho mudar).
+4. Faz o parse das datas no formato `DD/MM/YYYY HH:MM:SS` e mostra um **resumo prévio**:
+   - Data detectada na planilha (ex.: 29/05/2026)
+   - Total de linhas lidas / linhas com data válida / ignoradas
+   - Contagem por cada faixa horária (8h-9h, 9h-10h … 18h-19h)
+5. Usuário escolhe:
+   - **Faixa inicial** (select: 8h-9h … 18h-19h)
+   - **Faixa final** (select: 8h-9h … 18h-19h)
+   - **Data alvo** (default = data detectada na planilha, editável)
+   - **Modo**: `Substituir` (define o valor exato) ou `Somar` (adiciona ao valor atual)
+6. Botão **Confirmar** — para cada faixa no intervalo escolhido, grava em `relatorio_acionamentos.tentativas` via upsert e registra um log em `relatorio_acionamentos_log` com `acao = 'importacao_planilha_tentativas'`.
 
-**Função RPC `incrementar_metrica_acionamento(p_data, p_hora, p_coluna)`**
-- SECURITY DEFINER. Faz upsert + incremento atômico + grava log. Cooldown server-side opcional (rejeita se mesmo usuário/coluna/hora em <2s).
+### Regras de parsing
 
-**Trigger em `acordos` (AFTER INSERT)**
-- Calcula faixa horária a partir de `criado_em` (timezone America/Sao_Paulo)
-- Se entre 8h-19h: upsert + soma `valor_total` em `acordos_valor` da linha correspondente
-- Insere log com `acao='acordo_criado_auto'`
+- Cabeçalho da coluna: procurar por `call_date` (case-insensitive). Se não achar, usar a 38ª coluna (índice 37 = AL).
+- Linhas sem `call_date` válido são descartadas (contabilizadas em "ignoradas").
+- Faixa horária = hora cheia do `call_date` (ex.: `09:47:12` → faixa `9h-10h`). Linhas fora de 8h–19h ficam em "fora do expediente" (mostradas, mas não gravadas).
+- Toast de sucesso ao final com resumo: "X faixas atualizadas, Y ligações importadas".
 
-**RLS / GRANT**
-- `authenticated`: SELECT em todas; INSERT/UPDATE apenas via RPC (security definer)
-- Admin: UPDATE direto em `acordos_valor` e `meta_valor`
-- Log: SELECT só admin; INSERT via função
+### Arquivos afetados
 
-## Frontend
+- `src/pages/Relatorios.tsx` — botão + novo dialog de importação (componente inline ou separado).
+- Sem migração de banco — usa as tabelas e a estrutura que já existem.
+- Sem custo extra de Lovable Cloud (processamento no navegador, apenas writes pontuais no Postgres).
 
-**`src/pages/Relatorios.tsx`** (nova rota lazy em `App.tsx` dentro de `PermissionRoute`)
-- Header: título com data atual formatada (pt-BR) + subtítulo
-- Card de progresso: "Acordos hoje", "Meta", "% atingido" (barra de progresso)
-- Botões topo: Resetar dia (admin, com confirm), Exportar CSV, Ver relatório anterior (date picker)
-- Tabela 11 linhas + 2 linhas rodapé (TOTAL e MÉDIA)
-  - Células com botão `+` (lucide `Plus`) ao lado do número para tentativas/alo/cpc/cpca
-  - Cooldown client-side 2s por célula (state local com timestamps)
-  - Coluna `$ ACORDOS`: formato R$, editável inline só para admin
-  - Colunas %: calculadas em memória, 2 casas decimais, "0%" quando divisor zero
-  - Destaque 🏆 na hora com maior `acordos_valor`
-- Gráfico de barras (recharts, já no projeto) `acordos_valor` por hora
-- Realtime: subscribe em `postgres_changes` da tabela do dia para atualizar todos clientes
+### Pontos a confirmar
 
-**Sidebar** (`src/components/layout/AppLayout.tsx`): adicionar item "Relatórios" com ícone (ex.: `BarChart3`), apontando para `/relatorios`. Considerar em `useUserPermissions` para gating não-admin.
-
-**CSV export**: gerar localmente com as linhas do dia (sem precisar de lib extra).
-
-## Pontos de atenção
-- Trigger no `acordos` deve usar timezone `America/Sao_Paulo` para a faixa horária
-- RPC de incremento é única via de escrita do funcionário (mantém log e atomicidade)
-- Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.relatorio_acionamentos;`
-- Médias ignoram horas com divisor zero (média apenas das horas com valor válido)
-
-## Arquivos
-- `supabase/migrations/<novo>.sql` — tabelas, GRANTs, RLS, RPC, trigger, publication
-- `src/pages/Relatorios.tsx` — nova página
-- `src/App.tsx` — rota lazy
-- `src/components/layout/AppLayout.tsx` — item de menu
+- Os horários da planilha estão no fuso de Brasília? (Assumo que sim — é o mesmo fuso da aba Relatórios.)
+- Modo padrão deve ser **Substituir** ou **Somar**? (Proponho **Substituir** como default, já que você importa a planilha completa do dia/período.)
