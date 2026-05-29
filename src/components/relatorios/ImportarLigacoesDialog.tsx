@@ -51,15 +51,15 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
   const [loading, setLoading] = useState(false);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [dataAlvo, setDataAlvo] = useState('');
-  const [faixaIni, setFaixaIni] = useState('8h-9h');
-  const [faixaFim, setFaixaFim] = useState('18h-19h');
+  const [horaIni, setHoraIni] = useState(8);
+  const [horaFim, setHoraFim] = useState(19);
   const [modo, setModo] = useState<'substituir' | 'somar'>('substituir');
 
   const reset = () => {
     setResumo(null);
     setDataAlvo('');
-    setFaixaIni('8h-9h');
-    setFaixaFim('18h-19h');
+    setHoraIni(8);
+    setHoraFim(19);
     setModo('substituir');
   };
 
