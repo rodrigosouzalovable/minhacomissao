@@ -73,13 +73,13 @@ export default function Relatorios() {
     ]);
     const map: Record<string, Linha> = {};
     HORAS.forEach(h => {
-      map[h] = { data: dataStr, hora: h, tentativas: 0, alo: 0, cpc: 0, cpca: 0, acordos_valor: 0 };
+      map[h] = { data: dataStr, hora: h, tentativas: 0, whatsapp: 0, alo: 0, cpc: 0, cpca: 0, acordos_valor: 0 };
     });
     (rRes.data as any[] | null)?.forEach(r => {
       if (map[r.hora]) {
         map[r.hora] = {
           id: r.id, data: r.data, hora: r.hora,
-          tentativas: r.tentativas, alo: r.alo, cpc: r.cpc, cpca: r.cpca,
+          tentativas: r.tentativas, whatsapp: r.whatsapp ?? 0, alo: r.alo, cpc: r.cpc, cpca: r.cpca,
           acordos_valor: Number(r.acordos_valor),
         };
       }
