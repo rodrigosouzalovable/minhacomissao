@@ -1780,6 +1780,7 @@ export type Database = {
           hora: string
           id: string
           tentativas: number
+          whatsapp: number
         }
         Insert: {
           acordos_valor?: number
@@ -1793,6 +1794,7 @@ export type Database = {
           hora: string
           id?: string
           tentativas?: number
+          whatsapp?: number
         }
         Update: {
           acordos_valor?: number
@@ -1806,6 +1808,7 @@ export type Database = {
           hora?: string
           id?: string
           tentativas?: number
+          whatsapp?: number
         }
         Relationships: []
       }
@@ -3800,6 +3803,7 @@ export type Database = {
           hora: string
           id: string
           tentativas: number
+          whatsapp: number
         }
         SetofOptions: {
           from: "*"

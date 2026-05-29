@@ -32,13 +32,14 @@ type Linha = {
   data: string;
   hora: string;
   tentativas: number;
+  whatsapp: number;
   alo: number;
   cpc: number;
   cpca: number;
   acordos_valor: number;
 };
 
-type ColunaIncr = 'tentativas' | 'alo' | 'cpc' | 'cpca';
+type ColunaIncr = 'tentativas' | 'whatsapp' | 'alo' | 'cpc' | 'cpca';
 
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -72,13 +73,13 @@ export default function Relatorios() {
     ]);
     const map: Record<string, Linha> = {};
     HORAS.forEach(h => {
-      map[h] = { data: dataStr, hora: h, tentativas: 0, alo: 0, cpc: 0, cpca: 0, acordos_valor: 0 };
+      map[h] = { data: dataStr, hora: h, tentativas: 0, whatsapp: 0, alo: 0, cpc: 0, cpca: 0, acordos_valor: 0 };
     });
     (rRes.data as any[] | null)?.forEach(r => {
       if (map[r.hora]) {
         map[r.hora] = {
           id: r.id, data: r.data, hora: r.hora,
-          tentativas: r.tentativas, alo: r.alo, cpc: r.cpc, cpca: r.cpca,
+          tentativas: r.tentativas, whatsapp: r.whatsapp ?? 0, alo: r.alo, cpc: r.cpc, cpca: r.cpca,
           acordos_valor: Number(r.acordos_valor),
         };
       }
@@ -129,6 +130,7 @@ export default function Relatorios() {
     const arr = HORAS.map(h => linhas[h]).filter(Boolean);
     return {
       tentativas: arr.reduce((s, l) => s + l.tentativas, 0),
+      whatsapp: arr.reduce((s, l) => s + l.whatsapp, 0),
       alo: arr.reduce((s, l) => s + l.alo, 0),
       cpc: arr.reduce((s, l) => s + l.cpc, 0),
       cpca: arr.reduce((s, l) => s + l.cpca, 0),
@@ -218,19 +220,19 @@ export default function Relatorios() {
 
   const exportCSV = () => {
     const rows = [
-      ['HORA','TENTATIVAS','ALO','CPC','CPC-A','$ ACORDOS','% ALO','% CPC','% CONVERSAO'],
+      ['HORA','TENTATIVAS','WHATSAPP','ALO','CPC','CPC-A','$ ACORDOS','% ALO','% CPC','% CONVERSAO'],
       ...HORAS.map(h => {
         const l = linhas[h];
         return [
-          h, l.tentativas, l.alo, l.cpc, l.cpca,
+          h, l.tentativas, l.whatsapp, l.alo, l.cpc, l.cpca,
           l.acordos_valor.toFixed(2).replace('.', ','),
           fmtPct(l.alo, l.tentativas),
           fmtPct(l.cpc, l.alo),
           fmtPct(l.cpca, l.cpc),
         ];
       }),
-      ['TOTAL', totais.tentativas, totais.alo, totais.cpc, totais.cpca, totais.valor.toFixed(2).replace('.', ','), '--','--','--'],
-      ['MÉDIA','--','--','--','--','--',
+      ['TOTAL', totais.tentativas, totais.whatsapp, totais.alo, totais.cpc, totais.cpca, totais.valor.toFixed(2).replace('.', ','), '--','--','--'],
+      ['MÉDIA','--','--','--','--','--','--',
         medias.vazio.alo ? '0%' : medias.alo.toFixed(2).replace('.', ',') + '%',
         medias.vazio.cpc ? '0%' : medias.cpc.toFixed(2).replace('.', ',') + '%',
         medias.vazio.conv ? '0%' : medias.conv.toFixed(2).replace('.', ',') + '%',
@@ -355,6 +357,7 @@ export default function Relatorios() {
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="p-2">HORA</th>
                   <th className="p-2">TENTATIVAS</th>
+                  <th className="p-2">WHATSAPP</th>
                   <th className="p-2">ALO</th>
                   <th className="p-2">CPC</th>
                   <th className="p-2">CPC-A</th>
@@ -375,7 +378,7 @@ export default function Relatorios() {
                         {isTop && <Trophy className="inline h-4 w-4 mr-1 text-yellow-500" />}
                         {h}
                       </td>
-                      {(['tentativas','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
+                      {(['tentativas','whatsapp','alo','cpc','cpca'] as ColunaIncr[]).map(col => (
                         <td key={col} className="p-2">
                           {editingCol?.hora === h && editingCol?.col === col && isAdmin ? (
                             <div className="flex gap-1">
@@ -441,6 +444,7 @@ export default function Relatorios() {
                 <tr className="border-b font-bold bg-muted/40">
                   <td className="p-2">TOTAL</td>
                   <td className="p-2 tabular-nums">{totais.tentativas}</td>
+                  <td className="p-2 tabular-nums">{totais.whatsapp}</td>
                   <td className="p-2 tabular-nums">{totais.alo}</td>
                   <td className="p-2 tabular-nums">{totais.cpc}</td>
                   <td className="p-2 tabular-nums">{totais.cpca}</td>
@@ -451,6 +455,7 @@ export default function Relatorios() {
                 </tr>
                 <tr className="font-bold bg-muted/40">
                   <td className="p-2">MÉDIA</td>
+                  <td className="p-2">--</td>
                   <td className="p-2">--</td>
                   <td className="p-2">--</td>
                   <td className="p-2">--</td>

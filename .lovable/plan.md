@@ -1,20 +1,27 @@
-## Ajuste no diálogo "Importar planilha de ligações"
+## Adicionar coluna WhatsApp em Relatórios
 
-Trocar os seletores de **Faixa inicial / Faixa final** (hoje "8h-9h", "9h-10h"...) por seletores de **hora única**, alinhados com as colunas da aba Relatórios.
+Adicionar uma nova coluna chamada **WhatsApp** entre as colunas **TENTATIVAS** e **ALO** na tabela do Relatório de Acionamentos.
 
-### Mudanças em `src/components/relatorios/ImportarLigacoesDialog.tsx`
+### Comportamento
+- Coluna funciona igual às colunas Tentativas/Alô/CPC/CPC-A: contador por faixa de hora, com botão `+` para incrementar (cooldown de 2s) e botão de editar (lápis) visível só para admin.
+- Linhas TOTAL/MÉDIA incluem o novo somatório.
+- Exportação CSV passa a incluir a coluna WhatsApp.
+- A coluna **não** entra em nenhum cálculo de porcentagem (% ALO, % CPC, % Conversão permanecem como estão).
 
-1. Renomear os campos visíveis:
-   - "Faixa inicial" → **"Hora inicial"**, opções `08h, 09h, 10h, ... 18h`
-   - "Faixa final" → **"Hora final"**, opções `09h, 10h, ... 19h`
-   - Padrões: inicial = `08h`, final = `19h`
+### Mudanças técnicas
 
-2. Interpretação: a importação cobre todas as faixas cuja hora de início está entre `horaInicial` e `horaFinal - 1` (ex.: 08h → 18h grava as faixas `8h-9h` até `18h-19h`).
+**Banco (migration):**
+- `ALTER TABLE public.relatorio_acionamentos ADD COLUMN whatsapp INTEGER NOT NULL DEFAULT 0;`
+- Atualizar a função `incrementar_metrica_acionamento` para aceitar `'whatsapp'` como valor válido em `p_coluna`.
 
-3. A tabela de pré-visualização continua mostrando todas as 11 faixas do dia (`8h-9h` ... `18h-19h`) com a contagem — não muda.
+**Frontend (`src/pages/Relatorios.tsx`):**
+- Adicionar `whatsapp: number` no tipo `Linha` e em `ColunaIncr` (`'tentativas' | 'whatsapp' | 'alo' | 'cpc' | 'cpca'`).
+- Inicializar `whatsapp: 0` no `map` do `load` e mapear `r.whatsapp` no fetch.
+- Incluir `whatsapp` em `totais` (soma).
+- Adicionar `<th>WHATSAPP</th>` entre TENTATIVAS e ALO no cabeçalho.
+- Incluir `'whatsapp'` na ordem do array `(['tentativas','whatsapp','alo','cpc','cpca'])` que renderiza as células editáveis/incrementáveis.
+- Linha TOTAL: adicionar `<td>{totais.whatsapp}</td>` na posição correta.
+- Linha MÉDIA: adicionar célula `--` na posição.
+- `exportCSV`: adicionar `'WHATSAPP'` no cabeçalho e `l.whatsapp` em cada linha + `totais.whatsapp` no TOTAL + `'--'` na MÉDIA.
 
-4. Internamente o código continua usando o array `HORAS` (`'8h-9h'`...) para fazer o `upsert` em `relatorio_acionamentos`. Só a UI dos dois selects muda.
-
-5. Validação: se `horaFinal <= horaInicial`, exibe toast de erro "Hora final deve ser maior que a hora inicial".
-
-Nenhuma alteração de banco, lógica de parse da coluna AL ou modo Substituir/Somar.
+Sem mudanças no dialog de importação de planilha (continua atualizando apenas Tentativas).
