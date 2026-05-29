@@ -444,6 +444,7 @@ export default function Relatorios() {
                 <tr className="border-b font-bold bg-muted/40">
                   <td className="p-2">TOTAL</td>
                   <td className="p-2 tabular-nums">{totais.tentativas}</td>
+                  <td className="p-2 tabular-nums">{totais.whatsapp}</td>
                   <td className="p-2 tabular-nums">{totais.alo}</td>
                   <td className="p-2 tabular-nums">{totais.cpc}</td>
                   <td className="p-2 tabular-nums">{totais.cpca}</td>
