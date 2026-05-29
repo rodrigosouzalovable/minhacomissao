@@ -231,8 +231,8 @@ export default function Relatorios() {
           fmtPct(l.cpca, l.cpc),
         ];
       }),
-      ['TOTAL', totais.tentativas, totais.alo, totais.cpc, totais.cpca, totais.valor.toFixed(2).replace('.', ','), '--','--','--'],
-      ['MÉDIA','--','--','--','--','--',
+      ['TOTAL', totais.tentativas, totais.whatsapp, totais.alo, totais.cpc, totais.cpca, totais.valor.toFixed(2).replace('.', ','), '--','--','--'],
+      ['MÉDIA','--','--','--','--','--','--',
         medias.vazio.alo ? '0%' : medias.alo.toFixed(2).replace('.', ',') + '%',
         medias.vazio.cpc ? '0%' : medias.cpc.toFixed(2).replace('.', ',') + '%',
         medias.vazio.conv ? '0%' : medias.conv.toFixed(2).replace('.', ',') + '%',
