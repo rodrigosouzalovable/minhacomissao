@@ -460,6 +460,7 @@ export default function Relatorios() {
                   <td className="p-2">--</td>
                   <td className="p-2">--</td>
                   <td className="p-2">--</td>
+                  <td className="p-2">--</td>
                   <td className="p-2 tabular-nums">
                     {medias.vazio.alo ? '0%' : medias.alo.toFixed(2).replace('.', ',') + '%'}
                   </td>
