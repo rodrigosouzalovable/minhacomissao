@@ -285,7 +285,19 @@ export default function ComiteNovoMundo() {
                           <td className="p-2 text-right">{moeda(e.valor)}</td>
                           <td className="p-2 text-right">{moeda(e.pago)}</td>
                           <td className="p-2 text-right">{pct(e.pago, e.valor)}</td>
-                          <td className="p-2 text-right">{dias !== null ? `${dias} dias` : <span className="text-muted-foreground">— informar admissão</span>}</td>
+                          <td className="p-2 text-right">
+                            {dias !== null ? (
+                              `${dias} dias`
+                            ) : podeEditar ? (
+                              <InformarAdmissaoDialog
+                                userId={uid}
+                                nome={info?.nome ?? 'Cobrador'}
+                                onSaved={() => qc.invalidateQueries({ queryKey: ['comite-nm', 'cobradores'] })}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">— informar admissão</span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
