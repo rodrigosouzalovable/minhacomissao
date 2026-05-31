@@ -472,12 +472,17 @@ function BlocoTexto({
   }
 
   return (
-    <Card>
+    <Card className={!conteudo && !editando ? 'border-amber-500/40' : ''}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <CardTitle className="text-base">{titulo}</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2">
+          {titulo}
+          {!conteudo && !editando && (
+            <CampoZeradoHint motivo="Este bloco ainda está em branco. Clique em Editar para preencher — o conteúdo fica salvo por mês." />
+          )}
+        </CardTitle>
         {podeEditar && !editando && (
           <Button size="sm" variant="ghost" onClick={() => setEditando(true)}>
-            <Pencil className="h-3 w-3 mr-1" /> Editar
+            <Pencil className="h-3 w-3 mr-1" /> {conteudo ? 'Editar' : 'Preencher'}
           </Button>
         )}
       </CardHeader>
