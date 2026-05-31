@@ -134,6 +134,8 @@ export function useCarteira() {
       const totalContratos = Number(payload.total_contratos ?? 0);
       const totalCpfs = Number(payload.total_cpfs_unicos ?? 0);
       const totalRisco = Number(payload.total_risco ?? 0);
+      const cpfsArr: string[] = Array.isArray(payload.cpfs) ? payload.cpfs : [];
+      const cpfs = new Set<string>(cpfsArr.map((c) => normalizeCpf(c)).filter(Boolean));
 
       return {
         snapshot: snap,
@@ -146,7 +148,7 @@ export function useCarteira() {
         totalValor: totalRisco,
         totalValorAtualizado: totalRisco,
         totalRisco,
-        cpfs: undefined as Set<string> | undefined,
+        cpfs,
       };
     },
     ...liveQueryOpts,
