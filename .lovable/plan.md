@@ -1,45 +1,38 @@
-## Problema identificado
+# Corrigir cards 03 · Eficiência de Recuperação e 04 · Saúde dos Acordos (Comitê Novo Mundo)
 
-Dois bugs em `src/components/relatorios/ImportarLigacoesDialog.tsx`:
+## Diagnóstico
 
-**1. CobMais sobrescreveu a importação do 3C Plus**
-O modo padrão é `substituir`, e no caminho CobMais ele grava `tentativas/cpc/cpca` com os valores da própria planilha — zerando o que o 3C já havia escrito naquelas faixas.
+Os cards mostram tudo zerado, mas os dados existem na base e batem com a carteira Novo Mundo já importada:
 
-**2. Apenas uma data é importada (a "dominante")**
-Hoje o parser CobMais agrupa por hora em um único `Contagem`, e `dataAlvo` é a data com mais linhas (`dataDetectada`). Se a planilha cobre vários dias (ex.: 28/05 e 29/05), só a data majoritária é salva — por isso 29/05/2026 ficou "sem informação correta".
+| Métrica (consulta direta) | Valor real | Card hoje |
+|---|---|---|
+| Acordos ativos (CPFs da carteira NM) | **1.132** | 0 |
+| Quebrados | **122** | 0 |
+| Fechados em maio/2026 | **544** | 0 |
+| Pagamentos pagos em maio/2026 | **122** parcelas | R$ 0,00 |
+| Risco total da carteira | R$ 111.850.277,62 | R$ 111.850.277,62 ✅ |
 
-## Mudanças (somente em `ImportarLigacoesDialog.tsx`)
+O risco aparece porque vem de outra função (`comite_carteira_nm_agregar`). Os zeros vêm da função `comite_carteira_nm_kpis_extras`, que está retornando vazio mesmo havendo dados.
 
-### Parser CobMais multi-data
-- Trocar `contagem: Contagem` por `contagemPorData: Record<string, Contagem>` em `Resumo` (CobMais).
-- Para cada linha válida, incrementar em `contagemPorData[dataIso][faixa]`.
-- Manter `dataDetectada` (data dominante) só como sugestão visual.
-- 3C Plus segue igual (uma data só).
+**Causa raiz:** a função usa `CREATE TEMP TABLE IF NOT EXISTS ... ON COMMIT DROP` para 4 tabelas temporárias. No pooler do Supabase (transaction mode), em chamadas repetidas na mesma conexão, o `IF NOT EXISTS` ignora o `AS SELECT` quando a tabela ainda está "viva" sob outro snapshot — resultando em tabelas vazias e, consequentemente, todos os contadores em zero. É um padrão conhecido de ser instável em PostgREST.
 
-### UI de revisão CobMais
-- Mostrar lista de datas detectadas com totais por data (chips).
-- Substituir o campo único "Data alvo" por:
-  - **Checkbox "Importar todas as datas detectadas"** (default: ligado).
-  - Se desligado, reaparece o seletor de data única (comportamento atual).
-- A tabela de pré-visualização vira: tabs por data, ou um seletor que troca qual `Contagem` é exibido.
+## O que vai ser feito
 
-### Modo padrão e gravação
-- **Default do `modo` passa a ser `somar`** quando origem é CobMais (e mantém `substituir` como default para 3C, que é o caso típico de re-importar o mesmo arquivo).
-- No `confirmar()`, iterar sobre cada data selecionada e fazer o mesmo loop atual (`upsert` + log) para cada `(data, faixa)`.
-- Manter a regra: 3C nunca toca `whatsapp/alo`; CobMais escreve todas as 5 colunas.
-- Mensagem de toast final passa a incluir o número de datas atualizadas.
+Reescrever apenas a função `comite_carteira_nm_kpis_extras` trocando as 4 TEMP TABLES por **CTEs** (`WITH ...`) dentro de uma única consulta agregada. Mesma assinatura, mesmo formato JSON de retorno — o frontend não muda.
 
-### Texto explicativo
-- Acrescentar abaixo do RadioGroup de modo, quando CobMais:
-  > "Use **Somar** para combinar com uma importação anterior (ex.: 3C Plus). Use **Substituir** apenas se quiser reimportar o mesmo CobMais."
-
-## Não muda
-- Schema do banco, RPC, RLS, edge functions — nada.
-- Importação 3C Plus continua exatamente igual.
-- Trigger de `acordos_valor` continua intocada.
-- Sem custo adicional na Lovable Cloud.
+Blocos preservados, sem mudança semântica:
+- **Recuperação:** `pago_mes_total`, `pago_mes_qtd`, `pct_sobre_risco`, `por_faixa` (pago vs risco por faixa), `serie_6meses`.
+- **Saúde dos acordos:** `ativos_qtd`, `quebrados_qtd`, `quitados_qtd`, `fechados_mes`, `quebrados_mes`, `taxa_quebra`, `em_risco_qtd`, `em_risco_valor` (parcelas pendentes vencendo nos próximos 7 dias).
+- **Cobertura:** `total_cpfs`, `cpfs_acionados_mes`, `pct_acionados`, `cpfs_convertidos`, `pct_convertidos`, `cpfs_intocados_30d_qtd`.
 
 ## Detalhes técnicos
-- `Resumo` ganha campos opcionais `contagemPorData?: Record<string, Contagem>` e `datas?: string[]` (ordenadas desc por nº de linhas). Para 3C, esses campos ficam vazios e o código segue lendo `contagem`.
-- Estado novo: `datasSelecionadas: string[]` e `importarTodas: boolean` (default `true` em CobMais).
-- Ao confirmar, montar `const alvos = isCob && importarTodas ? resumo.datas! : [dataAlvo]` e loopar o bloco de upsert para cada data, usando `resumo.contagemPorData![data]` em CobMais e `resumo.contagem` em 3C.
+
+- Migration única que faz `CREATE OR REPLACE FUNCTION public.comite_carteira_nm_kpis_extras(p_mes_ano text)` com a mesma checagem `is_admin_user` e mesmo `jsonb_build_object` de saída.
+- CTEs internos: `cart_cpfs` (CPFs distintos da carteira ativa + faixa + risco), `risco_faixa`, `acordos_nm` (acordos cujo `cpf_normalize(cliente_cpf)` está em `cart_cpfs`), `phones` (devedores Novo Mundo com telefone normalizado para sufixo de 8 dígitos), `acionados_mes` e `acionados_30d` (CPFs com envio em `whatsapp_mensagens` direção `saida` nos respectivos períodos, casando pelo sufixo do telefone).
+- Sem mudanças em tabelas, RLS, índices, edge functions, cron ou frontend. Sem impacto em custo Lovable Cloud.
+- `comite_carteira_nm_intocados` continua igual (já usa CTE), nada a mexer.
+
+## Risco e validação
+
+- Risco: nulo — função `STABLE SECURITY DEFINER` apenas leitura, mesma interface pública.
+- Validação: após aplicar, abrir a aba Comitê Novo Mundo no mês 2026-05 e conferir que os cards 03/04/05 exibem os números acima (≈1.132 ativos, 122 quebrados, 544 fechados no mês, valor pago do mês > 0, % recuperado > 0).
