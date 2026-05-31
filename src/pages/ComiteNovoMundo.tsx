@@ -26,6 +26,8 @@ import {
 } from '@/hooks/useComiteNovoMundo';
 import { CampoZeradoHint } from '@/components/comite/CampoZeradoHint';
 import { InformarAdmissaoDialog } from '@/components/comite/InformarAdmissaoDialog';
+import { ImportarCarteiraNMDialog } from '@/components/comite/ImportarCarteiraNMDialog';
+import { BreakdownFaixasDialog } from '@/components/comite/BreakdownFaixasDialog';
 
 const moeda = (v: number) =>
   (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
