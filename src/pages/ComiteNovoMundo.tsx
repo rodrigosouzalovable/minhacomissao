@@ -393,7 +393,14 @@ function TabelaRecuperacao({
   const totalMeta = faixas.reduce((s, f) => s + (metas?.get(`${tipo}:${f}`) ?? 0), 0);
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-base">{titulo}</CardTitle></CardHeader>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          {titulo}
+          {totalMeta === 0 && (
+            <CampoZeradoHint motivo={`Sem meta cadastrada para ${tipo === 'nn' ? 'NN' : 'Colchão'} neste mês. Use o botão "Metas do mês" no topo da página para definir os valores por faixa.`} />
+          )}
+        </CardTitle>
+      </CardHeader>
       <CardContent>
         <table className="w-full text-sm">
           <thead className="bg-muted">
@@ -411,7 +418,14 @@ function TabelaRecuperacao({
               return (
                 <tr key={f} className="border-b">
                   <td className="p-2">{f}</td>
-                  <td className="p-2 text-right">{moeda(meta)}</td>
+                  <td className="p-2 text-right">
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      {moeda(meta)}
+                      {meta === 0 && (
+                        <CampoZeradoHint motivo={`Meta da faixa ${f} não cadastrada. Abra "Metas do mês" para informar.`} />
+                      )}
+                    </span>
+                  </td>
                   <td className="p-2 text-right">{moeda(realizado)}</td>
                   <td className="p-2 text-right">{pct(realizado, meta)}</td>
                 </tr>
