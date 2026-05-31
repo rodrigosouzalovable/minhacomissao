@@ -66,6 +66,7 @@ export default function ComiteNovoMundo() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  useComiteRealtime();
   const carteira = useCarteira();
   const funil = useFunilMes(mesAno);
   const acordos = useAcordosNovoMundo(mesAno, carteira.data?.cpfs);
