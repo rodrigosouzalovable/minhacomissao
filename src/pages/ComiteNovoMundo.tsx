@@ -608,3 +608,116 @@ function LinhaMeta({ label, value, onChange }: { label: string; value: string; o
     </div>
   );
 }
+
+function pctFmt(v: number) {
+  return `${((v || 0) * 100).toFixed(1)}%`;
+}
+
+function CardRecuperacao({ kpis, totalRisco }: { kpis: import('@/hooks/useComiteNovoMundo').KpisExtras | undefined; totalRisco: number }) {
+  const rec = kpis?.recuperacao;
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">03 · Eficiência de Recuperação</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <div className="text-xs text-muted-foreground">% Recuperado / Risco total</div>
+          <div className="text-2xl font-bold">{pctFmt(rec?.pct_sobre_risco ?? 0)}</div>
+          <div className="text-[10px] text-muted-foreground">
+            {moeda(rec?.pago_mes_total ?? 0)} sobre {moeda(totalRisco)}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">Curva 6 meses (R$ recuperado)</div>
+          <div className="h-[120px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={rec?.serie_6meses ?? []}>
+                <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} width={50} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <ReTooltip formatter={(v: number) => moeda(v)} labelFormatter={(l) => `Mês ${l}`} />
+                <Bar dataKey="valor" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CardSaudeAcordos({ kpis }: { kpis: import('@/hooks/useComiteNovoMundo').KpisExtras | undefined }) {
+  const s = kpis?.acordos_saude;
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">04 · Saúde dos Acordos</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <Mini label="Ativos" value={(s?.ativos_qtd ?? 0).toLocaleString('pt-BR')} />
+          <Mini label="Quebrados" value={(s?.quebrados_qtd ?? 0).toLocaleString('pt-BR')} />
+          <Mini label="Quitados" value={(s?.quitados_qtd ?? 0).toLocaleString('pt-BR')} />
+        </div>
+        <div className="flex justify-between text-sm border-t pt-2">
+          <span className="text-muted-foreground">Taxa de quebra do mês</span>
+          <span className="font-semibold">{pctFmt(s?.taxa_quebra ?? 0)}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Em risco (7 dias)</span>
+          <span className="font-semibold">{(s?.em_risco_qtd ?? 0)} · {moeda(s?.em_risco_valor ?? 0)}</span>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          "Em risco" = parcelas pendentes de acordos ativos vencendo nos próximos 7 dias.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CardCobertura({ kpis }: { kpis: import('@/hooks/useComiteNovoMundo').KpisExtras | undefined }) {
+  const c = kpis?.cobertura;
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">05 · Cobertura Operacional</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">CPFs acionados no mês</span>
+          <span className="font-semibold">{(c?.cpfs_acionados_mes ?? 0).toLocaleString('pt-BR')} ({pctFmt(c?.pct_acionados ?? 0)})</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">CPFs convertidos em acordo</span>
+          <span className="font-semibold">{(c?.cpfs_convertidos ?? 0).toLocaleString('pt-BR')} ({pctFmt(c?.pct_convertidos ?? 0)})</span>
+        </div>
+        <div className="border-t pt-2">
+          <IntocadosListDialog
+            totalQtd={c?.cpfs_intocados_30d_qtd ?? 0}
+            trigger={
+              <button className="w-full text-left text-sm hover:bg-accent rounded p-2 transition-colors">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Intocados há +30 dias</span>
+                  <span className="font-semibold text-destructive">{(c?.cpfs_intocados_30d_qtd ?? 0).toLocaleString('pt-BR')}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-1">Clique para listar (top 100 por risco)</div>
+              </button>
+            }
+          />
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          Acionamento via WhatsApp (saída), cruzando telefone do devedor Novo Mundo com mensagens enviadas.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Mini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border p-2">
+      <div className="text-[10px] text-muted-foreground uppercase">{label}</div>
+      <div className="text-lg font-bold">{value}</div>
+    </div>
+  );
+}
