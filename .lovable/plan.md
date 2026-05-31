@@ -1,112 +1,43 @@
+
 ## Objetivo
 
-Adicionar 3 blocos de análise à aba **Comitê Novo Mundo** que respondem à pergunta do credor *"quão eficiente está a operação sobre a carteira que entreguei?"* — **sem precisar de planilha extra**, cruzando o que já temos: snapshot da carteira (`comite_carteira_nm_item`), `acordos`, `pagamentos` e `relatorio_acionamentos`.
+No botão **"Importar planilha"** da aba Relatórios, permitir escolher entre **3C Plus Discador** (fluxo atual) ou **Relatório CobMais** (novo). O CobMais alimenta automaticamente Tentativas, WhatsApp, Alô, CPC e CPC-A no quadro horário.
 
----
+## Regras de mapeamento CobMais (confirmadas)
 
-## Bloco 1 — Eficiência de Recuperação
+Cada linha = 1 evento (Data, Hora, Evento, CPF/CNPJ, Nome, Valor em Atraso). Cabeçalhos de Equipe/Operador e linhas sem CPF/Hora são ignorados.
 
-KPIs novos no topo (linha abaixo dos cards atuais):
+| Evento (case-insensitive, normalizado) | Tentativas | WhatsApp | Alô | CPC | CPC-A |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Qualquer linha com CPF válido | +1 | | | | |
+| Evento contendo `whatsapp` (ex.: "Envio de WhatsApp") | (já +1 acima) | **+1** | **+1** | | |
+| `contato com cliente` | (já +1) | | **+1** | **+1** | |
+| `acordo` | (já +1) | | **+1** | **+1** | **+1** |
+| `boleto gerado`, `alteração de boleto`, `2ª via`, etc. | (já +1) | | **+1** | **+1** | **+1** |
+| Demais eventos (sem contato, caixa postal, número inválido, etc.) | (já +1) | | | | |
 
-- **% Recuperado / Risco Total** — `total_pago_mes ÷ total_risco_carteira`.
-- **% Recuperado por Faixa** — coluna nova na tabela de faixas existente (ao lado de "Risco"), mostrando quanto daquela faixa foi pago no mês.
-- **Curva 6 meses** — mini-gráfico de barras com o valor recuperado mês a mês (últimos 6) só de CPFs da carteira Novo Mundo.
+Resumo das regras confirmadas:
+- **Tentativas** = toda linha com CPF (todas as discagens).
+- **WhatsApp** = qualquer evento que contenha "whatsapp"; também soma em Alô.
+- **Alô** = recebe CPC, CPC-A, WhatsApp, Boleto Gerado e Alteração de Boleto.
+- **CPC** = Contato com Cliente, Acordo, Boleto Gerado, Alteração de Boleto.
+- **CPC-A** = Acordo, Boleto Gerado, Alteração de Boleto.
 
----
+Hora extraída do campo Hora (HH:MM) → faixa `Hh-(H+1)h`. Fora de 8h–18h é ignorado. Data alvo detectada da maioria das linhas e editável antes de confirmar.
 
-## Bloco 2 — Saúde dos Acordos Novo Mundo
+## Mudanças (apenas frontend)
 
-Card "Acordos da Carteira" abaixo do funil:
+### `src/components/relatorios/ImportarLigacoesDialog.tsx`
+- **Passo 0**: `RadioGroup` para escolher a origem — `3c` (atual) ou `cobmais` (novo).
+- Manter `handleFile3C` (parser atual intacto) e criar `handleFileCobmais`:
+  - Lê com `xlsx` (sheet 1, `header:1`), localiza a linha de cabeçalho contendo "Data", "Hora", "Evento", "CPF/CNPJ".
+  - Para cada linha de evento aplica o mapeamento acima e incrementa `contagem[faixa]` (`tentativas`, `whatsapp`, `alo`, `cpc`, `cpca`).
+- Estender o tipo `Resumo` e a tabela de pré-visualização para 5 colunas quando a origem for CobMais.
+- `confirmar()`: fazer upsert das 5 colunas em `relatorio_acionamentos` e registrar logs em `relatorio_acionamentos_log` (mesmo padrão atual: uma linha de log por coluna alterada, `acao = 'importacao_cobmais_<coluna>'`).
+- Manter modos **Substituir** / **Somar** e o intervalo de horas.
+- Coluna `acordos_valor` continua intocada (alimentada só pelo trigger de criação de acordos).
 
-- **Ativos / Quebrados / Quitados** (3 contadores).
-- **Taxa de Quebra do mês** — `quebrados_mes ÷ fechados_mes`.
-- **Em risco de quebra** — valor das parcelas vencendo nos próximos 7 dias ainda **pendentes**.
-
-Regra de quebra: reaproveita a função existente `cpf_ultimo_acordo_quebrado` / status `quebrado` em `acordos`.
-
----
-
-## Bloco 3 — Cobertura da Carteira
-
-Card "Cobertura Operacional":
-
-- **% CPFs acionados no mês** — CPFs da carteira com pelo menos 1 mensagem em `whatsapp_envios_log` no mês ÷ total de CPFs da carteira.
-- **% CPFs convertidos** — CPFs da carteira com acordo ativo/concluído ÷ total de CPFs da carteira.
-- **CPFs intocados há +30 dias** — contador clicável que abre dialog listando os 100 primeiros (CPF + faixa + risco) para o credor cobrar ação.
-
----
-
-## Como será implementado (técnico)
-
-Tudo no servidor para evitar baixar dados pesados ao navegador (mesma estratégia já adotada para a carteira).
-
-### 1) Nova migration
-
-Estender a função `comite_carteira_nm_agregar()` (ou criar `comite_carteira_nm_kpis_extras()` separada para manter responsabilidades claras) retornando:
-
-```jsonb
-{
-  recuperacao: {
-    pago_mes_total, pct_sobre_risco,
-    por_faixa: { '1-30': pago, '31-60': pago, ... },
-    serie_6meses: [{mes, valor}, ...]
-  },
-  acordos_saude: {
-    ativos_qtd, quebrados_qtd, quitados_qtd,
-    fechados_mes, quebrados_mes, taxa_quebra,
-    em_risco_qtd, em_risco_valor
-  },
-  cobertura: {
-    cpfs_acionados_mes, pct_acionados,
-    cpfs_convertidos, pct_convertidos,
-    cpfs_intocados_30d_qtd
-  }
-}
-```
-
-Cruzamentos por `cpf_normalize` entre `comite_carteira_nm_item.cpf_cnpj` e `acordos.cliente_cpf` / `whatsapp_envios_log.telefone→cpf` (via `devedores`).
-
-Nova função auxiliar (admin-only) `comite_carteira_nm_intocados(limit int)` para listar os CPFs intocados quando o usuário clicar no card.
-
-`SECURITY DEFINER`, `STABLE`, `GRANT EXECUTE` para `authenticated`, gatekeeper `is_admin_user(auth.uid())`.
-
-### 2) Hook
-
-Em `src/hooks/useComiteNovoMundo.ts`:
-- Novo hook `useKpisExtras(mesAno)` que chama a RPC.
-- Mantém `refetchInterval: 60s` e invalida via realtime já existente.
-
-### 3) UI
-
-Em `src/pages/ComiteNovoMundo.tsx`:
-- 3 novos `Card`s usando design tokens já existentes.
-- Coluna nova "% Recuperado" na tabela de faixas (`BreakdownFaixasDialog.tsx` ganha a mesma coluna).
-- Mini-gráfico de 6 meses com `recharts` (já está no projeto).
-- Dialog `IntocadosListDialog.tsx` (novo) para listar CPFs intocados ao clicar.
-
-### 4) Memória do projeto
-
-Adicionar `mem://features/comite-novomundo/kpis-enriquecidos` documentando os 3 blocos e a função SQL.
-
----
-
-## Aviso de custo
-
-Tudo roda como **1 RPC agregada extra a cada 60s** (mesma cadência da atual) — impacto irrelevante no Lovable Cloud. Sem novas tabelas, sem novos cron jobs, sem armazenamento extra.
-
-## Arquivos
-
-```text
-supabase/migrations/<new>.sql                       (nova função agregadora extra + intocados)
-src/hooks/useComiteNovoMundo.ts                     (novo useKpisExtras)
-src/pages/ComiteNovoMundo.tsx                       (3 cards novos + coluna)
-src/components/comite/BreakdownFaixasDialog.tsx     (coluna % recuperado)
-src/components/comite/IntocadosListDialog.tsx       (novo)
-mem://features/comite-novomundo/kpis-enriquecidos   (nova memória)
-```
-
-## O que NÃO entra
-
-- Nenhuma alteração nas tabelas existentes (`comite_carteira_nm_snapshot`/`_item`, `acordos`, `pagamentos`).
-- Nenhuma planilha nova exigida do credor.
-- Regras de faixa, NN×Colchão, metas e funil seguem iguais.
+## Sem mudanças
+- Backend, schema, RLS, edge functions, cron, storage — nada altera.
+- Importação 3C Plus segue idêntica.
+- Nenhum custo adicional de Lovable Cloud.
