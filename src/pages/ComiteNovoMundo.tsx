@@ -16,8 +16,6 @@ import {
   useFunilMes,
   useAcordosNovoMundo,
   useCobradores,
-  useCobradoresFixos,
-  useHistoricoCobradores,
   useMetasMes,
   useTextosMes,
   FAIXAS_NN,
@@ -70,12 +68,6 @@ export default function ComiteNovoMundo() {
   const acordos = useAcordosNovoMundo(mesAno, carteira.data?.cpfs);
   const userIds = useMemo(() => Array.from(acordos.data?.porUser.keys() ?? []), [acordos.data]);
   const cobradores = useCobradores(userIds);
-  const cobradoresFixos = useCobradoresFixos();
-  const idsFixos = useMemo(
-    () => (cobradoresFixos.data ?? []).map((c) => c.id).filter(Boolean),
-    [cobradoresFixos.data],
-  );
-  const historico = useHistoricoCobradores(idsFixos, carteira.data?.cpfs);
   const metas = useMetasMes(mesAno);
   const textos = useTextosMes(mesAno);
 
@@ -208,65 +200,37 @@ export default function ComiteNovoMundo() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted">
-                    <th rowSpan={2} className="text-left p-2 align-bottom">Cobrador</th>
-                    <th colSpan={4} className="text-center p-2 border-l">Mês de {labelMes(mesAno)}</th>
-                    <th colSpan={4} className="text-center p-2 border-l">Histórico (desde criação do login)</th>
-                    <th rowSpan={2} className="text-right p-2 align-bottom border-l">Tempo em casa</th>
-                  </tr>
-                  <tr className="bg-muted">
-                    <th className="text-right p-2 border-l">Acordos</th>
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="text-left p-2">Cobrador</th>
+                    <th className="text-right p-2">Acordos fechados</th>
                     <th className="text-right p-2">Valor acordado</th>
                     <th className="text-right p-2">Valor recebido</th>
-                    <th className="text-right p-2">Conv. $</th>
-                    <th className="text-right p-2 border-l">Acordos</th>
-                    <th className="text-right p-2">Valor acordado</th>
-                    <th className="text-right p-2">Valor recebido</th>
-                    <th className="text-right p-2">TMR</th>
+                    <th className="text-right p-2">Conversão $</th>
+                    <th className="text-right p-2">Tempo em casa</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(cobradoresFixos.data ?? []).map((c) => {
-                    const mes = c.id ? acordos.data?.porUser.get(c.id) : undefined;
-                    const hist = c.id ? historico.data?.get(c.id) : undefined;
-                    const admissao = c.data_admissao;
-                    const dias = admissao
-                      ? Math.floor((Date.now() - new Date(admissao).getTime()) / 86400000)
-                      : null;
-                    const desde = c.created_at
-                      ? new Date(c.created_at).toLocaleDateString('pt-BR')
-                      : null;
-                    if (!c.id) {
+                  {Array.from(acordos.data?.porUser.entries() ?? [])
+                    .sort((a, b) => b[1].pago - a[1].pago)
+                    .map(([uid, e]) => {
+                      const info = cobradorMap.get(uid);
+                      const dias = info?.admissao
+                        ? Math.floor((Date.now() - new Date(info.admissao).getTime()) / 86400000)
+                        : null;
                       return (
-                        <tr key={c.chave} className="border-b">
-                          <td className="p-2">{c.nome}</td>
-                          <td colSpan={9} className="p-2 text-center text-muted-foreground italic">
-                            Usuário não encontrado em profiles (verifique o nome cadastrado)
-                          </td>
+                        <tr key={uid} className="border-b">
+                          <td className="p-2">{info?.nome ?? '—'}</td>
+                          <td className="p-2 text-right">{e.qtd}</td>
+                          <td className="p-2 text-right">{moeda(e.valor)}</td>
+                          <td className="p-2 text-right">{moeda(e.pago)}</td>
+                          <td className="p-2 text-right">{pct(e.pago, e.valor)}</td>
+                          <td className="p-2 text-right">{dias !== null ? `${dias} dias` : <span className="text-muted-foreground">— informar admissão</span>}</td>
                         </tr>
                       );
-                    }
-                    return (
-                      <tr key={c.id} className="border-b">
-                        <td className="p-2">
-                          <div className="font-medium">{c.nome}</div>
-                          {desde && <div className="text-[10px] text-muted-foreground">desde {desde}</div>}
-                        </td>
-                        <td className="p-2 text-right border-l">{mes?.qtd ?? 0}</td>
-                        <td className="p-2 text-right">{moeda(mes?.valor ?? 0)}</td>
-                        <td className="p-2 text-right">{moeda(mes?.pago ?? 0)}</td>
-                        <td className="p-2 text-right">{pct(mes?.pago ?? 0, mes?.valor ?? 0)}</td>
-                        <td className="p-2 text-right border-l">{hist?.qtd ?? 0}</td>
-                        <td className="p-2 text-right">{moeda(hist?.valor ?? 0)}</td>
-                        <td className="p-2 text-right">{moeda(hist?.pago ?? 0)}</td>
-                        <td className="p-2 text-right">{hist?.tmr != null ? `${hist.tmr.toFixed(1)}d` : '—'}</td>
-                        <td className="p-2 text-right border-l">{dias !== null ? `${dias} dias` : <span className="text-muted-foreground">— informar admissão</span>}</td>
-                      </tr>
-                    );
-                  })}
-                  {(cobradoresFixos.data?.length ?? 0) === 0 && (
-                    <tr><td colSpan={10} className="p-4 text-center text-muted-foreground">Carregando…</td></tr>
+                    })}
+                  {(acordos.data?.porUser.size ?? 0) === 0 && (
+                    <tr><td colSpan={6} className="p-4 text-center text-muted-foreground">Sem acordos no mês.</td></tr>
                   )}
                 </tbody>
               </table>

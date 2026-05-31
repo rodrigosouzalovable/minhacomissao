@@ -1,42 +1,72 @@
-## Objetivo
+# Plano — Página "Comitê Novo Mundo"
 
-Na seção "Performance por cobrador" da página `/admin/comite-novomundo`, manter os números do mês selecionado e acrescentar, ao lado, uma coluna agrupada **"Histórico total (desde a criação do login)"** com os dados acumulados de cada cobrador no credor `ume_novo_mundo`.
+Nova rota interna `/admin/comite-novomundo` que reproduz o template do Comitê de Resultados UME já preenchido com dados reais do credor `ume_novo_mundo`, com seletor de mês e exportação.
 
-Lista fixa: **Wallace Veríssimo, Ana Flávia, Fernanda, Yasmin, Rodrigo**.
+## O que vem direto do banco (sem trabalho extra)
 
-## O que muda
+- **Base / Carteira**: `devedores` onde `credor = 'ume_novo_mundo' AND ativo = true` (qtd, valor original, valor atualizado).
+- **Aging List**: mesma tabela, agrupando por dias de atraso a partir de `data_vencimento`:
+  - NN: 1–30 / 31–60 / 61–90
+  - Colchão: 91–180 / 181–360 / 360+
+- **Funil do mês** (por hora e dia, somado no mês): `relatorio_acionamentos` → tentativas, whatsapp, alô, CPC, CPC-A, acordos_valor.
+- **Acordos fechados**: `acordos` filtrando CPFs do Novo Mundo (qtd, valor_total, ticket médio).
+- **Recuperação realizada**: `pagamentos` com `status='pago'` no mês, juntando com `acordos` do credor.
+- **Performance por cobrador**: `acordos` + `pagamentos` agrupado por `user_id`/`profiles.nome` (qtd acordos, valor acordado, valor recebido, taxa).
+- **TMR**: média de `(data_paga do 1º pagamento − criado_em do acordo)` em dias, por mês.
+- **Mês anterior vs atual**: mesma RPC `comparativo_mensal_global` adaptada para filtrar por credor.
 
-### 1. Hook `useComiteNovoMundo.ts`
+## O que precisa de schema novo (tudo numa migração)
 
-Adicionar:
+1. **`profiles.data_admissao DATE`** — para calcular "Tempo em casa" do operador.
+2. **`comite_metas_novomundo`** — meta mensal por faixa:
+   - `mes_ano TEXT` (YYYY-MM), `faixa TEXT` (`1-30`, `31-60`, `61-90`, `91-180`, `181-360`, `360+`, `total`), `meta_valor NUMERIC`, `tipo TEXT` ('nn' | 'colchao' | 'global').
+   - RLS: leitura para `authenticated`, escrita só admin.
+3. **`comite_textos_novomundo`** — blocos qualitativos editáveis:
+   - `mes_ano TEXT`, `bloco TEXT` (`acoes_mes`, `proximos_passos`, `observacoes`, `dificuldades`, `ata`), `conteudo TEXT`.
+   - RLS: leitura `authenticated`, escrita só admin/gestor.
 
-- **`COBRADORES_FIXOS`**: array com os 5 primeiros nomes (match por `ILIKE` em `profiles.nome`, case-insensitive, primeiro nome basta — ex.: `wallace`, `ana flávia`, `fernanda`, `yasmin`, `rodrigo`).
-- **`useCobradoresFixos()`**: busca em `profiles` os 5 ids correspondentes + `data_admissao` + `created_at` (a "criação do login" vem de `auth.users.created_at`; como não temos acesso direto, usar `profiles.created_at` que é gravado pelo trigger `handle_new_user` na mesma transação).
-- **`useHistoricoCobradores(userIds, cpfsCarteira)`**: para cada user_id, agrega **todos** os acordos do Novo Mundo (sem filtro de mês) e seus pagamentos pagos:
-  - `qtdAcordosHist`
-  - `valorAcordadoHist`
-  - `valorRecebidoHist`
-  - `tmrHist` (média de dias entre `criado_em` do acordo e 1º pagamento pago)
-  - `desdeData` = `profiles.created_at` formatado
+## Frontend
 
-Paginação igual à já existente (`pageSize = 1000`).
+Arquivos novos:
+- `src/pages/ComiteNovoMundo.tsx` — página com seletor de mês (default = mês atual) e seções na ordem do template.
+- `src/components/comite/` — um componente por bloco:
+  - `FunilCard.tsx` (base → trabalhadas → alô → CPC → acordo → pagamento, com % conversão entre etapas)
+  - `RecuperacaoNNColchao.tsx` (tabela faixa × meta × realizado × % atingido)
+  - `AgingList.tsx`
+  - `PerformanceCobradores.tsx` (qtd acordos, valor, recebido, tempo em casa)
+  - `TMRCard.tsx`
+  - `BlocoTexto.tsx` (editor inline reutilizável para os 5 blocos qualitativos)
+  - `MetasEditorDialog.tsx` (modal para cadastrar/editar metas do mês)
+- `src/hooks/useComiteNovoMundo.ts` — hooks React Query, um por seção.
 
-### 2. Página `ComiteNovoMundo.tsx`
+Adicionar rota em `src/App.tsx` (lazy) protegida por `AdminRoute`, e link no menu lateral (`AppLayout`) para admin/gestor.
 
-Na tabela "09 Performance por Cobrador":
+## Cálculos-chave
 
-- Trocar a fonte da lista de cobradores: passa a iterar sobre os 5 fixos (não mais sobre `porUser` do mês — entram mesmo sem acordo no mês).
-- Reordenar colunas em 2 grupos com cabeçalho duplo:
-  - **Mês de {mesAno}**: Acordos, Valor acordado, Valor recebido, TMR
-  - **Histórico (desde {desdeData})**: Acordos, Valor acordado, Valor recebido, TMR
-- Coluna "Tempo em casa" continua à direita (depende de `data_admissao`).
-- Se um nome não encontrar profile correspondente, exibir linha com aviso "Usuário não encontrado".
+- **Trabalhadas**: count distinct de CPFs com tentativa no mês (via `relatorio_acionamentos_log` + futura tabela de tentativas individualizada — por ora aproximamos por `SUM(tentativas)` da `relatorio_acionamentos`).
+- **% conversão**: alô/tentativas, CPC/alô, CPC-A/CPC, pago/CPC-A.
+- **TMR**: ver acima.
+- **Tempo em casa**: `now() - profiles.data_admissao` em dias, mostrado no ranking.
 
-## Dados / custo
+## Export
 
-- Nenhuma alteração de schema, nenhuma edge function, nenhum cron.
-- Custo Lovable Cloud: leitura adicional única de `acordos` + `pagamentos` filtrados pelos 5 user_ids — impacto desprezível, query cacheada por React Query (`staleTime` 5 min).
+Botão "Exportar PDF" usando `window.print()` com CSS print já estilizado (sem dependência nova, custo zero).
 
-## Pontos a confirmar depois (não bloqueia)
+## O que falta você me informar (resposta direta à sua pergunta)
 
-- Se algum dos 5 nomes na `profiles` estiver grafado diferente do esperado, ajusto o match após você apontar.
+Tudo já foi respondido nas perguntas acima:
+
+1. ✅ Faixas NN/Colchão definidas.
+2. ✅ Metas cadastradas dentro da própria página (modal).
+3. ✅ Blocos qualitativos editáveis na própria tela.
+4. ✅ TMR = dias entre acordo e 1º pagamento.
+5. ⚠️ **Você vai precisar preencher manualmente, depois que a tela estiver pronta:**
+   - **Data de admissão de cada cobrador** (em "Minha Conta" do admin ou edição rápida na tela de Usuários) — sem isso "Tempo em casa" fica vazio.
+   - **Metas mensais** do Novo Mundo (NN, Colchão e global) — primeira vez para Maio/2026.
+   - **Textos do mês** (Ações, Próximos passos, Observações, Dificuldades, Ata).
+
+Nenhum dado operacional adicional é necessário — todo o resto sai do que já está no sistema.
+
+## Custo Lovable Cloud
+
+Impacto mínimo: leitura agregada de tabelas existentes + 2 tabelas novas pequenas (metas/textos têm <12 linhas por mês). Sem edge functions, sem cron, sem IA.
