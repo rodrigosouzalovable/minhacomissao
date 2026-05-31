@@ -124,10 +124,38 @@ export default function ComiteNovoMundo() {
 
         {/* Resumo executivo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KPI titulo="Carteira (CPFs)" valor={carteira.data?.totalQtd.toLocaleString('pt-BR') ?? '—'} />
-          <KPI titulo="Valor em aberto" valor={moeda(carteira.data?.totalValorAtualizado ?? 0)} />
-          <KPI titulo="Recuperado no mês" valor={moeda(acordos.data?.totalPagoValor ?? 0)} sub={`${acordos.data?.totalPagoQtd ?? 0} parcelas pagas`} />
-          <KPI titulo="Acordos fechados" valor={String(acordos.data?.totalAcordosQtd ?? 0)} sub={moeda(acordos.data?.totalAcordosValor ?? 0)} />
+          <KPI
+            titulo="Carteira (CPFs)"
+            valor={carteira.data?.totalQtd.toLocaleString('pt-BR') ?? '—'}
+            hint={(carteira.data?.totalQtd ?? 0) === 0 ? {
+              motivo: 'Nenhum devedor ativo encontrado com credor "ume_novo_mundo". Importe a base do credor para começar.',
+              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            } : undefined}
+          />
+          <KPI
+            titulo="Valor em aberto"
+            valor={moeda(carteira.data?.totalValorAtualizado ?? 0)}
+            hint={(carteira.data?.totalValorAtualizado ?? 0) === 0 ? {
+              motivo: 'Sem valores em aberto porque a base do credor está vazia.',
+              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            } : undefined}
+          />
+          <KPI
+            titulo="Recuperado no mês"
+            valor={moeda(acordos.data?.totalPagoValor ?? 0)}
+            sub={`${acordos.data?.totalPagoQtd ?? 0} parcelas pagas`}
+            hint={(acordos.data?.totalPagoValor ?? 0) === 0 ? {
+              motivo: 'Nenhum pagamento marcado como pago neste mês para acordos cujo CPF bate com a base Novo Mundo. Conforme parcelas forem marcadas como pagas em "Meus Acordos", este número atualiza sozinho.',
+            } : undefined}
+          />
+          <KPI
+            titulo="Acordos fechados"
+            valor={String(acordos.data?.totalAcordosQtd ?? 0)}
+            sub={moeda(acordos.data?.totalAcordosValor ?? 0)}
+            hint={(acordos.data?.totalAcordosQtd ?? 0) === 0 ? {
+              motivo: 'Nenhum acordo criado neste mês com CPF da base Novo Mundo. Cada novo acordo registrado em "Novo Acordo" cujo CPF esteja na base aparece aqui automaticamente.',
+            } : undefined}
+          />
         </div>
 
         {/* Funil */}
@@ -136,11 +164,39 @@ export default function ComiteNovoMundo() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
               <FunilItem rotulo="Base" valor={(carteira.data?.totalQtd ?? 0).toLocaleString('pt-BR')} />
-              <FunilItem rotulo="Tentativas" valor={(funil.data?.tentativas ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.tentativas ?? 0, carteira.data?.totalQtd ?? 0) + ' da base'} />
-              <FunilItem rotulo="Alô" valor={(funil.data?.alo ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.alo ?? 0, funil.data?.tentativas ?? 0)} />
-              <FunilItem rotulo="CPC" valor={(funil.data?.cpc ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.cpc ?? 0, funil.data?.alo ?? 0)} />
-              <FunilItem rotulo="CPC-A (acordo)" valor={(funil.data?.cpca ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.cpca ?? 0, funil.data?.cpc ?? 0)} />
-              <FunilItem rotulo="Pagamento" valor={String(acordos.data?.totalPagoQtd ?? 0)} sub={pct(acordos.data?.totalPagoQtd ?? 0, funil.data?.cpca ?? 0)} />
+              <FunilItem
+                rotulo="Tentativas"
+                valor={(funil.data?.tentativas ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.tentativas ?? 0, carteira.data?.totalQtd ?? 0) + ' da base'}
+                hint={(funil.data?.tentativas ?? 0) === 0 ? {
+                  motivo: 'Nenhuma tentativa registrada em "relatorio_acionamentos" para o mês. Importe a planilha de ligações ou registre tentativas pelo painel de Acionamento.',
+                  acao: { label: 'Ir para Relatórios', to: '/relatorios' },
+                } : undefined}
+              />
+              <FunilItem
+                rotulo="Alô"
+                valor={(funil.data?.alo ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.alo ?? 0, funil.data?.tentativas ?? 0)}
+                hint={(funil.data?.alo ?? 0) === 0 ? { motivo: 'Sem "Alô" registrado no mês. Importe a planilha de ligações na aba Relatórios.', acao: { label: 'Ir para Relatórios', to: '/relatorios' } } : undefined}
+              />
+              <FunilItem
+                rotulo="CPC"
+                valor={(funil.data?.cpc ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.cpc ?? 0, funil.data?.alo ?? 0)}
+                hint={(funil.data?.cpc ?? 0) === 0 ? { motivo: 'Sem CPC (contato com o cliente) no mês. CPCs vêm da planilha de ligações (coluna T = CPC) importada em Relatórios.', acao: { label: 'Ir para Relatórios', to: '/relatorios' } } : undefined}
+              />
+              <FunilItem
+                rotulo="CPC-A (acordo)"
+                valor={(funil.data?.cpca ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.cpca ?? 0, funil.data?.cpc ?? 0)}
+                hint={(funil.data?.cpca ?? 0) === 0 ? { motivo: 'Sem CPC-A (acordo) no mês. Acordos da planilha (coluna T = CPC-A) ou acordos criados no sistema durante o horário comercial contam aqui.', acao: { label: 'Ir para Relatórios', to: '/relatorios' } } : undefined}
+              />
+              <FunilItem
+                rotulo="Pagamento"
+                valor={String(acordos.data?.totalPagoQtd ?? 0)}
+                sub={pct(acordos.data?.totalPagoQtd ?? 0, funil.data?.cpca ?? 0)}
+                hint={(acordos.data?.totalPagoQtd ?? 0) === 0 ? { motivo: 'Nenhuma parcela paga no mês para acordos Novo Mundo. Conforme parcelas forem marcadas como pagas, este número atualiza automaticamente.' } : undefined}
+              />
             </div>
             <p className="text-xs text-muted-foreground mt-3">
               Funil de acionamento agregado (não segmentado por credor). Acordos e pagamentos filtrados por Novo Mundo.
