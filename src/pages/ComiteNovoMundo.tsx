@@ -70,6 +70,12 @@ export default function ComiteNovoMundo() {
   const acordos = useAcordosNovoMundo(mesAno, carteira.data?.cpfs);
   const userIds = useMemo(() => Array.from(acordos.data?.porUser.keys() ?? []), [acordos.data]);
   const cobradores = useCobradores(userIds);
+  const cobradoresFixos = useCobradoresFixos();
+  const idsFixos = useMemo(
+    () => (cobradoresFixos.data ?? []).map((c) => c.id).filter(Boolean),
+    [cobradoresFixos.data],
+  );
+  const historico = useHistoricoCobradores(idsFixos, carteira.data?.cpfs);
   const metas = useMetasMes(mesAno);
   const textos = useTextosMes(mesAno);
 
