@@ -103,6 +103,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                     <td className="p-2 text-right border-l">{d.totalContratos.toLocaleString('pt-BR')}</td>
                     <td className="p-2 text-right">{d.totalCpfsUnicos.toLocaleString('pt-BR')}</td>
                     <td className="p-2 text-right">{moeda(d.totalRisco)}</td>
+                    <td className="p-2 text-right border-l">{pctFmt(extras.data?.recuperacao?.pct_sobre_risco ?? 0)}</td>
                   </tr>
                 </tfoot>
               </table>
