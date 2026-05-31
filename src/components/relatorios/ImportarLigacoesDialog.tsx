@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -20,7 +21,8 @@ const HORAS = [
 
 const horaParaFaixa = (h: number) => `${h}h-${h + 1}h`;
 
-type Contagem = Record<string, { tentativas: number; whatsapp: number; alo: number; cpc: number; cpca: number }>;
+type ContagemFaixa = { tentativas: number; whatsapp: number; alo: number; cpc: number; cpca: number };
+type Contagem = Record<string, ContagemFaixa>;
 
 type Origem = '3c' | 'cobmais';
 
@@ -31,7 +33,10 @@ type Resumo = {
   ignoradas: number;
   foraExpediente: number;
   dataDetectada: string;
+  // 3C: usa contagem (única data). CobMais: usa contagemPorData.
   contagem: Contagem;
+  contagemPorData?: Record<string, Contagem>;
+  datas?: { data: string; linhas: number }[];
   totalTent: number;
   totalWa: number;
   totalAlo: number;
@@ -53,7 +58,6 @@ function parseCallDate(raw: string): { dataIso: string; hora: number } | null {
 const normStr = (s: any) =>
   String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/^"|"$/g, '');
 
-// Normaliza removendo acentos para casar "alteração", "2ª via" etc.
 const normEvento = (s: any) => {
   return normStr(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 };
@@ -66,6 +70,18 @@ function emptyContagem(): Contagem {
   return c;
 }
 
+function somarTotais(contagens: Contagem[]): ContagemFaixa {
+  const tot: ContagemFaixa = { tentativas: 0, whatsapp: 0, alo: 0, cpc: 0, cpca: 0 };
+  contagens.forEach(c => HORAS.forEach(h => {
+    tot.tentativas += c[h].tentativas;
+    tot.whatsapp += c[h].whatsapp;
+    tot.alo += c[h].alo;
+    tot.cpc += c[h].cpc;
+    tot.cpca += c[h].cpca;
+  }));
+  return tot;
+}
+
 export function ImportarLigacoesDialog({ onDone }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -75,6 +91,8 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
   const [horaIni, setHoraIni] = useState(8);
   const [horaFim, setHoraFim] = useState(19);
   const [modo, setModo] = useState<'substituir' | 'somar'>('substituir');
+  const [importarTodas, setImportarTodas] = useState(true);
+  const [dataPreview, setDataPreview] = useState<string>('');
 
   const reset = () => {
     setResumo(null);
@@ -83,6 +101,8 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
     setHoraFim(19);
     setModo('substituir');
     setOrigem('3c');
+    setImportarTodas(true);
+    setDataPreview('');
   };
 
   const handleFile3C = async (file: File) => {
@@ -131,6 +151,7 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
         totalTent, totalWa: 0, totalAlo: 0, totalCpc, totalCpca,
       });
       setDataAlvo(dataDetectada);
+      setModo('substituir');
     } catch (e: any) {
       console.error(e);
       toast.error('Erro ao ler planilha: ' + (e?.message ?? 'desconhecido'));
@@ -149,7 +170,6 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
       const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
       if (rows.length < 2) { toast.error('Planilha vazia'); return; }
 
-      // Localizar linha de cabeçalho com Data, Hora, Evento, CPF/CNPJ
       let headerIdx = -1;
       let idxData = -1, idxHora = -1, idxEvento = -1, idxCpf = -1;
       for (let i = 0; i < Math.min(rows.length, 50); i++) {
@@ -170,7 +190,7 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
 
       let total = 0, validas = 0, ignoradas = 0, foraExp = 0;
       let totalTent = 0, totalWa = 0, totalAlo = 0, totalCpc = 0, totalCpca = 0;
-      const contagem = emptyContagem();
+      const contagemPorData: Record<string, Contagem> = {};
       const datasMap: Record<string, number> = {};
 
       for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -181,13 +201,11 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
         const cpf = cpfDigits(row[idxCpf]);
         if (cpf.length < 11) { ignoradas++; continue; }
 
-        // Hora: aceita "HH:MM" ou "HH:MM:SS"
         const horaRaw = String(row[idxHora] ?? '').trim();
         const mHora = horaRaw.match(/^(\d{1,2}):(\d{2})/);
         if (!mHora) { ignoradas++; continue; }
         const horaInt = parseInt(mHora[1], 10);
 
-        // Data: DD/MM/YYYY
         const dataRaw = String(row[idxData] ?? '').trim();
         const mData = dataRaw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
         if (!mData) { ignoradas++; continue; }
@@ -198,8 +216,10 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
         if (horaInt < 8 || horaInt > 18) { foraExp++; continue; }
         const faixa = horaParaFaixa(horaInt);
 
-        // Toda linha com CPF = tentativa
-        contagem[faixa].tentativas++;
+        if (!contagemPorData[dataIso]) contagemPorData[dataIso] = emptyContagem();
+        const cont = contagemPorData[dataIso];
+
+        cont[faixa].tentativas++;
         totalTent++;
 
         const ev = normEvento(row[idxEvento]);
@@ -209,26 +229,46 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
         const isBoleto = ev.includes('boleto') || ev.includes('2a via') || ev.includes('2 via');
 
         if (isWhatsapp) {
-          contagem[faixa].whatsapp++; totalWa++;
-          contagem[faixa].alo++; totalAlo++;
+          cont[faixa].whatsapp++; totalWa++;
+          cont[faixa].alo++; totalAlo++;
         }
         if (isCpc) {
-          contagem[faixa].cpc++; totalCpc++;
-          contagem[faixa].alo++; totalAlo++;
+          cont[faixa].cpc++; totalCpc++;
+          cont[faixa].alo++; totalAlo++;
         }
         if (isAcordo || isBoleto) {
-          contagem[faixa].cpca++; totalCpca++;
-          contagem[faixa].cpc++; totalCpc++;
-          contagem[faixa].alo++; totalAlo++;
+          cont[faixa].cpca++; totalCpca++;
+          cont[faixa].cpc++; totalCpc++;
+          cont[faixa].alo++; totalAlo++;
         }
       }
 
-      const dataDetectada = Object.entries(datasMap).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+      const datasOrdenadas = Object.entries(datasMap)
+        .sort((a, b) => b[1] - a[1])
+        .map(([data, linhas]) => ({ data, linhas }));
+      const dataDetectada = datasOrdenadas[0]?.data ?? '';
+
+      // Resumo.contagem agrega tudo (para o caso "data única") — mas a UI de CobMais
+      // usa contagemPorData[dataPreview] na pré-visualização.
+      const contagemAgregada = emptyContagem();
+      Object.values(contagemPorData).forEach(c => HORAS.forEach(h => {
+        contagemAgregada[h].tentativas += c[h].tentativas;
+        contagemAgregada[h].whatsapp += c[h].whatsapp;
+        contagemAgregada[h].alo += c[h].alo;
+        contagemAgregada[h].cpc += c[h].cpc;
+        contagemAgregada[h].cpca += c[h].cpca;
+      }));
+
       setResumo({
-        origem: 'cobmais', total, validas, ignoradas, foraExpediente: foraExp, dataDetectada, contagem,
+        origem: 'cobmais', total, validas, ignoradas, foraExpediente: foraExp,
+        dataDetectada, contagem: contagemAgregada, contagemPorData, datas: datasOrdenadas,
         totalTent, totalWa, totalAlo, totalCpc, totalCpca,
       });
       setDataAlvo(dataDetectada);
+      setDataPreview(dataDetectada);
+      setImportarTodas(datasOrdenadas.length > 1);
+      // Default CobMais = somar (combina com 3C ou importação anterior)
+      setModo('somar');
     } catch (e: any) {
       console.error(e);
       toast.error('Erro ao ler planilha: ' + (e?.message ?? 'desconhecido'));
@@ -242,80 +282,118 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
     return handleFileCobmais(file);
   };
 
+  const isCob = resumo?.origem === 'cobmais';
+  const multiDatas = isCob && (resumo?.datas?.length ?? 0) > 1;
+
+  const previewContagem: Contagem = useMemo(() => {
+    if (!resumo) return emptyContagem();
+    if (isCob && resumo.contagemPorData) {
+      if (importarTodas) return resumo.contagem; // soma de todas
+      return resumo.contagemPorData[dataPreview] ?? emptyContagem();
+    }
+    return resumo.contagem;
+  }, [resumo, isCob, importarTodas, dataPreview]);
+
+  const previewTotais = useMemo(() => somarTotais([previewContagem]), [previewContagem]);
+
   const confirmar = async () => {
-    if (!resumo || !dataAlvo) return;
+    if (!resumo) return;
     if (horaFim <= horaIni) { toast.error('Hora final deve ser maior que a hora inicial'); return; }
     const iniIdx = horaIni - 8;
     const fimIdx = horaFim - 1 - 8;
     if (iniIdx < 0 || fimIdx < 0 || iniIdx > fimIdx) { toast.error('Intervalo inválido'); return; }
 
-    const isCob = resumo.origem === 'cobmais';
+    const isCobLocal = resumo.origem === 'cobmais';
+
+    // Lista de (data, contagem) a aplicar
+    const alvos: { data: string; cont: Contagem }[] = [];
+    if (isCobLocal && resumo.contagemPorData) {
+      if (importarTodas) {
+        Object.entries(resumo.contagemPorData).forEach(([d, c]) => alvos.push({ data: d, cont: c }));
+      } else {
+        if (!dataAlvo) { toast.error('Selecione uma data'); return; }
+        const c = resumo.contagemPorData[dataAlvo] ?? emptyContagem();
+        alvos.push({ data: dataAlvo, cont: c });
+      }
+    } else {
+      if (!dataAlvo) { toast.error('Selecione uma data'); return; }
+      alvos.push({ data: dataAlvo, cont: resumo.contagem });
+    }
+
     setLoading(true);
     try {
-      const { data: existentes } = await supabase
-        .from('relatorio_acionamentos' as any)
-        .select('hora, tentativas, whatsapp, alo, cpc, cpca')
-        .eq('data', dataAlvo);
-      const atuais: Record<string, { tentativas: number; whatsapp: number; alo: number; cpc: number; cpca: number }> = {};
-      (existentes as any[] | null)?.forEach(r => {
-        atuais[r.hora] = {
-          tentativas: r.tentativas ?? 0,
-          whatsapp: r.whatsapp ?? 0,
-          alo: r.alo ?? 0,
-          cpc: r.cpc ?? 0,
-          cpca: r.cpca ?? 0,
-        };
-      });
-
-      let faixasAtualizadas = 0;
+      let totalFaixas = 0;
+      let datasAfetadas = 0;
       let sumTent = 0, sumWa = 0, sumAlo = 0, sumCpc = 0, sumCpca = 0;
-      const logPrefix = isCob ? 'importacao_cobmais_' : 'importacao_planilha_';
+      const logPrefix = isCobLocal ? 'importacao_cobmais_' : 'importacao_planilha_';
 
-      for (let i = iniIdx; i <= fimIdx; i++) {
-        const h = HORAS[i];
-        const imp = resumo.contagem[h];
-        const ant = atuais[h] ?? { tentativas: 0, whatsapp: 0, alo: 0, cpc: 0, cpca: 0 };
-
-        // 3C nunca toca em whatsapp/alo
-        const novo = isCob
-          ? (modo === 'substituir'
-              ? { tentativas: imp.tentativas, whatsapp: imp.whatsapp, alo: imp.alo, cpc: imp.cpc, cpca: imp.cpca }
-              : { tentativas: ant.tentativas + imp.tentativas, whatsapp: ant.whatsapp + imp.whatsapp, alo: ant.alo + imp.alo, cpc: ant.cpc + imp.cpc, cpca: ant.cpca + imp.cpca })
-          : (modo === 'substituir'
-              ? { tentativas: imp.tentativas, whatsapp: ant.whatsapp, alo: ant.alo, cpc: imp.cpc, cpca: imp.cpca }
-              : { tentativas: ant.tentativas + imp.tentativas, whatsapp: ant.whatsapp, alo: ant.alo, cpc: ant.cpc + imp.cpc, cpca: ant.cpca + imp.cpca });
-
-        if (
-          novo.tentativas === ant.tentativas &&
-          novo.whatsapp === ant.whatsapp &&
-          novo.alo === ant.alo &&
-          novo.cpc === ant.cpc &&
-          novo.cpca === ant.cpca
-        ) continue;
-
-        const { error } = await supabase
+      for (const alvo of alvos) {
+        const { data: existentes } = await supabase
           .from('relatorio_acionamentos' as any)
-          .upsert({ data: dataAlvo, hora: h, ...novo } as any, { onConflict: 'data,hora' });
-        if (error) throw error;
+          .select('hora, tentativas, whatsapp, alo, cpc, cpca')
+          .eq('data', alvo.data);
+        const atuais: Record<string, ContagemFaixa> = {};
+        (existentes as any[] | null)?.forEach(r => {
+          atuais[r.hora] = {
+            tentativas: r.tentativas ?? 0,
+            whatsapp: r.whatsapp ?? 0,
+            alo: r.alo ?? 0,
+            cpc: r.cpc ?? 0,
+            cpca: r.cpca ?? 0,
+          };
+        });
 
-        const logs: any[] = [];
-        if (novo.tentativas !== ant.tentativas) logs.push({ acao: logPrefix + 'tentativas', data: dataAlvo, hora: h, valor_anterior: ant.tentativas, valor_novo: novo.tentativas });
-        if (novo.whatsapp !== ant.whatsapp) logs.push({ acao: logPrefix + 'whatsapp', data: dataAlvo, hora: h, valor_anterior: ant.whatsapp, valor_novo: novo.whatsapp });
-        if (novo.alo !== ant.alo) logs.push({ acao: logPrefix + 'alo', data: dataAlvo, hora: h, valor_anterior: ant.alo, valor_novo: novo.alo });
-        if (novo.cpc !== ant.cpc) logs.push({ acao: logPrefix + 'cpc', data: dataAlvo, hora: h, valor_anterior: ant.cpc, valor_novo: novo.cpc });
-        if (novo.cpca !== ant.cpca) logs.push({ acao: logPrefix + 'cpca', data: dataAlvo, hora: h, valor_anterior: ant.cpca, valor_novo: novo.cpca });
-        if (logs.length) await supabase.from('relatorio_acionamentos_log' as any).insert(logs as any);
+        let faixasAtualizadas = 0;
 
-        faixasAtualizadas++;
-        sumTent += imp.tentativas;
-        sumWa += imp.whatsapp;
-        sumAlo += imp.alo;
-        sumCpc += imp.cpc;
-        sumCpca += imp.cpca;
+        for (let i = iniIdx; i <= fimIdx; i++) {
+          const h = HORAS[i];
+          const imp = alvo.cont[h];
+          const ant = atuais[h] ?? { tentativas: 0, whatsapp: 0, alo: 0, cpc: 0, cpca: 0 };
+
+          // 3C nunca toca em whatsapp/alo
+          const novo = isCobLocal
+            ? (modo === 'substituir'
+                ? { tentativas: imp.tentativas, whatsapp: imp.whatsapp, alo: imp.alo, cpc: imp.cpc, cpca: imp.cpca }
+                : { tentativas: ant.tentativas + imp.tentativas, whatsapp: ant.whatsapp + imp.whatsapp, alo: ant.alo + imp.alo, cpc: ant.cpc + imp.cpc, cpca: ant.cpca + imp.cpca })
+            : (modo === 'substituir'
+                ? { tentativas: imp.tentativas, whatsapp: ant.whatsapp, alo: ant.alo, cpc: imp.cpc, cpca: imp.cpca }
+                : { tentativas: ant.tentativas + imp.tentativas, whatsapp: ant.whatsapp, alo: ant.alo, cpc: ant.cpc + imp.cpc, cpca: ant.cpca + imp.cpca });
+
+          if (
+            novo.tentativas === ant.tentativas &&
+            novo.whatsapp === ant.whatsapp &&
+            novo.alo === ant.alo &&
+            novo.cpc === ant.cpc &&
+            novo.cpca === ant.cpca
+          ) continue;
+
+          const { error } = await supabase
+            .from('relatorio_acionamentos' as any)
+            .upsert({ data: alvo.data, hora: h, ...novo } as any, { onConflict: 'data,hora' });
+          if (error) throw error;
+
+          const logs: any[] = [];
+          if (novo.tentativas !== ant.tentativas) logs.push({ acao: logPrefix + 'tentativas', data: alvo.data, hora: h, valor_anterior: ant.tentativas, valor_novo: novo.tentativas });
+          if (novo.whatsapp !== ant.whatsapp) logs.push({ acao: logPrefix + 'whatsapp', data: alvo.data, hora: h, valor_anterior: ant.whatsapp, valor_novo: novo.whatsapp });
+          if (novo.alo !== ant.alo) logs.push({ acao: logPrefix + 'alo', data: alvo.data, hora: h, valor_anterior: ant.alo, valor_novo: novo.alo });
+          if (novo.cpc !== ant.cpc) logs.push({ acao: logPrefix + 'cpc', data: alvo.data, hora: h, valor_anterior: ant.cpc, valor_novo: novo.cpc });
+          if (novo.cpca !== ant.cpca) logs.push({ acao: logPrefix + 'cpca', data: alvo.data, hora: h, valor_anterior: ant.cpca, valor_novo: novo.cpca });
+          if (logs.length) await supabase.from('relatorio_acionamentos_log' as any).insert(logs as any);
+
+          faixasAtualizadas++;
+          sumTent += imp.tentativas;
+          sumWa += imp.whatsapp;
+          sumAlo += imp.alo;
+          sumCpc += imp.cpc;
+          sumCpca += imp.cpca;
+        }
+
+        if (faixasAtualizadas > 0) datasAfetadas++;
+        totalFaixas += faixasAtualizadas;
       }
 
-      const partes = [`${faixasAtualizadas} faixa(s)`, `${sumTent} tent.`];
-      if (isCob) partes.push(`${sumWa} WA`, `${sumAlo} Alô`);
+      const partes = [`${datasAfetadas} data(s)`, `${totalFaixas} faixa(s)`, `${sumTent} tent.`];
+      if (isCobLocal) partes.push(`${sumWa} WA`, `${sumAlo} Alô`);
       partes.push(`${sumCpc} CPC`, `${sumCpca} CPC-A`);
       toast.success(partes.join(' · '));
       setOpen(false);
@@ -327,8 +405,6 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
       setLoading(false);
     }
   };
-
-  const isCob = resumo?.origem === 'cobmais';
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
@@ -365,9 +441,10 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Lê as colunas <strong>Data</strong>, <strong>Hora</strong>, <strong>Evento</strong> e <strong>CPF/CNPJ</strong>.
-                Toda linha com CPF conta como <strong>Tentativa</strong>. Eventos de <strong>WhatsApp</strong> somam em WhatsApp + Alô.
-                <strong> Contato com Cliente</strong> soma em CPC + Alô. <strong>Acordo</strong> e <strong>Boleto Gerado/Alteração</strong> somam em CPC-A + CPC + Alô.
+                Lê <strong>Data</strong>, <strong>Hora</strong>, <strong>Evento</strong> e <strong>CPF/CNPJ</strong>.
+                Toda linha com CPF = <strong>Tentativa</strong>. <strong>WhatsApp</strong> soma em WhatsApp + Alô.
+                <strong> Contato com Cliente</strong> soma em CPC + Alô. <strong>Acordo</strong> e <strong>Boleto/2ª via</strong> somam em CPC-A + CPC + Alô.
+                <br />Suporta múltiplas datas no mesmo arquivo. Default <strong>Somar</strong> (combina com 3C Plus já importado).
               </p>
             )}
 
@@ -415,6 +492,53 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
               </div>
             </div>
 
+            {isCob && resumo.datas && resumo.datas.length > 0 && (
+              <div className="rounded border p-3 space-y-2 bg-muted/30">
+                <p className="text-xs font-medium">
+                  Datas detectadas no arquivo ({resumo.datas.length}):
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {resumo.datas.map(d => {
+                    const [y, m, dd] = d.data.split('-');
+                    const isActive = !importarTodas && dataPreview === d.data;
+                    return (
+                      <button
+                        key={d.data}
+                        type="button"
+                        onClick={() => { setImportarTodas(false); setDataPreview(d.data); setDataAlvo(d.data); }}
+                        className={`text-xs px-2 py-1 rounded border tabular-nums ${isActive ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted'}`}
+                      >
+                        {dd}/{m}/{y} · {d.linhas}
+                      </button>
+                    );
+                  })}
+                </div>
+                {multiDatas && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Checkbox
+                      id="imp-todas"
+                      checked={importarTodas}
+                      onCheckedChange={(v) => {
+                        const b = !!v;
+                        setImportarTodas(b);
+                        if (b) setDataPreview('');
+                        else if (!dataPreview) setDataPreview(resumo.dataDetectada);
+                      }}
+                    />
+                    <Label htmlFor="imp-todas" className="font-normal cursor-pointer text-sm">
+                      Importar todas as datas detectadas
+                    </Label>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Pré-visualização abaixo:{' '}
+                  <strong>
+                    {importarTodas ? 'soma de todas as datas' : (dataPreview || '—')}
+                  </strong>
+                </p>
+              </div>
+            )}
+
             <div className="rounded border max-h-56 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted sticky top-0">
@@ -431,21 +555,36 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
                   {HORAS.map(h => (
                     <tr key={h} className="border-t">
                       <td className="p-2">{h}</td>
-                      <td className="p-2 text-right tabular-nums">{resumo.contagem[h].tentativas}</td>
-                      {isCob && <td className="p-2 text-right tabular-nums">{resumo.contagem[h].whatsapp}</td>}
-                      {isCob && <td className="p-2 text-right tabular-nums">{resumo.contagem[h].alo}</td>}
-                      <td className="p-2 text-right tabular-nums">{resumo.contagem[h].cpc}</td>
-                      <td className="p-2 text-right tabular-nums">{resumo.contagem[h].cpca}</td>
+                      <td className="p-2 text-right tabular-nums">{previewContagem[h].tentativas}</td>
+                      {isCob && <td className="p-2 text-right tabular-nums">{previewContagem[h].whatsapp}</td>}
+                      {isCob && <td className="p-2 text-right tabular-nums">{previewContagem[h].alo}</td>}
+                      <td className="p-2 text-right tabular-nums">{previewContagem[h].cpc}</td>
+                      <td className="p-2 text-right tabular-nums">{previewContagem[h].cpca}</td>
                     </tr>
                   ))}
+                  <tr className="border-t font-bold bg-muted/30">
+                    <td className="p-2">TOTAL</td>
+                    <td className="p-2 text-right tabular-nums">{previewTotais.tentativas}</td>
+                    {isCob && <td className="p-2 text-right tabular-nums">{previewTotais.whatsapp}</td>}
+                    {isCob && <td className="p-2 text-right tabular-nums">{previewTotais.alo}</td>}
+                    <td className="p-2 text-right tabular-nums">{previewTotais.cpc}</td>
+                    <td className="p-2 text-right tabular-nums">{previewTotais.cpca}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <Label className="text-xs">Data alvo</Label>
-                <Input type="date" value={dataAlvo} onChange={(e) => setDataAlvo(e.target.value)} />
+                <Label className="text-xs">
+                  {isCob && importarTodas ? 'Data (várias)' : 'Data alvo'}
+                </Label>
+                <Input
+                  type="date"
+                  value={isCob && importarTodas ? '' : dataAlvo}
+                  disabled={isCob && importarTodas}
+                  onChange={(e) => { setDataAlvo(e.target.value); setDataPreview(e.target.value); }}
+                />
               </div>
               <div>
                 <Label className="text-xs">Hora inicial</Label>
@@ -485,7 +624,7 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
               </RadioGroup>
               <p className="text-xs text-muted-foreground mt-1">
                 {isCob
-                  ? 'Aplica Tentativas, WhatsApp, Alô, CPC e CPC-A nas faixas selecionadas.'
+                  ? <>Use <strong>Somar</strong> para combinar com uma importação anterior (ex.: 3C Plus). Use <strong>Substituir</strong> apenas se quiser reimportar o mesmo CobMais.</>
                   : 'Aplica Tentativas, CPC e CPC-A. WhatsApp/Alô não são alterados.'}
               </p>
             </div>
@@ -496,7 +635,10 @@ export function ImportarLigacoesDialog({ onDone }: Props) {
           {resumo && (
             <>
               <Button variant="ghost" onClick={reset} disabled={loading}>Trocar arquivo</Button>
-              <Button onClick={confirmar} disabled={loading || !dataAlvo}>
+              <Button
+                onClick={confirmar}
+                disabled={loading || (!isCob && !dataAlvo) || (isCob && !importarTodas && !dataAlvo)}
+              >
                 {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Confirmar importação
               </Button>
