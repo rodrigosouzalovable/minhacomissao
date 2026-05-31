@@ -262,6 +262,140 @@ export function useCobradores(userIds: string[]) {
   });
 }
 
+// Lista fixa de cobradores do Novo Mundo (match por primeiro nome em profiles.nome)
+export const COBRADORES_FIXOS_NM = [
+  'Wallace',
+  'Ana Flávia',
+  'Fernanda',
+  'Yasmin',
+  'Rodrigo',
+];
+
+export function useCobradoresFixos() {
+  return useQuery({
+    queryKey: ['comite-nm', 'cobradores-fixos'],
+    queryFn: async () => {
+      const results: Array<{ id: string; nome: string; data_admissao: string | null; created_at: string | null; chave: string }> = [];
+      for (const nome of COBRADORES_FIXOS_NM) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, nome, data_admissao, created_at')
+          .ilike('nome', `${nome}%`)
+          .limit(1);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const p = data[0] as any;
+          results.push({
+            id: p.id,
+            nome: p.nome,
+            data_admissao: p.data_admissao ?? null,
+            created_at: p.created_at ?? null,
+            chave: nome,
+          });
+        } else {
+          results.push({ id: '', nome, data_admissao: null, created_at: null, chave: nome });
+        }
+      }
+      return results;
+    },
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useHistoricoCobradores(userIds: string[], cpfsCarteira: Set<string> | undefined) {
+  return useQuery({
+    queryKey: ['comite-nm', 'historico-cobradores', userIds.sort().join(','), cpfsCarteira?.size ?? 0],
+    enabled: userIds.length > 0 && !!cpfsCarteira && cpfsCarteira.size > 0,
+    queryFn: async () => {
+      const cpfs = cpfsCarteira!;
+      const porUser = new Map<string, { qtd: number; valor: number; pago: number; tmr: number | null }>();
+      for (const uid of userIds) porUser.set(uid, { qtd: 0, valor: 0, pago: 0, tmr: null });
+
+      // Todos os acordos (paginado) desses usuários
+      const acordosAll: any[] = [];
+      const chunkSize = 50;
+      for (let i = 0; i < userIds.length; i += chunkSize) {
+        const chunk = userIds.slice(i, i + chunkSize);
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('acordos')
+            .select('id, cliente_cpf, valor_total, criado_em, user_id')
+            .in('user_id', chunk)
+            .range(from, from + pageSize - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          acordosAll.push(...data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+      }
+      const nmAcordos = acordosAll.filter((a) => cpfs.has(normalizeCpf(a.cliente_cpf)));
+      const acordoIds = nmAcordos.map((a) => a.id);
+      const acordoIdToUser = new Map(nmAcordos.map((a) => [a.id, a.user_id]));
+
+      // Pagamentos pagos para esses acordos
+      const pagamentos: any[] = [];
+      const primeiroPagPorAcordo = new Map<string, string>();
+      const idChunk = 200;
+      for (let i = 0; i < acordoIds.length; i += idChunk) {
+        const c = acordoIds.slice(i, i + idChunk);
+        const { data, error } = await supabase
+          .from('pagamentos')
+          .select('acordo_id, valor_parcela, data_paga')
+          .in('acordo_id', c)
+          .eq('status', 'pago')
+          .not('data_paga', 'is', null)
+          .order('data_paga', { ascending: true });
+        if (error) throw error;
+        for (const p of data ?? []) {
+          pagamentos.push(p);
+          if (!primeiroPagPorAcordo.has(p.acordo_id)) {
+            primeiroPagPorAcordo.set(p.acordo_id, p.data_paga);
+          }
+        }
+      }
+
+      // Acumular por user
+      for (const a of nmAcordos) {
+        const e = porUser.get(a.user_id);
+        if (!e) continue;
+        e.qtd += 1;
+        e.valor += Number(a.valor_total ?? 0);
+      }
+      for (const p of pagamentos) {
+        const uid = acordoIdToUser.get(p.acordo_id);
+        if (!uid) continue;
+        const e = porUser.get(uid);
+        if (!e) continue;
+        e.pago += Number(p.valor_parcela ?? 0);
+      }
+
+      // TMR por user
+      const tmrAcum = new Map<string, { soma: number; qtd: number }>();
+      for (const a of nmAcordos) {
+        const primeira = primeiroPagPorAcordo.get(a.id);
+        if (!primeira) continue;
+        const dias = Math.max(0, Math.floor(
+          (new Date(primeira).getTime() - new Date(a.criado_em).getTime()) / 86400000,
+        ));
+        const acc = tmrAcum.get(a.user_id) ?? { soma: 0, qtd: 0 };
+        acc.soma += dias;
+        acc.qtd += 1;
+        tmrAcum.set(a.user_id, acc);
+      }
+      for (const [uid, acc] of tmrAcum.entries()) {
+        const e = porUser.get(uid);
+        if (e) e.tmr = acc.qtd > 0 ? acc.soma / acc.qtd : null;
+      }
+
+      return porUser;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useMetasMes(mesAno: string) {
   return useQuery({
     queryKey: ['comite-nm', 'metas', mesAno],
