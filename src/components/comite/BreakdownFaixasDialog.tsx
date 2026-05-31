@@ -1,14 +1,19 @@
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { TODAS_FAIXAS, useCarteira } from '@/hooks/useComiteNovoMundo';
+import { TODAS_FAIXAS, useCarteira, useKpisExtras } from '@/hooks/useComiteNovoMundo';
 import { Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const moeda = (v: number) =>
   (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
 
+const pctFmt = (v: number) => `${((v || 0) * 100).toFixed(1)}%`;
+
 export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }) {
   const carteira = useCarteira();
   const d = carteira.data;
+  const mesAno = (() => { const x = new Date(); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; })();
+  const extras = useKpisExtras(mesAno);
 
   return (
     <Dialog>
