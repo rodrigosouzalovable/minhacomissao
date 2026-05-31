@@ -131,18 +131,22 @@ export default function ComiteNovoMundo() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KPI
             titulo="Carteira (CPFs)"
-            valor={carteira.data?.totalQtd.toLocaleString('pt-BR') ?? '—'}
-            hint={(carteira.data?.totalQtd ?? 0) === 0 ? {
-              motivo: 'Nenhum devedor ativo encontrado com credor "ume_novo_mundo". Importe a base do credor para começar.',
-              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            valor={(carteira.data?.totalCpfsUnicos ?? 0).toLocaleString('pt-BR')}
+            sub={
+              carteira.data?.snapshot
+                ? `${(carteira.data.totalContratos ?? 0).toLocaleString('pt-BR')} contratos · importado ${new Date(carteira.data.snapshot.importado_em).toLocaleDateString('pt-BR')}`
+                : undefined
+            }
+            extra={podeEditar ? <BreakdownFaixasDialog trigger={<Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]">Detalhar</Button>} /> : undefined}
+            hint={(carteira.data?.totalCpfsUnicos ?? 0) === 0 ? {
+              motivo: 'Nenhuma carteira importada ainda. Use o botão "Importar planilha" no topo da página para enviar o arquivo CPF NOVO MUNDO (.xlsx) com colunas CPF/CNPJ, CREDOR, ATRASO e RISCO.',
             } : undefined}
           />
           <KPI
-            titulo="Valor em aberto"
-            valor={moeda(carteira.data?.totalValorAtualizado ?? 0)}
-            hint={(carteira.data?.totalValorAtualizado ?? 0) === 0 ? {
-              motivo: 'Sem valores em aberto porque a base do credor está vazia.',
-              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            titulo="Valor em risco"
+            valor={moeda(carteira.data?.totalRisco ?? 0)}
+            hint={(carteira.data?.totalRisco ?? 0) === 0 ? {
+              motivo: 'Sem valores em risco porque nenhuma carteira foi importada ainda.',
             } : undefined}
           />
           <KPI
