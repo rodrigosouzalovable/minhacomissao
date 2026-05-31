@@ -73,6 +73,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                     const totQ = ina.qtd + apo.qtd;
                     const totR = ina.risco + apo.risco;
                     const totCpfs = d.porFaixa[f].cpfsUnicos;
+                    const recFaixa = extras.data?.recuperacao?.por_faixa?.[f];
                     return (
                       <tr key={f} className="border-b">
                         <td className="p-2 font-medium">{f}</td>
@@ -85,6 +86,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                         <td className="p-2 text-right border-l font-medium">{totQ.toLocaleString('pt-BR')}</td>
                         <td className="p-2 text-right font-medium">{totCpfs.toLocaleString('pt-BR')}</td>
                         <td className="p-2 text-right font-medium">{moeda(totR)}</td>
+                        <td className="p-2 text-right border-l">{recFaixa ? pctFmt(recFaixa.pct) : '—'}</td>
                       </tr>
                     );
                   })}
