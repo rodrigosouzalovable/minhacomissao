@@ -18,11 +18,14 @@ import {
   useCobradores,
   useMetasMes,
   useTextosMes,
+  useComiteRealtime,
   FAIXAS_NN,
   FAIXAS_COLCHAO,
   TODAS_FAIXAS,
   type FaixaKey,
 } from '@/hooks/useComiteNovoMundo';
+import { CampoZeradoHint } from '@/components/comite/CampoZeradoHint';
+import { InformarAdmissaoDialog } from '@/components/comite/InformarAdmissaoDialog';
 
 const moeda = (v: number) =>
   (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
