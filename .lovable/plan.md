@@ -1,72 +1,67 @@
-# Plano — Página "Comitê Novo Mundo"
+## Objetivo
 
-Nova rota interna `/admin/comite-novomundo` que reproduz o template do Comitê de Resultados UME já preenchido com dados reais do credor `ume_novo_mundo`, com seletor de mês e exportação.
+Na página `/admin/comite-novomundo`, transformar cada campo zerado/vazio em um **ponto de ação guiado** que explica exatamente o que falta no sistema para preencher aquele número — e garantir que, conforme acordos e pagamentos forem registrados no dia a dia, o painel se atualize sozinho sem precisar de importação manual.
 
-## O que vem direto do banco (sem trabalho extra)
+---
 
-- **Base / Carteira**: `devedores` onde `credor = 'ume_novo_mundo' AND ativo = true` (qtd, valor original, valor atualizado).
-- **Aging List**: mesma tabela, agrupando por dias de atraso a partir de `data_vencimento`:
-  - NN: 1–30 / 31–60 / 61–90
-  - Colchão: 91–180 / 181–360 / 360+
-- **Funil do mês** (por hora e dia, somado no mês): `relatorio_acionamentos` → tentativas, whatsapp, alô, CPC, CPC-A, acordos_valor.
-- **Acordos fechados**: `acordos` filtrando CPFs do Novo Mundo (qtd, valor_total, ticket médio).
-- **Recuperação realizada**: `pagamentos` com `status='pago'` no mês, juntando com `acordos` do credor.
-- **Performance por cobrador**: `acordos` + `pagamentos` agrupado por `user_id`/`profiles.nome` (qtd acordos, valor acordado, valor recebido, taxa).
-- **TMR**: média de `(data_paga do 1º pagamento − criado_em do acordo)` em dias, por mês.
-- **Mês anterior vs atual**: mesma RPC `comparativo_mensal_global` adaptada para filtrar por credor.
+## Parte 1 — Diagnóstico "Por que está zerado?"
 
-## O que precisa de schema novo (tudo numa migração)
+Cada card/linha do relatório ganha um indicador quando o valor é 0/—. Ao passar o mouse (ou clicar em um ícone de alerta âmbar), abre um popover explicando **a causa real** e **o que fazer**. As causas possíveis, mapeadas a partir das queries já existentes em `useComiteNovoMundo.ts`:
 
-1. **`profiles.data_admissao DATE`** — para calcular "Tempo em casa" do operador.
-2. **`comite_metas_novomundo`** — meta mensal por faixa:
-   - `mes_ano TEXT` (YYYY-MM), `faixa TEXT` (`1-30`, `31-60`, `61-90`, `91-180`, `181-360`, `360+`, `total`), `meta_valor NUMERIC`, `tipo TEXT` ('nn' | 'colchao' | 'global').
-   - RLS: leitura para `authenticated`, escrita só admin.
-3. **`comite_textos_novomundo`** — blocos qualitativos editáveis:
-   - `mes_ano TEXT`, `bloco TEXT` (`acoes_mes`, `proximos_passos`, `observacoes`, `dificuldades`, `ata`), `conteudo TEXT`.
-   - RLS: leitura `authenticated`, escrita só admin/gestor.
+| Campo zerado | Causa provável | Ação sugerida (CTA) |
+|---|---|---|
+| Carteira (CPFs) / Valor em aberto / Aging | Nenhum devedor com `credor = 'ume_novo_mundo'` ativo | Botão "Importar base Novo Mundo" → leva para `/admin/importar-devedores` |
+| Funil — Tentativas/Alô/CPC/CPC-A | Sem linhas em `relatorio_acionamentos` no mês | Botão "Importar planilha de ligações" → abre `ImportarLigacoesDialog` |
+| Recuperado / Acordos fechados | Sem acordos no mês cujo CPF cruza com a base do credor | "Os acordos do mês ainda não bateram com CPFs da base. Verifique se a base do credor está importada." |
+| Meta NN/Colchão/Global = 0 | Sem registro em `comite_metas_novomundo` para o mês | Botão "Definir meta" → abre o `MetasDialog` já existente, scrollado na faixa correta |
+| TMR — | Nenhum acordo do mês teve primeiro pagamento ainda | "TMR só calcula quando há pelo menos um pagamento registrado em acordo criado no mês." |
+| Tempo em casa "— informar admissão" | `profiles.data_admissao` nulo para o cobrador | Botão (admin) "Informar data de admissão" → mini-dialog que faz update direto no profile |
+| Blocos qualitativos vazios | Sem registro em `comite_textos_novomundo` | Botão "Preencher" (já existe — apenas destacar visualmente quando vazio) |
 
-## Frontend
+Componente novo: `CampoZeradoHint` (badge âmbar + popover) usado em todos os KPIs, células de tabela e cards.
 
-Arquivos novos:
-- `src/pages/ComiteNovoMundo.tsx` — página com seletor de mês (default = mês atual) e seções na ordem do template.
-- `src/components/comite/` — um componente por bloco:
-  - `FunilCard.tsx` (base → trabalhadas → alô → CPC → acordo → pagamento, com % conversão entre etapas)
-  - `RecuperacaoNNColchao.tsx` (tabela faixa × meta × realizado × % atingido)
-  - `AgingList.tsx`
-  - `PerformanceCobradores.tsx` (qtd acordos, valor, recebido, tempo em casa)
-  - `TMRCard.tsx`
-  - `BlocoTexto.tsx` (editor inline reutilizável para os 5 blocos qualitativos)
-  - `MetasEditorDialog.tsx` (modal para cadastrar/editar metas do mês)
-- `src/hooks/useComiteNovoMundo.ts` — hooks React Query, um por seção.
+---
 
-Adicionar rota em `src/App.tsx` (lazy) protegida por `AdminRoute`, e link no menu lateral (`AppLayout`) para admin/gestor.
+## Parte 2 — Atualização automática contínua
 
-## Cálculos-chave
+Hoje os dados **já são recalculados a cada visita** porque os hooks usam React Query lendo direto das tabelas (`devedores`, `acordos`, `pagamentos`, `relatorio_acionamentos`). O que falta é:
 
-- **Trabalhadas**: count distinct de CPFs com tentativa no mês (via `relatorio_acionamentos_log` + futura tabela de tentativas individualizada — por ora aproximamos por `SUM(tentativas)` da `relatorio_acionamentos`).
-- **% conversão**: alô/tentativas, CPC/alô, CPC-A/CPC, pago/CPC-A.
-- **TMR**: ver acima.
-- **Tempo em casa**: `now() - profiles.data_admissao` em dias, mostrado no ranking.
+1. **Realtime**: assinar mudanças nas 4 tabelas via Supabase Realtime e invalidar as queries do React Query — assim, com o painel aberto, qualquer acordo fechado ou pagamento marcado aparece em segundos sem refresh.
+2. **Auto-refetch quando a aba ganha foco** (`refetchOnWindowFocus: true`) + polling leve a cada 60s como fallback.
+3. **Mês corrente sempre atualizado**: garantir que o seletor de mês, quando aponta para o mês atual, considere o dia corrente para o filtro de `criado_em`/`data_paga`.
+4. **Mini-dialog de admissão** salva em `profiles.data_admissao` → o card de Performance recalcula "Tempo em casa" automaticamente.
 
-## Export
+Nada disso muda schema — usa o que já existe.
 
-Botão "Exportar PDF" usando `window.print()` com CSS print já estilizado (sem dependência nova, custo zero).
+---
 
-## O que falta você me informar (resposta direta à sua pergunta)
+## Parte 3 — Arquivos a alterar (apenas frontend)
 
-Tudo já foi respondido nas perguntas acima:
+```text
+src/components/comite/CampoZeradoHint.tsx        (novo)
+src/components/comite/InformarAdmissaoDialog.tsx (novo)
+src/hooks/useComiteNovoMundo.ts                  (adicionar realtime + refetchOnFocus)
+src/pages/ComiteNovoMundo.tsx                    (envolver KPIs/linhas com CampoZeradoHint;
+                                                  abrir MetasDialog em faixa específica via prop;
+                                                  destacar blocos qualitativos vazios)
+```
 
-1. ✅ Faixas NN/Colchão definidas.
-2. ✅ Metas cadastradas dentro da própria página (modal).
-3. ✅ Blocos qualitativos editáveis na própria tela.
-4. ✅ TMR = dias entre acordo e 1º pagamento.
-5. ⚠️ **Você vai precisar preencher manualmente, depois que a tela estiver pronta:**
-   - **Data de admissão de cada cobrador** (em "Minha Conta" do admin ou edição rápida na tela de Usuários) — sem isso "Tempo em casa" fica vazio.
-   - **Metas mensais** do Novo Mundo (NN, Colchão e global) — primeira vez para Maio/2026.
-   - **Textos do mês** (Ações, Próximos passos, Observações, Dificuldades, Ata).
+Sem migrations. Sem mudanças em edge functions.
 
-Nenhum dado operacional adicional é necessário — todo o resto sai do que já está no sistema.
+---
 
-## Custo Lovable Cloud
+## Detalhes técnicos
 
-Impacto mínimo: leitura agregada de tabelas existentes + 2 tabelas novas pequenas (metas/textos têm <12 linhas por mês). Sem edge functions, sem cron, sem IA.
+- `CampoZeradoHint` recebe `{ motivo, acao? }` onde `acao` é `{ label, onClick }` ou um link interno.
+- Realtime: um único `supabase.channel('comite-nm')` com `postgres_changes` em `acordos`, `pagamentos`, `devedores` (filtrado por `credor=eq.ume_novo_mundo` quando suportado) e `relatorio_acionamentos`. No callback: `queryClient.invalidateQueries({ queryKey: ['comite-nm'] })`.
+- React Query: `staleTime: 30_000`, `refetchOnWindowFocus: true`, `refetchInterval: 60_000`.
+- `MetasDialog` ganha prop opcional `faixaInicial` para abrir já posicionado.
+- `InformarAdmissaoDialog`: input date → `update profiles set data_admissao = ... where id = uid` (RLS já permite admin).
+
+---
+
+## O que NÃO entra neste plano
+
+- Nenhuma alteração de schema, RLS ou edge function.
+- Nenhuma mudança em outras páginas além das listadas.
+- Não muda regras de cálculo do funil, TMR, agrupamento de faixas — só explica quando está zerado e mantém vivo.

@@ -18,11 +18,14 @@ import {
   useCobradores,
   useMetasMes,
   useTextosMes,
+  useComiteRealtime,
   FAIXAS_NN,
   FAIXAS_COLCHAO,
   TODAS_FAIXAS,
   type FaixaKey,
 } from '@/hooks/useComiteNovoMundo';
+import { CampoZeradoHint } from '@/components/comite/CampoZeradoHint';
+import { InformarAdmissaoDialog } from '@/components/comite/InformarAdmissaoDialog';
 
 const moeda = (v: number) =>
   (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
@@ -63,6 +66,7 @@ export default function ComiteNovoMundo() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  useComiteRealtime();
   const carteira = useCarteira();
   const funil = useFunilMes(mesAno);
   const acordos = useAcordosNovoMundo(mesAno, carteira.data?.cpfs);
@@ -120,10 +124,38 @@ export default function ComiteNovoMundo() {
 
         {/* Resumo executivo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KPI titulo="Carteira (CPFs)" valor={carteira.data?.totalQtd.toLocaleString('pt-BR') ?? '—'} />
-          <KPI titulo="Valor em aberto" valor={moeda(carteira.data?.totalValorAtualizado ?? 0)} />
-          <KPI titulo="Recuperado no mês" valor={moeda(acordos.data?.totalPagoValor ?? 0)} sub={`${acordos.data?.totalPagoQtd ?? 0} parcelas pagas`} />
-          <KPI titulo="Acordos fechados" valor={String(acordos.data?.totalAcordosQtd ?? 0)} sub={moeda(acordos.data?.totalAcordosValor ?? 0)} />
+          <KPI
+            titulo="Carteira (CPFs)"
+            valor={carteira.data?.totalQtd.toLocaleString('pt-BR') ?? '—'}
+            hint={(carteira.data?.totalQtd ?? 0) === 0 ? {
+              motivo: 'Nenhum devedor ativo encontrado com credor "ume_novo_mundo". Importe a base do credor para começar.',
+              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            } : undefined}
+          />
+          <KPI
+            titulo="Valor em aberto"
+            valor={moeda(carteira.data?.totalValorAtualizado ?? 0)}
+            hint={(carteira.data?.totalValorAtualizado ?? 0) === 0 ? {
+              motivo: 'Sem valores em aberto porque a base do credor está vazia.',
+              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            } : undefined}
+          />
+          <KPI
+            titulo="Recuperado no mês"
+            valor={moeda(acordos.data?.totalPagoValor ?? 0)}
+            sub={`${acordos.data?.totalPagoQtd ?? 0} parcelas pagas`}
+            hint={(acordos.data?.totalPagoValor ?? 0) === 0 ? {
+              motivo: 'Nenhum pagamento marcado como pago neste mês para acordos cujo CPF bate com a base Novo Mundo. Conforme parcelas forem marcadas como pagas em "Meus Acordos", este número atualiza sozinho.',
+            } : undefined}
+          />
+          <KPI
+            titulo="Acordos fechados"
+            valor={String(acordos.data?.totalAcordosQtd ?? 0)}
+            sub={moeda(acordos.data?.totalAcordosValor ?? 0)}
+            hint={(acordos.data?.totalAcordosQtd ?? 0) === 0 ? {
+              motivo: 'Nenhum acordo criado neste mês com CPF da base Novo Mundo. Cada novo acordo registrado em "Novo Acordo" cujo CPF esteja na base aparece aqui automaticamente.',
+            } : undefined}
+          />
         </div>
 
         {/* Funil */}
@@ -132,11 +164,39 @@ export default function ComiteNovoMundo() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
               <FunilItem rotulo="Base" valor={(carteira.data?.totalQtd ?? 0).toLocaleString('pt-BR')} />
-              <FunilItem rotulo="Tentativas" valor={(funil.data?.tentativas ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.tentativas ?? 0, carteira.data?.totalQtd ?? 0) + ' da base'} />
-              <FunilItem rotulo="Alô" valor={(funil.data?.alo ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.alo ?? 0, funil.data?.tentativas ?? 0)} />
-              <FunilItem rotulo="CPC" valor={(funil.data?.cpc ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.cpc ?? 0, funil.data?.alo ?? 0)} />
-              <FunilItem rotulo="CPC-A (acordo)" valor={(funil.data?.cpca ?? 0).toLocaleString('pt-BR')} sub={pct(funil.data?.cpca ?? 0, funil.data?.cpc ?? 0)} />
-              <FunilItem rotulo="Pagamento" valor={String(acordos.data?.totalPagoQtd ?? 0)} sub={pct(acordos.data?.totalPagoQtd ?? 0, funil.data?.cpca ?? 0)} />
+              <FunilItem
+                rotulo="Tentativas"
+                valor={(funil.data?.tentativas ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.tentativas ?? 0, carteira.data?.totalQtd ?? 0) + ' da base'}
+                hint={(funil.data?.tentativas ?? 0) === 0 ? {
+                  motivo: 'Nenhuma tentativa registrada em "relatorio_acionamentos" para o mês. Importe a planilha de ligações ou registre tentativas pelo painel de Acionamento.',
+                  acao: { label: 'Ir para Relatórios', to: '/relatorios' },
+                } : undefined}
+              />
+              <FunilItem
+                rotulo="Alô"
+                valor={(funil.data?.alo ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.alo ?? 0, funil.data?.tentativas ?? 0)}
+                hint={(funil.data?.alo ?? 0) === 0 ? { motivo: 'Sem "Alô" registrado no mês. Importe a planilha de ligações na aba Relatórios.', acao: { label: 'Ir para Relatórios', to: '/relatorios' } } : undefined}
+              />
+              <FunilItem
+                rotulo="CPC"
+                valor={(funil.data?.cpc ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.cpc ?? 0, funil.data?.alo ?? 0)}
+                hint={(funil.data?.cpc ?? 0) === 0 ? { motivo: 'Sem CPC (contato com o cliente) no mês. CPCs vêm da planilha de ligações (coluna T = CPC) importada em Relatórios.', acao: { label: 'Ir para Relatórios', to: '/relatorios' } } : undefined}
+              />
+              <FunilItem
+                rotulo="CPC-A (acordo)"
+                valor={(funil.data?.cpca ?? 0).toLocaleString('pt-BR')}
+                sub={pct(funil.data?.cpca ?? 0, funil.data?.cpc ?? 0)}
+                hint={(funil.data?.cpca ?? 0) === 0 ? { motivo: 'Sem CPC-A (acordo) no mês. Acordos da planilha (coluna T = CPC-A) ou acordos criados no sistema durante o horário comercial contam aqui.', acao: { label: 'Ir para Relatórios', to: '/relatorios' } } : undefined}
+              />
+              <FunilItem
+                rotulo="Pagamento"
+                valor={String(acordos.data?.totalPagoQtd ?? 0)}
+                sub={pct(acordos.data?.totalPagoQtd ?? 0, funil.data?.cpca ?? 0)}
+                hint={(acordos.data?.totalPagoQtd ?? 0) === 0 ? { motivo: 'Nenhuma parcela paga no mês para acordos Novo Mundo. Conforme parcelas forem marcadas como pagas, este número atualiza automaticamente.' } : undefined}
+              />
             </div>
             <p className="text-xs text-muted-foreground mt-3">
               Funil de acionamento agregado (não segmentado por credor). Acordos e pagamentos filtrados por Novo Mundo.
@@ -225,7 +285,19 @@ export default function ComiteNovoMundo() {
                           <td className="p-2 text-right">{moeda(e.valor)}</td>
                           <td className="p-2 text-right">{moeda(e.pago)}</td>
                           <td className="p-2 text-right">{pct(e.pago, e.valor)}</td>
-                          <td className="p-2 text-right">{dias !== null ? `${dias} dias` : <span className="text-muted-foreground">— informar admissão</span>}</td>
+                          <td className="p-2 text-right">
+                            {dias !== null ? (
+                              `${dias} dias`
+                            ) : podeEditar ? (
+                              <InformarAdmissaoDialog
+                                userId={uid}
+                                nome={info?.nome ?? 'Cobrador'}
+                                onSaved={() => qc.invalidateQueries({ queryKey: ['comite-nm', 'cobradores'] })}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">— informar admissão</span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -240,7 +312,14 @@ export default function ComiteNovoMundo() {
 
         {/* TMR */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle>10 · TMR — Tempo Médio de Recuperação</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              10 · TMR — Tempo Médio de Recuperação
+              {(acordos.data?.tmr === null || acordos.data?.tmr === undefined) && (
+                <CampoZeradoHint motivo="TMR só calcula quando há pelo menos um acordo criado no mês com uma parcela paga. Conforme pagamentos forem registrados, este número aparece automaticamente." />
+              )}
+            </CardTitle>
+          </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
               {acordos.data?.tmr !== null && acordos.data?.tmr !== undefined ? `${acordos.data.tmr.toFixed(1)} dias` : '—'}
@@ -268,11 +347,14 @@ export default function ComiteNovoMundo() {
   );
 }
 
-function KPI({ titulo, valor, sub }: { titulo: string; valor: string; sub?: string }) {
+function KPI({ titulo, valor, sub, hint }: { titulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint } }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-xs uppercase text-muted-foreground">{titulo}</div>
+        <div className="text-xs uppercase text-muted-foreground flex items-center gap-1">
+          <span>{titulo}</span>
+          {hint && <CampoZeradoHint motivo={hint.motivo} acao={hint.acao} />}
+        </div>
         <div className="text-2xl font-bold mt-1">{valor}</div>
         {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
       </CardContent>
@@ -280,10 +362,13 @@ function KPI({ titulo, valor, sub }: { titulo: string; valor: string; sub?: stri
   );
 }
 
-function FunilItem({ rotulo, valor, sub }: { rotulo: string; valor: string; sub?: string }) {
+function FunilItem({ rotulo, valor, sub, hint }: { rotulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint } }) {
   return (
     <div className="rounded-md border p-3 text-center">
-      <div className="text-xs text-muted-foreground">{rotulo}</div>
+      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+        <span>{rotulo}</span>
+        {hint && <CampoZeradoHint motivo={hint.motivo} acao={hint.acao} />}
+      </div>
       <div className="text-xl font-bold">{valor}</div>
       {sub && <div className="text-[10px] text-muted-foreground mt-1">{sub}</div>}
     </div>
@@ -308,7 +393,14 @@ function TabelaRecuperacao({
   const totalMeta = faixas.reduce((s, f) => s + (metas?.get(`${tipo}:${f}`) ?? 0), 0);
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-base">{titulo}</CardTitle></CardHeader>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          {titulo}
+          {totalMeta === 0 && (
+            <CampoZeradoHint motivo={`Sem meta cadastrada para ${tipo === 'nn' ? 'NN' : 'Colchão'} neste mês. Use o botão "Metas do mês" no topo da página para definir os valores por faixa.`} />
+          )}
+        </CardTitle>
+      </CardHeader>
       <CardContent>
         <table className="w-full text-sm">
           <thead className="bg-muted">
@@ -326,7 +418,14 @@ function TabelaRecuperacao({
               return (
                 <tr key={f} className="border-b">
                   <td className="p-2">{f}</td>
-                  <td className="p-2 text-right">{moeda(meta)}</td>
+                  <td className="p-2 text-right">
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      {moeda(meta)}
+                      {meta === 0 && (
+                        <CampoZeradoHint motivo={`Meta da faixa ${f} não cadastrada. Abra "Metas do mês" para informar.`} />
+                      )}
+                    </span>
+                  </td>
                   <td className="p-2 text-right">{moeda(realizado)}</td>
                   <td className="p-2 text-right">{pct(realizado, meta)}</td>
                 </tr>
@@ -373,12 +472,17 @@ function BlocoTexto({
   }
 
   return (
-    <Card>
+    <Card className={!conteudo && !editando ? 'border-amber-500/40' : ''}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <CardTitle className="text-base">{titulo}</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2">
+          {titulo}
+          {!conteudo && !editando && (
+            <CampoZeradoHint motivo="Este bloco ainda está em branco. Clique em Editar para preencher — o conteúdo fica salvo por mês." />
+          )}
+        </CardTitle>
         {podeEditar && !editando && (
           <Button size="sm" variant="ghost" onClick={() => setEditando(true)}>
-            <Pencil className="h-3 w-3 mr-1" /> Editar
+            <Pencil className="h-3 w-3 mr-1" /> {conteudo ? 'Editar' : 'Preencher'}
           </Button>
         )}
       </CardHeader>

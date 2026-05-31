@@ -1,5 +1,36 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+
+const liveQueryOpts = {
+  staleTime: 30_000,
+  refetchOnWindowFocus: true as const,
+  refetchInterval: 60_000,
+};
+
+/**
+ * Assina mudanças nas tabelas que alimentam o Comitê Novo Mundo e invalida
+ * as queries do React Query para manter o painel vivo sem refresh manual.
+ */
+export function useComiteRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const invalidate = () => qc.invalidateQueries({ queryKey: ['comite-nm'] });
+    const channel = supabase
+      .channel('comite-nm-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'acordos' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pagamentos' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'devedores' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'relatorio_acionamentos' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comite_metas_novomundo' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comite_textos_novomundo' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, invalidate)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+}
 
 const CREDOR = 'ume_novo_mundo';
 
@@ -90,7 +121,7 @@ export function useCarteira() {
       }
       return { porFaixa, totalQtd, totalValor, totalValorAtualizado, cpfs };
     },
-    staleTime: 60_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -121,7 +152,7 @@ export function useFunilMes(mesAno: string) {
       );
       return agg;
     },
-    staleTime: 60_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -242,7 +273,7 @@ export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | 
         porUser,
       };
     },
-    staleTime: 60_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -277,7 +308,7 @@ export function useMetasMes(mesAno: string) {
       }
       return map;
     },
-    staleTime: 30_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -296,6 +327,6 @@ export function useTextosMes(mesAno: string) {
       }
       return map;
     },
-    staleTime: 30_000,
+    ...liveQueryOpts,
   });
 }
