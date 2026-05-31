@@ -312,7 +312,14 @@ export default function ComiteNovoMundo() {
 
         {/* TMR */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle>10 · TMR — Tempo Médio de Recuperação</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              10 · TMR — Tempo Médio de Recuperação
+              {(acordos.data?.tmr === null || acordos.data?.tmr === undefined) && (
+                <CampoZeradoHint motivo="TMR só calcula quando há pelo menos um acordo criado no mês com uma parcela paga. Conforme pagamentos forem registrados, este número aparece automaticamente." />
+              )}
+            </CardTitle>
+          </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
               {acordos.data?.tmr !== null && acordos.data?.tmr !== undefined ? `${acordos.data.tmr.toFixed(1)} dias` : '—'}
