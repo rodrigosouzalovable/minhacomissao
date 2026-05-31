@@ -88,6 +88,7 @@ const navItems: NavItem[] = [
   { href: '/monitor-envios', label: 'Monitor Envios', icon: Activity, adminOnly: true },
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { href: '/admin/comite-novomundo', label: 'Comitê Novo Mundo', icon: BarChart3, adminOnly: true },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
