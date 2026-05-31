@@ -272,11 +272,14 @@ export default function ComiteNovoMundo() {
   );
 }
 
-function KPI({ titulo, valor, sub }: { titulo: string; valor: string; sub?: string }) {
+function KPI({ titulo, valor, sub, hint }: { titulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint } }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-xs uppercase text-muted-foreground">{titulo}</div>
+        <div className="text-xs uppercase text-muted-foreground flex items-center gap-1">
+          <span>{titulo}</span>
+          {hint && <CampoZeradoHint motivo={hint.motivo} acao={hint.acao} />}
+        </div>
         <div className="text-2xl font-bold mt-1">{valor}</div>
         {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
       </CardContent>
@@ -284,10 +287,13 @@ function KPI({ titulo, valor, sub }: { titulo: string; valor: string; sub?: stri
   );
 }
 
-function FunilItem({ rotulo, valor, sub }: { rotulo: string; valor: string; sub?: string }) {
+function FunilItem({ rotulo, valor, sub, hint }: { rotulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint } }) {
   return (
     <div className="rounded-md border p-3 text-center">
-      <div className="text-xs text-muted-foreground">{rotulo}</div>
+      <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+        <span>{rotulo}</span>
+        {hint && <CampoZeradoHint motivo={hint.motivo} acao={hint.acao} />}
+      </div>
       <div className="text-xl font-bold">{valor}</div>
       {sub && <div className="text-[10px] text-muted-foreground mt-1">{sub}</div>}
     </div>
