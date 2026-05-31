@@ -76,16 +76,6 @@ export function useCarteira() {
   return useQuery({
     queryKey: ['comite-nm', 'carteira'],
     queryFn: async () => {
-      // 1) snapshot ativo
-      const { data: snap, error: snapErr } = await supabase
-        .from('comite_carteira_nm_snapshot')
-        .select('*')
-        .eq('ativo', true)
-        .order('importado_em', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (snapErr) throw snapErr;
-
       const baseFaixa = (): CelulaCarteira => ({ qtd: 0, cpfsUnicos: 0, risco: 0, valorAtualizado: 0, valor: 0 });
       const porFaixa: Record<FaixaKey, CelulaCarteira> = Object.fromEntries(
         TODAS_FAIXAS.map((f) => [f, baseFaixa()]),
@@ -97,6 +87,12 @@ export function useCarteira() {
       const matriz: Record<FaixaKey, Record<CredorTipo, CelulaCarteira>> = Object.fromEntries(
         TODAS_FAIXAS.map((f) => [f, { INADIMPLENTES: baseFaixa(), APORTE: baseFaixa() }]),
       ) as Record<FaixaKey, Record<CredorTipo, CelulaCarteira>>;
+
+      const { data, error } = await supabase.rpc('comite_carteira_nm_agregar');
+      if (error) throw error;
+
+      const payload = (data ?? {}) as any;
+      const snap = payload.snapshot ?? null;
 
       if (!snap) {
         return {
@@ -110,89 +106,47 @@ export function useCarteira() {
           totalValor: 0,
           totalValorAtualizado: 0,
           totalRisco: 0,
-          cpfs: new Set<string>(),
+          cpfs: undefined as Set<string> | undefined,
         };
       }
 
-      // 2) paginar todos os itens
-      const all: any[] = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const { data, error } = await supabase
-          .from('comite_carteira_nm_item')
-          .select('cpf_cnpj, credor_tipo, atraso_dias, risco, faixa')
-          .eq('snapshot_id', snap.id)
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        all.push(...data);
-        if (data.length < pageSize) break;
-        from += pageSize;
-      }
-
-      const cpfs = new Set<string>();
-      const cpfsPorFaixa = new Map<string, Set<string>>();
-      const cpfsPorTipo = new Map<string, Set<string>>();
-      const cpfsMatriz = new Map<string, Set<string>>();
-
-      for (const it of all) {
-        const cpf = normalizeCpf(it.cpf_cnpj);
-        if (cpf) cpfs.add(cpf);
-        const f = (it.faixa as FaixaKey) || faixaDeAtraso(it.atraso_dias);
-        const tipo = (it.credor_tipo === 'APORTE' ? 'APORTE' : 'INADIMPLENTES') as CredorTipo;
-        const risco = Number(it.risco ?? 0);
-
-        if (f && porFaixa[f]) {
-          porFaixa[f].qtd += 1;
-          porFaixa[f].risco += risco;
-          porFaixa[f].valor += risco;
-          porFaixa[f].valorAtualizado += risco;
-          const key = `${f}`;
-          if (!cpfsPorFaixa.has(key)) cpfsPorFaixa.set(key, new Set());
-          if (cpf) cpfsPorFaixa.get(key)!.add(cpf);
-
-          matriz[f][tipo].qtd += 1;
-          matriz[f][tipo].risco += risco;
-          matriz[f][tipo].valor += risco;
-          matriz[f][tipo].valorAtualizado += risco;
-          const mkey = `${f}|${tipo}`;
-          if (!cpfsMatriz.has(mkey)) cpfsMatriz.set(mkey, new Set());
-          if (cpf) cpfsMatriz.get(mkey)!.add(cpf);
-        }
-
-        porTipo[tipo].qtd += 1;
-        porTipo[tipo].risco += risco;
-        porTipo[tipo].valor += risco;
-        porTipo[tipo].valorAtualizado += risco;
-        if (!cpfsPorTipo.has(tipo)) cpfsPorTipo.set(tipo, new Set());
-        if (cpf) cpfsPorTipo.get(tipo)!.add(cpf);
-      }
+      const setCel = (cel: CelulaCarteira, raw: any) => {
+        const qtd = Number(raw?.qtd ?? 0);
+        const cpfsUnicos = Number(raw?.cpfs_unicos ?? 0);
+        const risco = Number(raw?.risco ?? 0);
+        cel.qtd = qtd;
+        cel.cpfsUnicos = cpfsUnicos;
+        cel.risco = risco;
+        cel.valor = risco;
+        cel.valorAtualizado = risco;
+      };
 
       for (const f of TODAS_FAIXAS) {
-        porFaixa[f].cpfsUnicos = cpfsPorFaixa.get(f)?.size ?? 0;
+        if (payload.por_faixa?.[f]) setCel(porFaixa[f], payload.por_faixa[f]);
         for (const t of CREDOR_TIPOS) {
-          matriz[f][t].cpfsUnicos = cpfsMatriz.get(`${f}|${t}`)?.size ?? 0;
+          if (payload.matriz?.[f]?.[t]) setCel(matriz[f][t], payload.matriz[f][t]);
         }
       }
       for (const t of CREDOR_TIPOS) {
-        porTipo[t].cpfsUnicos = cpfsPorTipo.get(t)?.size ?? 0;
+        if (payload.por_tipo?.[t]) setCel(porTipo[t], payload.por_tipo[t]);
       }
 
-      const totalRisco = all.reduce((s, it) => s + Number(it.risco ?? 0), 0);
+      const totalContratos = Number(payload.total_contratos ?? 0);
+      const totalCpfs = Number(payload.total_cpfs_unicos ?? 0);
+      const totalRisco = Number(payload.total_risco ?? 0);
 
       return {
         snapshot: snap,
         porFaixa,
         porTipo,
         matriz,
-        totalQtd: cpfs.size, // KPI "CPFs" = únicos
-        totalContratos: all.length,
-        totalCpfsUnicos: cpfs.size,
+        totalQtd: totalCpfs,
+        totalContratos,
+        totalCpfsUnicos: totalCpfs,
         totalValor: totalRisco,
         totalValorAtualizado: totalRisco,
         totalRisco,
-        cpfs,
+        cpfs: undefined as Set<string> | undefined,
       };
     },
     ...liveQueryOpts,
