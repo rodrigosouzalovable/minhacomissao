@@ -1,14 +1,19 @@
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { TODAS_FAIXAS, useCarteira } from '@/hooks/useComiteNovoMundo';
+import { TODAS_FAIXAS, useCarteira, useKpisExtras } from '@/hooks/useComiteNovoMundo';
 import { Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const moeda = (v: number) =>
   (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
 
+const pctFmt = (v: number) => `${((v || 0) * 100).toFixed(1)}%`;
+
 export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }) {
   const carteira = useCarteira();
   const d = carteira.data;
+  const mesAno = (() => { const x = new Date(); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; })();
+  const extras = useKpisExtras(mesAno);
 
   return (
     <Dialog>
@@ -47,6 +52,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                     <th className="text-center p-2 border-l" colSpan={3}>INADIMPLENTES (NN)</th>
                     <th className="text-center p-2 border-l" colSpan={3}>APORTE (Colchão)</th>
                     <th className="text-center p-2 border-l" colSpan={3}>Total</th>
+                    <th className="text-center p-2 border-l" rowSpan={2}>% Recup. mês</th>
                   </tr>
                   <tr>
                     <th className="text-right p-2 border-l">Contratos</th>
@@ -67,6 +73,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                     const totQ = ina.qtd + apo.qtd;
                     const totR = ina.risco + apo.risco;
                     const totCpfs = d.porFaixa[f].cpfsUnicos;
+                    const recFaixa = extras.data?.recuperacao?.por_faixa?.[f];
                     return (
                       <tr key={f} className="border-b">
                         <td className="p-2 font-medium">{f}</td>
@@ -79,6 +86,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                         <td className="p-2 text-right border-l font-medium">{totQ.toLocaleString('pt-BR')}</td>
                         <td className="p-2 text-right font-medium">{totCpfs.toLocaleString('pt-BR')}</td>
                         <td className="p-2 text-right font-medium">{moeda(totR)}</td>
+                        <td className="p-2 text-right border-l">{recFaixa ? pctFmt(recFaixa.pct) : '—'}</td>
                       </tr>
                     );
                   })}
@@ -95,6 +103,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                     <td className="p-2 text-right border-l">{d.totalContratos.toLocaleString('pt-BR')}</td>
                     <td className="p-2 text-right">{d.totalCpfsUnicos.toLocaleString('pt-BR')}</td>
                     <td className="p-2 text-right">{moeda(d.totalRisco)}</td>
+                    <td className="p-2 text-right border-l">{pctFmt(extras.data?.recuperacao?.pct_sobre_risco ?? 0)}</td>
                   </tr>
                 </tfoot>
               </table>

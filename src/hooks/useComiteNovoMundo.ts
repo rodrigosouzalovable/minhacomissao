@@ -186,6 +186,46 @@ export function useFunilMes(mesAno: string) {
   });
 }
 
+export type KpisExtras = {
+  recuperacao: {
+    pago_mes_total: number;
+    pago_mes_qtd: number;
+    pct_sobre_risco: number;
+    por_faixa: Record<string, { pago: number; risco: number; pct: number }>;
+    serie_6meses: { mes: string; valor: number }[];
+  };
+  acordos_saude: {
+    ativos_qtd: number;
+    quebrados_qtd: number;
+    quitados_qtd: number;
+    fechados_mes: number;
+    quebrados_mes: number;
+    taxa_quebra: number;
+    em_risco_qtd: number;
+    em_risco_valor: number;
+  };
+  cobertura: {
+    total_cpfs: number;
+    cpfs_acionados_mes: number;
+    pct_acionados: number;
+    cpfs_convertidos: number;
+    pct_convertidos: number;
+    cpfs_intocados_30d_qtd: number;
+  };
+};
+
+export function useKpisExtras(mesAno: string) {
+  return useQuery({
+    queryKey: ['comite-nm', 'kpis-extras', mesAno],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('comite_carteira_nm_kpis_extras', { p_mes_ano: mesAno });
+      if (error) throw error;
+      return data as unknown as KpisExtras;
+    },
+    ...liveQueryOpts,
+  });
+}
+
 export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | undefined) {
   return useQuery({
     queryKey: ['comite-nm', 'acordos', mesAno, cpfsCarteira?.size ?? 0],

@@ -3840,6 +3840,19 @@ export type Database = {
         Returns: undefined
       }
       comite_carteira_nm_agregar: { Args: never; Returns: Json }
+      comite_carteira_nm_intocados: {
+        Args: { p_limit?: number }
+        Returns: {
+          cpf_cnpj: string
+          faixa: string
+          nome: string
+          risco: number
+        }[]
+      }
+      comite_carteira_nm_kpis_extras: {
+        Args: { p_mes_ano: string }
+        Returns: Json
+      }
       comparativo_mensal_global: {
         Args: {
           p_fim_anterior: string
