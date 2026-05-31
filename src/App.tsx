@@ -196,6 +196,7 @@ const App = () => (
             <Route path="/monitor-envios" element={<PermissionRoute><MonitorEnvios /></PermissionRoute>} />
             <Route path="/admin/exportar-dados" element={<PermissionRoute><ExportarDados /></PermissionRoute>} />
             <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
+            <Route path="/admin/comite-novomundo" element={<AdminRoute><ComiteNovoMundo /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
