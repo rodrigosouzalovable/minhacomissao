@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 const liveQueryOpts = {
-  ...liveQueryOpts,
+  staleTime: 30_000,
   refetchOnWindowFocus: true as const,
   refetchInterval: 60_000,
 };
