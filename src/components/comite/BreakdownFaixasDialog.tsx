@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { TODAS_FAIXAS, useCarteira, useKpisExtras } from '@/hooks/useComiteNovoMundo';
 import { Maximize2 } from 'lucide-react';
