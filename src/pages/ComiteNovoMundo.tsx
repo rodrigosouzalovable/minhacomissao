@@ -19,6 +19,7 @@ import {
   useMetasMes,
   useTextosMes,
   useComiteRealtime,
+  useKpisExtras,
   FAIXAS_NN,
   FAIXAS_COLCHAO,
   TODAS_FAIXAS,
@@ -28,6 +29,8 @@ import { CampoZeradoHint } from '@/components/comite/CampoZeradoHint';
 import { InformarAdmissaoDialog } from '@/components/comite/InformarAdmissaoDialog';
 import { ImportarCarteiraNMDialog } from '@/components/comite/ImportarCarteiraNMDialog';
 import { BreakdownFaixasDialog } from '@/components/comite/BreakdownFaixasDialog';
+import { IntocadosListDialog } from '@/components/comite/IntocadosListDialog';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip } from 'recharts';
 
 const moeda = (v: number) =>
   (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
