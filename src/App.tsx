@@ -47,6 +47,7 @@ const MonitorEnvios = lazy(() => import("./pages/MonitorEnvios"));
 const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 
 const Relatorios = lazy(() => import("./pages/Relatorios"));
+const ComiteNovoMundo = lazy(() => import("./pages/ComiteNovoMundo"));
 
 const queryClient = new QueryClient();
 
