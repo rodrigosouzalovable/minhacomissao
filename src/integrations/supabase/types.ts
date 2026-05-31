@@ -958,6 +958,77 @@ export type Database = {
         }
         Relationships: []
       }
+      comite_carteira_nm_item: {
+        Row: {
+          atraso_dias: number
+          cpf_cnpj: string
+          credor_tipo: string
+          faixa: string
+          id: string
+          risco: number
+          snapshot_id: string
+        }
+        Insert: {
+          atraso_dias?: number
+          cpf_cnpj: string
+          credor_tipo: string
+          faixa: string
+          id?: string
+          risco?: number
+          snapshot_id: string
+        }
+        Update: {
+          atraso_dias?: number
+          cpf_cnpj?: string
+          credor_tipo?: string
+          faixa?: string
+          id?: string
+          risco?: number
+          snapshot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comite_carteira_nm_item_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "comite_carteira_nm_snapshot"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comite_carteira_nm_snapshot: {
+        Row: {
+          arquivo_nome: string | null
+          ativo: boolean
+          id: string
+          importado_em: string
+          importado_por: string | null
+          total_cpfs_unicos: number
+          total_linhas: number
+          total_risco: number
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          ativo?: boolean
+          id?: string
+          importado_em?: string
+          importado_por?: string | null
+          total_cpfs_unicos?: number
+          total_linhas?: number
+          total_risco?: number
+        }
+        Update: {
+          arquivo_nome?: string | null
+          ativo?: boolean
+          id?: string
+          importado_em?: string
+          importado_por?: string | null
+          total_cpfs_unicos?: number
+          total_linhas?: number
+          total_risco?: number
+        }
+        Relationships: []
+      }
       comite_metas_novomundo: {
         Row: {
           atualizado_em: string

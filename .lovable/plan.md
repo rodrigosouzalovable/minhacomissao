@@ -1,67 +1,117 @@
 ## Objetivo
 
-Na página `/admin/comite-novomundo`, transformar cada campo zerado/vazio em um **ponto de ação guiado** que explica exatamente o que falta no sistema para preencher aquele número — e garantir que, conforme acordos e pagamentos forem registrados no dia a dia, o painel se atualize sozinho sem precisar de importação manual.
+Permitir importar a planilha **CPF NOVO MUNDO.xlsx** direto no card "CARTEIRA (CPFs)" da página `/admin/comite-novomundo`. Cada importação **substitui** a anterior e o painel passa a mostrar o breakdown da carteira em 11 faixas de atraso, cruzando com o tipo de credor (INADIMPLENTES x APORTE).
 
 ---
 
-## Parte 1 — Diagnóstico "Por que está zerado?"
+## Layout esperado da planilha
 
-Cada card/linha do relatório ganha um indicador quando o valor é 0/—. Ao passar o mouse (ou clicar em um ícone de alerta âmbar), abre um popover explicando **a causa real** e **o que fazer**. As causas possíveis, mapeadas a partir das queries já existentes em `useComiteNovoMundo.ts`:
+Colunas fixas (header obrigatório, primeira linha):
 
-| Campo zerado | Causa provável | Ação sugerida (CTA) |
+| Coluna | Header | Conteúdo |
 |---|---|---|
-| Carteira (CPFs) / Valor em aberto / Aging | Nenhum devedor com `credor = 'ume_novo_mundo'` ativo | Botão "Importar base Novo Mundo" → leva para `/admin/importar-devedores` |
-| Funil — Tentativas/Alô/CPC/CPC-A | Sem linhas em `relatorio_acionamentos` no mês | Botão "Importar planilha de ligações" → abre `ImportarLigacoesDialog` |
-| Recuperado / Acordos fechados | Sem acordos no mês cujo CPF cruza com a base do credor | "Os acordos do mês ainda não bateram com CPFs da base. Verifique se a base do credor está importada." |
-| Meta NN/Colchão/Global = 0 | Sem registro em `comite_metas_novomundo` para o mês | Botão "Definir meta" → abre o `MetasDialog` já existente, scrollado na faixa correta |
-| TMR — | Nenhum acordo do mês teve primeiro pagamento ainda | "TMR só calcula quando há pelo menos um pagamento registrado em acordo criado no mês." |
-| Tempo em casa "— informar admissão" | `profiles.data_admissao` nulo para o cobrador | Botão (admin) "Informar data de admissão" → mini-dialog que faz update direto no profile |
-| Blocos qualitativos vazios | Sem registro em `comite_textos_novomundo` | Botão "Preencher" (já existe — apenas destacar visualmente quando vazio) |
+| A | `CPF/CNPJ` | CPF ou CNPJ (com ou sem máscara) |
+| B | `CREDOR` | `UME \| NOVO MUNDO - INADIMPLENTES` **ou** `UME \| NOVO MUNDO - APORTE` |
+| C | `ATRASO` | Dias de atraso (número inteiro) |
+| D | `RISCO` | Valor em risco (R$) |
 
-Componente novo: `CampoZeradoHint` (badge âmbar + popover) usado em todos os KPIs, células de tabela e cards.
+Cada linha = 1 contrato. O mesmo CPF pode aparecer em várias linhas.
 
 ---
 
-## Parte 2 — Atualização automática contínua
-
-Hoje os dados **já são recalculados a cada visita** porque os hooks usam React Query lendo direto das tabelas (`devedores`, `acordos`, `pagamentos`, `relatorio_acionamentos`). O que falta é:
-
-1. **Realtime**: assinar mudanças nas 4 tabelas via Supabase Realtime e invalidar as queries do React Query — assim, com o painel aberto, qualquer acordo fechado ou pagamento marcado aparece em segundos sem refresh.
-2. **Auto-refetch quando a aba ganha foco** (`refetchOnWindowFocus: true`) + polling leve a cada 60s como fallback.
-3. **Mês corrente sempre atualizado**: garantir que o seletor de mês, quando aponta para o mês atual, considere o dia corrente para o filtro de `criado_em`/`data_paga`.
-4. **Mini-dialog de admissão** salva em `profiles.data_admissao` → o card de Performance recalcula "Tempo em casa" automaticamente.
-
-Nada disso muda schema — usa o que já existe.
-
----
-
-## Parte 3 — Arquivos a alterar (apenas frontend)
+## Faixas de atraso (11 faixas)
 
 ```text
-src/components/comite/CampoZeradoHint.tsx        (novo)
-src/components/comite/InformarAdmissaoDialog.tsx (novo)
-src/hooks/useComiteNovoMundo.ts                  (adicionar realtime + refetchOnFocus)
-src/pages/ComiteNovoMundo.tsx                    (envolver KPIs/linhas com CampoZeradoHint;
-                                                  abrir MetasDialog em faixa específica via prop;
-                                                  destacar blocos qualitativos vazios)
+1-30, 31-60, 61-90, 91-180, 181-360,
+361-720, 721-1080, 1081-1440, 1441-1800, 1801-2000, 2000+
 ```
 
-Sem migrations. Sem mudanças em edge functions.
+Cada linha da planilha é jogada na faixa correspondente ao valor da coluna `ATRASO`. Linhas com atraso ≤ 0 ou vazio entram em "Sem atraso" e não contam para nenhuma faixa.
+
+NN x Colchão: como você escolheu **"Os dois"**, o painel mostra duas visões cruzadas:
+- **Por tipo CREDOR** (INADIMPLENTES = NN, APORTE = Colchão) — totais agregados.
+- **Por faixa × tipo** — matriz 11 faixas × 2 tipos com qtd de contratos, qtd de CPFs únicos e R$ risco.
 
 ---
 
-## Detalhes técnicos
+## Schema (migration nova)
 
-- `CampoZeradoHint` recebe `{ motivo, acao? }` onde `acao` é `{ label, onClick }` ou um link interno.
-- Realtime: um único `supabase.channel('comite-nm')` com `postgres_changes` em `acordos`, `pagamentos`, `devedores` (filtrado por `credor=eq.ume_novo_mundo` quando suportado) e `relatorio_acionamentos`. No callback: `queryClient.invalidateQueries({ queryKey: ['comite-nm'] })`.
-- React Query: `staleTime: 30_000`, `refetchOnWindowFocus: true`, `refetchInterval: 60_000`.
-- `MetasDialog` ganha prop opcional `faixaInicial` para abrir já posicionado.
-- `InformarAdmissaoDialog`: input date → `update profiles set data_admissao = ... where id = uid` (RLS já permite admin).
+Duas tabelas — uma de cabeçalho (1 linha por importação ativa) e uma de itens.
+
+```text
+comite_carteira_nm_snapshot
+  id uuid pk
+  importado_em timestamptz default now()
+  importado_por uuid (auth.users)
+  arquivo_nome text
+  total_linhas int
+  total_cpfs_unicos int
+  total_risco numeric
+  ativo bool default true   -- apenas 1 ativo; importação nova desativa o anterior
+
+comite_carteira_nm_item
+  id uuid pk
+  snapshot_id uuid fk
+  cpf_cnpj text            -- normalizado, só dígitos
+  credor_tipo text         -- 'INADIMPLENTES' | 'APORTE'
+  atraso_dias int
+  risco numeric
+  faixa text               -- '1-30' | '31-60' | ... | '2000+'
+  index (snapshot_id, faixa)
+  index (snapshot_id, credor_tipo)
+```
+
+GRANTs para `authenticated` e `service_role`; RLS permitindo SELECT/INSERT/UPDATE/DELETE apenas para admin (via `is_admin_user(auth.uid())`).
 
 ---
 
-## O que NÃO entra neste plano
+## UI
 
-- Nenhuma alteração de schema, RLS ou edge function.
-- Nenhuma mudança em outras páginas além das listadas.
-- Não muda regras de cálculo do funil, TMR, agrupamento de faixas — só explica quando está zerado e mantém vivo.
+**Card CARTEIRA (CPFs)** ganha um botão pequeno "Importar planilha" (ícone Upload) ao lado do `CampoZeradoHint`. Quando há snapshot ativo:
+- KPI principal = total de CPFs únicos do snapshot.
+- Subtítulo = "X contratos • R$ Y em risco • importado em DD/MM HH:mm".
+- Clicar no card abre o `BreakdownFaixasDialog` com a tabela 11×2 (faixa × tipo) + totais por linha/coluna em qtd contratos, CPFs únicos e R$.
+
+**Dialog `ImportarCarteiraNMDialog`:**
+1. Drop / select de `.xlsx` ou `.csv`.
+2. Parse no client com `xlsx` (já instalado no projeto — `import * as XLSX from 'xlsx'`).
+3. Validação: headers exatos, normaliza CPF (só dígitos), valida `CREDOR` contra os 2 valores aceitos (rejeita linhas fora do padrão e mostra contagem), converte `ATRASO` e `RISCO` para número.
+4. Preview: tabela com a matriz 11×2 que vai ser gravada + linha de "linhas ignoradas".
+5. Confirmar → desativa snapshot anterior (`update ... set ativo=false`) e insere novo snapshot + itens em chunks de 500 via `supabase.from('comite_carteira_nm_item').insert(...)`.
+6. Invalida `['comite-nm','carteira']` no React Query.
+
+---
+
+## Hook `useCarteira`
+
+Substitui a leitura atual (que vinha de `devedores`) por:
+
+1. SELECT do snapshot ativo (`ativo=true` LIMIT 1). Se não existe → retorna zerado com `motivo: 'sem_snapshot'`.
+2. Agrega `comite_carteira_nm_item` por `faixa` e `credor_tipo` no client (uma única paginação até 1000×N).
+3. Retorna `{ porFaixa, porTipo, matriz, totalCpfsUnicos, totalContratos, totalRisco, importadoEm }`.
+
+O `CampoZeradoHint` do card passa a usar `motivo: 'sem_snapshot'` com CTA "Importar planilha".
+
+As faixas antigas usadas pelo painel (NN: 1-30/31-60/61-90 e Colchão: 91-180/181-360/360+) continuam funcionando — basta somar as novas faixas que caem dentro dessas janelas. O Colchão "360+" passa a ser a soma de todas as faixas ≥ 361.
+
+---
+
+## Arquivos a alterar
+
+```text
+supabase/migrations/<new>.sql                        (novo — 2 tabelas + RLS + grants)
+src/components/comite/ImportarCarteiraNMDialog.tsx   (novo)
+src/components/comite/BreakdownFaixasDialog.tsx      (novo)
+src/hooks/useComiteNovoMundo.ts                      (reescrever useCarteira p/ ler snapshot)
+src/pages/ComiteNovoMundo.tsx                        (botão importar + abrir breakdown no card)
+```
+
+Sem mudanças em outras páginas, edge functions ou regras de cálculo do funil/TMR.
+
+---
+
+## O que NÃO entra
+
+- Não mexe na tabela `devedores` (a carteira passa a ser snapshot manual; o painel deixa de depender da importação de devedores para esse card específico).
+- Não cria edge function — parse e insert acontecem no client (admin).
+- Não guarda histórico mensal; cada importação substitui a anterior (escolha confirmada).
