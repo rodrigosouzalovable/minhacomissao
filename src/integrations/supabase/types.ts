@@ -958,6 +958,69 @@ export type Database = {
         }
         Relationships: []
       }
+      comite_metas_novomundo: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          criado_em: string
+          faixa: string
+          id: string
+          mes_ano: string
+          meta_valor: number
+          tipo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          faixa: string
+          id?: string
+          mes_ano: string
+          meta_valor?: number
+          tipo: string
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          faixa?: string
+          id?: string
+          mes_ano?: string
+          meta_valor?: number
+          tipo?: string
+        }
+        Relationships: []
+      }
+      comite_textos_novomundo: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          bloco: string
+          conteudo: string
+          criado_em: string
+          id: string
+          mes_ano: string
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          bloco: string
+          conteudo?: string
+          criado_em?: string
+          id?: string
+          mes_ano: string
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          bloco?: string
+          conteudo?: string
+          criado_em?: string
+          id?: string
+          mes_ano?: string
+        }
+        Relationships: []
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean
@@ -1700,6 +1763,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           criado_em: string
+          data_admissao: string | null
           email: string
           id: string
           nome: string
@@ -1712,6 +1776,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
+          data_admissao?: string | null
           email: string
           id: string
           nome: string
@@ -1724,6 +1789,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
+          data_admissao?: string | null
           email?: string
           id?: string
           nome?: string
