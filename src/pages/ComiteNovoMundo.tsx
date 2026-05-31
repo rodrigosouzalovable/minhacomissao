@@ -356,13 +356,14 @@ export default function ComiteNovoMundo() {
   );
 }
 
-function KPI({ titulo, valor, sub, hint }: { titulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint } }) {
+function KPI({ titulo, valor, sub, hint, extra }: { titulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint }; extra?: React.ReactNode }) {
   return (
     <Card>
       <CardContent className="p-4">
         <div className="text-xs uppercase text-muted-foreground flex items-center gap-1">
           <span>{titulo}</span>
           {hint && <CampoZeradoHint motivo={hint.motivo} acao={hint.acao} />}
+          {extra && <span className="ml-auto">{extra}</span>}
         </div>
         <div className="text-2xl font-bold mt-1">{valor}</div>
         {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
