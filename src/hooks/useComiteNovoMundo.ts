@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 const liveQueryOpts = {
-  staleTime: 30_000,
+  ...liveQueryOpts,
   refetchOnWindowFocus: true as const,
   refetchInterval: 60_000,
 };
@@ -121,7 +121,7 @@ export function useCarteira() {
       }
       return { porFaixa, totalQtd, totalValor, totalValorAtualizado, cpfs };
     },
-    staleTime: 60_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -152,7 +152,7 @@ export function useFunilMes(mesAno: string) {
       );
       return agg;
     },
-    staleTime: 60_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -273,7 +273,7 @@ export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | 
         porUser,
       };
     },
-    staleTime: 60_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -308,7 +308,7 @@ export function useMetasMes(mesAno: string) {
       }
       return map;
     },
-    staleTime: 30_000,
+    ...liveQueryOpts,
   });
 }
 
@@ -327,6 +327,6 @@ export function useTextosMes(mesAno: string) {
       }
       return map;
     },
-    staleTime: 30_000,
+    ...liveQueryOpts,
   });
 }
