@@ -16,6 +16,8 @@ import {
   useFunilMes,
   useAcordosNovoMundo,
   useCobradores,
+  useCobradoresFixos,
+  useHistoricoCobradores,
   useMetasMes,
   useTextosMes,
   FAIXAS_NN,
