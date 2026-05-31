@@ -8,10 +8,6 @@ const liveQueryOpts = {
   refetchInterval: 60_000,
 };
 
-/**
- * Assina mudanças nas tabelas que alimentam o Comitê Novo Mundo e invalida
- * as queries do React Query para manter o painel vivo sem refresh manual.
- */
 export function useComiteRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
@@ -20,11 +16,12 @@ export function useComiteRealtime() {
       .channel('comite-nm-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'acordos' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pagamentos' }, invalidate)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'devedores' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'relatorio_acionamentos' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comite_metas_novomundo' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comite_textos_novomundo' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comite_carteira_nm_snapshot' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comite_carteira_nm_item' }, invalidate)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -32,10 +29,7 @@ export function useComiteRealtime() {
   }, [qc]);
 }
 
-const CREDOR = 'ume_novo_mundo';
-
 function mesRange(mesAno: string) {
-  // mesAno = "YYYY-MM"
   const inicio = new Date(`${mesAno}-01T00:00:00-03:00`);
   const fim = new Date(inicio);
   fim.setMonth(fim.getMonth() + 1);
@@ -46,43 +40,89 @@ function normalizeCpf(c: string | null | undefined) {
   return (c ?? '').replace(/\D/g, '');
 }
 
-function diasAtraso(venc: string | null): number | null {
-  if (!venc) return null;
-  const d = new Date(venc);
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  return Math.floor((hoje.getTime() - d.getTime()) / 86400000);
-}
+export type FaixaKey =
+  | '1-30' | '31-60' | '61-90'
+  | '91-180' | '181-360'
+  | '361-720' | '721-1080' | '1081-1440' | '1441-1800' | '1801-2000' | '2000+';
 
-export type FaixaKey = '1-30' | '31-60' | '61-90' | '91-180' | '181-360' | '360+';
 export const FAIXAS_NN: FaixaKey[] = ['1-30', '31-60', '61-90'];
-export const FAIXAS_COLCHAO: FaixaKey[] = ['91-180', '181-360', '360+'];
+export const FAIXAS_COLCHAO: FaixaKey[] = [
+  '91-180', '181-360', '361-720', '721-1080', '1081-1440', '1441-1800', '1801-2000', '2000+',
+];
 export const TODAS_FAIXAS: FaixaKey[] = [...FAIXAS_NN, ...FAIXAS_COLCHAO];
 
-function faixaDeAtraso(dias: number | null): FaixaKey | null {
-  if (dias === null || dias < 1) return null;
-  if (dias <= 30) return '1-30';
-  if (dias <= 60) return '31-60';
-  if (dias <= 90) return '61-90';
-  if (dias <= 180) return '91-180';
-  if (dias <= 360) return '181-360';
-  return '360+';
+export type CredorTipo = 'INADIMPLENTES' | 'APORTE';
+export const CREDOR_TIPOS: CredorTipo[] = ['INADIMPLENTES', 'APORTE'];
+
+export function faixaDeAtraso(dias: number | null | undefined): FaixaKey | null {
+  if (dias === null || dias === undefined || isNaN(dias as number) || dias < 1) return null;
+  const d = Math.floor(dias);
+  if (d <= 30) return '1-30';
+  if (d <= 60) return '31-60';
+  if (d <= 90) return '61-90';
+  if (d <= 180) return '91-180';
+  if (d <= 360) return '181-360';
+  if (d <= 720) return '361-720';
+  if (d <= 1080) return '721-1080';
+  if (d <= 1440) return '1081-1440';
+  if (d <= 1800) return '1441-1800';
+  if (d <= 2000) return '1801-2000';
+  return '2000+';
 }
+
+type CelulaCarteira = { qtd: number; cpfsUnicos: number; risco: number; valorAtualizado: number; valor: number };
 
 export function useCarteira() {
   return useQuery({
     queryKey: ['comite-nm', 'carteira'],
     queryFn: async () => {
-      // Paginar para não bater no limite de 1000
+      // 1) snapshot ativo
+      const { data: snap, error: snapErr } = await supabase
+        .from('comite_carteira_nm_snapshot')
+        .select('*')
+        .eq('ativo', true)
+        .order('importado_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (snapErr) throw snapErr;
+
+      const baseFaixa = (): CelulaCarteira => ({ qtd: 0, cpfsUnicos: 0, risco: 0, valorAtualizado: 0, valor: 0 });
+      const porFaixa: Record<FaixaKey, CelulaCarteira> = Object.fromEntries(
+        TODAS_FAIXAS.map((f) => [f, baseFaixa()]),
+      ) as Record<FaixaKey, CelulaCarteira>;
+      const porTipo: Record<CredorTipo, CelulaCarteira> = {
+        INADIMPLENTES: baseFaixa(),
+        APORTE: baseFaixa(),
+      };
+      const matriz: Record<FaixaKey, Record<CredorTipo, CelulaCarteira>> = Object.fromEntries(
+        TODAS_FAIXAS.map((f) => [f, { INADIMPLENTES: baseFaixa(), APORTE: baseFaixa() }]),
+      ) as Record<FaixaKey, Record<CredorTipo, CelulaCarteira>>;
+
+      if (!snap) {
+        return {
+          snapshot: null,
+          porFaixa,
+          porTipo,
+          matriz,
+          totalQtd: 0,
+          totalContratos: 0,
+          totalCpfsUnicos: 0,
+          totalValor: 0,
+          totalValorAtualizado: 0,
+          totalRisco: 0,
+          cpfs: new Set<string>(),
+        };
+      }
+
+      // 2) paginar todos os itens
       const all: any[] = [];
       let from = 0;
       const pageSize = 1000;
       while (true) {
         const { data, error } = await supabase
-          .from('devedores')
-          .select('cpf, valor_original, valor_atualizado, data_vencimento')
-          .eq('credor', CREDOR)
-          .eq('ativo', true)
+          .from('comite_carteira_nm_item')
+          .select('cpf_cnpj, credor_tipo, atraso_dias, risco, faixa')
+          .eq('snapshot_id', snap.id)
           .range(from, from + pageSize - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
@@ -90,36 +130,70 @@ export function useCarteira() {
         if (data.length < pageSize) break;
         from += pageSize;
       }
-      // Agrupa por faixa
-      const porFaixa: Record<FaixaKey, { qtd: number; valor: number; valorAtualizado: number }> = {
-        '1-30': { qtd: 0, valor: 0, valorAtualizado: 0 },
-        '31-60': { qtd: 0, valor: 0, valorAtualizado: 0 },
-        '61-90': { qtd: 0, valor: 0, valorAtualizado: 0 },
-        '91-180': { qtd: 0, valor: 0, valorAtualizado: 0 },
-        '181-360': { qtd: 0, valor: 0, valorAtualizado: 0 },
-        '360+': { qtd: 0, valor: 0, valorAtualizado: 0 },
-      };
+
       const cpfs = new Set<string>();
-      let totalQtd = 0;
-      let totalValor = 0;
-      let totalValorAtualizado = 0;
-      for (const d of all) {
-        const cpfN = normalizeCpf(d.cpf);
-        if (cpfN) cpfs.add(cpfN);
-        const dias = diasAtraso(d.data_vencimento);
-        const f = faixaDeAtraso(dias);
-        const vo = Number(d.valor_original ?? 0);
-        const va = Number(d.valor_atualizado ?? vo);
-        totalQtd += 1;
-        totalValor += vo;
-        totalValorAtualizado += va;
-        if (f) {
+      const cpfsPorFaixa = new Map<string, Set<string>>();
+      const cpfsPorTipo = new Map<string, Set<string>>();
+      const cpfsMatriz = new Map<string, Set<string>>();
+
+      for (const it of all) {
+        const cpf = normalizeCpf(it.cpf_cnpj);
+        if (cpf) cpfs.add(cpf);
+        const f = (it.faixa as FaixaKey) || faixaDeAtraso(it.atraso_dias);
+        const tipo = (it.credor_tipo === 'APORTE' ? 'APORTE' : 'INADIMPLENTES') as CredorTipo;
+        const risco = Number(it.risco ?? 0);
+
+        if (f && porFaixa[f]) {
           porFaixa[f].qtd += 1;
-          porFaixa[f].valor += vo;
-          porFaixa[f].valorAtualizado += va;
+          porFaixa[f].risco += risco;
+          porFaixa[f].valor += risco;
+          porFaixa[f].valorAtualizado += risco;
+          const key = `${f}`;
+          if (!cpfsPorFaixa.has(key)) cpfsPorFaixa.set(key, new Set());
+          if (cpf) cpfsPorFaixa.get(key)!.add(cpf);
+
+          matriz[f][tipo].qtd += 1;
+          matriz[f][tipo].risco += risco;
+          matriz[f][tipo].valor += risco;
+          matriz[f][tipo].valorAtualizado += risco;
+          const mkey = `${f}|${tipo}`;
+          if (!cpfsMatriz.has(mkey)) cpfsMatriz.set(mkey, new Set());
+          if (cpf) cpfsMatriz.get(mkey)!.add(cpf);
+        }
+
+        porTipo[tipo].qtd += 1;
+        porTipo[tipo].risco += risco;
+        porTipo[tipo].valor += risco;
+        porTipo[tipo].valorAtualizado += risco;
+        if (!cpfsPorTipo.has(tipo)) cpfsPorTipo.set(tipo, new Set());
+        if (cpf) cpfsPorTipo.get(tipo)!.add(cpf);
+      }
+
+      for (const f of TODAS_FAIXAS) {
+        porFaixa[f].cpfsUnicos = cpfsPorFaixa.get(f)?.size ?? 0;
+        for (const t of CREDOR_TIPOS) {
+          matriz[f][t].cpfsUnicos = cpfsMatriz.get(`${f}|${t}`)?.size ?? 0;
         }
       }
-      return { porFaixa, totalQtd, totalValor, totalValorAtualizado, cpfs };
+      for (const t of CREDOR_TIPOS) {
+        porTipo[t].cpfsUnicos = cpfsPorTipo.get(t)?.size ?? 0;
+      }
+
+      const totalRisco = all.reduce((s, it) => s + Number(it.risco ?? 0), 0);
+
+      return {
+        snapshot: snap,
+        porFaixa,
+        porTipo,
+        matriz,
+        totalQtd: cpfs.size, // KPI "CPFs" = únicos
+        totalContratos: all.length,
+        totalCpfsUnicos: cpfs.size,
+        totalValor: totalRisco,
+        totalValorAtualizado: totalRisco,
+        totalRisco,
+        cpfs,
+      };
     },
     ...liveQueryOpts,
   });
@@ -162,7 +236,6 @@ export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | 
     enabled: !!cpfsCarteira && cpfsCarteira.size > 0,
     queryFn: async () => {
       const { inicioISO, fimISO } = mesRange(mesAno);
-      // Acordos criados no mês
       const all: any[] = [];
       let from = 0;
       const pageSize = 1000;
@@ -183,10 +256,8 @@ export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | 
       const novomundoAcordos = all.filter((a) => cpfs.has(normalizeCpf(a.cliente_cpf)));
       const acordoIds = novomundoAcordos.map((a) => a.id);
 
-      // Pagamentos pagos no mês para esses acordos
       const pagamentos: any[] = [];
       if (acordoIds.length > 0) {
-        // Chunk para evitar URL muito longa
         const chunkSize = 200;
         const inicioDate = new Date(inicioISO).toISOString().slice(0, 10);
         const fimDate = new Date(new Date(fimISO).getTime() - 1).toISOString().slice(0, 10);
@@ -204,7 +275,6 @@ export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | 
         }
       }
 
-      // Primeiro pagamento por acordo (para TMR)
       const primeiroPagPorAcordo = new Map<string, string>();
       if (acordoIds.length > 0) {
         const chunkSize = 200;
@@ -231,7 +301,6 @@ export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | 
       const totalPagoValor = pagamentos.reduce((s, p) => s + Number(p.valor_parcela ?? 0), 0);
       const totalPagoQtd = pagamentos.length;
 
-      // TMR
       let somaDias = 0;
       let qtdComPag = 0;
       for (const a of novomundoAcordos) {
@@ -246,7 +315,6 @@ export function useAcordosNovoMundo(mesAno: string, cpfsCarteira: Set<string> | 
       }
       const tmr = qtdComPag > 0 ? somaDias / qtdComPag : null;
 
-      // Por cobrador
       const porUser = new Map<string, { qtd: number; valor: number; pago: number }>();
       for (const a of novomundoAcordos) {
         const key = a.user_id ?? 'sem';
