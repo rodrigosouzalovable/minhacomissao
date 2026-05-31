@@ -79,6 +79,7 @@ export default function ComiteNovoMundo() {
   const cobradores = useCobradores(userIds);
   const metas = useMetasMes(mesAno);
   const textos = useTextosMes(mesAno);
+  const kpisExtras = useKpisExtras(mesAno);
 
   const cobradorMap = useMemo(() => {
     const m = new Map<string, { nome: string; admissao: string | null }>();
