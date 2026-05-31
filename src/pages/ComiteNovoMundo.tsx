@@ -115,7 +115,10 @@ export default function ComiteNovoMundo() {
               <Printer className="h-4 w-4 mr-2" /> Exportar PDF
             </Button>
             {podeEditar && (
-              <MetasDialog mesAno={mesAno} onSaved={() => qc.invalidateQueries({ queryKey: ['comite-nm', 'metas', mesAno] })} />
+              <>
+                <ImportarCarteiraNMDialog />
+                <MetasDialog mesAno={mesAno} onSaved={() => qc.invalidateQueries({ queryKey: ['comite-nm', 'metas', mesAno] })} />
+              </>
             )}
           </div>
         </div>
