@@ -1,43 +1,45 @@
+## Problema identificado
 
-## Objetivo
+Dois bugs em `src/components/relatorios/ImportarLigacoesDialog.tsx`:
 
-No botão **"Importar planilha"** da aba Relatórios, permitir escolher entre **3C Plus Discador** (fluxo atual) ou **Relatório CobMais** (novo). O CobMais alimenta automaticamente Tentativas, WhatsApp, Alô, CPC e CPC-A no quadro horário.
+**1. CobMais sobrescreveu a importação do 3C Plus**
+O modo padrão é `substituir`, e no caminho CobMais ele grava `tentativas/cpc/cpca` com os valores da própria planilha — zerando o que o 3C já havia escrito naquelas faixas.
 
-## Regras de mapeamento CobMais (confirmadas)
+**2. Apenas uma data é importada (a "dominante")**
+Hoje o parser CobMais agrupa por hora em um único `Contagem`, e `dataAlvo` é a data com mais linhas (`dataDetectada`). Se a planilha cobre vários dias (ex.: 28/05 e 29/05), só a data majoritária é salva — por isso 29/05/2026 ficou "sem informação correta".
 
-Cada linha = 1 evento (Data, Hora, Evento, CPF/CNPJ, Nome, Valor em Atraso). Cabeçalhos de Equipe/Operador e linhas sem CPF/Hora são ignorados.
+## Mudanças (somente em `ImportarLigacoesDialog.tsx`)
 
-| Evento (case-insensitive, normalizado) | Tentativas | WhatsApp | Alô | CPC | CPC-A |
-|---|:-:|:-:|:-:|:-:|:-:|
-| Qualquer linha com CPF válido | +1 | | | | |
-| Evento contendo `whatsapp` (ex.: "Envio de WhatsApp") | (já +1 acima) | **+1** | **+1** | | |
-| `contato com cliente` | (já +1) | | **+1** | **+1** | |
-| `acordo` | (já +1) | | **+1** | **+1** | **+1** |
-| `boleto gerado`, `alteração de boleto`, `2ª via`, etc. | (já +1) | | **+1** | **+1** | **+1** |
-| Demais eventos (sem contato, caixa postal, número inválido, etc.) | (já +1) | | | | |
+### Parser CobMais multi-data
+- Trocar `contagem: Contagem` por `contagemPorData: Record<string, Contagem>` em `Resumo` (CobMais).
+- Para cada linha válida, incrementar em `contagemPorData[dataIso][faixa]`.
+- Manter `dataDetectada` (data dominante) só como sugestão visual.
+- 3C Plus segue igual (uma data só).
 
-Resumo das regras confirmadas:
-- **Tentativas** = toda linha com CPF (todas as discagens).
-- **WhatsApp** = qualquer evento que contenha "whatsapp"; também soma em Alô.
-- **Alô** = recebe CPC, CPC-A, WhatsApp, Boleto Gerado e Alteração de Boleto.
-- **CPC** = Contato com Cliente, Acordo, Boleto Gerado, Alteração de Boleto.
-- **CPC-A** = Acordo, Boleto Gerado, Alteração de Boleto.
+### UI de revisão CobMais
+- Mostrar lista de datas detectadas com totais por data (chips).
+- Substituir o campo único "Data alvo" por:
+  - **Checkbox "Importar todas as datas detectadas"** (default: ligado).
+  - Se desligado, reaparece o seletor de data única (comportamento atual).
+- A tabela de pré-visualização vira: tabs por data, ou um seletor que troca qual `Contagem` é exibido.
 
-Hora extraída do campo Hora (HH:MM) → faixa `Hh-(H+1)h`. Fora de 8h–18h é ignorado. Data alvo detectada da maioria das linhas e editável antes de confirmar.
+### Modo padrão e gravação
+- **Default do `modo` passa a ser `somar`** quando origem é CobMais (e mantém `substituir` como default para 3C, que é o caso típico de re-importar o mesmo arquivo).
+- No `confirmar()`, iterar sobre cada data selecionada e fazer o mesmo loop atual (`upsert` + log) para cada `(data, faixa)`.
+- Manter a regra: 3C nunca toca `whatsapp/alo`; CobMais escreve todas as 5 colunas.
+- Mensagem de toast final passa a incluir o número de datas atualizadas.
 
-## Mudanças (apenas frontend)
+### Texto explicativo
+- Acrescentar abaixo do RadioGroup de modo, quando CobMais:
+  > "Use **Somar** para combinar com uma importação anterior (ex.: 3C Plus). Use **Substituir** apenas se quiser reimportar o mesmo CobMais."
 
-### `src/components/relatorios/ImportarLigacoesDialog.tsx`
-- **Passo 0**: `RadioGroup` para escolher a origem — `3c` (atual) ou `cobmais` (novo).
-- Manter `handleFile3C` (parser atual intacto) e criar `handleFileCobmais`:
-  - Lê com `xlsx` (sheet 1, `header:1`), localiza a linha de cabeçalho contendo "Data", "Hora", "Evento", "CPF/CNPJ".
-  - Para cada linha de evento aplica o mapeamento acima e incrementa `contagem[faixa]` (`tentativas`, `whatsapp`, `alo`, `cpc`, `cpca`).
-- Estender o tipo `Resumo` e a tabela de pré-visualização para 5 colunas quando a origem for CobMais.
-- `confirmar()`: fazer upsert das 5 colunas em `relatorio_acionamentos` e registrar logs em `relatorio_acionamentos_log` (mesmo padrão atual: uma linha de log por coluna alterada, `acao = 'importacao_cobmais_<coluna>'`).
-- Manter modos **Substituir** / **Somar** e o intervalo de horas.
-- Coluna `acordos_valor` continua intocada (alimentada só pelo trigger de criação de acordos).
+## Não muda
+- Schema do banco, RPC, RLS, edge functions — nada.
+- Importação 3C Plus continua exatamente igual.
+- Trigger de `acordos_valor` continua intocada.
+- Sem custo adicional na Lovable Cloud.
 
-## Sem mudanças
-- Backend, schema, RLS, edge functions, cron, storage — nada altera.
-- Importação 3C Plus segue idêntica.
-- Nenhum custo adicional de Lovable Cloud.
+## Detalhes técnicos
+- `Resumo` ganha campos opcionais `contagemPorData?: Record<string, Contagem>` e `datas?: string[]` (ordenadas desc por nº de linhas). Para 3C, esses campos ficam vazios e o código segue lendo `contagem`.
+- Estado novo: `datasSelecionadas: string[]` e `importarTodas: boolean` (default `true` em CobMais).
+- Ao confirmar, montar `const alvos = isCob && importarTodas ? resumo.datas! : [dataAlvo]` e loopar o bloco de upsert para cada data, usando `resumo.contagemPorData![data]` em CobMais e `resumo.contagem` em 3C.
