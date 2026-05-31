@@ -52,6 +52,7 @@ export function BreakdownFaixasDialog({ trigger }: { trigger?: React.ReactNode }
                     <th className="text-center p-2 border-l" colSpan={3}>INADIMPLENTES (NN)</th>
                     <th className="text-center p-2 border-l" colSpan={3}>APORTE (Colchão)</th>
                     <th className="text-center p-2 border-l" colSpan={3}>Total</th>
+                    <th className="text-center p-2 border-l" rowSpan={2}>% Recup. mês</th>
                   </tr>
                   <tr>
                     <th className="text-right p-2 border-l">Contratos</th>
