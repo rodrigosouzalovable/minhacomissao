@@ -3839,6 +3839,7 @@ export type Database = {
         Args: { p_telefone: string; p_texto: string; p_timestamp: string }
         Returns: undefined
       }
+      comite_carteira_nm_agregar: { Args: never; Returns: Json }
       comparativo_mensal_global: {
         Args: {
           p_fim_anterior: string
