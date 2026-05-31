@@ -217,7 +217,14 @@ export default function ComiteNovoMundo() {
           </CardContent>
         </Card>
 
-        {/* NN / Colchão */}
+        {/* Análises extras: Recuperação, Saúde dos Acordos, Cobertura */}
+        <div className="grid gap-3 md:grid-cols-3">
+          <CardRecuperacao kpis={kpisExtras.data} totalRisco={carteira.data?.totalRisco ?? 0} />
+          <CardSaudeAcordos kpis={kpisExtras.data} />
+          <CardCobertura kpis={kpisExtras.data} />
+        </div>
+
+
         <div className="grid md:grid-cols-2 gap-3">
           <TabelaRecuperacao titulo="02 · Recuperação NN" faixas={FAIXAS_NN} tipo="nn" carteira={carteira.data} metas={metas.data} totalRealizado={totalNNRealizado} />
           <TabelaRecuperacao titulo="02 · Colchão" faixas={FAIXAS_COLCHAO} tipo="colchao" carteira={carteira.data} metas={metas.data} totalRealizado={totalColchaoRealizado} />
