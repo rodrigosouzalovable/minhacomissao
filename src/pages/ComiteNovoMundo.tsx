@@ -26,6 +26,8 @@ import {
 } from '@/hooks/useComiteNovoMundo';
 import { CampoZeradoHint } from '@/components/comite/CampoZeradoHint';
 import { InformarAdmissaoDialog } from '@/components/comite/InformarAdmissaoDialog';
+import { ImportarCarteiraNMDialog } from '@/components/comite/ImportarCarteiraNMDialog';
+import { BreakdownFaixasDialog } from '@/components/comite/BreakdownFaixasDialog';
 
 const moeda = (v: number) =>
   (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
@@ -113,7 +115,10 @@ export default function ComiteNovoMundo() {
               <Printer className="h-4 w-4 mr-2" /> Exportar PDF
             </Button>
             {podeEditar && (
-              <MetasDialog mesAno={mesAno} onSaved={() => qc.invalidateQueries({ queryKey: ['comite-nm', 'metas', mesAno] })} />
+              <>
+                <ImportarCarteiraNMDialog />
+                <MetasDialog mesAno={mesAno} onSaved={() => qc.invalidateQueries({ queryKey: ['comite-nm', 'metas', mesAno] })} />
+              </>
             )}
           </div>
         </div>
@@ -126,18 +131,22 @@ export default function ComiteNovoMundo() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KPI
             titulo="Carteira (CPFs)"
-            valor={carteira.data?.totalQtd.toLocaleString('pt-BR') ?? '—'}
-            hint={(carteira.data?.totalQtd ?? 0) === 0 ? {
-              motivo: 'Nenhum devedor ativo encontrado com credor "ume_novo_mundo". Importe a base do credor para começar.',
-              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            valor={(carteira.data?.totalCpfsUnicos ?? 0).toLocaleString('pt-BR')}
+            sub={
+              carteira.data?.snapshot
+                ? `${(carteira.data.totalContratos ?? 0).toLocaleString('pt-BR')} contratos · importado ${new Date(carteira.data.snapshot.importado_em).toLocaleDateString('pt-BR')}`
+                : undefined
+            }
+            extra={podeEditar ? <BreakdownFaixasDialog trigger={<Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]">Detalhar</Button>} /> : undefined}
+            hint={(carteira.data?.totalCpfsUnicos ?? 0) === 0 ? {
+              motivo: 'Nenhuma carteira importada ainda. Use o botão "Importar planilha" no topo da página para enviar o arquivo CPF NOVO MUNDO (.xlsx) com colunas CPF/CNPJ, CREDOR, ATRASO e RISCO.',
             } : undefined}
           />
           <KPI
-            titulo="Valor em aberto"
-            valor={moeda(carteira.data?.totalValorAtualizado ?? 0)}
-            hint={(carteira.data?.totalValorAtualizado ?? 0) === 0 ? {
-              motivo: 'Sem valores em aberto porque a base do credor está vazia.',
-              acao: { label: 'Importar base Novo Mundo', to: '/admin/importar-devedores' },
+            titulo="Valor em risco"
+            valor={moeda(carteira.data?.totalRisco ?? 0)}
+            hint={(carteira.data?.totalRisco ?? 0) === 0 ? {
+              motivo: 'Sem valores em risco porque nenhuma carteira foi importada ainda.',
             } : undefined}
           />
           <KPI
@@ -347,13 +356,14 @@ export default function ComiteNovoMundo() {
   );
 }
 
-function KPI({ titulo, valor, sub, hint }: { titulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint } }) {
+function KPI({ titulo, valor, sub, hint, extra }: { titulo: string; valor: string; sub?: string; hint?: { motivo: string; acao?: import('@/components/comite/CampoZeradoHint').AcaoHint }; extra?: React.ReactNode }) {
   return (
     <Card>
       <CardContent className="p-4">
         <div className="text-xs uppercase text-muted-foreground flex items-center gap-1">
           <span>{titulo}</span>
           {hint && <CampoZeradoHint motivo={hint.motivo} acao={hint.acao} />}
+          {extra && <span className="ml-auto">{extra}</span>}
         </div>
         <div className="text-2xl font-bold mt-1">{valor}</div>
         {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
