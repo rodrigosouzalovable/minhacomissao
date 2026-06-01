@@ -598,20 +598,10 @@ export default function NovoAcordo() {
                           setCpfQuebraInfo('CPF possui acordo anterior com QUEBRA DE ACORDO. Novo acordo permitido.');
                           setCpfDuplicateError('');
                         } else {
-                          // Buscar nome do funcionário + data do último acordo
-                          const cpfNum = formatted.replace(/\D/g, '');
-                          const { data: ultimo } = await supabase
-                            .from('acordos')
-                            .select('criado_em, profiles:user_id(nome)')
-                            .filter('cliente_cpf', 'ilike', `%${cpfNum.slice(0, 3)}%${cpfNum.slice(3, 6)}%${cpfNum.slice(6, 9)}%${cpfNum.slice(9)}%`)
-                            .order('criado_em', { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
-                          const nome = (ultimo as any)?.profiles?.nome || 'outro funcionário';
-                          const data = (ultimo as any)?.criado_em
-                            ? new Date((ultimo as any).criado_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-                            : 'data desconhecida';
-                          setCpfDuplicateError(`Este CPF já possui acordo lançado por ${nome} em ${data}. Apenas o administrador pode lançar acordos duplicados.`);
+                          // Buscar nome do funcionário responsável pelo último acordo
+                          const { data: nomeFuncionario } = await supabase.rpc('cpf_acordo_funcionario_nome' as any, { p_cpf: formatted });
+                          const nome = nomeFuncionario || 'outro funcionário';
+                          setCpfDuplicateError(`Este CPF já possui acordo lançado por ${nome}. Apenas o administrador pode lançar acordos duplicados.`);
                           setCpfQuebraInfo('');
                         }
                       }
