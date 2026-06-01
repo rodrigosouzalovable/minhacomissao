@@ -48,6 +48,7 @@ const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const ComiteNovoMundo = lazy(() => import("./pages/ComiteNovoMundo"));
+const ValidarEmails = lazy(() => import("./pages/ValidarEmails"));
 
 const queryClient = new QueryClient();
 
