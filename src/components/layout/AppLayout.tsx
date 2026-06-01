@@ -26,7 +26,8 @@ import {
   Flame,
   Activity,
   Download,
-  BarChart3
+  BarChart3,
+  AtSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -89,6 +90,7 @@ const navItems: NavItem[] = [
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/admin/comite-novomundo', label: 'Comitê Novo Mundo', icon: BarChart3, adminOnly: true },
+  { href: '/admin/validar-emails', label: 'Validar E-mails', icon: AtSign, adminOnly: true },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
