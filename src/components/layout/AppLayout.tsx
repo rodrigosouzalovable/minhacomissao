@@ -26,7 +26,8 @@ import {
   Flame,
   Activity,
   Download,
-  BarChart3
+  BarChart3,
+  AtSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
