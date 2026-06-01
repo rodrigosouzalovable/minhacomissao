@@ -1,38 +1,41 @@
-# Corrigir cards 03 · Eficiência de Recuperação e 04 · Saúde dos Acordos (Comitê Novo Mundo)
+## Objetivo
 
-## Diagnóstico
+Apenas o admin pode lançar acordo com CPF que já tem outro acordo. Funcionários (mesmo os que hoje têm a permissão `permite_cpf_duplicado`) ficam bloqueados, exceto quando o último acordo do CPF está "quebrado".
 
-Os cards mostram tudo zerado, mas os dados existem na base e batem com a carteira Novo Mundo já importada:
+## Mudanças
 
-| Métrica (consulta direta) | Valor real | Card hoje |
-|---|---|---|
-| Acordos ativos (CPFs da carteira NM) | **1.132** | 0 |
-| Quebrados | **122** | 0 |
-| Fechados em maio/2026 | **544** | 0 |
-| Pagamentos pagos em maio/2026 | **122** parcelas | R$ 0,00 |
-| Risco total da carteira | R$ 111.850.277,62 | R$ 111.850.277,62 ✅ |
+### 1. Banco — trigger `acordos_block_duplicate_cpf`
 
-O risco aparece porque vem de outra função (`comite_carteira_nm_agregar`). Os zeros vêm da função `comite_carteira_nm_kpis_extras`, que está retornando vazio mesmo havendo dados.
+Reescrever a função para remover a exceção da permissão individual:
 
-**Causa raiz:** a função usa `CREATE TEMP TABLE IF NOT EXISTS ... ON COMMIT DROP` para 4 tabelas temporárias. No pooler do Supabase (transaction mode), em chamadas repetidas na mesma conexão, o `IF NOT EXISTS` ignora o `AS SELECT` quando a tabela ainda está "viva" sob outro snapshot — resultando em tabelas vazias e, consequentemente, todos os contadores em zero. É um padrão conhecido de ser instável em PostgREST.
+- Mantém bypass apenas para admin (`is_admin_user(auth.uid())`).
+- Remove o bloco que consulta `user_permissions.permite_cpf_duplicado`.
+- Mantém a exceção quando `cpf_ultimo_acordo_quebrado` é verdadeiro.
+- Atualiza a mensagem de erro para o formato pedido:
+  `"Este CPF já possui acordo lançado por {Nome} em {dd/mm/aaaa}. Apenas o administrador pode lançar acordos duplicados."`
+  (busca também a `criado_em` do último acordo do CPF para compor a data.)
 
-## O que vai ser feito
+### 2. Frontend — telas de criação de acordo
 
-Reescrever apenas a função `comite_carteira_nm_kpis_extras` trocando as 4 TEMP TABLES por **CTEs** (`WITH ...`) dentro de uma única consulta agregada. Mesma assinatura, mesmo formato JSON de retorno — o frontend não muda.
+`src/pages/NovoAcordo.tsx` (e qualquer fluxo de criação de funcionário) hoje usa o hook de validação em tempo real de CPF. Ajustes:
 
-Blocos preservados, sem mudança semântica:
-- **Recuperação:** `pago_mes_total`, `pago_mes_qtd`, `pct_sobre_risco`, `por_faixa` (pago vs risco por faixa), `serie_6meses`.
-- **Saúde dos acordos:** `ativos_qtd`, `quebrados_qtd`, `quitados_qtd`, `fechados_mes`, `quebrados_mes`, `taxa_quebra`, `em_risco_qtd`, `em_risco_valor` (parcelas pendentes vencendo nos próximos 7 dias).
-- **Cobertura:** `total_cpfs`, `cpfs_acionados_mes`, `pct_acionados`, `cpfs_convertidos`, `pct_convertidos`, `cpfs_intocados_30d_qtd`.
+- Quando a verificação detectar acordo existente para o CPF e o usuário não for admin, exibir mensagem no mesmo formato e desabilitar o botão "Salvar".
+- A exceção "último acordo quebrado" continua liberando o salvamento normalmente.
+- A flag `permiteCpfDuplicado` exposta em `useUserPermissions` deixa de afetar o bloqueio — ela passa a ser ignorada no formulário (campo continua na tabela por compatibilidade, mas sem efeito).
+- `NovoAcordoAdmin.tsx` continua livre (admin).
+
+### 3. Tela de permissões
+
+`src/components/EditPermissionsDialog.tsx`: ocultar/remover o switch "Permite CPF duplicado", já que a permissão deixou de ter efeito. (Coluna permanece no banco para não quebrar migrações antigas; só some da UI.)
 
 ## Detalhes técnicos
 
-- Migration única que faz `CREATE OR REPLACE FUNCTION public.comite_carteira_nm_kpis_extras(p_mes_ano text)` com a mesma checagem `is_admin_user` e mesmo `jsonb_build_object` de saída.
-- CTEs internos: `cart_cpfs` (CPFs distintos da carteira ativa + faixa + risco), `risco_faixa`, `acordos_nm` (acordos cujo `cpf_normalize(cliente_cpf)` está em `cart_cpfs`), `phones` (devedores Novo Mundo com telefone normalizado para sufixo de 8 dígitos), `acionados_mes` e `acionados_30d` (CPFs com envio em `whatsapp_mensagens` direção `saida` nos respectivos períodos, casando pelo sufixo do telefone).
-- Sem mudanças em tabelas, RLS, índices, edge functions, cron ou frontend. Sem impacto em custo Lovable Cloud.
-- `comite_carteira_nm_intocados` continua igual (já usa CTE), nada a mexer.
+- Migration única alterando `public.acordos_block_duplicate_cpf()`. Não mexe em RLS, tabelas, ou outros triggers.
+- Mensagem da exception usa `to_char(a.criado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY')`.
+- Frontend: o erro do Postgres já sobe via `supabase.from('acordos').insert(...)`; basta exibir `error.message` no toast, além do bloqueio preventivo no formulário.
 
-## Risco e validação
+## Fora de escopo
 
-- Risco: nulo — função `STABLE SECURITY DEFINER` apenas leitura, mesma interface pública.
-- Validação: após aplicar, abrir a aba Comitê Novo Mundo no mês 2026-05 e conferir que os cards 03/04/05 exibem os números acima (≈1.132 ativos, 122 quebrados, 544 fechados no mês, valor pago do mês > 0, % recuperado > 0).
+- Não altera regras de quebra de acordo (10 dias) nem fluxo do admin.
+- Não toca em `acordos_devedor` (CPFs do portal público), só em `acordos`.
+- Não mexe em RLS nem em outros gatilhos.

@@ -76,7 +76,7 @@ export default function NovoAcordo() {
     user
   } = useAuth();
   const { isAdmin } = useUserRole();
-  const { permiteCpfDuplicado } = useUserPermissions();
+  
   const navigate = useNavigate();
   const {
     toast
@@ -585,23 +585,23 @@ export default function NovoAcordo() {
                   if (cpfQuebraInfo) setCpfQuebraInfo('');
                   
                   // Verificar CPF duplicado quando completo (11 dígitos) e não for admin
-                  if (isCpfCompleto(formatted) && !isAdmin && !permiteCpfDuplicado) {
+                  if (isCpfCompleto(formatted) && !isAdmin) {
                     setCheckingCpf(true);
                     try {
                       const { data: hasDuplicate, error } = await supabase.rpc('cpf_has_acordo', { p_cpf: formatted });
                       if (!error && hasDuplicate) {
                         // Verificar se o último acordo tem QUEBRA DE ACORDO
                         const { data: isQuebrado, error: quebraError } = await supabase.rpc('cpf_ultimo_acordo_quebrado', { p_cpf: formatted });
-                        
+
                         if (!quebraError && isQuebrado) {
                           // CPF tem quebra, permitir novo acordo
                           setCpfQuebraInfo('CPF possui acordo anterior com QUEBRA DE ACORDO. Novo acordo permitido.');
                           setCpfDuplicateError('');
                         } else {
-                          // CPF não tem quebra, buscar nome do funcionário
+                          // Buscar nome do funcionário responsável pelo último acordo
                           const { data: nomeFuncionario } = await supabase.rpc('cpf_acordo_funcionario_nome' as any, { p_cpf: formatted });
                           const nome = nomeFuncionario || 'outro funcionário';
-                          setCpfDuplicateError(`Este CPF já possui acordo ativo lançado por ${nome}. Contate o administrador.`);
+                          setCpfDuplicateError(`Este CPF já possui acordo lançado por ${nome}. Apenas o administrador pode lançar acordos duplicados.`);
                           setCpfQuebraInfo('');
                         }
                       }
