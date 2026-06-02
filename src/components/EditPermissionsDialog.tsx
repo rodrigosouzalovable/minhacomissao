@@ -233,6 +233,28 @@ export function EditPermissionsDialog({
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Permite CPF duplicado</Label>
+                <p className="text-xs text-muted-foreground">Permite lançar acordo mesmo se já houver outro acordo com o mesmo CPF (apenas exibe alerta)</p>
+              </div>
+              <Switch
+                checked={permiteCpfDuplicado}
+                onCheckedChange={setPermiteCpfDuplicado}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Pode excluir acordos</Label>
+                <p className="text-xs text-muted-foreground">Permite excluir acordos próprios sem parcelas pagas, e excluir parcelas pendentes individualmente. Parcelas pagas ficam protegidas.</p>
+              </div>
+              <Switch
+                checked={podeExcluirAcordos}
+                onCheckedChange={setPodeExcluirAcordos}
+              />
+            </div>
+
           </div>
         </div>
 
