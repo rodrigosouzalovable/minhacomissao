@@ -463,6 +463,7 @@ export default function Acordos() {
     user
   } = useAuth();
   const { isAdmin } = useUserRole();
+  const { podeExcluirAcordos } = useUserPermissions();
   const {
     toast
   } = useToast();
