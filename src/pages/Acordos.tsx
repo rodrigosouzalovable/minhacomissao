@@ -152,6 +152,7 @@ function AcordoCard({
   isAdmin = false,
   ultimaParcelaPaga,
   canEdit = true,
+  canDelete = false,
   lancadoPor,
 }: {
   acordo: Acordo;
@@ -170,6 +171,7 @@ function AcordoCard({
   isAdmin?: boolean;
   ultimaParcelaPaga?: { numero: number; data_paga: string };
   canEdit?: boolean;
+  canDelete?: boolean;
   lancadoPor?: string | null;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
@@ -323,7 +325,7 @@ function AcordoCard({
                     {isEnviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                   </Button>
                 )}
-                {canEdit && (
+                {canDelete && (
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={e => {
                   e.preventDefault();
                   e.stopPropagation();
