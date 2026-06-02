@@ -76,6 +76,7 @@ export default function NovoAcordo() {
     user
   } = useAuth();
   const { isAdmin } = useUserRole();
+  const { permiteCpfDuplicado } = useUserPermissions();
   
   const navigate = useNavigate();
   const {
