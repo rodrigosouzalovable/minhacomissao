@@ -76,6 +76,7 @@ export default function NovoAcordo() {
     user
   } = useAuth();
   const { isAdmin } = useUserRole();
+  const { permiteCpfDuplicado } = useUserPermissions();
   
   const navigate = useNavigate();
   const {
@@ -85,6 +86,7 @@ export default function NovoAcordo() {
   const [nomeError, setNomeError] = useState('');
   const [cpfError, setCpfError] = useState('');
   const [cpfDuplicateError, setCpfDuplicateError] = useState('');
+  const [cpfDuplicateWarning, setCpfDuplicateWarning] = useState('');
   const [cpfQuebraInfo, setCpfQuebraInfo] = useState('');
   const [checkingCpf, setCheckingCpf] = useState(false);
   const [telefoneError, setTelefoneError] = useState('');
@@ -582,10 +584,11 @@ export default function NovoAcordo() {
                   });
                   if (cpfError) setCpfError('');
                   if (cpfDuplicateError) setCpfDuplicateError('');
+                  if (cpfDuplicateWarning) setCpfDuplicateWarning('');
                   if (cpfQuebraInfo) setCpfQuebraInfo('');
                   
-                  // Verificar CPF duplicado quando completo (11 dígitos) e não for admin
-                  if (isCpfCompleto(formatted) && !isAdmin) {
+                  // Verificar CPF duplicado quando completo (11 dígitos)
+                  if (isCpfCompleto(formatted)) {
                     setCheckingCpf(true);
                     try {
                       const { data: hasDuplicate, error } = await supabase.rpc('cpf_has_acordo', { p_cpf: formatted });
@@ -597,11 +600,18 @@ export default function NovoAcordo() {
                           // CPF tem quebra, permitir novo acordo
                           setCpfQuebraInfo('CPF possui acordo anterior com QUEBRA DE ACORDO. Novo acordo permitido.');
                           setCpfDuplicateError('');
+                          setCpfDuplicateWarning('');
                         } else {
                           // Buscar nome do funcionário responsável pelo último acordo
                           const { data: nomeFuncionario } = await supabase.rpc('cpf_acordo_funcionario_nome' as any, { p_cpf: formatted });
                           const nome = nomeFuncionario || 'outro funcionário';
-                          setCpfDuplicateError(`Este CPF já possui acordo lançado por ${nome}. Apenas o administrador pode lançar acordos duplicados.`);
+                          if (isAdmin || permiteCpfDuplicado) {
+                            setCpfDuplicateWarning(`⚠️ Atenção: este CPF já possui acordo lançado por ${nome}. Você pode prosseguir, mas confirme se realmente é um novo acordo.`);
+                            setCpfDuplicateError('');
+                          } else {
+                            setCpfDuplicateError(`Este CPF já possui acordo lançado por ${nome}. Apenas o administrador pode lançar acordos duplicados.`);
+                            setCpfDuplicateWarning('');
+                          }
                           setCpfQuebraInfo('');
                         }
                       }
@@ -615,9 +625,10 @@ export default function NovoAcordo() {
                   if (form.clienteCpf && !isCpfCompleto(form.clienteCpf)) {
                     setCpfError('CPF deve ter 11 dígitos');
                   }
-                }} maxLength={14} required className={cpfError || cpfDuplicateError ? 'border-destructive' : cpfQuebraInfo ? 'border-green-500' : ''} />
+                }} maxLength={14} required className={cpfError || cpfDuplicateError ? 'border-destructive' : cpfDuplicateWarning ? 'border-amber-500' : cpfQuebraInfo ? 'border-green-500' : ''} />
                   {cpfError && <p className="text-sm text-destructive">{cpfError}</p>}
                   {cpfDuplicateError && <p className="text-sm text-destructive">{cpfDuplicateError}</p>}
+                  {cpfDuplicateWarning && <p className="text-sm text-amber-600 dark:text-amber-500 font-medium">{cpfDuplicateWarning}</p>}
                   {cpfQuebraInfo && <p className="text-sm text-green-600">{cpfQuebraInfo}</p>}
                   {checkingCpf && <p className="text-sm text-muted-foreground">Verificando CPF...</p>}
                 </div>

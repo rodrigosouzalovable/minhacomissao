@@ -67,6 +67,7 @@ export function EditPermissionsDialog({
   const [inboxCompartilhado, setInboxCompartilhado] = useState(false);
   const [acordosCompartilhados, setAcordosCompartilhados] = useState(false);
   const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
+  const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -90,6 +91,7 @@ export function EditPermissionsDialog({
       setInboxCompartilhado((permissions as any).inbox_compartilhado ?? false);
       setAcordosCompartilhados((permissions as any).acordos_compartilhados ?? false);
       setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
+      setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -97,6 +99,7 @@ export function EditPermissionsDialog({
       setInboxCompartilhado(false);
       setAcordosCompartilhados(false);
       setPermiteCpfDuplicado(false);
+      setPodeExcluirAcordos(false);
     }
   }, [permissions, open]);
 
@@ -111,6 +114,7 @@ export function EditPermissionsDialog({
             inbox_compartilhado: inboxCompartilhado,
             acordos_compartilhados: acordosCompartilhados,
             permite_cpf_duplicado: permiteCpfDuplicado,
+            pode_excluir_acordos: podeExcluirAcordos,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
@@ -226,6 +230,28 @@ export function EditPermissionsDialog({
               <Switch
                 checked={acordosCompartilhados}
                 onCheckedChange={setAcordosCompartilhados}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Permite CPF duplicado</Label>
+                <p className="text-xs text-muted-foreground">Permite lançar acordo mesmo se já houver outro acordo com o mesmo CPF (apenas exibe alerta)</p>
+              </div>
+              <Switch
+                checked={permiteCpfDuplicado}
+                onCheckedChange={setPermiteCpfDuplicado}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Pode excluir acordos</Label>
+                <p className="text-xs text-muted-foreground">Permite excluir acordos próprios sem parcelas pagas, e excluir parcelas pendentes individualmente. Parcelas pagas ficam protegidas.</p>
+              </div>
+              <Switch
+                checked={podeExcluirAcordos}
+                onCheckedChange={setPodeExcluirAcordos}
               />
             </div>
 

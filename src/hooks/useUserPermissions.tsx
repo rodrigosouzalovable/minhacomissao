@@ -27,6 +27,7 @@ export function useUserPermissions() {
     acordosCompartilhados: permissions?.acordos_compartilhados ?? false,
     concedidoPor: permissions?.concedido_por ?? null,
     permiteCpfDuplicado: (permissions as any)?.permite_cpf_duplicado ?? false,
+    podeExcluirAcordos: (permissions as any)?.pode_excluir_acordos ?? false,
     isLoading,
   };
 }
