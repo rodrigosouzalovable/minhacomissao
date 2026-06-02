@@ -1,86 +1,83 @@
-# Validador de E-mails em Massa
-
 ## Objetivo
 
-Ferramenta interna onde o admin importa uma planilha com e-mails e o sistema separa **válidos** de **inválidos** sem custo de API externa.
+Liberar para **Anna Flavia Leite de Morais** duas permissões individuais:
+1. **Excluir acordos** (com regras de proteção a parcelas pagas).
+2. **Lançar acordo com CPF duplicado** (já tem a flag `permite_cpf_duplicado=true`, mas o trigger do banco e o formulário ainda bloqueiam — precisa ajustar para apenas alertar).
 
-## Como a validação grátis funciona
+---
 
-Cada e-mail passa por 4 checagens em sequência:
+## 1. Permissão de excluir acordos (parcial e segura)
 
-1. **Sintaxe (regex RFC)** — formato correto, sem espaços, sem caracteres proibidos.
-2. **Domínio descartável** — lista negra (mailinator, tempmail, 10minutemail, yopmail, guerrillamail e ~50 outros).
-3. **Typo de domínio popular** — `gmial.com`, `hotmial.com`, `outloook.com`, `yaho.com.br` → marca inválido + sugere o correto.
-4. **DNS MX lookup** — consulta se o domínio tem servidor de e-mail (via DNS-over-HTTPS público do Google e Cloudflare como fallback). Se não tem MX, e-mail é inválido.
+### Regras de negócio
+- Acordo **sem nenhuma parcela paga** → pode excluir o acordo inteiro (igual admin faz hoje).
+- Acordo **com pelo menos uma parcela paga** → não pode excluir o acordo. Mas pode excluir **individualmente** as parcelas ainda pendentes (não pagas).
+- Parcela com `status = 'pago'` → **nunca** pode ser excluída.
 
-Classificação final:
+### Banco de dados
+- Adicionar coluna `pode_excluir_acordos boolean default false` em `user_permissions`.
+- Marcar `true` para Anna (`bb6a930c-c5e7-45c1-ab27-3cc4e63539f5`).
+- Atualizar a função `delete_acordo_atomico(p_acordo_id)` para:
+  - Permitir execução se usuário for admin **OU** dono do acordo com `pode_excluir_acordos = true`.
+  - Bloquear (RAISE EXCEPTION) se existir qualquer `pagamentos.status = 'pago'` no acordo.
+- Criar nova função `excluir_parcela_pendente(p_pagamento_id)` SECURITY DEFINER:
+  - Permite admin ou dono com `pode_excluir_acordos=true`.
+  - Bloqueia exclusão se a parcela estiver paga.
 
-- ✅ **Válido** — passou em tudo.
-- ❌ **Inválido** — falhou em sintaxe / domínio descartável / sem MX / typo.
-- ⚠️ **Duvidoso** (opcional) — sintaxe OK e MX existe, mas é role-based (`contato@`, `vendas@`, `noreply@`) — vai para aba separada.
+### Frontend
+- **`src/hooks/useUserPermissions.tsx`**: expor `podeExcluirAcordos`.
+- **`src/components/EditPermissionsDialog.tsx`**: adicionar switch "Pode excluir acordos" (com aviso de que parcelas pagas ficam protegidas).
+- **`src/pages/AcordoDetalhe.tsx`**:
+  - Mostrar botão "Excluir Acordo" também quando `podeExcluirAcordos && isOwner`.
+  - Se o acordo tiver alguma parcela paga, **esconder/desabilitar** o botão "Excluir Acordo" e mostrar tooltip explicativo.
+  - Trocar `handleExcluirAcordo` para chamar `delete_acordo_atomico` (em vez de deletes diretos), capturando erro do banco e exibindo toast claro.
+  - No card de cada parcela pendente, exibir um botão "Excluir parcela" (ícone lixeira) para usuários com permissão. Já existe `excluirParcela` — apenas trocar a chamada por `excluir_parcela_pendente` e liberar o gatilho da UI.
+- **`src/pages/Acordos.tsx`** (lista): liberar `onDelete` no `AcordoCard` quando `podeExcluirAcordos && acordo.user_id === user.id` e o acordo **não** tiver `tem_pago`. Continuar usando `delete_acordo_atomico`.
 
-Cobertura esperada: ~75-80% dos e-mails ruins detectados, **sem gastar 1 centavo**.
+---
 
-## Escopo
+## 2. CPF duplicado: alerta em vez de bloqueio
 
-### 1. Página nova `/validar-emails`
+A flag `permite_cpf_duplicado` já existe e Anna já está com `true`. Faltam ajustes:
 
-- Item no menu lateral, **visível só para admin** (usa `useUserRole`).
-- Layout em 2 etapas:
-  - **Etapa 1 — Importar**: tabs com 3 entradas
-    - Upload `.xlsx` (usa o `xlsx` que já está no projeto via `src/lib/exportExcel.ts`)
-    - Upload `.csv`
-    - Colar lista de texto (um e-mail por linha)
-  - Se for planilha: dropdown pra escolher qual **coluna** contém o e-mail. Todas as demais colunas são preservadas no export.
-  - Mostra preview das 5 primeiras linhas e o total detectado.
-  - Botão **"Iniciar varredura"**.
-  - **Etapa 2 — Resultado**: barra de progresso → 4 cards (Total / Válidos / Inválidos / Duvidosos) → 3 tabs com tabela paginada → botões de download.
+### Banco
+- Atualizar trigger `acordos_block_duplicate_cpf` para também permitir quando o `auth.uid()` tiver `user_permissions.permite_cpf_duplicado = true` (hoje só libera admin ou último acordo quebrado).
 
-### 2. Edge function `validate-emails-batch`
+### Frontend `src/pages/NovoAcordo.tsx`
+- Usar `podeExcluirAcordos`/`permiteCpfDuplicado` (já existe em `useUserPermissions`).
+- Quando o CPF já tiver acordo lançado:
+  - Se admin **ou** `permiteCpfDuplicado` → exibir **alerta amarelo** (não bloqueante) com texto: "⚠️ Atenção: este CPF já possui acordo lançado por **{nome do funcionário}** em **{data}**. Você pode prosseguir, mas confirme se realmente é um novo acordo."
+  - Caso contrário, manter bloqueio atual (mensagem vermelha).
+- O envio do formulário não fica mais bloqueado pela duplicidade quando o usuário tem permissão.
 
-- Recebe `{ emails: string[] }` (lote de até 500).
-- Faz, em paralelo (com `Promise.all` limitado a 20 concorrentes):
-  - Regex de sintaxe.
-  - Match em lista de domínios descartáveis (hardcoded).
-  - Match em mapa de typos comuns (hardcoded com sugestão).
-  - Para cada domínio único do lote, **1 lookup MX** via `https://dns.google/resolve?name={dominio}&type=MX` (cache em memória por execução).
-- Devolve `{ results: [{ email, status, motivo, sugestao }] }`.
-- `verify_jwt = true`: valida que o caller é admin via `user_roles`. Bloqueia qualquer outro.
-- **Sem persistência no banco**. Processamento volátil.
+---
 
-### 3. Frontend — chamada em lotes
+## 3. Aplicar permissão na Anna
 
-- Quebra a lista em lotes de 500 e dispara sequencialmente (evita timeout da edge function).
-- Atualiza barra de progresso a cada lote concluído.
-- Acumula resultados em memória do navegador.
+Após a migração, rodar update para garantir:
+```
+pode_excluir_acordos = true
+permite_cpf_duplicado = true  (já está)
+```
+no registro de `user_permissions` da Anna.
 
-### 4. Export
+---
 
-- Botão "Baixar válidos" e "Baixar inválidos" (com motivo na coluna `_motivo` e sugestão em `_sugestao_typo` quando aplicável).
-- Preserva **todas as colunas originais** da planilha importada.
-- Usa o helper `exportarParaExcel` existente.
+## Arquivos a criar / editar
 
-## Detalhes técnicos
+**Migration (nova):**
+- adicionar coluna `pode_excluir_acordos`
+- atualizar `delete_acordo_atomico`
+- criar `excluir_parcela_pendente`
+- atualizar trigger `acordos_block_duplicate_cpf`
 
-- **Sem migração de banco** — nada é gravado. Custo de Lovable Cloud praticamente zero (só execução da edge function).
-- Lista de domínios descartáveis hardcoded em `disposable-domains.ts` (~80 domínios).
-- Lista de typos hardcoded em `typo-suggestions.ts` (~30 mapeamentos).
-- DNS-over-HTTPS via fetch direto (sem dependência externa).
-- Timeout de 3s por lookup MX, com Cloudflare DNS (`https://cloudflare-dns.com/dns-query`) como fallback.
-- Limite de 100.000 e-mails por sessão (proteção contra travamento de navegador).
+**Update de dados (insert tool):**
+- setar `pode_excluir_acordos = true` para Anna
 
-## Fora de escopo
+**Editados:**
+- `src/hooks/useUserPermissions.tsx`
+- `src/components/EditPermissionsDialog.tsx`
+- `src/pages/AcordoDetalhe.tsx`
+- `src/pages/Acordos.tsx`
+- `src/pages/NovoAcordo.tsx`
 
-- Não usa API paga (ZeroBounce, NeverBounce, Hunter).
-- Não faz SMTP handshake (gera muitos falsos positivos).
-- Não salva e-mails no banco nem casa com devedores.
-- Não tem agendamento — é manual sob demanda.
-- Não envia e-mails de teste (validação puramente passiva).
-
-## Arquivos
-
-- `supabase/functions/validate-emails-batch/index.ts` (novo)
-- `src/pages/ValidarEmails.tsx` (novo)
-- `src/components/validar-emails/ImportTab.tsx`, `ResultsTab.tsx` (novos)
-- `src/App.tsx` — rota `/validar-emails`
-- `src/components/layout/AppLayout.tsx` — item de menu (gated por admin)
+Sem custos adicionais de Cloud (apenas mudanças de lógica e UI).

@@ -2208,6 +2208,7 @@ export type Database = {
           id: string
           inbox_compartilhado: boolean
           permite_cpf_duplicado: boolean
+          pode_excluir_acordos: boolean
           user_id: string
           visivel_ranking: boolean
         }
@@ -2221,6 +2222,7 @@ export type Database = {
           id?: string
           inbox_compartilhado?: boolean
           permite_cpf_duplicado?: boolean
+          pode_excluir_acordos?: boolean
           user_id: string
           visivel_ranking?: boolean
         }
@@ -2234,6 +2236,7 @@ export type Database = {
           id?: string
           inbox_compartilhado?: boolean
           permite_cpf_duplicado?: boolean
+          pode_excluir_acordos?: boolean
           user_id?: string
           visivel_ranking?: boolean
         }
@@ -3912,6 +3915,10 @@ export type Database = {
       delete_importacao_em_lotes: {
         Args: { p_importacao_id: string }
         Returns: Json
+      }
+      excluir_parcela_pendente: {
+        Args: { p_pagamento_id: string }
+        Returns: undefined
       }
       get_acordo_status_flags: {
         Args: { p_acordo_ids: string[] }
