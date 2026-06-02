@@ -597,8 +597,8 @@ export default function AcordoDetalhe() {
                 </Button>
               </>
             )}
-            {/* Botão de excluir apenas para Admin */}
-            {isAdmin && (
+            {/* Botão de excluir acordo: admin sempre; dono com permissão apenas se NÃO houver parcelas pagas */}
+            {(isAdmin || (podeExcluirAcordos && isOwner && parcelasPagas === 0)) && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" size="sm">
@@ -622,6 +622,11 @@ export default function AcordoDetalhe() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            )}
+            {podeExcluirAcordos && isOwner && parcelasPagas > 0 && !isAdmin && (
+              <Badge variant="outline" className="text-xs">
+                Acordo com parcela paga — exclua apenas parcelas pendentes
+              </Badge>
             )}
             {!canEdit && (
               <Badge variant="outline" className="text-sm">
@@ -984,7 +989,7 @@ export default function AcordoDetalhe() {
                         </p>
                       ))}
                     </div>
-                    {isAdmin && (
+                    {(isAdmin || (podeExcluirAcordos && isOwner && pagamento.status !== 'pago')) && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button
