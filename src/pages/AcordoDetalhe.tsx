@@ -34,7 +34,7 @@ export default function AcordoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
-  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
+  const { acordosCompartilhados, concedidoPor, podeExcluirAcordos } = useUserPermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [acordo, setAcordo] = useState<Acordo | null>(null);
@@ -387,36 +387,23 @@ export default function AcordoDetalhe() {
 
   const handleExcluirAcordo = async () => {
     if (!acordo) return;
-    
+
     try {
-      // Primeiro, deletar os pagamentos associados
-      const { error: pagamentosError } = await supabase
-        .from('pagamentos')
-        .delete()
-        .eq('acordo_id', acordo.id);
-
-      if (pagamentosError) throw pagamentosError;
-
-      // Depois, deletar o acordo
-      const { error: acordoError } = await supabase
-        .from('acordos')
-        .delete()
-        .eq('id', acordo.id);
-
-      if (acordoError) throw acordoError;
+      const { error } = await supabase.rpc('delete_acordo_atomico' as any, { p_acordo_id: acordo.id });
+      if (error) throw error;
 
       toast({
         title: 'Acordo excluído',
         description: 'O acordo foi removido com sucesso.',
       });
 
-      navigate('/equipe/acordos');
-    } catch (error) {
+      navigate(isOwner ? '/acordos' : '/equipe/acordos');
+    } catch (error: any) {
       console.error('Erro ao excluir acordo:', error);
       toast({
         variant: 'destructive',
         title: 'Erro ao excluir',
-        description: 'Não foi possível excluir o acordo.',
+        description: error?.message || 'Não foi possível excluir o acordo.',
       });
     }
   };
@@ -520,10 +507,7 @@ export default function AcordoDetalhe() {
 
   const excluirParcela = async (pagamentoId: string, numeroParcela: number) => {
     try {
-      const { error } = await supabase
-        .from('pagamentos')
-        .delete()
-        .eq('id', pagamentoId);
+      const { error } = await supabase.rpc('excluir_parcela_pendente' as any, { p_pagamento_id: pagamentoId });
 
       if (error) throw error;
 
@@ -533,12 +517,12 @@ export default function AcordoDetalhe() {
         title: 'Parcela excluída',
         description: `A parcela ${numeroParcela} foi removida com sucesso.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao excluir parcela:', error);
       toast({
         variant: 'destructive',
         title: 'Erro ao excluir',
-        description: 'Não foi possível excluir a parcela.',
+        description: error?.message || 'Não foi possível excluir a parcela.',
       });
     }
   };
