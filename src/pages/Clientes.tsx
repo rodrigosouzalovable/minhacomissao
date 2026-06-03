@@ -577,7 +577,11 @@ export default function Clientes() {
           .range(from, from + PAGE_FETCH - 1);
 
         if (busca.trim()) {
-          q = q.ilike('nome', `%${busca.trim()}%`);
+          // Tokeniza para tolerar espaços duplos/extras vindos de planilhas
+          const tokens = busca.trim().split(/\s+/).filter(Boolean);
+          for (const tk of tokens) {
+            q = q.ilike('nome', `%${tk}%`);
+          }
         }
         if (telefone.trim()) q = q.ilike('telefone', `%${telefone.trim().replace(/\D/g, '')}%`);
         if (credor !== 'todos') q = q.eq('credor', credor);
