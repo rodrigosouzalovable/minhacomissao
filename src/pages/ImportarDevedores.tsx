@@ -435,7 +435,7 @@ export default function ImportarDevedores() {
       return {
         cpf: normalizeCpfCnpj(row['C']),
         nascimento: '',
-        nome: String(row['B'] ?? ''),
+        nome: normalizeNome(row['B']),
         credor: 'MONTREAL',
         contrato: String(row['H'] ?? ''),
         descricao: String(row['I'] ?? ''),
