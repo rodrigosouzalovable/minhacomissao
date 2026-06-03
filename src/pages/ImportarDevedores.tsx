@@ -648,7 +648,7 @@ export default function ImportarDevedores() {
       devedores.push({
         cpf,
         nascimento: '',
-        nome: isNDValue(row['B']) ? '' : String(row['B'] ?? ''),
+        nome: isNDValue(row['B']) ? '' : normalizeNome(row['B']),
         credor: '',
         contrato: isNDValue(contrato) ? '' : contrato,
         atraso: vencimentoStr,
