@@ -1,83 +1,53 @@
-## Objetivo
+## Causa
 
-Liberar para **Anna Flavia Leite de Morais** duas permissões individuais:
-1. **Excluir acordos** (com regras de proteção a parcelas pagas).
-2. **Lançar acordo com CPF duplicado** (já tem a flag `permite_cpf_duplicado=true`, mas o trigger do banco e o formulário ainda bloqueiam — precisa ajustar para apenas alertar).
+A planilha `ANIBAL.xlsx` traz o nome com **espaço duplo**: `ANIBAL CARDOSO NETO  LTDA`.  
+O registro foi importado corretamente (`devedores.id = 6e178f1c...`, credor `MONTREAL`, `ativo=true`), mas a busca em `src/pages/Clientes.tsx` (linha 580) faz:
 
----
-
-## 1. Permissão de excluir acordos (parcial e segura)
-
-### Regras de negócio
-- Acordo **sem nenhuma parcela paga** → pode excluir o acordo inteiro (igual admin faz hoje).
-- Acordo **com pelo menos uma parcela paga** → não pode excluir o acordo. Mas pode excluir **individualmente** as parcelas ainda pendentes (não pagas).
-- Parcela com `status = 'pago'` → **nunca** pode ser excluída.
-
-### Banco de dados
-- Adicionar coluna `pode_excluir_acordos boolean default false` em `user_permissions`.
-- Marcar `true` para Anna (`bb6a930c-c5e7-45c1-ab27-3cc4e63539f5`).
-- Atualizar a função `delete_acordo_atomico(p_acordo_id)` para:
-  - Permitir execução se usuário for admin **OU** dono do acordo com `pode_excluir_acordos = true`.
-  - Bloquear (RAISE EXCEPTION) se existir qualquer `pagamentos.status = 'pago'` no acordo.
-- Criar nova função `excluir_parcela_pendente(p_pagamento_id)` SECURITY DEFINER:
-  - Permite admin ou dono com `pode_excluir_acordos=true`.
-  - Bloqueia exclusão se a parcela estiver paga.
-
-### Frontend
-- **`src/hooks/useUserPermissions.tsx`**: expor `podeExcluirAcordos`.
-- **`src/components/EditPermissionsDialog.tsx`**: adicionar switch "Pode excluir acordos" (com aviso de que parcelas pagas ficam protegidas).
-- **`src/pages/AcordoDetalhe.tsx`**:
-  - Mostrar botão "Excluir Acordo" também quando `podeExcluirAcordos && isOwner`.
-  - Se o acordo tiver alguma parcela paga, **esconder/desabilitar** o botão "Excluir Acordo" e mostrar tooltip explicativo.
-  - Trocar `handleExcluirAcordo` para chamar `delete_acordo_atomico` (em vez de deletes diretos), capturando erro do banco e exibindo toast claro.
-  - No card de cada parcela pendente, exibir um botão "Excluir parcela" (ícone lixeira) para usuários com permissão. Já existe `excluirParcela` — apenas trocar a chamada por `excluir_parcela_pendente` e liberar o gatilho da UI.
-- **`src/pages/Acordos.tsx`** (lista): liberar `onDelete` no `AcordoCard` quando `podeExcluirAcordos && acordo.user_id === user.id` e o acordo **não** tiver `tem_pago`. Continuar usando `delete_acordo_atomico`.
-
----
-
-## 2. CPF duplicado: alerta em vez de bloqueio
-
-A flag `permite_cpf_duplicado` já existe e Anna já está com `true`. Faltam ajustes:
-
-### Banco
-- Atualizar trigger `acordos_block_duplicate_cpf` para também permitir quando o `auth.uid()` tiver `user_permissions.permite_cpf_duplicado = true` (hoje só libera admin ou último acordo quebrado).
-
-### Frontend `src/pages/NovoAcordo.tsx`
-- Usar `podeExcluirAcordos`/`permiteCpfDuplicado` (já existe em `useUserPermissions`).
-- Quando o CPF já tiver acordo lançado:
-  - Se admin **ou** `permiteCpfDuplicado` → exibir **alerta amarelo** (não bloqueante) com texto: "⚠️ Atenção: este CPF já possui acordo lançado por **{nome do funcionário}** em **{data}**. Você pode prosseguir, mas confirme se realmente é um novo acordo."
-  - Caso contrário, manter bloqueio atual (mensagem vermelha).
-- O envio do formulário não fica mais bloqueado pela duplicidade quando o usuário tem permissão.
-
----
-
-## 3. Aplicar permissão na Anna
-
-Após a migração, rodar update para garantir:
 ```
-pode_excluir_acordos = true
-permite_cpf_duplicado = true  (já está)
+q.ilike('nome', `%${busca.trim()}%`)
 ```
-no registro de `user_permissions` da Anna.
 
----
+Como o usuário digitou `ANIBAL CARDOSO NETO L` (com 1 espaço), o `ILIKE` não casa com o nome armazenado (`...NETO  LTDA`, 2 espaços). Resultado: "0 clientes encontrados".
 
-## Arquivos a criar / editar
+O mesmo problema afeta qualquer planilha importada com espaços duplos, tabs, ou espaços no início/fim — situação comum em arquivos vindos de ERPs.
 
-**Migration (nova):**
-- adicionar coluna `pode_excluir_acordos`
-- atualizar `delete_acordo_atomico`
-- criar `excluir_parcela_pendente`
-- atualizar trigger `acordos_block_duplicate_cpf`
+## Correção
 
-**Update de dados (insert tool):**
-- setar `pode_excluir_acordos = true` para Anna
+### 1. Tornar a busca tolerante a espaços (frontend + backend)
 
-**Editados:**
-- `src/hooks/useUserPermissions.tsx`
-- `src/components/EditPermissionsDialog.tsx`
-- `src/pages/AcordoDetalhe.tsx`
-- `src/pages/Acordos.tsx`
-- `src/pages/NovoAcordo.tsx`
+**`src/pages/Clientes.tsx`** — no `handleSearch`, quando houver termo de busca por nome:
+- Quebrar a busca em tokens por espaços (`busca.trim().split(/\s+/)`).
+- Aplicar um `ilike` por token (usando `q.ilike('nome', '%token%')` encadeado, que vira `AND`), de forma que a ordem e a quantidade de espaços não atrapalhem.
+- Continuar normalizando telefone como já está.
 
-Sem custos adicionais de Cloud (apenas mudanças de lógica e UI).
+Isso resolve o caso atual sem precisar de migration e cobre quaisquer outras planilhas com espaços extras.
+
+### 2. Normalizar nome no momento da importação
+
+Para evitar que o problema volte e para deixar a base mais limpa:
+
+- Em **`src/pages/ImportarDevedores.tsx`** (e em qualquer função/edge que grave em `devedores.nome`), aplicar `nome.replace(/\s+/g, ' ').trim()` antes do insert.
+- Apenas para inserções novas — **não** rodar update em massa nos registros existentes agora (sem custo extra e sem risco de mexer em outros credores).
+
+### 3. Corrigir o registro do ANIBAL já gravado
+
+Atualizar somente esta linha via `supabase--insert` (UPDATE) para colapsar o espaço duplo:
+
+```
+UPDATE devedores
+SET nome = regexp_replace(trim(nome), '\s+', ' ', 'g')
+WHERE id = '6e178f1c-bc85-4107-8016-cecd619353cc';
+```
+
+Assim a busca volta a achar o cliente imediatamente, mesmo antes do deploy do fix de UI (que continua valendo para futuras importações).
+
+## Arquivos afetados
+
+- `src/pages/Clientes.tsx` — busca por nome tolerante a espaços/tokens.
+- `src/pages/ImportarDevedores.tsx` — normalizar `nome` no insert.
+- Update pontual no registro do ANIBAL (sem migration, via insert tool).
+
+## Fora de escopo
+
+- Não vou rodar update em massa em todos os ~devedores antigos (evita risco e custo). A normalização passa a valer dali pra frente; e a busca tolerante cobre os registros legados.
+- Sem mudanças em RLS, edge functions ou validação de e-mails.

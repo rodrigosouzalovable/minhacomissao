@@ -96,6 +96,9 @@ const DESCRICOES: Record<CredorLayout, string> = {
   ume_consolidado: 'A = CPF, B = Nome, C = Credor, D = Contrato, E = Nº Parcela, F = Vencimento, G = Valor Parcela, H = Valor Total — Importa INADIMPLENTES e APORTE juntos',
 };
 
+// Normaliza nome vindo de planilhas: colapsa espaços duplos/tabs e remove espaços nas pontas
+const normalizeNome = (v: unknown): string => String(v ?? '').replace(/\s+/g, ' ').trim();
+
 export default function ImportarDevedores() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -339,7 +342,7 @@ export default function ImportarDevedores() {
       return {
         cpf: normalizeCpfCnpj(row['A']),
         nascimento: String(row['B'] ?? ''),
-        nome: String(row['C'] ?? ''),
+        nome: normalizeNome(row['C']),
         credor: String(row['D'] ?? ''),
         contrato: String(row['E'] ?? ''),
         atraso: String(row['F'] ?? ''),
@@ -432,7 +435,7 @@ export default function ImportarDevedores() {
       return {
         cpf: normalizeCpfCnpj(row['C']),
         nascimento: '',
-        nome: String(row['B'] ?? ''),
+        nome: normalizeNome(row['B']),
         credor: 'MONTREAL',
         contrato: String(row['H'] ?? ''),
         descricao: String(row['I'] ?? ''),
@@ -645,7 +648,7 @@ export default function ImportarDevedores() {
       devedores.push({
         cpf,
         nascimento: '',
-        nome: isNDValue(row['B']) ? '' : String(row['B'] ?? ''),
+        nome: isNDValue(row['B']) ? '' : normalizeNome(row['B']),
         credor: '',
         contrato: isNDValue(contrato) ? '' : contrato,
         atraso: vencimentoStr,
