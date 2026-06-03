@@ -96,6 +96,9 @@ const DESCRICOES: Record<CredorLayout, string> = {
   ume_consolidado: 'A = CPF, B = Nome, C = Credor, D = Contrato, E = Nº Parcela, F = Vencimento, G = Valor Parcela, H = Valor Total — Importa INADIMPLENTES e APORTE juntos',
 };
 
+// Normaliza nome vindo de planilhas: colapsa espaços duplos/tabs e remove espaços nas pontas
+const normalizeNome = (v: unknown): string => String(v ?? '').replace(/\s+/g, ' ').trim();
+
 export default function ImportarDevedores() {
   const navigate = useNavigate();
   const { user } = useAuth();
