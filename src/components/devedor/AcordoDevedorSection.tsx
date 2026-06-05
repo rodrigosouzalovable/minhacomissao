@@ -708,11 +708,18 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                                 </>
                               ) : (
                                 <>
-                                  {!parcela.pago && (
-                                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartEditParcela(parcela)}>
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={`h-7 text-xs ${parcela.observacao ? 'text-primary' : 'text-muted-foreground'}`}
+                                    onClick={() => handleOpenObs(parcela)}
+                                    title={parcela.observacao ? 'Ver/editar observação' : 'Adicionar observação'}
+                                  >
+                                    <MessageSquare className={`h-3 w-3 ${parcela.observacao ? 'fill-current' : ''}`} />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartEditParcela(parcela)}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
                                   <Button
                                     variant={parcela.pago ? 'outline' : 'default'}
                                     size="sm"
