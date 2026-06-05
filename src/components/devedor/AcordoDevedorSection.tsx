@@ -34,6 +34,7 @@ interface ParcelaDevedor {
   data_vencimento: string;
   pago: boolean;
   data_pagamento: string | null;
+  observacao: string | null;
 }
 
 interface ParcelaPreview {
