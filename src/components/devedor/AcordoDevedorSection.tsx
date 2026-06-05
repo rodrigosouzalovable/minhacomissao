@@ -817,6 +817,34 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog Observação da Parcela */}
+      <Dialog open={!!obsDialogParcela} onOpenChange={(open) => { if (!open) setObsDialogParcela(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Observação — Parcela {obsDialogParcela?.numero_parcela}
+            </DialogTitle>
+            <DialogDescription>
+              Adicione uma observação para esta parcela (combinações, prazos, contato, etc.).
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={obsDialogTexto}
+            onChange={(e) => setObsDialogTexto(e.target.value)}
+            placeholder="Digite uma observação..."
+            rows={5}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setObsDialogParcela(null)} disabled={savingObs}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveObs} disabled={savingObs}>
+              {savingObs ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="h-4 w-4 mr-2" /> Salvar</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
