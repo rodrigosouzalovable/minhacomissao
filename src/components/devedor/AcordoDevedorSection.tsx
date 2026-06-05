@@ -655,7 +655,16 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                           <TableCell className="text-xs font-medium">{parcela.numero_parcela}</TableCell>
                           <TableCell className="text-xs">
                             {editingParcelaId === parcela.id ? (
-                              <Input type="date" value={editParcelaData} onChange={(e) => setEditParcelaData(e.target.value)} className="h-7 text-xs w-36" />
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground w-16">Vencim.:</span>
+                                  <Input type="date" value={editParcelaData} onChange={(e) => setEditParcelaData(e.target.value)} className="h-7 text-xs w-36" />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground w-16">Pagam.:</span>
+                                  <Input type="date" value={editParcelaDataPagamento} onChange={(e) => setEditParcelaDataPagamento(e.target.value)} className="h-7 text-xs w-36" />
+                                </div>
+                              </div>
                             ) : (
                               new Date(parcela.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
                             )}
