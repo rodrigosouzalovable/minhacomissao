@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload, Percent } from 'lucide-react';
+import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, Upload, Percent, MessageSquare } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { calcularComissaoMontrealParcela } from '@/lib/comissao';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -34,6 +34,7 @@ interface ParcelaDevedor {
   data_vencimento: string;
   pago: boolean;
   data_pagamento: string | null;
+  observacao: string | null;
 }
 
 interface ParcelaPreview {
@@ -64,7 +65,13 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [editingParcelaId, setEditingParcelaId] = useState<string | null>(null);
   const [editParcelaValor, setEditParcelaValor] = useState('');
   const [editParcelaData, setEditParcelaData] = useState('');
+  const [editParcelaDataPagamento, setEditParcelaDataPagamento] = useState('');
   const [savingParcela, setSavingParcela] = useState(false);
+
+  // Observação por parcela
+  const [obsDialogParcela, setObsDialogParcela] = useState<ParcelaDevedor | null>(null);
+  const [obsDialogTexto, setObsDialogTexto] = useState('');
+  const [savingObs, setSavingObs] = useState(false);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -384,6 +391,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
     setEditingParcelaId(parcela.id);
     setEditParcelaValor(String(parcela.valor));
     setEditParcelaData(parcela.data_vencimento);
+    setEditParcelaDataPagamento(parcela.data_pagamento || '');
   };
 
   const handleCancelEditParcela = () => {
@@ -403,11 +411,14 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
     setSavingParcela(true);
     try {
+      const dataPag = editParcelaDataPagamento || null;
       const { error } = await supabase
         .from('parcelas_devedor' as any)
         .update({
           valor: Math.round(novoValor * 100) / 100,
           data_vencimento: editParcelaData,
+          data_pagamento: dataPag,
+          pago: !!dataPag,
         } as any)
         .eq('id', parcela.id);
 
@@ -432,6 +443,40 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       toast.error('Erro ao atualizar parcela: ' + (err.message || 'Tente novamente.'));
     } finally {
       setSavingParcela(false);
+    }
+  };
+
+  const handleOpenObs = (parcela: ParcelaDevedor) => {
+    setObsDialogParcela(parcela);
+    setObsDialogTexto(parcela.observacao || '');
+  };
+
+  const handleSaveObs = async () => {
+    if (!obsDialogParcela) return;
+    setSavingObs(true);
+    try {
+      const novoTexto = obsDialogTexto.trim() || null;
+      const { error } = await supabase
+        .from('parcelas_devedor' as any)
+        .update({ observacao: novoTexto } as any)
+        .eq('id', obsDialogParcela.id);
+      if (error) throw error;
+      setParcelas((prev) => {
+        const copy = { ...prev };
+        const lista = copy[obsDialogParcela.acordo_id];
+        if (lista) {
+          copy[obsDialogParcela.acordo_id] = lista.map((p) =>
+            p.id === obsDialogParcela.id ? { ...p, observacao: novoTexto } : p
+          );
+        }
+        return copy;
+      });
+      toast.success('Observação salva!');
+      setObsDialogParcela(null);
+    } catch (err: any) {
+      toast.error('Erro ao salvar observação: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setSavingObs(false);
     }
   };
 
@@ -610,7 +655,16 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                           <TableCell className="text-xs font-medium">{parcela.numero_parcela}</TableCell>
                           <TableCell className="text-xs">
                             {editingParcelaId === parcela.id ? (
-                              <Input type="date" value={editParcelaData} onChange={(e) => setEditParcelaData(e.target.value)} className="h-7 text-xs w-36" />
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground w-16">Vencim.:</span>
+                                  <Input type="date" value={editParcelaData} onChange={(e) => setEditParcelaData(e.target.value)} className="h-7 text-xs w-36" />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground w-16">Pagam.:</span>
+                                  <Input type="date" value={editParcelaDataPagamento} onChange={(e) => setEditParcelaDataPagamento(e.target.value)} className="h-7 text-xs w-36" />
+                                </div>
+                              </div>
                             ) : (
                               new Date(parcela.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
                             )}
@@ -654,11 +708,18 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                                 </>
                               ) : (
                                 <>
-                                  {!parcela.pago && (
-                                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartEditParcela(parcela)}>
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={`h-7 text-xs ${parcela.observacao ? 'text-primary' : 'text-muted-foreground'}`}
+                                    onClick={() => handleOpenObs(parcela)}
+                                    title={parcela.observacao ? 'Ver/editar observação' : 'Adicionar observação'}
+                                  >
+                                    <MessageSquare className={`h-3 w-3 ${parcela.observacao ? 'fill-current' : ''}`} />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartEditParcela(parcela)}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
                                   <Button
                                     variant={parcela.pago ? 'outline' : 'default'}
                                     size="sm"
@@ -753,6 +814,34 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                 <Upload className="h-4 w-4 mr-2" /> Importar PDF do Acordo
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Observação da Parcela */}
+      <Dialog open={!!obsDialogParcela} onOpenChange={(open) => { if (!open) setObsDialogParcela(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Observação — Parcela {obsDialogParcela?.numero_parcela}
+            </DialogTitle>
+            <DialogDescription>
+              Adicione uma observação para esta parcela (combinações, prazos, contato, etc.).
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={obsDialogTexto}
+            onChange={(e) => setObsDialogTexto(e.target.value)}
+            placeholder="Digite uma observação..."
+            rows={5}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setObsDialogParcela(null)} disabled={savingObs}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveObs} disabled={savingObs}>
+              {savingObs ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="h-4 w-4 mr-2" /> Salvar</>}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -1796,6 +1796,7 @@ export type Database = {
           data_vencimento: string
           id: string
           numero_parcela: number
+          observacao: string | null
           pago: boolean
           valor: number
         }
@@ -1806,6 +1807,7 @@ export type Database = {
           data_vencimento: string
           id?: string
           numero_parcela: number
+          observacao?: string | null
           pago?: boolean
           valor: number
         }
@@ -1816,6 +1818,7 @@ export type Database = {
           data_vencimento?: string
           id?: string
           numero_parcela?: number
+          observacao?: string | null
           pago?: boolean
           valor?: number
         }
