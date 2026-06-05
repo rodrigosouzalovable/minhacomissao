@@ -1,0 +1,1 @@
+ALTER TABLE public.parcelas_devedor ADD COLUMN IF NOT EXISTS observacao text;
