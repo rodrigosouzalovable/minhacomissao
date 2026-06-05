@@ -391,6 +391,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
     setEditingParcelaId(parcela.id);
     setEditParcelaValor(String(parcela.valor));
     setEditParcelaData(parcela.data_vencimento);
+    setEditParcelaDataPagamento(parcela.data_pagamento || '');
   };
 
   const handleCancelEditParcela = () => {
@@ -410,11 +411,14 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
     setSavingParcela(true);
     try {
+      const dataPag = editParcelaDataPagamento || null;
       const { error } = await supabase
         .from('parcelas_devedor' as any)
         .update({
           valor: Math.round(novoValor * 100) / 100,
           data_vencimento: editParcelaData,
+          data_pagamento: dataPag,
+          pago: !!dataPag,
         } as any)
         .eq('id', parcela.id);
 
@@ -439,6 +443,40 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       toast.error('Erro ao atualizar parcela: ' + (err.message || 'Tente novamente.'));
     } finally {
       setSavingParcela(false);
+    }
+  };
+
+  const handleOpenObs = (parcela: ParcelaDevedor) => {
+    setObsDialogParcela(parcela);
+    setObsDialogTexto(parcela.observacao || '');
+  };
+
+  const handleSaveObs = async () => {
+    if (!obsDialogParcela) return;
+    setSavingObs(true);
+    try {
+      const novoTexto = obsDialogTexto.trim() || null;
+      const { error } = await supabase
+        .from('parcelas_devedor' as any)
+        .update({ observacao: novoTexto } as any)
+        .eq('id', obsDialogParcela.id);
+      if (error) throw error;
+      setParcelas((prev) => {
+        const copy = { ...prev };
+        const lista = copy[obsDialogParcela.acordo_id];
+        if (lista) {
+          copy[obsDialogParcela.acordo_id] = lista.map((p) =>
+            p.id === obsDialogParcela.id ? { ...p, observacao: novoTexto } : p
+          );
+        }
+        return copy;
+      });
+      toast.success('Observação salva!');
+      setObsDialogParcela(null);
+    } catch (err: any) {
+      toast.error('Erro ao salvar observação: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setSavingObs(false);
     }
   };
 
