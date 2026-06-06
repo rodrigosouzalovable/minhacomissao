@@ -34,18 +34,17 @@ export default function Notificacoes() {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
-  const [qrConnected, setQrConnected] = useState(false);
-  const [creatingInstance, setCreatingInstance] = useState(false);
   const [edits, setEdits] = useState<Record<string, { telefone: string; ativo: boolean }>>({});
   const [testingRun, setTestingRun] = useState(false);
 
-  // Todas as instâncias (para permitir reconectar inativas também)
-  const { data: instances, refetch: refetchInstances } = useQuery({
+  // Instâncias do admin atual
+  const { data: instances } = useQuery({
     queryKey: ['notif-instancias'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('user_whatsapp_instances')
         .select('id, nome, telefone, ativo, server_url, instance_token')
+        .eq('ativo', true)
         .order('criado_em', { ascending: false });
       if (error) throw error;
       return data || [];
@@ -137,64 +136,29 @@ export default function Notificacoes() {
     }
   };
 
-  const autoSaveConfig = async (instanceId: string) => {
-    try {
-      if (config?.id) {
-        await supabase
-          .from('notificacoes_config')
-          .update({ instancia_id: instanceId, ativo: true })
-          .eq('id', config.id);
-      } else {
-        await supabase
-          .from('notificacoes_config')
-          .insert({ instancia_id: instanceId, ativo: true });
-      }
-      refetchConfig();
-    } catch (_) {}
-  };
-
-  const handleCreateInstance = async () => {
-    setCreatingInstance(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Usuário não autenticado');
-      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'create-instance', userId: user.id },
-      });
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao criar instância');
-      toast.success('Nova instância criada!');
-      await refetchInstances();
-      setSelectedInstance(data.instanceId);
-      // Abre o QR automaticamente
-      setTimeout(() => openQrFor(data.instanceId), 300);
-    } catch (e: any) {
-      toast.error('Erro ao criar: ' + e.message);
-    } finally {
-      setCreatingInstance(false);
+  const openQr = async () => {
+    if (!selectedInstance) {
+      toast.error('Selecione uma instância primeiro');
+      return;
     }
-  };
-
-  const openQrFor = async (instanceId: string) => {
     setQrOpen(true);
     setQrLoading(true);
     setQrImage(null);
-    setQrConnected(false);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const inst = instances?.find(i => i.id === selectedInstance);
+      if (!inst) throw new Error('Instância não encontrada');
       const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', instanceId, userId: user?.id },
+        body: { action: 'qr', instanceId: selectedInstance, userId: 'admin' },
       });
       if (error) throw error;
       const img = data?.qrcode || data?.qr || data?.base64 || null;
-      if (data?.alreadyConnected || data?.connected) {
-        setQrConnected(true);
-        toast.success('Já conectado!');
-        await autoSaveConfig(instanceId);
-      } else if (img) {
+      if (img) {
         setQrImage(img.startsWith('data:') ? img : `data:image/png;base64,${img}`);
+      } else if (data?.status === 'connected') {
+        toast.success('Já conectado!');
+        setQrOpen(false);
       } else {
-        toast.message('Sem QR disponível', { description: data?.error || 'Tente novamente.' });
+        toast.message('Sem QR disponível', { description: 'Tente novamente em alguns segundos.' });
       }
     } catch (e: any) {
       toast.error('Erro ao gerar QR: ' + e.message);
@@ -202,35 +166,6 @@ export default function Notificacoes() {
       setQrLoading(false);
     }
   };
-
-  const openQr = async () => {
-    if (!selectedInstance) {
-      toast.error('Selecione ou crie uma instância primeiro');
-      return;
-    }
-    await openQrFor(selectedInstance);
-  };
-
-  // Polling de status enquanto o diálogo do QR está aberto
-  useEffect(() => {
-    if (!qrOpen || qrConnected || !selectedInstance) return;
-    const interval = setInterval(async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const { data } = await supabase.functions.invoke('whatsapp-qr', {
-          body: { action: 'status', instanceId: selectedInstance, userId: user?.id },
-        });
-        if (data?.connected) {
-          setQrConnected(true);
-          toast.success('WhatsApp conectado!');
-          await autoSaveConfig(selectedInstance);
-          setTimeout(() => setQrOpen(false), 1500);
-        }
-      } catch (_) {}
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [qrOpen, qrConnected, selectedInstance]);
-
 
   const handleSaveTelefone = async (userId: string) => {
     const edit = edits[userId];
@@ -322,12 +257,8 @@ export default function Notificacoes() {
                 {savingConfig ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                 Salvar configuração
               </Button>
-              <Button variant="outline" onClick={openQr}>
+              <Button variant="outline" onClick={openQr} disabled={!selectedInstance}>
                 <QrCode className="h-4 w-4 mr-1" /> Conectar via QR Code
-              </Button>
-              <Button variant="secondary" onClick={handleCreateInstance} disabled={creatingInstance}>
-                {creatingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
-                Criar nova instância
               </Button>
               <Button variant="outline" onClick={() => handleTestRun('D-1')} disabled={testingRun}>
                 <Send className="h-4 w-4 mr-1" /> Testar D-1
@@ -336,10 +267,6 @@ export default function Notificacoes() {
                 <Send className="h-4 w-4 mr-1" /> Testar D0
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Dica: escolha uma instância existente acima e clique em "Conectar via QR Code". Se nenhuma servir, clique em "Criar nova instância" para gerar um novo WhatsApp dedicado.
-            </p>
-
           </CardContent>
         </Card>
 
@@ -462,25 +389,15 @@ export default function Notificacoes() {
             <DialogTitle>Conectar WhatsApp</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center gap-3 py-2">
-            {qrConnected ? (
-              <>
-                <CheckCircle2 className="h-12 w-12 text-emerald-600" />
-                <p className="text-sm font-medium">WhatsApp conectado com sucesso!</p>
-              </>
-            ) : (
-              <>
-                {qrLoading && <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />}
-                {qrImage && <img src={qrImage} alt="QR Code" className="w-64 h-64" />}
-                <p className="text-xs text-muted-foreground text-center">
-                  Abra o WhatsApp no celular → Aparelhos conectados → Conectar um aparelho.
-                </p>
-                <Button variant="outline" size="sm" onClick={openQr}>
-                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar QR
-                </Button>
-              </>
-            )}
+            {qrLoading && <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />}
+            {qrImage && <img src={qrImage} alt="QR Code" className="w-64 h-64" />}
+            <p className="text-xs text-muted-foreground text-center">
+              Abra o WhatsApp no celular → Aparelhos conectados → Conectar um aparelho.
+            </p>
+            <Button variant="outline" size="sm" onClick={openQr}>
+              <RefreshCw className="h-4 w-4 mr-1" /> Atualizar QR
+            </Button>
           </div>
-
         </DialogContent>
       </Dialog>
     </AppLayout>
