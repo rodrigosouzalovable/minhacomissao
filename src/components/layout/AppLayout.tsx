@@ -27,7 +27,8 @@ import {
   Activity,
   Download,
   BarChart3,
-  AtSign
+  AtSign,
+  Bell
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
