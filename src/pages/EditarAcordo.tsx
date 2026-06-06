@@ -24,7 +24,7 @@ const acordoSchema = z.object({
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
   dataPrimeiroPagamento: z.string().min(1, 'Data é obrigatória'),
   diasAtraso: z.number().int().min(0, 'Dias em atraso não pode ser negativo').max(9999),
-  observacoes: z.string().max(1000, 'Observações muito longas').optional(),
+  observacoes: z.string().trim().min(3, 'Informe o número que falou com o cliente').max(50, 'Máximo 50 caracteres'),
 });
 
 const formatCpf = (value: string) => {
@@ -163,7 +163,7 @@ export default function EditarAcordo() {
         parcelas: parseInt(form.parcelas),
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
-        observacoes: form.observacoes.trim() || undefined,
+        observacoes: form.observacoes.trim(),
       });
 
       // Atualizar acordo
@@ -182,7 +182,7 @@ export default function EditarAcordo() {
           dias_atraso: validated.diasAtraso,
           percentual_comissao: calculo.percentual,
           comissao_total: calculo.comissaoTotal,
-          observacoes: validated.observacoes || null,
+          observacoes: validated.observacoes,
         })
         .eq('id', id);
 
@@ -451,15 +451,17 @@ export default function EditarAcordo() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="observacoes">Observações (opcional)</Label>
-                <Textarea
+                <Label htmlFor="observacoes">Número que falou com o cliente *</Label>
+                <Input
                   id="observacoes"
-                  placeholder="Informações adicionais sobre o acordo..."
+                  placeholder="Ex: (62) 99999-9999 ou ramal 1234"
                   value={form.observacoes}
                   onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
-                  rows={3}
+                  maxLength={50}
+                  required
                 />
               </div>
+
             </CardContent>
           </Card>
 
