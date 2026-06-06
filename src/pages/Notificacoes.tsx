@@ -322,8 +322,12 @@ export default function Notificacoes() {
                 {savingConfig ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                 Salvar configuração
               </Button>
-              <Button variant="outline" onClick={openQr} disabled={!selectedInstance}>
+              <Button variant="outline" onClick={openQr}>
                 <QrCode className="h-4 w-4 mr-1" /> Conectar via QR Code
+              </Button>
+              <Button variant="secondary" onClick={handleCreateInstance} disabled={creatingInstance}>
+                {creatingInstance ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
+                Criar nova instância
               </Button>
               <Button variant="outline" onClick={() => handleTestRun('D-1')} disabled={testingRun}>
                 <Send className="h-4 w-4 mr-1" /> Testar D-1
@@ -332,6 +336,10 @@ export default function Notificacoes() {
                 <Send className="h-4 w-4 mr-1" /> Testar D0
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Dica: escolha uma instância existente acima e clique em "Conectar via QR Code". Se nenhuma servir, clique em "Criar nova instância" para gerar um novo WhatsApp dedicado.
+            </p>
+
           </CardContent>
         </Card>
 
