@@ -271,8 +271,8 @@ function AcordoCard({
                     Parcela Vencida
                   </Badge>}
                 {/* Flag de status do boleto - apenas para acordos negociados não vencidos */}
-                {isNegociado && !isVencido && <Badge variant="outline" className={acordo.boleto_enviado ? "bg-secondary/20 text-secondary border-secondary/30" : "bg-warning/20 text-warning border-warning/30"}>
-                    {acordo.boleto_enviado ? <>
+                {isNegociado && !isVencido && <Badge variant="outline" className={boletoEnviadoEfetivo ? "bg-secondary/20 text-secondary border-secondary/30" : "bg-warning/20 text-warning border-warning/30"}>
+                    {boletoEnviadoEfetivo ? <>
                         <Send className="h-3 w-3 mr-1" />
                         Boleto Enviado
                       </> : <>
