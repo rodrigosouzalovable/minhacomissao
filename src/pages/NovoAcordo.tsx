@@ -460,7 +460,7 @@ export default function NovoAcordo() {
         dias_atraso: validated.diasAtraso,
         percentual_comissao: calculo.percentual,
         comissao_total: calculo.comissaoTotal,
-        observacoes: validated.observacoes || null,
+        observacoes: validated.observacoes,
         empresa: empresa,
         instancia_negociacao_id: instanciaNegociacaoId || null
       } as any).select().single();
