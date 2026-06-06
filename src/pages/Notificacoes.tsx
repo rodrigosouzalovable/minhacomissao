@@ -34,17 +34,18 @@ export default function Notificacoes() {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrConnected, setQrConnected] = useState(false);
+  const [creatingInstance, setCreatingInstance] = useState(false);
   const [edits, setEdits] = useState<Record<string, { telefone: string; ativo: boolean }>>({});
   const [testingRun, setTestingRun] = useState(false);
 
-  // Instâncias do admin atual
-  const { data: instances } = useQuery({
+  // Todas as instâncias (para permitir reconectar inativas também)
+  const { data: instances, refetch: refetchInstances } = useQuery({
     queryKey: ['notif-instancias'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('user_whatsapp_instances')
         .select('id, nome, telefone, ativo, server_url, instance_token')
-        .eq('ativo', true)
         .order('criado_em', { ascending: false });
       if (error) throw error;
       return data || [];
