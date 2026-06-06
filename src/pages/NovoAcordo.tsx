@@ -805,12 +805,13 @@ export default function NovoAcordo() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="observacoes">Observações (opcional)</Label>
-                <Textarea id="observacoes" placeholder="Informações adicionais sobre o acordo..." value={form.observacoes} onChange={e => setForm({
+                <Label htmlFor="observacoes">Número que falou com o cliente *</Label>
+                <Input id="observacoes" placeholder="Ex: (62) 99999-9999 ou ramal 1234" value={form.observacoes} onChange={e => setForm({
                 ...form,
                 observacoes: e.target.value
-              })} rows={3} />
+              })} maxLength={50} required />
               </div>
+
             </CardContent>
           </Card>
 
