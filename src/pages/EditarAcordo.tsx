@@ -182,7 +182,7 @@ export default function EditarAcordo() {
           dias_atraso: validated.diasAtraso,
           percentual_comissao: calculo.percentual,
           comissao_total: calculo.comissaoTotal,
-          observacoes: validated.observacoes || null,
+          observacoes: validated.observacoes,
         })
         .eq('id', id);
 
