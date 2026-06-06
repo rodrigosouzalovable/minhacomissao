@@ -24,7 +24,7 @@ const acordoSchema = z.object({
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
   dataPrimeiroPagamento: z.string().min(1, 'Data é obrigatória'),
   diasAtraso: z.number().int().min(0, 'Dias em atraso não pode ser negativo').max(9999),
-  observacoes: z.string().max(1000, 'Observações muito longas').optional(),
+  observacoes: z.string().trim().min(3, 'Informe o número que falou com o cliente').max(50, 'Máximo 50 caracteres'),
 });
 
 const formatCpf = (value: string) => {
