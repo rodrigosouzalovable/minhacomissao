@@ -441,7 +441,7 @@ export default function NovoAcordo() {
         valorDemaisParcelas: valorDemaisParcelas || undefined,
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
-        observacoes: form.observacoes.trim() || undefined
+        observacoes: form.observacoes.trim()
       });
 
       // Criar acordo
