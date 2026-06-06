@@ -1744,6 +1744,117 @@ export type Database = {
         }
         Relationships: []
       }
+      notificacoes_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          instancia_id: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          instancia_id?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          instancia_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_config_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificacoes_envios_log: {
+        Row: {
+          data_ref: string
+          enviado_em: string
+          erro: string | null
+          id: string
+          pagamento_id: string
+          sucesso: boolean
+          telefone: string | null
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          data_ref: string
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          pagamento_id: string
+          sucesso?: boolean
+          telefone?: string | null
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          data_ref?: string
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          pagamento_id?: string
+          sucesso?: boolean
+          telefone?: string | null
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_envios_log_pagamento_id_fkey"
+            columns: ["pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "pagamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificacoes_operador_telefone: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          telefone: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          telefone: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          telefone?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_operador_telefone_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pagamentos: {
         Row: {
           acordo_id: string

@@ -49,6 +49,7 @@ const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const ComiteNovoMundo = lazy(() => import("./pages/ComiteNovoMundo"));
 const ValidarEmails = lazy(() => import("./pages/ValidarEmails"));
+const Notificacoes = lazy(() => import("./pages/Notificacoes"));
 
 const queryClient = new QueryClient();
 
@@ -199,6 +200,7 @@ const App = () => (
             <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
             <Route path="/admin/comite-novomundo" element={<AdminRoute><ComiteNovoMundo /></AdminRoute>} />
             <Route path="/admin/validar-emails" element={<AdminRoute><ValidarEmails /></AdminRoute>} />
+            <Route path="/admin/notificacoes" element={<AdminRoute><Notificacoes /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
