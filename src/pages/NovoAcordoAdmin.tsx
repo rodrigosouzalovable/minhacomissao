@@ -368,7 +368,7 @@ export default function NovoAcordoAdmin() {
         valorDemaisParcelas: valorDemaisParcelas || undefined,
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
-        observacoes: form.observacoes.trim() || undefined,
+        observacoes: form.observacoes.trim(),
       });
 
       // Criar acordo usando o userId do funcionário (parâmetro da URL)
