@@ -292,7 +292,7 @@ function AcordoCard({
                         size="icon"
                         className={cn(
                           "h-8 w-8",
-                          acordo.boleto_enviado
+                          boletoEnviadoEfetivo
                             ? "text-secondary hover:text-secondary hover:bg-secondary/10"
                             : "text-warning hover:text-warning hover:bg-warning/10"
                         )}
@@ -305,7 +305,7 @@ function AcordoCard({
                       >
                         {togglingBoleto ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : acordo.boleto_enviado ? (
+                        ) : boletoEnviadoEfetivo ? (
                           <CheckCircle2 className="h-4 w-4" />
                         ) : (
                           <Send className="h-4 w-4" />
@@ -313,7 +313,7 @@ function AcordoCard({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {acordo.boleto_enviado ? 'Marcar boleto como NÃO enviado' : 'Marcar boleto como enviado'}
+                      {boletoEnviadoEfetivo ? 'Marcar boleto como NÃO enviado' : 'Marcar boleto como enviado'}
                     </TooltipContent>
                   </Tooltip>
                   </TooltipProvider>
