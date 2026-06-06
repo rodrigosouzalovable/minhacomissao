@@ -1009,7 +1009,8 @@ export default function Acordos() {
     } else {
       matchesStatus = acordo.status === statusFilter;
     }
-    return matchesSearch && matchesStatus && matchesDateFilter(acordo.id) && matchesCriacaoFilter(acordo);
+    const matchesOperador = selectedUserId === 'todos' || acordo.user_id === selectedUserId;
+    return matchesSearch && matchesStatus && matchesOperador && matchesDateFilter(acordo.id) && matchesCriacaoFilter(acordo);
   });
 
   // Acordos Pagos: têm pelo menos 1 parcela paga
