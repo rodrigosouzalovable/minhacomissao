@@ -175,6 +175,7 @@ function AcordoCard({
   lancadoPor?: string | null;
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
+  const boletoEnviadoEfetivo = acordo.boleto_enviado || !!ultimaParcelaPaga;
   return <Link to={`/acordos/${acordo.id}`}>
       <Card className={cn("hover:border-primary/50 transition-all cursor-pointer",
     // VERDE - Mensagem enviada com sucesso
@@ -182,7 +183,8 @@ function AcordoCard({
     // VERMELHO - Parcela vencida (prioridade máxima) - só se não enviado
     envioStatus !== 'enviado' && isNegociado && isVencido && "border-destructive bg-gradient-to-r from-red-50 to-rose-50 ring-2 ring-destructive/60 shadow-lg shadow-red-200/50 animate-pulse dark:from-red-950/30 dark:to-rose-950/30 dark:border-destructive dark:ring-destructive/50 dark:shadow-red-500/20",
     // LARANJA - Aguardando boleto (apenas se não vencido e não enviado)
-    envioStatus !== 'enviado' && isNegociado && !isVencido && !acordo.boleto_enviado && "border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50 ring-2 ring-orange-300 shadow-lg shadow-orange-200/50 animate-pulse dark:from-orange-950/30 dark:to-amber-950/30 dark:border-orange-500 dark:ring-orange-400/50 dark:shadow-orange-500/20")}>
+    envioStatus !== 'enviado' && isNegociado && !isVencido && !boletoEnviadoEfetivo && "border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50 ring-2 ring-orange-300 shadow-lg shadow-orange-200/50 animate-pulse dark:from-orange-950/30 dark:to-amber-950/30 dark:border-orange-500 dark:ring-orange-400/50 dark:shadow-orange-500/20")}>
+
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
