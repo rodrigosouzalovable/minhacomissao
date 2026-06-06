@@ -137,29 +137,64 @@ export default function Notificacoes() {
     }
   };
 
-  const openQr = async () => {
-    if (!selectedInstance) {
-      toast.error('Selecione uma instância primeiro');
-      return;
+  const autoSaveConfig = async (instanceId: string) => {
+    try {
+      if (config?.id) {
+        await supabase
+          .from('notificacoes_config')
+          .update({ instancia_id: instanceId, ativo: true })
+          .eq('id', config.id);
+      } else {
+        await supabase
+          .from('notificacoes_config')
+          .insert({ instancia_id: instanceId, ativo: true });
+      }
+      refetchConfig();
+    } catch (_) {}
+  };
+
+  const handleCreateInstance = async () => {
+    setCreatingInstance(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'create-instance', userId: user.id },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Falha ao criar instância');
+      toast.success('Nova instância criada!');
+      await refetchInstances();
+      setSelectedInstance(data.instanceId);
+      // Abre o QR automaticamente
+      setTimeout(() => openQrFor(data.instanceId), 300);
+    } catch (e: any) {
+      toast.error('Erro ao criar: ' + e.message);
+    } finally {
+      setCreatingInstance(false);
     }
+  };
+
+  const openQrFor = async (instanceId: string) => {
     setQrOpen(true);
     setQrLoading(true);
     setQrImage(null);
+    setQrConnected(false);
     try {
-      const inst = instances?.find(i => i.id === selectedInstance);
-      if (!inst) throw new Error('Instância não encontrada');
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', instanceId: selectedInstance, userId: 'admin' },
+        body: { action: 'qr', instanceId, userId: user?.id },
       });
       if (error) throw error;
       const img = data?.qrcode || data?.qr || data?.base64 || null;
-      if (img) {
-        setQrImage(img.startsWith('data:') ? img : `data:image/png;base64,${img}`);
-      } else if (data?.status === 'connected') {
+      if (data?.alreadyConnected || data?.connected) {
+        setQrConnected(true);
         toast.success('Já conectado!');
-        setQrOpen(false);
+        await autoSaveConfig(instanceId);
+      } else if (img) {
+        setQrImage(img.startsWith('data:') ? img : `data:image/png;base64,${img}`);
       } else {
-        toast.message('Sem QR disponível', { description: 'Tente novamente em alguns segundos.' });
+        toast.message('Sem QR disponível', { description: data?.error || 'Tente novamente.' });
       }
     } catch (e: any) {
       toast.error('Erro ao gerar QR: ' + e.message);
@@ -167,6 +202,35 @@ export default function Notificacoes() {
       setQrLoading(false);
     }
   };
+
+  const openQr = async () => {
+    if (!selectedInstance) {
+      toast.error('Selecione ou crie uma instância primeiro');
+      return;
+    }
+    await openQrFor(selectedInstance);
+  };
+
+  // Polling de status enquanto o diálogo do QR está aberto
+  useEffect(() => {
+    if (!qrOpen || qrConnected || !selectedInstance) return;
+    const interval = setInterval(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data } = await supabase.functions.invoke('whatsapp-qr', {
+          body: { action: 'status', instanceId: selectedInstance, userId: user?.id },
+        });
+        if (data?.connected) {
+          setQrConnected(true);
+          toast.success('WhatsApp conectado!');
+          await autoSaveConfig(selectedInstance);
+          setTimeout(() => setQrOpen(false), 1500);
+        }
+      } catch (_) {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [qrOpen, qrConnected, selectedInstance]);
+
 
   const handleSaveTelefone = async (userId: string) => {
     const edit = edits[userId];
