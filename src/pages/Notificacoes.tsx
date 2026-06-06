@@ -462,15 +462,25 @@ export default function Notificacoes() {
             <DialogTitle>Conectar WhatsApp</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center gap-3 py-2">
-            {qrLoading && <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />}
-            {qrImage && <img src={qrImage} alt="QR Code" className="w-64 h-64" />}
-            <p className="text-xs text-muted-foreground text-center">
-              Abra o WhatsApp no celular → Aparelhos conectados → Conectar um aparelho.
-            </p>
-            <Button variant="outline" size="sm" onClick={openQr}>
-              <RefreshCw className="h-4 w-4 mr-1" /> Atualizar QR
-            </Button>
+            {qrConnected ? (
+              <>
+                <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+                <p className="text-sm font-medium">WhatsApp conectado com sucesso!</p>
+              </>
+            ) : (
+              <>
+                {qrLoading && <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />}
+                {qrImage && <img src={qrImage} alt="QR Code" className="w-64 h-64" />}
+                <p className="text-xs text-muted-foreground text-center">
+                  Abra o WhatsApp no celular → Aparelhos conectados → Conectar um aparelho.
+                </p>
+                <Button variant="outline" size="sm" onClick={openQr}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar QR
+                </Button>
+              </>
+            )}
           </div>
+
         </DialogContent>
       </Dialog>
     </AppLayout>
