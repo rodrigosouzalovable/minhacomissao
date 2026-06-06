@@ -1,21 +1,24 @@
-## Contexto
-
-No componente de card de acordo em `src/pages/Acordos.tsx` (linhas ~178-318), quando o acordo é negociado e ainda não foi marcado como "boleto enviado", o card recebe um efeito amarelado/laranja com `ring`, `animate-pulse` e o badge "Aguardando envio do boleto". O toggle só muda quando o usuário clica manualmente no botão de envio.
-
-O card já recebe a prop `ultimaParcelaPaga` (linha 172), que é populada sempre que existe pelo menos uma parcela paga no acordo. Esse é o sinal natural para detectar "tem pagamento".
-
 ## O que será feito
 
-Apenas mudança visual em `src/pages/Acordos.tsx`, sem alterar dados nem o campo `boleto_enviado` no banco:
+Alterar o campo **Observações (opcional)** para **Número que falou com o cliente (obrigatório)** nas telas de lançamento/edição de acordo:
 
-1. Criar uma variável local no card, `boletoEnviadoEfetivo = acordo.boleto_enviado || !!ultimaParcelaPaga`.
-2. Usar `boletoEnviadoEfetivo` no lugar de `acordo.boleto_enviado` em:
-   - Classe de fundo laranja/amarelo (linha 185) — assim some o efeito amarelado/pulse.
-   - Badge "Boleto Enviado / Aguardando envio do boleto" (linhas 272-280).
-   - Botão de toggle (cor/ícone/tooltip nas linhas 291-314) — visualmente passa a refletir "enviado", mas o clique continua alternando o campo real `acordo.boleto_enviado` (comportamento atual preservado).
+- `src/pages/NovoAcordo.tsx`
+- `src/pages/NovoAcordoAdmin.tsx`
+- `src/pages/EditarAcordo.tsx` (mantém consistência ao editar)
+
+Mudanças em cada arquivo:
+
+1. **Label**: trocar "Observações (opcional)" por "Número que falou com o cliente *".
+2. **Placeholder**: "Ex: (62) 99999-9999 ou ramal 1234".
+3. **Validação Zod** `observacoes`:
+   - Aceitar letras e números (qualquer texto não vazio após `trim`).
+   - `min(3)` e `max(50)`.
+   - Tornar obrigatório (remover `.optional()`).
+4. **Submit**: bloquear envio quando vazio (a validação do zod já cuida; só remover o `|| undefined`/`|| null` que permitia gravar vazio).
+5. O valor continua salvo na coluna `observacoes` da tabela `acordos` (sem migração).
 
 ## Fora de escopo
 
-- Não alterar a coluna `boleto_enviado` no banco automaticamente.
-- Não mexer em ordenação, filtros, RLS ou lógica de pagamentos.
-- Sem mudanças em outras páginas.
+- Não criar coluna nova no banco.
+- Não mexer em filtros, listas ou exibição do card em "Meus Acordos".
+- Não alterar máscara de telefone (campo livre conforme pedido: número e letra).
