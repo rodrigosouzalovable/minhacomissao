@@ -163,7 +163,7 @@ export default function EditarAcordo() {
         parcelas: parseInt(form.parcelas),
         dataPrimeiroPagamento: form.dataPrimeiroPagamento,
         diasAtraso: parseInt(form.diasAtraso),
-        observacoes: form.observacoes.trim() || undefined,
+        observacoes: form.observacoes.trim(),
       });
 
       // Atualizar acordo
