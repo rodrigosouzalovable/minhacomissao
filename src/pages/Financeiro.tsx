@@ -41,8 +41,9 @@ function calcularRepartePagamento(valorParcela: number, diasAtraso: number, empr
   const comissaoEscritorio = receita - comissaoFuncionario;
   return { receita, comissaoFuncionario, comissaoEscritorio };
 }
-import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, Building2, Users, DollarSign } from 'lucide-react';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, Building2, Users, DollarSign, Copy } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { ReplicarMesesDialog } from '@/components/financeiro/ReplicarMesesDialog';
 
 const CATEGORIAS_EMPRESA = [
   'Aluguel',
