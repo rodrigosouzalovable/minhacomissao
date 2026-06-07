@@ -275,12 +275,62 @@ export default function Estrategias() {
                   : 'Nenhuma importação ainda. Envie o arquivo CLIENTES SOUZA E RIBEIRO.xlsx'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-2 items-center flex-wrap">
-              <input ref={fileRef} type="file" accept=".xlsx" onChange={handleUpload} className="hidden" />
-              <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-                {uploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar planilha</>}
-              </Button>
-              <Button variant="outline" onClick={liberarTudo}><Trash2 className="h-4 w-4 mr-2" />Resetar todas as reservas</Button>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2 items-center flex-wrap">
+                <input ref={fileRef} type="file" accept=".xlsx" onChange={handleUpload} className="hidden" />
+                <Button onClick={() => fileRef.current?.click()} disabled={uploading || importStatus?.status === 'processando'}>
+                  {uploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Enviando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar planilha</>}
+                </Button>
+                <Button variant="outline" onClick={liberarTudo}><Trash2 className="h-4 w-4 mr-2" />Resetar todas as reservas</Button>
+              </div>
+
+              {uploading && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Enviando arquivo...</span>
+                    <span>{uploadPct}%</span>
+                  </div>
+                  <Progress value={uploadPct} />
+                </div>
+              )}
+
+              {trackingId && importStatus && (
+                <div className="rounded-md border p-3 space-y-2">
+                  {importStatus.status === 'processando' && (
+                    <>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="font-medium">Processando planilha...</span>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {importStatus.total_cpfs ? `${importStatus.total_cpfs} CPFs detectados` : 'lendo abas...'}
+                        </span>
+                      </div>
+                      <Progress value={undefined as any} className="animate-pulse" />
+                      <p className="text-xs text-muted-foreground">
+                        Pode levar alguns minutos para planilhas grandes. Você pode sair desta tela — o processamento continua no servidor.
+                      </p>
+                    </>
+                  )}
+                  {importStatus.status === 'concluido' && (
+                    <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="font-medium">Concluído!</span>
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {importStatus.total_cpfs} CPFs · {importStatus.total_localizados} localizados
+                      </span>
+                    </div>
+                  )}
+                  {importStatus.status === 'erro' && (
+                    <div className="flex items-start gap-2 text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="font-medium">Falha na importação</div>
+                        <div className="text-xs">{importStatus.erro}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
