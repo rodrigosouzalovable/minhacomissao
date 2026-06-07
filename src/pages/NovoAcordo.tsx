@@ -17,6 +17,7 @@ import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText, ChevronDown, Ch
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageDataExtractor, ExtractedData } from '@/components/ImageDataExtractor';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
   clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine(val => val.replace(/\D/g, '').length === 11, {
@@ -107,15 +108,35 @@ export default function NovoAcordo() {
   const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
   const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null; ativo: boolean }>>([]);
   const [instanciaBusca, setInstanciaBusca] = useState('');
+
+  // Admin: selecionar operador ao qual o acordo será vinculado
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [operadores, setOperadores] = useState<Array<{ id: string; nome: string | null; email: string | null }>>([]);
   useEffect(() => {
-    if (!user) return;
+    if (user && !selectedUserId) setSelectedUserId(user.id);
+  }, [user, selectedUserId]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase
+      .from('profiles')
+      .select('id, nome, email')
+      .order('nome', { ascending: true })
+      .then(({ data }) => setOperadores((data as any) || []));
+  }, [isAdmin]);
+
+  // Carrega instâncias do operador selecionado (ou do próprio usuário)
+  useEffect(() => {
+    const targetUserId = isAdmin ? (selectedUserId || user?.id) : user?.id;
+    if (!targetUserId) return;
+    setInstanciaNegociacaoId('');
     supabase
       .from('user_whatsapp_instances')
       .select('id, nome, telefone, ativo')
+      .eq('user_id', targetUserId)
       .order('ativo', { ascending: false })
       .order('ordem', { ascending: true })
       .then(({ data }) => setInstancias((data as any) || []));
-  }, [user]);
+  }, [user, isAdmin, selectedUserId]);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
     clienteNome: '',
@@ -449,7 +470,7 @@ export default function NovoAcordo() {
         data: acordo,
         error: acordoError
       } = await supabase.from('acordos').insert({
-        user_id: user.id,
+        user_id: isAdmin ? (selectedUserId || user.id) : user.id,
         cliente_nome: validated.clienteNome,
         cliente_cpf: validated.clienteCpf || null,
         cliente_telefone: validated.clienteTelefone || null,
@@ -487,9 +508,13 @@ export default function NovoAcordo() {
         status: p.status
       })));
       if (parcelasError) throw parcelasError;
+      const operadorEscolhido = operadores.find(o => o.id === selectedUserId);
+      const operadorLabel = isAdmin && selectedUserId && selectedUserId !== user.id && operadorEscolhido
+        ? ` — vinculado a ${operadorEscolhido.nome || operadorEscolhido.email || 'operador'}`
+        : '';
       toast({
         title: 'Acordo criado!',
-        description: `Acordo com ${validated.clienteNome} cadastrado com sucesso.`
+        description: `Acordo com ${validated.clienteNome} cadastrado com sucesso${operadorLabel}.`
       });
       navigate(`/acordos/${acordo.id}`);
     } catch (err) {
@@ -561,6 +586,35 @@ export default function NovoAcordo() {
 
           <TabsContent value="manual" className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {isAdmin && (
+                <Card className="border-primary/40">
+                  <CardHeader>
+                    <CardTitle>Operador responsável</CardTitle>
+                    <CardDescription>Selecione o funcionário ao qual este acordo ficará vinculado</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um operador" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {user && (
+                          <SelectItem value={user.id}>
+                            Eu mesmo{operadores.find(o => o.id === user.id)?.nome ? ` — ${operadores.find(o => o.id === user.id)?.nome}` : ''}
+                          </SelectItem>
+                        )}
+                        {operadores
+                          .filter(o => o.id !== user?.id)
+                          .map(op => (
+                            <SelectItem key={op.id} value={op.id}>
+                              {op.nome || op.email || op.id}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
             <CardHeader>
               <CardTitle>Dados do Cliente</CardTitle>

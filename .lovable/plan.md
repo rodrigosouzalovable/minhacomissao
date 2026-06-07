@@ -1,17 +1,27 @@
-# Corrigir acesso à aba Comissões para funcionários
+## Objetivo
+Permitir que o admin, ao lançar um novo acordo pela tela padrão `/acordos/novo`, escolha o operador (funcionário) ao qual o acordo ficará vinculado.
 
-## Problema
-A rota `/comissoes` está protegida por `AdminRoute`, que só permite admins. Por isso, mesmo liberando a aba "Minhas Comissões" nas permissões do funcionário, ao clicar ele é redirecionado para `/dashboard`.
+## Mudança proposta
 
-## Correção
-Em `src/App.tsx`, trocar o wrapper da rota `/comissoes`:
+Arquivo: `src/pages/NovoAcordo.tsx`
 
-- De: `<AdminRoute><Comissoes /></AdminRoute>`
-- Para: `<PermissionRoute><Comissoes /></PermissionRoute>`
+1. Detectar admin via `useUserRole()` (já usado em outras páginas).
+2. Quando `isAdmin === true`, carregar a lista de operadores ativos da tabela `profiles` (id, nome, email) ordenada por nome — query simples com `useQuery`.
+3. Adicionar no topo do formulário (logo após o cabeçalho/voltar, antes de "Dados do Cliente") um novo card "Operador responsável" contendo um `Select` (shadcn) com:
+   - Opção padrão: o próprio admin logado ("Eu — {nome}")
+   - Demais operadores listados
+   - Campo obrigatório
+4. Manter o estado `selectedUserId` (default = `user.id`).
+5. No `handleSubmit`, ao inserir em `acordos`, usar `user_id: isAdmin ? selectedUserId : user.id` em vez de sempre `user.id`. O restante (parcelas, instância de WhatsApp, comissão) permanece igual.
+6. Toast de sucesso passa a mencionar o nome do operador escolhido quando diferente do admin.
+7. Para funcionários comuns nada muda — o card do seletor só renderiza se `isAdmin`.
 
-Assim, admins continuam tendo acesso (PermissionRoute libera admins automaticamente) e funcionários com a aba `/comissoes` marcada em `user_permissions.abas_permitidas` também conseguirão entrar.
+## Pontos que NÃO mudam
+- Rota, permissões, RLS e cálculos de comissão permanecem iguais (admins já podem inserir acordos para qualquer `user_id` via policies existentes — mesmo padrão já usado em `NovoAcordoAdmin.tsx`).
+- Página `/admin/usuarios/:userId/novo-acordo` (NovoAcordoAdmin) continua existindo e funcionando normalmente.
+- Nenhuma migração de banco necessária.
 
-## Observação
-A página `Comissoes.tsx` já é a tela do próprio usuário (mostra as comissões do `user.id` logado), então não há risco de vazamento de dados — funcionário só vê as próprias comissões.
-
-As rotas administrativas reais (`/admin/usuarios/:userId/comissoes` e `/admin/usuarios/:userId/novo-acordo`) continuam em `AdminRoute`.
+## Detalhes técnicos
+- Lista de operadores: `supabase.from('profiles').select('id, nome, email').order('nome')`.
+- Componente: `Select`, `SelectTrigger`, `SelectContent`, `SelectItem` de `@/components/ui/select`.
+- Carregamento da lista de instâncias de WhatsApp (se houver no NovoAcordo, igual ao Admin) deve reagir ao `selectedUserId` para mostrar as instâncias do operador escolhido.
