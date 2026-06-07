@@ -222,7 +222,7 @@ export default function Financeiro() {
     queryFn: async () => {
       let query = supabase
         .from('pagamentos')
-        .select('*, acordos!inner(user_id, dias_atraso)')
+        .select('*, acordos!inner(user_id, dias_atraso, empresa)')
         .eq('status', 'pago');
       
       if (dataInicio) {
