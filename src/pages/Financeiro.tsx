@@ -272,10 +272,13 @@ export default function Financeiro() {
   const totalGastos = totalGastosEmpresa + totalGastosFuncionarios;
 
   const totalReceitaComissao = useMemo(() => {
-    return pagamentosPagos.reduce((acc, p) => {
-      const diasAtraso = p.acordos?.dias_atraso || 0;
-      const percentual = calcularPercentualComissaoEmpresa(diasAtraso);
-      return acc + (Number(p.valor_parcela) * percentual / 100);
+    return pagamentosPagos.reduce((acc, p: any) => {
+      const r = calcularRepartePagamento(
+        Number(p.valor_parcela),
+        p.acordos?.dias_atraso || 0,
+        p.acordos?.empresa
+      );
+      return acc + r.comissaoEscritorio;
     }, 0);
   }, [pagamentosPagos]);
 
@@ -290,26 +293,33 @@ export default function Financeiro() {
   // Analysis per funcionário
   const analisesPorFuncionario = useMemo(() => {
     return profiles.map(profile => {
-      // Gastos do funcionário
       const gastos = gastosFuncionarios
         .filter(g => g.funcionario_id === profile.id)
         .reduce((acc, g) => acc + Number(g.valor), 0);
-      
-      // Receita do funcionário (comissão empresa das parcelas pagas)
-      const receita = pagamentosPagos
-        .filter(p => p.acordos?.user_id === profile.id)
-        .reduce((acc, p) => {
-          const diasAtraso = p.acordos?.dias_atraso || 0;
-          const percentual = calcularPercentualComissaoEmpresa(diasAtraso);
-          return acc + (Number(p.valor_parcela) * percentual / 100);
-        }, 0);
-      
+
+      const pagsDoFunc = pagamentosPagos.filter((p: any) => p.acordos?.user_id === profile.id);
+      let receita = 0;
+      let comissaoFuncionario = 0;
+      let comissaoEscritorio = 0;
+      for (const p of pagsDoFunc as any[]) {
+        const r = calcularRepartePagamento(
+          Number(p.valor_parcela),
+          p.acordos?.dias_atraso || 0,
+          p.acordos?.empresa
+        );
+        receita += r.receita;
+        comissaoFuncionario += r.comissaoFuncionario;
+        comissaoEscritorio += r.comissaoEscritorio;
+      }
+
       return {
         id: profile.id,
         nome: profile.nome || profile.email || 'Sem nome',
         gastos,
         receita,
-        resultado: receita - gastos
+        comissaoFuncionario,
+        comissaoEscritorio,
+        resultado: comissaoEscritorio - gastos,
       };
     }).filter(a => a.gastos > 0 || a.receita > 0);
   }, [profiles, gastosFuncionarios, pagamentosPagos]);
