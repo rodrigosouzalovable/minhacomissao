@@ -67,6 +67,38 @@ export default function Estrategias() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
+
+  // Poll import status while processing
+  const { data: importStatus } = useQuery({
+    queryKey: ['estrategia-import-status', trackingId],
+    queryFn: async () => {
+      if (!trackingId) return null;
+      const { data } = await supabase
+        .from('estrategia_importacao')
+        .select('id, status, erro, total_cpfs, total_localizados, nome_arquivo, criado_em')
+        .eq('id', trackingId)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!trackingId,
+    refetchInterval: (q) => {
+      const d: any = q.state.data;
+      return d && (d.status === 'concluido' || d.status === 'erro') ? false : 2000;
+    },
+  });
+
+  useEffect(() => {
+    if (!importStatus) return;
+    if (importStatus.status === 'concluido') {
+      toast.success(`Importação concluída: ${importStatus.total_cpfs} CPFs.`);
+      qc.invalidateQueries({ queryKey: ['estrategia-resumo'] });
+      qc.invalidateQueries({ queryKey: ['estrategia-importacao'] });
+    } else if (importStatus.status === 'erro') {
+      toast.error(`Falha na importação: ${importStatus.erro ?? 'erro desconhecido'}`);
+    }
+  }, [importStatus?.status]);
 
   // Filtros manuais
   const [faixasSel, setFaixasSel] = useState<string[]>([]);
