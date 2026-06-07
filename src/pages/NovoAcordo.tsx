@@ -939,6 +939,39 @@ export default function NovoAcordo() {
                     </div>
                   </div>
 
+                  {parcelasNum > 1 && (
+                    <div className="rounded-md border overflow-hidden">
+                      <div className="bg-muted/30 px-3 py-2 text-sm font-medium">
+                        Comissão por parcela paga
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium">Parcela</th>
+                            <th className="text-right px-3 py-2 font-medium">Valor</th>
+                            <th className="text-right px-3 py-2 font-medium">Você recebe</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="px-3 py-2">1ª parcela</td>
+                            <td className="text-right px-3 py-2">{formatarMoeda(calculo.valorPrimeiraParcela)}</td>
+                            <td className="text-right px-3 py-2 font-semibold text-secondary">{formatarMoeda(comissaoPrimeira)}</td>
+                          </tr>
+                          {parcelasNum > 1 && (
+                            <tr>
+                              <td className="px-3 py-2">Demais parcelas (×{parcelasNum - 1})</td>
+                              <td className="text-right px-3 py-2">{formatarMoeda(calculo.valorDemaisParcelas)}</td>
+                              <td className="text-right px-3 py-2 font-semibold text-secondary">{formatarMoeda(comissaoDemais)}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+
+
                   <div className="rounded-md border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
