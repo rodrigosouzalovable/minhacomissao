@@ -153,15 +153,16 @@ export default function Estrategias() {
   }
 
   async function baixarManual() {
+    const clean = (v: string) => (v && v.trim() ? v.trim() : undefined);
     const filtro: any = {
       faixas: faixasSel.length ? faixasSel : undefined,
-      parcelas_min: parcMin || undefined,
-      parcelas_max: parcMax || undefined,
-      localizado: localizado || undefined,
-      acordo_quebrado: quebrado || undefined,
-      tipo_credor: tipo || undefined,
-      atraso_min: atrasoMin || undefined,
-      atraso_max: atrasoMax || undefined,
+      parcelas_min: clean(parcMin),
+      parcelas_max: clean(parcMax),
+      localizado: clean(localizado),
+      acordo_quebrado: clean(quebrado),
+      tipo_credor: clean(tipo),
+      atraso_min: clean(atrasoMin),
+      atraso_max: clean(atrasoMax),
       ordem,
     };
     try {
