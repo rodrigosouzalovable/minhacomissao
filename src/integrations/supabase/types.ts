@@ -4230,6 +4230,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      has_estrategias_access: { Args: { uid: string }; Returns: boolean }
       has_inbox_compartilhado: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
