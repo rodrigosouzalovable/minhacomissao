@@ -200,7 +200,7 @@ const App = () => (
             <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
             <Route path="/admin/comite-novomundo" element={<AdminRoute><ComiteNovoMundo /></AdminRoute>} />
             <Route path="/admin/validar-emails" element={<AdminRoute><ValidarEmails /></AdminRoute>} />
-            <Route path="/admin/notificacoes" element={<AdminRoute><Notificacoes /></AdminRoute>} />
+            <Route path="/admin/notificacoes" element={<PermissionRoute><Notificacoes /></PermissionRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
