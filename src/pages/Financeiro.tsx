@@ -554,7 +554,7 @@ export default function Financeiro() {
         categoria: categoriaEmpresa,
         descricao: descricaoEmpresa || null,
         valor,
-        data_referencia: dataReferenciaEmpresa,
+        data_referencia: dataReferenciaEmpresa + "-01",
         recorrente: recorrenteEmpresa
       });
     } else {
@@ -563,7 +563,7 @@ export default function Financeiro() {
         categoria: categoriaEmpresa,
         descricao: descricaoEmpresa || null,
         valor,
-        data_referencia: dataReferenciaEmpresa,
+        data_referencia: dataReferenciaEmpresa + "-01",
         recorrente: recorrenteEmpresa
       });
     }
@@ -586,7 +586,7 @@ export default function Financeiro() {
         categoria: categoriaFuncionario,
         descricao: descricaoFuncionario || null,
         valor,
-        data_referencia: dataReferenciaFuncionario,
+        data_referencia: dataReferenciaFuncionario + "-01",
         recorrente: recorrenteFuncionario
       });
     } else {
@@ -596,7 +596,7 @@ export default function Financeiro() {
         categoria: categoriaFuncionario,
         descricao: descricaoFuncionario || null,
         valor,
-        data_referencia: dataReferenciaFuncionario,
+        data_referencia: dataReferenciaFuncionario + "-01",
         recorrente: recorrenteFuncionario
       });
     }
@@ -618,7 +618,7 @@ export default function Financeiro() {
         categoria: categoriaReceita,
         descricao: descricaoReceita || null,
         valor,
-        data_referencia: dataReferenciaReceita,
+        data_referencia: dataReferenciaReceita + "-01",
         recorrente: recorrenteReceita
       });
     } else {
@@ -627,7 +627,7 @@ export default function Financeiro() {
         categoria: categoriaReceita,
         descricao: descricaoReceita || null,
         valor,
-        data_referencia: dataReferenciaReceita,
+        data_referencia: dataReferenciaReceita + "-01",
         recorrente: recorrenteReceita
       });
     }
