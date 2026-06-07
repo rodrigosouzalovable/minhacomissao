@@ -469,7 +469,7 @@ export default function NovoAcordo() {
         data: acordo,
         error: acordoError
       } = await supabase.from('acordos').insert({
-        user_id: user.id,
+        user_id: isAdmin ? (selectedUserId || user.id) : user.id,
         cliente_nome: validated.clienteNome,
         cliente_cpf: validated.clienteCpf || null,
         cliente_telefone: validated.clienteTelefone || null,
