@@ -1,0 +1,1 @@
+ALTER TABLE public.estrategia_importacao ADD COLUMN IF NOT EXISTS storage_path TEXT;
