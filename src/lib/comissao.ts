@@ -245,14 +245,8 @@ export function calcularComissaoParcelaPorEmpresa(
   valorParcela: number,
   diasAtraso: number
 ): { percentual: number; valor: number } {
-  let percentual = 0;
-  if (empresa === 'mundo_da_moda') {
-    // UME | APORTE
-    percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
-  } else {
-    // UME | INADIMPLENTES (default) — 35% fixo
-    percentual = calcularPercentualComissao(diasAtraso);
-  }
+  // Unificado: toda empresa usa a tabela faixada de Honorário (imagem UME).
+  const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
   const valor = Math.round(valorParcela * (percentual / 100) * 100) / 100;
   return { percentual, valor };
 }
