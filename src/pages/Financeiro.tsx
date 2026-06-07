@@ -160,6 +160,13 @@ export default function Financeiro() {
   const [dataReferenciaReceita, setDataReferenciaReceita] = useState('');
   const [recorrenteReceita, setRecorrenteReceita] = useState(false);
 
+  // Replicar meses dialog
+  const [replicarTabela, setReplicarTabela] = useState<null | 'gastos_empresa' | 'gastos_funcionarios' | 'receitas_empresa'>(null);
+
+  const formatMesRef = (data: string) => {
+    try { return format(parseISO(data), 'MM/yyyy'); } catch { return data; }
+  };
+
   // Fetch profiles (funcionários)
   const { data: profiles = [] } = useQuery({
     queryKey: ['profiles-financeiro'],
