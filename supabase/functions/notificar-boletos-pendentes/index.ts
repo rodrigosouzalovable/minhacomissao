@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     let tipo: "D-1" | "D0" = body.tipo === "D-1" ? "D-1" : "D0";
     const dryRun = body.dryRun === true;
+    const force = body.force === true;
 
     const brt = nowBRT();
     // Auto-decide tipo by hour if not provided
@@ -49,8 +50,8 @@ Deno.serve(async (req) => {
       tipo = hour < 12 ? "D0" : "D-1";
     }
 
-    // Sunday block (postpone D-1 sent on Saturday: still allow; block Sunday)
-    if (brt.getDay() === 0) {
+    // Sunday block (bypass with force=true for manual tests)
+    if (brt.getDay() === 0 && !force) {
       return new Response(JSON.stringify({ ok: true, skipped: "domingo" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
