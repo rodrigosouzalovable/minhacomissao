@@ -50,6 +50,7 @@ const Relatorios = lazy(() => import("./pages/Relatorios"));
 const ComiteNovoMundo = lazy(() => import("./pages/ComiteNovoMundo"));
 const ValidarEmails = lazy(() => import("./pages/ValidarEmails"));
 const Notificacoes = lazy(() => import("./pages/Notificacoes"));
+const Estrategias = lazy(() => import("./pages/Estrategias"));
 
 const queryClient = new QueryClient();
 
