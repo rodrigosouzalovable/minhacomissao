@@ -14,7 +14,33 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import {
+  calcularPercentualComissaoEmpresa,
+  calcularPercentualComissaoMontreal,
+  calcularPercentualComissaoMundoDaModa,
+  calcularPercentualComissaoFuncionario,
+} from '@/lib/comissao';
+
+// Calcula reparte de uma parcela paga respeitando a empresa do acordo.
+// Receita Gerada = parte que entra no escritório (H.O. sobre o valor pago).
+// Comissão Funcionário = % funcionário sobre o valor_parcela.
+// Comissão Escritório = Receita Gerada - Comissão Funcionário (líquido).
+function calcularRepartePagamento(valorParcela: number, diasAtraso: number, empresa: string | null | undefined) {
+  const emp = (empresa || '').toString().toUpperCase();
+  let percEmpresa: number;
+  if (emp.includes('MONTREAL')) {
+    percEmpresa = calcularPercentualComissaoMontreal(diasAtraso);
+  } else if (emp.includes('MUNDO_DA_MODA') || emp.includes('MUNDO DA MODA') || emp === 'MUNDO_DA_MODA') {
+    percEmpresa = calcularPercentualComissaoMundoDaModa(diasAtraso);
+  } else {
+    percEmpresa = calcularPercentualComissaoEmpresa(diasAtraso);
+  }
+  const percFunc = calcularPercentualComissaoFuncionario(diasAtraso);
+  const receita = Number(valorParcela) * (percEmpresa / 100);
+  const comissaoFuncionario = Number(valorParcela) * (percFunc / 100);
+  const comissaoEscritorio = receita - comissaoFuncionario;
+  return { receita, comissaoFuncionario, comissaoEscritorio };
+}
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, Building2, Users, DollarSign } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
