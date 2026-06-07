@@ -1,26 +1,41 @@
-## Mudanças em `src/pages/Notificacoes.tsx`
+## Alterações em `src/pages/Financeiro.tsx` (aba Análise)
 
-### 1. Remover botão "Conectar via QR Code"
-- Apagar o botão da linha 269-271 (header do card "WhatsApp Notificador"). A função `openQr` e o diálogo de QR no rodapé permanecem por enquanto (sem botão de gatilho), ou removo também se preferir — minha proposta é remover apenas o botão visível conforme o pedido. O fluxo passa a ser: selecionar instância → clicar "Salvar configuração".
+### 1. Nova estrutura da tabela
+Trocar as colunas atuais (`Funcionário | Gastos | Receita Gerada | Resultado`) por:
 
-### 2. Transformar "Testar D-1" e "Testar D0" em teste fictício
-- Trocar `handleTestRun` para NÃO chamar a edge function `notificar-boletos-pendentes` (que dispara para todos os operadores reais).
-- Em vez disso, montar localmente uma mensagem de exemplo com os mesmos placeholders do lembrete real, usando dados fictícios fixos:
-  - Operador: nome do próprio admin logado (`profiles.nome`) — para parecer real.
-  - Cliente: "JOÃO DA SILVA TESTE", CPF "123.456.789-00", parcela 1.
-  - Vencimento: amanhã (D-1) ou hoje (D0) formatado pt-BR.
-  - Linha "Número que falou com o cliente: (11) 99999-0000".
-  - Botão "Boleto Enviado" + rodapé "Clique abaixo após enviar o boleto".
-- Enviar via `send-whatsapp-buttons` para **apenas um destino**: o telefone do próprio admin que está testando. Buscar esse número em `notificacoes_operador_telefone` filtrando por `user_id = auth.user.id`; se não houver cadastrado, mostrar `toast.error("Cadastre seu telefone na lista de operadores para receber o teste")`.
-- Usa a instância configurada em `notificacoes_config` (mesma do envio real). Se nenhuma configurada, `toast.error("Configure a instância e salve antes de testar")`.
-- Toast de sucesso: `"Mensagem fictícia D-1 enviada para seu número"`.
+```
+Funcionário | Gastos | Receita Gerada | Comissão Funcionário | Comissão Escritório | Resultado
+```
 
-### 3. Sem mudanças no backend
-- `notificar-boletos-pendentes` continua igual — segue rodando pelos crons reais (D-1 17 UTC, D0 12 UTC) com dados reais.
+- **Receita Gerada**: soma de `valor_parcela` de todas as parcelas pagas do funcionário no período (valor bruto recebido pelo escritório, independente da tabela).
+- **Comissão Funcionário**: quanto o funcionário ganhou de comissão sobre essas parcelas.
+- **Comissão Escritório**: quanto o escritório ganhou (líquido da comissão paga).
+- **Gastos**: continua somando apenas `gastos_funcionarios` daquele funcionário (sem ratear Gastos Empresa, conforme decidido).
+- **Resultado**: `Comissão Escritório − Gastos do funcionário` (lucro real que o funcionário gera para o escritório).
+
+### 2. Cálculo respeitando empresa do acordo
+Buscar `acordos.empresa` (já vem no join) e aplicar a tabela correta por parcela:
+
+- `empresa = 'MONTREAL'` → `calcularComissaoMontrealParcela` (funcionário) e `valor_parcela − comissão funcionário` (escritório) — Montreal tem apenas comissão do funcionário; o restante é do escritório.
+- `empresa = 'MUNDO DA MODA'` (ou equivalente) → `calcularComissaoMundoDaModa` para funcionário, `calcularPercentualComissaoEmpresa` (tabela MdM se houver, senão padrão) para escritório.
+- Demais → `calcularPercentualComissaoFuncionario` (funcionário) + `calcularPercentualComissaoEmpresa` (escritório), ambos sobre `valor_parcela` e `dias_atraso`.
+
+Criar helper local `calcularRepartePagamento(pagamento)` que retorna `{ receita, comissaoFuncionario, comissaoEscritorio }` para uma parcela, centralizando o switch por empresa.
+
+### 3. Query
+A query atual de `pagamentosPagos` já traz `acordos(user_id, dias_atraso, ...)`. Adicionar `empresa` ao select para o cálculo. Sem mudanças de schema.
+
+### 4. Layout
+- Manter ordem alfabética atual.
+- Comissão Funcionário em texto neutro (`text-foreground`), Comissão Escritório em `text-green-600` (é o que entra de fato).
+- Cabeçalhos `text-right` para as 4 colunas numéricas.
 
 ## Verificação
 
-- Clicar em "Testar D-1": chega no WhatsApp do admin uma mensagem de exemplo com JOÃO DA SILVA TESTE + botão "Boleto Enviado" + rodapé. Nenhum outro operador recebe nada.
-- Idem para "Testar D0".
-- "Conectar via QR Code" sumiu do header do card.
-- "Salvar configuração" continua salvando normalmente.
+- Para um acordo Montreal 1x pago R$ 1.000 com 5 dias de atraso: Receita = 1000, Comissão Func conforme tabela Montreal, Escritório = 1000 − comissão func.
+- Para acordo padrão: Comissão Func + Comissão Escritório = % funcionário + % empresa sobre a parcela.
+- Resultado = Comissão Escritório − Gastos funcionário (sem rateio de Gastos Empresa).
+- Resumo geral (outras abas) permanece igual.
+
+## Sobre cadastro de salário/VA/custos
+Esses cadastros **já existem** hoje nas abas "Gastos Empresa" e "Gastos Funcionários" (categorias salário, vale alimentação, aluguel, energia, internet, sistema etc.). Esta tarefa apenas usa os dados que já são cadastrados ali. Nenhuma migration ou tabela nova é necessária.
