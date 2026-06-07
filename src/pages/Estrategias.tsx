@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -9,11 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { exportarParaExcel } from '@/lib/exportExcel';
-import { Loader2, Upload, Download, Target, Phone, Wallet, RotateCcw, History, Trash2, Flame } from 'lucide-react';
+import { Loader2, Upload, Download, Target, Phone, Wallet, RotateCcw, History, Trash2, Flame, CheckCircle2, AlertCircle } from 'lucide-react';
 
 type ResumoData = {
   importacao_id?: string;
@@ -66,6 +67,38 @@ export default function Estrategias() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
+
+  // Poll import status while processing
+  const { data: importStatus } = useQuery({
+    queryKey: ['estrategia-import-status', trackingId],
+    queryFn: async () => {
+      if (!trackingId) return null;
+      const { data } = await supabase
+        .from('estrategia_importacao')
+        .select('id, status, erro, total_cpfs, total_localizados, nome_arquivo, criado_em')
+        .eq('id', trackingId)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!trackingId,
+    refetchInterval: (q) => {
+      const d: any = q.state.data;
+      return d && (d.status === 'concluido' || d.status === 'erro') ? false : 2000;
+    },
+  });
+
+  useEffect(() => {
+    if (!importStatus) return;
+    if (importStatus.status === 'concluido') {
+      toast.success(`Importação concluída: ${importStatus.total_cpfs} CPFs.`);
+      qc.invalidateQueries({ queryKey: ['estrategia-resumo'] });
+      qc.invalidateQueries({ queryKey: ['estrategia-importacao'] });
+    } else if (importStatus.status === 'erro') {
+      toast.error(`Falha na importação: ${importStatus.erro ?? 'erro desconhecido'}`);
+    }
+  }, [importStatus?.status]);
 
   // Filtros manuais
   const [faixasSel, setFaixasSel] = useState<string[]>([]);
@@ -119,13 +152,26 @@ export default function Estrategias() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadPct(0);
+    setTrackingId(null);
+
+    // Simulação suave de progresso de upload (Supabase JS não expõe progresso nativo)
+    const startedAt = Date.now();
+    const estimateMs = Math.max(3000, Math.min(30000, file.size / 50_000)); // ~50KB/ms
+    const tick = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const pct = Math.min(95, Math.round((elapsed / estimateMs) * 95));
+      setUploadPct(pct);
+    }, 200);
+
     try {
-      // 1) Upload direto pro Storage (evita estourar memória da edge function)
+      // 1) Upload direto pro Storage
       const storagePath = `${user?.id ?? 'admin'}/${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage
         .from('estrategia-uploads')
         .upload(storagePath, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
       if (upErr) throw upErr;
+      setUploadPct(100);
 
       // 2) Dispara processamento em background
       const { data, error } = await supabase.functions.invoke('estrategia-importar', {
@@ -134,9 +180,9 @@ export default function Estrategias() {
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
 
-      toast.success('Planilha enviada. Processando em segundo plano — atualize em ~30s.');
-      qc.invalidateQueries({ queryKey: ['estrategia-resumo'] });
-      qc.invalidateQueries({ queryKey: ['estrategia-importacao'] });
+      const impId = (data as any)?.importacao_id;
+      if (impId) setTrackingId(impId);
+      toast.success('Planilha enviada. Processando em segundo plano...');
     } catch (err: any) {
       console.error(err);
       const message = String(err?.message ?? err ?? '');
@@ -144,7 +190,9 @@ export default function Estrategias() {
         ? 'Sem permissão para enviar esta planilha. Faça login como admin e tente novamente.'
         : 'Falha na importação: ' + (message || 'erro desconhecido');
       toast.error(friendlyMessage);
+      setUploadPct(0);
     } finally {
+      clearInterval(tick);
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
@@ -227,12 +275,62 @@ export default function Estrategias() {
                   : 'Nenhuma importação ainda. Envie o arquivo CLIENTES SOUZA E RIBEIRO.xlsx'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-2 items-center flex-wrap">
-              <input ref={fileRef} type="file" accept=".xlsx" onChange={handleUpload} className="hidden" />
-              <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-                {uploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar planilha</>}
-              </Button>
-              <Button variant="outline" onClick={liberarTudo}><Trash2 className="h-4 w-4 mr-2" />Resetar todas as reservas</Button>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2 items-center flex-wrap">
+                <input ref={fileRef} type="file" accept=".xlsx" onChange={handleUpload} className="hidden" />
+                <Button onClick={() => fileRef.current?.click()} disabled={uploading || importStatus?.status === 'processando'}>
+                  {uploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Enviando...</> : <><Upload className="h-4 w-4 mr-2" />Enviar planilha</>}
+                </Button>
+                <Button variant="outline" onClick={liberarTudo}><Trash2 className="h-4 w-4 mr-2" />Resetar todas as reservas</Button>
+              </div>
+
+              {uploading && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Enviando arquivo...</span>
+                    <span>{uploadPct}%</span>
+                  </div>
+                  <Progress value={uploadPct} />
+                </div>
+              )}
+
+              {trackingId && importStatus && (
+                <div className="rounded-md border p-3 space-y-2">
+                  {importStatus.status === 'processando' && (
+                    <>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="font-medium">Processando planilha...</span>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {importStatus.total_cpfs ? `${importStatus.total_cpfs} CPFs detectados` : 'lendo abas...'}
+                        </span>
+                      </div>
+                      <Progress value={undefined as any} className="animate-pulse" />
+                      <p className="text-xs text-muted-foreground">
+                        Pode levar alguns minutos para planilhas grandes. Você pode sair desta tela — o processamento continua no servidor.
+                      </p>
+                    </>
+                  )}
+                  {importStatus.status === 'concluido' && (
+                    <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="font-medium">Concluído!</span>
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {importStatus.total_cpfs} CPFs · {importStatus.total_localizados} localizados
+                      </span>
+                    </div>
+                  )}
+                  {importStatus.status === 'erro' && (
+                    <div className="flex items-start gap-2 text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="font-medium">Falha na importação</div>
+                        <div className="text-xs">{importStatus.erro}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
