@@ -14,7 +14,33 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import {
+  calcularPercentualComissaoEmpresa,
+  calcularPercentualComissaoMontreal,
+  calcularPercentualComissaoMundoDaModa,
+  calcularPercentualComissaoFuncionario,
+} from '@/lib/comissao';
+
+// Calcula reparte de uma parcela paga respeitando a empresa do acordo.
+// Receita Gerada = parte que entra no escritório (H.O. sobre o valor pago).
+// Comissão Funcionário = % funcionário sobre o valor_parcela.
+// Comissão Escritório = Receita Gerada - Comissão Funcionário (líquido).
+function calcularRepartePagamento(valorParcela: number, diasAtraso: number, empresa: string | null | undefined) {
+  const emp = (empresa || '').toString().toUpperCase();
+  let percEmpresa: number;
+  if (emp.includes('MONTREAL')) {
+    percEmpresa = calcularPercentualComissaoMontreal(diasAtraso);
+  } else if (emp.includes('MUNDO_DA_MODA') || emp.includes('MUNDO DA MODA') || emp === 'MUNDO_DA_MODA') {
+    percEmpresa = calcularPercentualComissaoMundoDaModa(diasAtraso);
+  } else {
+    percEmpresa = calcularPercentualComissaoEmpresa(diasAtraso);
+  }
+  const percFunc = calcularPercentualComissaoFuncionario(diasAtraso);
+  const receita = Number(valorParcela) * (percEmpresa / 100);
+  const comissaoFuncionario = Number(valorParcela) * (percFunc / 100);
+  const comissaoEscritorio = receita - comissaoFuncionario;
+  return { receita, comissaoFuncionario, comissaoEscritorio };
+}
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, Building2, Users, DollarSign } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -196,7 +222,7 @@ export default function Financeiro() {
     queryFn: async () => {
       let query = supabase
         .from('pagamentos')
-        .select('*, acordos!inner(user_id, dias_atraso)')
+        .select('*, acordos!inner(user_id, dias_atraso, empresa)')
         .eq('status', 'pago');
       
       if (dataInicio) {
@@ -246,10 +272,13 @@ export default function Financeiro() {
   const totalGastos = totalGastosEmpresa + totalGastosFuncionarios;
 
   const totalReceitaComissao = useMemo(() => {
-    return pagamentosPagos.reduce((acc, p) => {
-      const diasAtraso = p.acordos?.dias_atraso || 0;
-      const percentual = calcularPercentualComissaoEmpresa(diasAtraso);
-      return acc + (Number(p.valor_parcela) * percentual / 100);
+    return pagamentosPagos.reduce((acc, p: any) => {
+      const r = calcularRepartePagamento(
+        Number(p.valor_parcela),
+        p.acordos?.dias_atraso || 0,
+        p.acordos?.empresa
+      );
+      return acc + r.comissaoEscritorio;
     }, 0);
   }, [pagamentosPagos]);
 
@@ -264,26 +293,33 @@ export default function Financeiro() {
   // Analysis per funcionário
   const analisesPorFuncionario = useMemo(() => {
     return profiles.map(profile => {
-      // Gastos do funcionário
       const gastos = gastosFuncionarios
         .filter(g => g.funcionario_id === profile.id)
         .reduce((acc, g) => acc + Number(g.valor), 0);
-      
-      // Receita do funcionário (comissão empresa das parcelas pagas)
-      const receita = pagamentosPagos
-        .filter(p => p.acordos?.user_id === profile.id)
-        .reduce((acc, p) => {
-          const diasAtraso = p.acordos?.dias_atraso || 0;
-          const percentual = calcularPercentualComissaoEmpresa(diasAtraso);
-          return acc + (Number(p.valor_parcela) * percentual / 100);
-        }, 0);
-      
+
+      const pagsDoFunc = pagamentosPagos.filter((p: any) => p.acordos?.user_id === profile.id);
+      let receita = 0;
+      let comissaoFuncionario = 0;
+      let comissaoEscritorio = 0;
+      for (const p of pagsDoFunc as any[]) {
+        const r = calcularRepartePagamento(
+          Number(p.valor_parcela),
+          p.acordos?.dias_atraso || 0,
+          p.acordos?.empresa
+        );
+        receita += r.receita;
+        comissaoFuncionario += r.comissaoFuncionario;
+        comissaoEscritorio += r.comissaoEscritorio;
+      }
+
       return {
         id: profile.id,
         nome: profile.nome || profile.email || 'Sem nome',
         gastos,
         receita,
-        resultado: receita - gastos
+        comissaoFuncionario,
+        comissaoEscritorio,
+        resultado: comissaoEscritorio - gastos,
       };
     }).filter(a => a.gastos > 0 || a.receita > 0);
   }, [profiles, gastosFuncionarios, pagamentosPagos]);
@@ -932,13 +968,15 @@ export default function Financeiro() {
                       <TableHead>Funcionário</TableHead>
                       <TableHead className="text-right">Gastos</TableHead>
                       <TableHead className="text-right">Receita Gerada</TableHead>
+                      <TableHead className="text-right">Comissão Funcionário</TableHead>
+                      <TableHead className="text-right">Comissão Escritório</TableHead>
                       <TableHead className="text-right">Resultado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {analisesPorFuncionario.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                           Nenhum dado disponível para o período selecionado
                         </TableCell>
                       </TableRow>
@@ -947,7 +985,9 @@ export default function Financeiro() {
                         <TableRow key={analise.id}>
                           <TableCell className="font-medium">{analise.nome}</TableCell>
                           <TableCell className="text-right text-destructive">{formatarMoeda(analise.gastos)}</TableCell>
-                          <TableCell className="text-right text-green-600">{formatarMoeda(analise.receita)}</TableCell>
+                          <TableCell className="text-right">{formatarMoeda(analise.receita)}</TableCell>
+                          <TableCell className="text-right text-foreground">{formatarMoeda(analise.comissaoFuncionario)}</TableCell>
+                          <TableCell className="text-right text-green-600">{formatarMoeda(analise.comissaoEscritorio)}</TableCell>
                           <TableCell className="text-right">
                             <span className={`font-bold ${analise.resultado >= 0 ? 'text-green-600' : 'text-destructive'}`}>
                               {analise.resultado >= 0 ? '+' : ''}{formatarMoeda(analise.resultado)}
