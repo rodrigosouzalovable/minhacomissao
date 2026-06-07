@@ -1,23 +1,38 @@
-## Causa raiz
+## Diagnóstico
 
-A página `/estrategias` é liberada via `PermissionRoute` (qualquer usuário com `estrategias` em `user_permissions.abas_permitidas`), mas a policy do bucket `estrategia-uploads` exige `is_admin_user(auth.uid())` — que checa `user_roles.role = 'admin'`.
+O erro continua vindo do **Storage**, antes de chamar a função `estrategia-importar`.
 
-Consultando o banco:
-- Só existe **1 admin** em `user_roles` (Rodrigo). Qualquer outro usuário com acesso à aba recebe 403/RLS no upload.
-- O seu login atual tem permissão da aba mas não está em `user_roles` como admin → por isso o toast "Sem permissão".
+O request atual confirma:
+- Usuário autenticado: `rodrigo.rs2013@gmail.com`
+- ID: `ee649720-b8ce-47a2-859e-100a3a9ae6bb`
+- `is_admin_user(...) = true`
+- `has_estrategias_access(...) = true`
+- Mesmo assim o Storage retorna: `new row violates row-level security policy`
+
+A policy de envio está correta para `INSERT`, mas o frontend usa:
+
+```ts
+.upload(storagePath, file, { upsert: true })
+```
+
+No Storage, `upsert: true` pode exigir permissões extras de leitura/atualização além do envio, mesmo quando o caminho é novo. Como o caminho já usa timestamp e não precisa sobrescrever arquivo, o `upsert` é desnecessário e está mantendo o bloqueio.
 
 ## Correção
 
-1. **Migration** — recriar as policies `INSERT` e `UPDATE` em `storage.objects` para o bucket `estrategia-uploads` permitindo:
-   - `is_admin_user(auth.uid())` **OU**
-   - usuário autenticado cujo `user_permissions.abas_permitidas` contenha `'estrategias'`.
-   - Bucket continua **privado** (sem mexer em SELECT público).
+1. **Frontend**
+   - Alterar o upload em `src/pages/Estrategias.tsx` de `upsert: true` para `upsert: false`.
+   - Isso faz o Storage executar somente o fluxo de criação do arquivo, usando a policy de envio que já retorna `true` para o Rodrigo.
 
-2. **Edge function `estrategia-importar`** — manter a checagem server-side, mas aceitar também usuários com a permissão da aba (hoje exige admin). Assim o processamento não trava após o upload.
+2. **Backend/Storage**
+   - Manter o bucket privado.
+   - Manter a policy atual de `INSERT` para usuários com acesso a Estratégias.
+   - Não abrir leitura pública.
 
-3. **Sem mudanças visuais** — só backend/policy.
+3. **Edge Function**
+   - Manter a checagem `has_estrategias_access`, já ajustada e publicada.
 
 ## Validação
 
-- Re-executar upload com o usuário atual; conferir que sobe e a função processa.
-- Conferir via `pg_policies` que as duas policies novas estão ativas com a condição OR.
+- Confirmar que a linha do upload ficou sem `upsert: true`.
+- Conferir novamente as policies de Storage.
+- Depois você testa o envio; se passar do upload e aparecer outro erro, ele será da importação/processamento, não mais permissão de Storage.
