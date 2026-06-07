@@ -180,7 +180,7 @@ const App = () => (
             <Route path="/retornos" element={<ProtectedRoute><Retornos /></ProtectedRoute>} />
             <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
             <Route path="/clientes/:id" element={<ProtectedRoute><DevedorDetalhe /></ProtectedRoute>} />
-            <Route path="/comissoes" element={<AdminRoute><Comissoes /></AdminRoute>} />
+            <Route path="/comissoes" element={<PermissionRoute><Comissoes /></PermissionRoute>} />
             <Route path="/conta" element={<ProtectedRoute><MinhaConta /></ProtectedRoute>} />
             <Route path="/equipe/acordos" element={<PermissionRoute><EquipeAcordos /></PermissionRoute>} />
             <Route path="/admin/usuarios" element={<PermissionRoute><AdminUsuarios /></PermissionRoute>} />

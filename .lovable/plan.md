@@ -1,16 +1,17 @@
-## Resumo
-Ajustar o intervalo aleatório entre envios de mensagens de lembrete de boleto na edge function `notificar-boletos-pendentes`, de **2–6 segundos** para **30–90 segundos**.
+# Corrigir acesso à aba Comissões para funcionários
 
-## Alteração técnica
-Arquivo: `supabase/functions/notificar-boletos-pendentes/index.ts`
+## Problema
+A rota `/comissoes` está protegida por `AdminRoute`, que só permite admins. Por isso, mesmo liberando a aba "Minhas Comissões" nas permissões do funcionário, ao clicar ele é redirecionado para `/dashboard`.
 
-Linha 181:
-```typescript
-// Antes
-await sleep(rnd(2000, 6000));
+## Correção
+Em `src/App.tsx`, trocar o wrapper da rota `/comissoes`:
 
-// Depois
-await sleep(rnd(30000, 90000));
-```
+- De: `<AdminRoute><Comissoes /></AdminRoute>`
+- Para: `<PermissionRoute><Comissoes /></PermissionRoute>`
 
-Nenhuma outra parte do código utiliza esse padrão de delay; a mudança é isolada a essa única linha.
+Assim, admins continuam tendo acesso (PermissionRoute libera admins automaticamente) e funcionários com a aba `/comissoes` marcada em `user_permissions.abas_permitidas` também conseguirão entrar.
+
+## Observação
+A página `Comissoes.tsx` já é a tela do próprio usuário (mostra as comissões do `user.id` logado), então não há risco de vazamento de dados — funcionário só vê as próprias comissões.
+
+As rotas administrativas reais (`/admin/usuarios/:userId/comissoes` e `/admin/usuarios/:userId/novo-acordo`) continuam em `AdminRoute`.
