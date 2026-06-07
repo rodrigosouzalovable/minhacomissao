@@ -93,6 +93,7 @@ const navItems: NavItem[] = [
   { href: '/admin/comite-novomundo', label: 'Comitê Novo Mundo', icon: BarChart3, adminOnly: true },
   { href: '/admin/validar-emails', label: 'Validar E-mails', icon: AtSign, adminOnly: true },
   { href: '/admin/notificacoes', label: 'Notificações', icon: Bell, adminOnly: true },
+  { href: '/estrategias', label: 'Estratégias', icon: Target },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
