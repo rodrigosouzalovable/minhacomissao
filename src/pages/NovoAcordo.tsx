@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { calcularComissao, calcularComissaoMundoDaModa, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa } from '@/lib/comissao';
+import { calcularComissao, calcularComissaoMundoDaModa, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa, tabelaComissoesFuncionario, calcularPercentualComissaoFuncionario } from '@/lib/comissao';
 import { z } from 'zod';
 import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -910,6 +910,64 @@ export default function NovoAcordo() {
                 </div>
               </CardContent>
             </Card>}
+
+          {/* Preview da comissão do FUNCIONÁRIO */}
+          {calculo && !isAdmin && (() => {
+            const diasAtraso = parseInt(form.diasAtraso) || 0;
+            const percFunc = calcularPercentualComissaoFuncionario(diasAtraso);
+            const parcelasNum = parseInt(form.parcelas) || 0;
+            const comissaoPrimeira = calculo.valorPrimeiraParcela * (percFunc / 100);
+            const comissaoDemais = calculo.valorDemaisParcelas * (percFunc / 100);
+            const totalReceber = comissaoPrimeira + comissaoDemais * Math.max(0, parcelasNum - 1);
+            return (
+              <Card className="border-secondary/50 bg-secondary/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-secondary">
+                    <Calculator className="h-5 w-5" />
+                    Sua Comissão
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Faixa atual ({diasAtraso}d)</p>
+                      <p className="text-lg font-semibold">{percFunc}%</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Você receberá com este acordo</p>
+                      <p className="text-xl font-bold text-secondary">{formatarMoeda(totalReceber)}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Dias em Atraso</th>
+                          <th className="text-right px-3 py-2 font-medium">Comissão</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tabelaComissoesFuncionario.map((faixa) => {
+                          const ativa = diasAtraso >= faixa.min && diasAtraso <= faixa.max;
+                          const label = faixa.max >= 999999 ? `${faixa.min}+ dias` : `${faixa.min} – ${faixa.max} dias`;
+                          return (
+                            <tr key={faixa.min} className={ativa ? 'bg-secondary/10 font-semibold text-secondary' : ''}>
+                              <td className="px-3 py-2">{label}</td>
+                              <td className="text-right px-3 py-2">{faixa.percentual}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Valor estimado considerando o pagamento de todas as parcelas. A comissão é creditada conforme o cliente paga cada parcela.
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
 
           <div className="flex gap-4">
