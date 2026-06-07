@@ -152,13 +152,26 @@ export default function Estrategias() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadPct(0);
+    setTrackingId(null);
+
+    // Simulação suave de progresso de upload (Supabase JS não expõe progresso nativo)
+    const startedAt = Date.now();
+    const estimateMs = Math.max(3000, Math.min(30000, file.size / 50_000)); // ~50KB/ms
+    const tick = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const pct = Math.min(95, Math.round((elapsed / estimateMs) * 95));
+      setUploadPct(pct);
+    }, 200);
+
     try {
-      // 1) Upload direto pro Storage (evita estourar memória da edge function)
+      // 1) Upload direto pro Storage
       const storagePath = `${user?.id ?? 'admin'}/${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage
         .from('estrategia-uploads')
         .upload(storagePath, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
       if (upErr) throw upErr;
+      setUploadPct(100);
 
       // 2) Dispara processamento em background
       const { data, error } = await supabase.functions.invoke('estrategia-importar', {
@@ -167,9 +180,9 @@ export default function Estrategias() {
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
 
-      toast.success('Planilha enviada. Processando em segundo plano — atualize em ~30s.');
-      qc.invalidateQueries({ queryKey: ['estrategia-resumo'] });
-      qc.invalidateQueries({ queryKey: ['estrategia-importacao'] });
+      const impId = (data as any)?.importacao_id;
+      if (impId) setTrackingId(impId);
+      toast.success('Planilha enviada. Processando em segundo plano...');
     } catch (err: any) {
       console.error(err);
       const message = String(err?.message ?? err ?? '');
@@ -177,7 +190,9 @@ export default function Estrategias() {
         ? 'Sem permissão para enviar esta planilha. Faça login como admin e tente novamente.'
         : 'Falha na importação: ' + (message || 'erro desconhecido');
       toast.error(friendlyMessage);
+      setUploadPct(0);
     } finally {
+      clearInterval(tick);
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
