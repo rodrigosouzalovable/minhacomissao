@@ -4,11 +4,12 @@
 // Máximo 7% a partir de 721 dias.
 // ============================================================
 export const tabelaComissoesFuncionario = [
-  { min: 1,   max: 90,    percentual: 2 },
+  { min: 1,   max: 60,    percentual: 2 },
+  { min: 61,  max: 90,    percentual: 3 },
   { min: 91,  max: 180,   percentual: 4 },
-  { min: 181, max: 360,   percentual: 5 },
-  { min: 361, max: 720,   percentual: 6 },
-  { min: 721, max: 999999, percentual: 7 },
+  { min: 181, max: 360,   percentual: 6 },
+  { min: 361, max: 720,   percentual: 8 },
+  { min: 721, max: 999999, percentual: 10 },
 ];
 
 export function calcularPercentualComissaoFuncionario(diasAtraso: number): number {

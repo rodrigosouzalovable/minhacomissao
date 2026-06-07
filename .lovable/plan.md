@@ -1,37 +1,29 @@
 ## Objetivo
 
-Usar a tabela de Honorário/Comissão da imagem para TODA empresa (UME Aporte e UME Inadimplente), substituindo o atual 35% fixo do Inadimplente. Comissão do funcionário (2-7%) permanece inalterada.
+Atualizar a tabela de comissão do FUNCIONÁRIO conforme nova faixa informada. Visível nas páginas Comissões e no lançamento de acordo.
 
-## Tabela a aplicar (Honorário por faixa de atraso)
+## Nova tabela (funcionário)
 
 | Atraso (dias) | % |
 |---|---|
-| 1–30 | 7% |
-| 31–60 | 8% |
-| 61–90 | 15% |
-| 91–180 | 20% |
-| 181–360 | 27% |
-| 361–720 | 36% |
-| 721–1800 | 50% |
-| 1801+ | 50% |
-
-(Já equivale à `tabelaComissoesMundoDaModa` / `tabelaComissoesEmpresa` existentes.)
+| 1–60 | 2% |
+| 61–90 | 3% |
+| 91–180 | 4% |
+| 181–360 | 6% |
+| 361–720 | 8% |
+| 721+ | 10% |
 
 ## Mudanças em `src/lib/comissao.ts`
 
-1. `tabelaComissoes` (UME Inadimplente): trocar a faixa única `{0–999999, 35%}` pela mesma tabela faixada acima.
-2. `calcularComissaoParcelaPorEmpresa`: passar a usar `calcularPercentualComissaoMundoDaModa` para qualquer empresa (remove ramo do 35% fixo), garantindo unificação.
-3. Manter intactas:
-   - `tabelaComissoesFuncionario` e cálculos do funcionário.
-   - `tabelaComissoesEmpresa` (já igual).
-   - Tabelas Montreal e juros Aporte.
+Substituir `tabelaComissoesFuncionario` pelas novas faixas acima. `calcularPercentualComissaoFuncionario` e `calcularComissaoFuncionarioParcela` continuam funcionando sem alteração (consomem a tabela).
 
 ## Verificação
 
-- Conferir páginas que mostram comissão da empresa para Inadimplente (Dashboard, Comissões, Financeiro, Acordos) — passarão a refletir a nova faixa automaticamente, pois consomem essas funções.
-- Atualizar memória `Commission Logic` para registrar a unificação.
+- Página **Comissões** (`src/pages/Comissoes.tsx` / `UsuarioComissoes.tsx`): refletirá automaticamente as novas faixas.
+- Tela de **Novo Acordo** (`NovoAcordo.tsx`): preview da comissão do funcionário também será atualizado.
+- Comissão da empresa (Honorário) e tabelas Montreal/Aporte permanecem inalteradas.
 
 ## Fora de escopo
 
-- Colunas "Desconto Principal/Juros/Multa" da imagem (não aplicar agora).
-- Comissão do funcionário.
+- Comissão da empresa (Honorário).
+- Demais tabelas (Montreal, juros Aporte).
