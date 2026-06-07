@@ -202,10 +202,19 @@ export default function Notificacoes() {
     setTestingRun(true);
     try {
       const { data, error } = await supabase.functions.invoke('notificar-boletos-pendentes', {
-        body: { tipo },
+        body: { tipo, force: true },
       });
       if (error) throw error;
-      toast.success(`Execução ${tipo}: ${data?.total ?? 0} parcelas processadas`);
+      if (data?.skipped) {
+        toast.info(`Execução pulada: ${data.skipped}`);
+      } else {
+        const results = Array.isArray(data?.results) ? data.results : [];
+        const enviados = results.filter((r: any) => r.ok).length;
+        const pulados = results.filter((r: any) => r.skipped).length;
+        toast.success(
+          `Execução ${tipo}: ${data?.total ?? 0} parcelas — ${enviados} enviadas, ${pulados} puladas`
+        );
+      }
       refetchLogs();
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
