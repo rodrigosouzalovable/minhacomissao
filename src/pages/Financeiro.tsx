@@ -307,7 +307,7 @@ export default function Financeiro() {
           p.acordos?.dias_atraso || 0,
           p.acordos?.empresa
         );
-        receita += r.receita;
+        receita += Number(p.valor_parcela);
         comissaoFuncionario += r.comissaoFuncionario;
         comissaoEscritorio += r.comissaoEscritorio;
       }
