@@ -1396,9 +1396,11 @@ export type Database = {
         Row: {
           ativo: boolean
           criado_em: string
+          erro: string | null
           id: string
           importado_por: string | null
           nome_arquivo: string
+          status: string | null
           total_acordos_quebrados: number
           total_cpfs: number
           total_localizados: number
@@ -1407,9 +1409,11 @@ export type Database = {
         Insert: {
           ativo?: boolean
           criado_em?: string
+          erro?: string | null
           id?: string
           importado_por?: string | null
           nome_arquivo: string
+          status?: string | null
           total_acordos_quebrados?: number
           total_cpfs?: number
           total_localizados?: number
@@ -1418,9 +1422,11 @@ export type Database = {
         Update: {
           ativo?: boolean
           criado_em?: string
+          erro?: string | null
           id?: string
           importado_por?: string | null
           nome_arquivo?: string
+          status?: string | null
           total_acordos_quebrados?: number
           total_cpfs?: number
           total_localizados?: number
