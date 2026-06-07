@@ -512,7 +512,7 @@ export default function Financeiro() {
     setCategoriaEmpresa(gasto.categoria);
     setDescricaoEmpresa(gasto.descricao || '');
     setValorEmpresa(gasto.valor.toString());
-    setDataReferenciaEmpresa(gasto.data_referencia);
+    setDataReferenciaEmpresa((gasto.data_referencia || '').slice(0, 7));
     setRecorrenteEmpresa(gasto.recorrente);
     setDialogEmpresaOpen(true);
   };
