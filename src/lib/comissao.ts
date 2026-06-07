@@ -80,9 +80,28 @@ export function calcularJurosAporte(valorParcela: number, diasAtraso: number): n
 }
 
 // UME | INADIMPLENTES (valor no banco: 'ume_novo_mundo')
-// Comissão fixa de 35% sobre toda parcela paga, independente do atraso.
+// Comissão (Honorário/Encargo) por faixa de atraso — mesma tabela do APORTE.
 export const tabelaComissoes = [
-  { min: 0, max: 999999, percentual: 35 }
+  { min: 1, max: 30, percentual: 7 },
+  { min: 31, max: 60, percentual: 8 },
+  { min: 61, max: 90, percentual: 15 },
+  { min: 91, max: 120, percentual: 20 },
+  { min: 121, max: 150, percentual: 20 },
+  { min: 151, max: 180, percentual: 20 },
+  { min: 181, max: 210, percentual: 27 },
+  { min: 211, max: 240, percentual: 27 },
+  { min: 241, max: 270, percentual: 27 },
+  { min: 271, max: 300, percentual: 27 },
+  { min: 301, max: 330, percentual: 27 },
+  { min: 331, max: 360, percentual: 27 },
+  { min: 361, max: 420, percentual: 36 },
+  { min: 421, max: 480, percentual: 36 },
+  { min: 481, max: 540, percentual: 36 },
+  { min: 541, max: 600, percentual: 36 },
+  { min: 601, max: 660, percentual: 36 },
+  { min: 661, max: 720, percentual: 36 },
+  { min: 721, max: 1800, percentual: 50 },
+  { min: 1801, max: 999999, percentual: 50 }
 ];
 
 // UME | APORTE (valor no banco: 'mundo_da_moda')
