@@ -120,17 +120,21 @@ export default function Estrategias() {
     if (!file) return;
     setUploading(true);
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let bin = '';
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      const fileBase64 = btoa(bin);
+      // 1) Upload direto pro Storage (evita estourar memória da edge function)
+      const storagePath = `${user?.id ?? 'admin'}/${Date.now()}-${file.name}`;
+      const { error: upErr } = await supabase.storage
+        .from('estrategia-uploads')
+        .upload(storagePath, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+      if (upErr) throw upErr;
+
+      // 2) Dispara processamento em background
       const { data, error } = await supabase.functions.invoke('estrategia-importar', {
-        body: { fileBase64, fileName: file.name },
+        body: { storagePath, fileName: file.name },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(`Importação concluída: ${(data as any).total} CPFs.`);
+
+      toast.success('Planilha enviada. Processando em segundo plano — atualize em ~30s.');
       qc.invalidateQueries({ queryKey: ['estrategia-resumo'] });
       qc.invalidateQueries({ queryKey: ['estrategia-importacao'] });
     } catch (err: any) {
