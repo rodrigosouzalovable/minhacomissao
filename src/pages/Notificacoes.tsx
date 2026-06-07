@@ -201,27 +201,63 @@ export default function Notificacoes() {
   const handleTestRun = async (tipo: 'D-1' | 'D0') => {
     setTestingRun(true);
     try {
-      const { data, error } = await supabase.functions.invoke('notificar-boletos-pendentes', {
-        body: { tipo, force: true },
+      if (!selectedInstance) {
+        toast.error('Configure a instância e salve antes de testar');
+        return;
+      }
+      const inst = (instances || []).find((i: any) => i.id === selectedInstance) as any;
+      if (!inst?.server_url || !inst?.instance_token) {
+        throw new Error('Instância sem server_url/token configurados');
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) throw new Error('Usuário não autenticado');
+
+      const meuTel = (telefones || []).find(t => t.user_id === uid);
+      if (!meuTel?.telefone) {
+        toast.error('Cadastre seu telefone na lista de operadores para receber o teste');
+        return;
+      }
+
+      const meuProfile = (operadores || []).find(o => o.id === uid);
+      const nomeOperador = meuProfile?.nome || 'Operador';
+
+      const hoje = new Date();
+      const alvo = new Date(hoje);
+      if (tipo === 'D-1') alvo.setDate(alvo.getDate() + 1);
+      const dataFmt = format(alvo, 'dd/MM/yyyy');
+      const quando = tipo === 'D-1' ? `amanhã (${dataFmt})` : `hoje (${dataFmt})`;
+
+      const texto =
+        `Olá ${nomeOperador}!\n\n` +
+        `⚠️ Lembrete: o acordo de JOÃO DA SILVA TESTE (CPF 123.456.789-00) tem parcela 1 vencendo ${quando}.\n\n` +
+        `Número que falou com o cliente: (11) 99999-0000\n\n` +
+        `Lembre-se de enviar o boleto ao cliente e marcar como "Boleto Enviado" no sistema.\n\n` +
+        `🧪 Esta é uma MENSAGEM DE TESTE com dados fictícios.`;
+
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-buttons', {
+        body: {
+          telefone: meuTel.telefone,
+          texto,
+          choices: ['Boleto Enviado'],
+          footerText: 'Clique abaixo após enviar o boleto',
+          uazapi_server_url: inst.server_url,
+          uazapi_instance_token: inst.instance_token,
+          instancia_id: inst.id,
+        },
       });
       if (error) throw error;
-      if (data?.skipped) {
-        toast.info(`Execução pulada: ${data.skipped}`);
-      } else {
-        const results = Array.isArray(data?.results) ? data.results : [];
-        const enviados = results.filter((r: any) => r.ok).length;
-        const pulados = results.filter((r: any) => r.skipped).length;
-        toast.success(
-          `Execução ${tipo}: ${data?.total ?? 0} parcelas — ${enviados} enviadas, ${pulados} puladas`
-        );
-      }
-      refetchLogs();
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`Mensagem fictícia ${tipo} enviada para seu número`);
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
     } finally {
       setTestingRun(false);
     }
   };
+
 
   return (
     <AppLayout>
