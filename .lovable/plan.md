@@ -1,33 +1,23 @@
-O erro acontece antes da planilha ser processada: o navegador tenta gravar o arquivo no bucket privado `estrategia-uploads`, mas a política de segurança do Storage está recusando a criação do arquivo (`new row violates row-level security policy`).
+## Causa raiz
 
-Pelo que verifiquei, a política atual exige três coisas ao mesmo tempo:
+A página `/estrategias` é liberada via `PermissionRoute` (qualquer usuário com `estrategias` em `user_permissions.abas_permitidas`), mas a policy do bucket `estrategia-uploads` exige `is_admin_user(auth.uid())` — que checa `user_roles.role = 'admin'`.
 
-```text
-bucket = estrategia-uploads
-usuário logado é admin
-primeira pasta do arquivo = id do usuário logado
-```
+Consultando o banco:
+- Só existe **1 admin** em `user_roles` (Rodrigo). Qualquer outro usuário com acesso à aba recebe 403/RLS no upload.
+- O seu login atual tem permissão da aba mas não está em `user_roles` como admin → por isso o toast "Sem permissão".
 
-Ou seja, se qualquer uma dessas condições não bater exatamente no token da sessão atual, o upload é bloqueado. A tela mostra o botão porque o frontend reconhece o usuário como admin, mas o Storage valida de novo no backend e está barrando a linha do arquivo.
+## Correção
 
-Plano de correção:
+1. **Migration** — recriar as policies `INSERT` e `UPDATE` em `storage.objects` para o bucket `estrategia-uploads` permitindo:
+   - `is_admin_user(auth.uid())` **OU**
+   - usuário autenticado cujo `user_permissions.abas_permitidas` contenha `'estrategias'`.
+   - Bucket continua **privado** (sem mexer em SELECT público).
 
-1. Ajustar a política do bucket `estrategia-uploads`
-   - Permitir upload para usuários autenticados que sejam admin.
-   - Manter o bucket privado.
-   - Evitar depender da comparação frágil da primeira pasta com `auth.uid()` se ela estiver causando incompatibilidade.
+2. **Edge function `estrategia-importar`** — manter a checagem server-side, mas aceitar também usuários com a permissão da aba (hoje exige admin). Assim o processamento não trava após o upload.
 
-2. Reforçar a segurança no fluxo da função de importação
-   - A Edge Function já valida se o usuário é admin antes de processar.
-   - O arquivo continuará sendo lido pelo backend com chave segura e removido ao final.
+3. **Sem mudanças visuais** — só backend/policy.
 
-3. Melhorar a mensagem de erro na tela
-   - Trocar o erro técnico `new row violates row-level security policy` por uma mensagem clara, por exemplo: `Sem permissão para enviar esta planilha. Faça login como admin e tente novamente.`
-   - Isso ajuda a diferenciar erro de permissão, erro de arquivo e erro de processamento.
+## Validação
 
-4. Validar após a mudança
-   - Confirmar que existe política `INSERT` no Storage para `estrategia-uploads`.
-   - Confirmar que o bucket continua privado.
-   - Confirmar que o upload deixa de falhar nessa etapa e passa para o processamento em segundo plano.
-
-Não há aumento de custo de Lovable Cloud nesta correção.
+- Re-executar upload com o usuário atual; conferir que sobe e a função processa.
+- Conferir via `pg_policies` que as duas policies novas estão ativas com a condição OR.
