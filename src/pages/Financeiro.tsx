@@ -811,7 +811,7 @@ export default function Financeiro() {
                           <TableCell className="font-medium">{receita.categoria}</TableCell>
                           <TableCell>{receita.descricao || '-'}</TableCell>
                           <TableCell className="text-green-600 font-medium">{formatarMoeda(receita.valor)}</TableCell>
-                          <TableCell>{formatarData(receita.data_referencia)}</TableCell>
+                          <TableCell>{formatMesRef(receita.data_referencia)}</TableCell>
                           <TableCell>{receita.recorrente ? 'Sim' : 'Não'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
@@ -867,7 +867,7 @@ export default function Financeiro() {
                           <TableCell className="font-medium">{gasto.categoria}</TableCell>
                           <TableCell>{gasto.descricao || '-'}</TableCell>
                           <TableCell>{formatarMoeda(gasto.valor)}</TableCell>
-                          <TableCell>{formatarData(gasto.data_referencia)}</TableCell>
+                          <TableCell>{formatMesRef(gasto.data_referencia)}</TableCell>
                           <TableCell>{gasto.recorrente ? 'Sim' : 'Não'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
@@ -939,7 +939,7 @@ export default function Financeiro() {
                           <TableCell>{gasto.categoria}</TableCell>
                           <TableCell>{gasto.descricao || '-'}</TableCell>
                           <TableCell>{formatarMoeda(gasto.valor)}</TableCell>
-                          <TableCell>{formatarData(gasto.data_referencia)}</TableCell>
+                          <TableCell>{formatMesRef(gasto.data_referencia)}</TableCell>
                           <TableCell>{gasto.recorrente ? 'Sim' : 'Não'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
