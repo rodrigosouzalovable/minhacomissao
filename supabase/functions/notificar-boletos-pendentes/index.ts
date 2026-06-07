@@ -177,8 +177,8 @@ Deno.serve(async (req) => {
         results.push({ pagamento_id: p.id, ok: false, erro: String((e as Error).message) });
       }
 
-      // randomized delay 2-6s
-      await sleep(rnd(2000, 6000));
+      // randomized delay 30-90s (anti-ban)
+      await sleep(rnd(30000, 90000));
     }
 
     return new Response(
