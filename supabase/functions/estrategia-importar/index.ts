@@ -1,5 +1,6 @@
 // Edge function: importa planilha CLIENTES SOUZA E RIBEIRO e popula estrategia_cliente.
-// Recebe XLSX em base64 (POST { fileBase64, fileName }). Apenas admin.
+// Recebe { storagePath, fileName }. Baixa do Storage e processa em background (EdgeRuntime.waitUntil)
+// para evitar limites de CPU/memória da request. Retorna importacao_id imediatamente.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
@@ -16,9 +17,7 @@ function normalizeCpf(v: any): string {
   return String(v ?? "").replace(/\D/g, "").padStart(11, "0").slice(-11);
 }
 function normalizePhone(v: any): string {
-  const d = String(v ?? "").replace(/\D/g, "");
-  if (!d) return "";
-  return d.length >= 11 ? d : d;
+  return String(v ?? "").replace(/\D/g, "");
 }
 function faixaValor(v: number): string {
   if (v < 100) return "<100";
@@ -56,26 +55,14 @@ function calcScore(c: any): number {
   return Math.max(0, Math.min(100, s));
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+async function processarPlanilha(supabase: any, importacaoId: string, storagePath: string) {
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return new Response(JSON.stringify({ error: "no auth" }), { status: 401, headers: corsHeaders });
-
-    const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: userData } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-    const user = userData?.user;
-    if (!user) return new Response(JSON.stringify({ error: "unauth" }), { status: 401, headers: corsHeaders });
-
-    const { data: adminCheck } = await supabase.rpc("is_admin_user", { uid: user.id });
-    if (!adminCheck) return new Response(JSON.stringify({ error: "not admin" }), { status: 403, headers: corsHeaders });
-
-    const body = await req.json();
-    const { fileBase64, fileName } = body ?? {};
-    if (!fileBase64) return new Response(JSON.stringify({ error: "missing file" }), { status: 400, headers: corsHeaders });
-
-    const bin = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0));
-    const wb = XLSX.read(bin, { type: "array", cellDates: true });
+    const { data: blob, error: dlErr } = await supabase.storage
+      .from("estrategia-uploads")
+      .download(storagePath);
+    if (dlErr) throw dlErr;
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    const wb = XLSX.read(buf, { type: "array", cellDates: true });
 
     const readSheet = (name: string, headers?: string[]) => {
       const ws = wb.Sheets[name];
@@ -83,21 +70,16 @@ Deno.serve(async (req) => {
       return XLSX.utils.sheet_to_json<any>(ws, headers ? { header: headers } : {});
     };
 
-    // Cobrança: CPF/CNPJ, IDADE, CREDOR, CONTRATO, ATRASO, RISCO
     const cobranca = readSheet("Cobrança");
-    // CSIM / CNAO: CPF/CNPJ, CLIENTE, NUMERO
     const csim = readSheet("CSIM");
     const cnao = readSheet("CNAO");
-    // ACORDO QUEBRADO: header row pode estar quebrado; usar header explícito
     const aqRaw = readSheet("ACORDO QUEBRADO", ["CPF","col2","col3","col4"]);
-    // PARCELA N: CPF/CNPJ, NUMERO, VENCIMENTO, VALOR  (algumas têm header missing - forçar)
     const parcelasSheets = [
       "PARCELA 1","PARCELA 2","PARCELA 3","PARCELA 4","PARCELA 5","PARCELA 6",
       "PARCELA 7","PARCELA 8","PARCELA 9","PARCELA 10","PARCELA 11","PARCELA 12",
       "PARCELA 13","PARCELA 14","PARCELA 15","PARCELA 16","PARCELA 17","PARCELA 18+"
     ];
 
-    // Telefone por CPF (CSIM tem prioridade)
     const phoneMap = new Map<string, { tel: string; nome: string }>();
     const nomeMap = new Map<string, string>();
     for (const r of csim) {
@@ -115,20 +97,17 @@ Deno.serve(async (req) => {
       if (nome && !nomeMap.has(cpf)) nomeMap.set(cpf, nome);
     }
 
-    // Acordos quebrados
     const quebradosSet = new Set<string>();
     for (const r of aqRaw) {
       const cpf = normalizeCpf(r["CPF"]);
       if (cpf) quebradosSet.add(cpf);
     }
 
-    // Parcelas agregadas por CPF
     type ParcInfo = { num: number; valor: number; venc: string | null };
     const parcMap = new Map<string, ParcInfo[]>();
     for (const sheetName of parcelasSheets) {
       const ws = wb.Sheets[sheetName];
       if (!ws) continue;
-      // Forçar header padronizado para abas onde a 1ª linha é dado
       const rows = XLSX.utils.sheet_to_json<any>(ws, { header: ["CPF","NUMERO","VENCIMENTO","VALOR"] });
       for (const r of rows) {
         const cpf = normalizeCpf(r["CPF"]);
@@ -142,7 +121,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Cobrança agregada por CPF
     type Cob = { idade: number | null; credor: string | null; tipo: string | null; contrato: string | null; atraso: number | null; risco: number };
     const cobMap = new Map<string, Cob>();
     for (const r of cobranca) {
@@ -167,30 +145,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CPFs candidatos: união de todos os mapas
     const allCpfs = new Set<string>([
       ...cobMap.keys(), ...parcMap.keys(), ...phoneMap.keys(), ...nomeMap.keys(), ...quebradosSet,
     ]);
 
-    // Criar registro de importação (desativa anteriores)
-    await supabase.from("estrategia_importacao").update({ ativo: false }).eq("ativo", true);
-    const { data: imp, error: impErr } = await supabase
-      .from("estrategia_importacao")
-      .insert({
-        nome_arquivo: fileName || "planilha.xlsx",
-        total_cpfs: allCpfs.size,
-        total_localizados: phoneMap.size,
-        total_nao_localizados: Math.max(allCpfs.size - phoneMap.size, 0),
-        total_acordos_quebrados: quebradosSet.size,
-        importado_por: user.id,
-        ativo: true,
-      })
-      .select("id")
-      .single();
-    if (impErr) throw impErr;
+    // Atualizar totais
+    await supabase.from("estrategia_importacao").update({
+      total_cpfs: allCpfs.size,
+      total_localizados: phoneMap.size,
+      total_nao_localizados: Math.max(allCpfs.size - phoneMap.size, 0),
+      total_acordos_quebrados: quebradosSet.size,
+    }).eq("id", importacaoId);
 
-    // Montar registros
-    const rows: any[] = [];
+    const chunkSize = 500;
+    let buffer: any[] = [];
+    let inserted = 0;
     for (const cpf of allCpfs) {
       const cob = cobMap.get(cpf);
       const parcs = (parcMap.get(cpf) ?? []).sort((a, b) => a.num - b.num);
@@ -199,8 +168,8 @@ Deno.serve(async (req) => {
       const valores = parcs.map((p) => p.valor).filter((v) => isFinite(v));
       const proxima = parcs[0] ?? null;
       const faixa = proxima ? faixaValor(proxima.valor) : null;
-      const reg = {
-        importacao_id: imp.id,
+      const reg: any = {
+        importacao_id: importacaoId,
         cpf,
         nome: phoneMap.get(cpf)?.nome ?? nomeMap.get(cpf) ?? null,
         telefone: tel,
@@ -222,26 +191,82 @@ Deno.serve(async (req) => {
         score: 0,
       };
       reg.score = calcScore(reg);
-      rows.push(reg);
+      buffer.push(reg);
+      if (buffer.length >= chunkSize) {
+        const { error } = await supabase.from("estrategia_cliente").insert(buffer);
+        if (error) throw error;
+        inserted += buffer.length;
+        buffer = [];
+      }
+    }
+    if (buffer.length) {
+      const { error } = await supabase.from("estrategia_cliente").insert(buffer);
+      if (error) throw error;
+      inserted += buffer.length;
     }
 
-    // Inserir em lotes
-    const chunkSize = 500;
-    let inserted = 0;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
-      const { error } = await supabase.from("estrategia_cliente").insert(chunk);
-      if (error) throw error;
-      inserted += chunk.length;
-    }
+    await supabase.from("estrategia_importacao").update({
+      status: "concluido",
+    }).eq("id", importacaoId);
+
+    // Limpa o arquivo do storage
+    await supabase.storage.from("estrategia-uploads").remove([storagePath]);
+
+    console.log(`Importação ${importacaoId} concluída: ${inserted} CPFs`);
+  } catch (e: any) {
+    console.error("processarPlanilha erro:", e);
+    await supabase.from("estrategia_importacao").update({
+      status: "erro",
+      erro: String(e?.message ?? e).slice(0, 500),
+    }).eq("id", importacaoId);
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return new Response(JSON.stringify({ error: "no auth" }), { status: 401, headers: corsHeaders });
+
+    const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: userData } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+    const user = userData?.user;
+    if (!user) return new Response(JSON.stringify({ error: "unauth" }), { status: 401, headers: corsHeaders });
+
+    const { data: adminCheck } = await supabase.rpc("is_admin_user", { uid: user.id });
+    if (!adminCheck) return new Response(JSON.stringify({ error: "not admin" }), { status: 403, headers: corsHeaders });
+
+    const body = await req.json();
+    const { storagePath, fileName } = body ?? {};
+    if (!storagePath) return new Response(JSON.stringify({ error: "missing storagePath" }), { status: 400, headers: corsHeaders });
+
+    // Desativa importações anteriores e cria nova como processando
+    await supabase.from("estrategia_importacao").update({ ativo: false }).eq("ativo", true);
+    const { data: imp, error: impErr } = await supabase
+      .from("estrategia_importacao")
+      .insert({
+        nome_arquivo: fileName || "planilha.xlsx",
+        total_cpfs: 0,
+        total_localizados: 0,
+        total_nao_localizados: 0,
+        total_acordos_quebrados: 0,
+        importado_por: user.id,
+        ativo: true,
+        status: "processando",
+        storage_path: storagePath,
+      })
+      .select("id")
+      .single();
+    if (impErr) throw impErr;
+
+    // Processa em background — não bloqueia o response
+    // @ts-ignore EdgeRuntime is provided by Supabase runtime
+    EdgeRuntime.waitUntil(processarPlanilha(supabase, imp.id, storagePath));
 
     return new Response(JSON.stringify({
       ok: true,
       importacao_id: imp.id,
-      total: rows.length,
-      localizados: phoneMap.size,
-      quebrados: quebradosSet.size,
-      inserted,
+      status: "processando",
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     console.error("estrategia-importar erro:", e);
