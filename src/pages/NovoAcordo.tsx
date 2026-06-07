@@ -17,6 +17,7 @@ import { ArrowLeft, Calculator, AlertCircle, Sparkles, FileText, ChevronDown, Ch
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageDataExtractor, ExtractedData } from '@/components/ImageDataExtractor';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
   clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine(val => val.replace(/\D/g, '').length === 11, {
