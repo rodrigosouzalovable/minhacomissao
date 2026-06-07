@@ -968,13 +968,15 @@ export default function Financeiro() {
                       <TableHead>Funcionário</TableHead>
                       <TableHead className="text-right">Gastos</TableHead>
                       <TableHead className="text-right">Receita Gerada</TableHead>
+                      <TableHead className="text-right">Comissão Funcionário</TableHead>
+                      <TableHead className="text-right">Comissão Escritório</TableHead>
                       <TableHead className="text-right">Resultado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {analisesPorFuncionario.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                           Nenhum dado disponível para o período selecionado
                         </TableCell>
                       </TableRow>
@@ -983,7 +985,9 @@ export default function Financeiro() {
                         <TableRow key={analise.id}>
                           <TableCell className="font-medium">{analise.nome}</TableCell>
                           <TableCell className="text-right text-destructive">{formatarMoeda(analise.gastos)}</TableCell>
-                          <TableCell className="text-right text-green-600">{formatarMoeda(analise.receita)}</TableCell>
+                          <TableCell className="text-right">{formatarMoeda(analise.receita)}</TableCell>
+                          <TableCell className="text-right text-foreground">{formatarMoeda(analise.comissaoFuncionario)}</TableCell>
+                          <TableCell className="text-right text-green-600">{formatarMoeda(analise.comissaoEscritorio)}</TableCell>
                           <TableCell className="text-right">
                             <span className={`font-bold ${analise.resultado >= 0 ? 'text-green-600' : 'text-destructive'}`}>
                               {analise.resultado >= 0 ? '+' : ''}{formatarMoeda(analise.resultado)}
