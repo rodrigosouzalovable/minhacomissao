@@ -507,9 +507,13 @@ export default function NovoAcordo() {
         status: p.status
       })));
       if (parcelasError) throw parcelasError;
+      const operadorEscolhido = operadores.find(o => o.id === selectedUserId);
+      const operadorLabel = isAdmin && selectedUserId && selectedUserId !== user.id && operadorEscolhido
+        ? ` — vinculado a ${operadorEscolhido.nome || operadorEscolhido.email || 'operador'}`
+        : '';
       toast({
         title: 'Acordo criado!',
-        description: `Acordo com ${validated.clienteNome} cadastrado com sucesso.`
+        description: `Acordo com ${validated.clienteNome} cadastrado com sucesso${operadorLabel}.`
       });
       navigate(`/acordos/${acordo.id}`);
     } catch (err) {
