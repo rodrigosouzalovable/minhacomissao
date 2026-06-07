@@ -586,6 +586,35 @@ export default function NovoAcordo() {
 
           <TabsContent value="manual" className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {isAdmin && (
+                <Card className="border-primary/40">
+                  <CardHeader>
+                    <CardTitle>Operador responsável</CardTitle>
+                    <CardDescription>Selecione o funcionário ao qual este acordo ficará vinculado</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um operador" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {user && (
+                          <SelectItem value={user.id}>
+                            Eu mesmo{operadores.find(o => o.id === user.id)?.nome ? ` — ${operadores.find(o => o.id === user.id)?.nome}` : ''}
+                          </SelectItem>
+                        )}
+                        {operadores
+                          .filter(o => o.id !== user?.id)
+                          .map(op => (
+                            <SelectItem key={op.id} value={op.id}>
+                              {op.nome || op.email || op.id}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
             <CardHeader>
               <CardTitle>Dados do Cliente</CardTitle>
