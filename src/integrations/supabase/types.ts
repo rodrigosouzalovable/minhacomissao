@@ -1303,6 +1303,158 @@ export type Database = {
           },
         ]
       }
+      estrategia_cliente: {
+        Row: {
+          acordo_quebrado: boolean
+          atraso_dias: number | null
+          contrato: string | null
+          cpf: string
+          credor: string | null
+          criado_em: string
+          faixa_valor_parcela: string | null
+          id: string
+          idade: number | null
+          importacao_id: string
+          localizado: boolean
+          nome: string | null
+          parcelas_abertas_qtd: number | null
+          proxima_parcela_num: number | null
+          proxima_parcela_valor: number | null
+          proxima_parcela_vencimento: string | null
+          reservado_ate: string | null
+          reservado_por: string | null
+          risco_total: number | null
+          score: number
+          telefone: string | null
+          tipo_credor: string | null
+          valor_maximo_parcela: number | null
+          valor_minimo_parcela: number | null
+        }
+        Insert: {
+          acordo_quebrado?: boolean
+          atraso_dias?: number | null
+          contrato?: string | null
+          cpf: string
+          credor?: string | null
+          criado_em?: string
+          faixa_valor_parcela?: string | null
+          id?: string
+          idade?: number | null
+          importacao_id: string
+          localizado?: boolean
+          nome?: string | null
+          parcelas_abertas_qtd?: number | null
+          proxima_parcela_num?: number | null
+          proxima_parcela_valor?: number | null
+          proxima_parcela_vencimento?: string | null
+          reservado_ate?: string | null
+          reservado_por?: string | null
+          risco_total?: number | null
+          score?: number
+          telefone?: string | null
+          tipo_credor?: string | null
+          valor_maximo_parcela?: number | null
+          valor_minimo_parcela?: number | null
+        }
+        Update: {
+          acordo_quebrado?: boolean
+          atraso_dias?: number | null
+          contrato?: string | null
+          cpf?: string
+          credor?: string | null
+          criado_em?: string
+          faixa_valor_parcela?: string | null
+          id?: string
+          idade?: number | null
+          importacao_id?: string
+          localizado?: boolean
+          nome?: string | null
+          parcelas_abertas_qtd?: number | null
+          proxima_parcela_num?: number | null
+          proxima_parcela_valor?: number | null
+          proxima_parcela_vencimento?: string | null
+          reservado_ate?: string | null
+          reservado_por?: string | null
+          risco_total?: number | null
+          score?: number
+          telefone?: string | null
+          tipo_credor?: string | null
+          valor_maximo_parcela?: number | null
+          valor_minimo_parcela?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estrategia_cliente_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "estrategia_importacao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estrategia_importacao: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          id: string
+          importado_por: string | null
+          nome_arquivo: string
+          total_acordos_quebrados: number
+          total_cpfs: number
+          total_localizados: number
+          total_nao_localizados: number
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          importado_por?: string | null
+          nome_arquivo: string
+          total_acordos_quebrados?: number
+          total_cpfs?: number
+          total_localizados?: number
+          total_nao_localizados?: number
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          importado_por?: string | null
+          nome_arquivo?: string
+          total_acordos_quebrados?: number
+          total_cpfs?: number
+          total_localizados?: number
+          total_nao_localizados?: number
+        }
+        Relationships: []
+      }
+      estrategia_reserva_log: {
+        Row: {
+          cpfs: string[]
+          criado_em: string
+          filtro: Json | null
+          id: string
+          qtd: number
+          user_id: string
+        }
+        Insert: {
+          cpfs?: string[]
+          criado_em?: string
+          filtro?: Json | null
+          id?: string
+          qtd: number
+          user_id: string
+        }
+        Update: {
+          cpfs?: string[]
+          criado_em?: string
+          filtro?: Json | null
+          id?: string
+          qtd?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       gastos_empresa: {
         Row: {
           categoria: string
@@ -4030,6 +4182,31 @@ export type Database = {
         Args: { p_importacao_id: string }
         Returns: Json
       }
+      estrategia_liberar_reservas: {
+        Args: { p_user_id?: string }
+        Returns: number
+      }
+      estrategia_reservar: {
+        Args: { p_filtro: Json; p_qtd: number }
+        Returns: {
+          acordo_quebrado: boolean
+          atraso_dias: number
+          contrato: string
+          cpf: string
+          credor: string
+          faixa_valor_parcela: string
+          localizado: boolean
+          nome: string
+          parcelas_abertas_qtd: number
+          proxima_parcela_num: number
+          proxima_parcela_valor: number
+          proxima_parcela_vencimento: string
+          score: number
+          telefone: string
+          tipo_credor: string
+        }[]
+      }
+      estrategia_resumo: { Args: never; Returns: Json }
       excluir_parcela_pendente: {
         Args: { p_pagamento_id: string }
         Returns: undefined
