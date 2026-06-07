@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -9,11 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { exportarParaExcel } from '@/lib/exportExcel';
-import { Loader2, Upload, Download, Target, Phone, Wallet, RotateCcw, History, Trash2, Flame } from 'lucide-react';
+import { Loader2, Upload, Download, Target, Phone, Wallet, RotateCcw, History, Trash2, Flame, CheckCircle2, AlertCircle } from 'lucide-react';
 
 type ResumoData = {
   importacao_id?: string;
