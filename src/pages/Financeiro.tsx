@@ -533,7 +533,7 @@ export default function Financeiro() {
     setCategoriaReceita(receita.categoria);
     setDescricaoReceita(receita.descricao || '');
     setValorReceita(receita.valor.toString());
-    setDataReferenciaReceita(receita.data_referencia);
+    setDataReferenciaReceita((receita.data_referencia || '').slice(0, 7));
     setRecorrenteReceita(receita.recorrente);
     setDialogReceitaOpen(true);
   };
