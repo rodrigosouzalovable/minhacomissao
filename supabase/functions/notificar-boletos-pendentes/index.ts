@@ -128,6 +128,13 @@ Deno.serve(async (req) => {
         .eq("id", userId)
         .maybeSingle();
 
+      // Buscar observações do acordo (número que falou com o cliente)
+      const { data: acordoExtra } = await supabase
+        .from("acordos")
+        .select("observacoes")
+        .eq("id", p.acordo_id)
+        .maybeSingle();
+
       const phone = normalizePhone(tel.telefone);
       const cliente = p.acordos.cliente_nome || "cliente";
       const cpf = p.acordos.cliente_cpf || "";
@@ -136,18 +143,24 @@ Deno.serve(async (req) => {
       const intro = tipo === "D-1"
         ? `⚠️ Lembrete: o acordo de *${cliente}*${cpf ? ` (CPF ${cpf})` : ""} tem parcela ${p.numero_parcela} vencendo *amanhã (${venc})*.`
         : `🚨 Lembrete urgente: o acordo de *${cliente}*${cpf ? ` (CPF ${cpf})` : ""} vence *hoje (${venc})* e ainda não foi marcado como boleto enviado.`;
-      const mensagem = `Olá ${nomeOp}!\n\n${intro}\n\nLembre-se de enviar o boleto ao cliente e marcar como *"Boleto Enviado"* no sistema.`;
+
+      const obs = (acordoExtra?.observacoes || "").trim();
+      const linhaObs = obs ? `\n\nNúmero que falou com o cliente: ${obs}` : "";
+
+      const mensagem = `Olá ${nomeOp}!\n\n${intro}${linhaObs}\n\nLembre-se de enviar o boleto ao cliente e marcar como *"Boleto Enviado"* no sistema.`;
 
       if (dryRun) {
-        results.push({ pagamento_id: p.id, phone, dryRun: true });
+        results.push({ pagamento_id: p.id, phone, dryRun: true, mensagem });
         continue;
       }
 
       try {
-        const send = await supabase.functions.invoke("send-whatsapp", {
+        const send = await supabase.functions.invoke("send-whatsapp-buttons", {
           body: {
             telefone: phone,
-            mensagem,
+            texto: mensagem,
+            choices: ["Boleto Enviado"],
+            footerText: "Clique abaixo após enviar o boleto",
             uazapi_server_url: config.instancia.server_url,
             uazapi_instance_token: config.instancia.instance_token,
             instancia_id: config.instancia.id,
