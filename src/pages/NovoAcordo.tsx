@@ -107,15 +107,35 @@ export default function NovoAcordo() {
   const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
   const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null; ativo: boolean }>>([]);
   const [instanciaBusca, setInstanciaBusca] = useState('');
+
+  // Admin: selecionar operador ao qual o acordo será vinculado
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [operadores, setOperadores] = useState<Array<{ id: string; nome: string | null; email: string | null }>>([]);
   useEffect(() => {
-    if (!user) return;
+    if (user && !selectedUserId) setSelectedUserId(user.id);
+  }, [user, selectedUserId]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase
+      .from('profiles')
+      .select('id, nome, email')
+      .order('nome', { ascending: true })
+      .then(({ data }) => setOperadores((data as any) || []));
+  }, [isAdmin]);
+
+  // Carrega instâncias do operador selecionado (ou do próprio usuário)
+  useEffect(() => {
+    const targetUserId = isAdmin ? (selectedUserId || user?.id) : user?.id;
+    if (!targetUserId) return;
+    setInstanciaNegociacaoId('');
     supabase
       .from('user_whatsapp_instances')
       .select('id, nome, telefone, ativo')
+      .eq('user_id', targetUserId)
       .order('ativo', { ascending: false })
       .order('ordem', { ascending: true })
       .then(({ data }) => setInstancias((data as any) || []));
-  }, [user]);
+  }, [user, isAdmin, selectedUserId]);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
     clienteNome: '',
