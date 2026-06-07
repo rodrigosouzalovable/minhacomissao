@@ -1401,6 +1401,7 @@ export type Database = {
           importado_por: string | null
           nome_arquivo: string
           status: string | null
+          storage_path: string | null
           total_acordos_quebrados: number
           total_cpfs: number
           total_localizados: number
@@ -1414,6 +1415,7 @@ export type Database = {
           importado_por?: string | null
           nome_arquivo: string
           status?: string | null
+          storage_path?: string | null
           total_acordos_quebrados?: number
           total_cpfs?: number
           total_localizados?: number
@@ -1427,6 +1429,7 @@ export type Database = {
           importado_por?: string | null
           nome_arquivo?: string
           status?: string | null
+          storage_path?: string | null
           total_acordos_quebrados?: number
           total_cpfs?: number
           total_localizados?: number
