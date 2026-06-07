@@ -124,7 +124,7 @@ export default function Estrategias() {
       const storagePath = `${user?.id ?? 'admin'}/${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage
         .from('estrategia-uploads')
-        .upload(storagePath, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+        .upload(storagePath, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
       if (upErr) throw upErr;
 
       // 2) Dispara processamento em background
