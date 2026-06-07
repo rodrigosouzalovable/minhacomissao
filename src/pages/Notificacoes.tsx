@@ -302,9 +302,6 @@ export default function Notificacoes() {
                 {savingConfig ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                 Salvar configuração
               </Button>
-              <Button variant="outline" onClick={openQr} disabled={!selectedInstance}>
-                <QrCode className="h-4 w-4 mr-1" /> Conectar via QR Code
-              </Button>
               <Button variant="outline" onClick={() => handleTestRun('D-1')} disabled={testingRun}>
                 <Send className="h-4 w-4 mr-1" /> Testar D-1
               </Button>
