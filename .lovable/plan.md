@@ -1,29 +1,43 @@
-## Objetivo
+## 1. Desativar relatório de aquecimento no WhatsApp
 
-Quando o funcionário (não-admin) lançar um acordo em **Novo Acordo**, exibir:
+O resumo diário de aquecimento (20h BRT, imagem 1) é disparado por cron chamando a edge function `daily-report-aquecimento`.
 
-1. A **tabela de comissionamento do funcionário** com todas as faixas de atraso (1–60: 2%, 61–90: 3%, 91–180: 4%, 181–360: 6%, 361–720: 8%, 721+: 10%), destacando a faixa correspondente aos "Dias em Atraso" digitados.
-2. O **valor que ele irá receber** com aquele contrato (% aplicado sobre o valor total do acordo, somando primeira parcela + demais).
+- Remover o cron job que invoca `daily-report-aquecimento` (via migração que faz `cron.unschedule` do job correspondente).
+- Manter a edge function existindo (sem alterações), apenas sem agendamento — assim pode ser religada no futuro se necessário, sem perda de código.
 
-Admins continuam vendo o card atual de "Cálculo da Comissão" (Honorário da empresa) — sem mudança.
+## 2. Lembrete de boleto: incluir "Número que falou com o cliente" + botão "Boleto Enviado"
 
-## Mudanças
+Edge function: `supabase/functions/notificar-boletos-pendentes/index.ts`.
 
-### `src/pages/NovoAcordo.tsx`
+### 2a. Texto da mensagem
+- Buscar `acordos.observacoes` (campo já preenchido no Novo Acordo como "Número que falou com o cliente").
+- Se houver valor (não vazio), adicionar linha entre o lembrete e o aviso final:
+  `Número que falou com o cliente: <observacoes>`
+- Se vazio/nulo, não incluir a linha.
 
-- Importar de `@/lib/comissao`: `tabelaComissoesFuncionario`, `calcularPercentualComissaoFuncionario`, `calcularComissaoFuncionarioParcela`.
-- Após o card admin atual (linha ~912), adicionar um novo card **"Sua Comissão"** que renderiza **apenas para não-admins** (`!isAdmin`) e somente quando `calculo` existe (mesmas condições de validade dos campos).
-- Conteúdo do novo card:
-  - Linha de destaque com `Faixa atual: Xd → Y%` e `Você receberá: R$ X,XX` (calculado como `comissaoPrimeira + comissaoDemais × (parcelas−1)` usando a tabela do funcionário).
-  - Tabela compacta com todas as faixas (Atraso / %), grifando a linha ativa via classe (`bg-secondary/10 font-semibold`).
-- Não alterar o cálculo enviado ao banco; é apenas preview visual. Comissão real do funcionário continua sendo gravada por parcela como já é hoje.
+### 2b. Envio com botão
+- Trocar a chamada de `send-whatsapp` por `send-whatsapp-buttons` (já existente) com:
+  - `texto` = mensagem montada acima
+  - `choices` = `["Boleto Enviado"]`
+  - `footerText` = "Clique abaixo após enviar o boleto"
+- Continuar gravando em `notificacoes_envios_log` igual hoje (sucesso/erro, dedup por pagamento+tipo+data).
+- Manter delay randômico 30-90s entre envios e bloqueio de domingo.
+
+### 2c. Captura do clique (ação do botão)
+Quando o operador tocar em "Boleto Enviado", o UAZAPI envia a resposta como mensagem comum vinda do telefone do operador. Para marcar o acordo como `boleto_enviado=true` automaticamente:
+
+- Em `uazapi-webhook/index.ts`, adicionar um handler leve: se a mensagem recebida (texto puro ou `buttonOrListid`) for exatamente `"Boleto Enviado"` e o remetente bater com algum `notificacoes_operador_telefone.telefone` (match por sufixo de 8 dígitos, padrão do projeto), localizar o último `notificacoes_envios_log` enviado para esse operador nas últimas 48h, pegar o `pagamento_id` → `acordo_id` e atualizar `acordos.boleto_enviado = true`.
+- Responder ao operador com confirmação curta via `send-whatsapp` ("✅ Boleto marcado como enviado — acordo de <cliente>").
+- Se houver múltiplos lembretes pendentes do mesmo operador, marcar o mais recente e pedir para o operador especificar o CPF caso aplicável (mensagem de orientação).
 
 ## Verificação
 
-- Como funcionário: ao preencher Valor + Parcelas + Dias em Atraso, aparece o card "Sua Comissão" com a tabela e o valor a receber. Mudar "Dias em Atraso" reavalia a faixa destacada e o valor.
-- Como admin: card atual continua igual, novo card não aparece.
+- Rodar `notificar-boletos-pendentes` com `dryRun:true` e conferir o texto montado com/sem observações.
+- Rodar real em um acordo de teste com `observacoes` preenchido — operador deve receber mensagem com a linha extra e botão "Boleto Enviado".
+- Tocar no botão e verificar `acordos.boleto_enviado` virou `true` + confirmação no WhatsApp.
+- Confirmar via `cron.job` que `daily-report-aquecimento` não está mais agendado e que o resumo das 20h não chega mais.
 
 ## Fora de escopo
 
-- Comissão da empresa / Honorário.
-- Páginas Comissões / EditarAcordo.
+- Alterações no relatório diário geral (19h) — só o de aquecimento é desativado.
+- Mudanças na UI de Novo Acordo (campo "Número que falou com o cliente" já existe e é salvo em `observacoes`).
