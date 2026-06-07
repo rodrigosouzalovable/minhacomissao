@@ -139,7 +139,11 @@ export default function Estrategias() {
       qc.invalidateQueries({ queryKey: ['estrategia-importacao'] });
     } catch (err: any) {
       console.error(err);
-      toast.error('Falha na importação: ' + (err?.message ?? err));
+      const message = String(err?.message ?? err ?? '');
+      const friendlyMessage = message.includes('row-level security') || message.includes('403')
+        ? 'Sem permissão para enviar esta planilha. Faça login como admin e tente novamente.'
+        : 'Falha na importação: ' + (message || 'erro desconhecido');
+      toast.error(friendlyMessage);
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
