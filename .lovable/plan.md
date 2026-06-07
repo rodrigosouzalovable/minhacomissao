@@ -1,20 +1,16 @@
-## Problema
+## Resumo
+Ajustar o intervalo aleatório entre envios de mensagens de lembrete de boleto na edge function `notificar-boletos-pendentes`, de **2–6 segundos** para **30–90 segundos**.
 
-Hoje é domingo (07/06/2026). A edge function `notificar-boletos-pendentes` tem um bloqueio rígido nos domingos e retorna `{ ok: true, skipped: "domingo" }` sem processar nada. O frontend lê apenas `data.total`, que vem `undefined`, e mostra "Execução D-1: 0 parcelas processadas" — escondendo o motivo real.
+## Alteração técnica
+Arquivo: `supabase/functions/notificar-boletos-pendentes/index.ts`
 
-Confirmado via curl direto na função: retorno `{"ok":true,"skipped":"domingo"}`. No banco existem 39 parcelas elegíveis para D-1 e 16 para D0 hoje.
+Linha 181:
+```typescript
+// Antes
+await sleep(rnd(2000, 6000));
 
-## Correção
+// Depois
+await sleep(rnd(30000, 90000));
+```
 
-**1. Edge function `notificar-boletos-pendentes`**
-- Aceitar flag `force: true` no body para ignorar o bloqueio de domingo (somente uso manual via botões de teste).
-- Manter o bloqueio automático nos crons (que não enviam `force`).
-
-**2. Frontend `src/pages/Notificacoes.tsx` (`handleTestRun`)**
-- Enviar `{ tipo, force: true }` no invoke dos botões "Testar D-1" / "Testar D0".
-- Tratar resposta `skipped` mostrando o motivo (`toast.info("Execução pulada: domingo")` etc.).
-- Quando processar, mostrar `total` real e contagem de sucessos/erros.
-
-## Fora de escopo
-- Não altera os crons agendados nem a regra de não enviar automaticamente aos domingos.
-- Não altera UI da página além do feedback do toast.
+Nenhuma outra parte do código utiliza esse padrão de delay; a mudança é isolada a essa única linha.
