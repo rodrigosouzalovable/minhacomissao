@@ -233,8 +233,8 @@ Deno.serve(async (req) => {
     const user = userData?.user;
     if (!user) return new Response(JSON.stringify({ error: "unauth" }), { status: 401, headers: corsHeaders });
 
-    const { data: adminCheck } = await supabase.rpc("is_admin_user", { uid: user.id });
-    if (!adminCheck) return new Response(JSON.stringify({ error: "not admin" }), { status: 403, headers: corsHeaders });
+    const { data: canImport } = await supabase.rpc("has_estrategias_access", { uid: user.id });
+    if (!canImport) return new Response(JSON.stringify({ error: "sem permissão para importar estratégias" }), { status: 403, headers: corsHeaders });
 
     const body = await req.json();
     const { storagePath, fileName } = body ?? {};
