@@ -523,7 +523,7 @@ export default function Financeiro() {
     setCategoriaFuncionario(gasto.categoria);
     setDescricaoFuncionario(gasto.descricao || '');
     setValorFuncionario(gasto.valor.toString());
-    setDataReferenciaFuncionario(gasto.data_referencia);
+    setDataReferenciaFuncionario((gasto.data_referencia || '').slice(0, 7));
     setRecorrenteFuncionario(gasto.recorrente);
     setDialogFuncionarioOpen(true);
   };
