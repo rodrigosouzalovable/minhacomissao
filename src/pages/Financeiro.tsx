@@ -913,10 +913,16 @@ export default function Financeiro() {
                 </SelectContent>
               </Select>
 
-              <Button onClick={() => { resetFormFuncionario(); setEditingGastoFuncionario(null); setDialogFuncionarioOpen(true); }}>
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Gasto
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setReplicarTabela('gastos_funcionarios')}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Replicar meses
+                </Button>
+                <Button onClick={() => { resetFormFuncionario(); setEditingGastoFuncionario(null); setDialogFuncionarioOpen(true); }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Gasto
+                </Button>
+              </div>
             </div>
 
             <Card>
