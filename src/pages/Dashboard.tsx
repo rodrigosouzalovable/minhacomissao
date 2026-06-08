@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,11 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, FileText, DollarSign, Clock, CheckCircle } from 'lucide-react';
+import { PlusCircle, FileText, DollarSign, Clock, CheckCircle, Target } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, subMonths, startOfMonth, endOfDay, min } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
 import { ComparativoMensal } from '@/components/ComparativoMensal';
+import { MetaMesBanner } from '@/components/MetaMesBanner';
+import { DefinirMetasDialog } from '@/components/DefinirMetasDialog';
 
 export default function Dashboard() {
   const { user } = useAuth();
