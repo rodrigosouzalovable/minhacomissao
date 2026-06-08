@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, FileText, DollarSign, Clock, CheckCircle, Target } from 'lucide-react';
+import { PlusCircle, FileText, DollarSign, Clock, CheckCircle, Target, Sparkles } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, subMonths, startOfMonth, endOfDay, min } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
@@ -19,11 +19,17 @@ import { MotivacaoCard } from '@/components/MotivacaoCard';
 import { SugestoesMetaCard } from '@/components/SugestoesMetaCard';
 import { DefinirMetasDialog } from '@/components/DefinirMetasDialog';
 import { useMetaMes } from '@/hooks/useMetaMes';
+import { FraseDoDiaBanner } from '@/components/FraseDoDiaBanner';
+import { MuralTop3 } from '@/components/MuralTop3';
+import { MetaSemanalCard } from '@/components/MetaSemanalCard';
+import { RecordePessoalCard } from '@/components/RecordePessoalCard';
+import { ConfigMotivacaoDialog } from '@/components/ConfigMotivacaoDialog';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
+  const [configMotivOpen, setConfigMotivOpen] = useState(false);
   const metaMes = useMetaMes();
 
   const { data, isLoading } = useQuery({
@@ -140,10 +146,16 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <Button variant="outline" onClick={() => setDefinirMetasOpen(true)}>
-                <Target className="h-4 w-4 mr-2" />
-                Definir Meta
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setConfigMotivOpen(true)}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Motivação
+                </Button>
+                <Button variant="outline" onClick={() => setDefinirMetasOpen(true)}>
+                  <Target className="h-4 w-4 mr-2" />
+                  Definir Meta
+                </Button>
+              </>
             )}
             <Button asChild>
               <Link to="/acordos/novo">
@@ -156,7 +168,15 @@ export default function Dashboard() {
 
         {!isAdmin && (
           <>
+            <FraseDoDiaBanner />
+            <MuralTop3 />
             <MetaMesBanner />
+            {metaMes.valorMeta > 0 && (
+              <MetaSemanalCard valorMeta={metaMes.valorMeta} />
+            )}
+            {metaMes.valorMeta > 0 && (
+              <RecordePessoalCard recebidoMesAtual={metaMes.recebido} />
+            )}
             {metaMes.valorMeta > 0 && (
               <MotivacaoCard
                 recebido={metaMes.recebido}
@@ -306,6 +326,7 @@ export default function Dashboard() {
         </div>
       </div>
       <DefinirMetasDialog open={definirMetasOpen} onOpenChange={setDefinirMetasOpen} />
+      <ConfigMotivacaoDialog open={configMotivOpen} onOpenChange={setConfigMotivOpen} />
     </AppLayout>
   );
 }
