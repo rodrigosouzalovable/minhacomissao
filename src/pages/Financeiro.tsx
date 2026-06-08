@@ -778,7 +778,11 @@ export default function Financeiro() {
 
           {/* Tab Receitas */}
           <TabsContent value="receitas" className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReplicarTabela('receitas_empresa')}>
+                <Copy className="h-4 w-4 mr-2" />
+                Replicar meses
+              </Button>
               <Button onClick={() => { resetFormReceita(); setEditingReceita(null); setDialogReceitaOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Receita
