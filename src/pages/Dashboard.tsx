@@ -24,6 +24,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
+  const metaMes = useMetaMes();
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', user?.id, isAdmin],
