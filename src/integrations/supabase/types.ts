@@ -1092,6 +1092,39 @@ export type Database = {
         }
         Relationships: []
       }
+      configuracoes_motivacao: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          criado_em: string
+          frase_autor: string | null
+          frase_custom: string | null
+          frase_data: string | null
+          id: string
+          mural_top3_visivel: boolean
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          frase_autor?: string | null
+          frase_custom?: string | null
+          frase_data?: string | null
+          id?: string
+          mural_top3_visivel?: boolean
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          frase_autor?: string | null
+          frase_custom?: string | null
+          frase_data?: string | null
+          id?: string
+          mural_top3_visivel?: boolean
+        }
+        Relationships: []
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean
@@ -2103,6 +2136,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      premios_semanais: {
+        Row: {
+          atingido_em: string
+          atualizado_em: string
+          criado_em: string
+          id: string
+          mes_ano: string
+          pago_em: string | null
+          semana: number
+          status: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          atingido_em?: string
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          mes_ano: string
+          pago_em?: string | null
+          semana: number
+          status?: string
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          atingido_em?: string
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          mes_ano?: string
+          pago_em?: string | null
+          semana?: number
+          status?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
