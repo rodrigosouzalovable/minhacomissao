@@ -282,6 +282,7 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+      <DefinirMetasDialog open={definirMetasOpen} onOpenChange={setDefinirMetasOpen} />
     </AppLayout>
   );
 }
