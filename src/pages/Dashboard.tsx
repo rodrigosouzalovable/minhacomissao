@@ -15,7 +15,10 @@ import { format, subMonths, startOfMonth, endOfDay, min } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
 import { ComparativoMensal } from '@/components/ComparativoMensal';
 import { MetaMesBanner } from '@/components/MetaMesBanner';
+import { MotivacaoCard } from '@/components/MotivacaoCard';
+import { SugestoesMetaCard } from '@/components/SugestoesMetaCard';
 import { DefinirMetasDialog } from '@/components/DefinirMetasDialog';
+import { useMetaMes } from '@/hooks/useMetaMes';
 
 export default function Dashboard() {
   const { user } = useAuth();
