@@ -27,15 +27,7 @@ export function MuralTop3() {
     queryFn: async () => {
       const { data } = await supabase.rpc('ranking_mensal' as any);
       const arr = (data as any[]) || [];
-      // pegar avatar (profiles.avatar_url se houver)
-      const ids = arr.slice(0, 3).map(r => r.user_id);
-      if (!ids.length) return [];
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, avatar_url')
-        .in('id', ids);
-      const map = new Map((profs || []).map((p: any) => [p.id, p.avatar_url]));
-      return arr.slice(0, 3).map(r => ({ ...r, avatar_url: map.get(r.user_id) }));
+      return arr.slice(0, 3);
     },
     staleTime: 2 * 60 * 1000,
   });
@@ -58,7 +50,6 @@ export function MuralTop3() {
         {podio.map(p => (
           <div key={p.idx} className="flex flex-col items-center gap-2 flex-1 max-w-[160px]">
             <AvatarComMoldura
-              src={p.item.avatar_url}
               fallback={p.item.nome || '?'}
               tier={p.tier}
               size="lg"
