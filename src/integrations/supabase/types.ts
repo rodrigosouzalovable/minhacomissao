@@ -2412,6 +2412,42 @@ export type Database = {
         }
         Relationships: []
       }
+      solicitacoes_planilha: {
+        Row: {
+          atualizado_em: string
+          credores: string[]
+          criado_em: string
+          faixas_atraso: string[]
+          id: string
+          observacao: string | null
+          qtd_clientes: number | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          credores?: string[]
+          criado_em?: string
+          faixas_atraso?: string[]
+          id?: string
+          observacao?: string | null
+          qtd_clientes?: number | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          credores?: string[]
+          criado_em?: string
+          faixas_atraso?: string[]
+          id?: string
+          observacao?: string | null
+          qtd_clientes?: number | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       system_config: {
         Row: {
           key: string
