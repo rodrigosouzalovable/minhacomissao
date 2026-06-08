@@ -20,6 +20,7 @@ import { DefinirMetasDialog } from '@/components/DefinirMetasDialog';
 export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', user?.id, isAdmin],
