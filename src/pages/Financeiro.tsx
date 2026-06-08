@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { useToast } from '@/hooks/use-toast';
-import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { formatarMoeda } from '@/lib/comissao';
 import {
   calcularPercentualComissaoEmpresa,
   calcularPercentualComissaoMontreal,
@@ -41,8 +41,9 @@ function calcularRepartePagamento(valorParcela: number, diasAtraso: number, empr
   const comissaoEscritorio = receita - comissaoFuncionario;
   return { receita, comissaoFuncionario, comissaoEscritorio };
 }
-import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, Building2, Users, DollarSign } from 'lucide-react';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Wallet, Building2, Users, DollarSign, Copy } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { ReplicarMesesDialog } from '@/components/financeiro/ReplicarMesesDialog';
 
 const CATEGORIAS_EMPRESA = [
   'Aluguel',
@@ -158,6 +159,13 @@ export default function Financeiro() {
   const [valorReceita, setValorReceita] = useState('');
   const [dataReferenciaReceita, setDataReferenciaReceita] = useState('');
   const [recorrenteReceita, setRecorrenteReceita] = useState(false);
+
+  // Replicar meses dialog
+  const [replicarTabela, setReplicarTabela] = useState<null | 'gastos_empresa' | 'gastos_funcionarios' | 'receitas_empresa'>(null);
+
+  const formatMesRef = (data: string) => {
+    try { return format(parseISO(data), 'MM/yyyy'); } catch { return data; }
+  };
 
   // Fetch profiles (funcionários)
   const { data: profiles = [] } = useQuery({
@@ -504,7 +512,7 @@ export default function Financeiro() {
     setCategoriaEmpresa(gasto.categoria);
     setDescricaoEmpresa(gasto.descricao || '');
     setValorEmpresa(gasto.valor.toString());
-    setDataReferenciaEmpresa(gasto.data_referencia);
+    setDataReferenciaEmpresa((gasto.data_referencia || '').slice(0, 7));
     setRecorrenteEmpresa(gasto.recorrente);
     setDialogEmpresaOpen(true);
   };
@@ -515,7 +523,7 @@ export default function Financeiro() {
     setCategoriaFuncionario(gasto.categoria);
     setDescricaoFuncionario(gasto.descricao || '');
     setValorFuncionario(gasto.valor.toString());
-    setDataReferenciaFuncionario(gasto.data_referencia);
+    setDataReferenciaFuncionario((gasto.data_referencia || '').slice(0, 7));
     setRecorrenteFuncionario(gasto.recorrente);
     setDialogFuncionarioOpen(true);
   };
@@ -525,7 +533,7 @@ export default function Financeiro() {
     setCategoriaReceita(receita.categoria);
     setDescricaoReceita(receita.descricao || '');
     setValorReceita(receita.valor.toString());
-    setDataReferenciaReceita(receita.data_referencia);
+    setDataReferenciaReceita((receita.data_referencia || '').slice(0, 7));
     setRecorrenteReceita(receita.recorrente);
     setDialogReceitaOpen(true);
   };
@@ -546,7 +554,7 @@ export default function Financeiro() {
         categoria: categoriaEmpresa,
         descricao: descricaoEmpresa || null,
         valor,
-        data_referencia: dataReferenciaEmpresa,
+        data_referencia: dataReferenciaEmpresa + "-01",
         recorrente: recorrenteEmpresa
       });
     } else {
@@ -555,7 +563,7 @@ export default function Financeiro() {
         categoria: categoriaEmpresa,
         descricao: descricaoEmpresa || null,
         valor,
-        data_referencia: dataReferenciaEmpresa,
+        data_referencia: dataReferenciaEmpresa + "-01",
         recorrente: recorrenteEmpresa
       });
     }
@@ -578,7 +586,7 @@ export default function Financeiro() {
         categoria: categoriaFuncionario,
         descricao: descricaoFuncionario || null,
         valor,
-        data_referencia: dataReferenciaFuncionario,
+        data_referencia: dataReferenciaFuncionario + "-01",
         recorrente: recorrenteFuncionario
       });
     } else {
@@ -588,7 +596,7 @@ export default function Financeiro() {
         categoria: categoriaFuncionario,
         descricao: descricaoFuncionario || null,
         valor,
-        data_referencia: dataReferenciaFuncionario,
+        data_referencia: dataReferenciaFuncionario + "-01",
         recorrente: recorrenteFuncionario
       });
     }
@@ -610,7 +618,7 @@ export default function Financeiro() {
         categoria: categoriaReceita,
         descricao: descricaoReceita || null,
         valor,
-        data_referencia: dataReferenciaReceita,
+        data_referencia: dataReferenciaReceita + "-01",
         recorrente: recorrenteReceita
       });
     } else {
@@ -619,7 +627,7 @@ export default function Financeiro() {
         categoria: categoriaReceita,
         descricao: descricaoReceita || null,
         valor,
-        data_referencia: dataReferenciaReceita,
+        data_referencia: dataReferenciaReceita + "-01",
         recorrente: recorrenteReceita
       });
     }
@@ -770,7 +778,11 @@ export default function Financeiro() {
 
           {/* Tab Receitas */}
           <TabsContent value="receitas" className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReplicarTabela('receitas_empresa')}>
+                <Copy className="h-4 w-4 mr-2" />
+                Replicar meses
+              </Button>
               <Button onClick={() => { resetFormReceita(); setEditingReceita(null); setDialogReceitaOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Receita
@@ -803,7 +815,7 @@ export default function Financeiro() {
                           <TableCell className="font-medium">{receita.categoria}</TableCell>
                           <TableCell>{receita.descricao || '-'}</TableCell>
                           <TableCell className="text-green-600 font-medium">{formatarMoeda(receita.valor)}</TableCell>
-                          <TableCell>{formatarData(receita.data_referencia)}</TableCell>
+                          <TableCell>{formatMesRef(receita.data_referencia)}</TableCell>
                           <TableCell>{receita.recorrente ? 'Sim' : 'Não'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
@@ -826,7 +838,11 @@ export default function Financeiro() {
 
           {/* Tab Gastos Empresa */}
           <TabsContent value="empresa" className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReplicarTabela('gastos_empresa')}>
+                <Copy className="h-4 w-4 mr-2" />
+                Replicar meses
+              </Button>
               <Button onClick={() => { resetFormEmpresa(); setEditingGastoEmpresa(null); setDialogEmpresaOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Gasto
@@ -859,7 +875,7 @@ export default function Financeiro() {
                           <TableCell className="font-medium">{gasto.categoria}</TableCell>
                           <TableCell>{gasto.descricao || '-'}</TableCell>
                           <TableCell>{formatarMoeda(gasto.valor)}</TableCell>
-                          <TableCell>{formatarData(gasto.data_referencia)}</TableCell>
+                          <TableCell>{formatMesRef(gasto.data_referencia)}</TableCell>
                           <TableCell>{gasto.recorrente ? 'Sim' : 'Não'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
@@ -897,10 +913,16 @@ export default function Financeiro() {
                 </SelectContent>
               </Select>
 
-              <Button onClick={() => { resetFormFuncionario(); setEditingGastoFuncionario(null); setDialogFuncionarioOpen(true); }}>
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Gasto
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setReplicarTabela('gastos_funcionarios')}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Replicar meses
+                </Button>
+                <Button onClick={() => { resetFormFuncionario(); setEditingGastoFuncionario(null); setDialogFuncionarioOpen(true); }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Gasto
+                </Button>
+              </div>
             </div>
 
             <Card>
@@ -931,7 +953,7 @@ export default function Financeiro() {
                           <TableCell>{gasto.categoria}</TableCell>
                           <TableCell>{gasto.descricao || '-'}</TableCell>
                           <TableCell>{formatarMoeda(gasto.valor)}</TableCell>
-                          <TableCell>{formatarData(gasto.data_referencia)}</TableCell>
+                          <TableCell>{formatMesRef(gasto.data_referencia)}</TableCell>
                           <TableCell>{gasto.recorrente ? 'Sim' : 'Não'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
@@ -1041,9 +1063,9 @@ export default function Financeiro() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Data de Referência *</Label>
+              <Label>Mês de Referência *</Label>
               <Input
-                type="date"
+                type="month"
                 value={dataReferenciaEmpresa}
                 onChange={(e) => setDataReferenciaEmpresa(e.target.value)}
               />
@@ -1114,9 +1136,9 @@ export default function Financeiro() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Data de Referência *</Label>
+              <Label>Mês de Referência *</Label>
               <Input
-                type="date"
+                type="month"
                 value={dataReferenciaFuncionario}
                 onChange={(e) => setDataReferenciaFuncionario(e.target.value)}
               />
@@ -1174,9 +1196,9 @@ export default function Financeiro() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Data de Referência *</Label>
+              <Label>Mês de Referência *</Label>
               <Input
-                type="date"
+                type="month"
                 value={dataReferenciaReceita}
                 onChange={(e) => setDataReferenciaReceita(e.target.value)}
               />
@@ -1196,6 +1218,18 @@ export default function Financeiro() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {replicarTabela && (
+        <ReplicarMesesDialog
+          open={!!replicarTabela}
+          onOpenChange={(v) => { if (!v) setReplicarTabela(null); }}
+          tabela={replicarTabela}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['gastos-empresa'] });
+            queryClient.invalidateQueries({ queryKey: ['gastos-funcionarios'] });
+            queryClient.invalidateQueries({ queryKey: ['receitas-empresa'] });
+          }}
+        />
+      )}
     </AppLayout>
   );
 }

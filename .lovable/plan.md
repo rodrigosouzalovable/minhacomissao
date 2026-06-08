@@ -1,32 +1,44 @@
-## Ajuste na aba Análise — Financeiro
+## Plano: MM/AAAA + Replicar meses (Financeiro)
 
-### Problema
-Hoje a coluna **Receita Gerada** mostra apenas a parte do escritório (H.O.) sobre as parcelas pagas. O usuário quer que essa coluna mostre o **valor bruto total recebido** do funcionário no período (soma de `valor_parcela` das parcelas com `status = 'pago'` cuja `data_paga` está dentro do filtro).
+Escopo: aba **Financeiro** (`src/pages/Financeiro.tsx`) — Gastos Funcionários, Gastos Empresa e Receitas.
 
-A coluna **Comissão Funcionário** já é calculada sobre as mesmas parcelas filtradas por `data_paga`, então só precisa ser confirmada visualmente — nenhuma mudança de lógica.
-
-### Mudança em `src/pages/Financeiro.tsx`
-
-No `useMemo` `analisesPorFuncionario` (linhas 294-325), trocar:
-
-```ts
-receita += r.receita;   // hoje: valor_parcela * % escritório
+### 1. Exibição como MM/AAAA
+Trocar nas 3 tabelas a célula da coluna "Data Ref.":
+```tsx
+{format(parseISO(item.data_referencia), 'MM/yyyy')}
 ```
+(`parseISO` importado de `date-fns`.)
 
-por:
+### 2. Inputs do diálogo viram seletor de mês
+Nos 3 diálogos (Gasto Empresa / Gasto Funcionário / Receita):
+- `<Input type="date">` → `<Input type="month">`.
+- State guarda `yyyy-MM` (slice 0,7 do valor atual em edição).
+- Ao salvar, persiste como `yyyy-MM-01` no banco.
 
-```ts
-receita += Number(p.valor_parcela);   // total bruto pago no período
-```
+### 3. Botão "Replicar meses" (3 abas)
+Novo botão ao lado de "Adicionar Gasto"/"Adicionar Receita". Abre o mesmo componente `ReplicarMesesDialog` reaproveitável, parametrizado pela tabela alvo (`gastos_empresa` | `gastos_funcionarios` | `receitas_empresa`).
 
-`comissaoFuncionario` e `comissaoEscritorio` continuam iguais (cada um calculado pela sua tabela respeitando empresa do acordo). `resultado` continua = `comissaoEscritorio − gastos`.
+Conteúdo do diálogo:
+- **Mês de origem** (`type="month"`, padrão = mês mais recente com registros).
+- **Meses de destino** — grade com checkboxes dos 12 meses anteriores + 12 posteriores ao mês de origem (rótulo MM/AAAA). Botões rápidos "Marcar 6 anteriores" / "Marcar 6 posteriores".
+- Resumo: "X lançamentos serão copiados para Y meses."
 
-A query `pagamentosPagos` já filtra por `data_paga` entre `dataInicio` e `dataFim` (linhas 228-233), então o filtro de datas é aplicado automaticamente em todas as três colunas.
+Comportamento ao confirmar:
+1. Busca todos os registros da tabela com `data_referencia` entre o primeiro e o último dia do mês de origem.
+2. Para cada mês destino:
+   - Verifica se já existe algum registro no mês (qualquer registro) — se sim, **pula** o mês e adiciona ao contador "pulados".
+   - Caso contrário, monta array com os mesmos campos da origem (sem `id`/`criado_em`) trocando `data_referencia` para `yyyy-MM-01` do destino.
+3. Faz um único `.insert(arrayCombinado)` no final.
+4. Toast: "Replicado para N meses · M meses pulados (já tinham lançamentos)."
+5. Invalida as queries da tabela alterada.
 
-### Verificação
-- Mudar o DateRangePicker no topo da página → as 3 colunas (Receita Gerada, Comissão Funcionário, Comissão Escritório) recalculam para o período.
-- "Receita Gerada" passa a refletir o **total recebido** do cliente (ex.: R$ 51.596,49 = soma das parcelas pagas), não mais a fatia do escritório.
-- "Comissão Funcionário" mostra exatamente o que o funcionário ganhou nessas parcelas.
+Para Gastos Funcionários, "já tinham lançamentos" é checado **por funcionário** (não por mês inteiro), para permitir adicionar novo funcionário a um mês existente sem duplicar os que já estão lá. Para Empresa e Receitas, "já tinham" é checado por mês inteiro (mais simples e seguro).
+
+### 4. Verificação
+- Cadastrar um novo gasto → campo é seletor de mês; tabela mostra "06/2026".
+- Replicar 06/2026 → 05/2026 e 07/2026: cria duplicatas com `data_referencia = 2026-05-01` e `2026-07-01`, respectivamente.
+- Replicar novamente para os mesmos meses → toast "0 replicados, X pulados".
+- Aba Análise (que já usa último mês com lançamento por funcionário) reflete o mês mais recente automaticamente.
 
 ### Fora de escopo
-Não há mudança em queries, schema, totais gerais do dashboard ou outras abas.
+- Sem migration. Coluna `data_referencia` continua `date`, sempre dia 01 quando salva via seletor de mês. Lançamentos antigos com outras datas continuam funcionando — agrupados pelo mês.
