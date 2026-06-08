@@ -1,44 +1,56 @@
-## Plano: MM/AAAA + Replicar meses (Financeiro)
+# Meta do Mês no Dashboard
 
-Escopo: aba **Financeiro** (`src/pages/Financeiro.tsx`) — Gastos Funcionários, Gastos Empresa e Receitas.
+## 1. Banner "Meta do Mês" no Dashboard do funcionário
 
-### 1. Exibição como MM/AAAA
-Trocar nas 3 tabelas a célula da coluna "Data Ref.":
-```tsx
-{format(parseISO(item.data_referencia), 'MM/yyyy')}
+Adicionar no topo de `src/pages/Dashboard.tsx` (acima do `ComparativoMensal`, visível para todos exceto admin) um card replicando o layout do anexo:
+
+- **Título**: `🎯 Meta do Mês - {Mês Ano}` com lápis de edição (mantém comportamento da página `MetaPessoal` — clicar leva para `/meta-pessoal` ou abre edição inline).
+- **Linha sub**: `R$ recebido de R$ meta`.
+- **Badge à direita**: "↓ Abaixo da meta" / "↑ Acima da meta" / "✓ Meta batida" conforme projeção.
+- **Barra de progresso** colorida (vermelho até 50%, amarelo 50–90%, verde ≥90%) com `%` ao centro.
+- **Rodapé**: `Projeção de fechamento: R$ X` à esquerda; `N de M dias` à direita (dias úteis decorridos/total).
+- **4 cards abaixo**:
+  - 💲 Já Recebido — soma de pagamentos pagos no mês do user.
+  - 📈 Falta Receber — `meta − recebido` (mín 0).
+  - 📅 Dias Úteis Restantes.
+  - 🎯 Necessário/Dia Útil — `falta / diasUteisRestantes`.
+
+Reaproveita queries de `MetaPessoal.tsx` (tabela `metas_funcionarios` + `pagamentos` do user no mês). Se meta = 0, mostra CTA "Definir minha meta" linkando para `/meta-pessoal`.
+
+Projeção = `recebido / diasUteisDecorridos × diasUteisTotal`.
+
+Se admin: não mostra esse banner (admin já tem `MetasMensal`).
+
+## 2. Botão "Definir Meta" no Dashboard do admin
+
+Em `src/pages/Dashboard.tsx`, ao lado do botão "Novo Acordo" (renderizado só se `isAdmin`), botão `Definir Meta` que abre `DefinirMetasDialog`.
+
+**Novo componente** `src/components/DefinirMetasDialog.tsx`:
+- Seletor de mês (`<Input type="month">`, default mês atual).
+- Lista de funcionários (query em `profiles` join `user_roles` onde role ∈ {`funcionario`, `gestor`}).
+- Para cada um: nome + input de valor (R$), pré-preenchido com a meta atual do mês selecionado (se existir).
+- Botão "Salvar todas" → `upsert` em `metas_funcionarios` por `(user_id, mes_ano)` com os valores não-zero.
+- Botão "Replicar mês anterior" (opcional, copia do mês ant. para o selecionado).
+
+## 3. Migration RLS — permitir admin gravar metas de qualquer funcionário
+
+Hoje as policies de INSERT/UPDATE em `metas_funcionarios` só permitem o próprio user. Adicionar:
+
+```sql
+CREATE POLICY "Admins can insert any meta" ON public.metas_funcionarios
+  FOR INSERT TO authenticated WITH CHECK (has_role(auth.uid(),'admin'));
+CREATE POLICY "Admins can update any meta" ON public.metas_funcionarios
+  FOR UPDATE TO authenticated USING (has_role(auth.uid(),'admin'));
 ```
-(`parseISO` importado de `date-fns`.)
 
-### 2. Inputs do diálogo viram seletor de mês
-Nos 3 diálogos (Gasto Empresa / Gasto Funcionário / Receita):
-- `<Input type="date">` → `<Input type="month">`.
-- State guarda `yyyy-MM` (slice 0,7 do valor atual em edição).
-- Ao salvar, persiste como `yyyy-MM-01` no banco.
+`GRANT`s já existem (tabela já é usada).
 
-### 3. Botão "Replicar meses" (3 abas)
-Novo botão ao lado de "Adicionar Gasto"/"Adicionar Receita". Abre o mesmo componente `ReplicarMesesDialog` reaproveitável, parametrizado pela tabela alvo (`gastos_empresa` | `gastos_funcionarios` | `receitas_empresa`).
+## Arquivos
+- editar `src/pages/Dashboard.tsx` (banner funcionário + botão admin)
+- criar `src/components/MetaMesBanner.tsx`
+- criar `src/components/DefinirMetasDialog.tsx`
+- migration RLS
 
-Conteúdo do diálogo:
-- **Mês de origem** (`type="month"`, padrão = mês mais recente com registros).
-- **Meses de destino** — grade com checkboxes dos 12 meses anteriores + 12 posteriores ao mês de origem (rótulo MM/AAAA). Botões rápidos "Marcar 6 anteriores" / "Marcar 6 posteriores".
-- Resumo: "X lançamentos serão copiados para Y meses."
-
-Comportamento ao confirmar:
-1. Busca todos os registros da tabela com `data_referencia` entre o primeiro e o último dia do mês de origem.
-2. Para cada mês destino:
-   - Verifica se já existe algum registro no mês (qualquer registro) — se sim, **pula** o mês e adiciona ao contador "pulados".
-   - Caso contrário, monta array com os mesmos campos da origem (sem `id`/`criado_em`) trocando `data_referencia` para `yyyy-MM-01` do destino.
-3. Faz um único `.insert(arrayCombinado)` no final.
-4. Toast: "Replicado para N meses · M meses pulados (já tinham lançamentos)."
-5. Invalida as queries da tabela alterada.
-
-Para Gastos Funcionários, "já tinham lançamentos" é checado **por funcionário** (não por mês inteiro), para permitir adicionar novo funcionário a um mês existente sem duplicar os que já estão lá. Para Empresa e Receitas, "já tinham" é checado por mês inteiro (mais simples e seguro).
-
-### 4. Verificação
-- Cadastrar um novo gasto → campo é seletor de mês; tabela mostra "06/2026".
-- Replicar 06/2026 → 05/2026 e 07/2026: cria duplicatas com `data_referencia = 2026-05-01` e `2026-07-01`, respectivamente.
-- Replicar novamente para os mesmos meses → toast "0 replicados, X pulados".
-- Aba Análise (que já usa último mês com lançamento por funcionário) reflete o mês mais recente automaticamente.
-
-### Fora de escopo
-- Sem migration. Coluna `data_referencia` continua `date`, sempre dia 01 quando salva via seletor de mês. Lançamentos antigos com outras datas continuam funcionando — agrupados pelo mês.
+## Fora de escopo
+- Página `/meta-pessoal` (já existe e continua funcional).
+- Mudar componente `MetasMensal` do admin.
