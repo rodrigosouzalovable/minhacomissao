@@ -1218,6 +1218,18 @@ export default function Financeiro() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {replicarTabela && (
+        <ReplicarMesesDialog
+          open={!!replicarTabela}
+          onOpenChange={(v) => { if (!v) setReplicarTabela(null); }}
+          tabela={replicarTabela}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['gastos-empresa'] });
+            queryClient.invalidateQueries({ queryKey: ['gastos-funcionarios'] });
+            queryClient.invalidateQueries({ queryKey: ['receitas-empresa'] });
+          }}
+        />
+      )}
     </AppLayout>
   );
 }
