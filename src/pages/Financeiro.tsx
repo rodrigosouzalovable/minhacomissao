@@ -1051,7 +1051,7 @@ export default function Financeiro() {
             <div className="space-y-2">
               <Label>Data de Referência *</Label>
               <Input
-                type="date"
+                type="month"
                 value={dataReferenciaEmpresa}
                 onChange={(e) => setDataReferenciaEmpresa(e.target.value)}
               />
@@ -1124,7 +1124,7 @@ export default function Financeiro() {
             <div className="space-y-2">
               <Label>Data de Referência *</Label>
               <Input
-                type="date"
+                type="month"
                 value={dataReferenciaFuncionario}
                 onChange={(e) => setDataReferenciaFuncionario(e.target.value)}
               />
@@ -1184,7 +1184,7 @@ export default function Financeiro() {
             <div className="space-y-2">
               <Label>Data de Referência *</Label>
               <Input
-                type="date"
+                type="month"
                 value={dataReferenciaReceita}
                 onChange={(e) => setDataReferenciaReceita(e.target.value)}
               />
