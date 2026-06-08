@@ -154,7 +154,26 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {!isAdmin && <MetaMesBanner />}
+        {!isAdmin && (
+          <>
+            <MetaMesBanner />
+            {metaMes.valorMeta > 0 && (
+              <MotivacaoCard
+                recebido={metaMes.recebido}
+                meta={metaMes.valorMeta}
+                projecao={metaMes.projecao}
+              />
+            )}
+            {metaMes.valorMeta > 0 && metaMes.recebido < metaMes.valorMeta && metaMes.projecao < metaMes.valorMeta && (
+              <SugestoesMetaCard
+                recebido={metaMes.recebido}
+                meta={metaMes.valorMeta}
+                diasUteisRestantes={metaMes.diasUteisRestantes}
+                diasUteisDecorridos={metaMes.diasUteisDecorridos}
+              />
+            )}
+          </>
+        )}
 
         {isAdmin && (
           <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />
