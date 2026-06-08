@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { useToast } from '@/hooks/use-toast';
-import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { formatarMoeda } from '@/lib/comissao';
 import {
   calcularPercentualComissaoEmpresa,
   calcularPercentualComissaoMontreal,
