@@ -838,7 +838,11 @@ export default function Financeiro() {
 
           {/* Tab Gastos Empresa */}
           <TabsContent value="empresa" className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReplicarTabela('gastos_empresa')}>
+                <Copy className="h-4 w-4 mr-2" />
+                Replicar meses
+              </Button>
               <Button onClick={() => { resetFormEmpresa(); setEditingGastoEmpresa(null); setDialogEmpresaOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Gasto
