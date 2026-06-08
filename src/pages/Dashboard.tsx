@@ -134,13 +134,23 @@ export default function Dashboard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <Button asChild>
-            <Link to="/acordos/novo">
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Novo Acordo
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setDefinirMetasOpen(true)}>
+                <Target className="h-4 w-4 mr-2" />
+                Definir Meta
+              </Button>
+            )}
+            <Button asChild>
+              <Link to="/acordos/novo">
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Novo Acordo
+              </Link>
+            </Button>
+          </div>
         </div>
+
+        {!isAdmin && <MetaMesBanner />}
 
         {isAdmin && (
           <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />
