@@ -1049,7 +1049,7 @@ export default function Financeiro() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Data de Referência *</Label>
+              <Label>Mês de Referência *</Label>
               <Input
                 type="month"
                 value={dataReferenciaEmpresa}
@@ -1122,7 +1122,7 @@ export default function Financeiro() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Data de Referência *</Label>
+              <Label>Mês de Referência *</Label>
               <Input
                 type="month"
                 value={dataReferenciaFuncionario}
@@ -1182,7 +1182,7 @@ export default function Financeiro() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Data de Referência *</Label>
+              <Label>Mês de Referência *</Label>
               <Input
                 type="month"
                 value={dataReferenciaReceita}
