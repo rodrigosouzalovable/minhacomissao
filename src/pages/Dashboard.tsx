@@ -15,12 +15,16 @@ import { format, subMonths, startOfMonth, endOfDay, min } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
 import { ComparativoMensal } from '@/components/ComparativoMensal';
 import { MetaMesBanner } from '@/components/MetaMesBanner';
+import { MotivacaoCard } from '@/components/MotivacaoCard';
+import { SugestoesMetaCard } from '@/components/SugestoesMetaCard';
 import { DefinirMetasDialog } from '@/components/DefinirMetasDialog';
+import { useMetaMes } from '@/hooks/useMetaMes';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
+  const metaMes = useMetaMes();
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', user?.id, isAdmin],
@@ -150,7 +154,26 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {!isAdmin && <MetaMesBanner />}
+        {!isAdmin && (
+          <>
+            <MetaMesBanner />
+            {metaMes.valorMeta > 0 && (
+              <MotivacaoCard
+                recebido={metaMes.recebido}
+                meta={metaMes.valorMeta}
+                projecao={metaMes.projecao}
+              />
+            )}
+            {metaMes.valorMeta > 0 && metaMes.recebido < metaMes.valorMeta && metaMes.projecao < metaMes.valorMeta && (
+              <SugestoesMetaCard
+                recebido={metaMes.recebido}
+                meta={metaMes.valorMeta}
+                diasUteisRestantes={metaMes.diasUteisRestantes}
+                diasUteisDecorridos={metaMes.diasUteisDecorridos}
+              />
+            )}
+          </>
+        )}
 
         {isAdmin && (
           <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />

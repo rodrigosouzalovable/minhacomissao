@@ -90,8 +90,7 @@ export function MetaMesBanner() {
   const necessarioPorDia = diasUteisRestantes > 0 ? restante / diasUteisRestantes : 0;
   const projecao = diasUteisDecorridos > 0 ? (recebido / diasUteisDecorridos) * diasUteisTotal : 0;
 
-  const barColor =
-    percentual >= 90 ? 'bg-emerald-500' : percentual >= 50 ? 'bg-yellow-400' : 'bg-red-500';
+  const barColor = 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-green-600';
 
   const statusBadge =
     recebido >= valorMeta
