@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Loader2, Upload, Copy, Settings, FileSpreadsheet } from 'lucide-react';
+import { Loader2, Upload, Copy, Settings, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import {
   parsePlanilhaCobmais,
@@ -31,14 +32,14 @@ Identificamos {qtd_parcelas_atraso} parcelas em aberto a {dias_atraso} dias de a
 
 Posso confirmar qual opção é melhor para você?`;
 
-interface LinhaConfig {
-  descontoVistaPct: number;
-  parceladoQtd: number;
-  descontoParceladoPct: number;
-}
+const STORAGE_KEY = 'modelo_mensagem_state_v1';
 
-const fmtBRL = (n: number) =>
-  n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+interface PersistedState {
+  clientes: ClienteImportado[];
+  contatados: string[];
+  descVistaGlobal: number;
+  descParceladoGlobal: number;
+}
 
 export default function ModeloMensagem() {
   const { user } = useAuth();
@@ -48,11 +49,48 @@ export default function ModeloMensagem() {
   const [descParceladoGlobal, setDescParceladoGlobal] = useState(30);
 
   const [clientes, setClientes] = useState<ClienteImportado[]>([]);
-  const [configs, setConfigs] = useState<Record<string, LinhaConfig>>({});
+  const [contatados, setContatados] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  
+  const [hydrated, setHydrated] = useState(false);
 
+  // Hidrata do localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw) as PersistedState;
+        if (Array.isArray(s.clientes)) {
+          // backfill telefones[] em dados antigos
+          const fixed = s.clientes.map((c: any) => ({
+            ...c,
+            telefones: Array.isArray(c.telefones) ? c.telefones : (c.telefone ? [c.telefone] : []),
+          }));
+          setClientes(fixed);
+        }
+        if (Array.isArray(s.contatados)) setContatados(new Set(s.contatados));
+        if (typeof s.descVistaGlobal === 'number') setDescVistaGlobal(s.descVistaGlobal);
+        if (typeof s.descParceladoGlobal === 'number') setDescParceladoGlobal(s.descParceladoGlobal);
+      }
+    } catch {}
+    setHydrated(true);
+  }, []);
+
+  // Persiste no localStorage
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      const s: PersistedState = {
+        clientes,
+        contatados: Array.from(contatados),
+        descVistaGlobal,
+        descParceladoGlobal,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    } catch {}
+  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, hydrated]);
+
+  // Carrega template salvo do usuário
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -64,31 +102,10 @@ export default function ModeloMensagem() {
       if (data) {
         const d = data as any;
         if (d.template) setTemplate(d.template);
-        if (d.desconto_padrao != null) setDescVistaGlobal(Number(d.desconto_padrao));
         if (d.parcelas_padrao != null) setParceladoQtdGlobal(Number(d.parcelas_padrao));
       }
     })();
   }, [user]);
-
-  const PARCELA_MINIMA = 100;
-  const calcMaxParcelas = (total: number, descPct: number, desejado: number) => {
-    const valor = total * (1 - (descPct || 0) / 100);
-    const max = Math.max(1, Math.floor(valor / PARCELA_MINIMA));
-    return Math.max(1, Math.min(desejado || 1, max));
-  };
-
-  const aplicarGlobaisATodos = () => {
-    const novo: Record<string, LinhaConfig> = {};
-    for (const c of clientes) {
-      novo[c.cpf] = {
-        descontoVistaPct: descVistaGlobal,
-        parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
-        descontoParceladoPct: descParceladoGlobal,
-      };
-    }
-    setConfigs(novo);
-    toast.success('Configurações aplicadas a todos os clientes.');
-  };
 
   const handleFile = async (file: File) => {
     setLoading(true);
@@ -100,15 +117,7 @@ export default function ModeloMensagem() {
         toast.success(`${lista.length} cliente(s) importado(s).`);
       }
       setClientes(lista);
-      const cfg: Record<string, LinhaConfig> = {};
-      for (const c of lista) {
-        cfg[c.cpf] = {
-          descontoVistaPct: descVistaGlobal,
-          parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
-          descontoParceladoPct: descParceladoGlobal,
-        };
-      }
-      setConfigs(cfg);
+      setContatados(new Set());
     } catch (e: any) {
       toast.error(e.message || 'Erro ao ler planilha');
     } finally {
@@ -116,36 +125,44 @@ export default function ModeloMensagem() {
     }
   };
 
-  const setLinhaCfg = (cpf: string, patch: Partial<LinhaConfig>) => {
-    setConfigs((prev) => {
-      const cur = prev[cpf] ?? {
-        descontoVistaPct: descVistaGlobal,
-        parceladoQtd: parceladoQtdGlobal,
-        descontoParceladoPct: descParceladoGlobal,
-      };
-      const next = { ...cur, ...patch };
-      const cliente = clientes.find((x) => x.cpf === cpf);
-      if (cliente && (patch.parceladoQtd !== undefined || patch.descontoParceladoPct !== undefined)) {
-        next.parceladoQtd = calcMaxParcelas(cliente.totalAtraso, next.descontoParceladoPct, next.parceladoQtd);
-      }
-      return { ...prev, [cpf]: next };
+  const limparLista = () => {
+    if (!confirm('Limpar a lista importada e os marcadores de contato?')) return;
+    setClientes([]);
+    setContatados(new Set());
+    toast.success('Lista limpa.');
+  };
+
+  const toggleContatado = (cpf: string) => {
+    setContatados((prev) => {
+      const n = new Set(prev);
+      if (n.has(cpf)) n.delete(cpf);
+      else n.add(cpf);
+      return n;
     });
   };
 
-  const mensagemDoCliente = (c: ClienteImportado) => {
-    const cfg = configs[c.cpf] ?? {
+  const mensagemDoCliente = (c: ClienteImportado) =>
+    renderMensagem(template, {
+      cliente: c,
       descontoVistaPct: descVistaGlobal,
-      parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
+      parceladoQtd: parceladoQtdGlobal,
       descontoParceladoPct: descParceladoGlobal,
-    };
-    return renderMensagem(template, { cliente: c, ...cfg });
-  };
+    });
 
-  const copiar = async (c: ClienteImportado) => {
+  const copiarMsg = async (c: ClienteImportado) => {
     await navigator.clipboard.writeText(mensagemDoCliente(c));
     toast.success(`Mensagem de ${c.nome.split(' ')[0]} copiada!`);
   };
 
+  const copiarTel = async (tel: string) => {
+    await navigator.clipboard.writeText(tel);
+    toast.success('Telefone copiado!');
+  };
+
+  const totalContatados = useMemo(
+    () => clientes.filter((c) => contatados.has(c.cpf)).length,
+    [clientes, contatados],
+  );
 
   return (
     <AppLayout>
@@ -185,14 +202,19 @@ export default function ModeloMensagem() {
                 Selecionar arquivo .xlsx
               </Button>
               {clientes.length > 0 && (
-                <span className="text-sm text-muted-foreground flex items-center gap-1">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  {clientes.length} cliente(s) importado(s)
-                </span>
+                <>
+                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    {clientes.length} cliente(s) • {totalContatados} contatado(s)
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={limparLista}>
+                    <Trash2 className="h-4 w-4 mr-1" /> Limpar lista
+                  </Button>
+                </>
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t">
               <div>
                 <Label className="text-xs">% Desconto à vista</Label>
                 <Input type="number" min={0} max={100}
@@ -205,16 +227,9 @@ export default function ModeloMensagem() {
                   value={descParceladoGlobal}
                   onChange={(e) => setDescParceladoGlobal(Number(e.target.value))} />
               </div>
-              <div className="flex items-end">
-                <Button variant="secondary" className="w-full"
-                  disabled={clientes.length === 0}
-                  onClick={aplicarGlobaisATodos}>
-                  Aplicar a todos
-                </Button>
-              </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              O parcelamento mostra automaticamente 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
+              As mensagens são atualizadas automaticamente ao alterar os descontos. Parcelamento exibe 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
             </p>
           </CardContent>
         </Card>
@@ -228,29 +243,39 @@ export default function ModeloMensagem() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[80px]">Contatado</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Telefone</TableHead>
+                    <TableHead>Telefone(s)</TableHead>
                     <TableHead className="min-w-[320px]">Mensagem</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {clientes.map((c) => {
                     const msg = mensagemDoCliente(c);
-                    const copiarTel = async () => {
-                      if (!c.telefone) return;
-                      await navigator.clipboard.writeText(c.telefone);
-                      toast.success('Telefone copiado!');
-                    };
+                    const isContatado = contatados.has(c.cpf);
+                    const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
                     return (
-                      <TableRow key={c.cpf}>
-                        <TableCell className="font-medium align-top">{c.nome}</TableCell>
+                      <TableRow key={c.cpf} className={isContatado ? 'opacity-50' : ''}>
+                        <TableCell className="align-top">
+                          <Checkbox
+                            checked={isContatado}
+                            onCheckedChange={() => toggleContatado(c.cpf)}
+                          />
+                        </TableCell>
+                        <TableCell className={`font-medium align-top ${isContatado ? 'line-through' : ''}`}>
+                          {c.nome}
+                        </TableCell>
                         <TableCell className="font-mono text-xs align-top">
-                          {c.telefone ? (
-                            <div className="flex items-center gap-2">
-                              <span>{c.telefone}</span>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={copiarTel} title="Copiar telefone">
-                                <Copy className="h-3.5 w-3.5" />
-                              </Button>
+                          {tels.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                              {tels.map((t) => (
+                                <div key={t} className="flex items-center gap-2">
+                                  <span>{t}</span>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copiarTel(t)} title="Copiar telefone">
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
                             </div>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -264,7 +289,7 @@ export default function ModeloMensagem() {
                             >
                               {msg}
                             </div>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copiar(c)} title="Copiar mensagem">
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copiarMsg(c)} title="Copiar mensagem">
                               <Copy className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -277,7 +302,6 @@ export default function ModeloMensagem() {
             </CardContent>
           </Card>
         )}
-
 
         <EditarTemplateMensagemDialog
           open={editOpen}
