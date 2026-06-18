@@ -1938,6 +1938,36 @@ export type Database = {
         }
         Relationships: []
       }
+      modelo_mensagem_template: {
+        Row: {
+          created_at: string
+          desconto_padrao: number
+          id: string
+          parcelas_padrao: number
+          template: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          desconto_padrao?: number
+          id?: string
+          parcelas_padrao?: number
+          template?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          desconto_padrao?: number
+          id?: string
+          parcelas_padrao?: number
+          template?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notificacoes_config: {
         Row: {
           ativo: boolean
