@@ -78,16 +78,24 @@ export default function ModeloMensagem() {
     })();
   }, [user]);
 
+  const PARCELA_MINIMA = 100;
+  const calcMaxParcelas = (total: number, descPct: number, desejado: number) => {
+    const valor = total * (1 - (descPct || 0) / 100);
+    const max = Math.max(1, Math.floor(valor / PARCELA_MINIMA));
+    return Math.max(1, Math.min(desejado || 1, max));
+  };
+
   const aplicarGlobaisATodos = () => {
     const novo: Record<string, LinhaConfig> = {};
     for (const c of clientes) {
       novo[c.cpf] = {
         descontoVistaPct: descVistaGlobal,
-        parceladoQtd: parceladoQtdGlobal,
+        parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
         descontoParceladoPct: descParceladoGlobal,
       };
     }
     setConfigs(novo);
+    toast.success('Configurações aplicadas a todos os clientes.');
   };
 
   const handleFile = async (file: File) => {
@@ -104,7 +112,7 @@ export default function ModeloMensagem() {
       for (const c of lista) {
         cfg[c.cpf] = {
           descontoVistaPct: descVistaGlobal,
-          parceladoQtd: parceladoQtdGlobal,
+          parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
           descontoParceladoPct: descParceladoGlobal,
         };
       }
@@ -117,16 +125,25 @@ export default function ModeloMensagem() {
   };
 
   const setLinhaCfg = (cpf: string, patch: Partial<LinhaConfig>) => {
-    setConfigs((prev) => ({
-      ...prev,
-      [cpf]: { ...prev[cpf], ...patch },
-    }));
+    setConfigs((prev) => {
+      const cur = prev[cpf] ?? {
+        descontoVistaPct: descVistaGlobal,
+        parceladoQtd: parceladoQtdGlobal,
+        descontoParceladoPct: descParceladoGlobal,
+      };
+      const next = { ...cur, ...patch };
+      const cliente = clientes.find((x) => x.cpf === cpf);
+      if (cliente && (patch.parceladoQtd !== undefined || patch.descontoParceladoPct !== undefined)) {
+        next.parceladoQtd = calcMaxParcelas(cliente.totalAtraso, next.descontoParceladoPct, next.parceladoQtd);
+      }
+      return { ...prev, [cpf]: next };
+    });
   };
 
   const mensagemDoCliente = (c: ClienteImportado) => {
     const cfg = configs[c.cpf] ?? {
       descontoVistaPct: descVistaGlobal,
-      parceladoQtd: parceladoQtdGlobal,
+      parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
       descontoParceladoPct: descParceladoGlobal,
     };
     return renderMensagem(template, { cliente: c, ...cfg });
