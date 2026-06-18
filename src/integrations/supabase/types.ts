@@ -4251,6 +4251,18 @@ export type Database = {
           valor_original: number
         }[]
       }
+      can_view_credor: {
+        Args: { _credor: string; _user: string }
+        Returns: boolean
+      }
+      can_view_devedor_cpf: {
+        Args: { _cpf: string; _user: string }
+        Returns: boolean
+      }
+      can_view_devedor_id: {
+        Args: { _devedor_id: string; _user: string }
+        Returns: boolean
+      }
       chatbot_append_buffer: {
         Args: { p_telefone: string; p_texto: string; p_timestamp: string }
         Returns: undefined
