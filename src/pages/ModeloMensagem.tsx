@@ -150,10 +150,6 @@ export default function ModeloMensagem() {
     toast.success(`Mensagem de ${c.nome.split(' ')[0]} copiada!`);
   };
 
-  const clientePreview = useMemo(
-    () => clientes.find((c) => c.cpf === previewCpf) || null,
-    [clientes, previewCpf],
-  );
 
   return (
     <AppLayout>
