@@ -1,36 +1,28 @@
-# Mensagem pronta + parcelamento com piso de R$100
+## Mudanças em `src/pages/ModeloMensagem.tsx`
 
-## O que muda na página `Modelo Mensagem`
+**Tabela "2. Clientes & Propostas"** — reduzir para 3 colunas:
+1. **Cliente** (nome completo, como hoje)
+2. **Telefone** — número + botão "Copiar" ao lado (ícone)
+3. **Mensagem** — preview com `line-clamp-3` + botão "Copiar" ao lado
 
-### 1. Regra de "parcela mínima R$100"
-Hoje, ao clicar **Aplicar a todos**, o sistema simplesmente copia "Nº de parcelas" para todos. Vou adicionar uma regra:
+Remover colunas: CPF, Contrato, Total, Parc., % à vista, Nx, % Nx, Ações (Eye).
+Manter o `Sheet` de preview? Não — sem coluna Ações. Remover preview lateral e estado `previewCpf`/`clientePreview`.
 
-- Calcula o valor parcelado com desconto: `total × (1 − %desconto_parcelado/100)`
-- Calcula quantas parcelas cabem mantendo cada parcela ≥ R$100: `floor(valorParcelado / 100)`
-- Usa o menor entre o Nº global digitado e esse máximo
-- Mínimo absoluto = 1 (se o débito for menor que R$100, vira 1x à vista mesmo)
+As configurações globais (% à vista, Nx, % parcelado, Aplicar a todos) **permanecem** no card 1 — só não são mais editáveis por linha. O cálculo de `calcMaxParcelas` continua sendo aplicado por cliente automaticamente.
 
-Exemplo do usuário: total R$500, 12x global, 30% desconto parcelado → valor com desconto = R$350 → máximo 3 parcelas de ≈R$116 (não 5x100, porque o desconto reduz o total). Se o usuário quiser 5x100 sem desconto, basta deixar o desconto parcelado em 0 → 5x100.
+## Mudanças em `src/lib/parseCobmaisPlanilha.ts`
 
-Essa mesma regra é reaplicada automaticamente quando o usuário edita a linha (muda % parcelado ou Nx) — o campo Nx fica "limitado" pelo piso de R$100.
+**Nova coluna F "DIAS EM ATRASO"** na aba Cobrança:
+- Adicionar `diasAtraso: number` em `ClienteImportado`.
+- Em `parsePlanilhaCobmais`, localizar com `findCol(cobH, 'DIAS EM ATRASO', 'DIAS ATRASO', 'DIAS')`. Se não achar, usar índice 5 (coluna F) como fallback. Parsear com `Number(...) || 0`.
 
-### 2. Nova coluna "Mensagem"
-Na tabela "Clientes & Propostas", adiciono uma coluna **Mensagem** entre `% Nx` e `Ações`, com:
-- Preview truncado (2–3 linhas, `line-clamp`) da mensagem renderizada
-- Tooltip/hover mostra a mensagem completa
-- Botão **Copiar** já existente fica do lado, na coluna Ações
-
-Assim o usuário enxerga as 3 colunas que pediu lado a lado: **Cliente | Telefone | Mensagem** (CPF/Contrato/Total continuam visíveis para contexto, mas a mensagem agora aparece direto na linha).
-
-### 3. Indicação visual quando o Nx foi reduzido
-Se o Nx aplicado for menor que o Nx global digitado (porque bateu no piso de R$100), o campo Nx ganha um pequeno aviso (badge "ajustado" ou cor âmbar) para o usuário entender que o sistema reduziu por causa da regra dos R$100.
-
-## Arquivos envolvidos
-
-- `src/pages/ModeloMensagem.tsx` — função `aplicarGlobaisATodos`, função `setLinhaCfg`, render da tabela (nova coluna), helper `calcMaxParcelas(total, descPct)`
-- `src/lib/parseCobmaisPlanilha.ts` — `renderMensagem` já usa `parceladoQtd` recebido; nenhuma mudança necessária, só passamos o Nx já ajustado
+**Template e render** — novo placeholder `{dias_atraso}`:
+- Adicionar `'{dias_atraso}': String(cliente.diasAtraso)` no map.
+- Atualizar `TEMPLATE_PADRAO` em `ModeloMensagem.tsx`:
+  ```
+  Identificamos {qtd_parcelas_atraso} parcelas em aberto a {dias_atraso} dias de atraso no contrato {contrato}, totalizando *R$ {total_atraso}*.
+  ```
+- Trocar `{nome}` por **primeiro nome**: criar placeholder `{primeiro_nome}` = `cliente.nome.split(' ')[0]` e usar no template padrão. Manter `{nome}` funcionando.
 
 ## Fora do escopo
-- Não mudo o template de mensagem nem o parser da planilha
-- Não altero o backend / RLS
-- Não mudo o fluxo de "1 SIM por cliente" já decidido
+- Não mexer em RLS/backend, parser das outras abas (Telefones/Parcelas), nem no `EditarTemplateMensagemDialog`.

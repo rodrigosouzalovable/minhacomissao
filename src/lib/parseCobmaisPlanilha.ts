@@ -12,6 +12,7 @@ export interface ClienteImportado {
   contrato: string;
   telefone: string;
   totalAtraso: number;
+  diasAtraso: number;
   parcelas: ParcelaAberta[];
 }
 
@@ -92,6 +93,8 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
   const ciNome = findCol(cobH, 'CLIENTE', 'NOME');
   const ciContrato = findCol(cobH, 'CONTRATO');
   const ciTotal = findCol(cobH, 'TOTAL ATRASO', 'TOTAL EM ATRASO', 'TOTAL');
+  let ciDias = findCol(cobH, 'DIAS EM ATRASO', 'DIAS ATRASO', 'DIAS');
+  if (ciDias < 0) ciDias = 5; // fallback: coluna F
   if (ciCpf < 0 || ciNome < 0 || ciContrato < 0 || ciTotal < 0) {
     throw new Error('Cabeçalhos de "Cobrança" não encontrados (esperado: CPF/CNPJ, CLIENTE, CONTRATO, TOTAL ATRASO).');
   }
@@ -108,6 +111,7 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
       contrato: String(row[ciContrato] ?? '').trim(),
       telefone: '',
       totalAtraso: parseBRNumber(row[ciTotal]),
+      diasAtraso: Math.max(0, Math.floor(Number(String(row[ciDias] ?? '').replace(/\D+/g, '')) || 0)),
       parcelas: [],
     });
   }
@@ -188,10 +192,12 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
 
   const map: Record<string, string> = {
     '{nome}': cliente.nome,
+    '{primeiro_nome}': (cliente.nome || '').trim().split(/\s+/)[0] || cliente.nome,
     '{cpf}': cliente.cpf,
     '{contrato}': cliente.contrato,
     '{telefone}': cliente.telefone,
     '{total_atraso}': fmtBRL(total),
+    '{dias_atraso}': String(cliente.diasAtraso ?? 0),
     '{qtd_parcelas_atraso}': String(cliente.parcelas.length),
     '{valor_parcela_aberto}': fmtBRL(valorParcelaAberto),
     '{lista_parcelas}': lista,
