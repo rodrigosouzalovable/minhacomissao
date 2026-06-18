@@ -189,11 +189,8 @@ function titleCaseFirst(s: string): string {
 function buildOpcoesParcelado(total: number, descPct: number): string {
   const valorTotal = total * (1 - (descPct || 0) / 100);
   const candidatos = [4, 8, 12, 15];
-  let escolhidos = candidatos.filter((n) => valorTotal / n >= 100);
-  if (escolhidos.length === 0) {
-    const maxN = Math.max(1, Math.floor(valorTotal / 100));
-    escolhidos = [maxN];
-  }
+  const escolhidos = candidatos.filter((n) => n >= 2 && valorTotal / n >= 100);
+  if (escolhidos.length === 0) return '';
   return escolhidos
     .map((n) => {
       const parcela = valorTotal / n;
@@ -242,5 +239,7 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
     '{data_hoje}': new Date().toLocaleDateString('pt-BR'),
   };
 
-  return tpl.replace(/\{[a-z_]+\}/g, (m) => map[m] ?? m);
+  const out = tpl.replace(/\{[a-z_]+\}/g, (m) => map[m] ?? m);
+  // Colapsa 3+ quebras de linha consecutivas (geradas quando {opcoes_parcelado} fica vazio)
+  return out.replace(/\n{3,}/g, '\n\n');
 }

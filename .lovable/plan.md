@@ -1,46 +1,23 @@
 ## Objetivo
+Quando não houver nenhuma opção viável de parcelamento (mínimo 2x com parcela ≥ R$ 100,00), a mensagem deve mostrar apenas a opção À VISTA, sem a seção de parcelamento.
 
-Tornar a importação persistente entre abas/sessões, permitir marcar clientes já contatados, recalcular descontos automaticamente quando o usuário altera os percentuais globais, e importar todos os telefones marcados como "Sim".
+## Regras
+- Parcelamento só é exibido se existir ao menos uma quantidade N ∈ {4, 8, 12, 15} em que `valorTotal / N ≥ 100`.
+- Hoje o fallback em `buildOpcoesParcelado` cria uma opção com `Math.floor(valorTotal/100)` parcelas, o que gera situações como "1x de R$ 141,05" (caso da Alexania, dívida R$ 235,09). Esse fallback será removido.
+- Se nenhuma opção atender à regra (≥ 2x e parcela ≥ R$ 100), `{opcoes_parcelado}` retorna string vazia e o bloco "✅ *PARCELADO* ..." é omitido da mensagem.
+- Se houver pelo menos uma opção válida, comportamento atual é mantido.
 
-## 1. Persistência da lista importada (localStorage)
+## Alterações
 
-- Em `src/pages/ModeloMensagem.tsx`, salvar em `localStorage` (chave `modelo_mensagem_state_v1`):
-  - `clientes` (lista importada)
-  - `contatados` (Set de CPFs marcados)
-  - `descVistaGlobal`, `descParceladoGlobal`
-- `useEffect` ao montar: hidrata os estados a partir do `localStorage`.
-- `useEffect` em cada mudança relevante: persiste o estado.
-- Adicionar botão "Limpar lista" (ao lado de "Selecionar arquivo") para resetar quando o usuário quiser começar do zero.
+### `src/lib/parseCobmaisPlanilha.ts`
+- Em `buildOpcoesParcelado`: remover o fallback `Math.floor(valorTotal/100)`. Filtrar `[4,8,12,15]` mantendo apenas N com `valorTotal/N ≥ 100` e `N ≥ 2`. Se a lista ficar vazia, retornar string vazia.
 
-## 2. Marcar cliente como "Já contatado"
-
-- Nova coluna **"Contatado"** na tabela (primeira coluna) com um `Checkbox`.
-- Estado `contatados: Set<string>` (por CPF), persistido junto com a lista.
-- Linhas marcadas ganham estilo apagado (`opacity-50`, texto riscado no nome) para indicar visualmente.
-- Contador no topo: "X de Y contatados".
-
-## 3. Recalcular descontos automaticamente
-
-- Hoje a mensagem usa `configs[cpf]`, que só é atualizado ao clicar "Aplicar a todos". 
-- Mudar `mensagemDoCliente` para usar diretamente `descVistaGlobal` e `descParceladoGlobal` como fonte da verdade (remover `configs` e `LinhaConfig`, já que o controle por linha foi removido em mudanças anteriores).
-- Resultado: ao alterar qualquer percentual nos inputs globais, todas as mensagens da tabela atualizam em tempo real, sem precisar clicar em "Aplicar".
-- O botão "Aplicar a todos" deixa de ser necessário e será removido (ou mantido apenas como atalho visual — decisão: **remover** para simplificar).
-
-## 4. Importar todos os telefones marcados como "Sim"
-
-- Em `src/lib/parseCobmaisPlanilha.ts`:
-  - Mudar `ClienteImportado.telefone: string` → `telefones: string[]`.
-  - No parser da aba **Telefones**, acumular todos os números cujo `CONTATO === "Sim"` (deduplicados), em vez de parar no primeiro.
-- Em `ModeloMensagem.tsx`:
-  - Renderizar a coluna **Telefone** como lista vertical — cada número com seu próprio botão "Copiar" ao lado.
-  - Placeholder `{telefone}` no template passa a usar o primeiro telefone (compatibilidade).
-
-## Arquivos afetados
-
-- `src/lib/parseCobmaisPlanilha.ts` — campo `telefones: string[]`, parsing de múltiplos telefones.
-- `src/pages/ModeloMensagem.tsx` — persistência em localStorage, coluna "Contatado", recálculo automático, render de múltiplos telefones, remoção de `configs`/`LinhaConfig` e do botão "Aplicar".
+### `src/pages/ModeloMensagem.tsx`
+- No `TEMPLATE_PADRAO`, separar a parte "PARCELADO" em um placeholder único `{bloco_parcelado}` (ou montar condicionalmente em `renderMensagem`):
+  - Se `opcoes_parcelado` vazio → não inclui o subtítulo "💰 Condições especiais para hoje" com bloco parcelado; mantém somente o bloco À VISTA.
+  - Se `opcoes_parcelado` não vazio → mensagem atual.
+- Ajustar `renderMensagem` para remover linhas em branco extras quando o bloco parcelado é omitido.
 
 ## Fora de escopo
-
-- Persistir no backend (Supabase) — `localStorage` atende ao pedido ("ficar fixa mesmo trocando de aba ou fechando"). Se quiser sincronizar entre dispositivos depois, fazemos em um passo separado.
-- Mudanças no template/edge functions.
+- Mudar percentuais padrão de desconto.
+- Persistência, importação ou colunas da tabela.
