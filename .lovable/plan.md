@@ -1,23 +1,36 @@
-# Fix: planilha do Cob+ com `!ref` inválido
+# Mensagem pronta + parcelamento com piso de R$100
 
-## Causa raiz
+## O que muda na página `Modelo Mensagem`
 
-O arquivo `.xlsx` exportado pelo Cob+ grava o atributo `<dimension>` da aba apontando só para a linha do cabeçalho (`A1:R1`), mesmo quando há dados em `A2:R2` em diante. SheetJS usa esse `!ref` para iterar células e por isso `sheet_to_json` devolve só 1 linha → o parser dispara "Aba Cobrança vazia".
+### 1. Regra de "parcela mínima R$100"
+Hoje, ao clicar **Aplicar a todos**, o sistema simplesmente copia "Nº de parcelas" para todos. Vou adicionar uma regra:
 
-Reproduzido em Node com o arquivo enviado: `!ref = "A1:R1"`, mas `A2..R2` existem e contêm o cliente.
+- Calcula o valor parcelado com desconto: `total × (1 − %desconto_parcelado/100)`
+- Calcula quantas parcelas cabem mantendo cada parcela ≥ R$100: `floor(valorParcelado / 100)`
+- Usa o menor entre o Nº global digitado e esse máximo
+- Mínimo absoluto = 1 (se o débito for menor que R$100, vira 1x à vista mesmo)
 
-## Correção
+Exemplo do usuário: total R$500, 12x global, 30% desconto parcelado → valor com desconto = R$350 → máximo 3 parcelas de ≈R$116 (não 5x100, porque o desconto reduz o total). Se o usuário quiser 5x100 sem desconto, basta deixar o desconto parcelado em 0 → 5x100.
 
-Em `src/lib/parseCobmaisPlanilha.ts`, dentro de `sheetToRows`, antes do `sheet_to_json`:
+Essa mesma regra é reaplicada automaticamente quando o usuário edita a linha (muda % parcelado ou Nx) — o campo Nx fica "limitado" pelo piso de R$100.
 
-1. Varrer as chaves de célula (`A1`, `B2`, …, ignorando metadados `!*`).
-2. Calcular a maior linha e maior coluna reais.
-3. Sobrescrever `sheet['!ref']` com o range correto via `XLSX.utils.encode_range`.
-4. Chamar `sheet_to_json(sheet, { header: 1, defval: '', raw: true })` normalmente.
+### 2. Nova coluna "Mensagem"
+Na tabela "Clientes & Propostas", adiciono uma coluna **Mensagem** entre `% Nx` e `Ações`, com:
+- Preview truncado (2–3 linhas, `line-clamp`) da mensagem renderizada
+- Tooltip/hover mostra a mensagem completa
+- Botão **Copiar** já existente fica do lado, na coluna Ações
 
-Isso conserta as três abas (`Cobrança`, `Telefones`, `Parcelas`) de uma vez e não muda nada na UI nem no template.
+Assim o usuário enxerga as 3 colunas que pediu lado a lado: **Cliente | Telefone | Mensagem** (CPF/Contrato/Total continuam visíveis para contexto, mas a mensagem agora aparece direto na linha).
 
-## Fora de escopo
+### 3. Indicação visual quando o Nx foi reduzido
+Se o Nx aplicado for menor que o Nx global digitado (porque bateu no piso de R$100), o campo Nx ganha um pequeno aviso (badge "ajustado" ou cor âmbar) para o usuário entender que o sistema reduziu por causa da regra dos R$100.
 
-- Mudanças visuais ou de fluxo na aba `/modelo-mensagem`.
-- Outras abas da planilha (não usadas hoje).
+## Arquivos envolvidos
+
+- `src/pages/ModeloMensagem.tsx` — função `aplicarGlobaisATodos`, função `setLinhaCfg`, render da tabela (nova coluna), helper `calcMaxParcelas(total, descPct)`
+- `src/lib/parseCobmaisPlanilha.ts` — `renderMensagem` já usa `parceladoQtd` recebido; nenhuma mudança necessária, só passamos o Nx já ajustado
+
+## Fora do escopo
+- Não mudo o template de mensagem nem o parser da planilha
+- Não altero o backend / RLS
+- Não mudo o fluxo de "1 SIM por cliente" já decidido
