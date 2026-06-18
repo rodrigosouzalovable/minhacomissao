@@ -28,7 +28,8 @@ import {
   Download,
   BarChart3,
   AtSign,
-  Bell
+  Bell,
+  MessageSquareText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -94,6 +95,7 @@ const navItems: NavItem[] = [
   { href: '/admin/validar-emails', label: 'Validar E-mails', icon: AtSign, adminOnly: true },
   { href: '/admin/notificacoes', label: 'Notificações', icon: Bell, adminOnly: true },
   { href: '/estrategias', label: 'Estratégias', icon: Target },
+  { href: '/modelo-mensagem', label: 'Modelo Mensagem', icon: MessageSquareText },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
