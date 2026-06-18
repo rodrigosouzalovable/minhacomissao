@@ -192,10 +192,12 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
 
   const map: Record<string, string> = {
     '{nome}': cliente.nome,
+    '{primeiro_nome}': (cliente.nome || '').trim().split(/\s+/)[0] || cliente.nome,
     '{cpf}': cliente.cpf,
     '{contrato}': cliente.contrato,
     '{telefone}': cliente.telefone,
     '{total_atraso}': fmtBRL(total),
+    '{dias_atraso}': String(cliente.diasAtraso ?? 0),
     '{qtd_parcelas_atraso}': String(cliente.parcelas.length),
     '{valor_parcela_aberto}': fmtBRL(valorParcelaAberto),
     '{lista_parcelas}': lista,
