@@ -93,6 +93,8 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
   const ciNome = findCol(cobH, 'CLIENTE', 'NOME');
   const ciContrato = findCol(cobH, 'CONTRATO');
   const ciTotal = findCol(cobH, 'TOTAL ATRASO', 'TOTAL EM ATRASO', 'TOTAL');
+  let ciDias = findCol(cobH, 'DIAS EM ATRASO', 'DIAS ATRASO', 'DIAS');
+  if (ciDias < 0) ciDias = 5; // fallback: coluna F
   if (ciCpf < 0 || ciNome < 0 || ciContrato < 0 || ciTotal < 0) {
     throw new Error('Cabeçalhos de "Cobrança" não encontrados (esperado: CPF/CNPJ, CLIENTE, CONTRATO, TOTAL ATRASO).');
   }
@@ -109,6 +111,7 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
       contrato: String(row[ciContrato] ?? '').trim(),
       telefone: '',
       totalAtraso: parseBRNumber(row[ciTotal]),
+      diasAtraso: Math.max(0, Math.floor(Number(String(row[ciDias] ?? '').replace(/\D+/g, '')) || 0)),
       parcelas: [],
     });
   }
