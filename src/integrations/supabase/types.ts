@@ -1938,6 +1938,33 @@ export type Database = {
         }
         Relationships: []
       }
+      modelo_mensagem_estado: {
+        Row: {
+          atualizado_em: string
+          clientes: Json
+          contatados: Json
+          desc_parcelado_global: number
+          desc_vista_global: number
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          clientes?: Json
+          contatados?: Json
+          desc_parcelado_global?: number
+          desc_vista_global?: number
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          clientes?: Json
+          contatados?: Json
+          desc_parcelado_global?: number
+          desc_vista_global?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       modelo_mensagem_template: {
         Row: {
           created_at: string

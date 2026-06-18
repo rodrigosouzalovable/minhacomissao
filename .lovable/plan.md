@@ -1,23 +1,27 @@
-## Objetivo
-Quando não houver nenhuma opção viável de parcelamento (mínimo 2x com parcela ≥ R$ 100,00), a mensagem deve mostrar apenas a opção À VISTA, sem a seção de parcelamento.
+## Persistir lista importada e contatados no banco
 
-## Regras
-- Parcelamento só é exibido se existir ao menos uma quantidade N ∈ {4, 8, 12, 15} em que `valorTotal / N ≥ 100`.
-- Hoje o fallback em `buildOpcoesParcelado` cria uma opção com `Math.floor(valorTotal/100)` parcelas, o que gera situações como "1x de R$ 141,05" (caso da Alexania, dívida R$ 235,09). Esse fallback será removido.
-- Se nenhuma opção atender à regra (≥ 2x e parcela ≥ R$ 100), `{opcoes_parcelado}` retorna string vazia e o bloco "✅ *PARCELADO* ..." é omitido da mensagem.
-- Se houver pelo menos uma opção válida, comportamento atual é mantido.
+Hoje a lista de clientes importados e a marcação de "contatado" só ficam salvas no navegador (localStorage). Vou movê-las para o banco, vinculadas à sua conta, para que apareçam iguais em qualquer dispositivo.
 
-## Alterações
+### O que muda
 
-### `src/lib/parseCobmaisPlanilha.ts`
-- Em `buildOpcoesParcelado`: remover o fallback `Math.floor(valorTotal/100)`. Filtrar `[4,8,12,15]` mantendo apenas N com `valorTotal/N ≥ 100` e `N ≥ 2`. Se a lista ficar vazia, retornar string vazia.
+1. **Nova tabela** `modelo_mensagem_estado` (1 linha por usuário):
+   - `user_id` (PK, dono da linha)
+   - `clientes` (JSON com a planilha importada — mesma estrutura de hoje)
+   - `contatados` (lista de CPFs marcados)
+   - `desc_vista_global`, `desc_parcelado_global`
+   - `atualizado_em`
+   - RLS: cada usuário lê/escreve apenas a sua própria linha.
 
-### `src/pages/ModeloMensagem.tsx`
-- No `TEMPLATE_PADRAO`, separar a parte "PARCELADO" em um placeholder único `{bloco_parcelado}` (ou montar condicionalmente em `renderMensagem`):
-  - Se `opcoes_parcelado` vazio → não inclui o subtítulo "💰 Condições especiais para hoje" com bloco parcelado; mantém somente o bloco À VISTA.
-  - Se `opcoes_parcelado` não vazio → mensagem atual.
-- Ajustar `renderMensagem` para remover linhas em branco extras quando o bloco parcelado é omitido.
+2. **Página `ModeloMensagem.tsx`**:
+   - Ao abrir, carrega o estado do banco (com fallback para o localStorage existente, só na primeira vez, para não perder o que você já tem hoje).
+   - Sempre que `clientes`, `contatados` ou os descontos globais mudarem, faz um `upsert` no banco (com debounce de ~600ms para não gravar a cada tecla).
+   - Mantém o localStorage como cache rápido para evitar tela vazia enquanto carrega.
 
-## Fora de escopo
-- Mudar percentuais padrão de desconto.
-- Persistência, importação ou colunas da tabela.
+### Resultado
+- Importar planilha → fica salva na sua conta.
+- Marcar/desmarcar contatado → salvo na sua conta.
+- Trocar de aba, fechar o navegador, abrir em outro PC/celular → tudo reaparece igual.
+
+### Fora do escopo
+- Compartilhar a mesma lista entre usuários diferentes (cada conta tem a sua).
+- Histórico/versões da planilha.

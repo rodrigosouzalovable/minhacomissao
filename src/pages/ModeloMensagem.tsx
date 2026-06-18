@@ -55,41 +55,82 @@ export default function ModeloMensagem() {
   const [editOpen, setEditOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hidrata do localStorage
+  // Hidrata: tenta banco primeiro (sincroniza entre dispositivos); cai pro localStorage como cache.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const s = JSON.parse(raw) as PersistedState;
-        if (Array.isArray(s.clientes)) {
-          // backfill telefones[] em dados antigos
-          const fixed = s.clientes.map((c: any) => ({
-            ...c,
-            telefones: Array.isArray(c.telefones) ? c.telefones : (c.telefone ? [c.telefone] : []),
-          }));
-          setClientes(fixed);
+    let cancelled = false;
+    (async () => {
+      // 1) cache local imediato (evita tela vazia)
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw) as PersistedState;
+          if (Array.isArray(s.clientes)) {
+            const fixed = s.clientes.map((c: any) => ({
+              ...c,
+              telefones: Array.isArray(c.telefones) ? c.telefones : (c.telefone ? [c.telefone] : []),
+            }));
+            setClientes(fixed);
+          }
+          if (Array.isArray(s.contatados)) setContatados(new Set(s.contatados));
+          if (typeof s.descVistaGlobal === 'number') setDescVistaGlobal(s.descVistaGlobal);
+          if (typeof s.descParceladoGlobal === 'number') setDescParceladoGlobal(s.descParceladoGlobal);
         }
-        if (Array.isArray(s.contatados)) setContatados(new Set(s.contatados));
-        if (typeof s.descVistaGlobal === 'number') setDescVistaGlobal(s.descVistaGlobal);
-        if (typeof s.descParceladoGlobal === 'number') setDescParceladoGlobal(s.descParceladoGlobal);
-      }
-    } catch {}
-    setHydrated(true);
-  }, []);
+      } catch {}
 
-  // Persiste no localStorage
+      // 2) banco (autoritativo)
+      if (user) {
+        const { data } = await supabase
+          .from('modelo_mensagem_estado' as any)
+          .select('clientes, contatados, desc_vista_global, desc_parcelado_global')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!cancelled && data) {
+          const d: any = data;
+          if (Array.isArray(d.clientes)) {
+            const fixed = d.clientes.map((c: any) => ({
+              ...c,
+              telefones: Array.isArray(c.telefones) ? c.telefones : (c.telefone ? [c.telefone] : []),
+            }));
+            setClientes(fixed);
+          }
+          if (Array.isArray(d.contatados)) setContatados(new Set(d.contatados));
+          if (d.desc_vista_global != null) setDescVistaGlobal(Number(d.desc_vista_global));
+          if (d.desc_parcelado_global != null) setDescParceladoGlobal(Number(d.desc_parcelado_global));
+        }
+      }
+      if (!cancelled) setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Persiste no localStorage (cache rápido) + banco (debounce 600ms)
   useEffect(() => {
     if (!hydrated) return;
-    try {
-      const s: PersistedState = {
-        clientes,
-        contatados: Array.from(contatados),
-        descVistaGlobal,
-        descParceladoGlobal,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-    } catch {}
-  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, hydrated]);
+    const s: PersistedState = {
+      clientes,
+      contatados: Array.from(contatados),
+      descVistaGlobal,
+      descParceladoGlobal,
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+
+    if (!user) return;
+    const t = setTimeout(() => {
+      supabase
+        .from('modelo_mensagem_estado' as any)
+        .upsert({
+          user_id: user.id,
+          clientes: clientes as any,
+          contatados: Array.from(contatados) as any,
+          desc_vista_global: descVistaGlobal,
+          desc_parcelado_global: descParceladoGlobal,
+          atualizado_em: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+        .then(({ error }) => { if (error) console.error('[modelo_mensagem_estado] upsert', error); });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, hydrated, user]);
+
 
   // Carrega template salvo do usuário
   useEffect(() => {
