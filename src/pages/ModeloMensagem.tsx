@@ -192,18 +192,12 @@ export default function ModeloMensagem() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t">
               <div>
                 <Label className="text-xs">% Desconto à vista</Label>
                 <Input type="number" min={0} max={100}
                   value={descVistaGlobal}
                   onChange={(e) => setDescVistaGlobal(Number(e.target.value))} />
-              </div>
-              <div>
-                <Label className="text-xs">Nº parcelas (parcelado)</Label>
-                <Input type="number" min={1} max={60}
-                  value={parceladoQtdGlobal}
-                  onChange={(e) => setParceladoQtdGlobal(Number(e.target.value))} />
               </div>
               <div>
                 <Label className="text-xs">% Desconto parcelado</Label>
@@ -220,7 +214,7 @@ export default function ModeloMensagem() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Esses valores são aplicados como padrão a cada cliente. Você pode editar linha a linha na tabela abaixo.
+              O parcelamento mostra automaticamente 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
             </p>
           </CardContent>
         </Card>
