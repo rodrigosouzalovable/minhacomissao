@@ -78,16 +78,24 @@ export default function ModeloMensagem() {
     })();
   }, [user]);
 
+  const PARCELA_MINIMA = 100;
+  const calcMaxParcelas = (total: number, descPct: number, desejado: number) => {
+    const valor = total * (1 - (descPct || 0) / 100);
+    const max = Math.max(1, Math.floor(valor / PARCELA_MINIMA));
+    return Math.max(1, Math.min(desejado || 1, max));
+  };
+
   const aplicarGlobaisATodos = () => {
     const novo: Record<string, LinhaConfig> = {};
     for (const c of clientes) {
       novo[c.cpf] = {
         descontoVistaPct: descVistaGlobal,
-        parceladoQtd: parceladoQtdGlobal,
+        parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
         descontoParceladoPct: descParceladoGlobal,
       };
     }
     setConfigs(novo);
+    toast.success('Configurações aplicadas a todos os clientes.');
   };
 
   const handleFile = async (file: File) => {
@@ -104,7 +112,7 @@ export default function ModeloMensagem() {
       for (const c of lista) {
         cfg[c.cpf] = {
           descontoVistaPct: descVistaGlobal,
-          parceladoQtd: parceladoQtdGlobal,
+          parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
           descontoParceladoPct: descParceladoGlobal,
         };
       }
@@ -117,16 +125,25 @@ export default function ModeloMensagem() {
   };
 
   const setLinhaCfg = (cpf: string, patch: Partial<LinhaConfig>) => {
-    setConfigs((prev) => ({
-      ...prev,
-      [cpf]: { ...prev[cpf], ...patch },
-    }));
+    setConfigs((prev) => {
+      const cur = prev[cpf] ?? {
+        descontoVistaPct: descVistaGlobal,
+        parceladoQtd: parceladoQtdGlobal,
+        descontoParceladoPct: descParceladoGlobal,
+      };
+      const next = { ...cur, ...patch };
+      const cliente = clientes.find((x) => x.cpf === cpf);
+      if (cliente && (patch.parceladoQtd !== undefined || patch.descontoParceladoPct !== undefined)) {
+        next.parceladoQtd = calcMaxParcelas(cliente.totalAtraso, next.descontoParceladoPct, next.parceladoQtd);
+      }
+      return { ...prev, [cpf]: next };
+    });
   };
 
   const mensagemDoCliente = (c: ClienteImportado) => {
     const cfg = configs[c.cpf] ?? {
       descontoVistaPct: descVistaGlobal,
-      parceladoQtd: parceladoQtdGlobal,
+      parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
       descontoParceladoPct: descParceladoGlobal,
     };
     return renderMensagem(template, { cliente: c, ...cfg });
@@ -236,8 +253,9 @@ export default function ModeloMensagem() {
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-center">Parc.</TableHead>
                     <TableHead className="w-20">% à vista</TableHead>
-                    <TableHead className="w-16">Nx</TableHead>
+                    <TableHead className="w-20">Nx</TableHead>
                     <TableHead className="w-20">% Nx</TableHead>
+                    <TableHead className="min-w-[260px]">Mensagem</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -245,9 +263,11 @@ export default function ModeloMensagem() {
                   {clientes.map((c) => {
                     const cfg = configs[c.cpf] ?? {
                       descontoVistaPct: descVistaGlobal,
-                      parceladoQtd: parceladoQtdGlobal,
+                      parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
                       descontoParceladoPct: descParceladoGlobal,
                     };
+                    const ajustado = cfg.parceladoQtd < (parceladoQtdGlobal || 1);
+                    const msg = mensagemDoCliente(c);
                     return (
                       <TableRow key={c.cpf}>
                         <TableCell className="font-medium">{c.nome}</TableCell>
@@ -264,14 +284,25 @@ export default function ModeloMensagem() {
                             onChange={(e) => setLinhaCfg(c.cpf, { descontoVistaPct: Number(e.target.value) })} />
                         </TableCell>
                         <TableCell>
-                          <Input className="h-8" type="number" min={1} max={60}
+                          <Input
+                            className={`h-8 ${ajustado ? 'border-amber-500 text-amber-700 font-semibold' : ''}`}
+                            type="number" min={1} max={60}
                             value={cfg.parceladoQtd}
+                            title={ajustado ? `Ajustado para manter parcela ≥ R$ ${PARCELA_MINIMA}` : ''}
                             onChange={(e) => setLinhaCfg(c.cpf, { parceladoQtd: Number(e.target.value) })} />
                         </TableCell>
                         <TableCell>
                           <Input className="h-8" type="number" min={0} max={100}
                             value={cfg.descontoParceladoPct}
                             onChange={(e) => setLinhaCfg(c.cpf, { descontoParceladoPct: Number(e.target.value) })} />
+                        </TableCell>
+                        <TableCell>
+                          <div
+                            className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[420px] text-muted-foreground"
+                            title={msg}
+                          >
+                            {msg}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <Button size="sm" variant="ghost" onClick={() => setPreviewCpf(c.cpf)}>
