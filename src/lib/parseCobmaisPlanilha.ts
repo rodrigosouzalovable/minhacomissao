@@ -57,6 +57,18 @@ function parseDateCell(v: any): string {
 function sheetToRows(wb: XLSX.WorkBook, name: string): any[][] {
   const sheet = wb.Sheets[name];
   if (!sheet) return [];
+  // Cob+ exporta `!ref` apontando só para a linha do cabeçalho.
+  // Recalcula a range varrendo as chaves reais de célula.
+  let maxR = 0, maxC = 0;
+  for (const key of Object.keys(sheet)) {
+    if (key[0] === '!') continue;
+    const ref = XLSX.utils.decode_cell(key);
+    if (ref.r > maxR) maxR = ref.r;
+    if (ref.c > maxC) maxC = ref.c;
+  }
+  if (maxR > 0 || maxC > 0) {
+    sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: maxC } });
+  }
   return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true }) as any[][];
 }
 
