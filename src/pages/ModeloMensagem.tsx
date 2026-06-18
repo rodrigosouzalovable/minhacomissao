@@ -22,16 +22,12 @@ const TEMPLATE_PADRAO = `Olá, {primeiro_nome}! Tudo bem?
 
 Identificamos {qtd_parcelas_atraso} parcelas em aberto a {dias_atraso} dias de atraso no contrato {contrato}, totalizando *R$ {total_atraso}*.
 
-📋 *Parcelas em aberto:*
-{lista_parcelas}
-
 💰 *Condições especiais para hoje:*
 
 ✅ *À VISTA* com {desconto_vista_pct}% de desconto:
    *R$ {valor_quitacao}*
 
-✅ *PARCELADO* em {parcelado_qtd}x de {valor_cada_parcela_proposta}
-   (total R$ {valor_parcelado_total}, {desconto_parcelado_pct}% de desconto)
+{opcoes_parcelado}
 
 Posso confirmar qual opção é melhor para você?`;
 
