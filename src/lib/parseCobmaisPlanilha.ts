@@ -12,6 +12,7 @@ export interface ClienteImportado {
   contrato: string;
   telefone: string;
   totalAtraso: number;
+  diasAtraso: number;
   parcelas: ParcelaAberta[];
 }
 
