@@ -10,7 +10,8 @@ export interface ClienteImportado {
   cpf: string;
   nome: string;
   contrato: string;
-  telefone: string;
+  telefone: string; // primeiro telefone (compat)
+  telefones: string[]; // todos os telefones marcados como "Sim"
   totalAtraso: number;
   diasAtraso: number;
   parcelas: ParcelaAberta[];
