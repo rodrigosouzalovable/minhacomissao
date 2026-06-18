@@ -1,15 +1,26 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Loader2, Upload, Copy, Settings, Sparkles, X } from 'lucide-react';
+import { Loader2, Upload, Copy, Settings, FileSpreadsheet, Eye } from 'lucide-react';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
+import {
+  parsePlanilhaCobmais,
+  renderMensagem,
+  type ClienteImportado,
+} from '@/lib/parseCobmaisPlanilha';
 
 const TEMPLATE_PADRAO = `Olá, {nome}! Tudo bem?
 
@@ -20,63 +31,36 @@ Identificamos {qtd_parcelas_atraso} parcelas em aberto no contrato {contrato}, t
 
 💰 *Condições especiais para hoje:*
 
-✅ *À VISTA* com {desconto_pct}% de desconto:
+✅ *À VISTA* com {desconto_vista_pct}% de desconto:
    *R$ {valor_quitacao}*
 
-✅ *PARCELADO* em {parcelas_qtd}x de:
-   *R$ {valor_parcela}*
+✅ *PARCELADO* em {parcelado_qtd}x de {valor_cada_parcela_proposta}
+   (total R$ {valor_parcelado_total}, {desconto_parcelado_pct}% de desconto)
 
 Posso confirmar qual opção é melhor para você?`;
 
-interface Parcela { numero: string; vencimento: string; valor: number; atraso: number; }
-interface Extracted {
-  nome?: string;
-  cpf?: string;
-  contrato?: string;
-  total_atraso?: number;
-  neg_data?: string;
-  credor_sigla?: string;
-  parcelas?: Parcela[];
+interface LinhaConfig {
+  descontoVistaPct: number;
+  parceladoQtd: number;
+  descontoParceladoPct: number;
 }
 
-const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtData = () => new Date().toLocaleDateString('pt-BR');
-
-function renderMensagem(tpl: string, d: Extracted, desconto: number, parcelas: number): string {
-  const total = d.total_atraso || 0;
-  const valorQuit = total * (1 - desconto / 100);
-  const valorParc = parcelas > 0 ? total / parcelas : 0;
-  const lista = (d.parcelas || [])
-    .map((p) => `• Parcela ${p.numero} — venc. ${p.vencimento} — R$ ${fmtBRL(p.valor)} (${p.atraso} dias de atraso)`)
-    .join('\n');
-  const map: Record<string, string> = {
-    '{nome}': d.nome || '',
-    '{cpf}': d.cpf || '',
-    '{contrato}': d.contrato || '',
-    '{total_atraso}': fmtBRL(total),
-    '{qtd_parcelas_atraso}': String((d.parcelas || []).length),
-    '{desconto_pct}': String(desconto),
-    '{valor_quitacao}': fmtBRL(valorQuit),
-    '{parcelas_qtd}': String(parcelas),
-    '{valor_parcela}': fmtBRL(valorParc),
-    '{lista_parcelas}': lista,
-    '{data_hoje}': fmtData(),
-  };
-  return tpl.replace(/\{[a-z_]+\}/g, (m) => map[m] ?? m);
-}
+const fmtBRL = (n: number) =>
+  n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ModeloMensagem() {
   const { user } = useAuth();
   const [template, setTemplate] = useState(TEMPLATE_PADRAO);
-  const [desconto, setDesconto] = useState(50);
-  const [parcelas, setParcelas] = useState(12);
-  const [image, setImage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [extracted, setExtracted] = useState<Extracted | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
+  const [descVistaGlobal, setDescVistaGlobal] = useState(50);
+  const [parceladoQtdGlobal, setParceladoQtdGlobal] = useState(12);
+  const [descParceladoGlobal, setDescParceladoGlobal] = useState(30);
 
-  // Load saved template
+  const [clientes, setClientes] = useState<ClienteImportado[]>([]);
+  const [configs, setConfigs] = useState<Record<string, LinhaConfig>>({});
+  const [loading, setLoading] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [previewCpf, setPreviewCpf] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -88,76 +72,75 @@ export default function ModeloMensagem() {
       if (data) {
         const d = data as any;
         if (d.template) setTemplate(d.template);
-        if (d.desconto_padrao != null) setDesconto(Number(d.desconto_padrao));
-        if (d.parcelas_padrao != null) setParcelas(Number(d.parcelas_padrao));
+        if (d.desconto_padrao != null) setDescVistaGlobal(Number(d.desconto_padrao));
+        if (d.parcelas_padrao != null) setParceladoQtdGlobal(Number(d.parcelas_padrao));
       }
     })();
   }, [user]);
 
-  const handleFile = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Apenas imagens são aceitas');
-      return;
+  const aplicarGlobaisATodos = () => {
+    const novo: Record<string, LinhaConfig> = {};
+    for (const c of clientes) {
+      novo[c.cpf] = {
+        descontoVistaPct: descVistaGlobal,
+        parceladoQtd: parceladoQtdGlobal,
+        descontoParceladoPct: descParceladoGlobal,
+      };
     }
-    const reader = new FileReader();
-    reader.onload = () => setImage(reader.result as string);
-    reader.readAsDataURL(file);
-  }, []);
-
-  // Paste handler
-  useEffect(() => {
-    const onPaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const it of items) {
-        if (it.type.startsWith('image/')) {
-          const f = it.getAsFile();
-          if (f) { handleFile(f); break; }
-        }
-      }
-    };
-    window.addEventListener('paste', onPaste);
-    return () => window.removeEventListener('paste', onPaste);
-  }, [handleFile]);
-
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFile(f);
+    setConfigs(novo);
   };
 
-  const extrair = async () => {
-    if (!image) return;
+  const handleFile = async (file: File) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('extract-cobmais-print', { body: { image } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setExtracted(data.data as Extracted);
-      toast.success('Dados extraídos!');
+      const lista = await parsePlanilhaCobmais(file);
+      if (lista.length === 0) {
+        toast.warning('Nenhum cliente encontrado na planilha.');
+      } else {
+        toast.success(`${lista.length} cliente(s) importado(s).`);
+      }
+      setClientes(lista);
+      const cfg: Record<string, LinhaConfig> = {};
+      for (const c of lista) {
+        cfg[c.cpf] = {
+          descontoVistaPct: descVistaGlobal,
+          parceladoQtd: parceladoQtdGlobal,
+          descontoParceladoPct: descParceladoGlobal,
+        };
+      }
+      setConfigs(cfg);
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao extrair dados');
+      toast.error(e.message || 'Erro ao ler planilha');
     } finally {
       setLoading(false);
     }
   };
 
-  const mensagem = extracted ? renderMensagem(template, extracted, desconto, parcelas) : '';
-
-  const copiar = async () => {
-    await navigator.clipboard.writeText(mensagem);
-    toast.success('Mensagem copiada!');
+  const setLinhaCfg = (cpf: string, patch: Partial<LinhaConfig>) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [cpf]: { ...prev[cpf], ...patch },
+    }));
   };
 
-  const updateField = (k: keyof Extracted, v: any) => setExtracted((e) => ({ ...(e || {}), [k]: v }));
-  const updateParcela = (i: number, k: keyof Parcela, v: any) => {
-    setExtracted((e) => {
-      if (!e?.parcelas) return e;
-      const arr = [...e.parcelas];
-      arr[i] = { ...arr[i], [k]: k === 'valor' || k === 'atraso' ? Number(v) : v };
-      return { ...e, parcelas: arr };
-    });
+  const mensagemDoCliente = (c: ClienteImportado) => {
+    const cfg = configs[c.cpf] ?? {
+      descontoVistaPct: descVistaGlobal,
+      parceladoQtd: parceladoQtdGlobal,
+      descontoParceladoPct: descParceladoGlobal,
+    };
+    return renderMensagem(template, { cliente: c, ...cfg });
   };
+
+  const copiar = async (c: ClienteImportado) => {
+    await navigator.clipboard.writeText(mensagemDoCliente(c));
+    toast.success(`Mensagem de ${c.nome.split(' ')[0]} copiada!`);
+  };
+
+  const clientePreview = useMemo(
+    () => clientes.find((c) => c.cpf === previewCpf) || null,
+    [clientes, previewCpf],
+  );
 
   return (
     <AppLayout>
@@ -165,122 +148,180 @@ export default function ModeloMensagem() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-bold">Modelo Mensagem</h1>
-            <p className="text-sm text-muted-foreground">Cole um print do Cob+ e gere a mensagem de negociação automaticamente.</p>
+            <p className="text-sm text-muted-foreground">
+              Importe a planilha do Cob+ e gere as mensagens de negociação para cada cliente.
+            </p>
           </div>
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <Settings className="h-4 w-4 mr-2" /> Editar Modelo
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Coluna 1: print */}
-          <Card>
-            <CardHeader><CardTitle className="text-base">1. Cole o print</CardTitle></CardHeader>
-            <CardContent>
-              <div
-                ref={dropRef}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={onDrop}
-                className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-muted/50 transition"
-                onClick={() => document.getElementById('file-input')?.click()}
-              >
-                {image ? (
-                  <div className="relative">
-                    <img src={image} alt="Print" className="max-h-64 mx-auto rounded" />
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      className="absolute top-1 right-1 h-6 w-6"
-                      onClick={(e) => { e.stopPropagation(); setImage(null); setExtracted(null); }}
-                    ><X className="h-3 w-3" /></Button>
-                  </div>
-                ) : (
-                  <div className="py-8 text-muted-foreground">
-                    <Upload className="h-8 w-8 mx-auto mb-2" />
-                    <p className="text-sm">Clique, arraste ou pressione <kbd className="px-1 border rounded">Ctrl+V</kbd></p>
-                  </div>
-                )}
-                <input
-                  id="file-input"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                />
-              </div>
-              <Button className="w-full mt-3" onClick={extrair} disabled={!image || loading}>
-                {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                Extrair Dados
-              </Button>
-              <p className="text-[10px] text-muted-foreground mt-2 text-center">⚡ Consome créditos de IA Lovable Gateway</p>
-            </CardContent>
-          </Card>
-
-          {/* Coluna 2: dados + parâmetros */}
-          <Card>
-            <CardHeader><CardTitle className="text-base">2. Dados & Condições</CardTitle></CardHeader>
-            <CardContent className="space-y-3 max-h-[600px] overflow-y-auto">
-              {extracted ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><Label className="text-xs">Nome</Label><Input value={extracted.nome || ''} onChange={(e) => updateField('nome', e.target.value)} /></div>
-                    <div><Label className="text-xs">CPF</Label><Input value={extracted.cpf || ''} onChange={(e) => updateField('cpf', e.target.value)} /></div>
-                    <div><Label className="text-xs">Contrato</Label><Input value={extracted.contrato || ''} onChange={(e) => updateField('contrato', e.target.value)} /></div>
-                    <div><Label className="text-xs">Total atraso (R$)</Label><Input type="number" value={extracted.total_atraso ?? 0} onChange={(e) => updateField('total_atraso', Number(e.target.value))} /></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                    <div><Label className="text-xs">% Desconto à vista</Label><Input type="number" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} /></div>
-                    <div><Label className="text-xs">Nº parcelas</Label><Input type="number" value={parcelas} onChange={(e) => setParcelas(Number(e.target.value))} /></div>
-                  </div>
-                  {extracted.parcelas && extracted.parcelas.length > 0 && (
-                    <div className="pt-2 border-t">
-                      <Label className="text-xs">Parcelas ({extracted.parcelas.length})</Label>
-                      <div className="space-y-1 mt-1">
-                        {extracted.parcelas.map((p, i) => (
-                          <div key={i} className="grid grid-cols-4 gap-1 text-xs">
-                            <Input className="h-7 text-xs" value={p.numero} onChange={(e) => updateParcela(i, 'numero', e.target.value)} />
-                            <Input className="h-7 text-xs" value={p.vencimento} onChange={(e) => updateParcela(i, 'vencimento', e.target.value)} />
-                            <Input className="h-7 text-xs" type="number" value={p.valor} onChange={(e) => updateParcela(i, 'valor', e.target.value)} />
-                            <Input className="h-7 text-xs" type="number" value={p.atraso} onChange={(e) => updateParcela(i, 'atraso', e.target.value)} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">Cole um print e clique em "Extrair Dados"</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Coluna 3: mensagem */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">3. Mensagem Final</CardTitle>
-              {mensagem && (
-                <Button size="sm" onClick={copiar}><Copy className="h-4 w-4 mr-2" />Copiar</Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={mensagem}
-                readOnly
-                rows={24}
-                className="font-mono text-xs bg-muted/30"
-                placeholder="A mensagem aparecerá aqui depois da extração..."
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">1. Importar planilha</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <input
+                id="xlsx-input"
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               />
+              <Button
+                onClick={() => document.getElementById('xlsx-input')?.click()}
+                disabled={loading}
+              >
+                {loading
+                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  : <Upload className="h-4 w-4 mr-2" />}
+                Selecionar arquivo .xlsx
+              </Button>
+              {clientes.length > 0 && (
+                <span className="text-sm text-muted-foreground flex items-center gap-1">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {clientes.length} cliente(s) importado(s)
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t">
+              <div>
+                <Label className="text-xs">% Desconto à vista</Label>
+                <Input type="number" min={0} max={100}
+                  value={descVistaGlobal}
+                  onChange={(e) => setDescVistaGlobal(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label className="text-xs">Nº parcelas (parcelado)</Label>
+                <Input type="number" min={1} max={60}
+                  value={parceladoQtdGlobal}
+                  onChange={(e) => setParceladoQtdGlobal(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label className="text-xs">% Desconto parcelado</Label>
+                <Input type="number" min={0} max={100}
+                  value={descParceladoGlobal}
+                  onChange={(e) => setDescParceladoGlobal(Number(e.target.value))} />
+              </div>
+              <div className="flex items-end">
+                <Button variant="secondary" className="w-full"
+                  disabled={clientes.length === 0}
+                  onClick={aplicarGlobaisATodos}>
+                  Aplicar a todos
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Esses valores são aplicados como padrão a cada cliente. Você pode editar linha a linha na tabela abaixo.
+            </p>
+          </CardContent>
+        </Card>
+
+        {clientes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">2. Clientes & Propostas</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>CPF</TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead>Contrato</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-center">Parc.</TableHead>
+                    <TableHead className="w-20">% à vista</TableHead>
+                    <TableHead className="w-16">Nx</TableHead>
+                    <TableHead className="w-20">% Nx</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clientes.map((c) => {
+                    const cfg = configs[c.cpf] ?? {
+                      descontoVistaPct: descVistaGlobal,
+                      parceladoQtd: parceladoQtdGlobal,
+                      descontoParceladoPct: descParceladoGlobal,
+                    };
+                    return (
+                      <TableRow key={c.cpf}>
+                        <TableCell className="font-medium">{c.nome}</TableCell>
+                        <TableCell className="font-mono text-xs">{c.cpf}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {c.telefone || <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{c.contrato}</TableCell>
+                        <TableCell className="text-right">R$ {fmtBRL(c.totalAtraso)}</TableCell>
+                        <TableCell className="text-center">{c.parcelas.length}</TableCell>
+                        <TableCell>
+                          <Input className="h-8" type="number" min={0} max={100}
+                            value={cfg.descontoVistaPct}
+                            onChange={(e) => setLinhaCfg(c.cpf, { descontoVistaPct: Number(e.target.value) })} />
+                        </TableCell>
+                        <TableCell>
+                          <Input className="h-8" type="number" min={1} max={60}
+                            value={cfg.parceladoQtd}
+                            onChange={(e) => setLinhaCfg(c.cpf, { parceladoQtd: Number(e.target.value) })} />
+                        </TableCell>
+                        <TableCell>
+                          <Input className="h-8" type="number" min={0} max={100}
+                            value={cfg.descontoParceladoPct}
+                            onChange={(e) => setLinhaCfg(c.cpf, { descontoParceladoPct: Number(e.target.value) })} />
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <Button size="sm" variant="ghost" onClick={() => setPreviewCpf(c.cpf)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => copiar(c)}>
+                            <Copy className="h-4 w-4 mr-1" /> Copiar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
-        </div>
+        )}
+
+        <Sheet open={!!previewCpf} onOpenChange={(o) => !o && setPreviewCpf(null)}>
+          <SheetContent className="sm:max-w-lg w-full overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>{clientePreview?.nome}</SheetTitle>
+            </SheetHeader>
+            {clientePreview && (
+              <div className="mt-4 space-y-3">
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div>CPF: <span className="font-mono">{clientePreview.cpf}</span></div>
+                  <div>Telefone: <span className="font-mono">{clientePreview.telefone || '—'}</span></div>
+                </div>
+                <Textarea
+                  readOnly
+                  rows={22}
+                  className="font-mono text-xs bg-muted/30"
+                  value={mensagemDoCliente(clientePreview)}
+                />
+                <Button className="w-full" onClick={() => copiar(clientePreview)}>
+                  <Copy className="h-4 w-4 mr-2" /> Copiar mensagem
+                </Button>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
 
         <EditarTemplateMensagemDialog
           open={editOpen}
           onOpenChange={setEditOpen}
           template={template}
-          descontoPadrao={desconto}
-          parcelasPadrao={parcelas}
-          onSaved={(t, d, p) => { setTemplate(t); setDesconto(d); setParcelas(p); }}
+          descontoPadrao={descVistaGlobal}
+          parcelasPadrao={parceladoQtdGlobal}
+          onSaved={(t, d, p) => { setTemplate(t); setDescVistaGlobal(d); setParceladoQtdGlobal(p); }}
         />
       </div>
     </AppLayout>
