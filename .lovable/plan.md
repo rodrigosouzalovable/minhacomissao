@@ -1,28 +1,44 @@
-## Mudanças em `src/pages/ModeloMensagem.tsx`
+## Objetivo
+Atualizar a mensagem para mostrar até 4 opções de parcelamento (4x, 8x, 12x, 15x), filtrando as que ficariam abaixo de R$100/parcela, e capitalizar o primeiro nome (Title case).
 
-**Tabela "2. Clientes & Propostas"** — reduzir para 3 colunas:
-1. **Cliente** (nome completo, como hoje)
-2. **Telefone** — número + botão "Copiar" ao lado (ícone)
-3. **Mensagem** — preview com `line-clamp-3` + botão "Copiar" ao lado
+## Mudanças
 
-Remover colunas: CPF, Contrato, Total, Parc., % à vista, Nx, % Nx, Ações (Eye).
-Manter o `Sheet` de preview? Não — sem coluna Ações. Remover preview lateral e estado `previewCpf`/`clientePreview`.
-
-As configurações globais (% à vista, Nx, % parcelado, Aplicar a todos) **permanecem** no card 1 — só não são mais editáveis por linha. O cálculo de `calcMaxParcelas` continua sendo aplicado por cliente automaticamente.
-
-## Mudanças em `src/lib/parseCobmaisPlanilha.ts`
-
-**Nova coluna F "DIAS EM ATRASO"** na aba Cobrança:
-- Adicionar `diasAtraso: number` em `ClienteImportado`.
-- Em `parsePlanilhaCobmais`, localizar com `findCol(cobH, 'DIAS EM ATRASO', 'DIAS ATRASO', 'DIAS')`. Se não achar, usar índice 5 (coluna F) como fallback. Parsear com `Number(...) || 0`.
-
-**Template e render** — novo placeholder `{dias_atraso}`:
-- Adicionar `'{dias_atraso}': String(cliente.diasAtraso)` no map.
-- Atualizar `TEMPLATE_PADRAO` em `ModeloMensagem.tsx`:
+### 1. `src/lib/parseCobmaisPlanilha.ts`
+- **Capitalizar `{primeiro_nome}`**: aplicar Title Case (primeira letra maiúscula, demais minúsculas) — ex.: `JHONY` → `Jhony`, `jhony` → `Jhony`.
+- **Novo placeholder `{opcoes_parcelado}`**: gera bloco multilinha com até 4 opções (4x, 8x, 12x, 15x), filtrando as que resultam em parcela < R$100. Formato de cada linha:
   ```
+  ✅ *PARCELADO* em {N}x de {valor_parcela}
+     (total R$ {valor_total}, {desconto}% de desconto)
+  ```
+  Separadas por linha em branco. Usa `descontoParceladoPct` do contexto.
+- Manter placeholders antigos (`{parcelado_qtd}`, `{valor_cada_parcela_proposta}`, etc.) para retrocompatibilidade.
+
+### 2. `src/pages/ModeloMensagem.tsx`
+- **`TEMPLATE_PADRAO`**: trocar o bloco fixo de "PARCELADO em {parcelado_qtd}x..." por `{opcoes_parcelado}`. Resultado final:
+  ```
+  Olá, {primeiro_nome}! Tudo bem?
+
   Identificamos {qtd_parcelas_atraso} parcelas em aberto a {dias_atraso} dias de atraso no contrato {contrato}, totalizando *R$ {total_atraso}*.
+
+  💰 *Condições especiais para hoje:*
+
+  ✅ *À VISTA* com {desconto_vista_pct}% de desconto:
+     *R$ {valor_quitacao}*
+
+  {opcoes_parcelado}
+
+  Posso confirmar qual opção é melhor para você?
   ```
-- Trocar `{nome}` por **primeiro nome**: criar placeholder `{primeiro_nome}` = `cliente.nome.split(' ')[0]` e usar no template padrão. Manter `{nome}` funcionando.
+  (Remove `📋 Parcelas em aberto` e `{lista_parcelas}` conforme exemplo do usuário.)
+- Remover o controle "Nº parcelas (parcelado)" do painel de configurações globais (não faz mais sentido — agora são 4, 8, 12, 15 fixos). Manter `descVistaGlobal` e `descParceladoGlobal`. `calcMaxParcelas` deixa de ser necessário e é removido (junto com os usos em `aplicarGlobaisATodos`, `handleFile`, `setLinhaCfg`, `mensagemDoCliente`).
+- Layout do grid de configs passa de 4 para 3 colunas.
+
+## Regra de filtro (R$100)
+Para cada N ∈ [4, 8, 12, 15]:
+- `valorTotal = totalAtraso * (1 - descParceladoPct/100)`
+- `valorParcela = valorTotal / N`
+- incluir apenas se `valorParcela >= 100`
+- Se nenhuma opção sobrar (dívida < R$400 após desconto), incluir ao menos a opção de menor N viável (`Math.floor(valorTotal/100)`x), garantindo ≥1 opção.
 
 ## Fora do escopo
-- Não mexer em RLS/backend, parser das outras abas (Telefones/Parcelas), nem no `EditarTemplateMensagemDialog`.
+- Backend/RLS, edge functions, `EditarTemplateMensagemDialog`, outras páginas.

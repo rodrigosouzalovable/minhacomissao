@@ -176,6 +176,27 @@ export interface RenderCtx {
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+function titleCaseFirst(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function buildOpcoesParcelado(total: number, descPct: number): string {
+  const valorTotal = total * (1 - (descPct || 0) / 100);
+  const candidatos = [4, 8, 12, 15];
+  let escolhidos = candidatos.filter((n) => valorTotal / n >= 100);
+  if (escolhidos.length === 0) {
+    const maxN = Math.max(1, Math.floor(valorTotal / 100));
+    escolhidos = [maxN];
+  }
+  return escolhidos
+    .map((n) => {
+      const parcela = valorTotal / n;
+      return `✅ *PARCELADO* em ${n}x de ${fmtBRL(parcela)}\n   (total R$ ${fmtBRL(valorTotal)}, ${descPct}% de desconto)`;
+    })
+    .join('\n\n');
+}
+
 export function renderMensagem(tpl: string, ctx: RenderCtx): string {
   const { cliente, descontoVistaPct, parceladoQtd, descontoParceladoPct } = ctx;
   const total = cliente.totalAtraso || 0;
@@ -190,9 +211,11 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
     .map((p) => `• Parcela ${p.numero} — venc. ${p.vencimento} — R$ ${fmtBRL(p.valor)}`)
     .join('\n');
 
+  const primeiroNomeRaw = (cliente.nome || '').trim().split(/\s+/)[0] || cliente.nome || '';
+
   const map: Record<string, string> = {
     '{nome}': cliente.nome,
-    '{primeiro_nome}': (cliente.nome || '').trim().split(/\s+/)[0] || cliente.nome,
+    '{primeiro_nome}': titleCaseFirst(primeiroNomeRaw),
     '{cpf}': cliente.cpf,
     '{contrato}': cliente.contrato,
     '{telefone}': cliente.telefone,
@@ -202,14 +225,15 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
     '{valor_parcela_aberto}': fmtBRL(valorParcelaAberto),
     '{lista_parcelas}': lista,
     '{desconto_vista_pct}': String(descontoVistaPct),
-    '{desconto_pct}': String(descontoVistaPct), // alias antigo
+    '{desconto_pct}': String(descontoVistaPct),
     '{valor_quitacao}': fmtBRL(valorQuitacao),
     '{parcelado_qtd}': String(parceladoQtd),
-    '{parcelas_qtd}': String(parceladoQtd), // alias antigo
+    '{parcelas_qtd}': String(parceladoQtd),
     '{desconto_parcelado_pct}': String(descontoParceladoPct),
     '{valor_cada_parcela_proposta}': fmtBRL(valorCadaParcelaProposta),
-    '{valor_parcela}': fmtBRL(valorParcelaAlias), // alias antigo
+    '{valor_parcela}': fmtBRL(valorParcelaAlias),
     '{valor_parcelado_total}': fmtBRL(valorParceladoTotal),
+    '{opcoes_parcelado}': buildOpcoesParcelado(total, descontoParceladoPct),
     '{data_hoje}': new Date().toLocaleDateString('pt-BR'),
   };
 

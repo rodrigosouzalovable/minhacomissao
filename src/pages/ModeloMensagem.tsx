@@ -22,16 +22,12 @@ const TEMPLATE_PADRAO = `Olá, {primeiro_nome}! Tudo bem?
 
 Identificamos {qtd_parcelas_atraso} parcelas em aberto a {dias_atraso} dias de atraso no contrato {contrato}, totalizando *R$ {total_atraso}*.
 
-📋 *Parcelas em aberto:*
-{lista_parcelas}
-
 💰 *Condições especiais para hoje:*
 
 ✅ *À VISTA* com {desconto_vista_pct}% de desconto:
    *R$ {valor_quitacao}*
 
-✅ *PARCELADO* em {parcelado_qtd}x de {valor_cada_parcela_proposta}
-   (total R$ {valor_parcelado_total}, {desconto_parcelado_pct}% de desconto)
+{opcoes_parcelado}
 
 Posso confirmar qual opção é melhor para você?`;
 
@@ -196,18 +192,12 @@ export default function ModeloMensagem() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t">
               <div>
                 <Label className="text-xs">% Desconto à vista</Label>
                 <Input type="number" min={0} max={100}
                   value={descVistaGlobal}
                   onChange={(e) => setDescVistaGlobal(Number(e.target.value))} />
-              </div>
-              <div>
-                <Label className="text-xs">Nº parcelas (parcelado)</Label>
-                <Input type="number" min={1} max={60}
-                  value={parceladoQtdGlobal}
-                  onChange={(e) => setParceladoQtdGlobal(Number(e.target.value))} />
               </div>
               <div>
                 <Label className="text-xs">% Desconto parcelado</Label>
@@ -224,7 +214,7 @@ export default function ModeloMensagem() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Esses valores são aplicados como padrão a cada cliente. Você pode editar linha a linha na tabela abaixo.
+              O parcelamento mostra automaticamente 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
             </p>
           </CardContent>
         </Card>
