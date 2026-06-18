@@ -131,11 +131,14 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
         const cpf = onlyDigits(row[tiCpf]);
         if (!cpf) continue;
         const cli = clientes.get(cpf);
-        if (!cli || cli.telefone) continue; // já tem
+        if (!cli) continue;
         const isContato = tiContato >= 0 ? norm(row[tiContato]) === 'sim' : true;
         if (!isContato) continue;
         const phone = normalizePhone(String(row[tiNum] ?? ''));
-        if (phone) cli.telefone = phone;
+        if (!phone) continue;
+        if (cli.telefones.includes(phone)) continue;
+        cli.telefones.push(phone);
+        if (!cli.telefone) cli.telefone = phone;
       }
     }
   }
