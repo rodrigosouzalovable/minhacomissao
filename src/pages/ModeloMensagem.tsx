@@ -55,7 +55,7 @@ export default function ModeloMensagem() {
   const [configs, setConfigs] = useState<Record<string, LinhaConfig>>({});
   const [loading, setLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [previewCpf, setPreviewCpf] = useState<string | null>(null);
+  
 
   useEffect(() => {
     if (!user) return;
