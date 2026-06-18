@@ -247,70 +247,45 @@ export default function ModeloMensagem() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>CPF</TableHead>
                     <TableHead>Telefone</TableHead>
-                    <TableHead>Contrato</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-center">Parc.</TableHead>
-                    <TableHead className="w-20">% à vista</TableHead>
-                    <TableHead className="w-20">Nx</TableHead>
-                    <TableHead className="w-20">% Nx</TableHead>
-                    <TableHead className="min-w-[260px]">Mensagem</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                    <TableHead className="min-w-[320px]">Mensagem</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {clientes.map((c) => {
-                    const cfg = configs[c.cpf] ?? {
-                      descontoVistaPct: descVistaGlobal,
-                      parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
-                      descontoParceladoPct: descParceladoGlobal,
-                    };
-                    const ajustado = cfg.parceladoQtd < (parceladoQtdGlobal || 1);
                     const msg = mensagemDoCliente(c);
+                    const copiarTel = async () => {
+                      if (!c.telefone) return;
+                      await navigator.clipboard.writeText(c.telefone);
+                      toast.success('Telefone copiado!');
+                    };
                     return (
                       <TableRow key={c.cpf}>
-                        <TableCell className="font-medium">{c.nome}</TableCell>
-                        <TableCell className="font-mono text-xs">{c.cpf}</TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {c.telefone || <span className="text-muted-foreground">—</span>}
+                        <TableCell className="font-medium align-top">{c.nome}</TableCell>
+                        <TableCell className="font-mono text-xs align-top">
+                          {c.telefone ? (
+                            <div className="flex items-center gap-2">
+                              <span>{c.telefone}</span>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={copiarTel} title="Copiar telefone">
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
-                        <TableCell className="font-mono text-xs">{c.contrato}</TableCell>
-                        <TableCell className="text-right">R$ {fmtBRL(c.totalAtraso)}</TableCell>
-                        <TableCell className="text-center">{c.parcelas.length}</TableCell>
-                        <TableCell>
-                          <Input className="h-8" type="number" min={0} max={100}
-                            value={cfg.descontoVistaPct}
-                            onChange={(e) => setLinhaCfg(c.cpf, { descontoVistaPct: Number(e.target.value) })} />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            className={`h-8 ${ajustado ? 'border-amber-500 text-amber-700 font-semibold' : ''}`}
-                            type="number" min={1} max={60}
-                            value={cfg.parceladoQtd}
-                            title={ajustado ? `Ajustado para manter parcela ≥ R$ ${PARCELA_MINIMA}` : ''}
-                            onChange={(e) => setLinhaCfg(c.cpf, { parceladoQtd: Number(e.target.value) })} />
-                        </TableCell>
-                        <TableCell>
-                          <Input className="h-8" type="number" min={0} max={100}
-                            value={cfg.descontoParceladoPct}
-                            onChange={(e) => setLinhaCfg(c.cpf, { descontoParceladoPct: Number(e.target.value) })} />
-                        </TableCell>
-                        <TableCell>
-                          <div
-                            className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[420px] text-muted-foreground"
-                            title={msg}
-                          >
-                            {msg}
+                        <TableCell className="align-top">
+                          <div className="flex items-start gap-2">
+                            <div
+                              className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[520px] text-muted-foreground flex-1"
+                              title={msg}
+                            >
+                              {msg}
+                            </div>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copiar(c)} title="Copiar mensagem">
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <Button size="sm" variant="ghost" onClick={() => setPreviewCpf(c.cpf)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => copiar(c)}>
-                            <Copy className="h-4 w-4 mr-1" /> Copiar
-                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -321,30 +296,6 @@ export default function ModeloMensagem() {
           </Card>
         )}
 
-        <Sheet open={!!previewCpf} onOpenChange={(o) => !o && setPreviewCpf(null)}>
-          <SheetContent className="sm:max-w-lg w-full overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>{clientePreview?.nome}</SheetTitle>
-            </SheetHeader>
-            {clientePreview && (
-              <div className="mt-4 space-y-3">
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div>CPF: <span className="font-mono">{clientePreview.cpf}</span></div>
-                  <div>Telefone: <span className="font-mono">{clientePreview.telefone || '—'}</span></div>
-                </div>
-                <Textarea
-                  readOnly
-                  rows={22}
-                  className="font-mono text-xs bg-muted/30"
-                  value={mensagemDoCliente(clientePreview)}
-                />
-                <Button className="w-full" onClick={() => copiar(clientePreview)}>
-                  <Copy className="h-4 w-4 mr-2" /> Copiar mensagem
-                </Button>
-              </div>
-            )}
-          </SheetContent>
-        </Sheet>
 
         <EditarTemplateMensagemDialog
           open={editOpen}
