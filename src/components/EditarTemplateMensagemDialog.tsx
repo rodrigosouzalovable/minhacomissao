@@ -18,9 +18,13 @@ interface Props {
 }
 
 const VARIAVEIS = [
-  '{nome}', '{cpf}', '{contrato}', '{total_atraso}',
-  '{qtd_parcelas_atraso}', '{desconto_pct}', '{valor_quitacao}',
-  '{parcelas_qtd}', '{valor_parcela}', '{lista_parcelas}', '{data_hoje}',
+  '{nome}', '{cpf}', '{contrato}', '{telefone}',
+  '{total_atraso}', '{qtd_parcelas_atraso}', '{valor_parcela_aberto}',
+  '{lista_parcelas}',
+  '{desconto_vista_pct}', '{valor_quitacao}',
+  '{parcelado_qtd}', '{desconto_parcelado_pct}',
+  '{valor_cada_parcela_proposta}', '{valor_parcelado_total}',
+  '{data_hoje}',
 ];
 
 export function EditarTemplateMensagemDialog({ open, onOpenChange, template, descontoPadrao, parcelasPadrao, onSaved }: Props) {
