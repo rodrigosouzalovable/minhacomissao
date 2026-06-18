@@ -22,9 +22,9 @@ import {
   type ClienteImportado,
 } from '@/lib/parseCobmaisPlanilha';
 
-const TEMPLATE_PADRAO = `Olá, {nome}! Tudo bem?
+const TEMPLATE_PADRAO = `Olá, {primeiro_nome}! Tudo bem?
 
-Identificamos {qtd_parcelas_atraso} parcelas em aberto no contrato {contrato}, totalizando *R$ {total_atraso}*.
+Identificamos {qtd_parcelas_atraso} parcelas em aberto a {dias_atraso} dias de atraso no contrato {contrato}, totalizando *R$ {total_atraso}*.
 
 📋 *Parcelas em aberto:*
 {lista_parcelas}
