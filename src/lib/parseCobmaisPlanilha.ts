@@ -10,7 +10,8 @@ export interface ClienteImportado {
   cpf: string;
   nome: string;
   contrato: string;
-  telefone: string;
+  telefone: string; // primeiro telefone (compat)
+  telefones: string[]; // todos os telefones marcados como "Sim"
   totalAtraso: number;
   diasAtraso: number;
   parcelas: ParcelaAberta[];
@@ -110,6 +111,7 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
       nome: String(row[ciNome] ?? '').trim(),
       contrato: String(row[ciContrato] ?? '').trim(),
       telefone: '',
+      telefones: [],
       totalAtraso: parseBRNumber(row[ciTotal]),
       diasAtraso: Math.max(0, Math.floor(Number(String(row[ciDias] ?? '').replace(/\D+/g, '')) || 0)),
       parcelas: [],
@@ -129,11 +131,14 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
         const cpf = onlyDigits(row[tiCpf]);
         if (!cpf) continue;
         const cli = clientes.get(cpf);
-        if (!cli || cli.telefone) continue; // já tem
+        if (!cli) continue;
         const isContato = tiContato >= 0 ? norm(row[tiContato]) === 'sim' : true;
         if (!isContato) continue;
         const phone = normalizePhone(String(row[tiNum] ?? ''));
-        if (phone) cli.telefone = phone;
+        if (!phone) continue;
+        if (cli.telefones.includes(phone)) continue;
+        cli.telefones.push(phone);
+        if (!cli.telefone) cli.telefone = phone;
       }
     }
   }
