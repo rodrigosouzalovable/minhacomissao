@@ -1,44 +1,46 @@
 ## Objetivo
-Atualizar a mensagem para mostrar até 4 opções de parcelamento (4x, 8x, 12x, 15x), filtrando as que ficariam abaixo de R$100/parcela, e capitalizar o primeiro nome (Title case).
 
-## Mudanças
+Tornar a importação persistente entre abas/sessões, permitir marcar clientes já contatados, recalcular descontos automaticamente quando o usuário altera os percentuais globais, e importar todos os telefones marcados como "Sim".
 
-### 1. `src/lib/parseCobmaisPlanilha.ts`
-- **Capitalizar `{primeiro_nome}`**: aplicar Title Case (primeira letra maiúscula, demais minúsculas) — ex.: `JHONY` → `Jhony`, `jhony` → `Jhony`.
-- **Novo placeholder `{opcoes_parcelado}`**: gera bloco multilinha com até 4 opções (4x, 8x, 12x, 15x), filtrando as que resultam em parcela < R$100. Formato de cada linha:
-  ```
-  ✅ *PARCELADO* em {N}x de {valor_parcela}
-     (total R$ {valor_total}, {desconto}% de desconto)
-  ```
-  Separadas por linha em branco. Usa `descontoParceladoPct` do contexto.
-- Manter placeholders antigos (`{parcelado_qtd}`, `{valor_cada_parcela_proposta}`, etc.) para retrocompatibilidade.
+## 1. Persistência da lista importada (localStorage)
 
-### 2. `src/pages/ModeloMensagem.tsx`
-- **`TEMPLATE_PADRAO`**: trocar o bloco fixo de "PARCELADO em {parcelado_qtd}x..." por `{opcoes_parcelado}`. Resultado final:
-  ```
-  Olá, {primeiro_nome}! Tudo bem?
+- Em `src/pages/ModeloMensagem.tsx`, salvar em `localStorage` (chave `modelo_mensagem_state_v1`):
+  - `clientes` (lista importada)
+  - `contatados` (Set de CPFs marcados)
+  - `descVistaGlobal`, `descParceladoGlobal`
+- `useEffect` ao montar: hidrata os estados a partir do `localStorage`.
+- `useEffect` em cada mudança relevante: persiste o estado.
+- Adicionar botão "Limpar lista" (ao lado de "Selecionar arquivo") para resetar quando o usuário quiser começar do zero.
 
-  Identificamos {qtd_parcelas_atraso} parcelas em aberto a {dias_atraso} dias de atraso no contrato {contrato}, totalizando *R$ {total_atraso}*.
+## 2. Marcar cliente como "Já contatado"
 
-  💰 *Condições especiais para hoje:*
+- Nova coluna **"Contatado"** na tabela (primeira coluna) com um `Checkbox`.
+- Estado `contatados: Set<string>` (por CPF), persistido junto com a lista.
+- Linhas marcadas ganham estilo apagado (`opacity-50`, texto riscado no nome) para indicar visualmente.
+- Contador no topo: "X de Y contatados".
 
-  ✅ *À VISTA* com {desconto_vista_pct}% de desconto:
-     *R$ {valor_quitacao}*
+## 3. Recalcular descontos automaticamente
 
-  {opcoes_parcelado}
+- Hoje a mensagem usa `configs[cpf]`, que só é atualizado ao clicar "Aplicar a todos". 
+- Mudar `mensagemDoCliente` para usar diretamente `descVistaGlobal` e `descParceladoGlobal` como fonte da verdade (remover `configs` e `LinhaConfig`, já que o controle por linha foi removido em mudanças anteriores).
+- Resultado: ao alterar qualquer percentual nos inputs globais, todas as mensagens da tabela atualizam em tempo real, sem precisar clicar em "Aplicar".
+- O botão "Aplicar a todos" deixa de ser necessário e será removido (ou mantido apenas como atalho visual — decisão: **remover** para simplificar).
 
-  Posso confirmar qual opção é melhor para você?
-  ```
-  (Remove `📋 Parcelas em aberto` e `{lista_parcelas}` conforme exemplo do usuário.)
-- Remover o controle "Nº parcelas (parcelado)" do painel de configurações globais (não faz mais sentido — agora são 4, 8, 12, 15 fixos). Manter `descVistaGlobal` e `descParceladoGlobal`. `calcMaxParcelas` deixa de ser necessário e é removido (junto com os usos em `aplicarGlobaisATodos`, `handleFile`, `setLinhaCfg`, `mensagemDoCliente`).
-- Layout do grid de configs passa de 4 para 3 colunas.
+## 4. Importar todos os telefones marcados como "Sim"
 
-## Regra de filtro (R$100)
-Para cada N ∈ [4, 8, 12, 15]:
-- `valorTotal = totalAtraso * (1 - descParceladoPct/100)`
-- `valorParcela = valorTotal / N`
-- incluir apenas se `valorParcela >= 100`
-- Se nenhuma opção sobrar (dívida < R$400 após desconto), incluir ao menos a opção de menor N viável (`Math.floor(valorTotal/100)`x), garantindo ≥1 opção.
+- Em `src/lib/parseCobmaisPlanilha.ts`:
+  - Mudar `ClienteImportado.telefone: string` → `telefones: string[]`.
+  - No parser da aba **Telefones**, acumular todos os números cujo `CONTATO === "Sim"` (deduplicados), em vez de parar no primeiro.
+- Em `ModeloMensagem.tsx`:
+  - Renderizar a coluna **Telefone** como lista vertical — cada número com seu próprio botão "Copiar" ao lado.
+  - Placeholder `{telefone}` no template passa a usar o primeiro telefone (compatibilidade).
 
-## Fora do escopo
-- Backend/RLS, edge functions, `EditarTemplateMensagemDialog`, outras páginas.
+## Arquivos afetados
+
+- `src/lib/parseCobmaisPlanilha.ts` — campo `telefones: string[]`, parsing de múltiplos telefones.
+- `src/pages/ModeloMensagem.tsx` — persistência em localStorage, coluna "Contatado", recálculo automático, render de múltiplos telefones, remoção de `configs`/`LinhaConfig` e do botão "Aplicar".
+
+## Fora de escopo
+
+- Persistir no backend (Supabase) — `localStorage` atende ao pedido ("ficar fixa mesmo trocando de aba ou fechando"). Se quiser sincronizar entre dispositivos depois, fazemos em um passo separado.
+- Mudanças no template/edge functions.
