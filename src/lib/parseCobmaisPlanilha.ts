@@ -111,6 +111,7 @@ export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado
       nome: String(row[ciNome] ?? '').trim(),
       contrato: String(row[ciContrato] ?? '').trim(),
       telefone: '',
+      telefones: [],
       totalAtraso: parseBRNumber(row[ciTotal]),
       diasAtraso: Math.max(0, Math.floor(Number(String(row[ciDias] ?? '').replace(/\D+/g, '')) || 0)),
       parcelas: [],
