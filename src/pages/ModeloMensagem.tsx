@@ -258,7 +258,7 @@ export default function ModeloMensagem() {
                     return (
                       <TableRow
                         key={c.cpf}
-                        className={`cursor-pointer ${isContatado ? 'opacity-50' : ''}`}
+                        className={`cursor-pointer hover:bg-muted/50 ${isContatado ? 'opacity-50' : ''}`}
                         onClick={(e) => {
                           if ((e.target as HTMLElement).closest('button, input, label')) return;
                           toggleContatado(c.cpf);
