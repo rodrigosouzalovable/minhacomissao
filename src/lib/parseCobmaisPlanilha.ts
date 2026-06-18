@@ -189,11 +189,8 @@ function titleCaseFirst(s: string): string {
 function buildOpcoesParcelado(total: number, descPct: number): string {
   const valorTotal = total * (1 - (descPct || 0) / 100);
   const candidatos = [4, 8, 12, 15];
-  let escolhidos = candidatos.filter((n) => valorTotal / n >= 100);
-  if (escolhidos.length === 0) {
-    const maxN = Math.max(1, Math.floor(valorTotal / 100));
-    escolhidos = [maxN];
-  }
+  const escolhidos = candidatos.filter((n) => n >= 2 && valorTotal / n >= 100);
+  if (escolhidos.length === 0) return '';
   return escolhidos
     .map((n) => {
       const parcela = valorTotal / n;
