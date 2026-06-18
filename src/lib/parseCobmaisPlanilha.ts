@@ -239,5 +239,7 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
     '{data_hoje}': new Date().toLocaleDateString('pt-BR'),
   };
 
-  return tpl.replace(/\{[a-z_]+\}/g, (m) => map[m] ?? m);
+  const out = tpl.replace(/\{[a-z_]+\}/g, (m) => map[m] ?? m);
+  // Colapsa 3+ quebras de linha consecutivas (geradas quando {opcoes_parcelado} fica vazio)
+  return out.replace(/\n{3,}/g, '\n\n');
 }
