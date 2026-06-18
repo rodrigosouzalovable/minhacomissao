@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Loader2, Upload, Copy, Settings, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { CopyButton } from '@/components/CopyButton';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import {
   parsePlanilhaCobmais,
@@ -255,7 +256,14 @@ export default function ModeloMensagem() {
                     const isContatado = contatados.has(c.cpf);
                     const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
                     return (
-                      <TableRow key={c.cpf} className={isContatado ? 'opacity-50' : ''}>
+                      <TableRow
+                        key={c.cpf}
+                        className={`cursor-pointer hover:bg-muted/50 ${isContatado ? 'opacity-50' : ''}`}
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).closest('button, input, label')) return;
+                          toggleContatado(c.cpf);
+                        }}
+                      >
                         <TableCell className="align-top">
                           <Checkbox
                             checked={isContatado}
@@ -263,7 +271,10 @@ export default function ModeloMensagem() {
                           />
                         </TableCell>
                         <TableCell className={`font-medium align-top ${isContatado ? 'line-through' : ''}`}>
-                          {c.nome}
+                          <div className="flex items-center gap-2">
+                            {c.nome}
+                            <CopyButton value={c.nome} label="Nome" preserveText />
+                          </div>
                         </TableCell>
                         <TableCell className="font-mono text-xs align-top">
                           {tels.length > 0 ? (
