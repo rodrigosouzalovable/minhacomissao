@@ -253,8 +253,9 @@ export default function ModeloMensagem() {
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-center">Parc.</TableHead>
                     <TableHead className="w-20">% à vista</TableHead>
-                    <TableHead className="w-16">Nx</TableHead>
+                    <TableHead className="w-20">Nx</TableHead>
                     <TableHead className="w-20">% Nx</TableHead>
+                    <TableHead className="min-w-[260px]">Mensagem</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -262,9 +263,11 @@ export default function ModeloMensagem() {
                   {clientes.map((c) => {
                     const cfg = configs[c.cpf] ?? {
                       descontoVistaPct: descVistaGlobal,
-                      parceladoQtd: parceladoQtdGlobal,
+                      parceladoQtd: calcMaxParcelas(c.totalAtraso, descParceladoGlobal, parceladoQtdGlobal),
                       descontoParceladoPct: descParceladoGlobal,
                     };
+                    const ajustado = cfg.parceladoQtd < (parceladoQtdGlobal || 1);
+                    const msg = mensagemDoCliente(c);
                     return (
                       <TableRow key={c.cpf}>
                         <TableCell className="font-medium">{c.nome}</TableCell>
@@ -281,14 +284,25 @@ export default function ModeloMensagem() {
                             onChange={(e) => setLinhaCfg(c.cpf, { descontoVistaPct: Number(e.target.value) })} />
                         </TableCell>
                         <TableCell>
-                          <Input className="h-8" type="number" min={1} max={60}
+                          <Input
+                            className={`h-8 ${ajustado ? 'border-amber-500 text-amber-700 font-semibold' : ''}`}
+                            type="number" min={1} max={60}
                             value={cfg.parceladoQtd}
+                            title={ajustado ? `Ajustado para manter parcela ≥ R$ ${PARCELA_MINIMA}` : ''}
                             onChange={(e) => setLinhaCfg(c.cpf, { parceladoQtd: Number(e.target.value) })} />
                         </TableCell>
                         <TableCell>
                           <Input className="h-8" type="number" min={0} max={100}
                             value={cfg.descontoParceladoPct}
                             onChange={(e) => setLinhaCfg(c.cpf, { descontoParceladoPct: Number(e.target.value) })} />
+                        </TableCell>
+                        <TableCell>
+                          <div
+                            className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[420px] text-muted-foreground"
+                            title={msg}
+                          >
+                            {msg}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <Button size="sm" variant="ghost" onClick={() => setPreviewCpf(c.cpf)}>
