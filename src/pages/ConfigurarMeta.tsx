@@ -70,8 +70,36 @@ export default function ConfigurarMeta() {
     setLoading(false);
   };
 
+  const carregarToken = async () => {
+    const { data } = await supabase
+      .from("meta_whatsapp_config")
+      .select("valor")
+      .eq("chave", "webhook_verify_token")
+      .maybeSingle();
+    if (data) setVerifyToken(data.valor);
+  };
+
+  const salvarToken = async (novoToken: string) => {
+    if (!novoToken.trim()) {
+      toast.error("Digite ou gere um token antes de salvar");
+      return;
+    }
+    setSavingToken(true);
+    const { error } = await supabase
+      .from("meta_whatsapp_config")
+      .upsert({ chave: "webhook_verify_token", valor: novoToken.trim() }, { onConflict: "chave" });
+    if (error) {
+      toast.error("Erro ao salvar token: " + error.message);
+    } else {
+      setVerifyToken(novoToken.trim());
+      toast.success("Verify Token salvo");
+    }
+    setSavingToken(false);
+  };
+
   useEffect(() => {
     carregar();
+    carregarToken();
   }, []);
 
   const copiar = (txt: string, label = "Copiado!") => {
