@@ -9,13 +9,23 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
   // GET → Meta verify challenge
   if (req.method === 'GET') {
     const url = new URL(req.url);
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
-    const expected = Deno.env.get('WHATSAPP_META_VERIFY_TOKEN');
+
+    const { data: config } = await supabase
+      .from('meta_whatsapp_config')
+      .select('valor')
+      .eq('chave', 'webhook_verify_token')
+      .maybeSingle();
+
+    const expected = config?.valor;
+
     if (mode === 'subscribe' && token === expected && challenge) {
       return new Response(challenge, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
     }
@@ -23,7 +33,6 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const payload = await req.json();
     console.log('[MetaWebhook] payload:', JSON.stringify(payload).slice(0, 1000));
 
