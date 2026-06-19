@@ -25,7 +25,7 @@ import {
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { ArrowLeft, DollarSign, CheckCircle, Clock, TrendingUp, Download, Search, ExternalLink, PlusCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa } from '@/lib/comissao';
+import { formatarMoeda, formatarData, calcularPercentualComissaoEmpresa, calcularComissaoFuncionarioParcela } from '@/lib/comissao';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { useToast } from '@/hooks/use-toast';
 
