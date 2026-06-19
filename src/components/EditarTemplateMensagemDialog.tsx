@@ -28,18 +28,20 @@ const VARIAVEIS = [
   '{data_hoje}',
 ];
 
-export function EditarTemplateMensagemDialog({ open, onOpenChange, template, descontoPadrao, parcelasPadrao, onSaved }: Props) {
+export function EditarTemplateMensagemDialog({ open, onOpenChange, template, descontoPadrao, descontoParceladoPadrao, parcelasPadrao, onSaved }: Props) {
   const { user } = useAuth();
   const [text, setText] = useState(template);
   const [desconto, setDesconto] = useState(descontoPadrao);
+  const [descontoParcelado, setDescontoParcelado] = useState(descontoParceladoPadrao);
   const [parcelas, setParcelas] = useState(parcelasPadrao);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setText(template);
     setDesconto(descontoPadrao);
+    setDescontoParcelado(descontoParceladoPadrao);
     setParcelas(parcelasPadrao);
-  }, [template, descontoPadrao, parcelasPadrao, open]);
+  }, [template, descontoPadrao, descontoParceladoPadrao, parcelasPadrao, open]);
 
   const inserirVar = (v: string) => setText((t) => t + v);
 
