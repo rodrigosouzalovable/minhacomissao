@@ -57,6 +57,10 @@ export default function ModeloMensagem() {
   const [loading, setLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [lastClicked, setLastClicked] = useState<{ cpf: string; field: 'nome' | 'telefone' | 'mensagem'; value?: string } | null>(null);
+
+  const isHighlighted = (cpf: string, field: 'nome' | 'telefone' | 'mensagem', value?: string) =>
+    !!lastClicked && lastClicked.cpf === cpf && lastClicked.field === field && (value === undefined || lastClicked.value === value);
 
   // Hidrata: tenta banco primeiro (sincroniza entre dispositivos); cai pro localStorage como cache.
   useEffect(() => {
