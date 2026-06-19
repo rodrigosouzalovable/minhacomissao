@@ -13,8 +13,9 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   template: string;
   descontoPadrao: number;
+  descontoParceladoPadrao: number;
   parcelasPadrao: number;
-  onSaved: (template: string, desconto: number, parcelas: number) => void;
+  onSaved: (template: string, desconto: number, descontoParcelado: number, parcelas: number) => void;
 }
 
 const VARIAVEIS = [

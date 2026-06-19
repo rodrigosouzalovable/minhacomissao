@@ -1969,6 +1969,7 @@ export type Database = {
         Row: {
           created_at: string
           desconto_padrao: number
+          desconto_parcelado_padrao: number | null
           id: string
           parcelas_padrao: number
           template: string
@@ -1978,6 +1979,7 @@ export type Database = {
         Insert: {
           created_at?: string
           desconto_padrao?: number
+          desconto_parcelado_padrao?: number | null
           id?: string
           parcelas_padrao?: number
           template?: string
@@ -1987,6 +1989,7 @@ export type Database = {
         Update: {
           created_at?: string
           desconto_padrao?: number
+          desconto_parcelado_padrao?: number | null
           id?: string
           parcelas_padrao?: number
           template?: string
