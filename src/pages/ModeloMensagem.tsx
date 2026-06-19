@@ -19,6 +19,9 @@ import {
   renderMensagem,
   type ClienteImportado,
 } from '@/lib/parseCobmaisPlanilha';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
+
 
 const TEMPLATE_PADRAO = `Olá, {primeiro_nome}! Tudo bem?
 
@@ -221,139 +224,158 @@ export default function ModeloMensagem() {
           </Button>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">1. Importar planilha</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <input
-                id="xlsx-input"
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-              />
-              <Button
-                onClick={() => document.getElementById('xlsx-input')?.click()}
-                disabled={loading}
-              >
-                {loading
-                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  : <Upload className="h-4 w-4 mr-2" />}
-                Selecionar arquivo .xlsx
-              </Button>
-              {clientes.length > 0 && (
-                <>
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    {clientes.length} cliente(s) • {totalContatados} contatado(s)
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={limparLista}>
-                    <Trash2 className="h-4 w-4 mr-1" /> Limpar lista
+        <Tabs defaultValue="planilha" className="w-full">
+          <TabsList>
+            <TabsTrigger value="planilha">Importar planilha</TabsTrigger>
+            <TabsTrigger value="imagem">Colar imagem</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="planilha" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">1. Importar planilha</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input
+                    id="xlsx-input"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                  />
+                  <Button
+                    onClick={() => document.getElementById('xlsx-input')?.click()}
+                    disabled={loading}
+                  >
+                    {loading
+                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      : <Upload className="h-4 w-4 mr-2" />}
+                    Selecionar arquivo .xlsx
                   </Button>
-                </>
-              )}
-            </div>
+                  {clientes.length > 0 && (
+                    <>
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        <FileSpreadsheet className="h-4 w-4" />
+                        {clientes.length} cliente(s) • {totalContatados} contatado(s)
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={limparLista}>
+                        <Trash2 className="h-4 w-4 mr-1" /> Limpar lista
+                      </Button>
+                    </>
+                  )}
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t">
-              <div>
-                <Label className="text-xs">% Desconto à vista</Label>
-                <Input type="number" min={0} max={100}
-                  value={descVistaGlobal}
-                  onChange={(e) => setDescVistaGlobal(Number(e.target.value))} />
-              </div>
-              <div>
-                <Label className="text-xs">% Desconto parcelado</Label>
-                <Input type="number" min={0} max={100}
-                  value={descParceladoGlobal}
-                  onChange={(e) => setDescParceladoGlobal(Number(e.target.value))} />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              As mensagens são atualizadas automaticamente ao alterar os descontos. Parcelamento exibe 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
-            </p>
-          </CardContent>
-        </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t">
+                  <div>
+                    <Label className="text-xs">% Desconto à vista</Label>
+                    <Input type="number" min={0} max={100}
+                      value={descVistaGlobal}
+                      onChange={(e) => setDescVistaGlobal(Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">% Desconto parcelado</Label>
+                    <Input type="number" min={0} max={100}
+                      value={descParceladoGlobal}
+                      onChange={(e) => setDescParceladoGlobal(Number(e.target.value))} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  As mensagens são atualizadas automaticamente ao alterar os descontos. Parcelamento exibe 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
+                </p>
+              </CardContent>
+            </Card>
 
-        {clientes.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">2. Clientes & Propostas</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[80px]">Contatado</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Telefone(s)</TableHead>
-                    <TableHead className="min-w-[320px]">Mensagem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {clientes.map((c) => {
-                    const msg = mensagemDoCliente(c);
-                    const isContatado = contatados.has(c.cpf);
-                    const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
-                    return (
-                      <TableRow
-                        key={c.cpf}
-                        className={`cursor-pointer hover:bg-muted/50 ${isContatado ? 'opacity-50' : ''}`}
-                        onClick={(e) => {
-                          if ((e.target as HTMLElement).closest('button, input, label')) return;
-                          toggleContatado(c.cpf);
-                        }}
-                      >
-                        <TableCell className="align-top">
-                          <Checkbox
-                            checked={isContatado}
-                            onCheckedChange={() => toggleContatado(c.cpf)}
-                          />
-                        </TableCell>
-                        <TableCell className={`font-medium align-top ${isContatado ? 'line-through' : ''}`}>
-                          <div className="flex items-center gap-2">
-                            {c.nome}
-                            <CopyButton value={c.nome} label="Nome" preserveText />
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs align-top">
-                          {tels.length > 0 ? (
-                            <div className="flex flex-col gap-1">
-                              {tels.map((t) => (
-                                <div key={t} className="flex items-center gap-2">
-                                  <span>{t}</span>
-                                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copiarTel(t)} title="Copiar telefone">
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="align-top">
-                          <div className="flex items-start gap-2">
-                            <div
-                              className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[520px] text-muted-foreground flex-1"
-                              title={msg}
-                            >
-                              {msg}
-                            </div>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copiarMsg(c)} title="Copiar mensagem">
-                              <Copy className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
+            {clientes.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">2. Clientes & Propostas</CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[80px]">Contatado</TableHead>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Telefone(s)</TableHead>
+                        <TableHead className="min-w-[320px]">Mensagem</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
+                    </TableHeader>
+                    <TableBody>
+                      {clientes.map((c) => {
+                        const msg = mensagemDoCliente(c);
+                        const isContatado = contatados.has(c.cpf);
+                        const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
+                        return (
+                          <TableRow
+                            key={c.cpf}
+                            className={`cursor-pointer hover:bg-muted/50 ${isContatado ? 'opacity-50' : ''}`}
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('button, input, label')) return;
+                              toggleContatado(c.cpf);
+                            }}
+                          >
+                            <TableCell className="align-top">
+                              <Checkbox
+                                checked={isContatado}
+                                onCheckedChange={() => toggleContatado(c.cpf)}
+                              />
+                            </TableCell>
+                            <TableCell className={`font-medium align-top ${isContatado ? 'line-through' : ''}`}>
+                              <div className="flex items-center gap-2">
+                                {c.nome}
+                                <CopyButton value={c.nome} label="Nome" preserveText />
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs align-top">
+                              {tels.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  {tels.map((t) => (
+                                    <div key={t} className="flex items-center gap-2">
+                                      <span>{t}</span>
+                                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copiarTel(t)} title="Copiar telefone">
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <div className="flex items-start gap-2">
+                                <div
+                                  className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[520px] text-muted-foreground flex-1"
+                                  title={msg}
+                                >
+                                  {msg}
+                                </div>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copiarMsg(c)} title="Copiar mensagem">
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="imagem" className="mt-4">
+            <ColarImagemTab
+              template={template}
+              descVistaGlobal={descVistaGlobal}
+              descParceladoGlobal={descParceladoGlobal}
+              parceladoQtdGlobal={parceladoQtdGlobal}
+            />
+          </TabsContent>
+        </Tabs>
+
 
         <EditarTemplateMensagemDialog
           open={editOpen}
