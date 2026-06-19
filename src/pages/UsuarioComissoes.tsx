@@ -500,7 +500,7 @@ export default function UsuarioComissoes() {
                                   <TableRow>
                                     <TableHead>Parcela</TableHead>
                                     <TableHead>Valor</TableHead>
-                                    <TableHead>Comissão</TableHead>
+                                    <TableHead>Comissão Funcionário</TableHead>
                                     <TableHead>Comissão Escritório</TableHead>
                                     <TableHead>Data do Pagamento</TableHead>
                                     <TableHead>Status</TableHead>
@@ -513,10 +513,10 @@ export default function UsuarioComissoes() {
                                         {pagamento.numero_parcela}/{acordo.parcelas}
                                       </TableCell>
                                       <TableCell>{formatarMoeda(pagamento.valor_parcela)}</TableCell>
-                                      <TableCell>{formatarMoeda(pagamento.comissao_parcela)}</TableCell>
                                       <TableCell>
-                                        {formatarMoeda(Number(pagamento.valor_parcela) * calcularPercentualComissaoEmpresa(acordo.dias_atraso) / 100)}
+                                        {formatarMoeda(calcularComissaoFuncionarioParcela(Number(pagamento.valor_parcela), acordo.dias_atraso).valor)}
                                       </TableCell>
+                                      <TableCell>{formatarMoeda(pagamento.comissao_parcela)}</TableCell>
                                       <TableCell>{formatarData(pagamento.data_prevista)}</TableCell>
                                       <TableCell>
                                         <Badge 
