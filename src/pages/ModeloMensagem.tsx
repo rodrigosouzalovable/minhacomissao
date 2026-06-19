@@ -388,8 +388,9 @@ export default function ModeloMensagem() {
           onOpenChange={setEditOpen}
           template={template}
           descontoPadrao={descVistaGlobal}
+          descontoParceladoPadrao={descParceladoGlobal}
           parcelasPadrao={parceladoQtdGlobal}
-          onSaved={(t, d, p) => { setTemplate(t); setDescVistaGlobal(d); setParceladoQtdGlobal(p); }}
+          onSaved={(t, d, dp, p) => { setTemplate(t); setDescVistaGlobal(d); setDescParceladoGlobal(dp); setParceladoQtdGlobal(p); }}
         />
       </div>
     </AppLayout>

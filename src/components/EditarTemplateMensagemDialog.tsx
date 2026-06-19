@@ -50,14 +50,14 @@ export function EditarTemplateMensagemDialog({ open, onOpenChange, template, des
     setSaving(true);
     const { error } = await supabase
       .from('modelo_mensagem_template' as any)
-      .upsert({ user_id: user.id, template: text, desconto_padrao: desconto, parcelas_padrao: parcelas }, { onConflict: 'user_id' });
+      .upsert({ user_id: user.id, template: text, desconto_padrao: desconto, desconto_parcelado_padrao: descontoParcelado, parcelas_padrao: parcelas }, { onConflict: 'user_id' });
     setSaving(false);
     if (error) {
       toast.error('Erro ao salvar: ' + error.message);
       return;
     }
     toast.success('Modelo salvo!');
-    onSaved(text, desconto, parcelas);
+    onSaved(text, desconto, descontoParcelado, parcelas);
     onOpenChange(false);
   };
 
@@ -82,10 +82,14 @@ export function EditarTemplateMensagemDialog({ open, onOpenChange, template, des
             <Label htmlFor="tpl">Mensagem (use as variáveis acima)</Label>
             <Textarea id="tpl" value={text} onChange={(e) => setText(e.target.value)} rows={14} className="font-mono text-sm" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="desc">% Desconto padrão (à vista)</Label>
               <Input id="desc" type="number" min={0} max={100} value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
+            </div>
+            <div>
+              <Label htmlFor="desc-parc">% Desconto parcelado</Label>
+              <Input id="desc-parc" type="number" min={0} max={100} value={descontoParcelado} onChange={(e) => setDescontoParcelado(Number(e.target.value))} />
             </div>
             <div>
               <Label htmlFor="parc">Nº parcelas padrão</Label>
