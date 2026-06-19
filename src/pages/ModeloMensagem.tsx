@@ -202,11 +202,19 @@ export default function ModeloMensagem() {
 
   const copiarMsg = async (c: ClienteImportado) => {
     await navigator.clipboard.writeText(mensagemDoCliente(c));
+    setLastClicked({ cpf: c.cpf, field: 'mensagem' });
     toast.success(`Mensagem de ${c.nome.split(' ')[0]} copiada!`);
   };
 
-  const copiarTel = async (tel: string) => {
+  const copiarNome = async (c: ClienteImportado) => {
+    await navigator.clipboard.writeText(c.nome);
+    setLastClicked({ cpf: c.cpf, field: 'nome' });
+    toast.success('Nome copiado!');
+  };
+
+  const copiarTel = async (cpf: string, tel: string) => {
     await navigator.clipboard.writeText(tel);
+    setLastClicked({ cpf, field: 'telefone', value: tel });
     toast.success('Telefone copiado!');
   };
 
