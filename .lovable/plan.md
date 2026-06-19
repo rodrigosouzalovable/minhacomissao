@@ -1,27 +1,84 @@
-## Persistir lista importada e contatados no banco
 
-Hoje a lista de clientes importados e a marcação de "contatado" só ficam salvas no navegador (localStorage). Vou movê-las para o banco, vinculadas à sua conta, para que apareçam iguais em qualquer dispositivo.
+## Objetivo
 
-### O que muda
+Na página **Modelo Mensagem** (`/modelo-mensagem`), adicionar duas abas no topo do conteúdo:
 
-1. **Nova tabela** `modelo_mensagem_estado` (1 linha por usuário):
-   - `user_id` (PK, dono da linha)
-   - `clientes` (JSON com a planilha importada — mesma estrutura de hoje)
-   - `contatados` (lista de CPFs marcados)
-   - `desc_vista_global`, `desc_parcelado_global`
-   - `atualizado_em`
-   - RLS: cada usuário lê/escreve apenas a sua própria linha.
+1. **Importar planilha** — exatamente o fluxo atual (xlsx do Cob+), sem alterações.
+2. **Colar imagem** (novo) — funcionário cola/anexa um print da tela do Cob+ (igual ao exemplo enviado), a IA extrai os dados, monta a mensagem usando o mesmo template e o funcionário copia.
 
-2. **Página `ModeloMensagem.tsx`**:
-   - Ao abrir, carrega o estado do banco (com fallback para o localStorage existente, só na primeira vez, para não perder o que você já tem hoje).
-   - Sempre que `clientes`, `contatados` ou os descontos globais mudarem, faz um `upsert` no banco (com debounce de ~600ms para não gravar a cada tecla).
-   - Mantém o localStorage como cache rápido para evitar tela vazia enquanto carrega.
+O botão **Editar Modelo** (canto superior direito) continua o mesmo e é compartilhado pelas duas abas — qualquer edição do template já reflete no resultado das duas.
 
-### Resultado
-- Importar planilha → fica salva na sua conta.
-- Marcar/desmarcar contatado → salvo na sua conta.
-- Trocar de aba, fechar o navegador, abrir em outro PC/celular → tudo reaparece igual.
+## Aba "Colar imagem" — comportamento
 
-### Fora do escopo
-- Compartilhar a mesma lista entre usuários diferentes (cada conta tem a sua).
-- Histórico/versões da planilha.
+Layout em duas colunas (empilha no mobile):
+
+**Coluna esquerda — Entrada da imagem**
+- Área grande de drop / colar com mensagem "Cole (Ctrl+V) ou arraste o print aqui".
+- Suporta:
+  - `Ctrl+V` colando print da área de transferência (listener `paste`).
+  - Drag-and-drop de arquivo de imagem.
+  - Botão "Selecionar arquivo" como fallback.
+- Mostra preview da imagem colada.
+- Botão **Extrair dados** dispara a chamada à IA. Estado de loading com spinner.
+- Botão **Limpar** para começar de novo.
+
+**Coluna direita — Resultado**
+- Formulário com os campos extraídos, todos editáveis manualmente (a IA pode errar):
+  - Nome completo
+  - CPF
+  - Contrato
+  - Dias de atraso
+  - Qtd. de parcelas em atraso (se a IA não achar, deixa 1 como padrão e o usuário ajusta)
+  - Total em atraso (R$)
+- Mesmos campos globais de % desconto à vista e % desconto parcelado já existentes (reaproveita o estado da página).
+- **Pré-visualização da mensagem** renderizada em tempo real com o template salvo (atualiza ao digitar nos campos ou mudar desconto).
+- Botões: **Copiar mensagem** e **Copiar CPF** / **Copiar nome**.
+
+## Extração por IA
+
+- Edge function nova `supabase/functions/extract-modelo-mensagem/index.ts`.
+- Recebe `{ imageBase64: string }` do cliente.
+- Usa **Lovable AI Gateway** com modelo de visão `google/gemini-3-flash-preview` (já é o padrão e é multimodal). Sem custo extra de chave (usa `LOVABLE_API_KEY` já existente).
+- Prompt instrui a IA a devolver **JSON estrito** com:
+  ```json
+  {
+    "nome": "REIGIANE MACARIO DA CRUZ",
+    "cpf": "071.512.775-63",
+    "contrato": "00076777887",
+    "dias_atraso": 155,
+    "qtd_parcelas_atraso": 1,
+    "total_atraso": 1086.69
+  }
+  ```
+- Trata 429 (rate limit) e 402 (créditos) com mensagens amigáveis.
+- Validação básica no servidor (Zod) antes de devolver.
+
+## Renderização da mensagem
+
+Reaproveita 100% a função `renderMensagem` de `src/lib/parseCobmaisPlanilha.ts`, montando um objeto `ClienteImportado` a partir dos campos extraídos/editados (telefones = `[]`, parcelas vazias — o template padrão não exige). Assim, qualquer mudança feita no botão "Editar Modelo" continua sendo respeitada igualmente nas duas abas.
+
+## Arquivos a criar / alterar
+
+- **Alterar** `src/pages/ModeloMensagem.tsx`
+  - Envolver o conteúdo atual em `<Tabs>` com 2 `<TabsTrigger>` ("Importar planilha", "Colar imagem").
+  - Aba 1: move os Cards existentes para dentro do `TabsContent`.
+  - Aba 2: renderiza o novo componente `<ColarImagemTab />`.
+- **Criar** `src/components/modelo-mensagem/ColarImagemTab.tsx`
+  - Toda a UI de colar/dropar imagem, preview, formulário editável e preview de mensagem.
+  - Props: `template`, `descVistaGlobal`, `descParceladoGlobal`, `parceladoQtdGlobal`.
+- **Criar** `supabase/functions/extract-modelo-mensagem/index.ts`
+  - Endpoint POST que chama a Lovable AI com a imagem e devolve o JSON validado.
+- **Alterar** `supabase/config.toml`
+  - Registrar a nova função com `verify_jwt = true` (página é autenticada).
+
+## Fora do escopo
+
+- Salvar histórico de imagens extraídas no banco.
+- Enviar a mensagem pelo WhatsApp daqui (mantém só "Copiar", igual à aba atual).
+- Mexer no fluxo da aba "Importar planilha" — fica idêntico.
+
+## Riscos / observações
+
+- A IA pode confundir o **CPF** (071.512.775-63) com outros números da tela; por isso todos os campos são editáveis antes de copiar.
+- O exemplo mostra "Atraso: 155" — confirmar com a IA que pegue esse número e não a quantidade de telefones (6) nem o número do contrato.
+- Custo por extração: 1 chamada multimodal Gemini Flash por imagem (baixo, mas vale lembrar — segue a regra de aviso de custos do projeto). **Será exibido um pequeno aviso na aba** indicando que cada extração consome créditos de IA.
