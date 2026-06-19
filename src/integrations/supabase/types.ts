@@ -1887,6 +1887,148 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_whatsapp_envios_log: {
+        Row: {
+          enviado_em: string
+          erro: string | null
+          id: string
+          instancia_id: string
+          status: string
+          telefone: string
+          template_nome: string | null
+          user_id: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id: string
+          status?: string
+          telefone: string
+          template_nome?: string | null
+          user_id: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string
+          status?: string
+          telefone?: string
+          template_nome?: string | null
+          user_id?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_whatsapp_envios_log_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_whatsapp_instances: {
+        Row: {
+          access_token: string
+          ativo: boolean
+          atualizado_em: string
+          business_id: string | null
+          criado_em: string
+          display_phone: string | null
+          enviados_hoje: number
+          id: string
+          nome: string
+          phone_number_id: string
+          tier_diario: number
+          ultimo_reset: string
+          user_id: string
+          waba_id: string
+          webhook_verify_token: string | null
+        }
+        Insert: {
+          access_token: string
+          ativo?: boolean
+          atualizado_em?: string
+          business_id?: string | null
+          criado_em?: string
+          display_phone?: string | null
+          enviados_hoje?: number
+          id?: string
+          nome: string
+          phone_number_id: string
+          tier_diario?: number
+          ultimo_reset?: string
+          user_id: string
+          waba_id: string
+          webhook_verify_token?: string | null
+        }
+        Update: {
+          access_token?: string
+          ativo?: boolean
+          atualizado_em?: string
+          business_id?: string | null
+          criado_em?: string
+          display_phone?: string | null
+          enviados_hoje?: number
+          id?: string
+          nome?: string
+          phone_number_id?: string
+          tier_diario?: number
+          ultimo_reset?: string
+          user_id?: string
+          waba_id?: string
+          webhook_verify_token?: string | null
+        }
+        Relationships: []
+      }
+      meta_whatsapp_templates: {
+        Row: {
+          body_text: string | null
+          categoria: string | null
+          id: string
+          idioma: string
+          instancia_id: string
+          nome_template: string
+          sincronizado_em: string
+          status: string
+          variaveis: Json
+        }
+        Insert: {
+          body_text?: string | null
+          categoria?: string | null
+          id?: string
+          idioma?: string
+          instancia_id: string
+          nome_template: string
+          sincronizado_em?: string
+          status?: string
+          variaveis?: Json
+        }
+        Update: {
+          body_text?: string | null
+          categoria?: string | null
+          id?: string
+          idioma?: string
+          instancia_id?: string
+          nome_template?: string
+          sincronizado_em?: string
+          status?: string
+          variaveis?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_whatsapp_templates_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metas_funcionarios: {
         Row: {
           atualizado_em: string
@@ -4133,6 +4275,7 @@ export type Database = {
           lida: boolean
           media_url: string | null
           nome_contato: string | null
+          provedor: string
           quoted_conteudo: string | null
           quoted_direcao: string | null
           quoted_msg_id: string | null
@@ -4151,6 +4294,7 @@ export type Database = {
           lida?: boolean
           media_url?: string | null
           nome_contato?: string | null
+          provedor?: string
           quoted_conteudo?: string | null
           quoted_direcao?: string | null
           quoted_msg_id?: string | null
@@ -4169,6 +4313,7 @@ export type Database = {
           lida?: boolean
           media_url?: string | null
           nome_contato?: string | null
+          provedor?: string
           quoted_conteudo?: string | null
           quoted_direcao?: string | null
           quoted_msg_id?: string | null
