@@ -1,0 +1,1 @@
+ALTER TABLE public.modelo_mensagem_template ADD COLUMN IF NOT EXISTS desconto_parcelado_padrao NUMERIC DEFAULT 30;
