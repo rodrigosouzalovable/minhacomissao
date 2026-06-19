@@ -44,6 +44,7 @@ const AVAILABLE_TABS = [
   { path: '/aquecimento', label: 'Aquecimento' },
   { path: '/relatorios', label: 'Relatórios' },
   { path: '/estrategias', label: 'Estratégias' },
+  { path: '/modelo-mensagem', label: 'Modelo Mensagem' },
 ];
 
 const CREDORES = [
