@@ -160,14 +160,10 @@ export default function UsuarioComissoes() {
     return true;
   });
 
-  // Calcular totais (considerando o filtro de período)
+  // Calcular totais das parcelas pagas no período
   const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
-  const comissaoTotal = pagamentosFiltradosPorPeriodo?.reduce((acc, p) => acc + Number(p.comissao_parcela), 0) ?? 0;
-  const comissaoPaga = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
-  const comissaoPendente = comissaoTotal - comissaoPaga;
-  const percentualRecebido = comissaoTotal > 0 
-    ? (comissaoPaga / comissaoTotal) * 100 
-    : 0;
+  const totalPagoNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.valor_parcela), 0);
+  const comissaoPagaNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
 
   // Normalizar CPF (apenas dígitos)
   const normalizarCPF = (cpf: string | null) => 
