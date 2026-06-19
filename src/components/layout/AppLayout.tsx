@@ -29,7 +29,8 @@ import {
   BarChart3,
   AtSign,
   Bell,
-  MessageSquareText
+  MessageSquareText,
+  Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -90,6 +91,7 @@ const navItems: NavItem[] = [
   { href: '/aquecimento', label: 'Aquecimento', icon: Flame },
   { href: '/monitor-envios', label: 'Monitor Envios', icon: Activity, adminOnly: true },
   { href: '/admin/configurar-meta', label: 'API Oficial Meta', icon: MessageSquare, adminOnly: true },
+  { href: '/admin/envio-meta', label: 'Envio Meta (massa)', icon: Send, adminOnly: true },
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/admin/comite-novomundo', label: 'Comitê Novo Mundo', icon: BarChart3, adminOnly: true },
