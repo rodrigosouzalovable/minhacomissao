@@ -48,6 +48,8 @@ export default function ConfigurarMeta() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [testando, setTestando] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState<string | null>(null);
+  const [savingToken, setSavingToken] = useState(false);
+  const [verifyToken, setVerifyToken] = useState("");
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
@@ -68,8 +70,36 @@ export default function ConfigurarMeta() {
     setLoading(false);
   };
 
+  const carregarToken = async () => {
+    const { data } = await supabase
+      .from("meta_whatsapp_config")
+      .select("valor")
+      .eq("chave", "webhook_verify_token")
+      .maybeSingle();
+    if (data) setVerifyToken(data.valor);
+  };
+
+  const salvarToken = async (novoToken: string) => {
+    if (!novoToken.trim()) {
+      toast.error("Digite ou gere um token antes de salvar");
+      return;
+    }
+    setSavingToken(true);
+    const { error } = await supabase
+      .from("meta_whatsapp_config")
+      .upsert({ chave: "webhook_verify_token", valor: novoToken.trim() }, { onConflict: "chave" });
+    if (error) {
+      toast.error("Erro ao salvar token: " + error.message);
+    } else {
+      setVerifyToken(novoToken.trim());
+      toast.success("Verify Token salvo");
+    }
+    setSavingToken(false);
+  };
+
   useEffect(() => {
     carregar();
+    carregarToken();
   }, []);
 
   const copiar = (txt: string, label = "Copiado!") => {
@@ -188,9 +218,47 @@ export default function ConfigurarMeta() {
           <div>
             <Label>Verify Token (compartilhado)</Label>
             <p className="text-xs text-muted-foreground mt-1">
-              Use o mesmo valor salvo no secret <code>WHATSAPP_META_VERIFY_TOKEN</code>.
-              Cole-o no campo "Verify Token" do webhook na HookCloud.
+              Cole esse valor no campo "Verify Token" do webhook na HookCloud.
             </p>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              <Input
+                value={verifyToken}
+                onChange={(e) => setVerifyToken(e.target.value)}
+                placeholder="Clique em Gerar para criar um token"
+                className="font-mono text-xs flex-1 min-w-[200px]"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => copiar(verifyToken, "Token copiado!")}
+                disabled={!verifyToken}
+                title="Copiar"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setVerifyToken(gerarToken())}
+                disabled={savingToken}
+              >
+                Gerar
+              </Button>
+              <Button onClick={() => salvarToken(verifyToken)} disabled={savingToken || !verifyToken}>
+                {savingToken ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const t = gerarToken();
+                  setVerifyToken(t);
+                  salvarToken(t);
+                }}
+                disabled={savingToken}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Resetar
+              </Button>
+            </div>
           </div>
           <div>
             <Label>Eventos a inscrever</Label>
