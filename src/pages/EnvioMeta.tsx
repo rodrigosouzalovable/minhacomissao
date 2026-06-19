@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Send, RefreshCw } from "lucide-react";
+import { AppLayout } from "@/components/layout/AppLayout";
 
 type Instancia = {
   id: string;
@@ -134,7 +135,8 @@ export default function EnvioMeta() {
     : [];
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl space-y-6">
+    <AppLayout>
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Envio em massa — Meta WhatsApp</h1>
@@ -285,5 +287,6 @@ export default function EnvioMeta() {
         </CardContent>
       </Card>
     </div>
+    </AppLayout>
   );
 }
