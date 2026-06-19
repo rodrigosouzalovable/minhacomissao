@@ -141,13 +141,15 @@ export default function ModeloMensagem() {
     (async () => {
       const { data } = await supabase
         .from('modelo_mensagem_template' as any)
-        .select('template, desconto_padrao, parcelas_padrao')
+        .select('template, desconto_padrao, desconto_parcelado_padrao, parcelas_padrao')
         .eq('user_id', user.id)
         .maybeSingle();
       if (data) {
         const d = data as any;
         if (d.template) setTemplate(d.template);
         if (d.parcelas_padrao != null) setParceladoQtdGlobal(Number(d.parcelas_padrao));
+        if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal(Number(d.desconto_parcelado_padrao));
+        if (d.desconto_padrao != null) setDescVistaGlobal(Number(d.desconto_padrao));
       }
     })();
   }, [user]);
