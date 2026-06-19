@@ -29,7 +29,8 @@ import {
   BarChart3,
   AtSign,
   Bell,
-  MessageSquareText
+  MessageSquareText,
+  Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
