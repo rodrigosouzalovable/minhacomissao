@@ -47,7 +47,8 @@ export default function ConfigurarMeta() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [testando, setTestando] = useState<string | null>(null);
-  const [sincronizando, setSincronizando] = useState<string | null>(null);
+  const [savingToken, setSavingToken] = useState(false);
+  const [verifyToken, setVerifyToken] = useState("");
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
