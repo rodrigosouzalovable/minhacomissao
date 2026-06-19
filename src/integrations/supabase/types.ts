@@ -1887,6 +1887,30 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_whatsapp_config: {
+        Row: {
+          atualizado_em: string
+          chave: string
+          criado_em: string
+          id: string
+          valor: string
+        }
+        Insert: {
+          atualizado_em?: string
+          chave: string
+          criado_em?: string
+          id?: string
+          valor: string
+        }
+        Update: {
+          atualizado_em?: string
+          chave?: string
+          criado_em?: string
+          id?: string
+          valor?: string
+        }
+        Relationships: []
+      }
       meta_whatsapp_envios_log: {
         Row: {
           enviado_em: string
