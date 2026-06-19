@@ -160,14 +160,10 @@ export default function UsuarioComissoes() {
     return true;
   });
 
-  // Calcular totais (considerando o filtro de período)
+  // Calcular totais das parcelas pagas no período
   const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
-  const comissaoTotal = pagamentosFiltradosPorPeriodo?.reduce((acc, p) => acc + Number(p.comissao_parcela), 0) ?? 0;
-  const comissaoPaga = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
-  const comissaoPendente = comissaoTotal - comissaoPaga;
-  const percentualRecebido = comissaoTotal > 0 
-    ? (comissaoPaga / comissaoTotal) * 100 
-    : 0;
+  const totalPagoNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.valor_parcela), 0);
+  const comissaoPagaNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
 
   // Normalizar CPF (apenas dígitos)
   const normalizarCPF = (cpf: string | null) => 
@@ -360,41 +356,23 @@ export default function UsuarioComissoes() {
         </div>
 
         {/* Cards de Resumo */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Comissão Total</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Total Parcelas Pagas</CardTitle>
+              <DollarSign className="h-5 w-5 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatarMoeda(comissaoTotal)}</div>
+              <div className="text-2xl font-bold text-green-600">{formatarMoeda(totalPagoNoPeriodo)}</div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Comissão Paga</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CardTitle className="text-sm font-medium">Comissão Parcelas Pagas</CardTitle>
+              <CheckCircle className="h-5 w-5 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{formatarMoeda(comissaoPaga)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Comissão Pendente</CardTitle>
-              <Clock className="h-4 w-4 text-yellow-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{formatarMoeda(comissaoPendente)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">% Recebido</CardTitle>
-              <TrendingUp className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{percentualRecebido.toFixed(1)}%</div>
+              <div className="text-2xl font-bold text-green-600">{formatarMoeda(comissaoPagaNoPeriodo)}</div>
             </CardContent>
           </Card>
         </div>
