@@ -360,7 +360,7 @@ export default function UsuarioComissoes() {
         </div>
 
         {/* Cards de Resumo */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Parcelas Pagas</CardTitle>
@@ -372,11 +372,22 @@ export default function UsuarioComissoes() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Comissão Parcelas Pagas</CardTitle>
+              <CardTitle className="text-sm font-medium">Comissão Funcionário (a pagar)</CardTitle>
               <CheckCircle className="h-5 w-5 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{formatarMoeda(comissaoPagaNoPeriodo)}</div>
+              <div className="text-2xl font-bold text-green-600">{formatarMoeda(comissaoFuncionarioNoPeriodo)}</div>
+              <p className="text-xs text-muted-foreground mt-1">Valor devido ao funcionário no período</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Comissão Escritório</CardTitle>
+              <TrendingUp className="h-5 w-5 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{formatarMoeda(comissaoEscritorioNoPeriodo)}</div>
+              <p className="text-xs text-muted-foreground mt-1">Receita da empresa no período</p>
             </CardContent>
           </Card>
         </div>
