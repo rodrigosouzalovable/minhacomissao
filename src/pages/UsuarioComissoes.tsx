@@ -163,7 +163,11 @@ export default function UsuarioComissoes() {
   // Calcular totais das parcelas pagas no período
   const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
   const totalPagoNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.valor_parcela), 0);
-  const comissaoPagaNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
+  const comissaoEscritorioNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
+  const comissaoFuncionarioNoPeriodo = pagamentosPagosNoPeriodo.reduce((acc, p) => {
+    const acordo = acordos?.find(a => a.id === p.acordo_id);
+    return acc + calcularComissaoFuncionarioParcela(Number(p.valor_parcela), acordo?.dias_atraso || 0).valor;
+  }, 0);
 
   // Normalizar CPF (apenas dígitos)
   const normalizarCPF = (cpf: string | null) => 
