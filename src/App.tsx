@@ -206,7 +206,7 @@ const App = () => (
             <Route path="/admin/notificacoes" element={<PermissionRoute><Notificacoes /></PermissionRoute>} />
             <Route path="/estrategias" element={<PermissionRoute><Estrategias /></PermissionRoute>} />
             <Route path="/modelo-mensagem" element={<ProtectedRoute><ModeloMensagem /></ProtectedRoute>} />
-            <Route path="/configurar-meta" element={<AdminRoute><ConfigurarMeta /></AdminRoute>} />
+            <Route path="/admin/configurar-meta" element={<AdminRoute><ConfigurarMeta /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
