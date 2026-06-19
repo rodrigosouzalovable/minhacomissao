@@ -337,7 +337,13 @@ export default function ModeloMensagem() {
                             </TableCell>
                             <TableCell className={`font-medium align-top ${isContatado ? 'line-through' : ''}`}>
                               <div className="flex items-center gap-2">
-                                {c.nome}
+                                <span
+                                  className={`cursor-pointer hover:underline hover:text-emerald-600 rounded px-1 -mx-1 ${isHighlighted(c.cpf, 'nome') ? 'animate-pulse-slow' : ''}`}
+                                  onClick={(e) => { e.stopPropagation(); copiarNome(c); }}
+                                  title="Clique para copiar o nome"
+                                >
+                                  {c.nome}
+                                </span>
                                 <CopyButton value={c.nome} label="Nome" preserveText />
                               </div>
                             </TableCell>
@@ -347,13 +353,13 @@ export default function ModeloMensagem() {
                                   {tels.map((t) => (
                                     <div key={t} className="flex items-center gap-2">
                                       <span
-                                        className="cursor-pointer hover:underline hover:text-emerald-600 font-bold"
-                                        onClick={(e) => { e.stopPropagation(); copiarTel(t); }}
+                                        className={`cursor-pointer hover:underline hover:text-emerald-600 font-bold rounded px-1 -mx-1 ${isHighlighted(c.cpf, 'telefone', t) ? 'animate-pulse-slow' : ''}`}
+                                        onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }}
                                         title="Clique para copiar"
                                       >
                                         {t}
                                       </span>
-                                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copiarTel(t)} title="Copiar telefone">
+                                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }} title="Copiar telefone">
                                         <Copy className="h-3 w-3" />
                                       </Button>
                                     </div>
@@ -366,12 +372,13 @@ export default function ModeloMensagem() {
                             <TableCell className="align-top">
                               <div className="flex items-start gap-2">
                                 <div
-                                  className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[520px] text-muted-foreground flex-1"
+                                  className={`text-xs whitespace-pre-wrap line-clamp-3 max-w-[520px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
                                   title={msg}
+                                  onClick={(e) => { e.stopPropagation(); copiarMsg(c); }}
                                 >
                                   {msg}
                                 </div>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => copiarMsg(c)} title="Copiar mensagem">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c); }} title="Copiar mensagem">
                                   <Copy className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
