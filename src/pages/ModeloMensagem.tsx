@@ -19,6 +19,9 @@ import {
   renderMensagem,
   type ClienteImportado,
 } from '@/lib/parseCobmaisPlanilha';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
+
 
 const TEMPLATE_PADRAO = `Olá, {primeiro_nome}! Tudo bem?
 
