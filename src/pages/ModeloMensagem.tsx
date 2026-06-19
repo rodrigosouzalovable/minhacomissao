@@ -309,7 +309,7 @@ export default function ModeloMensagem() {
                         return (
                           <TableRow
                             key={c.cpf}
-                            className={`cursor-pointer hover:bg-muted/50 ${isContatado ? 'bg-emerald-50/70 hover:bg-emerald-100/50' : ''}`}
+                            className={`cursor-pointer hover:bg-muted/50 ${isContatado ? 'bg-emerald-100 hover:bg-emerald-200/60' : ''}`}
                             onClick={(e) => {
                               if ((e.target as HTMLElement).closest('button, input, label')) return;
                               toggleContatado(c.cpf);
@@ -327,13 +327,13 @@ export default function ModeloMensagem() {
                                 <CopyButton value={c.nome} label="Nome" preserveText />
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm align-top">
+                            <TableCell className="font-mono text-base align-top">
                               {tels.length > 0 ? (
                                 <div className="flex flex-col gap-1">
                                   {tels.map((t) => (
                                     <div key={t} className="flex items-center gap-2">
                                       <span
-                                        className="cursor-pointer hover:underline hover:text-emerald-600 font-medium"
+                                        className="cursor-pointer hover:underline hover:text-emerald-600 font-bold"
                                         onClick={(e) => { e.stopPropagation(); copiarTel(t); }}
                                         title="Clique para copiar"
                                       >
