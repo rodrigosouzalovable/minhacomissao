@@ -411,5 +411,6 @@ export default function ConfigurarMeta() {
         </DialogContent>
       </Dialog>
     </div>
+    </AppLayout>
   );
 }
