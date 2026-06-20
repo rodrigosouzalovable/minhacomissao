@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const DEFAULT_HEADER_IMAGE_URL =
+  Deno.env.get('META_DEFAULT_HEADER_IMAGE_URL') ||
+  'https://minhacomissao.lovable.app/perfil-souza-ribeiro.png';
+
 interface ClienteData {
   cpf?: string;
   nome?: string;
@@ -121,6 +125,34 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
   return { parameters, format: 'positional' };
 }
 
+function getTemplateComponents(template: any): any[] {
+  const components = template?.variaveis?._components;
+  return Array.isArray(components) ? components : [];
+}
+
+function getHeaderFormat(template: any): string {
+  const header = getTemplateComponents(template).find((c: any) => c?.type === 'HEADER');
+  return String(header?.format || template?.variaveis?._header_format || '').toUpperCase();
+}
+
+function buildMetaComponents(template: any, bodyParameters: any[]) {
+  const components: any[] = [];
+  const headerFormat = getHeaderFormat(template);
+
+  if (headerFormat === 'IMAGE') {
+    const imageUrl = template?.variaveis?._header_image_url || DEFAULT_HEADER_IMAGE_URL;
+    components.push({
+      type: 'header',
+      parameters: [{ type: 'image', image: { link: imageUrl } }],
+    });
+  } else if (headerFormat === 'VIDEO' || headerFormat === 'DOCUMENT') {
+    throw new Error(`Template exige cabeçalho ${headerFormat}. Configure uma mídia pública para este template antes de enviar.`);
+  }
+
+  if (bodyParameters.length) components.push({ type: 'body', parameters: bodyParameters });
+  return components;
+}
+
 async function postMeta(_inst: any, template: any, parameters: any[]) {
   const body: any = {
     messaging_product: 'whatsapp',
@@ -129,7 +161,7 @@ async function postMeta(_inst: any, template: any, parameters: any[]) {
     template: {
       name: template.nome_template,
       language: { code: template.idioma || 'pt_BR' },
-      components: parameters.length ? [{ type: 'body', parameters }] : [],
+      components: buildMetaComponents(template, parameters),
     },
   };
   return body;
@@ -156,7 +188,7 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
     const body = await postMeta(inst, template, parameters);
     body.to = formatTelefone(cliente.telefone);
 
-    console.log(`[Meta] tentando template=${template.nome_template} format=${format} params=${JSON.stringify(parameters)}`);
+    console.log(`[Meta] tentando template=${template.nome_template} header=${getHeaderFormat(template) || 'NONE'} format=${format} params=${JSON.stringify(parameters)}`);
 
     const res = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
       method: 'POST',
