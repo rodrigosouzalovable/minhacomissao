@@ -205,11 +205,21 @@ Deno.serve(async (req) => {
       const inst = avail[rr % avail.length]; rr++;
 
       try {
-        const waId = await sendOne(inst, template, cliente);
+        const { waId, formatUsed } = await sendOne(inst, template, cliente);
         enviados++;
         inst.enviados_hoje = (inst.enviados_hoje || 0) + 1;
         await supabase.from('meta_whatsapp_instances')
           .update({ enviados_hoje: inst.enviados_hoje }).eq('id', inst.id);
+
+        // Persist successful format on template to skip retries next time
+        const currentVars = (template.variaveis || {}) as Record<string, any>;
+        if (currentVars._format !== formatUsed && formatUsed !== 'none') {
+          const newVars = { ...currentVars, _format: formatUsed };
+          await supabase.from('meta_whatsapp_templates')
+            .update({ variaveis: newVars }).eq('id', template.id);
+          template.variaveis = newVars;
+        }
+
         await supabase.from('meta_whatsapp_envios_log').insert({
           instancia_id: inst.id,
           user_id: user_id || inst.user_id,
