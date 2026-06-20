@@ -124,7 +124,7 @@ async function sendOne(inst: any, template: any, cliente: ClienteData) {
   return data?.messages?.[0]?.id || null;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const { template_id, instancia_ids, clientes, min_sec = 30, max_sec = 90, user_id } = await req.json();
