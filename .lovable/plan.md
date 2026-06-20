@@ -1,25 +1,22 @@
-## Problemas identificados
+# Corrigir envio Meta — fallback de formato de parâmetro
 
-1. **`/admin/configurar-meta` (API Oficial Meta) sem sidebar** — A página `src/pages/ConfigurarMeta.tsx` não está envolvida pelo `AppLayout`, por isso renderiza sem a barra lateral. Todas as demais páginas internas usam `<AppLayout>…</AppLayout>` como wrapper.
+## Problema
+A Meta retornou `(#132012) Parameter format does not match format in the created template`.
 
-2. **`/admin/envio-meta` (Envio Meta massa) volta para Dashboard** — A rota está protegida por `AdminRoute`, que redireciona para `/dashboard` quando o usuário não é admin. Como o item já aparece no menu para admin, o redirect indica que o `useUserRole` está retornando `isAdmin=false` em algum momento (ou o usuário logado não é admin mas vê o link mesmo assim — o filtro `adminOnly` do menu pode estar divergindo do `isAdmin` da rota).
+O template `atualizacao` mostra `{{name}}` no preview, mas internamente foi criado com placeholder **posicional `{{1}}`**. A edge function está enviando como **nomeado** (`parameter_name: "name"`), e a Meta rejeita.
 
-## Correções
+Você **não precisa alterar nada na Meta** — o ajuste é só na função de envio.
 
-### 1. Envolver `ConfigurarMeta` com `AppLayout`
-Em `src/pages/ConfigurarMeta.tsx`:
-- Importar `AppLayout`.
-- Envolver o JSX retornado por `<AppLayout> … </AppLayout>` (mesmo padrão de `EnvioMeta.tsx`).
+## O que será alterado
 
-### 2. Permitir acesso real à `/admin/envio-meta`
-Em `src/App.tsx`, trocar a proteção das duas rotas Meta de `AdminRoute` para `PermissionRoute`, igual às outras telas administrativas (Auditoria, Financeiro, Acionamento etc.). Assim:
-- Admin continua entrando sem restrição.
-- Gestores/usuários com a aba liberada em `user_permissions` também conseguem entrar.
-- Resolve o "vai para dashboard" para o seu usuário atual (que aparentemente não está marcado como admin nessa sessão, mas tem a aba liberada).
+Arquivo: `supabase/functions/send-whatsapp-meta/index.ts`
 
-```tsx
-<Route path="/admin/configurar-meta" element={<PermissionRoute><ConfigurarMeta /></PermissionRoute>} />
-<Route path="/admin/envio-meta" element={<PermissionRoute><EnvioMeta /></PermissionRoute>} />
-```
+1. **Tentar primeiro o formato detectado** (named se `{{xxx}}`, positional se `{{1}}`) — comportamento atual.
+2. **Se a Meta responder erro `132012`**: refazer a chamada automaticamente usando o **outro formato** com o mesmo valor (primeiro nome do cliente).
+3. **Persistir a preferência**: ao primeiro sucesso de um template, salvar em `meta_whatsapp_templates.variaveis` qual formato funcionou (ex.: `{"_format":"positional"}` ou `{"_format":"named","_param":"name"}`), para que envios futuros já comecem certos sem retry.
 
-Nenhuma outra alteração de lógica. Sidebar e navegação voltam a funcionar nas duas telas.
+## Resultado esperado
+Ao clicar em **Disparar**, o envio acontece (1 enviado, 0 erros). Próximos envios do mesmo template vão direto no formato correto, sem retry.
+
+## Observação
+Se quiser evitar essa lógica de fallback no futuro, você pode criar todos os novos templates na Meta usando explicitamente variáveis nomeadas (Body → "Add variable" → escolher nome). Mas não é obrigatório — o sistema vai funcionar com ambos.

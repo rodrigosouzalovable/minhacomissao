@@ -58,51 +58,52 @@ function resolveNamedVar(name: string, c: ClienteData): string {
   return resolveVar(`{${n}}`, c) || ' ';
 }
 
-async function sendOne(inst: any, template: any, cliente: ClienteData) {
+function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'named' | 'positional'): { parameters: any[]; format: 'named' | 'positional' | 'none' } {
   const variaveis = (template.variaveis || {}) as Record<string, string>;
   const bodyText: string = template.body_text || '';
-  const sortedKeys = Object.keys(variaveis).sort((a, b) => Number(a) - Number(b));
+  const sortedKeys = Object.keys(variaveis).filter(k => /^\d+$/.test(k)).sort((a, b) => Number(a) - Number(b));
 
-  let parameters: any[] = [];
-
-  if (sortedKeys.length > 0) {
-    parameters = sortedKeys.map(k => ({
-      type: 'text',
-      text: resolveVar(variaveis[k] || '', cliente) || ' ',
-    }));
-  } else {
-    // Auto-detect placeholders from body_text
-    const namedMatches = [...bodyText.matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g)];
-    const positionalMatches = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)];
-
-    if (namedMatches.length > 0) {
-      const seen = new Set<string>();
-      for (const m of namedMatches) {
-        const name = m[1];
-        if (seen.has(name)) continue;
-        seen.add(name);
-        parameters.push({
-          type: 'text',
-          parameter_name: name,
-          text: resolveNamedVar(name, cliente),
-        });
-      }
-    } else if (positionalMatches.length > 0) {
-      const seen = new Set<string>();
-      for (const m of positionalMatches) {
-        if (seen.has(m[1])) continue;
-        seen.add(m[1]);
-        parameters.push({
-          type: 'text',
-          text: formatPrimeiroNome(cliente.nome || '') || 'cliente',
-        });
-      }
-    }
+  if (sortedKeys.length > 0 && !forceFormat) {
+    return {
+      parameters: sortedKeys.map(k => ({ type: 'text', text: resolveVar(variaveis[k] || '', cliente) || ' ' })),
+      format: 'positional',
+    };
   }
 
+  const namedMatches = [...bodyText.matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g)];
+  const positionalMatches = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)];
+
+  const useNamed = forceFormat ? forceFormat === 'named' : namedMatches.length > 0;
+  const useToken = useNamed ? namedMatches : positionalMatches;
+
+  if (useToken.length === 0 && namedMatches.length === 0 && positionalMatches.length === 0) {
+    return { parameters: [], format: 'none' };
+  }
+
+  // If forced format differs from what placeholders show, fall back to the available list with that format.
+  const list = useNamed
+    ? (namedMatches.length ? namedMatches : positionalMatches.map(m => [m[0], 'name'] as any))
+    : (positionalMatches.length ? positionalMatches : namedMatches.map((m, i) => [m[0], String(i + 1)] as any));
+
+  const seen = new Set<string>();
+  const parameters: any[] = [];
+  for (const m of list) {
+    const key = m[1];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (useNamed) {
+      parameters.push({ type: 'text', parameter_name: key, text: resolveNamedVar(key, cliente) });
+    } else {
+      parameters.push({ type: 'text', text: resolveNamedVar(key, cliente) });
+    }
+  }
+  return { parameters, format: useNamed ? 'named' : 'positional' };
+}
+
+async function postMeta(inst: any, template: any, parameters: any[]) {
   const body: any = {
     messaging_product: 'whatsapp',
-    to: formatTelefone(cliente.telefone),
+    to: undefined as any,
     type: 'template',
     template: {
       name: template.nome_template,
@@ -110,19 +111,48 @@ async function sendOne(inst: any, template: any, cliente: ClienteData) {
       components: parameters.length ? [{ type: 'body', parameters }] : [],
     },
   };
-
-  const res = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${inst.access_token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || 'Falha Meta API');
-  return data?.messages?.[0]?.id || null;
+  return body;
 }
+
+async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<{ waId: string | null; formatUsed: 'named' | 'positional' | 'none' }> {
+  const variaveis = (template.variaveis || {}) as Record<string, string>;
+  const preferred: 'named' | 'positional' | undefined = variaveis._format === 'named' || variaveis._format === 'positional' ? variaveis._format : undefined;
+
+  const formatsToTry: (('named' | 'positional') | undefined)[] = preferred
+    ? [preferred, preferred === 'named' ? 'positional' : 'named']
+    : [undefined, 'positional', 'named'];
+
+  let lastErr: any = null;
+  const triedKeys = new Set<string>();
+
+  for (const fmt of formatsToTry) {
+    const { parameters, format } = buildParameters(template, cliente, fmt);
+    const key = `${format}:${parameters.length}`;
+    if (triedKeys.has(key)) continue;
+    triedKeys.add(key);
+
+    const body = await postMeta(inst, template, parameters);
+    body.to = formatTelefone(cliente.telefone);
+
+    const res = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { waId: data?.messages?.[0]?.id || null, formatUsed: format === 'none' ? (preferred || 'positional') : format };
+    }
+    lastErr = data?.error;
+    const code = data?.error?.code;
+    // 132012 = format mismatch, 132000 = param count mismatch → try next format
+    if (code !== 132012 && code !== 132000) {
+      throw new Error(data?.error?.message || 'Falha Meta API');
+    }
+  }
+  throw new Error(lastErr?.message || 'Falha Meta API após tentar formatos');
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -175,11 +205,21 @@ Deno.serve(async (req) => {
       const inst = avail[rr % avail.length]; rr++;
 
       try {
-        const waId = await sendOne(inst, template, cliente);
+        const { waId, formatUsed } = await sendOne(inst, template, cliente);
         enviados++;
         inst.enviados_hoje = (inst.enviados_hoje || 0) + 1;
         await supabase.from('meta_whatsapp_instances')
           .update({ enviados_hoje: inst.enviados_hoje }).eq('id', inst.id);
+
+        // Persist successful format on template to skip retries next time
+        const currentVars = (template.variaveis || {}) as Record<string, any>;
+        if (currentVars._format !== formatUsed && formatUsed !== 'none') {
+          const newVars = { ...currentVars, _format: formatUsed };
+          await supabase.from('meta_whatsapp_templates')
+            .update({ variaveis: newVars }).eq('id', template.id);
+          template.variaveis = newVars;
+        }
+
         await supabase.from('meta_whatsapp_envios_log').insert({
           instancia_id: inst.id,
           user_id: user_id || inst.user_id,
