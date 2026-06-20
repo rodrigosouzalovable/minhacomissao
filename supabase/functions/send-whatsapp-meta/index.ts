@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Using built-in Deno.serve (no import needed)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -47,13 +47,58 @@ function formatTelefone(tel: string): string {
   return d.startsWith('55') ? d : `55${d}`;
 }
 
+function resolveNamedVar(name: string, c: ClienteData): string {
+  const n = name.toLowerCase();
+  if (n === 'name' || n === 'nome' || n === 'primeiro_nome') return formatPrimeiroNome(c.nome || '') || 'cliente';
+  if (n === 'nome_completo' || n === 'full_name') return c.nome || 'cliente';
+  if (n === 'cpf') return c.cpf || '';
+  if (n === 'atraso' || n === 'delay') return String(c.atraso ?? '');
+  if (n === 'saldo' || n === 'valor' || n === 'value') return fmtBRL(Number(c.saldo || 0));
+  if (n === 'avista') return fmtBRL(Number(c.saldo || 0) * 0.5);
+  return resolveVar(`{${n}}`, c) || ' ';
+}
+
 async function sendOne(inst: any, template: any, cliente: ClienteData) {
   const variaveis = (template.variaveis || {}) as Record<string, string>;
+  const bodyText: string = template.body_text || '';
   const sortedKeys = Object.keys(variaveis).sort((a, b) => Number(a) - Number(b));
-  const parameters = sortedKeys.map(k => ({
-    type: 'text',
-    text: resolveVar(variaveis[k] || '', cliente) || ' ',
-  }));
+
+  let parameters: any[] = [];
+
+  if (sortedKeys.length > 0) {
+    parameters = sortedKeys.map(k => ({
+      type: 'text',
+      text: resolveVar(variaveis[k] || '', cliente) || ' ',
+    }));
+  } else {
+    // Auto-detect placeholders from body_text
+    const namedMatches = [...bodyText.matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g)];
+    const positionalMatches = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)];
+
+    if (namedMatches.length > 0) {
+      const seen = new Set<string>();
+      for (const m of namedMatches) {
+        const name = m[1];
+        if (seen.has(name)) continue;
+        seen.add(name);
+        parameters.push({
+          type: 'text',
+          parameter_name: name,
+          text: resolveNamedVar(name, cliente),
+        });
+      }
+    } else if (positionalMatches.length > 0) {
+      const seen = new Set<string>();
+      for (const m of positionalMatches) {
+        if (seen.has(m[1])) continue;
+        seen.add(m[1]);
+        parameters.push({
+          type: 'text',
+          text: formatPrimeiroNome(cliente.nome || '') || 'cliente',
+        });
+      }
+    }
+  }
 
   const body: any = {
     messaging_product: 'whatsapp',
@@ -79,7 +124,7 @@ async function sendOne(inst: any, template: any, cliente: ClienteData) {
   return data?.messages?.[0]?.id || null;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const { template_id, instancia_ids, clientes, min_sec = 30, max_sec = 90, user_id } = await req.json();
