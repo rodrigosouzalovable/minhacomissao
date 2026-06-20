@@ -30,6 +30,7 @@ type Template = {
   idioma: string;
   variaveis: Record<string, string> | null;
   instancia_id: string;
+  categoria: string | null;
 };
 
 type ClienteRow = {
