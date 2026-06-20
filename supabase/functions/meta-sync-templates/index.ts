@@ -7,10 +7,17 @@ const corsHeaders = {
 };
 
 function extractVariables(bodyText: string): Record<string, string> {
-  const matches = Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g));
+  const matches = Array.from(bodyText.matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*|\d+)\s*\}\}/g));
   const vars: Record<string, string> = {};
   matches.forEach(m => { vars[m[1]] = ''; });
   return vars;
+}
+
+function extractTemplateMetadata(components: any[]): Record<string, any> {
+  const meta: Record<string, any> = { _components: components || [] };
+  const header = (components || []).find((c: any) => c?.type === 'HEADER');
+  if (header?.format) meta._header_format = String(header.format).toUpperCase();
+  return meta;
 }
 
 serve(async (req) => {
@@ -35,6 +42,7 @@ serve(async (req) => {
       const body = (t.components || []).find((c: any) => c.type === 'BODY');
       const bodyText = body?.text || '';
       const variaveis = extractVariables(bodyText);
+      const metadata = extractTemplateMetadata(t.components || []);
 
       // Preserve existing mapping when re-syncing
       const { data: existing } = await supabase
@@ -44,9 +52,8 @@ serve(async (req) => {
         .eq('nome_template', t.name)
         .eq('idioma', t.language)
         .maybeSingle();
-      const mergedVars = existing?.variaveis
-        ? { ...variaveis, ...(existing.variaveis as Record<string, string>) }
-        : variaveis;
+      const existingVars = (existing?.variaveis || {}) as Record<string, any>;
+      const mergedVars = { ...variaveis, ...existingVars, ...metadata };
 
       await supabase.from('meta_whatsapp_templates').upsert({
         instancia_id,
