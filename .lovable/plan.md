@@ -1,13 +1,25 @@
-Diagnóstico: a página `Envio Meta (massa)` (`src/pages/EnvioMeta.tsx`) renderiza seu conteúdo direto em uma `<div>` sem o wrapper `<AppLayout>`, por isso a aba lateral desaparece.
+## Problemas identificados
 
-Plano de correção:
+1. **`/admin/configurar-meta` (API Oficial Meta) sem sidebar** — A página `src/pages/ConfigurarMeta.tsx` não está envolvida pelo `AppLayout`, por isso renderiza sem a barra lateral. Todas as demais páginas internas usam `<AppLayout>…</AppLayout>` como wrapper.
 
-1. Importar `AppLayout` no `src/pages/EnvioMeta.tsx`.
-2. Adicionar estado de carregamento envolto em `<AppLayout>` (padrão das outras páginas).
-3. Envolver o conteúdo principal em `<AppLayout>`.
-4. Ajustar o wrapper externo para remover o `p-6` redundante, já que `AppLayout` já aplica padding no conteúdo (`p-6` no `main`). Manter `max-w-6xl mx-auto space-y-6` para manter a centralização e o espaçamento.
+2. **`/admin/envio-meta` (Envio Meta massa) volta para Dashboard** — A rota está protegida por `AdminRoute`, que redireciona para `/dashboard` quando o usuário não é admin. Como o item já aparece no menu para admin, o redirect indica que o `useUserRole` está retornando `isAdmin=false` em algum momento (ou o usuário logado não é admin mas vê o link mesmo assim — o filtro `adminOnly` do menu pode estar divergindo do `isAdmin` da rota).
 
-Arquivos alterados:
-- `src/pages/EnvioMeta.tsx`
+## Correções
 
-Nenhuma mudança de backend, rota ou banco de dados é necessária.
+### 1. Envolver `ConfigurarMeta` com `AppLayout`
+Em `src/pages/ConfigurarMeta.tsx`:
+- Importar `AppLayout`.
+- Envolver o JSX retornado por `<AppLayout> … </AppLayout>` (mesmo padrão de `EnvioMeta.tsx`).
+
+### 2. Permitir acesso real à `/admin/envio-meta`
+Em `src/App.tsx`, trocar a proteção das duas rotas Meta de `AdminRoute` para `PermissionRoute`, igual às outras telas administrativas (Auditoria, Financeiro, Acionamento etc.). Assim:
+- Admin continua entrando sem restrição.
+- Gestores/usuários com a aba liberada em `user_permissions` também conseguem entrar.
+- Resolve o "vai para dashboard" para o seu usuário atual (que aparentemente não está marcado como admin nessa sessão, mas tem a aba liberada).
+
+```tsx
+<Route path="/admin/configurar-meta" element={<PermissionRoute><ConfigurarMeta /></PermissionRoute>} />
+<Route path="/admin/envio-meta" element={<PermissionRoute><EnvioMeta /></PermissionRoute>} />
+```
+
+Nenhuma outra alteração de lógica. Sidebar e navegação voltam a funcionar nas duas telas.
