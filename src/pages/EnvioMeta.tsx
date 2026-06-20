@@ -169,7 +169,15 @@ export default function EnvioMeta() {
                 <SelectContent>
                   {templates.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.nome_template} <span className="text-xs text-muted-foreground ml-2">({t.idioma})</span>
+                      <div className="flex items-center gap-2 w-full">
+                        <span>{t.nome_template}</span>
+                        <span className="text-xs text-muted-foreground">({t.idioma})</span>
+                        {t.categoria && (
+                          <Badge variant={t.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                            {t.categoria === 'MARKETING' ? 'Marketing' : t.categoria === 'UTILITY' ? 'Utilidade' : t.categoria}
+                          </Badge>
+                        )}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
