@@ -61,46 +61,67 @@ function resolveNamedVar(name: string, c: ClienteData): string {
 function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'named' | 'positional'): { parameters: any[]; format: 'named' | 'positional' | 'none' } {
   const variaveis = (template.variaveis || {}) as Record<string, string>;
   const bodyText: string = template.body_text || '';
+
   const sortedKeys = Object.keys(variaveis).filter(k => /^\d+$/.test(k)).sort((a, b) => Number(a) - Number(b));
-
-  if (sortedKeys.length > 0 && !forceFormat) {
-    return {
-      parameters: sortedKeys.map(k => ({ type: 'text', text: resolveVar(variaveis[k] || '', cliente) || ' ' })),
-      format: 'positional',
-    };
-  }
-
   const namedMatches = [...bodyText.matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g)];
   const positionalMatches = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)];
 
-  const useNamed = forceFormat ? forceFormat === 'named' : namedMatches.length > 0;
-  const useToken = useNamed ? namedMatches : positionalMatches;
+  const useNamed = forceFormat
+    ? forceFormat === 'named'
+    : (namedMatches.length > 0 && positionalMatches.length === 0);
 
-  if (useToken.length === 0 && namedMatches.length === 0 && positionalMatches.length === 0) {
-    return { parameters: [], format: 'none' };
+  if (useNamed) {
+    const seen = new Set<string>();
+    const parameters: any[] = [];
+    for (const m of namedMatches) {
+      const key = m[1];
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const value = resolveNamedVar(key, cliente) || 'cliente';
+      parameters.push({ type: 'text', parameter_name: key, text: value });
+    }
+    // Se o template só tem {{1}} mas usuário forçou named, mapeia posicionais para parameter_name
+    if (parameters.length === 0 && positionalMatches.length > 0) {
+      const seen2 = new Set<string>();
+      for (const m of positionalMatches) {
+        const k = m[1];
+        if (seen2.has(k)) continue;
+        seen2.add(k);
+        const field = variaveis[k] || 'name';
+        const value = resolveNamedVar(field.replace(/[{}]/g, ''), cliente) || 'cliente';
+        parameters.push({ type: 'text', parameter_name: field.replace(/[{}]/g, '') || 'name', text: value });
+      }
+    }
+    return { parameters, format: 'named' };
   }
 
-  // If forced format differs from what placeholders show, fall back to the available list with that format.
-  const list = useNamed
-    ? (namedMatches.length ? namedMatches : positionalMatches.map(m => [m[0], 'name'] as any))
-    : (positionalMatches.length ? positionalMatches : namedMatches.map((m, i) => [m[0], String(i + 1)] as any));
-
-  const seen = new Set<string>();
+  // POSICIONAL
   const parameters: any[] = [];
-  for (const m of list) {
+  if (sortedKeys.length > 0) {
+    for (const k of sortedKeys) {
+      const field = variaveis[k] || '';
+      const value =
+        resolveVar(field, cliente) ||
+        resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
+        'cliente';
+      parameters.push({ type: 'text', text: value });
+    }
+    return { parameters, format: 'positional' };
+  }
+
+  const source = positionalMatches.length > 0 ? positionalMatches : namedMatches;
+  const seen = new Set<string>();
+  for (const m of source) {
     const key = m[1];
     if (seen.has(key)) continue;
     seen.add(key);
-    if (useNamed) {
-      parameters.push({ type: 'text', parameter_name: key, text: resolveNamedVar(key, cliente) });
-    } else {
-      parameters.push({ type: 'text', text: resolveNamedVar(key, cliente) });
-    }
+    const value = resolveNamedVar(key, cliente) || 'cliente';
+    parameters.push({ type: 'text', text: value && value.trim() !== '' ? value : 'cliente' });
   }
-  return { parameters, format: useNamed ? 'named' : 'positional' };
+  return { parameters, format: 'positional' };
 }
 
-async function postMeta(inst: any, template: any, parameters: any[]) {
+async function postMeta(_inst: any, template: any, parameters: any[]) {
   const body: any = {
     messaging_product: 'whatsapp',
     to: undefined as any,
@@ -116,23 +137,26 @@ async function postMeta(inst: any, template: any, parameters: any[]) {
 
 async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<{ waId: string | null; formatUsed: 'named' | 'positional' | 'none' }> {
   const variaveis = (template.variaveis || {}) as Record<string, string>;
-  const preferred: 'named' | 'positional' | undefined = variaveis._format === 'named' || variaveis._format === 'positional' ? variaveis._format : undefined;
+  const preferred: 'named' | 'positional' | undefined =
+    variaveis._format === 'named' || variaveis._format === 'positional' ? variaveis._format : undefined;
 
   const formatsToTry: (('named' | 'positional') | undefined)[] = preferred
     ? [preferred, preferred === 'named' ? 'positional' : 'named']
-    : [undefined, 'positional', 'named'];
+    : [undefined, 'named', 'positional'];
 
   let lastErr: any = null;
   const triedKeys = new Set<string>();
 
   for (const fmt of formatsToTry) {
     const { parameters, format } = buildParameters(template, cliente, fmt);
-    const key = `${format}:${parameters.length}`;
+    const key = `${format}:${JSON.stringify(parameters)}`;
     if (triedKeys.has(key)) continue;
     triedKeys.add(key);
 
     const body = await postMeta(inst, template, parameters);
     body.to = formatTelefone(cliente.telefone);
+
+    console.log(`[Meta] tentando template=${template.nome_template} format=${format} params=${JSON.stringify(parameters)}`);
 
     const res = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
       method: 'POST',
@@ -141,16 +165,22 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
     });
     const data = await res.json();
     if (res.ok) {
+      console.log(`[Meta] OK format=${format} waId=${data?.messages?.[0]?.id}`);
       return { waId: data?.messages?.[0]?.id || null, formatUsed: format === 'none' ? (preferred || 'positional') : format };
     }
     lastErr = data?.error;
     const code = data?.error?.code;
-    // 132012 = format mismatch, 132000 = param count mismatch → try next format
-    if (code !== 132012 && code !== 132000) {
-      throw new Error(data?.error?.message || 'Falha Meta API');
+    const details = data?.error?.error_data?.details || '';
+    console.error(`[Meta] erro code=${code} msg=${data?.error?.message} details=${details}`);
+
+    // mismatch de formato/quantidade/param inválido → tenta próximo formato
+    if (code !== 132012 && code !== 132000 && code !== 100) {
+      throw new Error(`(#${code}) ${data?.error?.message || 'Falha Meta API'}${details ? ' | ' + details : ''}`);
     }
   }
-  throw new Error(lastErr?.message || 'Falha Meta API após tentar formatos');
+  const code = lastErr?.code;
+  const details = lastErr?.error_data?.details || '';
+  throw new Error(`(#${code}) ${lastErr?.message || 'Falha Meta API'}${details ? ' | ' + details : ''}`);
 }
 
 
