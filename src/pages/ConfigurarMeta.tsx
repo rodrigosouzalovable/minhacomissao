@@ -182,6 +182,27 @@ export default function ConfigurarMeta() {
     setSincronizando(null);
   };
 
+  const sincronizarTodos = async () => {
+    setSincronizando("__all__");
+    let total = 0;
+    let erros = 0;
+    for (const inst of instancias.filter((i) => i.ativo)) {
+      try {
+        const { data, error } = await supabase.functions.invoke("meta-sync-templates", {
+          body: { instancia_id: inst.id },
+        });
+        if (error) throw error;
+        total += data?.synced || 0;
+      } catch {
+        erros++;
+      }
+    }
+    if (erros) toast.error(`${total} sincronizados, ${erros} instâncias com erro`);
+    else toast.success(`${total} templates sincronizados`);
+    await carregar();
+    setSincronizando(null);
+  };
+
   const toggle = async (inst: Instancia) => {
     await supabase.from("meta_whatsapp_instances").update({ ativo: !inst.ativo }).eq("id", inst.id);
     carregar();
