@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Send, RefreshCw } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 
 type Instancia = {
   id: string;
@@ -132,7 +133,9 @@ export default function EnvioMeta() {
   };
 
   const variaveisDoTemplate = template?.variaveis
-    ? Object.entries(template.variaveis).sort(([a], [b]) => Number(a) - Number(b))
+    ? Object.entries(template.variaveis)
+        .filter(([k]) => !k.startsWith("_"))
+        .sort(([a], [b]) => (Number(a) || 0) - (Number(b) || 0))
     : [];
 
   return (
@@ -185,16 +188,8 @@ export default function EnvioMeta() {
             )}
 
             {template && (
-              <div className="bg-muted/40 border rounded p-3 text-sm whitespace-pre-wrap">
-                <div className="flex items-center gap-2 mb-2">
-                  <strong className="text-xs uppercase tracking-wide text-muted-foreground">Template selecionado</strong>
-                  {template.categoria && (
-                    <Badge variant={template.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                      {template.categoria === 'MARKETING' ? 'Marketing' : template.categoria === 'UTILITY' ? 'Utilidade' : template.categoria}
-                    </Badge>
-                  )}
-                </div>
-                {template.body_text || <em className="text-muted-foreground">Sem corpo</em>}
+              <div className="mt-2">
+                <TemplateWhatsAppPreview template={template} />
               </div>
             )}
 
