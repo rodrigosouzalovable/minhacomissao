@@ -133,7 +133,9 @@ export default function EnvioMeta() {
   };
 
   const variaveisDoTemplate = template?.variaveis
-    ? Object.entries(template.variaveis).sort(([a], [b]) => Number(a) - Number(b))
+    ? Object.entries(template.variaveis)
+        .filter(([k]) => !k.startsWith("_"))
+        .sort(([a], [b]) => (Number(a) || 0) - (Number(b) || 0))
     : [];
 
   return (
