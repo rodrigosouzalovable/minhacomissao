@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2, Send, RefreshCw, Pencil, Check, X } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
+import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 
 type Instancia = {
   id: string;
@@ -76,6 +77,7 @@ export default function EnvioMeta() {
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
+  const custoRef = useRef<CustoEnvioCardHandle>(null);
 
   const startEdit = (i: Instancia) => {
     setEditingId(i.id);
@@ -158,6 +160,7 @@ export default function EnvioMeta() {
       setResultado({ enviados: data.enviados || 0, erros: data.erros || 0, total: data.total || 0 });
       toast.success(`${data.enviados} enviados • ${data.erros} erros`);
       carregar();
+      custoRef.current?.refetch();
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
     }
@@ -185,6 +188,8 @@ export default function EnvioMeta() {
           Atualizar
         </Button>
       </div>
+
+      <CustoEnvioCard ref={custoRef} />
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Template */}
