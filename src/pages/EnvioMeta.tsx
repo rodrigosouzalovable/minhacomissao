@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 
@@ -72,6 +72,38 @@ export default function EnvioMeta() {
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState<string>("");
+  const [editPhone, setEditPhone] = useState<string>("");
+  const [savingEdit, setSavingEdit] = useState<boolean>(false);
+
+  const startEdit = (i: Instancia) => {
+    setEditingId(i.id);
+    setEditNome(i.nome || "");
+    setEditPhone(i.display_phone || "");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditNome("");
+    setEditPhone("");
+  };
+
+  const salvarEdicao = async (id: string) => {
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from("meta_whatsapp_instances")
+      .update({ nome: editNome.trim(), display_phone: editPhone.trim() || null })
+      .eq("id", id);
+    setSavingEdit(false);
+    if (error) {
+      toast.error("Erro ao salvar: " + error.message);
+      return;
+    }
+    setInstancias((prev) => prev.map((x) => (x.id === id ? { ...x, nome: editNome.trim(), display_phone: editPhone.trim() || null } : x)));
+    toast.success("Instância atualizada");
+    cancelEdit();
+  };
 
   const carregar = async () => {
     setLoading(true);
@@ -219,23 +251,88 @@ export default function EnvioMeta() {
               </p>
             ) : (
               <div className="space-y-2">
-                {instancias.map((i) => (
+                {instancias.map((i) => {
+                  const isEditing = editingId === i.id;
+                  return (
                   <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
                     <Checkbox
                       checked={instanciaIds.includes(i.id)}
                       onCheckedChange={() => toggleInstancia(i.id)}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{i.nome}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
-                      </div>
+                      {isEditing ? (
+                        <div
+                          className="space-y-1.5"
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          <Input
+                            value={editNome}
+                            onChange={(e) => setEditNome(e.target.value)}
+                            placeholder="Nome / apelido"
+                            className="h-7 text-sm"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Input
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            placeholder="Telefone de exibição"
+                            className="h-7 text-xs"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-medium text-sm">{i.nome}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
-                      {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
-                    </Badge>
+                    {isEditing ? (
+                      <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          disabled={savingEdit}
+                          onClick={(e) => { e.stopPropagation(); salvarEdicao(i.id); }}
+                          title="Salvar"
+                        >
+                          {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={(e) => { e.stopPropagation(); cancelEdit(); }}
+                          title="Cancelar"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
+                          {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
+                        </Badge>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(i); }}
+                          title="Editar"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
                   </label>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
