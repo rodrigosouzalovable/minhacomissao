@@ -72,6 +72,38 @@ export default function EnvioMeta() {
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState<string>("");
+  const [editPhone, setEditPhone] = useState<string>("");
+  const [savingEdit, setSavingEdit] = useState<boolean>(false);
+
+  const startEdit = (i: Instancia) => {
+    setEditingId(i.id);
+    setEditNome(i.nome || "");
+    setEditPhone(i.display_phone || "");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditNome("");
+    setEditPhone("");
+  };
+
+  const salvarEdicao = async (id: string) => {
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from("meta_whatsapp_instances")
+      .update({ nome: editNome.trim(), display_phone: editPhone.trim() || null })
+      .eq("id", id);
+    setSavingEdit(false);
+    if (error) {
+      toast.error("Erro ao salvar: " + error.message);
+      return;
+    }
+    setInstancias((prev) => prev.map((x) => (x.id === id ? { ...x, nome: editNome.trim(), display_phone: editPhone.trim() || null } : x)));
+    toast.success("Instância atualizada");
+    cancelEdit();
+  };
 
   const carregar = async () => {
     setLoading(true);
