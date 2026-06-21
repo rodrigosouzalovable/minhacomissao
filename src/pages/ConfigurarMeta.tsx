@@ -182,6 +182,27 @@ export default function ConfigurarMeta() {
     setSincronizando(null);
   };
 
+  const sincronizarTodos = async () => {
+    setSincronizando("__all__");
+    let total = 0;
+    let erros = 0;
+    for (const inst of instancias.filter((i) => i.ativo)) {
+      try {
+        const { data, error } = await supabase.functions.invoke("meta-sync-templates", {
+          body: { instancia_id: inst.id },
+        });
+        if (error) throw error;
+        total += data?.synced || 0;
+      } catch {
+        erros++;
+      }
+    }
+    if (erros) toast.error(`${total} sincronizados, ${erros} instâncias com erro`);
+    else toast.success(`${total} templates sincronizados`);
+    await carregar();
+    setSincronizando(null);
+  };
+
   const toggle = async (inst: Instancia) => {
     await supabase.from("meta_whatsapp_instances").update({ ativo: !inst.ativo }).eq("id", inst.id);
     carregar();
@@ -337,9 +358,24 @@ export default function ConfigurarMeta() {
         </TabsContent>
 
         <TabsContent value="templates">
+          <div className="flex justify-end mb-3">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={sincronizarTodos}
+              disabled={sincronizando !== null || instancias.filter((i) => i.ativo).length === 0}
+            >
+              {sincronizando === "__all__" ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Sincronizar todos os templates
+            </Button>
+          </div>
           {templates.length === 0 ? (
             <Card><CardContent className="p-8 text-center text-muted-foreground">
-              Nenhum template sincronizado. Clique em "Templates" em uma instância para sincronizar da Meta.
+              Nenhum template sincronizado. Clique em "Sincronizar todos os templates" acima ou em "Templates" em uma instância.
             </CardContent></Card>
           ) : (
             <Card><CardContent className="p-0">
