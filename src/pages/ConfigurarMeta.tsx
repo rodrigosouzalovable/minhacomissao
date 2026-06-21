@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -51,6 +52,7 @@ export default function ConfigurarMeta() {
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
+  const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
