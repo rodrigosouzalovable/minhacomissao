@@ -1,23 +1,40 @@
-# Plano: Preview WhatsApp do template na aba "Envio em massa"
+## Diagnóstico
 
-Hoje a página `/admin/envio-meta` mostra apenas o texto do template selecionado. Vou substituir esse bloco "TEMPLATE SELECIONADO" por um **preview visual estilo WhatsApp**, igual ao que abre clicando no template em "API Oficial Meta WhatsApp":
+**Botões não aparecem:** A função `meta-sync-templates` já foi atualizada para salvar `_components` (que inclui botões e rodapé), mas no banco a maioria dos templates ainda está com `variaveis` vazio — ou seja, a sincronização **não foi executada novamente** depois da última atualização. Basta re-sincronizar e os botões (SIM, BLOQUEAR CONTATO etc.) vão aparecer automaticamente no preview, tanto em "Templates HSM" quanto em "Envio em Massa".
 
-- Header com imagem (lendo `_header_image_url` do template) ou texto
-- Corpo com variáveis `{{name}}` destacadas com sample (`Rodrigo`)
-- Footer cinza ("Este número é certificado pelo WhatsApp Empresas", se houver)
-- Botões (SIM / BLOQUEAR CONTATO / etc) renderizados como no WhatsApp (verde, com ícone)
-- Mantém embaixo, em texto pequeno, a lista de variáveis mapeadas
+**Imagens dos outros templates:** No banco só os 2 templates `atualizacao` têm `_header_format: IMAGE` configurado. Os outros (`autorizacao`, `recomendada`, `solicitacao`, `solicitacao_para_renegociar`, `solicitacao2`, `atualizacao_de_cadastro`, `vencimento_3_dias_antes`) estão sem header detectado — só vou saber quais têm imagem depois da re-sync.
 
-## Implementação
+## Plano
 
-- Extrair o JSX de preview do `TemplatePreviewDialog` para um componente reutilizável **`TemplateWhatsAppPreview`** (sem o Dialog, só o "card WhatsApp")
-- `TemplatePreviewDialog` passa a usá-lo internamente
-- `src/pages/EnvioMeta.tsx`: substituir o bloco "TEMPLATE SELECIONADO" pelo `<TemplateWhatsAppPreview template={tpl} />`
+### Passo 1 — Você re-sincroniza (sem código)
+Na aba **Templates HSM**, clique em **"Sincronizar Templates"** para cada instância Meta. Isso vai:
+- Puxar os botões aprovados na Meta → aparecem no preview automaticamente
+- Marcar quais templates têm `HEADER IMAGE` → eu identifico todos que precisam de imagem
 
-## Arquivos afetados
+### Passo 2 — Você me envia as imagens
+Para cada template que tem foto na Meta, me envie:
+- **Nome do template** (ex: `solicitacao2`, `recomendada`)
+- **A imagem exata** que você cadastrou na Meta (anexa no chat)
 
-- `src/components/meta/TemplateWhatsAppPreview.tsx` (novo — só o preview)
-- `src/components/meta/TemplatePreviewDialog.tsx` (refatorado para usar o novo)
-- `src/pages/EnvioMeta.tsx` (troca o bloco do template selecionado)
+A Meta exige que a imagem enviada seja **visualmente idêntica** ao sample aprovado, então é a mesma arte que você subiu lá.
 
-Confirma?
+Pode ser tudo de uma vez numa mensagem só, no formato:
+```
+- recomendada → [imagem A]
+- solicitacao2 → [imagem B]  
+- atualizacao (com botões) → [imagem do anexo 2 desta conversa]
+```
+
+### Passo 3 — Eu configuro (build mode)
+Para cada template informado:
+1. Faço upload da imagem via Lovable Assets (CDN)
+2. Rodo migration atualizando `variaveis._header_image_url` no template correspondente
+3. Confirmo que o preview do "Envio em Massa" mostra a imagem + botões certinhos
+
+### Sobre botões — não precisa informar
+Os botões já estão cadastrados na Meta e vêm automaticamente na sincronização. Não preciso saber quais templates têm botões — o componente `TemplateWhatsAppPreview` já renderiza qualquer botão (`QUICK_REPLY`, `URL`, `PHONE_NUMBER`) que vier do `_components`.
+
+## Detalhes técnicos
+- `meta-sync-templates/index.ts` já salva `_components` completo (linha 17) — só falta executar
+- `TemplateWhatsAppPreview.tsx` já lê `template.variaveis._components` e renderiza header IMAGE/TEXT, body, footer e botões
+- `send-whatsapp-meta` já valida `_header_image_url` antes de enviar e falha com mensagem clara se faltar
