@@ -251,23 +251,88 @@ export default function EnvioMeta() {
               </p>
             ) : (
               <div className="space-y-2">
-                {instancias.map((i) => (
+                {instancias.map((i) => {
+                  const isEditing = editingId === i.id;
+                  return (
                   <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
                     <Checkbox
                       checked={instanciaIds.includes(i.id)}
                       onCheckedChange={() => toggleInstancia(i.id)}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{i.nome}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
-                      </div>
+                      {isEditing ? (
+                        <div
+                          className="space-y-1.5"
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          <Input
+                            value={editNome}
+                            onChange={(e) => setEditNome(e.target.value)}
+                            placeholder="Nome / apelido"
+                            className="h-7 text-sm"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Input
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            placeholder="Telefone de exibição"
+                            className="h-7 text-xs"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-medium text-sm">{i.nome}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
-                      {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
-                    </Badge>
+                    {isEditing ? (
+                      <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          disabled={savingEdit}
+                          onClick={(e) => { e.stopPropagation(); salvarEdicao(i.id); }}
+                          title="Salvar"
+                        >
+                          {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={(e) => { e.stopPropagation(); cancelEdit(); }}
+                          title="Cancelar"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
+                          {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
+                        </Badge>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(i); }}
+                          title="Editar"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
                   </label>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
