@@ -84,6 +84,44 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) {
+      toast.error("Use JPG, PNG ou WebP");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem deve ter no máximo 5 MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `meta-templates/${template.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("inbox-media")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("inbox-media").getPublicUrl(path);
+      const url = pub.publicUrl;
+      setImageUrl(url);
+      const newVars = { ...(template.variaveis || {}), _header_image_url: url };
+      const { error: dbErr } = await supabase
+        .from("meta_whatsapp_templates")
+        .update({ variaveis: newVars })
+        .eq("id", template.id);
+      if (dbErr) throw dbErr;
+      toast.success("Imagem enviada e salva");
+      onSaved?.();
+    } catch (err: any) {
+      toast.error("Erro ao enviar: " + (err?.message || "falhou"));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
