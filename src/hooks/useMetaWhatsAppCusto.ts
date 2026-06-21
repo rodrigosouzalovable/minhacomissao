@@ -82,9 +82,8 @@ export function useMetaWhatsAppCusto() {
 
   useEffect(() => {
     calcular();
-    const id = setInterval(calcular, 30000);
-    return () => clearInterval(id);
   }, [calcular]);
+
 
   return { hoje, mes, total, loading, refetch: calcular };
 }
