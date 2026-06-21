@@ -50,6 +50,8 @@ function renderBodyWithVars(text: string) {
 export default function TemplatePreviewDialog({ template, open, onOpenChange, onSaved }: Props) {
   const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (template) setImageUrl(template.variaveis?._header_image_url || "");
