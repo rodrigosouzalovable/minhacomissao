@@ -212,7 +212,32 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
         {/* Edit header image */}
         {headerFormat === "IMAGE" && (
           <div className="space-y-2 mt-2">
-            <Label className="text-xs">URL da imagem do header (deve ser idêntica à cadastrada na Meta)</Label>
+            <Label className="text-xs">Imagem do header (deve ser idêntica à cadastrada na Meta)</Label>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploading ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</>
+              ) : (
+                <><Upload className="h-4 w-4 mr-2" /> Enviar imagem do meu computador</>
+              )}
+            </Button>
+
+            <div className="text-[11px] text-muted-foreground text-center">ou cole uma URL pública</div>
+
             <div className="flex gap-2">
               <Input
                 value={imageUrl}
@@ -225,7 +250,7 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              A Meta exige que a imagem enviada seja visualmente igual ao sample aprovado. URL deve ser pública e direta (sem redirect).
+              A Meta exige que a imagem enviada seja visualmente igual ao sample aprovado. JPG/PNG/WebP, máx 5 MB.
             </p>
           </div>
         )}
