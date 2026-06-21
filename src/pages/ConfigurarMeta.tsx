@@ -355,12 +355,16 @@ export default function ConfigurarMeta() {
                 </TableHeader>
                 <TableBody>
                   {templates.map((t) => (
-                    <TableRow key={t.id}>
+                    <TableRow
+                      key={t.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setPreviewTpl(t)}
+                    >
                       <TableCell className="font-mono text-xs">{t.nome_template}</TableCell>
                       <TableCell>{t.categoria || "—"}</TableCell>
                       <TableCell>{t.idioma}</TableCell>
                       <TableCell>
-                        <Badge variant={t.status === "APPROVED" ? "default" : "secondary"}>
+                        <Badge variant={t.status === "approved" ? "default" : "secondary"}>
                           {t.status}
                         </Badge>
                       </TableCell>
@@ -412,6 +416,12 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <TemplatePreviewDialog
+        template={previewTpl}
+        open={!!previewTpl}
+        onOpenChange={(o) => !o && setPreviewTpl(null)}
+        onSaved={carregar}
+      />
     </div>
     </AppLayout>
   );
