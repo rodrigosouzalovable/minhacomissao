@@ -6,9 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DEFAULT_HEADER_IMAGE_URL =
-  Deno.env.get('META_DEFAULT_HEADER_IMAGE_URL') ||
-  'https://minhacomissao.lovable.app/perfil-souza-ribeiro.png';
+// Não usamos mais imagem default — cada template deve ter sua própria
+// _header_image_url cadastrada (igual ao sample aprovado na Meta).
 
 interface ClienteData {
   cpf?: string;
@@ -140,7 +139,12 @@ function buildMetaComponents(template: any, bodyParameters: any[]) {
   const headerFormat = getHeaderFormat(template);
 
   if (headerFormat === 'IMAGE') {
-    const imageUrl = template?.variaveis?._header_image_url || DEFAULT_HEADER_IMAGE_URL;
+    const imageUrl = template?.variaveis?._header_image_url;
+    if (!imageUrl) {
+      throw new Error(
+        `Template "${template.nome_template}" exige header IMAGE mas não tem _header_image_url configurada. Abra "Templates HSM" e cadastre a URL da imagem aprovada.`,
+      );
+    }
     components.push({
       type: 'header',
       parameters: [{ type: 'image', image: { link: imageUrl } }],

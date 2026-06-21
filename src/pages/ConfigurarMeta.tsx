@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -51,6 +52,7 @@ export default function ConfigurarMeta() {
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
+  const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
@@ -353,12 +355,16 @@ export default function ConfigurarMeta() {
                 </TableHeader>
                 <TableBody>
                   {templates.map((t) => (
-                    <TableRow key={t.id}>
+                    <TableRow
+                      key={t.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setPreviewTpl(t)}
+                    >
                       <TableCell className="font-mono text-xs">{t.nome_template}</TableCell>
                       <TableCell>{t.categoria || "—"}</TableCell>
                       <TableCell>{t.idioma}</TableCell>
                       <TableCell>
-                        <Badge variant={t.status === "APPROVED" ? "default" : "secondary"}>
+                        <Badge variant={t.status === "approved" ? "default" : "secondary"}>
                           {t.status}
                         </Badge>
                       </TableCell>
@@ -410,6 +416,12 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <TemplatePreviewDialog
+        template={previewTpl}
+        open={!!previewTpl}
+        onOpenChange={(o) => !o && setPreviewTpl(null)}
+        onSaved={carregar}
+      />
     </div>
     </AppLayout>
   );
