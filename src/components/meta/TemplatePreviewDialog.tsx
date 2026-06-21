@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Reply, ExternalLink, Phone, Loader2, Save } from "lucide-react";
+import { Reply, ExternalLink, Phone, Loader2, Save, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -50,6 +50,8 @@ function renderBodyWithVars(text: string) {
 export default function TemplatePreviewDialog({ template, open, onOpenChange, onSaved }: Props) {
   const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (template) setImageUrl(template.variaveis?._header_image_url || "");
@@ -79,6 +81,44 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
     else {
       toast.success("Imagem do header salva");
       onSaved?.();
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) {
+      toast.error("Use JPG, PNG ou WebP");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem deve ter no máximo 5 MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `meta-templates/${template.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("inbox-media")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("inbox-media").getPublicUrl(path);
+      const url = pub.publicUrl;
+      setImageUrl(url);
+      const newVars = { ...(template.variaveis || {}), _header_image_url: url };
+      const { error: dbErr } = await supabase
+        .from("meta_whatsapp_templates")
+        .update({ variaveis: newVars })
+        .eq("id", template.id);
+      if (dbErr) throw dbErr;
+      toast.success("Imagem enviada e salva");
+      onSaved?.();
+    } catch (err: any) {
+      toast.error("Erro ao enviar: " + (err?.message || "falhou"));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -172,7 +212,32 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
         {/* Edit header image */}
         {headerFormat === "IMAGE" && (
           <div className="space-y-2 mt-2">
-            <Label className="text-xs">URL da imagem do header (deve ser idêntica à cadastrada na Meta)</Label>
+            <Label className="text-xs">Imagem do header (deve ser idêntica à cadastrada na Meta)</Label>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploading ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</>
+              ) : (
+                <><Upload className="h-4 w-4 mr-2" /> Enviar imagem do meu computador</>
+              )}
+            </Button>
+
+            <div className="text-[11px] text-muted-foreground text-center">ou cole uma URL pública</div>
+
             <div className="flex gap-2">
               <Input
                 value={imageUrl}
@@ -185,7 +250,7 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              A Meta exige que a imagem enviada seja visualmente igual ao sample aprovado. URL deve ser pública e direta (sem redirect).
+              A Meta exige que a imagem enviada seja visualmente igual ao sample aprovado. JPG/PNG/WebP, máx 5 MB.
             </p>
           </div>
         )}
