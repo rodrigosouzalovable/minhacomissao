@@ -120,12 +120,18 @@ export default function EnvioMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t] = await Promise.all([
+    const [i, t, u] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates").select("*").eq("status", "approved").order("nome_template"),
+      supabase.from("user_whatsapp_instances")
+        .select("id, nome, telefone, ativo, server_url, instance_token, status")
+        .eq("ativo", true)
+        .eq("status", "connected")
+        .order("nome"),
     ]);
     if (i.data) setInstancias(i.data as any);
     if (t.data) setTemplates(t.data as any);
+    if (u.data) setUazInstancias(u.data as any);
     setLoading(false);
   };
 
