@@ -93,6 +93,13 @@ export default function EnvioMeta() {
     enviados: number; erros: number; total: number;
     atualTelefone: string; atualInstancia: string; proximoEmSeg: number;
   } | null>(null);
+  type EnvioItem = { telefone: string; instancia?: string; erro?: string; ts: number };
+  const [detalhes, setDetalhes] = useState<{
+    enviados: EnvioItem[];
+    erros: EnvioItem[];
+    semWhatsapp: string[];
+    erroValidacao: string[];
+  }>({ enviados: [], erros: [], semWhatsapp: [], erroValidacao: [] });
   const pausedRef = useRef<boolean>(false);
   const cancelRef = useRef<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
