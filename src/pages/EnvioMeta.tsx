@@ -451,8 +451,16 @@ export default function EnvioMeta() {
         {/* Instâncias */}
         <Card>
           <CardHeader>
-            <CardTitle>2. Instâncias</CardTitle>
-            <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>2. Instâncias</CardTitle>
+                <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
+                {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
+                Verificar saúde
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {instancias.length === 0 ? (
