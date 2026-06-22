@@ -14,6 +14,14 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 
+type UazInstancia = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  server_url: string;
+  instance_token: string;
+};
+
 type Instancia = {
   id: string;
   nome: string;
@@ -73,6 +81,9 @@ export default function EnvioMeta() {
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
+  const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
+  const [validadorId, setValidadorId] = useState<string>("");
+  const [validando, setValidando] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
@@ -109,12 +120,18 @@ export default function EnvioMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t] = await Promise.all([
+    const [i, t, u] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates").select("*").eq("status", "approved").order("nome_template"),
+      (supabase as any).from("user_whatsapp_instances")
+        .select("id, nome, telefone, ativo, server_url, instance_token, status")
+        .eq("ativo", true)
+        .eq("status", "connected")
+        .order("nome"),
     ]);
     if (i.data) setInstancias(i.data as any);
     if (t.data) setTemplates(t.data as any);
+    if (u.data) setUazInstancias(u.data as any);
     setLoading(false);
   };
 
@@ -141,7 +158,54 @@ export default function EnvioMeta() {
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
 
-    if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
+    let clientesFinal = recipients;
+
+    // Validação opcional via UAZAPI
+    if (validadorId) {
+      const validador = uazInstancias.find((x) => x.id === validadorId);
+      if (!validador) return toast.error("Instância validadora inválida");
+
+      setValidando(true);
+      try {
+        const numeros = recipients.map((r) => r.telefone);
+        const { data: vData, error: vErr } = await supabase.functions.invoke("check-whatsapp-numbers", {
+          body: {
+            numbers: numeros,
+            server_url: validador.server_url,
+            instance_token: validador.instance_token,
+          },
+        });
+        if (vErr) throw vErr;
+        const validSet = new Set<string>((vData?.valid || []).map((n: string) => String(n)));
+        const totalValid = vData?.total_valid ?? validSet.size;
+        const totalInvalid = vData?.total_invalid ?? 0;
+        const totalErr = vData?.total_errors ?? 0;
+
+        if (totalValid === 0) {
+          toast.error("Nenhum número com WhatsApp encontrado");
+          setValidando(false);
+          return;
+        }
+
+        const ok = confirm(
+          `Validação concluída:\n\n` +
+          `✅ ${totalValid} com WhatsApp\n` +
+          `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
+          `⚠️ ${totalErr} erros de validação (descartados)\n\n` +
+          `Disparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+        );
+        if (!ok) { setValidando(false); return; }
+
+        clientesFinal = recipients.filter((r) => validSet.has(r.telefone));
+      } catch (e: any) {
+        toast.error("Erro na validação: " + (e?.message || e));
+        setValidando(false);
+        return;
+      }
+      setValidando(false);
+    } else {
+      if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
+    }
 
     setEnviando(true);
     setResultado(null);
@@ -150,7 +214,7 @@ export default function EnvioMeta() {
         body: {
           template_id: template.id,
           instancia_ids: instanciaIds,
-          clientes: recipients,
+          clientes: clientesFinal,
           min_sec: lo,
           max_sec: hi,
         },
@@ -386,10 +450,31 @@ export default function EnvioMeta() {
             </div>
           </div>
 
-          <Button onClick={enviar} disabled={enviando} size="lg">
-            {enviando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-            Disparar {recipients.length > 0 ? `(${recipients.length})` : ""}
+          <div className="max-w-md space-y-1.5">
+            <Label>Validar WhatsApp antes do disparo (opcional)</Label>
+            <Select value={validadorId || "__none__"} onValueChange={(v) => setValidadorId(v === "__none__" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sem validação (envia para todos)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem validação (envia para todos)</SelectItem>
+                {uazInstancias.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.nome} {u.telefone ? `• ${u.telefone}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Usa uma instância UAZAPI conectada para checar quem tem WhatsApp. Números sem WhatsApp e erros de validação são descartados antes do envio Meta.
+            </p>
+          </div>
+
+          <Button onClick={enviar} disabled={enviando || validando} size="lg">
+            {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+            {validando ? "Validando WhatsApp..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
           </Button>
+
 
           {resultado && (
             <div className="text-sm">
