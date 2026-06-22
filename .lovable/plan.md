@@ -1,34 +1,15 @@
-## Filtro automático "tem WhatsApp" antes do disparo Meta
+## Problema
 
-Adicionar uma etapa de validação de números via UAZAPI antes do disparo em massa pela Meta. Ao clicar em **Disparar**, o sistema valida todos os destinatários, mostra um resumo e envia apenas para os que têm WhatsApp.
+O seletor "Validar WhatsApp antes do disparo" está vazio porque a query filtra por `status = 'connected'`, mas a tabela `user_whatsapp_instances` **não tem coluna `status`** (a conexão UAZAPI é verificada em runtime, não armazenada). Como o cliente Supabase está com cast `as any`, o erro é silencioso e o array fica vazio.
 
-### Mudanças na tela `Envio em massa — Meta WhatsApp` (`src/pages/EnvioMeta.tsx`)
+## Correção
 
-1. **Novo seletor "Instância validadora (UAZAPI)"** abaixo do bloco de delay:
-   - Carrega instâncias da tabela `user_whatsapp_instances` do usuário com `status = 'connected'`.
-   - Mostra nome + telefone de cada instância.
-   - Campo opcional: se vazio, pula a validação e dispara direto (comportamento atual).
+Em `src/pages/EnvioMeta.tsx`, na função `carregar()`:
 
-2. **Fluxo no botão Disparar**:
-   - Se a instância validadora estiver selecionada:
-     1. Chama a edge function existente `check-whatsapp-numbers` passando todos os telefones, `server_url` e `instance_token` da instância escolhida.
-     2. Exibe um `confirm()` com o resumo: `X com WhatsApp · Y sem WhatsApp · Z erros de validação · enviar para X?`
-     3. Se confirmado, envia apenas os destinatários `valid` (mais os `errors`, opcionalmente — ver decisão abaixo) para `send-whatsapp-meta`.
-   - Se a instância validadora não estiver selecionada: mantém o fluxo atual (envia para todos).
+- Remover o filtro `.eq("status", "connected")` da query de `user_whatsapp_instances`.
+- Remover `status` do `select(...)`.
+- Manter o filtro `ativo = true`.
 
-3. **Estado de loading**: durante a validação, mostrar spinner com texto "Validando WhatsApp..." no botão.
+Resultado: o seletor passa a listar todas as instâncias UAZAPI ativas do usuário (que é como funciona em outras telas do projeto, ex. Inbox/Envios). A verificação real de conectividade já acontece dentro da edge function `check-whatsapp-numbers` no momento da validação — se a instância escolhida estiver offline, o erro é exibido via toast.
 
-4. **Decisão de inclusão dos "erros"**: por padrão, **descartar também os erros** (mais seguro, evita gastar mensagem Meta em número que não pôde ser validado). O resumo deixa isso claro.
-
-### Detalhes técnicos
-
-- A edge function `check-whatsapp-numbers` já existe e processa em lotes de 15 com concorrência 3 e timeout/retry — sem alterações necessárias.
-- Cada instância em `user_whatsapp_instances` tem `server_url` e `instance_token` (já usados por outras telas — replicar o padrão de busca).
-- Nenhuma mudança em banco, edge function ou no cálculo de custo (`useMetaWhatsAppCusto`).
-- O custo só é recalculado depois do envio bem-sucedido, como já está.
-
-### Fora de escopo
-
-- Não criar tela de gestão de "números sem WhatsApp" — apenas resumo no confirm.
-- Não persistir resultado da validação (cada disparo revalida).
-- Sem alteração no round-robin entre instâncias Meta.
+Nenhuma alteração de schema, edge function ou backend.
