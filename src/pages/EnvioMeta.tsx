@@ -287,9 +287,18 @@ export default function EnvioMeta() {
         }
         if (!data?.success) throw new Error(data?.error || "Falha");
         enviados++;
+        setDetalhes((d) => ({
+          ...d,
+          enviados: [...d.enviados, { telefone: cliente.telefone, instancia: instInfo?.nome, ts: Date.now() }],
+        }));
       } catch (e: any) {
         erros++;
-        console.error("[EnvioMeta]", e?.message || e);
+        const msg = e?.message || String(e);
+        console.error("[EnvioMeta]", msg);
+        setDetalhes((d) => ({
+          ...d,
+          erros: [...d.erros, { telefone: cliente.telefone, instancia: instInfo?.nome, erro: msg, ts: Date.now() }],
+        }));
       }
       setProgresso((p) => p ? { ...p, enviados, erros } : p);
 
