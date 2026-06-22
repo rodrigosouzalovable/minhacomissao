@@ -700,8 +700,69 @@ export default function EnvioMeta() {
         </CardContent>
       </Card>
     </div>
+
+    <Dialog open={!!detalheSaude} onOpenChange={(o) => !o && setDetalheSaude(null)}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+        <DialogHeader>
+          <DialogTitle>Saúde — {detalheSaude?.nome}</DialogTitle>
+          <DialogDescription>
+            Dados retornados pela Graph API da Meta para este número.
+          </DialogDescription>
+        </DialogHeader>
+        {detalheSaude && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <div><strong>Status:</strong> {detalheSaude.saude_status || "—"}</div>
+              <div><strong>Qualidade:</strong> {detalheSaude.saude_quality || "—"}</div>
+              <div><strong>Tier diário:</strong> {detalheSaude.saude_tier || "—"}</div>
+              <div><strong>Nome verificado:</strong> {detalheSaude.saude_name_status || "—"}</div>
+            </div>
+            {detalheSaude.saude_ban_info && (
+              <div className="rounded border border-destructive bg-destructive/10 p-3">
+                <div className="font-semibold text-destructive flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4" /> Conta WhatsApp banida pela Meta
+                </div>
+                <pre className="text-xs mt-2 overflow-auto">{JSON.stringify(detalheSaude.saude_ban_info, null, 2)}</pre>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Para apelar: business.facebook.com → WhatsApp Manager → Status da conta.
+                </p>
+              </div>
+            )}
+            {(detalheSaude.saude_status === "FLAGGED" || detalheSaude.saude_status === "RESTRICTED") && (
+              <div className="rounded border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs">
+                <strong>Atenção:</strong> esta instância está {detalheSaude.saude_status}. A Meta está limitando ou bloqueando envios deste número. Reduza volume, pause envios de marketing e monitore o quality_rating.
+              </div>
+            )}
+            {detalheSaude.saude_quality === "RED" && (
+              <div className="rounded border border-red-500 bg-red-50 dark:bg-red-950/30 p-3 text-xs">
+                <strong>Qualidade RED:</strong> alto risco de banimento. Pare envios em massa por 24-48h, revise template de marketing, peça aos destinatários para não bloquearem.
+              </div>
+            )}
+            <details className="rounded border">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-medium">JSON cru da Meta</summary>
+              <pre className="text-[10px] p-3 overflow-auto max-h-64">{JSON.stringify(detalheSaude.saude_raw, null, 2)}</pre>
+            </details>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
     </AppLayout>
   );
+}
+
+function SaudeBadgeStatus({ status }: { status?: string | null }) {
+  if (!status) return null;
+  const s = status.toUpperCase();
+  const variant: any = s === "CONNECTED" ? "default" : (s === "FLAGGED" || s === "RESTRICTED" || s === "DISCONNECTED") ? "destructive" : "secondary";
+  const cls = s === "CONNECTED" ? "bg-green-600 hover:bg-green-600 text-white" : "";
+  return <Badge variant={variant} className={`text-[10px] px-1.5 py-0 ${cls}`}>{s}</Badge>;
+}
+
+function SaudeBadgeQuality({ quality }: { quality?: string | null }) {
+  if (!quality) return null;
+  const q = quality.toUpperCase();
+  const cls = q === "GREEN" ? "bg-green-600 text-white" : q === "YELLOW" ? "bg-yellow-500 text-white" : q === "RED" ? "bg-red-600 text-white" : "";
+  return <Badge className={`text-[10px] px-1.5 py-0 ${cls}`}>QUALIDADE {q}</Badge>;
 }
 
 function DetalhesEnvioPainel({ detalhes }: {
