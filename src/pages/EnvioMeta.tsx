@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
+import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
+import { Trash2 } from "lucide-react";
 
 type UazInstancia = {
   id: string;
