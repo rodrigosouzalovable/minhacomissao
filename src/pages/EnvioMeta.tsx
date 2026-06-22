@@ -557,6 +557,12 @@ export default function EnvioMeta() {
                 </Button>
               </>
             )}
+            {!enviando && (resultado || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
+              <Button type="button" variant="outline" size="lg" onClick={limpar}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Limpar resultados
+              </Button>
+            )}
           </div>
 
           {progresso && (
