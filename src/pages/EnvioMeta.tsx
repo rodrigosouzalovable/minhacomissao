@@ -504,6 +504,30 @@ export default function EnvioMeta() {
                           <div className="text-xs text-muted-foreground">
                             {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
                           </div>
+                          {(i.saude_status || i.saude_quality) && (
+                            <div className="flex flex-wrap gap-1 mt-1 items-center">
+                              <SaudeBadgeStatus status={i.saude_status} />
+                              <SaudeBadgeQuality quality={i.saude_quality} />
+                              {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
+                              {i.saude_ban_info && (
+                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                                  <AlertTriangle className="h-3 w-3" /> BANIDO
+                                </Badge>
+                              )}
+                              <button
+                                type="button"
+                                className="text-[10px] text-primary underline ml-1"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDetalheSaude(i); }}
+                              >
+                                detalhes
+                              </button>
+                              {i.saude_checked_at && (
+                                <span className="text-[10px] text-muted-foreground ml-1">
+                                  {new Date(i.saude_checked_at).toLocaleTimeString()}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
