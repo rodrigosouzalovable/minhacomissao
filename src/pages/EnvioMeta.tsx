@@ -172,6 +172,7 @@ export default function EnvioMeta() {
     const hi = Math.max(lo, Number(maxSec) || lo);
 
     let clientesFinal = recipients;
+    setDetalhes({ enviados: [], erros: [], semWhatsapp: [], erroValidacao: [] });
 
     // Validação opcional via UAZAPI
     if (validadorId) {
