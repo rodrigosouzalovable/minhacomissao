@@ -167,6 +167,7 @@ const App = () => (
           <AutoSendProvider>
           <WhatsAppSendingProvider>
           <VoiceCampaignSendingProvider>
+          <EnvioMetaSendingProvider>
           <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
