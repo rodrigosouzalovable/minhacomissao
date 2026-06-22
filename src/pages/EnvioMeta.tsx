@@ -88,6 +88,13 @@ export default function EnvioMeta() {
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
+  const [pausado, setPausado] = useState<boolean>(false);
+  const [progresso, setProgresso] = useState<{
+    enviados: number; erros: number; total: number;
+    atualTelefone: string; atualInstancia: string; proximoEmSeg: number;
+  } | null>(null);
+  const pausedRef = useRef<boolean>(false);
+  const cancelRef = useRef<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
 
   const startEdit = (i: Instancia) => {
