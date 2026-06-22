@@ -560,10 +560,47 @@ export default function EnvioMeta() {
             </p>
           </div>
 
-          <Button onClick={enviar} disabled={enviando || validando} size="lg">
-            {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-            {validando ? "Validando WhatsApp..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={enviar} disabled={enviando || validando} size="lg">
+              {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
+            </Button>
+            {enviando && (
+              <>
+                <Button type="button" variant="secondary" size="lg" onClick={togglePausa}>
+                  {pausado ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
+                  {pausado ? "Retomar" : "Pausar"}
+                </Button>
+                <Button type="button" variant="destructive" size="lg" onClick={cancelar}>
+                  <StopCircle className="h-4 w-4 mr-2" />
+                  Cancelar
+                </Button>
+              </>
+            )}
+          </div>
+
+          {progresso && (
+            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">
+                  {pausado ? "⏸ Pausado" : "Enviando"} — {progresso.enviados + progresso.erros}/{progresso.total}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  ✅ {progresso.enviados} • ❌ {progresso.erros} • ⏳ {progresso.total - progresso.enviados - progresso.erros}
+                </span>
+              </div>
+              <div className="h-2 w-full bg-muted rounded overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${Math.round(((progresso.enviados + progresso.erros) / Math.max(progresso.total, 1)) * 100)}%` }}
+                />
+              </div>
+              <div className="text-xs text-muted-foreground space-y-0.5">
+                {progresso.atualTelefone && <div>Último: <code>{progresso.atualTelefone}</code> via <strong>{progresso.atualInstancia}</strong></div>}
+                {progresso.proximoEmSeg > 0 && !pausado && <div>Próximo envio em {progresso.proximoEmSeg}s</div>}
+              </div>
+            </div>
+          )}
 
 
           {resultado && (
