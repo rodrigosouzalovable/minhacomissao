@@ -631,9 +631,121 @@ export default function EnvioMeta() {
               <span className="text-muted-foreground">de {resultado.total} contatos</span>
             </div>
           )}
+
+          {(enviando || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
+            <DetalhesEnvioPainel detalhes={detalhes} />
+          )}
         </CardContent>
       </Card>
     </div>
     </AppLayout>
+  );
+}
+
+function DetalhesEnvioPainel({ detalhes }: {
+  detalhes: {
+    enviados: { telefone: string; instancia?: string; erro?: string; ts: number }[];
+    erros: { telefone: string; instancia?: string; erro?: string; ts: number }[];
+    semWhatsapp: string[];
+    erroValidacao: string[];
+  };
+}) {
+  const copiar = async (linhas: string[], label: string) => {
+    try {
+      await navigator.clipboard.writeText(linhas.join("\n"));
+      toast.success(`${label}: ${linhas.length} número(s) copiado(s)`);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+
+  const exportarCSV = () => {
+    const rows: string[] = ["telefone,status,instancia,erro"];
+    const esc = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+    detalhes.enviados.forEach((e) => rows.push(`${esc(e.telefone)},enviado,${esc(e.instancia || "")},`));
+    detalhes.erros.forEach((e) => rows.push(`${esc(e.telefone)},erro,${esc(e.instancia || "")},${esc(e.erro || "")}`));
+    detalhes.semWhatsapp.forEach((t) => rows.push(`${esc(t)},sem_whatsapp,,`));
+    detalhes.erroValidacao.forEach((t) => rows.push(`${esc(t)},erro_validacao,,`));
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `envio-meta-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const Section = ({ titulo, cor, count, children, onCopy }: { titulo: string; cor: string; count: number; children: React.ReactNode; onCopy?: () => void }) => (
+    <details className="rounded-md border bg-card" open={count > 0 && count <= 20}>
+      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between gap-2">
+        <span className={cor}>{titulo} <span className="text-muted-foreground font-normal">({count})</span></span>
+        {onCopy && count > 0 && (
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); onCopy(); }}>
+            Copiar
+          </Button>
+        )}
+      </summary>
+      <div className="max-h-48 overflow-auto px-3 pb-3 font-mono text-xs space-y-0.5">
+        {count === 0 ? <div className="text-muted-foreground italic">Nenhum</div> : children}
+      </div>
+    </details>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold">Detalhamento dos envios</h4>
+        <Button type="button" size="sm" variant="outline" onClick={exportarCSV}>Exportar CSV</Button>
+      </div>
+
+      <Section
+        titulo="✅ Enviados"
+        cor="text-green-600"
+        count={detalhes.enviados.length}
+        onCopy={() => copiar(detalhes.enviados.map((e) => e.telefone), "Enviados")}
+      >
+        {detalhes.enviados.map((e, i) => (
+          <div key={i} className="flex items-center justify-between gap-2">
+            <span>{e.telefone}</span>
+            <span className="text-muted-foreground">{e.instancia} · {new Date(e.ts).toLocaleTimeString()}</span>
+          </div>
+        ))}
+      </Section>
+
+      <Section
+        titulo="❌ Erros no envio"
+        cor="text-red-600"
+        count={detalhes.erros.length}
+        onCopy={() => copiar(detalhes.erros.map((e) => e.telefone), "Erros")}
+      >
+        {detalhes.erros.map((e, i) => (
+          <div key={i} className="border-b last:border-b-0 py-1">
+            <div className="flex items-center justify-between gap-2">
+              <span>{e.telefone}</span>
+              <span className="text-muted-foreground">{e.instancia}</span>
+            </div>
+            {e.erro && <div className="text-[10px] text-red-600/80 break-words">{e.erro}</div>}
+          </div>
+        ))}
+      </Section>
+
+      <Section
+        titulo="🚫 Sem WhatsApp"
+        cor="text-orange-600"
+        count={detalhes.semWhatsapp.length}
+        onCopy={() => copiar(detalhes.semWhatsapp, "Sem WhatsApp")}
+      >
+        {detalhes.semWhatsapp.map((t, i) => <div key={i}>{t}</div>)}
+      </Section>
+
+      <Section
+        titulo="⚠️ Erro na validação"
+        cor="text-amber-600"
+        count={detalhes.erroValidacao.length}
+        onCopy={() => copiar(detalhes.erroValidacao, "Erro de validação")}
+      >
+        {detalhes.erroValidacao.map((t, i) => <div key={i}>{t}</div>)}
+      </Section>
+    </div>
   );
 }
