@@ -80,11 +80,21 @@ function parseRecipients(input: string): ClienteRow[] {
 }
 
 export default function EnvioMeta() {
+  const {
+    enviando,
+    pausado,
+    progresso,
+    detalhes,
+    resultado,
+    iniciar,
+    togglePausa,
+    cancelar,
+    limpar,
+  } = useEnvioMetaSending();
+
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [enviando, setEnviando] = useState(false);
-  const [resultado, setResultado] = useState<{ enviados: number; erros: number; total: number } | null>(null);
 
   const [templateId, setTemplateId] = useState<string>("");
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
@@ -98,20 +108,6 @@ export default function EnvioMeta() {
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
-  const [pausado, setPausado] = useState<boolean>(false);
-  const [progresso, setProgresso] = useState<{
-    enviados: number; erros: number; total: number;
-    atualTelefone: string; atualInstancia: string; proximoEmSeg: number;
-  } | null>(null);
-  type EnvioItem = { telefone: string; instancia?: string; erro?: string; ts: number };
-  const [detalhes, setDetalhes] = useState<{
-    enviados: EnvioItem[];
-    erros: EnvioItem[];
-    semWhatsapp: string[];
-    erroValidacao: string[];
-  }>({ enviados: [], erros: [], semWhatsapp: [], erroValidacao: [] });
-  const pausedRef = useRef<boolean>(false);
-  const cancelRef = useRef<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
