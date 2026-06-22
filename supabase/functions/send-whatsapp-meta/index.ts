@@ -25,7 +25,7 @@ const fmtBRL = (v: number): string =>
 
 function resolveVar(field: string, c: ClienteData): string {
   switch (field) {
-    case '{nome}': return c.nome || '';
+    case '{nome}': return (c.nome || '').trim();
     case '{primeiro_nome}': return formatPrimeiroNome(c.nome || '');
     case '{cpf}': return c.cpf || '';
     case '{atraso}': return String(c.atraso ?? '');
@@ -50,8 +50,9 @@ function formatTelefone(tel: string): string {
 
 function resolveNamedVar(name: string, c: ClienteData): string {
   const n = name.toLowerCase();
-  if (n === 'name' || n === 'nome' || n === 'primeiro_nome') return formatPrimeiroNome(c.nome || '') || 'cliente';
-  if (n === 'nome_completo' || n === 'full_name') return c.nome || 'cliente';
+  const full = (c.nome || '').trim();
+  if (n === 'primeiro_nome' || n === 'first_name') return formatPrimeiroNome(full) || 'cliente';
+  if (n === 'name' || n === 'nome' || n === 'nome_completo' || n === 'full_name') return full || 'cliente';
   if (n === 'cpf') return c.cpf || '';
   if (n === 'atraso' || n === 'delay') return String(c.atraso ?? '');
   if (n === 'saldo' || n === 'valor' || n === 'value') return fmtBRL(Number(c.saldo || 0));
