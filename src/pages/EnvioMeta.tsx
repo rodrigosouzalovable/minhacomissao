@@ -158,7 +158,54 @@ export default function EnvioMeta() {
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
 
-    if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
+    let clientesFinal = recipients;
+
+    // Validação opcional via UAZAPI
+    if (validadorId) {
+      const validador = uazInstancias.find((x) => x.id === validadorId);
+      if (!validador) return toast.error("Instância validadora inválida");
+
+      setValidando(true);
+      try {
+        const numeros = recipients.map((r) => r.telefone);
+        const { data: vData, error: vErr } = await supabase.functions.invoke("check-whatsapp-numbers", {
+          body: {
+            numbers: numeros,
+            server_url: validador.server_url,
+            instance_token: validador.instance_token,
+          },
+        });
+        if (vErr) throw vErr;
+        const validSet = new Set<string>((vData?.valid || []).map((n: string) => String(n)));
+        const totalValid = vData?.total_valid ?? validSet.size;
+        const totalInvalid = vData?.total_invalid ?? 0;
+        const totalErr = vData?.total_errors ?? 0;
+
+        if (totalValid === 0) {
+          toast.error("Nenhum número com WhatsApp encontrado");
+          setValidando(false);
+          return;
+        }
+
+        const ok = confirm(
+          `Validação concluída:\n\n` +
+          `✅ ${totalValid} com WhatsApp\n` +
+          `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
+          `⚠️ ${totalErr} erros de validação (descartados)\n\n` +
+          `Disparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+        );
+        if (!ok) { setValidando(false); return; }
+
+        clientesFinal = recipients.filter((r) => validSet.has(r.telefone));
+      } catch (e: any) {
+        toast.error("Erro na validação: " + (e?.message || e));
+        setValidando(false);
+        return;
+      }
+      setValidando(false);
+    } else {
+      if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
+    }
 
     setEnviando(true);
     setResultado(null);
@@ -167,7 +214,7 @@ export default function EnvioMeta() {
         body: {
           template_id: template.id,
           instancia_ids: instanciaIds,
-          clientes: recipients,
+          clientes: clientesFinal,
           min_sec: lo,
           max_sec: hi,
         },
