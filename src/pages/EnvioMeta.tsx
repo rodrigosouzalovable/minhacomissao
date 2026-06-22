@@ -14,6 +14,14 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 
+type UazInstancia = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  server_url: string;
+  instance_token: string;
+};
+
 type Instancia = {
   id: string;
   nome: string;
