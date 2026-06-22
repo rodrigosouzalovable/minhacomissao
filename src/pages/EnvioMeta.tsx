@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
@@ -30,6 +31,13 @@ type Instancia = {
   tier_diario: number;
   enviados_hoje: number;
   ativo: boolean;
+  saude_status?: string | null;
+  saude_quality?: string | null;
+  saude_tier?: string | null;
+  saude_name_status?: string | null;
+  saude_ban_info?: any;
+  saude_raw?: any;
+  saude_checked_at?: string | null;
 };
 
 type Template = {
@@ -103,6 +111,28 @@ export default function EnvioMeta() {
   const pausedRef = useRef<boolean>(false);
   const cancelRef = useRef<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
+  const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
+  const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
+
+  const verificarSaude = async () => {
+    setChecandoSaude(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-meta-instance-health", { body: {} });
+      if (error) throw error;
+      const results: any[] = data?.results || [];
+      const bannedOrFlagged = results.filter((r) => r.ban_info || ["FLAGGED", "RESTRICTED"].includes(String(r.status || "").toUpperCase()));
+      if (bannedOrFlagged.length > 0) {
+        toast.warning(`${bannedOrFlagged.length} instância(s) com problema: ${bannedOrFlagged.map((r) => r.nome).join(", ")}`);
+      } else {
+        toast.success(`Todas as ${results.length} instância(s) OK`);
+      }
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro ao verificar saúde: " + (e?.message || e));
+    } finally {
+      setChecandoSaude(false);
+    }
+  };
 
   const startEdit = (i: Instancia) => {
     setEditingId(i.id);
@@ -421,8 +451,16 @@ export default function EnvioMeta() {
         {/* Instâncias */}
         <Card>
           <CardHeader>
-            <CardTitle>2. Instâncias</CardTitle>
-            <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>2. Instâncias</CardTitle>
+                <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
+                {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
+                Verificar saúde
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {instancias.length === 0 ? (
@@ -466,6 +504,30 @@ export default function EnvioMeta() {
                           <div className="text-xs text-muted-foreground">
                             {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
                           </div>
+                          {(i.saude_status || i.saude_quality) && (
+                            <div className="flex flex-wrap gap-1 mt-1 items-center">
+                              <SaudeBadgeStatus status={i.saude_status} />
+                              <SaudeBadgeQuality quality={i.saude_quality} />
+                              {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
+                              {i.saude_ban_info && (
+                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                                  <AlertTriangle className="h-3 w-3" /> BANIDO
+                                </Badge>
+                              )}
+                              <button
+                                type="button"
+                                className="text-[10px] text-primary underline ml-1"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDetalheSaude(i); }}
+                              >
+                                detalhes
+                              </button>
+                              {i.saude_checked_at && (
+                                <span className="text-[10px] text-muted-foreground ml-1">
+                                  {new Date(i.saude_checked_at).toLocaleTimeString()}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -638,8 +700,69 @@ export default function EnvioMeta() {
         </CardContent>
       </Card>
     </div>
+
+    <Dialog open={!!detalheSaude} onOpenChange={(o) => !o && setDetalheSaude(null)}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+        <DialogHeader>
+          <DialogTitle>Saúde — {detalheSaude?.nome}</DialogTitle>
+          <DialogDescription>
+            Dados retornados pela Graph API da Meta para este número.
+          </DialogDescription>
+        </DialogHeader>
+        {detalheSaude && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <div><strong>Status:</strong> {detalheSaude.saude_status || "—"}</div>
+              <div><strong>Qualidade:</strong> {detalheSaude.saude_quality || "—"}</div>
+              <div><strong>Tier diário:</strong> {detalheSaude.saude_tier || "—"}</div>
+              <div><strong>Nome verificado:</strong> {detalheSaude.saude_name_status || "—"}</div>
+            </div>
+            {detalheSaude.saude_ban_info && (
+              <div className="rounded border border-destructive bg-destructive/10 p-3">
+                <div className="font-semibold text-destructive flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4" /> Conta WhatsApp banida pela Meta
+                </div>
+                <pre className="text-xs mt-2 overflow-auto">{JSON.stringify(detalheSaude.saude_ban_info, null, 2)}</pre>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Para apelar: business.facebook.com → WhatsApp Manager → Status da conta.
+                </p>
+              </div>
+            )}
+            {(detalheSaude.saude_status === "FLAGGED" || detalheSaude.saude_status === "RESTRICTED") && (
+              <div className="rounded border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs">
+                <strong>Atenção:</strong> esta instância está {detalheSaude.saude_status}. A Meta está limitando ou bloqueando envios deste número. Reduza volume, pause envios de marketing e monitore o quality_rating.
+              </div>
+            )}
+            {detalheSaude.saude_quality === "RED" && (
+              <div className="rounded border border-red-500 bg-red-50 dark:bg-red-950/30 p-3 text-xs">
+                <strong>Qualidade RED:</strong> alto risco de banimento. Pare envios em massa por 24-48h, revise template de marketing, peça aos destinatários para não bloquearem.
+              </div>
+            )}
+            <details className="rounded border">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-medium">JSON cru da Meta</summary>
+              <pre className="text-[10px] p-3 overflow-auto max-h-64">{JSON.stringify(detalheSaude.saude_raw, null, 2)}</pre>
+            </details>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
     </AppLayout>
   );
+}
+
+function SaudeBadgeStatus({ status }: { status?: string | null }) {
+  if (!status) return null;
+  const s = status.toUpperCase();
+  const variant: any = s === "CONNECTED" ? "default" : (s === "FLAGGED" || s === "RESTRICTED" || s === "DISCONNECTED") ? "destructive" : "secondary";
+  const cls = s === "CONNECTED" ? "bg-green-600 hover:bg-green-600 text-white" : "";
+  return <Badge variant={variant} className={`text-[10px] px-1.5 py-0 ${cls}`}>{s}</Badge>;
+}
+
+function SaudeBadgeQuality({ quality }: { quality?: string | null }) {
+  if (!quality) return null;
+  const q = quality.toUpperCase();
+  const cls = q === "GREEN" ? "bg-green-600 text-white" : q === "YELLOW" ? "bg-yellow-500 text-white" : q === "RED" ? "bg-red-600 text-white" : "";
+  return <Badge className={`text-[10px] px-1.5 py-0 ${cls}`}>QUALIDADE {q}</Badge>;
 }
 
 function DetalhesEnvioPainel({ detalhes }: {

@@ -1967,6 +1967,14 @@ export type Database = {
           id: string
           nome: string
           phone_number_id: string
+          saude_ban_info: Json | null
+          saude_checked_at: string | null
+          saude_name_status: string | null
+          saude_quality: string | null
+          saude_raw: Json | null
+          saude_status: string | null
+          saude_throughput: Json | null
+          saude_tier: string | null
           tier_diario: number
           ultimo_reset: string
           user_id: string
@@ -1984,6 +1992,14 @@ export type Database = {
           id?: string
           nome: string
           phone_number_id: string
+          saude_ban_info?: Json | null
+          saude_checked_at?: string | null
+          saude_name_status?: string | null
+          saude_quality?: string | null
+          saude_raw?: Json | null
+          saude_status?: string | null
+          saude_throughput?: Json | null
+          saude_tier?: string | null
           tier_diario?: number
           ultimo_reset?: string
           user_id: string
@@ -2001,6 +2017,14 @@ export type Database = {
           id?: string
           nome?: string
           phone_number_id?: string
+          saude_ban_info?: Json | null
+          saude_checked_at?: string | null
+          saude_name_status?: string | null
+          saude_quality?: string | null
+          saude_raw?: Json | null
+          saude_status?: string | null
+          saude_throughput?: Json | null
+          saude_tier?: string | null
           tier_diario?: number
           ultimo_reset?: string
           user_id?: string
