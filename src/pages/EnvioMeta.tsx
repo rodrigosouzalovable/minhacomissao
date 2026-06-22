@@ -81,6 +81,9 @@ export default function EnvioMeta() {
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
+  const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
+  const [validadorId, setValidadorId] = useState<string>("");
+  const [validando, setValidando] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
