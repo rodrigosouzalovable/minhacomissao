@@ -30,6 +30,13 @@ type Instancia = {
   tier_diario: number;
   enviados_hoje: number;
   ativo: boolean;
+  saude_status?: string | null;
+  saude_quality?: string | null;
+  saude_tier?: string | null;
+  saude_name_status?: string | null;
+  saude_ban_info?: any;
+  saude_raw?: any;
+  saude_checked_at?: string | null;
 };
 
 type Template = {
