@@ -450,10 +450,31 @@ export default function EnvioMeta() {
             </div>
           </div>
 
-          <Button onClick={enviar} disabled={enviando} size="lg">
-            {enviando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-            Disparar {recipients.length > 0 ? `(${recipients.length})` : ""}
+          <div className="max-w-md space-y-1.5">
+            <Label>Validar WhatsApp antes do disparo (opcional)</Label>
+            <Select value={validadorId || "__none__"} onValueChange={(v) => setValidadorId(v === "__none__" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sem validação (envia para todos)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem validação (envia para todos)</SelectItem>
+                {uazInstancias.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.nome} {u.telefone ? `• ${u.telefone}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Usa uma instância UAZAPI conectada para checar quem tem WhatsApp. Números sem WhatsApp e erros de validação são descartados antes do envio Meta.
+            </p>
+          </div>
+
+          <Button onClick={enviar} disabled={enviando || validando} size="lg">
+            {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+            {validando ? "Validando WhatsApp..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
           </Button>
+
 
           {resultado && (
             <div className="text-sm">
