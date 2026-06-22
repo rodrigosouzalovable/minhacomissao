@@ -111,6 +111,28 @@ export default function EnvioMeta() {
   const pausedRef = useRef<boolean>(false);
   const cancelRef = useRef<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
+  const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
+  const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
+
+  const verificarSaude = async () => {
+    setChecandoSaude(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-meta-instance-health", { body: {} });
+      if (error) throw error;
+      const results: any[] = data?.results || [];
+      const bannedOrFlagged = results.filter((r) => r.ban_info || ["FLAGGED", "RESTRICTED"].includes(String(r.status || "").toUpperCase()));
+      if (bannedOrFlagged.length > 0) {
+        toast.warning(`${bannedOrFlagged.length} instância(s) com problema: ${bannedOrFlagged.map((r) => r.nome).join(", ")}`);
+      } else {
+        toast.success(`Todas as ${results.length} instância(s) OK`);
+      }
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro ao verificar saúde: " + (e?.message || e));
+    } finally {
+      setChecandoSaude(false);
+    }
+  };
 
   const startEdit = (i: Instancia) => {
     setEditingId(i.id);
