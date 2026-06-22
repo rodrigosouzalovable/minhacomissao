@@ -1,15 +1,41 @@
-## Problema
+## Painel de detalhamento de envios
 
-O seletor "Validar WhatsApp antes do disparo" está vazio porque a query filtra por `status = 'connected'`, mas a tabela `user_whatsapp_instances` **não tem coluna `status`** (a conexão UAZAPI é verificada em runtime, não armazenada). Como o cliente Supabase está com cast `as any`, o erro é silencioso e o array fica vazio.
+Adicionar, abaixo do card "4. Delay e disparo", um novo painel mostrando, em tempo real, **quais números** caíram em cada categoria — em vez de só os contadores agregados que existem hoje.
 
-## Correção
+### Categorias exibidas
 
-Em `src/pages/EnvioMeta.tsx`, na função `carregar()`:
+1. ✅ **Enviados** — telefone + instância usada + horário
+2. ❌ **Erros no envio Meta** — telefone + instância + mensagem de erro (ex.: template rejeitado, número bloqueado, tier estourado)
+3. 🚫 **Sem WhatsApp / falha na validação** — telefones descartados pelo `check-whatsapp-numbers` (separando "sem WA" de "erro de validação")
 
-- Remover o filtro `.eq("status", "connected")` da query de `user_whatsapp_instances`.
-- Remover `status` do `select(...)`.
-- Manter o filtro `ativo = true`.
+### Comportamento
 
-Resultado: o seletor passa a listar todas as instâncias UAZAPI ativas do usuário (que é como funciona em outras telas do projeto, ex. Inbox/Envios). A verificação real de conectividade já acontece dentro da edge function `check-whatsapp-numbers` no momento da validação — se a instância escolhida estiver offline, o erro é exibido via toast.
+- Painel aparece assim que o usuário clica em **Disparar** e persiste após o término (até iniciar novo disparo ou recarregar a página).
+- Atualiza em tempo real durante o loop (mesmo cadência do progresso atual).
+- Cada categoria é uma seção colapsável (`<details>`) com contador no título; lista rolável (`max-h-48 overflow-auto`) com fonte mono pequena.
+- Botão **Copiar** em cada categoria (copia números separados por quebra de linha) e botão **Exportar CSV** geral (telefone, status, instância, erro).
 
-Nenhuma alteração de schema, edge function ou backend.
+### Mudanças técnicas
+
+`src/pages/EnvioMeta.tsx`:
+
+- Novo estado `detalhes`:
+  ```ts
+  type EnvioItem = { telefone: string; instancia?: string; erro?: string; ts: number };
+  const [detalhes, setDetalhes] = useState<{
+    enviados: EnvioItem[];
+    erros: EnvioItem[];
+    semWhatsapp: string[];
+    erroValidacao: string[];
+  }>({ enviados: [], erros: [], semWhatsapp: [], erroValidacao: [] });
+  ```
+- Na validação UAZAPI: popular `semWhatsapp` com `vData.invalid` e `erroValidacao` com `vData.errors` (o edge `check-whatsapp-numbers` já retorna esses arrays).
+- No loop de envio: a cada iteração, fazer `push` em `enviados` ou `erros` com `{ telefone, instancia: instInfo?.nome, erro: msg, ts: Date.now() }`.
+- Resetar `detalhes` no início de `enviar()`.
+- Novo componente inline `<DetalhesEnvioCard>` renderizado abaixo do card de delay/disparo, visível quando `detalhes` tem qualquer item ou `enviando` é true.
+
+### Fora de escopo
+
+- Não muda o backend (`send-whatsapp-meta` e `check-whatsapp-numbers` já devolvem o necessário).
+- Não persiste no banco — estado vive na página (já existe `meta_whatsapp_envios_log` para histórico).
+- Não investiga por que algumas mensagens "enviadas" não chegam no WhatsApp do destinatário — isso normalmente é entrega Meta (status `sent` ≠ `delivered`); se quiser, posso depois adicionar coluna de status de entrega via webhook Meta.
