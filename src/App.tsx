@@ -10,6 +10,7 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
 import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
+import { EnvioMetaSendingProvider } from "@/contexts/EnvioMetaSendingContext";
 
 // Code-split: each route becomes its own chunk to reduce initial bundle.
 const Auth = lazy(() => import("./pages/Auth"));
@@ -166,6 +167,7 @@ const App = () => (
           <AutoSendProvider>
           <WhatsAppSendingProvider>
           <VoiceCampaignSendingProvider>
+          <EnvioMetaSendingProvider>
           <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
@@ -212,6 +214,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          </EnvioMetaSendingProvider>
           </VoiceCampaignSendingProvider>
           </WhatsAppSendingProvider>
           </AutoSendProvider>
