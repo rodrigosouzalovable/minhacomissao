@@ -1,13 +1,11 @@
-// Using built-in Deno.serve (no import needed)
+// Envio unitário (1 mensagem por chamada). O loop, delay, pausa e round-robin
+// vivem no frontend para permitir pausar/retomar/cancelar sem servidor extra.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Não usamos mais imagem default — cada template deve ter sua própria
-// _header_image_url cadastrada (igual ao sample aprovado na Meta).
 
 interface ClienteData {
   cpf?: string;
@@ -83,7 +81,6 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
       const value = resolveNamedVar(key, cliente) || 'cliente';
       parameters.push({ type: 'text', parameter_name: key, text: value });
     }
-    // Se o template só tem {{1}} mas usuário forçou named, mapeia posicionais para parameter_name
     if (parameters.length === 0 && positionalMatches.length > 0) {
       const seen2 = new Set<string>();
       for (const m of positionalMatches) {
@@ -98,7 +95,6 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
     return { parameters, format: 'named' };
   }
 
-  // POSICIONAL
   const parameters: any[] = [];
   if (sortedKeys.length > 0) {
     for (const k of sortedKeys) {
@@ -142,7 +138,7 @@ function buildMetaComponents(template: any, bodyParameters: any[]) {
     const imageUrl = template?.variaveis?._header_image_url;
     if (!imageUrl) {
       throw new Error(
-        `Template "${template.nome_template}" exige header IMAGE mas não tem _header_image_url configurada. Abra "Templates HSM" e cadastre a URL da imagem aprovada.`,
+        `Template "${template.nome_template}" exige header IMAGE mas não tem _header_image_url configurada.`,
       );
     }
     components.push({
@@ -150,25 +146,11 @@ function buildMetaComponents(template: any, bodyParameters: any[]) {
       parameters: [{ type: 'image', image: { link: imageUrl } }],
     });
   } else if (headerFormat === 'VIDEO' || headerFormat === 'DOCUMENT') {
-    throw new Error(`Template exige cabeçalho ${headerFormat}. Configure uma mídia pública para este template antes de enviar.`);
+    throw new Error(`Template exige cabeçalho ${headerFormat}. Configure uma mídia pública antes de enviar.`);
   }
 
   if (bodyParameters.length) components.push({ type: 'body', parameters: bodyParameters });
   return components;
-}
-
-async function postMeta(_inst: any, template: any, parameters: any[]) {
-  const body: any = {
-    messaging_product: 'whatsapp',
-    to: undefined as any,
-    type: 'template',
-    template: {
-      name: template.nome_template,
-      language: { code: template.idioma || 'pt_BR' },
-      components: buildMetaComponents(template, parameters),
-    },
-  };
-  return body;
 }
 
 async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<{ waId: string | null; formatUsed: 'named' | 'positional' | 'none' }> {
@@ -189,10 +171,16 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
     if (triedKeys.has(key)) continue;
     triedKeys.add(key);
 
-    const body = await postMeta(inst, template, parameters);
-    body.to = formatTelefone(cliente.telefone);
-
-    console.log(`[Meta] tentando template=${template.nome_template} header=${getHeaderFormat(template) || 'NONE'} format=${format} params=${JSON.stringify(parameters)}`);
+    const body: any = {
+      messaging_product: 'whatsapp',
+      to: formatTelefone(cliente.telefone),
+      type: 'template',
+      template: {
+        name: template.nome_template,
+        language: { code: template.idioma || 'pt_BR' },
+        components: buildMetaComponents(template, parameters),
+      },
+    };
 
     const res = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
       method: 'POST',
@@ -201,15 +189,11 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
     });
     const data = await res.json();
     if (res.ok) {
-      console.log(`[Meta] OK format=${format} waId=${data?.messages?.[0]?.id}`);
       return { waId: data?.messages?.[0]?.id || null, formatUsed: format === 'none' ? (preferred || 'positional') : format };
     }
     lastErr = data?.error;
     const code = data?.error?.code;
     const details = data?.error?.error_data?.details || '';
-    console.error(`[Meta] erro code=${code} msg=${data?.error?.message} details=${details}`);
-
-    // mismatch de formato/quantidade/param inválido → tenta próximo formato
     if (code !== 132012 && code !== 132000 && code !== 100) {
       throw new Error(`(#${code}) ${data?.error?.message || 'Falha Meta API'}${details ? ' | ' + details : ''}`);
     }
@@ -219,13 +203,12 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
   throw new Error(`(#${code}) ${lastErr?.message || 'Falha Meta API'}${details ? ' | ' + details : ''}`);
 }
 
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { template_id, instancia_ids, clientes, min_sec = 30, max_sec = 90, user_id } = await req.json();
-    if (!template_id || !Array.isArray(clientes) || clientes.length === 0) {
-      return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, clientes[]' }), {
+    const { template_id, instancia_id, cliente, user_id } = await req.json();
+    if (!template_id || !instancia_id || !cliente?.telefone) {
+      return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -235,88 +218,64 @@ Deno.serve(async (req) => {
     const { data: template } = await supabase
       .from('meta_whatsapp_templates').select('*').eq('id', template_id).maybeSingle();
     if (!template) throw new Error('Template não encontrado');
-    if (template.status !== 'approved') throw new Error('Template não está aprovado pela Meta');
+    if (template.status !== 'approved') throw new Error('Template não aprovado pela Meta');
 
-    let q = supabase.from('meta_whatsapp_instances').select('*').eq('ativo', true);
-    if (instancia_ids?.length) q = q.in('id', instancia_ids);
-    if (user_id) q = q.eq('user_id', user_id);
-    const { data: instances } = await q;
-    if (!instances || instances.length === 0) throw new Error('Sem instâncias Meta ativas');
+    const { data: inst } = await supabase
+      .from('meta_whatsapp_instances').select('*').eq('id', instancia_id).eq('ativo', true).maybeSingle();
+    if (!inst) throw new Error('Instância Meta não encontrada/ativa');
 
-    // Reset daily counters
+    // Reset diário
     const today = new Date().toISOString().slice(0, 10);
-    for (const inst of instances) {
-      if (inst.ultimo_reset !== today) {
-        await supabase.from('meta_whatsapp_instances').update({
-          enviados_hoje: 0, ultimo_reset: today,
-        }).eq('id', inst.id);
-        inst.enviados_hoje = 0; inst.ultimo_reset = today;
-      }
+    if (inst.ultimo_reset !== today) {
+      await supabase.from('meta_whatsapp_instances').update({
+        enviados_hoje: 0, ultimo_reset: today,
+      }).eq('id', inst.id);
+      inst.enviados_hoje = 0; inst.ultimo_reset = today;
     }
 
-    // Dedup phones
-    const seen = new Set<string>();
-    const unique = clientes.filter((c: ClienteData) => {
-      const p = (c.telefone || '').replace(/\D/g, '');
-      if (!p || seen.has(p)) return false;
-      seen.add(p); return true;
-    });
-
-    let enviados = 0, erros = 0;
-    let rr = 0;
-    for (let i = 0; i < unique.length; i++) {
-      const cliente = unique[i];
-      const avail = instances.filter(it => (it.enviados_hoje || 0) < (it.tier_diario || 250));
-      if (!avail.length) { console.error('[Meta] Todas instâncias atingiram tier_diario'); break; }
-      const inst = avail[rr % avail.length]; rr++;
-
-      try {
-        const { waId, formatUsed } = await sendOne(inst, template, cliente);
-        enviados++;
-        inst.enviados_hoje = (inst.enviados_hoje || 0) + 1;
-        await supabase.from('meta_whatsapp_instances')
-          .update({ enviados_hoje: inst.enviados_hoje }).eq('id', inst.id);
-
-        // Persist successful format on template to skip retries next time
-        const currentVars = (template.variaveis || {}) as Record<string, any>;
-        if (currentVars._format !== formatUsed && formatUsed !== 'none') {
-          const newVars = { ...currentVars, _format: formatUsed };
-          await supabase.from('meta_whatsapp_templates')
-            .update({ variaveis: newVars }).eq('id', template.id);
-          template.variaveis = newVars;
-        }
-
-        await supabase.from('meta_whatsapp_envios_log').insert({
-          instancia_id: inst.id,
-          user_id: user_id || inst.user_id,
-          telefone: formatTelefone(cliente.telefone),
-          template_nome: template.nome_template,
-          status: 'sent',
-          wa_message_id: waId,
-        });
-      } catch (e) {
-        erros++;
-        await supabase.from('meta_whatsapp_envios_log').insert({
-          instancia_id: inst.id,
-          user_id: user_id || inst.user_id,
-          telefone: formatTelefone(cliente.telefone),
-          template_nome: template.nome_template,
-          status: 'failed',
-          erro: e instanceof Error ? e.message : 'erro',
-        });
-      }
-
-      if (i < unique.length - 1) {
-        const lo = Math.max(1, Number(min_sec) || 1);
-        const hi = Math.max(lo, Number(max_sec) || lo);
-        const delay = Math.floor(Math.random() * (hi - lo + 1)) + lo;
-        await new Promise(r => setTimeout(r, delay * 1000));
-      }
+    if ((inst.enviados_hoje || 0) >= (inst.tier_diario || 250)) {
+      return new Response(JSON.stringify({ success: false, error: 'Instância atingiu tier_diario', tier_full: true, instancia_id }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true, enviados, erros, total: unique.length }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    try {
+      const { waId, formatUsed } = await sendOne(inst, template, cliente);
+      await supabase.from('meta_whatsapp_instances')
+        .update({ enviados_hoje: (inst.enviados_hoje || 0) + 1 }).eq('id', inst.id);
+
+      const currentVars = (template.variaveis || {}) as Record<string, any>;
+      if (currentVars._format !== formatUsed && formatUsed !== 'none') {
+        await supabase.from('meta_whatsapp_templates')
+          .update({ variaveis: { ...currentVars, _format: formatUsed } }).eq('id', template.id);
+      }
+
+      await supabase.from('meta_whatsapp_envios_log').insert({
+        instancia_id: inst.id,
+        user_id: user_id || inst.user_id,
+        telefone: formatTelefone(cliente.telefone),
+        template_nome: template.nome_template,
+        status: 'sent',
+        wa_message_id: waId,
+      });
+
+      return new Response(JSON.stringify({ success: true, waId, instancia_id }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'erro';
+      await supabase.from('meta_whatsapp_envios_log').insert({
+        instancia_id: inst.id,
+        user_id: user_id || inst.user_id,
+        telefone: formatTelefone(cliente.telefone),
+        template_nome: template.nome_template,
+        status: 'failed',
+        erro: msg,
+      });
+      return new Response(JSON.stringify({ success: false, error: msg, instancia_id }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
   } catch (err) {
     return new Response(JSON.stringify({ success: false, error: err instanceof Error ? err.message : 'Erro' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

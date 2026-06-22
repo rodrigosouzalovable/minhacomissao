@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
@@ -88,6 +88,13 @@ export default function EnvioMeta() {
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
+  const [pausado, setPausado] = useState<boolean>(false);
+  const [progresso, setProgresso] = useState<{
+    enviados: number; erros: number; total: number;
+    atualTelefone: string; atualInstancia: string; proximoEmSeg: number;
+  } | null>(null);
+  const pausedRef = useRef<boolean>(false);
+  const cancelRef = useRef<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
 
   const startEdit = (i: Instancia) => {
@@ -206,29 +213,113 @@ export default function EnvioMeta() {
       if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
     }
 
+    // Loop client-side com suporte a pausa/cancelamento
     setEnviando(true);
+    setPausado(false);
+    pausedRef.current = false;
+    cancelRef.current = false;
     setResultado(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-        body: {
-          template_id: template.id,
-          instancia_ids: instanciaIds,
-          clientes: clientesFinal,
-          min_sec: lo,
-          max_sec: hi,
-        },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Falha no envio");
-      setResultado({ enviados: data.enviados || 0, erros: data.erros || 0, total: data.total || 0 });
-      toast.success(`${data.enviados} enviados • ${data.erros} erros`);
-      carregar();
-      custoRef.current?.refetch();
-    } catch (e: any) {
-      toast.error("Erro: " + (e?.message || e));
+
+    let enviados = 0;
+    let erros = 0;
+    let rr = 0;
+    const total = clientesFinal.length;
+    setProgresso({ enviados: 0, erros: 0, total, atualTelefone: "", atualInstancia: "", proximoEmSeg: 0 });
+
+    const instAtivas = [...instanciaIds];
+    const instMap = new Map(instancias.map((i) => [i.id, i] as const));
+
+    const sleepInterruptible = async (segs: number) => {
+      const ate = Date.now() + segs * 1000;
+      while (Date.now() < ate) {
+        if (cancelRef.current) return;
+        while (pausedRef.current && !cancelRef.current) {
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        const restanteMs = Math.max(0, ate - Date.now());
+        setProgresso((p) => p ? { ...p, proximoEmSeg: Math.ceil(restanteMs / 1000) } : p);
+        await new Promise((r) => setTimeout(r, Math.min(250, restanteMs)));
+      }
+    };
+
+    let cancelado = false;
+    for (let i = 0; i < clientesFinal.length; i++) {
+      if (cancelRef.current) { cancelado = true; break; }
+      while (pausedRef.current && !cancelRef.current) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      if (cancelRef.current) { cancelado = true; break; }
+
+      if (instAtivas.length === 0) { toast.error("Todas as instâncias atingiram o limite diário"); break; }
+      const instId = instAtivas[rr % instAtivas.length];
+      const instInfo = instMap.get(instId);
+      rr++;
+
+      const cliente = clientesFinal[i];
+      setProgresso((p) => p ? {
+        ...p,
+        atualTelefone: cliente.telefone,
+        atualInstancia: instInfo?.nome || "",
+        proximoEmSeg: 0,
+      } : p);
+
+      try {
+        const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
+          body: { template_id: template.id, instancia_id: instId, cliente },
+        });
+        if (error) throw error;
+        if (data?.tier_full) {
+          const idx = instAtivas.indexOf(instId);
+          if (idx >= 0) instAtivas.splice(idx, 1);
+          i--; continue;
+        }
+        if (!data?.success) throw new Error(data?.error || "Falha");
+        enviados++;
+      } catch (e: any) {
+        erros++;
+        console.error("[EnvioMeta]", e?.message || e);
+      }
+      setProgresso((p) => p ? { ...p, enviados, erros } : p);
+
+      if (i < clientesFinal.length - 1 && !cancelRef.current) {
+        const delay = Math.floor(Math.random() * (hi - lo + 1)) + lo;
+        await sleepInterruptible(delay);
+      }
     }
+
+    setResultado({ enviados, erros, total });
+    setProgresso(null);
     setEnviando(false);
+    setPausado(false);
+    pausedRef.current = false;
+    cancelRef.current = false;
+    toast.success(`${enviados} enviados • ${erros} erros${cancelado ? " (cancelado)" : ""}`);
+    carregar();
+    custoRef.current?.refetch();
   };
+
+  const togglePausa = () => {
+    const novo = !pausedRef.current;
+    pausedRef.current = novo;
+    setPausado(novo);
+    toast.info(novo ? "Envio pausado" : "Envio retomado");
+  };
+
+  const cancelar = () => {
+    if (!confirm("Cancelar o envio? Os contatos restantes não serão disparados.")) return;
+    cancelRef.current = true;
+    pausedRef.current = false;
+    setPausado(false);
+    toast.warning("Cancelando envio...");
+  };
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (enviando) { e.preventDefault(); e.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [enviando]);
 
   const variaveisDoTemplate = template?.variaveis
     ? Object.entries(template.variaveis)
@@ -469,10 +560,47 @@ export default function EnvioMeta() {
             </p>
           </div>
 
-          <Button onClick={enviar} disabled={enviando || validando} size="lg">
-            {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-            {validando ? "Validando WhatsApp..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={enviar} disabled={enviando || validando} size="lg">
+              {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
+            </Button>
+            {enviando && (
+              <>
+                <Button type="button" variant="secondary" size="lg" onClick={togglePausa}>
+                  {pausado ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
+                  {pausado ? "Retomar" : "Pausar"}
+                </Button>
+                <Button type="button" variant="destructive" size="lg" onClick={cancelar}>
+                  <StopCircle className="h-4 w-4 mr-2" />
+                  Cancelar
+                </Button>
+              </>
+            )}
+          </div>
+
+          {progresso && (
+            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">
+                  {pausado ? "⏸ Pausado" : "Enviando"} — {progresso.enviados + progresso.erros}/{progresso.total}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  ✅ {progresso.enviados} • ❌ {progresso.erros} • ⏳ {progresso.total - progresso.enviados - progresso.erros}
+                </span>
+              </div>
+              <div className="h-2 w-full bg-muted rounded overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${Math.round(((progresso.enviados + progresso.erros) / Math.max(progresso.total, 1)) * 100)}%` }}
+                />
+              </div>
+              <div className="text-xs text-muted-foreground space-y-0.5">
+                {progresso.atualTelefone && <div>Último: <code>{progresso.atualTelefone}</code> via <strong>{progresso.atualInstancia}</strong></div>}
+                {progresso.proximoEmSeg > 0 && !pausado && <div>Próximo envio em {progresso.proximoEmSeg}s</div>}
+              </div>
+            </div>
+          )}
 
 
           {resultado && (
