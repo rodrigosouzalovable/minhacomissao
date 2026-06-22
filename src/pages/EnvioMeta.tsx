@@ -213,29 +213,113 @@ export default function EnvioMeta() {
       if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
     }
 
+    // Loop client-side com suporte a pausa/cancelamento
     setEnviando(true);
+    setPausado(false);
+    pausedRef.current = false;
+    cancelRef.current = false;
     setResultado(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-        body: {
-          template_id: template.id,
-          instancia_ids: instanciaIds,
-          clientes: clientesFinal,
-          min_sec: lo,
-          max_sec: hi,
-        },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Falha no envio");
-      setResultado({ enviados: data.enviados || 0, erros: data.erros || 0, total: data.total || 0 });
-      toast.success(`${data.enviados} enviados • ${data.erros} erros`);
-      carregar();
-      custoRef.current?.refetch();
-    } catch (e: any) {
-      toast.error("Erro: " + (e?.message || e));
+
+    let enviados = 0;
+    let erros = 0;
+    let rr = 0;
+    const total = clientesFinal.length;
+    setProgresso({ enviados: 0, erros: 0, total, atualTelefone: "", atualInstancia: "", proximoEmSeg: 0 });
+
+    const instAtivas = [...instanciaIds];
+    const instMap = new Map(instancias.map((i) => [i.id, i] as const));
+
+    const sleepInterruptible = async (segs: number) => {
+      const ate = Date.now() + segs * 1000;
+      while (Date.now() < ate) {
+        if (cancelRef.current) return;
+        while (pausedRef.current && !cancelRef.current) {
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        const restanteMs = Math.max(0, ate - Date.now());
+        setProgresso((p) => p ? { ...p, proximoEmSeg: Math.ceil(restanteMs / 1000) } : p);
+        await new Promise((r) => setTimeout(r, Math.min(250, restanteMs)));
+      }
+    };
+
+    let cancelado = false;
+    for (let i = 0; i < clientesFinal.length; i++) {
+      if (cancelRef.current) { cancelado = true; break; }
+      while (pausedRef.current && !cancelRef.current) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      if (cancelRef.current) { cancelado = true; break; }
+
+      if (instAtivas.length === 0) { toast.error("Todas as instâncias atingiram o limite diário"); break; }
+      const instId = instAtivas[rr % instAtivas.length];
+      const instInfo = instMap.get(instId);
+      rr++;
+
+      const cliente = clientesFinal[i];
+      setProgresso((p) => p ? {
+        ...p,
+        atualTelefone: cliente.telefone,
+        atualInstancia: instInfo?.nome || "",
+        proximoEmSeg: 0,
+      } : p);
+
+      try {
+        const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
+          body: { template_id: template.id, instancia_id: instId, cliente },
+        });
+        if (error) throw error;
+        if (data?.tier_full) {
+          const idx = instAtivas.indexOf(instId);
+          if (idx >= 0) instAtivas.splice(idx, 1);
+          i--; continue;
+        }
+        if (!data?.success) throw new Error(data?.error || "Falha");
+        enviados++;
+      } catch (e: any) {
+        erros++;
+        console.error("[EnvioMeta]", e?.message || e);
+      }
+      setProgresso((p) => p ? { ...p, enviados, erros } : p);
+
+      if (i < clientesFinal.length - 1 && !cancelRef.current) {
+        const delay = Math.floor(Math.random() * (hi - lo + 1)) + lo;
+        await sleepInterruptible(delay);
+      }
     }
+
+    setResultado({ enviados, erros, total });
+    setProgresso(null);
     setEnviando(false);
+    setPausado(false);
+    pausedRef.current = false;
+    cancelRef.current = false;
+    toast.success(`${enviados} enviados • ${erros} erros${cancelado ? " (cancelado)" : ""}`);
+    carregar();
+    custoRef.current?.refetch();
   };
+
+  const togglePausa = () => {
+    const novo = !pausedRef.current;
+    pausedRef.current = novo;
+    setPausado(novo);
+    toast.info(novo ? "Envio pausado" : "Envio retomado");
+  };
+
+  const cancelar = () => {
+    if (!confirm("Cancelar o envio? Os contatos restantes não serão disparados.")) return;
+    cancelRef.current = true;
+    pausedRef.current = false;
+    setPausado(false);
+    toast.warning("Cancelando envio...");
+  };
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (enviando) { e.preventDefault(); e.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [enviando]);
 
   const variaveisDoTemplate = template?.variaveis
     ? Object.entries(template.variaveis)
