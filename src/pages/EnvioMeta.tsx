@@ -191,9 +191,13 @@ export default function EnvioMeta() {
         });
         if (vErr) throw vErr;
         const validSet = new Set<string>((vData?.valid || []).map((n: string) => String(n)));
+        const invalidArr: string[] = (vData?.invalid || []).map((n: string) => String(n));
+        const errorArr: string[] = (vData?.errors || []).map((n: string) => String(n));
         const totalValid = vData?.total_valid ?? validSet.size;
-        const totalInvalid = vData?.total_invalid ?? 0;
-        const totalErr = vData?.total_errors ?? 0;
+        const totalInvalid = vData?.total_invalid ?? invalidArr.length;
+        const totalErr = vData?.total_errors ?? errorArr.length;
+
+        setDetalhes((d) => ({ ...d, semWhatsapp: invalidArr, erroValidacao: errorArr }));
 
         if (totalValid === 0) {
           toast.error("Nenhum número com WhatsApp encontrado");
