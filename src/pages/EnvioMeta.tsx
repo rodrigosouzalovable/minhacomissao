@@ -123,7 +123,7 @@ export default function EnvioMeta() {
     const [i, t, u] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates").select("*").eq("status", "approved").order("nome_template"),
-      supabase.from("user_whatsapp_instances")
+      (supabase as any).from("user_whatsapp_instances")
         .select("id, nome, telefone, ativo, server_url, instance_token, status")
         .eq("ativo", true)
         .eq("status", "connected")
