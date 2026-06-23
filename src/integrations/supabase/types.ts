@@ -2136,6 +2136,7 @@ export type Database = {
           desc_parcelado_global: number
           desc_vista_global: number
           user_id: string
+          whatsapp_status: Json
         }
         Insert: {
           atualizado_em?: string
@@ -2144,6 +2145,7 @@ export type Database = {
           desc_parcelado_global?: number
           desc_vista_global?: number
           user_id: string
+          whatsapp_status?: Json
         }
         Update: {
           atualizado_em?: string
@@ -2152,6 +2154,7 @@ export type Database = {
           desc_parcelado_global?: number
           desc_vista_global?: number
           user_id?: string
+          whatsapp_status?: Json
         }
         Relationships: []
       }
