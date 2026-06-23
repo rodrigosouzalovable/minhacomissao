@@ -1,0 +1,1 @@
+ALTER TABLE public.modelo_mensagem_estado ADD COLUMN IF NOT EXISTS whatsapp_status jsonb NOT NULL DEFAULT '{}'::jsonb;

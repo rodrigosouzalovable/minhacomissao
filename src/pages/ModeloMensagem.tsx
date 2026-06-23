@@ -8,10 +8,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Loader2, Upload, Copy, Settings, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { Loader2, Upload, Copy, Settings, FileSpreadsheet, Trash2, ShieldCheck, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import {
@@ -38,11 +41,31 @@ Posso confirmar qual opção é melhor para você?`;
 
 const STORAGE_KEY = 'modelo_mensagem_state_v1';
 
+type WaStatus = 'valido' | 'sem_whatsapp' | 'erro';
+type FiltroWa = 'todos' | 'com' | 'sem' | 'nao';
+
 interface PersistedState {
   clientes: ClienteImportado[];
   contatados: string[];
   descVistaGlobal: number;
   descParceladoGlobal: number;
+  whatsappStatus?: Record<string, WaStatus>;
+}
+
+interface UazInstance {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  ativo: boolean;
+  server_url: string;
+  instance_token: string;
+}
+
+// Mesma normalização da edge function check-whatsapp-numbers (prefixo 55)
+function normalizeTel(phone: string): string {
+  const clean = (phone || '').replace(/\D/g, '');
+  if (!clean) return '';
+  return clean.startsWith('55') ? clean : `55${clean}`;
 }
 
 export default function ModeloMensagem() {
@@ -58,6 +81,13 @@ export default function ModeloMensagem() {
   const [editOpen, setEditOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [lastClicked, setLastClicked] = useState<{ cpf: string; field: 'nome' | 'telefone' | 'mensagem'; value?: string } | null>(null);
+
+  // Validação WhatsApp
+  const [whatsappStatus, setWhatsappStatus] = useState<Record<string, WaStatus>>({});
+  const [uazInstancias, setUazInstancias] = useState<UazInstance[]>([]);
+  const [validadorId, setValidadorId] = useState<string>('');
+  const [validando, setValidando] = useState(false);
+  const [filtroWa, setFiltroWa] = useState<FiltroWa>('todos');
 
   const isHighlighted = (cpf: string, field: 'nome' | 'telefone' | 'mensagem', value?: string) =>
     !!lastClicked && lastClicked.cpf === cpf && lastClicked.field === field && (value === undefined || lastClicked.value === value);
@@ -81,6 +111,7 @@ export default function ModeloMensagem() {
           if (Array.isArray(s.contatados)) setContatados(new Set(s.contatados));
           if (typeof s.descVistaGlobal === 'number') setDescVistaGlobal(s.descVistaGlobal);
           if (typeof s.descParceladoGlobal === 'number') setDescParceladoGlobal(s.descParceladoGlobal);
+          if (s.whatsappStatus && typeof s.whatsappStatus === 'object') setWhatsappStatus(s.whatsappStatus);
         }
       } catch {}
 
@@ -88,7 +119,7 @@ export default function ModeloMensagem() {
       if (user) {
         const { data } = await supabase
           .from('modelo_mensagem_estado' as any)
-          .select('clientes, contatados, desc_vista_global, desc_parcelado_global')
+          .select('clientes, contatados, desc_vista_global, desc_parcelado_global, whatsapp_status')
           .eq('user_id', user.id)
           .maybeSingle();
         if (!cancelled && data) {
@@ -103,11 +134,25 @@ export default function ModeloMensagem() {
           if (Array.isArray(d.contatados)) setContatados(new Set(d.contatados));
           if (d.desc_vista_global != null) setDescVistaGlobal(Number(d.desc_vista_global));
           if (d.desc_parcelado_global != null) setDescParceladoGlobal(Number(d.desc_parcelado_global));
+          if (d.whatsapp_status && typeof d.whatsapp_status === 'object') setWhatsappStatus(d.whatsapp_status);
         }
       }
       if (!cancelled) setHydrated(true);
     })();
     return () => { cancelled = true; };
+  }, [user]);
+
+  // Carrega instâncias UAZAPI conectadas do usuário (para validar WhatsApp)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('user_whatsapp_instances')
+        .select('id, nome, telefone, ativo, server_url, instance_token')
+        .eq('ativo', true)
+        .order('nome');
+      if (data) setUazInstancias(data as UazInstance[]);
+    })();
   }, [user]);
 
   // Persiste no localStorage (cache rápido) + banco (debounce 600ms)
@@ -118,6 +163,7 @@ export default function ModeloMensagem() {
       contatados: Array.from(contatados),
       descVistaGlobal,
       descParceladoGlobal,
+      whatsappStatus,
     };
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
 
@@ -131,12 +177,13 @@ export default function ModeloMensagem() {
           contatados: Array.from(contatados) as any,
           desc_vista_global: descVistaGlobal,
           desc_parcelado_global: descParceladoGlobal,
+          whatsapp_status: whatsappStatus as any,
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'user_id' })
         .then(({ error }) => { if (error) console.error('[modelo_mensagem_estado] upsert', error); });
     }, 600);
     return () => clearTimeout(t);
-  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, hydrated, user]);
+  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, whatsappStatus, hydrated, user]);
 
 
   // Carrega template salvo do usuário
@@ -169,6 +216,8 @@ export default function ModeloMensagem() {
       }
       setClientes(lista);
       setContatados(new Set());
+      setWhatsappStatus({});
+      setFiltroWa('todos');
     } catch (e: any) {
       toast.error(e.message || 'Erro ao ler planilha');
     } finally {
@@ -180,7 +229,61 @@ export default function ModeloMensagem() {
     if (!confirm('Limpar a lista importada e os marcadores de contato?')) return;
     setClientes([]);
     setContatados(new Set());
+    setWhatsappStatus({});
+    setFiltroWa('todos');
     toast.success('Lista limpa.');
+  };
+
+  const limparValidacao = () => {
+    if (!confirm('Limpar a verificação de WhatsApp (mantém a lista de clientes)?')) return;
+    setWhatsappStatus({});
+    setFiltroWa('todos');
+    toast.success('Verificação limpa.');
+  };
+
+  const verificarWhatsApp = async () => {
+    if (clientes.length === 0) return toast.error('Importe uma planilha primeiro');
+    if (!validadorId) return toast.error('Selecione uma instância validadora');
+    const validador = uazInstancias.find((x) => x.id === validadorId);
+    if (!validador) return toast.error('Instância validadora inválida');
+
+    // coleta todos os telefones únicos (normalizados)
+    const telSet = new Set<string>();
+    for (const c of clientes) {
+      const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
+      tels.forEach((t) => { const n = normalizeTel(t); if (n) telSet.add(n); });
+    }
+    const numeros = Array.from(telSet);
+    if (numeros.length === 0) return toast.error('Nenhum telefone para verificar');
+
+    setValidando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('check-whatsapp-numbers', {
+        body: {
+          numbers: numeros,
+          server_url: validador.server_url,
+          instance_token: validador.instance_token,
+        },
+      });
+      if (error) throw error;
+
+      const novo: Record<string, WaStatus> = { ...whatsappStatus };
+      const validos: string[] = (data?.valid || []).map((n: string) => normalizeTel(String(n)));
+      const invalidos: string[] = (data?.invalid || []).map((n: string) => normalizeTel(String(n)));
+      const erros: string[] = (data?.errors || []).map((n: string) => normalizeTel(String(n)));
+      validos.forEach((n) => { if (n) novo[n] = 'valido'; });
+      invalidos.forEach((n) => { if (n) novo[n] = 'sem_whatsapp'; });
+      erros.forEach((n) => { if (n) novo[n] = 'erro'; });
+      setWhatsappStatus(novo);
+
+      toast.success(
+        `Verificação concluída — ✅ ${validos.length} com WhatsApp · ❌ ${invalidos.length} sem · ⚠️ ${erros.length} erro`
+      );
+    } catch (e: any) {
+      toast.error('Erro na verificação: ' + (e?.message || e));
+    } finally {
+      setValidando(false);
+    }
   };
 
   const toggleContatado = (cpf: string) => {
@@ -222,6 +325,50 @@ export default function ModeloMensagem() {
     () => clientes.filter((c) => contatados.has(c.cpf)).length,
     [clientes, contatados],
   );
+
+  // Classifica cliente pelo "melhor status" entre seus telefones
+  const statusDoCliente = (c: ClienteImportado): WaStatus | 'desconhecido' => {
+    const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
+    let temValido = false, temSem = false, temErro = false, temDesc = false;
+    for (const t of tels) {
+      const s = whatsappStatus[normalizeTel(t)];
+      if (s === 'valido') temValido = true;
+      else if (s === 'sem_whatsapp') temSem = true;
+      else if (s === 'erro') temErro = true;
+      else temDesc = true;
+    }
+    if (temValido) return 'valido';
+    if (temDesc && !temSem && !temErro) return 'desconhecido';
+    if (temSem) return 'sem_whatsapp';
+    if (temErro) return 'erro';
+    return 'desconhecido';
+  };
+
+  const { totalComWa, totalSemWa, totalNaoVerificados } = useMemo(() => {
+    let com = 0, sem = 0, nao = 0;
+    for (const c of clientes) {
+      const s = statusDoCliente(c);
+      if (s === 'valido') com++;
+      else if (s === 'sem_whatsapp') sem++;
+      else nao++;
+    }
+    return { totalComWa: com, totalSemWa: sem, totalNaoVerificados: nao };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, whatsappStatus]);
+
+  const clientesFiltrados = useMemo(() => {
+    if (filtroWa === 'todos') return clientes;
+    return clientes.filter((c) => {
+      const s = statusDoCliente(c);
+      if (filtroWa === 'com') return s === 'valido';
+      if (filtroWa === 'sem') return s === 'sem_whatsapp';
+      if (filtroWa === 'nao') return s !== 'valido' && s !== 'sem_whatsapp';
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, filtroWa, whatsappStatus]);
+
+  const houveVerificacao = Object.keys(whatsappStatus).length > 0;
 
   return (
     <AppLayout>
@@ -272,10 +419,22 @@ export default function ModeloMensagem() {
                       <span className="text-sm text-muted-foreground flex items-center gap-1">
                         <FileSpreadsheet className="h-4 w-4" />
                         {clientes.length} cliente(s) • {totalContatados} contatado(s)
+                        {houveVerificacao && (
+                          <>
+                            {' '}• <span className="text-emerald-600 font-medium">✅ {totalComWa} com WA</span>
+                            {' '}• <span className="text-red-600 font-medium">❌ {totalSemWa} sem WA</span>
+                            {totalNaoVerificados > 0 && <> {' '}• {totalNaoVerificados} não verif.</>}
+                          </>
+                        )}
                       </span>
                       <Button variant="ghost" size="sm" onClick={limparLista}>
                         <Trash2 className="h-4 w-4 mr-1" /> Limpar lista
                       </Button>
+                      {houveVerificacao && (
+                        <Button variant="ghost" size="sm" onClick={limparValidacao}>
+                          <Trash2 className="h-4 w-4 mr-1" /> Limpar verificação
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -297,13 +456,66 @@ export default function ModeloMensagem() {
                 <p className="text-xs text-muted-foreground">
                   As mensagens são atualizadas automaticamente ao alterar os descontos. Parcelamento exibe 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
                 </p>
+
+                {clientes.length > 0 && (
+                  <div className="pt-3 border-t space-y-2">
+                    <Label className="text-xs flex items-center gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5" /> Verificar quem tem WhatsApp (opcional)
+                    </Label>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="flex-1 min-w-[260px]">
+                        <Select value={validadorId || '__none__'} onValueChange={(v) => setValidadorId(v === '__none__' ? '' : v)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma instância UAZAPI conectada" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Selecione uma instância…</SelectItem>
+                            {uazInstancias.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.nome} {u.telefone ? `• ${u.telefone}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button onClick={verificarWhatsApp} disabled={validando || !validadorId}>
+                        {validando
+                          ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          : <ShieldCheck className="h-4 w-4 mr-2" />}
+                        Verificar WhatsApp
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Usa a UAZAPI para identificar quais telefones têm WhatsApp. Os que não têm aparecem em <span className="text-red-600 font-medium">vermelho</span> e podem ser filtrados na lista abaixo.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             {clientes.length > 0 && (
               <Card>
-                <CardHeader>
+                <CardHeader className="space-y-3">
                   <CardTitle className="text-base">2. Clientes & Propostas</CardTitle>
+                  {houveVerificacao && (
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        { v: 'todos', label: `Todos (${clientes.length})` },
+                        { v: 'com', label: `✅ Com WhatsApp (${totalComWa})` },
+                        { v: 'sem', label: `❌ Sem WhatsApp (${totalSemWa})` },
+                        { v: 'nao', label: `Não verificados (${totalNaoVerificados})` },
+                      ] as { v: FiltroWa; label: string }[]).map((opt) => (
+                        <Button
+                          key={opt.v}
+                          size="sm"
+                          variant={filtroWa === opt.v ? 'default' : 'outline'}
+                          onClick={() => setFiltroWa(opt.v)}
+                        >
+                          {opt.label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
                   <Table>
@@ -316,7 +528,7 @@ export default function ModeloMensagem() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {clientes.map((c) => {
+                      {clientesFiltrados.map((c) => {
                         const msg = mensagemDoCliente(c);
                         const isContatado = contatados.has(c.cpf);
                         const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
@@ -350,20 +562,43 @@ export default function ModeloMensagem() {
                             <TableCell className="font-mono text-base align-top">
                               {tels.length > 0 ? (
                                 <div className="flex flex-col gap-1">
-                                  {tels.map((t) => (
-                                    <div key={t} className="flex items-center gap-2">
-                                      <span
-                                        className={`cursor-pointer hover:underline hover:text-emerald-600 font-bold rounded px-1 -mx-1 ${isHighlighted(c.cpf, 'telefone', t) ? 'animate-pulse-slow' : ''}`}
-                                        onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }}
-                                        title="Clique para copiar"
-                                      >
-                                        {t}
-                                      </span>
-                                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }} title="Copiar telefone">
-                                        <Copy className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  ))}
+                                  {tels.map((t) => {
+                                    const status = whatsappStatus[normalizeTel(t)];
+                                    const isSem = status === 'sem_whatsapp';
+                                    const isValido = status === 'valido';
+                                    const isErro = status === 'erro';
+                                    const corTel = isSem
+                                      ? 'text-red-600 line-through'
+                                      : isValido
+                                      ? 'text-emerald-700'
+                                      : isErro
+                                      ? 'text-amber-600'
+                                      : '';
+                                    const titleTel = isSem
+                                      ? 'Sem WhatsApp'
+                                      : isValido
+                                      ? 'Tem WhatsApp'
+                                      : isErro
+                                      ? 'Erro ao verificar'
+                                      : 'Clique para copiar';
+                                    return (
+                                      <div key={t} className="flex items-center gap-2">
+                                        {isValido && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                                        {isSem && <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                                        {isErro && <HelpCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />}
+                                        <span
+                                          className={`cursor-pointer hover:underline font-bold rounded px-1 -mx-1 ${corTel} ${isHighlighted(c.cpf, 'telefone', t) ? 'animate-pulse-slow' : ''}`}
+                                          onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }}
+                                          title={titleTel}
+                                        >
+                                          {t}
+                                        </span>
+                                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }} title="Copiar telefone">
+                                          <Copy className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <span className="text-muted-foreground">—</span>
