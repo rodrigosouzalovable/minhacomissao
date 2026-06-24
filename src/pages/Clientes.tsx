@@ -173,6 +173,29 @@ export default function Clientes() {
         return;
       }
 
+      // Referência de atraso Montreal por CPF: data_vencimento MAIS ANTIGA das dívidas
+      // do CPF com credor MONTREAL (mesma lógica usada na ficha do devedor).
+      const montrealRefByCpf: Record<string, string> = {};
+      for (let i = 0; i < uniqueCpfs.length; i += batchSize) {
+        const batch = uniqueCpfs.slice(i, i + batchSize);
+        const { data: dividas } = await supabase
+          .from('devedores')
+          .select('cpf, data_vencimento')
+          .in('cpf', batch)
+          .ilike('credor', 'MONTREAL')
+          .not('data_vencimento', 'is', null);
+        if (dividas) {
+          for (const d of dividas as any[]) {
+            const c = (d.cpf || '').replace(/\D/g, '');
+            const v = d.data_vencimento as string;
+            if (!c || !v) continue;
+            if (!montrealRefByCpf[c] || v < montrealRefByCpf[c]) {
+              montrealRefByCpf[c] = v;
+            }
+          }
+        }
+      }
+
       const hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
 
@@ -195,17 +218,21 @@ export default function Clientes() {
           if (p.pago) status = 'Paga';
           else if (p.data_vencimento && new Date(p.data_vencimento + 'T00:00:00') < hoje) status = 'Atrasada';
 
-          // Comissão MONTREAL: calcula apenas para parcelas pagas de credor MONTREAL
+          // Comissão MONTREAL: dias = data_pagamento − vencimento_original_montreal do CPF.
+          // Fallback: data_primeiro_vencimento do próprio acordo (mesma regra da ficha).
           let comissaoPct: number | string = '';
           let comissaoValor: number | string = '';
           const credorUpper = (info.credor || '').toUpperCase();
-          if (p.pago && credorUpper.includes('MONTREAL') && p.data_pagamento && p.data_vencimento) {
-            const venc = new Date(p.data_vencimento + 'T00:00:00');
-            const pag = new Date(p.data_pagamento + 'T00:00:00');
-            const dias = Math.floor((pag.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
-            const c = calcularComissaoMontrealParcela(Number(p.valor || 0), dias);
-            comissaoPct = c.percentual;
-            comissaoValor = c.valor;
+          if (p.pago && credorUpper.includes('MONTREAL') && p.data_pagamento) {
+            const refStr = montrealRefByCpf[cpfNorm] || acordo?.data_primeiro_vencimento;
+            if (refStr) {
+              const ref = new Date(refStr + 'T00:00:00');
+              const pag = new Date(p.data_pagamento + 'T00:00:00');
+              const dias = Math.floor((pag.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24));
+              const c = calcularComissaoMontrealParcela(Number(p.valor || 0), dias);
+              comissaoPct = c.percentual;
+              comissaoValor = c.valor;
+            }
           }
 
           return {
