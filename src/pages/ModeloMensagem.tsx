@@ -309,18 +309,18 @@ export default function ModeloMensagem() {
     });
   };
 
-  const mensagemDoCliente = (c: ClienteImportado) =>
-    renderMensagem(template, {
+  const mensagemDoCliente = (c: ClienteImportado, qual: 1 | 2 = 1) =>
+    renderMensagem(qual === 2 ? template2 : template, {
       cliente: c,
-      descontoVistaPct: descVistaGlobal,
-      parceladoQtd: parceladoQtdGlobal,
-      descontoParceladoPct: descParceladoGlobal,
+      descontoVistaPct: qual === 2 ? descVistaGlobal2 : descVistaGlobal,
+      parceladoQtd: qual === 2 ? parceladoQtdGlobal2 : parceladoQtdGlobal,
+      descontoParceladoPct: qual === 2 ? descParceladoGlobal2 : descParceladoGlobal,
     });
 
-  const copiarMsg = async (c: ClienteImportado) => {
-    await navigator.clipboard.writeText(mensagemDoCliente(c));
+  const copiarMsg = async (c: ClienteImportado, qual: 1 | 2 = 1) => {
+    await navigator.clipboard.writeText(mensagemDoCliente(c, qual));
     setLastClicked({ cpf: c.cpf, field: 'mensagem' });
-    toast.success(`Mensagem de ${c.nome.split(' ')[0]} copiada!`);
+    toast.success(`Mensagem ${qual} de ${c.nome.split(' ')[0]} copiada!`);
   };
 
   const copiarNome = async (c: ClienteImportado) => {
