@@ -538,12 +538,13 @@ export default function ModeloMensagem() {
                         <TableHead className="w-[80px]">Contatado</TableHead>
                         <TableHead>Cliente</TableHead>
                         <TableHead>Telefone(s)</TableHead>
-                        <TableHead className="min-w-[320px]">Mensagem</TableHead>
+                        <TableHead className="min-w-[360px]">Mensagens</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {clientesFiltrados.map((c) => {
-                        const msg = mensagemDoCliente(c);
+                        const msg1 = mensagemDoCliente(c, 1);
+                        const msg2 = mensagemDoCliente(c, 2);
                         const isContatado = contatados.has(c.cpf);
                         const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
                         return (
