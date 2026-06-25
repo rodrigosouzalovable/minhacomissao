@@ -75,6 +75,12 @@ export default function ModeloMensagem() {
   const [parceladoQtdGlobal, setParceladoQtdGlobal] = useState(12);
   const [descParceladoGlobal, setDescParceladoGlobal] = useState(30);
 
+  // Mensagem 2 (modelo alternativo)
+  const [template2, setTemplate2] = useState(TEMPLATE_PADRAO);
+  const [descVistaGlobal2, setDescVistaGlobal2] = useState(50);
+  const [parceladoQtdGlobal2, setParceladoQtdGlobal2] = useState(12);
+  const [descParceladoGlobal2, setDescParceladoGlobal2] = useState(30);
+
   const [clientes, setClientes] = useState<ClienteImportado[]>([]);
   const [contatados, setContatados] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
