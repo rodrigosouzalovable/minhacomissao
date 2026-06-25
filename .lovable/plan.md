@@ -1,45 +1,25 @@
-## Objetivo
-Permitir, na aba **Modelo Mensagem → Importar planilha**, subir planilhas no formato simples como `CNAO RODRIGO.xlsx`:
+## Resumo
+Na aba **Modelo Mensagem**, remover a pré-visualização do texto das mensagens na lista de clientes, mantendo apenas os botões **"Mensagem 1"** e **"Mensagem 2"**.
 
-- Coluna A: Nome do cliente
-- Coluna B: Telefone
-- Coluna C: Dias de atraso
-- Coluna D: Valor total em aberto
-- Sem cabeçalho, dados a partir da linha 1
+## Alteração
+**Arquivo:** `src/pages/ModeloMensagem.tsx`
 
-O sistema deve detectar automaticamente esse layout (além do layout Cob+ atual de 3 abas) e gerar a mensagem usando o mesmo template/descontos já configurados.
+Na coluna **Mensagens** da tabela de clientes (linhas ~631–659):
+- Remover os dois blocos `<div className="text-xs whitespace-pre-wrap line-clamp-3 ...">` que exibem o conteúdo de `msg1` e `msg2`.
+- Manter os dois botões **"Mensagem 1"** e **"Mensagem 2"** com o comportamento de cópia ao clicar.
+- Simplificar o layout da célula para que os botões fiquem um abaixo do outro sem o texto lateral.
 
-## Mudanças
+**Antes:**
+```
+[Mensagem 1]  [botão Mensagem 1]
+---
+[Mensagem 2]  [botão Mensagem 2]
+```
 
-### 1. `src/lib/parseCobmaisPlanilha.ts`
-- Detectar o formato:
-  - Se o workbook tiver as abas `Cobrança` / `Telefones` / `Parcelas` → usar parser atual (Cob+).
-  - Caso contrário, tratar a primeira aba como **layout simples**.
-- Novo parser interno `parsePlanilhaSimples(wb)`:
-  - Lê linha a linha da primeira aba.
-  - Detecta automaticamente se a primeira linha é cabeçalho (texto em todas as colunas) e pula.
-  - Mapeia: A=nome, B=telefone (normalizado via `normalizePhone`), C=diasAtraso, D=totalAtraso.
-  - Sem CPF disponível → gera chave sintética `sim-<idx>-<telefone>` para preencher `cpf` (mantém unicidade na UI).
-  - `contrato = ''`, `parcelas = []`, `telefones = [telefone]`.
-  - Ignora linhas sem telefone ou sem valor.
-- Exporta a mesma `ClienteImportado[]` — nenhuma mudança no consumidor.
+**Depois:**
+```
+[botão Mensagem 1]
+[botão Mensagem 2]
+```
 
-### 2. `src/pages/ModeloMensagem.tsx`
-- Atualizar o texto de ajuda do bloco "1. Importar planilha" para mencionar os dois formatos aceitos:
-  - Cob+ (abas Cobrança/Telefones/Parcelas)
-  - Simples (Nome | Telefone | Dias Atraso | Valor Total)
-- Nenhuma mudança em `handleFile` (o parser passa a aceitar ambos os formatos transparentemente).
-
-### 3. Renderização da mensagem
-- `renderMensagem` em `parseCobmaisPlanilha.ts` continua o mesmo. Para o layout simples:
-  - `{lista_parcelas}` fica vazio (sem dados de parcelas) — usuário pode ajustar o template ou continuar usando as variáveis principais (`{nome}`, `{primeiro_nome}`, `{total_atraso}`, `{dias_atraso}`, `{valor_quitacao}`, `{opcoes_parcelado}`, `{valor_cada_parcela_proposta}`, etc., que dependem só de `totalAtraso` e dos descontos globais já configurados).
-  - `{qtd_parcelas_atraso}` retorna 0; `{valor_parcela_aberto}` cai no fallback `total/1 = total`.
-
-## Fora de escopo
-- Não altera template padrão nem a lógica de envio/validação WhatsApp.
-- Não toca em banco de dados.
-
-## Validação manual
-1. Importar o arquivo `CNAO RODRIGO.xlsx` na aba Modelo Mensagem.
-2. Conferir contagem de clientes (~361 linhas) e amostra de mensagens Msg 1/Msg 2 com nome, valor e desconto corretos.
-3. Importar uma planilha Cob+ existente para garantir que o fluxo antigo continua funcionando.
+Nenhuma outra funcionalidade é alterada — apenas a remoção da pré-visualização do texto na tabela.

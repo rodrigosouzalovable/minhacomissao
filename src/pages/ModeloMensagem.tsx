@@ -629,33 +629,27 @@ export default function ModeloMensagem() {
                               )}
                             </TableCell>
                             <TableCell className="align-top">
-                              <div className="flex flex-col gap-2">
-                                <div className="flex items-start gap-2">
-                                  <div
-                                    className={`text-xs whitespace-pre-wrap line-clamp-3 max-w-[460px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
-                                    title={msg1}
-                                    onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }}
-                                  >
-                                    {msg1}
-                                  </div>
-                                  <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }} title="Copiar Mensagem 1">
-                                    <Copy className="h-3.5 w-3.5 mr-2" />
-                                    Mensagem 1
-                                  </Button>
-                                </div>
-                                <div className="flex items-start gap-2 border-t pt-2">
-                                  <div
-                                    className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[460px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground"
-                                    title={msg2}
-                                    onClick={(e) => { e.stopPropagation(); copiarMsg(c, 2); }}
-                                  >
-                                    {msg2}
-                                  </div>
-                                  <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 2); }} title="Copiar Mensagem 2">
-                                    <Copy className="h-3.5 w-3.5 mr-2" />
-                                    Mensagem 2
-                                  </Button>
-                                </div>
+                              <div className="flex flex-col gap-2 items-start">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={`h-8 ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
+                                  onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }}
+                                  title={msg1}
+                                >
+                                  <Copy className="h-3.5 w-3.5 mr-2" />
+                                  Mensagem 1
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8"
+                                  onClick={(e) => { e.stopPropagation(); copiarMsg(c, 2); }}
+                                  title={msg2}
+                                >
+                                  <Copy className="h-3.5 w-3.5 mr-2" />
+                                  Mensagem 2
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
