@@ -290,6 +290,17 @@ export default function ModeloMensagem() {
       erros.forEach((n) => { if (n) novo[n] = 'erro'; });
       setWhatsappStatus(novo);
 
+      // Remove números sem WhatsApp e clientes que ficarem sem telefone
+      const validosSet = new Set(validos);
+      const atualizados = clientes
+        .map((c) => {
+          const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
+          const mantidos = tels.filter((t) => validosSet.has(normalizeTel(t)));
+          return { ...c, telefones: mantidos, telefone: mantidos[0] || '' };
+        })
+        .filter((c) => c.telefones.length > 0);
+      setClientes(atualizados);
+
       toast.success(
         `Verificação concluída — ✅ ${validos.length} com WhatsApp · ❌ ${invalidos.length} sem · ⚠️ ${erros.length} erro`
       );
