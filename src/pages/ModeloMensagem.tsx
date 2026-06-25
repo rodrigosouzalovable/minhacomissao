@@ -540,6 +540,7 @@ export default function ModeloMensagem() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-[50px]">#</TableHead>
                         <TableHead className="w-[80px]">Contatado</TableHead>
                         <TableHead>Cliente</TableHead>
                         <TableHead>Telefone(s)</TableHead>
