@@ -82,9 +82,55 @@ function normalizePhone(p: string): string {
   return d;
 }
 
+function parsePlanilhaSimples(wb: XLSX.WorkBook): ClienteImportado[] {
+  const firstName = wb.SheetNames[0];
+  if (!firstName) return [];
+  const rows = sheetToRows(wb, firstName);
+  if (rows.length === 0) return [];
+
+  // Detecta cabeçalho: se A/B/C/D na linha 0 forem texto não-numérico, pula.
+  let start = 0;
+  const r0 = rows[0] || [];
+  const looksHeader =
+    typeof r0[0] === 'string' &&
+    typeof r0[1] !== 'number' &&
+    isNaN(Number(String(r0[3] ?? '').replace(',', '.')));
+  if (looksHeader) start = 1;
+
+  const out: ClienteImportado[] = [];
+  for (let i = start; i < rows.length; i++) {
+    const row = rows[i];
+    const nome = String(row[0] ?? '').trim();
+    const telefone = normalizePhone(String(row[1] ?? ''));
+    const dias = Math.max(0, Math.floor(Number(String(row[2] ?? '').replace(/\D+/g, '')) || 0));
+    const total = parseBRNumber(row[3]);
+    if (!telefone || total <= 0) continue;
+    out.push({
+      cpf: `sim-${i}-${telefone}`,
+      nome,
+      contrato: '',
+      telefone,
+      telefones: [telefone],
+      totalAtraso: total,
+      diasAtraso: dias,
+      parcelas: [],
+    });
+  }
+  return out;
+}
+
 export async function parsePlanilhaCobmais(file: File): Promise<ClienteImportado[]> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+
+  // Layout simples (Nome | Telefone | Dias Atraso | Valor Total) — sem abas Cob+
+  const temCobMais =
+    wb.SheetNames.includes('Cobrança') ||
+    wb.SheetNames.includes('Telefones') ||
+    wb.SheetNames.includes('Parcelas');
+  if (!temCobMais) {
+    return parsePlanilhaSimples(wb);
+  }
 
   // ----- Cobrança -----
   const cobRows = sheetToRows(wb, 'Cobrança');
