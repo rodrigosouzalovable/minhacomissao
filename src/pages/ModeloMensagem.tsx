@@ -198,7 +198,7 @@ export default function ModeloMensagem() {
     (async () => {
       const { data } = await supabase
         .from('modelo_mensagem_template' as any)
-        .select('template, desconto_padrao, desconto_parcelado_padrao, parcelas_padrao')
+        .select('template, desconto_padrao, desconto_parcelado_padrao, parcelas_padrao, template_2, desconto_padrao_2, desconto_parcelado_padrao_2, parcelas_padrao_2')
         .eq('user_id', user.id)
         .maybeSingle();
       if (data) {
@@ -207,6 +207,14 @@ export default function ModeloMensagem() {
         if (d.parcelas_padrao != null) setParceladoQtdGlobal(Number(d.parcelas_padrao));
         if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal(Number(d.desconto_parcelado_padrao));
         if (d.desconto_padrao != null) setDescVistaGlobal(Number(d.desconto_padrao));
+        if (d.template_2) setTemplate2(d.template_2);
+        else if (d.template) setTemplate2(d.template);
+        if (d.parcelas_padrao_2 != null) setParceladoQtdGlobal2(Number(d.parcelas_padrao_2));
+        else if (d.parcelas_padrao != null) setParceladoQtdGlobal2(Number(d.parcelas_padrao));
+        if (d.desconto_parcelado_padrao_2 != null) setDescParceladoGlobal2(Number(d.desconto_parcelado_padrao_2));
+        else if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal2(Number(d.desconto_parcelado_padrao));
+        if (d.desconto_padrao_2 != null) setDescVistaGlobal2(Number(d.desconto_padrao_2));
+        else if (d.desconto_padrao != null) setDescVistaGlobal2(Number(d.desconto_padrao));
       }
     })();
   }, [user]);
