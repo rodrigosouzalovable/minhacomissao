@@ -677,7 +677,12 @@ export default function ModeloMensagem() {
           descontoPadrao={descVistaGlobal}
           descontoParceladoPadrao={descParceladoGlobal}
           parcelasPadrao={parceladoQtdGlobal}
-          onSaved={(t, d, dp, p) => { setTemplate(t); setDescVistaGlobal(d); setDescParceladoGlobal(dp); setParceladoQtdGlobal(p); }}
+          template2={template2}
+          descontoPadrao2={descVistaGlobal2}
+          descontoParceladoPadrao2={descParceladoGlobal2}
+          parcelasPadrao2={parceladoQtdGlobal2}
+          onSaved1={(t, d, dp, p) => { setTemplate(t); setDescVistaGlobal(d); setDescParceladoGlobal(dp); setParceladoQtdGlobal(p); }}
+          onSaved2={(t, d, dp, p) => { setTemplate2(t); setDescVistaGlobal2(d); setDescParceladoGlobal2(dp); setParceladoQtdGlobal2(p); }}
         />
       </div>
     </AppLayout>
