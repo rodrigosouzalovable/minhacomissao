@@ -548,7 +548,7 @@ export default function ModeloMensagem() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {clientesFiltrados.map((c) => {
+                      {clientesFiltrados.map((c, idx) => {
                         const msg1 = mensagemDoCliente(c, 1);
                         const msg2 = mensagemDoCliente(c, 2);
                         const isContatado = contatados.has(c.cpf);
