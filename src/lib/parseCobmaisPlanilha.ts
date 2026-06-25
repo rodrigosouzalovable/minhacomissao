@@ -262,7 +262,7 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
   const primeiroNomeRaw = (cliente.nome || '').trim().split(/\s+/)[0] || cliente.nome || '';
 
   const map: Record<string, string> = {
-    '{nome}': cliente.nome,
+    '{nome}': titleCaseFirst(cliente.nome),
     '{primeiro_nome}': titleCaseFirst(primeiroNomeRaw),
     '{cpf}': cliente.cpf,
     '{contrato}': cliente.contrato,
