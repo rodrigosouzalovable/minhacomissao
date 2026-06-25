@@ -2162,30 +2162,42 @@ export type Database = {
         Row: {
           created_at: string
           desconto_padrao: number
+          desconto_padrao_2: number | null
           desconto_parcelado_padrao: number | null
+          desconto_parcelado_padrao_2: number | null
           id: string
           parcelas_padrao: number
+          parcelas_padrao_2: number | null
           template: string
+          template_2: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
           desconto_padrao?: number
+          desconto_padrao_2?: number | null
           desconto_parcelado_padrao?: number | null
+          desconto_parcelado_padrao_2?: number | null
           id?: string
           parcelas_padrao?: number
+          parcelas_padrao_2?: number | null
           template?: string
+          template_2?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
           desconto_padrao?: number
+          desconto_padrao_2?: number | null
           desconto_parcelado_padrao?: number | null
+          desconto_parcelado_padrao_2?: number | null
           id?: string
           parcelas_padrao?: number
+          parcelas_padrao_2?: number | null
           template?: string
+          template_2?: string | null
           updated_at?: string
           user_id?: string
         }

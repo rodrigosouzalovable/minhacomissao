@@ -75,6 +75,12 @@ export default function ModeloMensagem() {
   const [parceladoQtdGlobal, setParceladoQtdGlobal] = useState(12);
   const [descParceladoGlobal, setDescParceladoGlobal] = useState(30);
 
+  // Mensagem 2 (modelo alternativo)
+  const [template2, setTemplate2] = useState(TEMPLATE_PADRAO);
+  const [descVistaGlobal2, setDescVistaGlobal2] = useState(50);
+  const [parceladoQtdGlobal2, setParceladoQtdGlobal2] = useState(12);
+  const [descParceladoGlobal2, setDescParceladoGlobal2] = useState(30);
+
   const [clientes, setClientes] = useState<ClienteImportado[]>([]);
   const [contatados, setContatados] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -192,7 +198,7 @@ export default function ModeloMensagem() {
     (async () => {
       const { data } = await supabase
         .from('modelo_mensagem_template' as any)
-        .select('template, desconto_padrao, desconto_parcelado_padrao, parcelas_padrao')
+        .select('template, desconto_padrao, desconto_parcelado_padrao, parcelas_padrao, template_2, desconto_padrao_2, desconto_parcelado_padrao_2, parcelas_padrao_2')
         .eq('user_id', user.id)
         .maybeSingle();
       if (data) {
@@ -201,6 +207,14 @@ export default function ModeloMensagem() {
         if (d.parcelas_padrao != null) setParceladoQtdGlobal(Number(d.parcelas_padrao));
         if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal(Number(d.desconto_parcelado_padrao));
         if (d.desconto_padrao != null) setDescVistaGlobal(Number(d.desconto_padrao));
+        if (d.template_2) setTemplate2(d.template_2);
+        else if (d.template) setTemplate2(d.template);
+        if (d.parcelas_padrao_2 != null) setParceladoQtdGlobal2(Number(d.parcelas_padrao_2));
+        else if (d.parcelas_padrao != null) setParceladoQtdGlobal2(Number(d.parcelas_padrao));
+        if (d.desconto_parcelado_padrao_2 != null) setDescParceladoGlobal2(Number(d.desconto_parcelado_padrao_2));
+        else if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal2(Number(d.desconto_parcelado_padrao));
+        if (d.desconto_padrao_2 != null) setDescVistaGlobal2(Number(d.desconto_padrao_2));
+        else if (d.desconto_padrao != null) setDescVistaGlobal2(Number(d.desconto_padrao));
       }
     })();
   }, [user]);
@@ -295,18 +309,18 @@ export default function ModeloMensagem() {
     });
   };
 
-  const mensagemDoCliente = (c: ClienteImportado) =>
-    renderMensagem(template, {
+  const mensagemDoCliente = (c: ClienteImportado, qual: 1 | 2 = 1) =>
+    renderMensagem(qual === 2 ? template2 : template, {
       cliente: c,
-      descontoVistaPct: descVistaGlobal,
-      parceladoQtd: parceladoQtdGlobal,
-      descontoParceladoPct: descParceladoGlobal,
+      descontoVistaPct: qual === 2 ? descVistaGlobal2 : descVistaGlobal,
+      parceladoQtd: qual === 2 ? parceladoQtdGlobal2 : parceladoQtdGlobal,
+      descontoParceladoPct: qual === 2 ? descParceladoGlobal2 : descParceladoGlobal,
     });
 
-  const copiarMsg = async (c: ClienteImportado) => {
-    await navigator.clipboard.writeText(mensagemDoCliente(c));
+  const copiarMsg = async (c: ClienteImportado, qual: 1 | 2 = 1) => {
+    await navigator.clipboard.writeText(mensagemDoCliente(c, qual));
     setLastClicked({ cpf: c.cpf, field: 'mensagem' });
-    toast.success(`Mensagem de ${c.nome.split(' ')[0]} copiada!`);
+    toast.success(`Mensagem ${qual} de ${c.nome.split(' ')[0]} copiada!`);
   };
 
   const copiarNome = async (c: ClienteImportado) => {
@@ -524,12 +538,13 @@ export default function ModeloMensagem() {
                         <TableHead className="w-[80px]">Contatado</TableHead>
                         <TableHead>Cliente</TableHead>
                         <TableHead>Telefone(s)</TableHead>
-                        <TableHead className="min-w-[320px]">Mensagem</TableHead>
+                        <TableHead className="min-w-[360px]">Mensagens</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {clientesFiltrados.map((c) => {
-                        const msg = mensagemDoCliente(c);
+                        const msg1 = mensagemDoCliente(c, 1);
+                        const msg2 = mensagemDoCliente(c, 2);
                         const isContatado = contatados.has(c.cpf);
                         const tels = c.telefones?.length ? c.telefones : (c.telefone ? [c.telefone] : []);
                         return (
@@ -605,17 +620,33 @@ export default function ModeloMensagem() {
                               )}
                             </TableCell>
                             <TableCell className="align-top">
-                              <div className="flex items-start gap-2">
-                                <div
-                                  className={`text-xs whitespace-pre-wrap line-clamp-3 max-w-[520px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
-                                  title={msg}
-                                  onClick={(e) => { e.stopPropagation(); copiarMsg(c); }}
-                                >
-                                  {msg}
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground mt-1 shrink-0">Msg 1</span>
+                                  <div
+                                    className={`text-xs whitespace-pre-wrap line-clamp-3 max-w-[460px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
+                                    title={msg1}
+                                    onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }}
+                                  >
+                                    {msg1}
+                                  </div>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }} title="Copiar Mensagem 1">
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
                                 </div>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c); }} title="Copiar mensagem">
-                                  <Copy className="h-3.5 w-3.5" />
-                                </Button>
+                                <div className="flex items-start gap-2 border-t pt-2">
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground mt-1 shrink-0">Msg 2</span>
+                                  <div
+                                    className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[460px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground"
+                                    title={msg2}
+                                    onClick={(e) => { e.stopPropagation(); copiarMsg(c, 2); }}
+                                  >
+                                    {msg2}
+                                  </div>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 2); }} title="Copiar Mensagem 2">
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -646,7 +677,12 @@ export default function ModeloMensagem() {
           descontoPadrao={descVistaGlobal}
           descontoParceladoPadrao={descParceladoGlobal}
           parcelasPadrao={parceladoQtdGlobal}
-          onSaved={(t, d, dp, p) => { setTemplate(t); setDescVistaGlobal(d); setDescParceladoGlobal(dp); setParceladoQtdGlobal(p); }}
+          template2={template2}
+          descontoPadrao2={descVistaGlobal2}
+          descontoParceladoPadrao2={descParceladoGlobal2}
+          parcelasPadrao2={parceladoQtdGlobal2}
+          onSaved1={(t, d, dp, p) => { setTemplate(t); setDescVistaGlobal(d); setDescParceladoGlobal(dp); setParceladoQtdGlobal(p); }}
+          onSaved2={(t, d, dp, p) => { setTemplate2(t); setDescVistaGlobal2(d); setDescParceladoGlobal2(dp); setParceladoQtdGlobal2(p); }}
         />
       </div>
     </AppLayout>
