@@ -1,39 +1,45 @@
 ## Objetivo
+Permitir, na aba **Modelo Mensagem → Importar planilha**, subir planilhas no formato simples como `CNAO RODRIGO.xlsx`:
 
-Permitir dois modelos de mensagem ("Mensagem 1" e "Mensagem 2") no botão **Editar Modelo**, cada um com seu próprio botão **Salvar**, e exibir na tabela "2. Clientes & Propostas" **dois botões de copiar** por linha — um para cada mensagem.
+- Coluna A: Nome do cliente
+- Coluna B: Telefone
+- Coluna C: Dias de atraso
+- Coluna D: Valor total em aberto
+- Sem cabeçalho, dados a partir da linha 1
+
+O sistema deve detectar automaticamente esse layout (além do layout Cob+ atual de 3 abas) e gerar a mensagem usando o mesmo template/descontos já configurados.
 
 ## Mudanças
 
-### 1. Banco (`modelo_mensagem_template`)
-Adicionar colunas para o segundo template:
-- `template_2 text`
-- `desconto_padrao_2 numeric`
-- `desconto_parcelado_padrao_2 numeric`
-- `parcelas_padrao_2 integer`
+### 1. `src/lib/parseCobmaisPlanilha.ts`
+- Detectar o formato:
+  - Se o workbook tiver as abas `Cobrança` / `Telefones` / `Parcelas` → usar parser atual (Cob+).
+  - Caso contrário, tratar a primeira aba como **layout simples**.
+- Novo parser interno `parsePlanilhaSimples(wb)`:
+  - Lê linha a linha da primeira aba.
+  - Detecta automaticamente se a primeira linha é cabeçalho (texto em todas as colunas) e pula.
+  - Mapeia: A=nome, B=telefone (normalizado via `normalizePhone`), C=diasAtraso, D=totalAtraso.
+  - Sem CPF disponível → gera chave sintética `sim-<idx>-<telefone>` para preencher `cpf` (mantém unicidade na UI).
+  - `contrato = ''`, `parcelas = []`, `telefones = [telefone]`.
+  - Ignora linhas sem telefone ou sem valor.
+- Exporta a mesma `ClienteImportado[]` — nenhuma mudança no consumidor.
 
-(O `template` atual vira "Mensagem 1"; novas colunas guardam "Mensagem 2". Sem alterações em RLS.)
+### 2. `src/pages/ModeloMensagem.tsx`
+- Atualizar o texto de ajuda do bloco "1. Importar planilha" para mencionar os dois formatos aceitos:
+  - Cob+ (abas Cobrança/Telefones/Parcelas)
+  - Simples (Nome | Telefone | Dias Atraso | Valor Total)
+- Nenhuma mudança em `handleFile` (o parser passa a aceitar ambos os formatos transparentemente).
 
-### 2. `EditarTemplateMensagemDialog.tsx`
-- Adicionar `Tabs` internas: **Mensagem 1** / **Mensagem 2**.
-- Cada aba tem seu próprio textarea + 3 campos (% desconto à vista, % desconto parcelado, nº parcelas) + **botão "Salvar Mensagem 1"** / **"Salvar Mensagem 2"** independentes.
-- Cada Salvar grava só os campos da aba ativa (`upsert` parcial) e dispara um callback separado (`onSaved1` / `onSaved2`).
-- Variáveis disponíveis continuam compartilhadas no topo.
+### 3. Renderização da mensagem
+- `renderMensagem` em `parseCobmaisPlanilha.ts` continua o mesmo. Para o layout simples:
+  - `{lista_parcelas}` fica vazio (sem dados de parcelas) — usuário pode ajustar o template ou continuar usando as variáveis principais (`{nome}`, `{primeiro_nome}`, `{total_atraso}`, `{dias_atraso}`, `{valor_quitacao}`, `{opcoes_parcelado}`, `{valor_cada_parcela_proposta}`, etc., que dependem só de `totalAtraso` e dos descontos globais já configurados).
+  - `{qtd_parcelas_atraso}` retorna 0; `{valor_parcela_aberto}` cai no fallback `total/1 = total`.
 
-### 3. `ModeloMensagem.tsx`
-- Novos estados: `template2`, `descVistaGlobal2`, `descParceladoGlobal2`, `parceladoQtdGlobal2` (defaults = mesmos da Mensagem 1).
-- Carregar e persistir as novas colunas junto do template existente.
-- Função `mensagemDoCliente2(c)` que renderiza com os parâmetros do template 2.
-- Na coluna **Mensagem** da tabela, mostrar **duas linhas/botões**:
-  - Botão "Copiar Mensagem 1" (com preview/tooltip da msg 1)
-  - Botão "Copiar Mensagem 2" (com preview/tooltip da msg 2)
-- Atualizar toast para indicar qual mensagem foi copiada.
-- O cabeçalho da coluna passa a ser "Mensagens".
+## Fora de escopo
+- Não altera template padrão nem a lógica de envio/validação WhatsApp.
+- Não toca em banco de dados.
 
-### Fora de escopo
-- Aba "Colar imagem" continua usando só a Mensagem 1 (sem mudanças).
-- Sem alteração na lógica de validação WhatsApp, filtros, contadores.
-
-## Detalhes técnicos
-- Se `template_2` vier `null` do banco, usar o mesmo `TEMPLATE_PADRAO` como fallback inicial.
-- O `EditarTemplateMensagemDialog` recebe ambos templates como props e dois callbacks `onSaved1` / `onSaved2`.
-- Migration usa `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — sem novas policies (a tabela já tem RLS por `user_id`).
+## Validação manual
+1. Importar o arquivo `CNAO RODRIGO.xlsx` na aba Modelo Mensagem.
+2. Conferir contagem de clientes (~361 linhas) e amostra de mensagens Msg 1/Msg 2 com nome, valor e desconto corretos.
+3. Importar uma planilha Cob+ existente para garantir que o fluxo antigo continua funcionando.

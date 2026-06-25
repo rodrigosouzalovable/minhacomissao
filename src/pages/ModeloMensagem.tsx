@@ -452,6 +452,11 @@ export default function ModeloMensagem() {
                     </>
                   )}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Formatos aceitos: <strong>Cob+</strong> (abas Cobrança / Telefones / Parcelas) ou{' '}
+                  <strong>Simples</strong> (colunas: A=Nome, B=Telefone, C=Dias de atraso, D=Valor total).
+                </p>
+
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t">
                   <div>
