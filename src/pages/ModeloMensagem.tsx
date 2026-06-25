@@ -631,7 +631,6 @@ export default function ModeloMensagem() {
                             <TableCell className="align-top">
                               <div className="flex flex-col gap-2">
                                 <div className="flex items-start gap-2">
-                                  <span className="text-[10px] font-bold uppercase text-muted-foreground mt-1 shrink-0">Msg 1</span>
                                   <div
                                     className={`text-xs whitespace-pre-wrap line-clamp-3 max-w-[460px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
                                     title={msg1}
@@ -639,8 +638,9 @@ export default function ModeloMensagem() {
                                   >
                                     {msg1}
                                   </div>
-                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }} title="Copiar Mensagem 1">
-                                    <Copy className="h-3.5 w-3.5" />
+                                  <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }} title="Copiar Mensagem 1">
+                                    <Copy className="h-3.5 w-3.5 mr-2" />
+                                    Mensagem 1
                                   </Button>
                                 </div>
                                 <div className="flex items-start gap-2 border-t pt-2">
