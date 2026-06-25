@@ -562,6 +562,9 @@ export default function ModeloMensagem() {
                               toggleContatado(c.cpf);
                             }}
                           >
+                            <TableCell className="align-top text-muted-foreground text-sm">
+                              {idx + 1}
+                            </TableCell>
                             <TableCell className="align-top">
                               <Checkbox
                                 checked={isContatado}
