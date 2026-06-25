@@ -620,17 +620,33 @@ export default function ModeloMensagem() {
                               )}
                             </TableCell>
                             <TableCell className="align-top">
-                              <div className="flex items-start gap-2">
-                                <div
-                                  className={`text-xs whitespace-pre-wrap line-clamp-3 max-w-[520px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
-                                  title={msg}
-                                  onClick={(e) => { e.stopPropagation(); copiarMsg(c); }}
-                                >
-                                  {msg}
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground mt-1 shrink-0">Msg 1</span>
+                                  <div
+                                    className={`text-xs whitespace-pre-wrap line-clamp-3 max-w-[460px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground ${isHighlighted(c.cpf, 'mensagem') ? 'animate-pulse-slow' : ''}`}
+                                    title={msg1}
+                                    onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }}
+                                  >
+                                    {msg1}
+                                  </div>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 1); }} title="Copiar Mensagem 1">
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
                                 </div>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c); }} title="Copiar mensagem">
-                                  <Copy className="h-3.5 w-3.5" />
-                                </Button>
+                                <div className="flex items-start gap-2 border-t pt-2">
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground mt-1 shrink-0">Msg 2</span>
+                                  <div
+                                    className="text-xs whitespace-pre-wrap line-clamp-3 max-w-[460px] text-muted-foreground flex-1 cursor-pointer rounded px-1 -mx-1 hover:text-foreground"
+                                    title={msg2}
+                                    onClick={(e) => { e.stopPropagation(); copiarMsg(c, 2); }}
+                                  >
+                                    {msg2}
+                                  </div>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); copiarMsg(c, 2); }} title="Copiar Mensagem 2">
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                               </div>
                             </TableCell>
                           </TableRow>
