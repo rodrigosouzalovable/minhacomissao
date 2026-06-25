@@ -227,6 +227,26 @@ export interface RenderCtx {
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const PREPOSICOES = new Set([
+  'de','do','da','dos','das','e','em','no','na','nos','nas',
+  'por','para','com','sem','sob','sobre','entre','até','após',
+  'desde','perante','mediante','exceto','salvo','senão','quando',
+  'enquanto','porque','pois','mas','ou','nem','também'
+]);
+
+function toTitleCasePt(s: string): string {
+  if (!s) return s;
+  return s
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w, i) => {
+      if (i > 0 && PREPOSICOES.has(w)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(' ');
+}
+
 function titleCaseFirst(s: string): string {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
