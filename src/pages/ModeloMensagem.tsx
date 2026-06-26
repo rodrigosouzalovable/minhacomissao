@@ -49,6 +49,7 @@ interface PersistedState {
   contatados: string[];
   descVistaGlobal: number;
   descParceladoGlobal: number;
+  parceladoQtdGlobal: number;
   whatsappStatus?: Record<string, WaStatus>;
 }
 
@@ -117,6 +118,7 @@ export default function ModeloMensagem() {
           if (Array.isArray(s.contatados)) setContatados(new Set(s.contatados));
           if (typeof s.descVistaGlobal === 'number') setDescVistaGlobal(s.descVistaGlobal);
           if (typeof s.descParceladoGlobal === 'number') setDescParceladoGlobal(s.descParceladoGlobal);
+          if (typeof s.parceladoQtdGlobal === 'number') setParceladoQtdGlobal(s.parceladoQtdGlobal);
           if (s.whatsappStatus && typeof s.whatsappStatus === 'object') setWhatsappStatus(s.whatsappStatus);
         }
       } catch {}
@@ -125,7 +127,7 @@ export default function ModeloMensagem() {
       if (user) {
         const { data } = await supabase
           .from('modelo_mensagem_estado' as any)
-          .select('clientes, contatados, desc_vista_global, desc_parcelado_global, whatsapp_status')
+          .select('clientes, contatados, desc_vista_global, desc_parcelado_global, parcelado_qtd_global, whatsapp_status')
           .eq('user_id', user.id)
           .maybeSingle();
         if (!cancelled && data) {
@@ -140,6 +142,7 @@ export default function ModeloMensagem() {
           if (Array.isArray(d.contatados)) setContatados(new Set(d.contatados));
           if (d.desc_vista_global != null) setDescVistaGlobal(Number(d.desc_vista_global));
           if (d.desc_parcelado_global != null) setDescParceladoGlobal(Number(d.desc_parcelado_global));
+          if (d.parcelado_qtd_global != null) setParceladoQtdGlobal(Number(d.parcelado_qtd_global));
           if (d.whatsapp_status && typeof d.whatsapp_status === 'object') setWhatsappStatus(d.whatsapp_status);
         }
       }
@@ -169,6 +172,7 @@ export default function ModeloMensagem() {
       contatados: Array.from(contatados),
       descVistaGlobal,
       descParceladoGlobal,
+      parceladoQtdGlobal,
       whatsappStatus,
     };
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
@@ -183,13 +187,14 @@ export default function ModeloMensagem() {
           contatados: Array.from(contatados) as any,
           desc_vista_global: descVistaGlobal,
           desc_parcelado_global: descParceladoGlobal,
+          parcelado_qtd_global: parceladoQtdGlobal,
           whatsapp_status: whatsappStatus as any,
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'user_id' })
         .then(({ error }) => { if (error) console.error('[modelo_mensagem_estado] upsert', error); });
     }, 600);
     return () => clearTimeout(t);
-  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, whatsappStatus, hydrated, user]);
+  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal, whatsappStatus, hydrated, user]);
 
 
   // Carrega template salvo do usuário
@@ -204,17 +209,8 @@ export default function ModeloMensagem() {
       if (data) {
         const d = data as any;
         if (d.template) setTemplate(d.template);
-        if (d.parcelas_padrao != null) setParceladoQtdGlobal(Number(d.parcelas_padrao));
-        if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal(Number(d.desconto_parcelado_padrao));
-        if (d.desconto_padrao != null) setDescVistaGlobal(Number(d.desconto_padrao));
         if (d.template_2) setTemplate2(d.template_2);
         else if (d.template) setTemplate2(d.template);
-        if (d.parcelas_padrao_2 != null) setParceladoQtdGlobal2(Number(d.parcelas_padrao_2));
-        else if (d.parcelas_padrao != null) setParceladoQtdGlobal2(Number(d.parcelas_padrao));
-        if (d.desconto_parcelado_padrao_2 != null) setDescParceladoGlobal2(Number(d.desconto_parcelado_padrao_2));
-        else if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal2(Number(d.desconto_parcelado_padrao));
-        if (d.desconto_padrao_2 != null) setDescVistaGlobal2(Number(d.desconto_padrao_2));
-        else if (d.desconto_padrao != null) setDescVistaGlobal2(Number(d.desconto_padrao));
       }
     })();
   }, [user]);

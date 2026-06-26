@@ -2135,6 +2135,7 @@ export type Database = {
           contatados: Json
           desc_parcelado_global: number
           desc_vista_global: number
+          parcelado_qtd_global: number | null
           user_id: string
           whatsapp_status: Json
         }
@@ -2144,6 +2145,7 @@ export type Database = {
           contatados?: Json
           desc_parcelado_global?: number
           desc_vista_global?: number
+          parcelado_qtd_global?: number | null
           user_id: string
           whatsapp_status?: Json
         }
@@ -2153,6 +2155,7 @@ export type Database = {
           contatados?: Json
           desc_parcelado_global?: number
           desc_vista_global?: number
+          parcelado_qtd_global?: number | null
           user_id?: string
           whatsapp_status?: Json
         }
