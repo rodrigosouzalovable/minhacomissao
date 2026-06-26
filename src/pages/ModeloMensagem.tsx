@@ -194,7 +194,7 @@ export default function ModeloMensagem() {
         .then(({ error }) => { if (error) console.error('[modelo_mensagem_estado] upsert', error); });
     }, 600);
     return () => clearTimeout(t);
-  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, whatsappStatus, hydrated, user]);
+  }, [clientes, contatados, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal, whatsappStatus, hydrated, user]);
 
 
   // Carrega template salvo do usuário
