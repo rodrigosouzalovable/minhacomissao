@@ -127,7 +127,7 @@ export default function ModeloMensagem() {
       if (user) {
         const { data } = await supabase
           .from('modelo_mensagem_estado' as any)
-          .select('clientes, contatados, desc_vista_global, desc_parcelado_global, whatsapp_status')
+          .select('clientes, contatados, desc_vista_global, desc_parcelado_global, parcelado_qtd_global, whatsapp_status')
           .eq('user_id', user.id)
           .maybeSingle();
         if (!cancelled && data) {
