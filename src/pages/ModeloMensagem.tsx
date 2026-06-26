@@ -187,6 +187,7 @@ export default function ModeloMensagem() {
           contatados: Array.from(contatados) as any,
           desc_vista_global: descVistaGlobal,
           desc_parcelado_global: descParceladoGlobal,
+          parcelado_qtd_global: parceladoQtdGlobal,
           whatsapp_status: whatsappStatus as any,
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'user_id' })
