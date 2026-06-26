@@ -142,6 +142,7 @@ export default function ModeloMensagem() {
           if (Array.isArray(d.contatados)) setContatados(new Set(d.contatados));
           if (d.desc_vista_global != null) setDescVistaGlobal(Number(d.desc_vista_global));
           if (d.desc_parcelado_global != null) setDescParceladoGlobal(Number(d.desc_parcelado_global));
+          if (d.parcelado_qtd_global != null) setParceladoQtdGlobal(Number(d.parcelado_qtd_global));
           if (d.whatsapp_status && typeof d.whatsapp_status === 'object') setWhatsappStatus(d.whatsapp_status);
         }
       }
