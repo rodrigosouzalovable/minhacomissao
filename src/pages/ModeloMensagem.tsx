@@ -172,6 +172,7 @@ export default function ModeloMensagem() {
       contatados: Array.from(contatados),
       descVistaGlobal,
       descParceladoGlobal,
+      parceladoQtdGlobal,
       whatsappStatus,
     };
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
