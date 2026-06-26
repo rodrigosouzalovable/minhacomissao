@@ -49,6 +49,7 @@ interface PersistedState {
   contatados: string[];
   descVistaGlobal: number;
   descParceladoGlobal: number;
+  parceladoQtdGlobal: number;
   whatsappStatus?: Record<string, WaStatus>;
 }
 
