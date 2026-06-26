@@ -1,25 +1,25 @@
-## Resumo
-Na aba **Modelo Mensagem**, remover a pré-visualização do texto das mensagens na lista de clientes, mantendo apenas os botões **"Mensagem 1"** e **"Mensagem 2"**.
+## Problema
 
-## Alteração
-**Arquivo:** `src/pages/ModeloMensagem.tsx`
+Na aba **Modelo Mensagem**, os dois campos `% Desconto à vista` e `% Desconto parcelado` da página atualizam apenas os percentuais da **Mensagem 1** (`descVistaGlobal` / `descParceladoGlobal`).
 
-Na coluna **Mensagens** da tabela de clientes (linhas ~631–659):
-- Remover os dois blocos `<div className="text-xs whitespace-pre-wrap line-clamp-3 ...">` que exibem o conteúdo de `msg1` e `msg2`.
-- Manter os dois botões **"Mensagem 1"** e **"Mensagem 2"** com o comportamento de cópia ao clicar.
-- Simplificar o layout da célula para que os botões fiquem um abaixo do outro sem o texto lateral.
+A **Mensagem 2** é renderizada com variáveis separadas (`descVistaGlobal2` / `descParceladoGlobal2`), que vêm dos defaults salvos no editor e nunca mudam quando o usuário ajusta os campos na tela. Por isso `{desconto_vista_pct}` na Mensagem 2 continua zerado/com valor antigo.
 
-**Antes:**
-```
-[Mensagem 1]  [botão Mensagem 1]
----
-[Mensagem 2]  [botão Mensagem 2]
-```
+## Correção
 
-**Depois:**
-```
-[botão Mensagem 1]
-[botão Mensagem 2]
-```
+Arquivo: `src/pages/ModeloMensagem.tsx`
 
-Nenhuma outra funcionalidade é alterada — apenas a remoção da pré-visualização do texto na tabela.
+Fazer com que os dois inputs da página alterem **simultaneamente** os percentuais das duas mensagens:
+
+- `onChange` do campo "% Desconto à vista" passa a chamar `setDescVistaGlobal(n)` **e** `setDescVistaGlobal2(n)`.
+- `onChange` do campo "% Desconto parcelado" passa a chamar `setDescParceladoGlobal(n)` **e** `setDescParceladoGlobal2(n)`.
+
+Ajuste pequeno do texto de ajuda logo abaixo, indicando que o desconto se aplica às duas mensagens.
+
+Nada mais muda:
+- O editor de templates continua salvando defaults independentes por mensagem.
+- A renderização (`mensagemDoCliente` / `copiarMsg`) já lê as variáveis corretas — basta mantê-las sincronizadas.
+- Ao recarregar a página, os defaults salvos voltam a popular cada mensagem normalmente; o usuário sobrescreve as duas ao mexer nos campos.
+
+## Resultado
+
+Sempre que você alterar `% Desconto à vista` ou `% Desconto parcelado` na tela, o botão **Mensagem 2** passará a copiar o texto com o desconto atualizado, igual à Mensagem 1.

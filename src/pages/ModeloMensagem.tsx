@@ -474,18 +474,27 @@ export default function ModeloMensagem() {
                     <Label className="text-xs">% Desconto à vista</Label>
                     <Input type="number" min={0} max={100}
                       value={descVistaGlobal}
-                      onChange={(e) => setDescVistaGlobal(Number(e.target.value))} />
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setDescVistaGlobal(n);
+                        setDescVistaGlobal2(n);
+                      }} />
                   </div>
                   <div>
                     <Label className="text-xs">% Desconto parcelado</Label>
                     <Input type="number" min={0} max={100}
                       value={descParceladoGlobal}
-                      onChange={(e) => setDescParceladoGlobal(Number(e.target.value))} />
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setDescParceladoGlobal(n);
+                        setDescParceladoGlobal2(n);
+                      }} />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  As mensagens são atualizadas automaticamente ao alterar os descontos. Parcelamento exibe 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
+                  Os descontos são aplicados às duas mensagens (Mensagem 1 e Mensagem 2) automaticamente. Parcelamento exibe 4x, 8x, 12x e 15x — opções com parcela menor que R$100 são ocultadas.
                 </p>
+
 
                 {clientes.length > 0 && (
                   <div className="pt-3 border-t space-y-2">
