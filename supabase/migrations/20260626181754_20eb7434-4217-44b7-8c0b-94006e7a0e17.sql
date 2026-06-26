@@ -1,0 +1,1 @@
+alter table public.modelo_mensagem_estado add column if not exists parcelado_qtd_global numeric default 12;
