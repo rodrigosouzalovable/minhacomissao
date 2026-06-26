@@ -118,6 +118,7 @@ export default function ModeloMensagem() {
           if (Array.isArray(s.contatados)) setContatados(new Set(s.contatados));
           if (typeof s.descVistaGlobal === 'number') setDescVistaGlobal(s.descVistaGlobal);
           if (typeof s.descParceladoGlobal === 'number') setDescParceladoGlobal(s.descParceladoGlobal);
+          if (typeof s.parceladoQtdGlobal === 'number') setParceladoQtdGlobal(s.parceladoQtdGlobal);
           if (s.whatsappStatus && typeof s.whatsappStatus === 'object') setWhatsappStatus(s.whatsappStatus);
         }
       } catch {}
