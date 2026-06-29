@@ -9,13 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 type UazInstancia = {
   id: string;
@@ -111,6 +112,72 @@ export default function EnvioMeta() {
   const custoRef = useRef<CustoEnvioCardHandle>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[] } | null>(null);
+
+  const importarExcel = async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) throw new Error("Planilha vazia");
+      const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
+      const linhas: string[] = [];
+      let ignorados = 0;
+      let cabecalhoPulado = false;
+      for (let idx = 0; idx < rows.length; idx++) {
+        const r = rows[idx] || [];
+        const telRaw = String(r[0] ?? "").trim();
+        const nomeRaw = String(r[1] ?? "").trim();
+        const digitos = telRaw.replace(/\D/g, "");
+        if (idx === 0 && !digitos && !cabecalhoPulado) { cabecalhoPulado = true; continue; }
+        if (!digitos) { if (telRaw || nomeRaw) ignorados++; continue; }
+        linhas.push(nomeRaw ? `${telRaw}, ${nomeRaw}` : telRaw);
+      }
+      if (linhas.length === 0) { toast.error("Nenhum telefone válido encontrado"); return; }
+      setRecipientsRaw(linhas.join("\n"));
+      setValidacaoPreview(null);
+      toast.success(`${linhas.length} contato(s) importado(s)${ignorados ? ` • ${ignorados} ignorado(s)` : ""}`);
+    } catch (e: any) {
+      toast.error("Erro ao ler planilha: " + (e?.message || e));
+    }
+  };
+
+  const validarAgora = async () => {
+    if (!validadorId) return toast.error("Selecione uma instância UAZAPI para validar");
+    const validador = uazInstancias.find((x) => x.id === validadorId);
+    if (!validador) return toast.error("Instância validadora inválida");
+    const numeros = parseRecipients(recipientsRaw).map((r) => r.telefone);
+    if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
+    setValidando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-whatsapp-numbers", {
+        body: { numbers: numeros, server_url: validador.server_url, instance_token: validador.instance_token },
+      });
+      if (error) throw error;
+      const preview = {
+        valid: (data?.valid || []).map((n: string) => String(n)),
+        invalid: (data?.invalid || []).map((n: string) => String(n)),
+        errors: (data?.errors || []).map((n: string) => String(n)),
+      };
+      setValidacaoPreview(preview);
+      toast.success(`Validação: ✅ ${preview.valid.length} • ❌ ${preview.invalid.length} • ⚠️ ${preview.errors.length}`);
+    } catch (e: any) {
+      toast.error("Erro na validação: " + (e?.message || e));
+    } finally {
+      setValidando(false);
+    }
+  };
+
+  const removerSemWhatsApp = () => {
+    if (!validacaoPreview) return;
+    const invalidSet = new Set(validacaoPreview.invalid);
+    const rows = parseRecipients(recipientsRaw).filter((r) => !invalidSet.has(r.telefone));
+    const linhas = rows.map((r) => [r.telefone, r.nome, r.cpf, r.atraso, r.saldo ? String(r.saldo) : ""].filter(Boolean).join(", "));
+    setRecipientsRaw(linhas.join("\n"));
+    setValidacaoPreview({ ...validacaoPreview, invalid: [] });
+    toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
+  };
 
   const verificarSaude = async () => {
     setChecandoSaude(true);
@@ -481,16 +548,38 @@ export default function EnvioMeta() {
       {/* Destinatários */}
       <Card>
         <CardHeader>
-          <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
-          <CardDescription>
-            Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>. Apenas <code>telefone</code> é obrigatório.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
+              <CardDescription>
+                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>. Apenas <code>telefone</code> é obrigatório.
+                Ou importe uma planilha Excel com <strong>Coluna A = Telefone</strong> e <strong>Coluna B = Nome</strong>.
+              </CardDescription>
+            </div>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importarExcel(f);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+              <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
+                Importar Excel
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           <Textarea
             rows={10}
             value={recipientsRaw}
-            onChange={(e) => setRecipientsRaw(e.target.value)}
+            onChange={(e) => { setRecipientsRaw(e.target.value); setValidacaoPreview(null); }}
             placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
             className="font-mono text-xs"
           />
@@ -501,6 +590,7 @@ export default function EnvioMeta() {
           )}
         </CardContent>
       </Card>
+
 
       {/* Envio */}
       <Card>
@@ -538,7 +628,53 @@ export default function EnvioMeta() {
             <p className="text-xs text-muted-foreground">
               Usa uma instância UAZAPI conectada para checar quem tem WhatsApp. Números sem WhatsApp e erros de validação são descartados antes do envio Meta.
             </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={validarAgora}
+                disabled={validando || !validadorId || recipients.length === 0}
+              >
+                {validando ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />}
+                Validar agora
+              </Button>
+              {validacaoPreview && validacaoPreview.invalid.length > 0 && (
+                <Button type="button" size="sm" variant="outline" onClick={removerSemWhatsApp}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Remover {validacaoPreview.invalid.length} sem WhatsApp
+                </Button>
+              )}
+            </div>
+            {validacaoPreview && (
+              <div className="mt-2 rounded-md border bg-muted/30 p-2 space-y-1.5">
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <Badge className="bg-green-600 text-white">✅ {validacaoPreview.valid.length} com WhatsApp</Badge>
+                  <Badge variant="destructive">❌ {validacaoPreview.invalid.length} sem WhatsApp</Badge>
+                  {validacaoPreview.errors.length > 0 && (
+                    <Badge className="bg-amber-500 text-white">⚠️ {validacaoPreview.errors.length} erro(s)</Badge>
+                  )}
+                </div>
+                {validacaoPreview.invalid.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-red-600">Ver sem WhatsApp</summary>
+                    <div className="max-h-32 overflow-auto font-mono mt-1 space-y-0.5">
+                      {validacaoPreview.invalid.map((t, i) => <div key={i}>{t}</div>)}
+                    </div>
+                  </details>
+                )}
+                {validacaoPreview.errors.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-amber-600">Ver erros de validação</summary>
+                    <div className="max-h-32 overflow-auto font-mono mt-1 space-y-0.5">
+                      {validacaoPreview.errors.map((t, i) => <div key={i}>{t}</div>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
           </div>
+
 
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enviar} disabled={enviando || validando} size="lg">
