@@ -112,6 +112,72 @@ export default function EnvioMeta() {
   const custoRef = useRef<CustoEnvioCardHandle>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[] } | null>(null);
+
+  const importarExcel = async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) throw new Error("Planilha vazia");
+      const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
+      const linhas: string[] = [];
+      let ignorados = 0;
+      let cabecalhoPulado = false;
+      for (let idx = 0; idx < rows.length; idx++) {
+        const r = rows[idx] || [];
+        const telRaw = String(r[0] ?? "").trim();
+        const nomeRaw = String(r[1] ?? "").trim();
+        const digitos = telRaw.replace(/\D/g, "");
+        if (idx === 0 && !digitos && !cabecalhoPulado) { cabecalhoPulado = true; continue; }
+        if (!digitos) { if (telRaw || nomeRaw) ignorados++; continue; }
+        linhas.push(nomeRaw ? `${telRaw}, ${nomeRaw}` : telRaw);
+      }
+      if (linhas.length === 0) { toast.error("Nenhum telefone válido encontrado"); return; }
+      setRecipientsRaw(linhas.join("\n"));
+      setValidacaoPreview(null);
+      toast.success(`${linhas.length} contato(s) importado(s)${ignorados ? ` • ${ignorados} ignorado(s)` : ""}`);
+    } catch (e: any) {
+      toast.error("Erro ao ler planilha: " + (e?.message || e));
+    }
+  };
+
+  const validarAgora = async () => {
+    if (!validadorId) return toast.error("Selecione uma instância UAZAPI para validar");
+    const validador = uazInstancias.find((x) => x.id === validadorId);
+    if (!validador) return toast.error("Instância validadora inválida");
+    const numeros = parseRecipients(recipientsRaw).map((r) => r.telefone);
+    if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
+    setValidando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-whatsapp-numbers", {
+        body: { numbers: numeros, server_url: validador.server_url, instance_token: validador.instance_token },
+      });
+      if (error) throw error;
+      const preview = {
+        valid: (data?.valid || []).map((n: string) => String(n)),
+        invalid: (data?.invalid || []).map((n: string) => String(n)),
+        errors: (data?.errors || []).map((n: string) => String(n)),
+      };
+      setValidacaoPreview(preview);
+      toast.success(`Validação: ✅ ${preview.valid.length} • ❌ ${preview.invalid.length} • ⚠️ ${preview.errors.length}`);
+    } catch (e: any) {
+      toast.error("Erro na validação: " + (e?.message || e));
+    } finally {
+      setValidando(false);
+    }
+  };
+
+  const removerSemWhatsApp = () => {
+    if (!validacaoPreview) return;
+    const invalidSet = new Set(validacaoPreview.invalid);
+    const rows = parseRecipients(recipientsRaw).filter((r) => !invalidSet.has(r.telefone));
+    const linhas = rows.map((r) => [r.telefone, r.nome, r.cpf, r.atraso, r.saldo ? String(r.saldo) : ""].filter(Boolean).join(", "));
+    setRecipientsRaw(linhas.join("\n"));
+    setValidacaoPreview({ ...validacaoPreview, invalid: [] });
+    toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
+  };
 
   const verificarSaude = async () => {
     setChecandoSaude(true);
