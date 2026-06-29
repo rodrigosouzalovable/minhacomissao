@@ -718,6 +718,9 @@ export default function EnvioMeta() {
                   {validacaoPreview.errors.length > 0 && (
                     <Badge className="bg-amber-500 text-white">⚠️ {validacaoPreview.errors.length} erro(s)</Badge>
                   )}
+                  {validacaoPreview.duplicados && validacaoPreview.duplicados > 0 ? (
+                    <Badge variant="secondary">🔁 {validacaoPreview.duplicados} duplicado(s) removido(s)</Badge>
+                  ) : null}
                 </div>
                 {validacaoPreview.invalid.length > 0 && (
                   <details className="text-xs">
