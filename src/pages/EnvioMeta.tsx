@@ -628,7 +628,53 @@ export default function EnvioMeta() {
             <p className="text-xs text-muted-foreground">
               Usa uma instância UAZAPI conectada para checar quem tem WhatsApp. Números sem WhatsApp e erros de validação são descartados antes do envio Meta.
             </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={validarAgora}
+                disabled={validando || !validadorId || recipients.length === 0}
+              >
+                {validando ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />}
+                Validar agora
+              </Button>
+              {validacaoPreview && validacaoPreview.invalid.length > 0 && (
+                <Button type="button" size="sm" variant="outline" onClick={removerSemWhatsApp}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Remover {validacaoPreview.invalid.length} sem WhatsApp
+                </Button>
+              )}
+            </div>
+            {validacaoPreview && (
+              <div className="mt-2 rounded-md border bg-muted/30 p-2 space-y-1.5">
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <Badge className="bg-green-600 text-white">✅ {validacaoPreview.valid.length} com WhatsApp</Badge>
+                  <Badge variant="destructive">❌ {validacaoPreview.invalid.length} sem WhatsApp</Badge>
+                  {validacaoPreview.errors.length > 0 && (
+                    <Badge className="bg-amber-500 text-white">⚠️ {validacaoPreview.errors.length} erro(s)</Badge>
+                  )}
+                </div>
+                {validacaoPreview.invalid.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-red-600">Ver sem WhatsApp</summary>
+                    <div className="max-h-32 overflow-auto font-mono mt-1 space-y-0.5">
+                      {validacaoPreview.invalid.map((t, i) => <div key={i}>{t}</div>)}
+                    </div>
+                  </details>
+                )}
+                {validacaoPreview.errors.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-amber-600">Ver erros de validação</summary>
+                    <div className="max-h-32 overflow-auto font-mono mt-1 space-y-0.5">
+                      {validacaoPreview.errors.map((t, i) => <div key={i}>{t}</div>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
           </div>
+
 
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enviar} disabled={enviando || validando} size="lg">
