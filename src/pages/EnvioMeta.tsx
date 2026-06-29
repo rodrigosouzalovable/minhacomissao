@@ -311,12 +311,20 @@ export default function EnvioMeta() {
   const enviar = async () => {
     if (!template) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
-    if (recipients.length === 0) return toast.error("Cole ao menos um destinatário");
+
+    // Deduplica destinatários antes de qualquer coisa
+    const dedup = dedupRecipientsRaw(recipientsRaw);
+    if (dedup.duplicados > 0) {
+      setRecipientsRaw(dedup.texto);
+      toast.message(`${dedup.duplicados} duplicado(s) removido(s)`);
+    }
+    const recipientsDedup = parseRecipients(dedup.texto);
+    if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
 
-    let clientesFinal = recipients;
+    let clientesFinal = recipientsDedup;
     let semWa: string[] = [];
     let erroVal: string[] = [];
 
@@ -327,7 +335,7 @@ export default function EnvioMeta() {
 
       setValidando(true);
       try {
-        const numeros = recipients.map((r) => r.telefone);
+        const numeros = recipientsDedup.map((r) => r.telefone);
         const { data: vData, error: vErr } = await supabase.functions.invoke("check-whatsapp-numbers", {
           body: {
             numbers: numeros,
@@ -336,10 +344,10 @@ export default function EnvioMeta() {
           },
         });
         if (vErr) throw vErr;
-        const validSet = new Set<string>((vData?.valid || []).map((n: string) => String(n)));
+        const validKeys = new Set<string>((vData?.valid || []).map((n: string) => normalizeTelKey(String(n))));
         semWa = (vData?.invalid || []).map((n: string) => String(n));
         erroVal = (vData?.errors || []).map((n: string) => String(n));
-        const totalValid = vData?.total_valid ?? validSet.size;
+        const totalValid = vData?.total_valid ?? validKeys.size;
         const totalInvalid = vData?.total_invalid ?? semWa.length;
         const totalErr = vData?.total_errors ?? erroVal.length;
 
@@ -353,12 +361,13 @@ export default function EnvioMeta() {
           `Validação concluída:\n\n` +
           `✅ ${totalValid} com WhatsApp\n` +
           `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
-          `⚠️ ${totalErr} erros de validação (descartados)\n\n` +
-          `Disparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+          `⚠️ ${totalErr} erros de validação (descartados)\n` +
+          (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
+          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
         );
         if (!ok) { setValidando(false); return; }
 
-        clientesFinal = recipients.filter((r) => validSet.has(r.telefone));
+        clientesFinal = recipientsDedup.filter((r) => validKeys.has(normalizeTelKey(r.telefone)));
       } catch (e: any) {
         toast.error("Erro na validação: " + (e?.message || e));
         setValidando(false);
@@ -366,8 +375,13 @@ export default function EnvioMeta() {
       }
       setValidando(false);
     } else {
-      if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
+      if (!confirm(
+        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
+        (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
+      )) return;
     }
+
+
 
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
