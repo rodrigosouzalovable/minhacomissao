@@ -62,13 +62,25 @@ type ClienteRow = {
   saldo?: number;
 };
 
+function normalizeTelKey(t: string): string {
+  const d = String(t || "").replace(/\D+/g, "");
+  if (!d) return "";
+  if (d.startsWith("55") && d.length >= 12) return d;
+  if (d.length === 10 || d.length === 11) return "55" + d;
+  return d;
+}
+
 function parseRecipients(input: string): ClienteRow[] {
   const linhas = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows: ClienteRow[] = [];
+  const seen = new Set<string>();
   for (const linha of linhas) {
     const parts = linha.split(/[,;\t]/).map((p) => p.trim());
     const telefone = parts[0] || "";
-    if (!telefone.replace(/\D/g, "")) continue;
+    const key = normalizeTelKey(telefone);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
     rows.push({
       telefone,
       nome: parts[1] || "",
@@ -78,6 +90,25 @@ function parseRecipients(input: string): ClienteRow[] {
     });
   }
   return rows;
+}
+
+// Reescreve o textarea sem duplicados, retornando quantos foram removidos.
+function dedupRecipientsRaw(raw: string): { texto: string; duplicados: number } {
+  const linhas = raw.split(/\r?\n/);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let dup = 0;
+  for (const l of linhas) {
+    const trimmed = l.trim();
+    if (!trimmed) continue;
+    const tel = trimmed.split(/[,;\t]/)[0]?.trim() || "";
+    const key = normalizeTelKey(tel);
+    if (!key) { out.push(trimmed); continue; }
+    if (seen.has(key)) { dup++; continue; }
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return { texto: out.join("\n"), duplicados: dup };
 }
 
 export default function EnvioMeta() {
