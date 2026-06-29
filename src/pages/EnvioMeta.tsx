@@ -144,7 +144,7 @@ export default function EnvioMeta() {
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[] } | null>(null);
+  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[]; duplicados?: number } | null>(null);
 
   const importarExcel = async (file: File) => {
     try {
@@ -154,7 +154,9 @@ export default function EnvioMeta() {
       if (!ws) throw new Error("Planilha vazia");
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
       const linhas: string[] = [];
+      const seen = new Set<string>();
       let ignorados = 0;
+      let duplicados = 0;
       let cabecalhoPulado = false;
       for (let idx = 0; idx < rows.length; idx++) {
         const r = rows[idx] || [];
@@ -163,12 +165,19 @@ export default function EnvioMeta() {
         const digitos = telRaw.replace(/\D/g, "");
         if (idx === 0 && !digitos && !cabecalhoPulado) { cabecalhoPulado = true; continue; }
         if (!digitos) { if (telRaw || nomeRaw) ignorados++; continue; }
+        const key = normalizeTelKey(telRaw);
+        if (seen.has(key)) { duplicados++; continue; }
+        seen.add(key);
         linhas.push(nomeRaw ? `${telRaw}, ${nomeRaw}` : telRaw);
       }
       if (linhas.length === 0) { toast.error("Nenhum telefone válido encontrado"); return; }
       setRecipientsRaw(linhas.join("\n"));
       setValidacaoPreview(null);
-      toast.success(`${linhas.length} contato(s) importado(s)${ignorados ? ` • ${ignorados} ignorado(s)` : ""}`);
+      toast.success(
+        `${linhas.length} contato(s) importado(s)` +
+        (ignorados ? ` • ${ignorados} ignorado(s)` : "") +
+        (duplicados ? ` • ${duplicados} duplicado(s) removido(s)` : "")
+      );
     } catch (e: any) {
       toast.error("Erro ao ler planilha: " + (e?.message || e));
     }
@@ -178,7 +187,15 @@ export default function EnvioMeta() {
     if (!validadorId) return toast.error("Selecione uma instância UAZAPI para validar");
     const validador = uazInstancias.find((x) => x.id === validadorId);
     if (!validador) return toast.error("Instância validadora inválida");
-    const numeros = parseRecipients(recipientsRaw).map((r) => r.telefone);
+
+    // 1) Deduplica antes de tudo
+    const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw);
+    if (duplicados > 0) {
+      setRecipientsRaw(texto);
+      toast.message(`${duplicados} duplicado(s) removido(s) antes da validação`);
+    }
+
+    const numeros = parseRecipients(texto).map((r) => r.telefone);
     if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
     setValidando(true);
     try {
@@ -190,9 +207,10 @@ export default function EnvioMeta() {
         valid: (data?.valid || []).map((n: string) => String(n)),
         invalid: (data?.invalid || []).map((n: string) => String(n)),
         errors: (data?.errors || []).map((n: string) => String(n)),
+        duplicados,
       };
       setValidacaoPreview(preview);
-      toast.success(`Validação: ✅ ${preview.valid.length} • ❌ ${preview.invalid.length} • ⚠️ ${preview.errors.length}`);
+      toast.success(`Validação: ✅ ${preview.valid.length} • ❌ ${preview.invalid.length} • ⚠️ ${preview.errors.length}${duplicados ? ` • 🔁 ${duplicados}` : ""}`);
     } catch (e: any) {
       toast.error("Erro na validação: " + (e?.message || e));
     } finally {
@@ -202,13 +220,14 @@ export default function EnvioMeta() {
 
   const removerSemWhatsApp = () => {
     if (!validacaoPreview) return;
-    const invalidSet = new Set(validacaoPreview.invalid);
-    const rows = parseRecipients(recipientsRaw).filter((r) => !invalidSet.has(r.telefone));
+    const invalidSet = new Set(validacaoPreview.invalid.map((t) => normalizeTelKey(t)));
+    const rows = parseRecipients(recipientsRaw).filter((r) => !invalidSet.has(normalizeTelKey(r.telefone)));
     const linhas = rows.map((r) => [r.telefone, r.nome, r.cpf, r.atraso, r.saldo ? String(r.saldo) : ""].filter(Boolean).join(", "));
     setRecipientsRaw(linhas.join("\n"));
     setValidacaoPreview({ ...validacaoPreview, invalid: [] });
     toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
   };
+
 
   const verificarSaude = async () => {
     setChecandoSaude(true);
