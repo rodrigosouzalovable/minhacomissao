@@ -548,16 +548,38 @@ export default function EnvioMeta() {
       {/* Destinatários */}
       <Card>
         <CardHeader>
-          <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
-          <CardDescription>
-            Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>. Apenas <code>telefone</code> é obrigatório.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
+              <CardDescription>
+                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>. Apenas <code>telefone</code> é obrigatório.
+                Ou importe uma planilha Excel com <strong>Coluna A = Telefone</strong> e <strong>Coluna B = Nome</strong>.
+              </CardDescription>
+            </div>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importarExcel(f);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+              <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
+                Importar Excel
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           <Textarea
             rows={10}
             value={recipientsRaw}
-            onChange={(e) => setRecipientsRaw(e.target.value)}
+            onChange={(e) => { setRecipientsRaw(e.target.value); setValidacaoPreview(null); }}
             placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
             className="font-mono text-xs"
           />
@@ -568,6 +590,7 @@ export default function EnvioMeta() {
           )}
         </CardContent>
       </Card>
+
 
       {/* Envio */}
       <Card>
