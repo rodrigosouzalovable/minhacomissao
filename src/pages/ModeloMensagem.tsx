@@ -587,19 +587,19 @@ export default function ModeloMensagem() {
                                 onCheckedChange={() => toggleContatado(c.cpf)}
                               />
                             </TableCell>
-                            <TableCell className={`font-medium align-top ${isContatado ? 'line-through' : ''}`}>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`cursor-pointer hover:underline hover:text-emerald-600 rounded px-1 -mx-1 ${isHighlighted(c.cpf, 'nome') ? 'animate-pulse-slow' : ''}`}
-                                  onClick={(e) => { e.stopPropagation(); copiarNome(c); }}
-                                  title="Clique para copiar o nome"
-                                >
-                                  {c.nome}
-                                </span>
-                                <CopyButton value={c.nome} label="Nome" preserveText />
-                              </div>
+                            <TableCell className={`align-top ${isContatado ? 'line-through' : ''}`}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className={`h-8 font-medium ${isHighlighted(c.cpf, 'nome') ? 'animate-pulse-slow' : ''}`}
+                                onClick={(e) => { e.stopPropagation(); copiarNome(c); }}
+                                title="Clique para copiar o nome"
+                              >
+                                <Copy className="h-3.5 w-3.5 mr-2" />
+                                {c.nome}
+                              </Button>
                             </TableCell>
-                            <TableCell className="font-mono text-base align-top">
+                            <TableCell className="align-top">
                               {tels.length > 0 ? (
                                 <div className="flex flex-col gap-1">
                                   {tels.map((t) => {
@@ -622,21 +622,20 @@ export default function ModeloMensagem() {
                                       ? 'Erro ao verificar'
                                       : 'Clique para copiar';
                                     return (
-                                      <div key={t} className="flex items-center gap-2">
-                                        {isValido && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
-                                        {isSem && <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
-                                        {isErro && <HelpCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />}
-                                        <span
-                                          className={`cursor-pointer hover:underline font-bold rounded px-1 -mx-1 ${corTel} ${isHighlighted(c.cpf, 'telefone', t) ? 'animate-pulse-slow' : ''}`}
-                                          onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }}
-                                          title={titleTel}
-                                        >
-                                          {t}
-                                        </span>
-                                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }} title="Copiar telefone">
-                                          <Copy className="h-3 w-3" />
-                                        </Button>
-                                      </div>
+                                      <Button
+                                        key={t}
+                                        size="sm"
+                                        variant="outline"
+                                        className={`h-8 font-mono font-bold ${corTel} ${isHighlighted(c.cpf, 'telefone', t) ? 'animate-pulse-slow' : ''}`}
+                                        onClick={(e) => { e.stopPropagation(); copiarTel(c.cpf, t); }}
+                                        title={titleTel}
+                                      >
+                                        {isValido && <CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-600 shrink-0" />}
+                                        {isSem && <XCircle className="h-3.5 w-3.5 mr-2 text-red-600 shrink-0" />}
+                                        {isErro && <HelpCircle className="h-3.5 w-3.5 mr-2 text-amber-600 shrink-0" />}
+                                        {!status && <Copy className="h-3.5 w-3.5 mr-2 shrink-0" />}
+                                        {t}
+                                      </Button>
                                     );
                                   })}
                                 </div>
