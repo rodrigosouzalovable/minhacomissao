@@ -62,13 +62,25 @@ type ClienteRow = {
   saldo?: number;
 };
 
+function normalizeTelKey(t: string): string {
+  const d = String(t || "").replace(/\D+/g, "");
+  if (!d) return "";
+  if (d.startsWith("55") && d.length >= 12) return d;
+  if (d.length === 10 || d.length === 11) return "55" + d;
+  return d;
+}
+
 function parseRecipients(input: string): ClienteRow[] {
   const linhas = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows: ClienteRow[] = [];
+  const seen = new Set<string>();
   for (const linha of linhas) {
     const parts = linha.split(/[,;\t]/).map((p) => p.trim());
     const telefone = parts[0] || "";
-    if (!telefone.replace(/\D/g, "")) continue;
+    const key = normalizeTelKey(telefone);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
     rows.push({
       telefone,
       nome: parts[1] || "",
@@ -78,6 +90,25 @@ function parseRecipients(input: string): ClienteRow[] {
     });
   }
   return rows;
+}
+
+// Reescreve o textarea sem duplicados, retornando quantos foram removidos.
+function dedupRecipientsRaw(raw: string): { texto: string; duplicados: number } {
+  const linhas = raw.split(/\r?\n/);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let dup = 0;
+  for (const l of linhas) {
+    const trimmed = l.trim();
+    if (!trimmed) continue;
+    const tel = trimmed.split(/[,;\t]/)[0]?.trim() || "";
+    const key = normalizeTelKey(tel);
+    if (!key) { out.push(trimmed); continue; }
+    if (seen.has(key)) { dup++; continue; }
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return { texto: out.join("\n"), duplicados: dup };
 }
 
 export default function EnvioMeta() {
@@ -113,7 +144,7 @@ export default function EnvioMeta() {
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[] } | null>(null);
+  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[]; duplicados?: number } | null>(null);
 
   const importarExcel = async (file: File) => {
     try {
@@ -123,7 +154,9 @@ export default function EnvioMeta() {
       if (!ws) throw new Error("Planilha vazia");
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
       const linhas: string[] = [];
+      const seen = new Set<string>();
       let ignorados = 0;
+      let duplicados = 0;
       let cabecalhoPulado = false;
       for (let idx = 0; idx < rows.length; idx++) {
         const r = rows[idx] || [];
@@ -132,12 +165,19 @@ export default function EnvioMeta() {
         const digitos = telRaw.replace(/\D/g, "");
         if (idx === 0 && !digitos && !cabecalhoPulado) { cabecalhoPulado = true; continue; }
         if (!digitos) { if (telRaw || nomeRaw) ignorados++; continue; }
+        const key = normalizeTelKey(telRaw);
+        if (seen.has(key)) { duplicados++; continue; }
+        seen.add(key);
         linhas.push(nomeRaw ? `${telRaw}, ${nomeRaw}` : telRaw);
       }
       if (linhas.length === 0) { toast.error("Nenhum telefone válido encontrado"); return; }
       setRecipientsRaw(linhas.join("\n"));
       setValidacaoPreview(null);
-      toast.success(`${linhas.length} contato(s) importado(s)${ignorados ? ` • ${ignorados} ignorado(s)` : ""}`);
+      toast.success(
+        `${linhas.length} contato(s) importado(s)` +
+        (ignorados ? ` • ${ignorados} ignorado(s)` : "") +
+        (duplicados ? ` • ${duplicados} duplicado(s) removido(s)` : "")
+      );
     } catch (e: any) {
       toast.error("Erro ao ler planilha: " + (e?.message || e));
     }
@@ -147,7 +187,15 @@ export default function EnvioMeta() {
     if (!validadorId) return toast.error("Selecione uma instância UAZAPI para validar");
     const validador = uazInstancias.find((x) => x.id === validadorId);
     if (!validador) return toast.error("Instância validadora inválida");
-    const numeros = parseRecipients(recipientsRaw).map((r) => r.telefone);
+
+    // 1) Deduplica antes de tudo
+    const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw);
+    if (duplicados > 0) {
+      setRecipientsRaw(texto);
+      toast.message(`${duplicados} duplicado(s) removido(s) antes da validação`);
+    }
+
+    const numeros = parseRecipients(texto).map((r) => r.telefone);
     if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
     setValidando(true);
     try {
@@ -159,9 +207,10 @@ export default function EnvioMeta() {
         valid: (data?.valid || []).map((n: string) => String(n)),
         invalid: (data?.invalid || []).map((n: string) => String(n)),
         errors: (data?.errors || []).map((n: string) => String(n)),
+        duplicados,
       };
       setValidacaoPreview(preview);
-      toast.success(`Validação: ✅ ${preview.valid.length} • ❌ ${preview.invalid.length} • ⚠️ ${preview.errors.length}`);
+      toast.success(`Validação: ✅ ${preview.valid.length} • ❌ ${preview.invalid.length} • ⚠️ ${preview.errors.length}${duplicados ? ` • 🔁 ${duplicados}` : ""}`);
     } catch (e: any) {
       toast.error("Erro na validação: " + (e?.message || e));
     } finally {
@@ -171,13 +220,14 @@ export default function EnvioMeta() {
 
   const removerSemWhatsApp = () => {
     if (!validacaoPreview) return;
-    const invalidSet = new Set(validacaoPreview.invalid);
-    const rows = parseRecipients(recipientsRaw).filter((r) => !invalidSet.has(r.telefone));
+    const invalidSet = new Set(validacaoPreview.invalid.map((t) => normalizeTelKey(t)));
+    const rows = parseRecipients(recipientsRaw).filter((r) => !invalidSet.has(normalizeTelKey(r.telefone)));
     const linhas = rows.map((r) => [r.telefone, r.nome, r.cpf, r.atraso, r.saldo ? String(r.saldo) : ""].filter(Boolean).join(", "));
     setRecipientsRaw(linhas.join("\n"));
     setValidacaoPreview({ ...validacaoPreview, invalid: [] });
     toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
   };
+
 
   const verificarSaude = async () => {
     setChecandoSaude(true);
@@ -261,12 +311,20 @@ export default function EnvioMeta() {
   const enviar = async () => {
     if (!template) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
-    if (recipients.length === 0) return toast.error("Cole ao menos um destinatário");
+
+    // Deduplica destinatários antes de qualquer coisa
+    const dedup = dedupRecipientsRaw(recipientsRaw);
+    if (dedup.duplicados > 0) {
+      setRecipientsRaw(dedup.texto);
+      toast.message(`${dedup.duplicados} duplicado(s) removido(s)`);
+    }
+    const recipientsDedup = parseRecipients(dedup.texto);
+    if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
 
-    let clientesFinal = recipients;
+    let clientesFinal = recipientsDedup;
     let semWa: string[] = [];
     let erroVal: string[] = [];
 
@@ -277,7 +335,7 @@ export default function EnvioMeta() {
 
       setValidando(true);
       try {
-        const numeros = recipients.map((r) => r.telefone);
+        const numeros = recipientsDedup.map((r) => r.telefone);
         const { data: vData, error: vErr } = await supabase.functions.invoke("check-whatsapp-numbers", {
           body: {
             numbers: numeros,
@@ -286,10 +344,10 @@ export default function EnvioMeta() {
           },
         });
         if (vErr) throw vErr;
-        const validSet = new Set<string>((vData?.valid || []).map((n: string) => String(n)));
+        const validKeys = new Set<string>((vData?.valid || []).map((n: string) => normalizeTelKey(String(n))));
         semWa = (vData?.invalid || []).map((n: string) => String(n));
         erroVal = (vData?.errors || []).map((n: string) => String(n));
-        const totalValid = vData?.total_valid ?? validSet.size;
+        const totalValid = vData?.total_valid ?? validKeys.size;
         const totalInvalid = vData?.total_invalid ?? semWa.length;
         const totalErr = vData?.total_errors ?? erroVal.length;
 
@@ -303,12 +361,13 @@ export default function EnvioMeta() {
           `Validação concluída:\n\n` +
           `✅ ${totalValid} com WhatsApp\n` +
           `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
-          `⚠️ ${totalErr} erros de validação (descartados)\n\n` +
-          `Disparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+          `⚠️ ${totalErr} erros de validação (descartados)\n` +
+          (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
+          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
         );
         if (!ok) { setValidando(false); return; }
 
-        clientesFinal = recipients.filter((r) => validSet.has(r.telefone));
+        clientesFinal = recipientsDedup.filter((r) => validKeys.has(normalizeTelKey(r.telefone)));
       } catch (e: any) {
         toast.error("Erro na validação: " + (e?.message || e));
         setValidando(false);
@@ -316,8 +375,13 @@ export default function EnvioMeta() {
       }
       setValidando(false);
     } else {
-      if (!confirm(`Disparar template "${template.nome_template}" para ${recipients.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`)) return;
+      if (!confirm(
+        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
+        (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
+      )) return;
     }
+
+
 
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
@@ -654,6 +718,9 @@ export default function EnvioMeta() {
                   {validacaoPreview.errors.length > 0 && (
                     <Badge className="bg-amber-500 text-white">⚠️ {validacaoPreview.errors.length} erro(s)</Badge>
                   )}
+                  {validacaoPreview.duplicados && validacaoPreview.duplicados > 0 ? (
+                    <Badge variant="secondary">🔁 {validacaoPreview.duplicados} duplicado(s) removido(s)</Badge>
+                  ) : null}
                 </div>
                 {validacaoPreview.invalid.length > 0 && (
                   <details className="text-xs">
