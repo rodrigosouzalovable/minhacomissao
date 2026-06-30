@@ -1030,7 +1030,7 @@ export default function AcordoDetalhe() {
                         <MessageCircle className="h-4 w-4" />
                       </Button>
                     )}
-                    {pagamento.status === 'pendente' && canEdit && (
+                    {pagamento.status === 'pendente' && canMarcarPago && (
                       <Button
                         size="sm"
                         onClick={() => marcarComoPago(pagamento.id)}
@@ -1038,7 +1038,7 @@ export default function AcordoDetalhe() {
                         Marcar Pago
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && canEdit && (
+                    {pagamento.status === 'pago' && canMarcarPago && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1049,7 +1049,7 @@ export default function AcordoDetalhe() {
                         Desmarcar
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && !canEdit && (
+                    {pagamento.status === 'pago' && !canMarcarPago && (
                       <Badge variant="secondary">Pago</Badge>
                     )}
                   </div>
