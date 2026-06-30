@@ -260,6 +260,47 @@ Deno.serve(async (req) => {
         wa_message_id: waId,
       });
 
+      // Espelha o envio no Inbox Meta (mensagem saída + upsert contato)
+      try {
+        const tel = formatTelefone(cliente.telefone);
+        const nowIso = new Date().toISOString();
+        const preview = `[Template: ${template.nome_template}]`;
+        await supabase.from('meta_whatsapp_mensagens').insert({
+          user_id: user_id || inst.user_id,
+          instancia_id: inst.id,
+          telefone: tel,
+          direcao: 'saida',
+          conteudo: preview,
+          tipo_conteudo: 'texto',
+          timestamp_msg: nowIso,
+          status_envio: 'enviada',
+          wa_message_id: waId,
+          template_nome: template.nome_template,
+        } as any);
+        const { data: ex } = await supabase
+          .from('meta_whatsapp_contatos')
+          .select('id')
+          .eq('instancia_id', inst.id)
+          .eq('telefone', tel)
+          .maybeSingle();
+        if (ex) {
+          await supabase.from('meta_whatsapp_contatos').update({
+            ultima_mensagem: preview,
+            ultima_mensagem_em: nowIso,
+            atualizado_em: nowIso,
+          }).eq('id', ex.id);
+        } else {
+          await supabase.from('meta_whatsapp_contatos').insert({
+            user_id: user_id || inst.user_id,
+            instancia_id: inst.id,
+            telefone: tel,
+            nome: (cliente.nome || '').trim() || null,
+            ultima_mensagem: preview,
+            ultima_mensagem_em: nowIso,
+          } as any);
+        }
+      } catch (_) { /* não bloqueia o envio */ }
+
       return new Response(JSON.stringify({ success: true, waId, instancia_id }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
