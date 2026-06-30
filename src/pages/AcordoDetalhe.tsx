@@ -34,7 +34,7 @@ export default function AcordoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
-  const { acordosCompartilhados, concedidoPor, podeExcluirAcordos } = useUserPermissions();
+  const { acordosCompartilhados, concedidoPor, podeExcluirAcordos, podeMarcarPagoGlobal } = useUserPermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [acordo, setAcordo] = useState<Acordo | null>(null);
@@ -54,6 +54,8 @@ export default function AcordoDetalhe() {
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
   const canEdit = isOwner || isAdmin || (acordosCompartilhados && acordo?.user_id === concedidoPor);
+  // Permissão granular para marcar/desmarcar parcelas como pagas em qualquer acordo
+  const canMarcarPago = canEdit || podeMarcarPagoGlobal;
 
   useEffect(() => {
     async function loadAcordo() {
