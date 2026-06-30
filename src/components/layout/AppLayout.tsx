@@ -240,6 +240,27 @@ export function AppLayout({ children }: AppLayoutProps) {
     return () => { supabase.removeChannel(channel); };
   }, [fetchUnreadCount]);
 
+  // Fetch Meta Inbox unread count
+  const fetchMetaUnreadCount = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('meta_whatsapp_contatos')
+      .select('id', { count: 'exact', head: true })
+      .gt('nao_lido', 0);
+    setMetaInboxUnreadCount(count ?? 0);
+  }, [user]);
+
+  useEffect(() => {
+    fetchMetaUnreadCount();
+    const channel = supabase
+      .channel('meta-inbox-unread-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos' }, () => {
+        fetchMetaUnreadCount();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchMetaUnreadCount]);
+
   // Save sidebar order with debounce
   const saveSidebarOrder = useCallback((newOrder: string[]) => {
     if (!user) return;
