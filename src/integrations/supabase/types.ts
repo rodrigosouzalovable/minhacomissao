@@ -2860,6 +2860,7 @@ export type Database = {
           inbox_compartilhado: boolean
           permite_cpf_duplicado: boolean
           pode_excluir_acordos: boolean
+          pode_marcar_pago_global: boolean
           user_id: string
           visivel_ranking: boolean
         }
@@ -2874,6 +2875,7 @@ export type Database = {
           inbox_compartilhado?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
+          pode_marcar_pago_global?: boolean
           user_id: string
           visivel_ranking?: boolean
         }
@@ -2888,6 +2890,7 @@ export type Database = {
           inbox_compartilhado?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
+          pode_marcar_pago_global?: boolean
           user_id?: string
           visivel_ranking?: boolean
         }
@@ -4694,6 +4697,7 @@ export type Database = {
         }[]
       }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
+      pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
       ranking_mensal: {
         Args: { p_mes_ano?: string }
         Returns: {
