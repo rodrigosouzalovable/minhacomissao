@@ -55,6 +55,7 @@ const Estrategias = lazy(() => import("./pages/Estrategias"));
 const ModeloMensagem = lazy(() => import("./pages/ModeloMensagem"));
 const ConfigurarMeta = lazy(() => import("./pages/ConfigurarMeta"));
 const EnvioMeta = lazy(() => import("./pages/EnvioMeta"));
+const InboxMeta = lazy(() => import("./pages/InboxMeta"));
 
 const queryClient = new QueryClient();
 
