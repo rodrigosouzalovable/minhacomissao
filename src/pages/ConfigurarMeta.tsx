@@ -217,6 +217,23 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  const assinarWebhook = async () => {
+    setAssinando(true);
+    setResultadosAssinatura(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-subscribe-waba", { body: {} });
+      if (error) throw error;
+      setResultadosAssinatura(data?.resultados || []);
+      const okCount = (data?.resultados || []).filter((r: any) => r.subscribe_ok).length;
+      const total = (data?.resultados || []).length;
+      if (okCount === total) toast.success(`${okCount}/${total} WABAs assinadas com sucesso`);
+      else toast.error(`${okCount}/${total} assinadas — veja detalhes abaixo`);
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    }
+    setAssinando(false);
+  };
+
   return (
     <AppLayout>
     <div className="container mx-auto p-6 max-w-6xl">
