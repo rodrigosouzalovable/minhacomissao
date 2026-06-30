@@ -6,6 +6,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Mapeia status da Meta -> status interno do app
+function mapStatusMeta(s: string): string {
+  switch (s) {
+    case 'sent': return 'enviada';
+    case 'delivered': return 'entregue';
+    case 'read': return 'lida';
+    case 'failed': return 'erro';
+    default: return 'enviada';
+  }
+}
+
+function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_url: string | null } {
+  const tipo = m.type || 'texto';
+  if (m.text?.body) return { texto: m.text.body, tipo: 'texto', media_url: null };
+  if (m.button?.text) return { texto: m.button.text, tipo: 'texto', media_url: null };
+  if (m.interactive?.button_reply?.title) return { texto: m.interactive.button_reply.title, tipo: 'texto', media_url: null };
+  if (m.interactive?.list_reply?.title) return { texto: m.interactive.list_reply.title, tipo: 'texto', media_url: null };
+  if (tipo === 'image') return { texto: m.image?.caption || '[Imagem]', tipo: 'imagem', media_url: null };
+  if (tipo === 'audio') return { texto: '[Áudio]', tipo: 'audio', media_url: null };
+  if (tipo === 'document') return { texto: m.document?.filename || '[Documento]', tipo: 'documento', media_url: null };
+  if (tipo === 'video') return { texto: m.video?.caption || '[Vídeo]', tipo: 'video', media_url: null };
+  return { texto: `[${tipo}]`, tipo: 'texto', media_url: null };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -34,7 +58,7 @@ serve(async (req) => {
 
   try {
     const payload = await req.json();
-    console.log('[MetaWebhook] payload:', JSON.stringify(payload).slice(0, 1000));
+    console.log('[MetaWebhook] payload:', JSON.stringify(payload).slice(0, 1500));
 
     const entries = payload.entry || [];
     for (const entry of entries) {
@@ -49,27 +73,67 @@ serve(async (req) => {
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
-        // Incoming messages → write to whatsapp_mensagens with provedor='meta'
+        // ===== Mensagens recebidas =====
         const messages = value.messages || [];
-        for (const m of messages) {
-          const from = m.from; // already in international format without '+'
-          const text = m.text?.body || m.button?.text || m.interactive?.button_reply?.title || `[${m.type}]`;
-          const ts = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
+        const contacts = value.contacts || [];
+        const nomePorWaId: Record<string, string> = {};
+        for (const c of contacts) {
+          if (c?.wa_id && c?.profile?.name) nomePorWaId[c.wa_id] = c.profile.name;
+        }
 
-          // We don't yet have a whatsapp_contatos row tied to a Meta instance; only store the message
-          // tagged as provedor='meta' so Inbox queries can opt-in later.
-          await supabase.from('whatsapp_mensagens').insert({
-            instancia_id: null,
-            telefone_remoto: from,
-            conteudo: text,
+        for (const m of messages) {
+          const from = m.from;
+          if (!from) continue;
+          const { texto, tipo } = extractTextoFromMessage(m);
+          const tsMsg = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
+          const nomeContato = nomePorWaId[from] || null;
+
+          // Insere mensagem (dedup via UNIQUE instancia_id + wa_message_id)
+          await supabase.from('meta_whatsapp_mensagens').insert({
+            user_id: inst.user_id,
+            instancia_id: inst.id,
+            telefone: from,
             direcao: 'entrada',
-            timestamp_msg: ts,
-            lida: false,
-            whatsapp_msg_id: m.id,
-            provedor: 'meta',
+            conteudo: texto,
+            tipo_conteudo: tipo,
+            timestamp_msg: tsMsg,
+            status_envio: 'entregue',
+            wa_message_id: m.id,
           } as any);
 
-          // Mark last log entry for this phone as 'replied'
+          // Upsert contato — incrementa não-lido e atualiza preview
+          const { data: existente } = await supabase
+            .from('meta_whatsapp_contatos')
+            .select('id, nao_lido, nome')
+            .eq('instancia_id', inst.id)
+            .eq('telefone', from)
+            .maybeSingle();
+
+          if (existente) {
+            await supabase.from('meta_whatsapp_contatos')
+              .update({
+                ultima_mensagem: texto,
+                ultima_mensagem_em: tsMsg,
+                ultima_msg_entrada_em: tsMsg,
+                nao_lido: (existente.nao_lido || 0) + 1,
+                nome: existente.nome || nomeContato,
+                atualizado_em: new Date().toISOString(),
+              })
+              .eq('id', existente.id);
+          } else {
+            await supabase.from('meta_whatsapp_contatos').insert({
+              user_id: inst.user_id,
+              instancia_id: inst.id,
+              telefone: from,
+              nome: nomeContato,
+              ultima_mensagem: texto,
+              ultima_mensagem_em: tsMsg,
+              ultima_msg_entrada_em: tsMsg,
+              nao_lido: 1,
+            } as any);
+          }
+
+          // Compatibilidade com o log de envios em massa
           await supabase.from('meta_whatsapp_envios_log')
             .update({ status: 'replied' })
             .eq('instancia_id', inst.id)
@@ -77,12 +141,24 @@ serve(async (req) => {
             .neq('status', 'replied');
         }
 
-        // Status updates (delivered, read, failed)
+        // ===== Atualizações de status =====
         const statuses = value.statuses || [];
         for (const s of statuses) {
           const waId = s.id;
           const status = s.status; // sent | delivered | read | failed
           if (!waId) continue;
+
+          const novoStatus = mapStatusMeta(status);
+
+          // Atualiza mensagem do inbox
+          await supabase.from('meta_whatsapp_mensagens')
+            .update({
+              status_envio: novoStatus,
+              erro: status === 'failed' ? (s.errors?.[0]?.title || s.errors?.[0]?.message || 'falha') : null,
+            })
+            .eq('wa_message_id', waId);
+
+          // Compatibilidade com log de massa
           await supabase.from('meta_whatsapp_envios_log')
             .update({ status })
             .eq('wa_message_id', waId);
