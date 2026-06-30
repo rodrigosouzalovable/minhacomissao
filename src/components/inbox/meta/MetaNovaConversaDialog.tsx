@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2 } from 'lucide-react';
 
 interface MetaInst { id: string; nome: string | null; display_phone: string | null; }
-interface Template { id: string; name: string; language: string; category: string; }
+interface Template { id: string; nome_template: string; idioma: string; categoria: string; }
 
 interface Props {
   open: boolean;
@@ -32,7 +32,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('meta_whatsapp_templates')
-        .select('id, name, language, category').eq('status', 'APPROVED').order('name');
+        .select('id, nome_template, idioma, categoria').eq('status', 'APPROVED').order('nome_template');
       setTemplates((data as Template[]) ?? []);
     })();
   }, [open]);
@@ -41,13 +41,13 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
     if (!instId || !tel.trim() || !templateName) return;
     setEnviando(true);
     try {
-      const tpl = templates.find(t => t.name === templateName);
+      const tpl = templates.find(t => t.nome_template === templateName);
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
         body: {
           instancia_id: instId,
           recipient: { telefone: tel.replace(/\D/g, ''), nome: nome.trim() || null },
           template_name: templateName,
-          template_language: tpl?.language || 'pt_BR',
+          template_language: tpl?.idioma || 'pt_BR',
         },
       });
       if (error) throw new Error(error.message);
@@ -86,8 +86,8 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
             <SelectTrigger><SelectValue placeholder="Template HSM" /></SelectTrigger>
             <SelectContent>
               {templates.map(t => (
-                <SelectItem key={t.id} value={t.name}>
-                  {t.name} · <span className="text-xs text-muted-foreground">{t.category}</span>
+                <SelectItem key={t.id} value={t.nome_template}>
+                  {t.nome_template} · <span className="text-xs text-muted-foreground">{t.categoria}</span>
                 </SelectItem>
               ))}
             </SelectContent>
