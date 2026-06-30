@@ -313,6 +313,45 @@ export default function ConfigurarMeta() {
         </CardContent>
       </Card>
 
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Assinar webhook nas WABAs</CardTitle>
+          <CardDescription>
+            Sem isso, a Meta não envia as mensagens recebidas para o nosso webhook.
+            Rode 1x por número (e sempre que adicionar uma instância nova).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button onClick={assinarWebhook} disabled={assinando}>
+            {assinando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Assinar todas as instâncias ativas
+          </Button>
+          {resultadosAssinatura && (
+            <div className="space-y-2 text-xs">
+              {resultadosAssinatura.map((r) => (
+                <div key={r.id} className="border rounded p-2">
+                  <div className="flex items-center gap-2 font-medium">
+                    {r.subscribe_ok ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    )}
+                    {r.nome} <span className="text-muted-foreground font-mono">({r.phone_number_id})</span>
+                  </div>
+                  {!r.subscribe_ok && (
+                    <pre className="mt-1 text-[10px] bg-muted p-2 rounded overflow-x-auto">
+{JSON.stringify(r.subscribe_raw || r.error, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+
+
       <Tabs defaultValue="instancias">
         <TabsList>
           <TabsTrigger value="instancias">Instâncias ({instancias.length})</TabsTrigger>
