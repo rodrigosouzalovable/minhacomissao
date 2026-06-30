@@ -53,6 +53,8 @@ export default function ConfigurarMeta() {
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
+  const [assinando, setAssinando] = useState(false);
+  const [resultadosAssinatura, setResultadosAssinatura] = useState<any[] | null>(null);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
