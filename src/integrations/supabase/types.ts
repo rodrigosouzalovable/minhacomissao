@@ -2010,6 +2010,56 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_whatsapp_contatos: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          id: string
+          instancia_id: string
+          nao_lido: number
+          nome: string | null
+          telefone: string
+          ultima_mensagem: string | null
+          ultima_mensagem_em: string | null
+          ultima_msg_entrada_em: string | null
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          instancia_id: string
+          nao_lido?: number
+          nome?: string | null
+          telefone: string
+          ultima_mensagem?: string | null
+          ultima_mensagem_em?: string | null
+          ultima_msg_entrada_em?: string | null
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          instancia_id?: string
+          nao_lido?: number
+          nome?: string | null
+          telefone?: string
+          ultima_mensagem?: string | null
+          ultima_mensagem_em?: string | null
+          ultima_msg_entrada_em?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_whatsapp_contatos_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_whatsapp_envios_log: {
         Row: {
           enviado_em: string
@@ -2131,6 +2181,65 @@ export type Database = {
           webhook_verify_token?: string | null
         }
         Relationships: []
+      }
+      meta_whatsapp_mensagens: {
+        Row: {
+          conteudo: string
+          criado_em: string
+          direcao: string
+          erro: string | null
+          id: string
+          instancia_id: string
+          media_url: string | null
+          status_envio: string
+          telefone: string
+          template_nome: string | null
+          timestamp_msg: string
+          tipo_conteudo: string
+          user_id: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          conteudo?: string
+          criado_em?: string
+          direcao: string
+          erro?: string | null
+          id?: string
+          instancia_id: string
+          media_url?: string | null
+          status_envio?: string
+          telefone: string
+          template_nome?: string | null
+          timestamp_msg?: string
+          tipo_conteudo?: string
+          user_id: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          conteudo?: string
+          criado_em?: string
+          direcao?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string
+          media_url?: string | null
+          status_envio?: string
+          telefone?: string
+          template_nome?: string | null
+          timestamp_msg?: string
+          tipo_conteudo?: string
+          user_id?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_whatsapp_mensagens_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_whatsapp_templates: {
         Row: {
