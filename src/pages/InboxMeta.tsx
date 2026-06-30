@@ -8,42 +8,38 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Send, Loader2, ShieldCheck, AlertCircle, Clock } from 'lucide-react';
+import {
+  Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Plus, Tag, X, Pin,
+  Archive, Trash2, MessageSquarePlus, Paperclip, Reply, CheckSquare, Square, ChevronDown,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { format, formatDistanceToNowStrict, differenceInMinutes } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChatMessage } from '@/components/inbox/ChatMessage';
+import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaContextMenu';
+import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
+import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
+import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover';
 
-interface MetaInstance {
-  id: string;
-  nome: string | null;
-  display_phone: string | null;
-  ativo: boolean;
-}
-
+interface MetaInstance { id: string; nome: string | null; display_phone: string | null; ativo: boolean; }
 interface MetaContato {
-  id: string;
-  instancia_id: string;
-  telefone: string;
-  nome: string | null;
-  ultima_mensagem: string | null;
-  ultima_mensagem_em: string | null;
-  ultima_msg_entrada_em: string | null;
-  nao_lido: number;
+  id: string; instancia_id: string; telefone: string; nome: string | null;
+  ultima_mensagem: string | null; ultima_mensagem_em: string | null;
+  ultima_msg_entrada_em: string | null; nao_lido: number;
+  fixado: boolean; arquivado: boolean;
 }
-
 interface MetaMensagem {
-  id: string;
-  instancia_id: string;
-  telefone: string;
-  conteudo: string;
-  direcao: string;
-  timestamp_msg: string;
-  tipo_conteudo?: string;
-  media_url?: string | null;
-  wa_message_id?: string | null;
-  status_envio?: string | null;
+  id: string; instancia_id: string; telefone: string; conteudo: string;
+  direcao: string; timestamp_msg: string; tipo_conteudo?: string;
+  media_url?: string | null; wa_message_id?: string | null; status_envio?: string | null;
+  wa_message_id_reply?: string | null; conteudo_citado?: string | null;
 }
 
 const PAGE_SIZE = 200;
@@ -55,17 +51,12 @@ function formatTelefone(t: string) {
   if (d.length >= 12) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
   return t;
 }
-
-function formatMsgTime(ts: string) {
-  try { return format(new Date(ts), 'HH:mm', { locale: ptBR }); } catch { return ''; }
-}
-
+function formatMsgTime(ts: string) { try { return format(new Date(ts), 'HH:mm', { locale: ptBR }); } catch { return ''; } }
 function formatContatoTime(ts: string | null) {
   if (!ts) return '';
   try {
     const d = new Date(ts);
-    const hoje = new Date();
-    if (d.toDateString() === hoje.toDateString()) return format(d, 'HH:mm');
+    if (d.toDateString() === new Date().toDateString()) return format(d, 'HH:mm');
     return format(d, 'dd/MM', { locale: ptBR });
   } catch { return ''; }
 }
@@ -82,77 +73,150 @@ export default function InboxMeta() {
   const [busca, setBusca] = useState('');
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [enviandoArquivo, setEnviandoArquivo] = useState(false);
   const [carregandoMsgs, setCarregandoMsgs] = useState(false);
+  const [paginaAtual, setPaginaAtual] = useState(0);
+  const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
+  const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<'conversas' | 'arquivados'>('conversas');
+
+  const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
+  const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
+  const [filtroEtOpen, setFiltroEtOpen] = useState(false);
+
+  const [novaOpen, setNovaOpen] = useState(false);
+  const [etiquetasOpen, setEtiquetasOpen] = useState(false);
+  const [msgRapidasOpen, setMsgRapidasOpen] = useState(false);
+  const [msgRapidas, setMsgRapidas] = useState<MetaMsgRapida[]>([]);
+
+  const [selMultipla, setSelMultipla] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [respondendo, setRespondendo] = useState<MetaMensagem | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Carrega instâncias Meta
+  // ============== Carregamento ==============
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
-        .from('meta_whatsapp_instances')
-        .select('id, nome, display_phone, ativo')
-        .eq('ativo', true)
-        .order('nome', { ascending: true });
+      const { data } = await supabase.from('meta_whatsapp_instances')
+        .select('id, nome, display_phone, ativo').eq('ativo', true).order('nome');
       setInstancias((data as MetaInstance[]) ?? []);
     })();
   }, [user]);
 
-  // Carrega contatos
+  const fetchEtiquetas = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from('meta_whatsapp_etiquetas')
+      .select('id, nome, cor').eq('user_id', user.id).order('nome');
+    setEtiquetas((data as MetaEtiqueta[]) ?? []);
+  }, [user]);
+
+  const fetchContatoEtiquetas = useCallback(async () => {
+    const { data } = await supabase.from('meta_whatsapp_contato_etiquetas')
+      .select('contato_id, etiqueta_id');
+    const map: Record<string, string[]> = {};
+    (data ?? []).forEach((r: any) => {
+      if (!map[r.contato_id]) map[r.contato_id] = [];
+      map[r.contato_id].push(r.etiqueta_id);
+    });
+    setContatoEtiquetas(map);
+  }, []);
+
+  const fetchMsgRapidas = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from('meta_whatsapp_mensagens_rapidas')
+      .select('id, titulo, tipo, conteudo, audio_url').eq('user_id', user.id).order('ordem');
+    setMsgRapidas((data as MetaMsgRapida[]) ?? []);
+  }, [user]);
+
+  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMsgRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMsgRapidas]);
+
   const fetchContatos = useCallback(async () => {
     if (!user) return;
-    let q = supabase
-      .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido')
+    let q = supabase.from('meta_whatsapp_contatos')
+      .select('id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado')
+      .eq('arquivado', abaAtiva === 'arquivados')
       .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
       .limit(500);
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
     const { data } = await q;
     setContatos((data as MetaContato[]) ?? []);
-  }, [user, filtroInstancia]);
+  }, [user, filtroInstancia, abaAtiva]);
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
-  // Realtime: contatos
+  // Realtime + polling fallback
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel('meta-contatos')
+      .channel('meta-inbox-contatos')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos' }, () => {
         fetchContatos();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, () => {
+        fetchContatoEtiquetas();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_etiquetas' }, () => {
+        fetchEtiquetas();
+      })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user, fetchContatos]);
+    const poll = setInterval(() => fetchContatos(), 20000);
+    const onVis = () => { if (!document.hidden) fetchContatos(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVis); };
+  }, [user, fetchContatos, fetchContatoEtiquetas, fetchEtiquetas]);
 
-  // Carrega mensagens do contato ativo
-  const fetchMensagens = useCallback(async (contato: MetaContato) => {
-    setCarregandoMsgs(true);
-    const { data } = await supabase
+  // ============== Mensagens ==============
+  const fetchMensagens = useCallback(async (contato: MetaContato, loadMore = false) => {
+    if (loadMore) setCarregandoAnteriores(true); else setCarregandoMsgs(true);
+    const offset = loadMore ? (paginaAtual + 1) * PAGE_SIZE : 0;
+    const { data, count } = await supabase
       .from('meta_whatsapp_mensagens')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('instancia_id', contato.instancia_id)
       .eq('telefone', contato.telefone)
+      .eq('apagada_para_mim', false)
       .order('timestamp_msg', { ascending: false })
-      .limit(PAGE_SIZE);
+      .range(offset, offset + PAGE_SIZE - 1);
     const lista = ((data as MetaMensagem[]) ?? []).reverse();
-    setMensagens(lista);
-    setCarregandoMsgs(false);
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
-
-    // Marca como lido
-    if (contato.nao_lido > 0) {
-      await supabase.from('meta_whatsapp_contatos').update({ nao_lido: 0 }).eq('id', contato.id);
+    if (loadMore) {
+      const container = chatContainerRef.current;
+      const oldH = container?.scrollHeight || 0;
+      setMensagens(prev => {
+        const ids = new Set(prev.map(m => m.id));
+        return [...lista.filter(m => !ids.has(m.id)), ...prev];
+      });
+      setPaginaAtual(p => p + 1);
+      setTemMaisAnteriores(((paginaAtual + 2) * PAGE_SIZE) < (count ?? 0));
+      requestAnimationFrame(() => {
+        if (container) container.scrollTop = container.scrollHeight - oldH;
+      });
+      setCarregandoAnteriores(false);
+    } else {
+      setMensagens(lista);
+      setPaginaAtual(0);
+      setTemMaisAnteriores(PAGE_SIZE < (count ?? 0));
+      setCarregandoMsgs(false);
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
+      if (contato.nao_lido > 0) {
+        await supabase.from('meta_whatsapp_contatos').update({ nao_lido: 0 }).eq('id', contato.id);
+      }
     }
-  }, []);
+  }, [paginaAtual]);
 
   useEffect(() => {
-    if (contatoAtivo) fetchMensagens(contatoAtivo);
+    if (contatoAtivo) fetchMensagens(contatoAtivo, false);
     else setMensagens([]);
-  }, [contatoAtivo, fetchMensagens]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contatoAtivo?.id]);
 
-  // Realtime: mensagens do contato ativo
+  // Realtime mensagens
   useEffect(() => {
     if (!contatoAtivo) return;
     const channel = supabase
@@ -174,56 +238,64 @@ export default function InboxMeta() {
     return () => { supabase.removeChannel(channel); };
   }, [contatoAtivo]);
 
-  // Filtro de busca
+  // Scroll infinito
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container || !contatoAtivo) return;
+    const onScroll = () => {
+      if (container.scrollTop < 100 && temMaisAnteriores && !carregandoAnteriores && !carregandoMsgs) {
+        fetchMensagens(contatoAtivo, true);
+      }
+    };
+    container.addEventListener('scroll', onScroll);
+    return () => container.removeEventListener('scroll', onScroll);
+  }, [contatoAtivo, temMaisAnteriores, carregandoAnteriores, carregandoMsgs, fetchMensagens]);
+
+  // ============== Filtros derivados ==============
   const contatosFiltrados = useMemo(() => {
     const b = busca.trim().toLowerCase();
-    if (!b) return contatos;
-    return contatos.filter(c =>
-      (c.nome || '').toLowerCase().includes(b) ||
-      c.telefone.includes(b.replace(/\D/g, ''))
-    );
-  }, [contatos, busca]);
+    return contatos
+      .filter(c => {
+        if (b && !((c.nome || '').toLowerCase().includes(b) || c.telefone.includes(b.replace(/\D/g, '')))) return false;
+        if (filtroEtiqueta) {
+          const ids = contatoEtiquetas[c.id] || [];
+          if (!ids.includes(filtroEtiqueta)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => (b.fixado ? 1 : 0) - (a.fixado ? 1 : 0));
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas]);
 
-  // Janela 24h
   const janelaInfo = useMemo(() => {
-    if (!contatoAtivo?.ultima_msg_entrada_em) {
-      return { aberta: false, expiraEm: null as string | null, restantesMin: 0 };
-    }
-    const ultima = new Date(contatoAtivo.ultima_msg_entrada_em).getTime();
-    const fim = ultima + JANELA_24H_MS;
-    const restanteMs = fim - Date.now();
-    return {
-      aberta: restanteMs > 0,
-      expiraEm: new Date(fim).toISOString(),
-      restantesMin: Math.max(0, Math.floor(restanteMs / 60000)),
-    };
+    if (!contatoAtivo?.ultima_msg_entrada_em) return { aberta: false, expiraEm: null as string | null };
+    const fim = new Date(contatoAtivo.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
+    return { aberta: fim - Date.now() > 0, expiraEm: new Date(fim).toISOString() };
   }, [contatoAtivo]);
 
-  const enviar = async () => {
-    if (!contatoAtivo || !texto.trim() || enviando) return;
+  const instAtiva = useMemo(() => instancias.find(i => i.id === contatoAtivo?.instancia_id), [instancias, contatoAtivo]);
+
+  // ============== Envio ==============
+  const enviar = async (textoCustom?: string) => {
+    const t = (textoCustom ?? texto).trim();
+    if (!contatoAtivo || !t || enviando) return;
     if (!janelaInfo.aberta) {
-      toast({
-        title: 'Janela de 24h expirada',
-        description: 'Use um template HSM em "Envio Meta (massa)" para reabrir a conversa.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Janela 24h expirada', description: 'Use um template HSM em "Envio Meta (massa)".', variant: 'destructive' });
       return;
     }
     setEnviando(true);
     const tempId = `temp-${Date.now()}`;
     const tempMsg: MetaMensagem = {
-      id: tempId,
-      instancia_id: contatoAtivo.instancia_id,
-      telefone: contatoAtivo.telefone,
-      conteudo: texto,
-      direcao: 'saida',
-      timestamp_msg: new Date().toISOString(),
-      tipo_conteudo: 'texto',
-      status_envio: 'enviando',
+      id: tempId, instancia_id: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone,
+      conteudo: t, direcao: 'saida', timestamp_msg: new Date().toISOString(),
+      tipo_conteudo: 'texto', status_envio: 'enviando',
+      wa_message_id_reply: respondendo?.wa_message_id || null,
+      conteudo_citado: respondendo?.conteudo || null,
     };
     setMensagens(prev => [...prev, tempMsg]);
-    const textoEnviar = texto;
-    setTexto('');
+    if (!textoCustom) setTexto('');
+    const replyTo = respondendo?.wa_message_id;
+    const replySnap = respondendo?.conteudo;
+    setRespondendo(null);
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
 
     try {
@@ -231,118 +303,285 @@ export default function InboxMeta() {
         body: {
           instancia_id: contatoAtivo.instancia_id,
           telefone: contatoAtivo.telefone,
-          texto: textoEnviar,
+          texto: t,
           user_id: user?.id,
+          reply_to_wa_id: replyTo,
+          conteudo_citado: replySnap,
         },
       });
       if (error) throw new Error(error.message);
-      if (!data?.success) {
-        throw new Error(data?.error || 'Falha ao enviar');
-      }
-      // Remove temp; o INSERT real virá via realtime
+      if (!data?.success) throw new Error(data?.error || 'Falha');
       setMensagens(prev => prev.filter(m => m.id !== tempId));
     } catch (e: any) {
       setMensagens(prev => prev.map(m => m.id === tempId ? { ...m, status_envio: 'erro' } : m));
-      toast({ title: 'Erro ao enviar', description: e.message || 'Falha', variant: 'destructive' });
+      toast({ title: 'Erro ao enviar', description: e.message, variant: 'destructive' });
     } finally {
       setEnviando(false);
     }
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      enviar();
+  const enviarMidia = async (file: File) => {
+    if (!contatoAtivo) return;
+    if (!janelaInfo.aberta) {
+      toast({ title: 'Janela 24h expirada', variant: 'destructive' });
+      return;
+    }
+    const isImage = file.type.startsWith('image/');
+    const isAudio = file.type.startsWith('audio/');
+    const isVideo = file.type.startsWith('video/');
+    const isPdf = file.type === 'application/pdf';
+    if (!isImage && !isAudio && !isVideo && !isPdf) {
+      toast({ title: 'Arquivo inválido', description: 'Envie imagem, áudio, vídeo ou PDF', variant: 'destructive' });
+      return;
+    }
+    setEnviandoArquivo(true);
+    try {
+      const ext = file.name.split('.').pop() || 'bin';
+      const path = `meta/${contatoAtivo.instancia_id}/${contatoAtivo.telefone}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('inbox-media').upload(path, file, { contentType: file.type });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(path);
+      const type = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'document';
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
+        body: {
+          instancia_id: contatoAtivo.instancia_id,
+          telefone: contatoAtivo.telefone,
+          media_url: urlData.publicUrl,
+          type,
+          file_name: file.name,
+          user_id: user?.id,
+          reply_to_wa_id: respondendo?.wa_message_id,
+          conteudo_citado: respondendo?.conteudo,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || 'Falha');
+      setRespondendo(null);
+    } catch (e: any) {
+      toast({ title: 'Erro ao enviar mídia', description: e.message, variant: 'destructive' });
+    } finally {
+      setEnviandoArquivo(false);
     }
   };
 
-  const instAtiva = useMemo(
-    () => instancias.find(i => i.id === contatoAtivo?.instancia_id),
-    [instancias, contatoAtivo],
-  );
+  const onPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items; if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const f = items[i].getAsFile();
+        if (f) enviarMidia(new File([f], `clipboard-${Date.now()}.png`, { type: f.type }));
+        return;
+      }
+    }
+  };
 
+  // ============== Ações conversa ==============
+  const handleFixar = async (id: string, fix: boolean) => {
+    await supabase.from('meta_whatsapp_contatos').update({ fixado: fix }).eq('id', id);
+  };
+  const handleArquivar = async (id: string, arq: boolean) => {
+    await supabase.from('meta_whatsapp_contatos').update({ arquivado: arq }).eq('id', id);
+    if (contatoAtivo?.id === id) setContatoAtivo(null);
+  };
+  const handleMarcarNaoLida = () => { /* realtime já atualiza */ };
+  const handleEtiquetaToggle = (cId: string, eId: string, ativo: boolean) => {
+    setContatoEtiquetas(prev => {
+      const ids = prev[cId] || [];
+      return { ...prev, [cId]: ativo ? [...ids, eId] : ids.filter(x => x !== eId) };
+    });
+  };
+  const handleExcluirConversa = async (id: string) => {
+    if (!confirm('Excluir esta conversa e todas as mensagens?')) return;
+    const c = contatos.find(x => x.id === id);
+    if (!c) return;
+    await supabase.from('meta_whatsapp_mensagens').delete()
+      .eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
+    await supabase.from('meta_whatsapp_contatos').delete().eq('id', id);
+    if (contatoAtivo?.id === id) setContatoAtivo(null);
+    toast({ title: 'Conversa excluída' });
+  };
+
+  // Multi-seleção
+  const toggleSel = (id: string) => {
+    setSelecionados(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const sairMultipla = () => { setSelMultipla(false); setSelecionados(new Set()); };
+  const arquivarSelecionados = async () => {
+    if (selecionados.size === 0) return;
+    await supabase.from('meta_whatsapp_contatos').update({ arquivado: abaAtiva !== 'arquivados' }).in('id', Array.from(selecionados));
+    sairMultipla();
+  };
+  const excluirSelecionados = async () => {
+    if (selecionados.size === 0 || !confirm(`Excluir ${selecionados.size} conversa(s)?`)) return;
+    const ids = Array.from(selecionados);
+    const cs = contatos.filter(c => ids.includes(c.id));
+    for (const c of cs) {
+      await supabase.from('meta_whatsapp_mensagens').delete().eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
+    }
+    await supabase.from('meta_whatsapp_contatos').delete().in('id', ids);
+    sairMultipla();
+  };
+
+  // ============== Render ==============
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-4rem)] gap-0 overflow-hidden">
-        {/* Sidebar de contatos */}
+        {/* Sidebar */}
         <div className="w-full sm:w-[360px] border-r flex flex-col bg-card">
           <div className="p-3 border-b space-y-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <h2 className="text-sm font-semibold">Inbox API Oficial Meta</h2>
-              <Badge variant="outline" className="ml-auto text-[10px] border-emerald-500/40 text-emerald-500">
-                Oficial
-              </Badge>
+              <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
+              <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">Oficial</Badge>
+            </div>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => setNovaOpen(true)}>
+                <MessageSquarePlus className="h-3.5 w-3.5 mr-1" /> Nova
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setMsgRapidasOpen(true)} title="Mensagens rápidas">
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setEtiquetasOpen(true)} title="Etiquetas">
+                <Tag className="h-3.5 w-3.5" />
+              </Button>
             </div>
             <Select value={filtroInstancia} onValueChange={setFiltroInstancia}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Número Meta" />
-              </SelectTrigger>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Número Meta" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="todas">Todos os números ({instancias.length})</SelectItem>
+                <SelectItem value="todas">Todos ({instancias.length})</SelectItem>
                 {instancias.map(i => (
-                  <SelectItem key={i.id} value={i.id}>
-                    {i.nome || i.display_phone || i.id.slice(0, 8)}
-                  </SelectItem>
+                  <SelectItem key={i.id} value={i.id}>{i.nome || i.display_phone || i.id.slice(0, 8)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={busca}
-                onChange={e => setBusca(e.target.value)}
-                placeholder="Buscar contato ou telefone"
-                className="pl-7 h-8 text-xs"
-              />
+            <div className="flex gap-1.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar..."
+                  className="pl-7 h-8 text-xs" />
+              </div>
+              <Popover open={filtroEtOpen} onOpenChange={setFiltroEtOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant={filtroEtiqueta ? 'default' : 'outline'} size="sm" className="h-8 px-2">
+                    <Tag className="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-1" align="end">
+                  <button
+                    onClick={() => { setFiltroEtiqueta(null); setFiltroEtOpen(false); }}
+                    className={cn('w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent', !filtroEtiqueta && 'bg-accent')}>
+                    Todas as conversas
+                  </button>
+                  {etiquetas.map(et => (
+                    <button key={et.id}
+                      onClick={() => { setFiltroEtiqueta(et.id); setFiltroEtOpen(false); }}
+                      className={cn('w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-accent', filtroEtiqueta === et.id && 'bg-accent')}>
+                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: et.cor }} />
+                      <span className="truncate">{et.nome}</span>
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
             </div>
+            {/* Tabs */}
+            <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
+              <button onClick={() => setAbaAtiva('conversas')}
+                className={cn('flex-1 text-xs py-1 rounded transition', abaAtiva === 'conversas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                Conversas
+              </button>
+              <button onClick={() => setAbaAtiva('arquivados')}
+                className={cn('flex-1 text-xs py-1 rounded transition', abaAtiva === 'arquivados' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                Arquivados
+              </button>
+            </div>
+            {selMultipla && (
+              <div className="flex items-center gap-1 bg-primary/10 rounded p-1.5">
+                <span className="text-xs flex-1">{selecionados.size} selecionada(s)</span>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={arquivarSelecionados} title={abaAtiva === 'arquivados' ? 'Desarquivar' : 'Arquivar'}>
+                  <Archive className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={excluirSelecionados} title="Excluir">
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={sairMultipla} title="Cancelar">
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
           <ScrollArea className="flex-1">
             {contatosFiltrados.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
-                Nenhuma conversa ainda. Mensagens recebidas nos seus números Meta aparecem aqui automaticamente.
+                {abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.'}
               </div>
             ) : contatosFiltrados.map(c => {
               const inst = instancias.find(i => i.id === c.instancia_id);
               const ativo = contatoAtivo?.id === c.id;
+              const etIds = contatoEtiquetas[c.id] || [];
+              const ets = etiquetas.filter(e => etIds.includes(e.id));
+              const sel = selecionados.has(c.id);
               return (
-                <button
+                <MetaConversaContextMenu
                   key={c.id}
-                  onClick={() => setContatoAtivo(c)}
-                  className={cn(
-                    'w-full text-left px-3 py-2.5 border-b hover:bg-accent/50 transition flex flex-col gap-0.5',
-                    ativo && 'bg-accent',
-                  )}
+                  contatoId={c.id}
+                  etiquetas={etiquetas}
+                  contatoEtiquetaIds={etIds}
+                  fixado={c.fixado}
+                  arquivado={c.arquivado}
+                  onMarcarNaoLida={handleMarcarNaoLida}
+                  onExcluirConversa={handleExcluirConversa}
+                  onEtiquetaToggle={handleEtiquetaToggle}
+                  onEtiquetasChange={fetchEtiquetas}
+                  onFixarToggle={handleFixar}
+                  onArquivarToggle={handleArquivar}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium truncate">
-                      {c.nome || formatTelefone(c.telefone)}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground shrink-0">
-                      {formatContatoTime(c.ultima_mensagem_em)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground truncate">
-                      {c.ultima_mensagem || '—'}
-                    </span>
-                    {c.nao_lido > 0 && (
-                      <Badge className="h-4 min-w-[16px] px-1 text-[10px] bg-emerald-500 text-white">
-                        {c.nao_lido}
-                      </Badge>
+                  <button
+                    onClick={() => selMultipla ? toggleSel(c.id) : setContatoAtivo(c)}
+                    onDoubleClick={() => { if (!selMultipla) { setSelMultipla(true); toggleSel(c.id); } }}
+                    className={cn(
+                      'w-full text-left px-3 py-2.5 border-b hover:bg-accent/50 transition flex flex-col gap-0.5',
+                      ativo && 'bg-accent',
+                      sel && 'bg-primary/15',
+                    )}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium truncate flex items-center gap-1">
+                        {selMultipla && (sel ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" /> : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />)}
+                        {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
+                        <span className="truncate">{c.nome || formatTelefone(c.telefone)}</span>
+                      </span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">{formatContatoTime(c.ultima_mensagem_em)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground truncate">{c.ultima_mensagem || '—'}</span>
+                      {c.nao_lido > 0 && (
+                        <Badge className="h-4 min-w-[16px] px-1 text-[10px] bg-emerald-500 text-white">{c.nao_lido}</Badge>
+                      )}
+                    </div>
+                    {ets.length > 0 && (
+                      <div className="flex gap-1 flex-wrap mt-0.5">
+                        {ets.map(et => (
+                          <span key={et.id} className="text-[9px] px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: et.cor }}>{et.nome}</span>
+                        ))}
+                      </div>
                     )}
-                  </div>
-                  <div className="text-[10px] text-emerald-500/80 truncate">
-                    {inst?.nome || inst?.display_phone || ''}
-                  </div>
-                </button>
+                    <div className="text-[10px] text-emerald-500/80 truncate">{inst?.nome || inst?.display_phone || ''}</div>
+                  </button>
+                </MetaConversaContextMenu>
               );
             })}
           </ScrollArea>
         </div>
 
         {/* Painel da conversa */}
-        <div className="flex-1 flex flex-col bg-background min-w-0">
+        <div className="flex-1 flex flex-col bg-background min-w-0"
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault(); setDragOver(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) enviarMidia(f);
+          }}>
           {!contatoAtivo ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
               Selecione uma conversa para começar
@@ -350,17 +589,15 @@ export default function InboxMeta() {
           ) : (
             <>
               <div className="p-3 border-b flex items-center justify-between bg-card">
-                <div>
-                  <div className="text-sm font-semibold">
-                    {contatoAtivo.nome || formatTelefone(contatoAtivo.telefone)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold truncate">{contatoAtivo.nome || formatTelefone(contatoAtivo.telefone)}</div>
+                  <div className="text-xs text-muted-foreground truncate">
                     {formatTelefone(contatoAtivo.telefone)} · via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}
                   </div>
                 </div>
                 {janelaInfo.aberta ? (
                   <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
-                    <Clock className="h-3 w-3" /> Janela aberta · {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
+                    <Clock className="h-3 w-3" /> {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="border-amber-500/40 text-amber-500 gap-1">
@@ -369,56 +606,111 @@ export default function InboxMeta() {
                 )}
               </div>
 
-              <ScrollArea className="flex-1 p-3">
+              <div ref={chatContainerRef} className={cn('flex-1 overflow-y-auto p-3 relative', dragOver && 'bg-primary/10')}>
+                {carregandoAnteriores && (
+                  <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+                )}
                 {carregandoMsgs ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                 ) : (
                   <div className="space-y-2">
-                    {mensagens.map(m => (
-                      <ChatMessage
-                        key={m.id}
-                        msg={{
-                          id: m.id,
-                          conteudo: m.conteudo,
-                          direcao: m.direcao,
-                          timestamp_msg: m.timestamp_msg,
-                          tipo_conteudo: m.tipo_conteudo,
-                          media_url: m.media_url,
-                          whatsapp_msg_id: m.wa_message_id,
-                          status_envio: m.status_envio,
-                        }}
-                        formatMsgTime={formatMsgTime}
-                      />
-                    ))}
+                    {mensagens.map((m, idx) => {
+                      const prev = idx > 0 ? mensagens[idx - 1] : null;
+                      const dStr = new Date(m.timestamp_msg).toLocaleDateString('pt-BR');
+                      const prevStr = prev ? new Date(prev.timestamp_msg).toLocaleDateString('pt-BR') : null;
+                      const sep = !prev || dStr !== prevStr;
+                      return (
+                        <div key={m.id}>
+                          {sep && (
+                            <div className="flex justify-center my-3">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{dStr}</span>
+                            </div>
+                          )}
+                          <div onDoubleClick={() => setRespondendo(m)} title="Duplo clique para responder">
+                            <ChatMessage
+                              msg={{
+                                id: m.id, conteudo: m.conteudo, direcao: m.direcao,
+                                timestamp_msg: m.timestamp_msg, tipo_conteudo: m.tipo_conteudo,
+                                media_url: m.media_url, whatsapp_msg_id: m.wa_message_id,
+                                status_envio: m.status_envio,
+                                conteudo_citado: m.conteudo_citado,
+                              } as any}
+                              formatMsgTime={formatMsgTime}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                     <div ref={messagesEndRef} />
                   </div>
                 )}
-              </ScrollArea>
-
-              <div className="p-3 border-t bg-card space-y-2">
-                {!janelaInfo.aberta && (
-                  <div className="text-xs bg-amber-500/10 border border-amber-500/30 rounded p-2 text-amber-700 dark:text-amber-400">
-                    <strong>Janela de 24h expirada.</strong> A Meta só permite mensagens livres se o cliente tiver te respondido nas últimas 24 horas. Para reabrir a conversa, envie um template HSM em <strong>Envio Meta (massa)</strong>.
+                {dragOver && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="bg-primary/20 border-2 border-dashed border-primary rounded-lg px-6 py-4 text-sm font-medium">
+                      Solte para enviar
+                    </div>
                   </div>
                 )}
-                <div className="flex gap-2 items-end">
+              </div>
+
+              <div className="border-t bg-card">
+                {!janelaInfo.aberta && (
+                  <div className="m-3 text-xs bg-amber-500/10 border border-amber-500/30 rounded p-2 text-amber-700 dark:text-amber-400">
+                    <strong>Janela 24h expirada.</strong> Use template HSM em <strong>Envio Meta (massa)</strong> para reabrir.
+                  </div>
+                )}
+                {respondendo && (
+                  <div className="px-3 pt-2 flex items-center gap-2">
+                    <div className="flex-1 flex gap-2 rounded-md bg-muted/60 border-l-4 border-primary px-3 py-2 overflow-hidden">
+                      <Reply className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-medium text-primary leading-tight">
+                          Respondendo a {respondendo.direcao === 'saida' ? 'você' : 'esta mensagem'}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate leading-tight">{respondendo.conteudo || 'Mídia'}</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setRespondendo(null)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                {msgRapidas.length > 0 && janelaInfo.aberta && (
+                  <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto scrollbar-none">
+                    {msgRapidas.map(m => (
+                      <Button key={m.id} variant="outline" size="sm" className="shrink-0 text-xs h-7 px-2.5"
+                        disabled={enviando || enviandoArquivo}
+                        onClick={() => m.conteudo && enviar(m.conteudo)}>
+                        {m.titulo}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                <div className="p-3 flex gap-2 items-end">
+                  <input ref={fileInputRef} type="file" className="hidden"
+                    accept="image/*,audio/*,video/*,.pdf"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]; e.target.value = '';
+                      if (f) enviarMidia(f);
+                    }} />
+                  <Button variant="ghost" size="icon" className="shrink-0"
+                    disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
+                    onClick={() => fileInputRef.current?.click()}>
+                    {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                  </Button>
                   <Textarea
+                    ref={textareaRef}
                     value={texto}
                     onChange={e => setTexto(e.target.value)}
-                    onKeyDown={onKeyDown}
-                    placeholder={janelaInfo.aberta ? 'Digite uma mensagem (Enter envia, Shift+Enter quebra linha)' : 'Janela de 24h expirada — envie um template HSM'}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); }
+                      else if (e.key === 'Escape' && respondendo) setRespondendo(null);
+                    }}
+                    onPaste={onPaste}
+                    placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : 'Janela 24h expirada — use template HSM'}
                     disabled={!janelaInfo.aberta || enviando}
-                    className="min-h-[44px] max-h-[120px] resize-none"
-                    rows={1}
-                  />
-                  <Button
-                    onClick={enviar}
-                    disabled={!janelaInfo.aberta || !texto.trim() || enviando}
-                    size="icon"
-                    className="shrink-0"
-                  >
+                    className="min-h-[44px] max-h-[120px] resize-none" rows={1} />
+                  <Button onClick={() => enviar()} disabled={!janelaInfo.aberta || !texto.trim() || enviando} size="icon" className="shrink-0">
                     {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -427,6 +719,12 @@ export default function InboxMeta() {
           )}
         </div>
       </div>
+
+      <MetaNovaConversaDialog open={novaOpen} onOpenChange={setNovaOpen} instancias={instancias}
+        defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
+        onSent={() => fetchContatos()} />
+      <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
+      <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
     </AppLayout>
   );
 }

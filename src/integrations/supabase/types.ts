@@ -2010,10 +2010,49 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_whatsapp_contato_etiquetas: {
+        Row: {
+          contato_id: string
+          criado_em: string
+          etiqueta_id: string
+          id: string
+        }
+        Insert: {
+          contato_id: string
+          criado_em?: string
+          etiqueta_id: string
+          id?: string
+        }
+        Update: {
+          contato_id?: string
+          criado_em?: string
+          etiqueta_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_whatsapp_contato_etiquetas_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_whatsapp_contato_etiquetas_etiqueta_id_fkey"
+            columns: ["etiqueta_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_etiquetas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_whatsapp_contatos: {
         Row: {
+          arquivado: boolean
           atualizado_em: string
           criado_em: string
+          fixado: boolean
+          historico_inicial_importado_em: string | null
           id: string
           instancia_id: string
           nao_lido: number
@@ -2025,8 +2064,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          arquivado?: boolean
           atualizado_em?: string
           criado_em?: string
+          fixado?: boolean
+          historico_inicial_importado_em?: string | null
           id?: string
           instancia_id: string
           nao_lido?: number
@@ -2038,8 +2080,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          arquivado?: boolean
           atualizado_em?: string
           criado_em?: string
+          fixado?: boolean
+          historico_inicial_importado_em?: string | null
           id?: string
           instancia_id?: string
           nao_lido?: number
@@ -2103,6 +2148,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meta_whatsapp_etiquetas: {
+        Row: {
+          atualizado_em: string
+          cor: string
+          criado_em: string
+          id: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          cor?: string
+          criado_em?: string
+          id?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          cor?: string
+          criado_em?: string
+          id?: string
+          nome?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       meta_whatsapp_instances: {
         Row: {
@@ -2184,9 +2256,12 @@ export type Database = {
       }
       meta_whatsapp_mensagens: {
         Row: {
+          apagada_para_mim: boolean
           conteudo: string
+          conteudo_citado: string | null
           criado_em: string
           direcao: string
+          editada: boolean
           erro: string | null
           id: string
           instancia_id: string
@@ -2198,11 +2273,15 @@ export type Database = {
           tipo_conteudo: string
           user_id: string
           wa_message_id: string | null
+          wa_message_id_reply: string | null
         }
         Insert: {
+          apagada_para_mim?: boolean
           conteudo?: string
+          conteudo_citado?: string | null
           criado_em?: string
           direcao: string
+          editada?: boolean
           erro?: string | null
           id?: string
           instancia_id: string
@@ -2214,11 +2293,15 @@ export type Database = {
           tipo_conteudo?: string
           user_id: string
           wa_message_id?: string | null
+          wa_message_id_reply?: string | null
         }
         Update: {
+          apagada_para_mim?: boolean
           conteudo?: string
+          conteudo_citado?: string | null
           criado_em?: string
           direcao?: string
+          editada?: boolean
           erro?: string | null
           id?: string
           instancia_id?: string
@@ -2230,6 +2313,7 @@ export type Database = {
           tipo_conteudo?: string
           user_id?: string
           wa_message_id?: string | null
+          wa_message_id_reply?: string | null
         }
         Relationships: [
           {
@@ -2240,6 +2324,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meta_whatsapp_mensagens_rapidas: {
+        Row: {
+          atualizado_em: string
+          audio_url: string | null
+          botoes_choices: Json | null
+          botoes_texto: string | null
+          conteudo: string | null
+          criado_em: string
+          id: string
+          ordem: number
+          tipo: string
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          audio_url?: string | null
+          botoes_choices?: Json | null
+          botoes_texto?: string | null
+          conteudo?: string | null
+          criado_em?: string
+          id?: string
+          ordem?: number
+          tipo?: string
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          audio_url?: string | null
+          botoes_choices?: Json | null
+          botoes_texto?: string | null
+          conteudo?: string | null
+          criado_em?: string
+          id?: string
+          ordem?: number
+          tipo?: string
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       meta_whatsapp_templates: {
         Row: {

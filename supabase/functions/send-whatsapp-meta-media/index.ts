@@ -1,6 +1,4 @@
-// Envia mensagem de texto livre (free-form) pela API oficial Meta.
-// Só funciona dentro da janela de 24h da última mensagem recebida do cliente.
-// Para janelas expiradas, use send-whatsapp-meta com um template HSM.
+// Envia mídia (imagem, documento, áudio) pela API oficial Meta dentro da janela 24h.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -16,11 +14,14 @@ function formatTel(tel: string): string {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-
   try {
-    const { instancia_id, telefone, texto, user_id, reply_to_wa_id, conteudo_citado } = await req.json();
-    if (!instancia_id || !telefone || !texto) {
-      return new Response(JSON.stringify({ success: false, error: 'instancia_id, telefone e texto são obrigatórios' }), {
+    const {
+      instancia_id, telefone, media_url, type, file_name, caption, user_id,
+      reply_to_wa_id, conteudo_citado,
+    } = await req.json();
+
+    if (!instancia_id || !telefone || !media_url || !type) {
+      return new Response(JSON.stringify({ success: false, error: 'instancia_id, telefone, media_url, type obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -30,50 +31,43 @@ Deno.serve(async (req) => {
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances')
       .select('*')
-      .eq('id', instancia_id)
-      .eq('ativo', true)
-      .maybeSingle();
-
+      .eq('id', instancia_id).eq('ativo', true).maybeSingle();
     if (!inst) {
-      return new Response(JSON.stringify({ success: false, error: 'Instância Meta não encontrada/ativa' }), {
+      return new Response(JSON.stringify({ success: false, error: 'Instância Meta inativa/não encontrada' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     const uid = user_id || inst.user_id;
     const to = formatTel(telefone);
-    if (!to) {
-      return new Response(JSON.stringify({ success: false, error: 'Telefone inválido' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+
+    // Verifica janela 24h
+    const { data: contato } = await supabase
+      .from('meta_whatsapp_contatos')
+      .select('id, ultima_msg_entrada_em')
+      .eq('instancia_id', instancia_id).eq('telefone', to).maybeSingle();
+    const ultimaEntrada = contato?.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
+    if (!ultimaEntrada || (Date.now() - ultimaEntrada) >= 24 * 60 * 60 * 1000) {
+      return new Response(JSON.stringify({ success: false, janela_expirada: true, error: 'Janela 24h expirada' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Bloqueia se janela 24h estiver expirada
-    const { data: contato } = await supabase
-      .from('meta_whatsapp_contatos')
-      .select('ultima_msg_entrada_em')
-      .eq('instancia_id', instancia_id)
-      .eq('telefone', to)
-      .maybeSingle();
-
-    const ultimaEntrada = contato?.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
-    const agora = Date.now();
-    const janelaAberta = ultimaEntrada > 0 && (agora - ultimaEntrada) < 24 * 60 * 60 * 1000;
-
-    if (!janelaAberta) {
-      return new Response(JSON.stringify({
-        success: false,
-        janela_expirada: true,
-        error: 'Janela de 24h expirada. Envie um template HSM para reabrir a conversa.',
-      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // Constrói body Meta
+    const metaType = type === 'image' ? 'image' : type === 'audio' ? 'audio' : type === 'video' ? 'video' : 'document';
+    const payload: any = { link: media_url };
+    if (metaType === 'document') {
+      if (file_name) payload.filename = file_name;
+      if (caption) payload.caption = caption;
     }
+    if (metaType === 'image' && caption) payload.caption = caption;
 
     const body: any = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
       to,
-      type: 'text',
-      text: { preview_url: false, body: String(texto).slice(0, 4096) },
+      type: metaType,
+      [metaType]: payload,
     };
     if (reply_to_wa_id) body.context = { message_id: reply_to_wa_id };
 
@@ -82,27 +76,26 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-
     const data = await res.json().catch(() => ({}));
-
     if (!res.ok) {
-      const erro = data?.error?.message || `HTTP ${res.status}`;
-      return new Response(JSON.stringify({ success: false, error: erro }), {
+      return new Response(JSON.stringify({ success: false, error: data?.error?.message || `HTTP ${res.status}`, raw: data }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const waId: string | null = data?.messages?.[0]?.id || null;
+    const waId = data?.messages?.[0]?.id || null;
     const nowIso = new Date().toISOString();
+    const tipoConteudoLocal = metaType === 'image' ? 'imagem' : metaType === 'audio' ? 'audio' : metaType === 'video' ? 'video' : 'documento';
+    const preview = metaType === 'image' ? '📷 Imagem' : metaType === 'audio' ? '🎵 Áudio' : metaType === 'video' ? '🎥 Vídeo' : `📄 ${file_name || 'Documento'}`;
 
-    // Persiste mensagem enviada
     await supabase.from('meta_whatsapp_mensagens').insert({
       user_id: uid,
       instancia_id,
       telefone: to,
       direcao: 'saida',
-      conteudo: texto,
-      tipo_conteudo: 'texto',
+      conteudo: caption || preview,
+      tipo_conteudo: tipoConteudoLocal,
+      media_url,
       timestamp_msg: nowIso,
       status_envio: 'enviada',
       wa_message_id: waId,
@@ -110,29 +103,14 @@ Deno.serve(async (req) => {
       conteudo_citado: conteudo_citado || null,
     } as any);
 
-    // Atualiza preview do contato (cria se não existir)
-    const { data: existente } = await supabase
-      .from('meta_whatsapp_contatos')
-      .select('id')
-      .eq('instancia_id', instancia_id)
-      .eq('telefone', to)
-      .maybeSingle();
-
-    if (existente) {
+    if (contato) {
       await supabase.from('meta_whatsapp_contatos')
-        .update({
-          ultima_mensagem: texto,
-          ultima_mensagem_em: nowIso,
-          atualizado_em: nowIso,
-        })
-        .eq('id', existente.id);
+        .update({ ultima_mensagem: preview, ultima_mensagem_em: nowIso, atualizado_em: nowIso })
+        .eq('id', contato.id);
     } else {
       await supabase.from('meta_whatsapp_contatos').insert({
-        user_id: uid,
-        instancia_id,
-        telefone: to,
-        ultima_mensagem: texto,
-        ultima_mensagem_em: nowIso,
+        user_id: uid, instancia_id, telefone: to,
+        ultima_mensagem: preview, ultima_mensagem_em: nowIso,
       } as any);
     }
 
