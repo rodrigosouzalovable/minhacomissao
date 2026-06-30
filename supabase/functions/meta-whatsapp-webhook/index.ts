@@ -58,7 +58,14 @@ serve(async (req) => {
 
   try {
     const payload = await req.json();
-    console.log('[MetaWebhook] payload:', JSON.stringify(payload).slice(0, 1500));
+    const firstEntry = payload?.entry?.[0]?.changes?.[0];
+    console.log('[MetaWebhook] POST recebido', {
+      object: payload?.object,
+      field: firstEntry?.field,
+      phone_number_id: firstEntry?.value?.metadata?.phone_number_id,
+      messages: firstEntry?.value?.messages?.length || 0,
+      statuses: firstEntry?.value?.statuses?.length || 0,
+    });
 
     const entries = payload.entry || [];
     for (const entry of entries) {
