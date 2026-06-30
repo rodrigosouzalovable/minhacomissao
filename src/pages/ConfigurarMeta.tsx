@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 
@@ -224,10 +224,10 @@ export default function ConfigurarMeta() {
       const { data, error } = await supabase.functions.invoke("meta-subscribe-waba", { body: {} });
       if (error) throw error;
       setResultadosAssinatura(data?.resultados || []);
-      const okCount = (data?.resultados || []).filter((r: any) => r.subscribe_ok).length;
+      const okCount = (data?.resultados || []).filter((r: any) => r.subscribe_ok && r.callback_confirmado).length;
       const total = (data?.resultados || []).length;
-      if (okCount === total) toast.success(`${okCount}/${total} WABAs assinadas com sucesso`);
-      else toast.error(`${okCount}/${total} assinadas — veja detalhes abaixo`);
+      if (okCount === total) toast.success(`${okCount}/${total} WABAs assinadas e callback confirmado`);
+      else toast.error(`${okCount}/${total} com callback confirmado — veja detalhes abaixo`);
     } catch (e: any) {
       toast.error("Erro: " + e.message);
     }
@@ -331,16 +331,29 @@ export default function ConfigurarMeta() {
               {resultadosAssinatura.map((r) => (
                 <div key={r.id} className="border rounded p-2">
                   <div className="flex items-center gap-2 font-medium">
-                    {r.subscribe_ok ? (
+                    {r.subscribe_ok && r.callback_confirmado ? (
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
                     ) : (
                       <XCircle className="h-4 w-4 text-destructive" />
                     )}
                     {r.nome} <span className="text-muted-foreground font-mono">({r.phone_number_id})</span>
                   </div>
-                  {!r.subscribe_ok && (
+                  <div className="mt-1 text-muted-foreground">
+                    {r.subscribe_ok && r.callback_confirmado
+                      ? "Assinado e callback do sistema confirmado pela Meta."
+                      : "A Meta não confirmou o callback do sistema para esta WABA."}
+                  </div>
+                  {r.subscribe_ok && r.callback_confirmado && (
+                    <div className="mt-2 flex gap-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>
+                        Se as mensagens ainda não chegarem, confirme no app da Meta que o campo <strong>messages</strong> está marcado em Webhook Fields.
+                      </span>
+                    </div>
+                  )}
+                  {(!r.subscribe_ok || !r.callback_confirmado || r.subscriptions) && (
                     <pre className="mt-1 text-[10px] bg-muted p-2 rounded overflow-x-auto">
-{JSON.stringify(r.subscribe_raw || r.error, null, 2)}
+{JSON.stringify({ assinatura: r.subscribe_raw || r.error, inscricoes: r.subscriptions }, null, 2)}
                     </pre>
                   )}
                 </div>
