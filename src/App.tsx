@@ -55,6 +55,7 @@ const Estrategias = lazy(() => import("./pages/Estrategias"));
 const ModeloMensagem = lazy(() => import("./pages/ModeloMensagem"));
 const ConfigurarMeta = lazy(() => import("./pages/ConfigurarMeta"));
 const EnvioMeta = lazy(() => import("./pages/EnvioMeta"));
+const InboxMeta = lazy(() => import("./pages/InboxMeta"));
 
 const queryClient = new QueryClient();
 
@@ -211,6 +212,7 @@ const App = () => (
             <Route path="/modelo-mensagem" element={<ProtectedRoute><ModeloMensagem /></ProtectedRoute>} />
             <Route path="/admin/configurar-meta" element={<PermissionRoute><ConfigurarMeta /></PermissionRoute>} />
             <Route path="/admin/envio-meta" element={<PermissionRoute><EnvioMeta /></PermissionRoute>} />
+            <Route path="/admin/inbox-meta" element={<PermissionRoute><InboxMeta /></PermissionRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
