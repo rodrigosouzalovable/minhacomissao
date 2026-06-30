@@ -379,7 +379,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                       icon={item.icon}
                       isActive={location.pathname === item.href}
                       onClick={() => setMobileMenuOpen(false)}
-                      badge={item.href === '/inbox' ? inboxUnreadCount : undefined}
+                      badge={
+                        item.href === '/inbox'
+                          ? inboxUnreadCount
+                          : item.href === '/admin/inbox-meta'
+                            ? metaInboxUnreadCount
+                            : undefined
+                      }
                       statusBadge={
                         item.href === '/campanhas-voz' && sendingCampaignId && sendingProgress
                           ? `${sendingProgress.sent + sendingProgress.errors}/${sendingProgress.total}`
