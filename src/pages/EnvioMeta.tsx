@@ -425,6 +425,10 @@ export default function EnvioMeta() {
 
       <CustoEnvioCard ref={custoRef} />
 
+      <EscalonamentoPanel />
+
+
+
       <div className="grid md:grid-cols-2 gap-6">
         {/* Template */}
         <Card>
