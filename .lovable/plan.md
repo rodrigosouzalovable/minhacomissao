@@ -1,31 +1,52 @@
-## Mudanças
+## Objetivo
 
-### 1) `src/pages/EnvioMeta.tsx` — remover duplicados além de quem não tem WhatsApp
+Permitir que a operadora **Anna Flavia Leite de Morais** marque parcelas como pagas (e desfaça) em **qualquer acordo lançado por qualquer usuário**, sem dar a ela acesso total de admin nem permissão para excluir/criar acordos.
 
-- Novo helper `normalizeTelKey(tel)` (só dígitos, prefixa `55` quando 10/11 dígitos) e `dedupRecipientsRaw(raw)` que devolve `{ texto, duplicados, total }`.
-- `parseRecipients` passa a deduplicar pelo telefone normalizado (mantém a primeira ocorrência, preserva o nome).
-- `importarExcel`: deduplica os números importados antes de gravar no textarea. Toast: `X importados · Y ignorados · Z duplicados removidos`.
-- `validarAgora`: antes de chamar `check-whatsapp-numbers`, roda `dedupRecipientsRaw`; se removeu, reescreve `recipientsRaw` e mostra toast informando os duplicados retirados. Continua validando só a lista única.
-- `removerSemWhatsApp`: continua existindo; agora também deduplica ao reescrever o textarea.
-- `enviar`: idem — deduplica antes de validar/disparar; o `confirm` mostra explicitamente os duplicados descartados.
-- Painel "Resultado da validação" ganha uma 4ª linha: **🔁 Duplicados removidos: N** (informativa, vindos do passo de dedup).
+## Abordagem
 
-Critério de duplicidade: telefone normalizado idêntico, ignorando o nome.
+Criar uma nova permissão granular chamada `pode_marcar_pago_global` na tabela `user_permissions`, com política de RLS que libera apenas `UPDATE` na tabela `pagamentos` para usuários que tiverem essa flag ligada. Em seguida, ativar a permissão para a Anna Flavia.
 
-### 2) `src/pages/ModeloMensagem.tsx` — Nome e Telefone como botões "Mensagem 1/2"
+Essa abordagem é segura porque:
+- Não promove a Anna a admin.
+- Não libera DELETE/INSERT em `pagamentos` nem em `acordos`.
+- Fica reutilizável para liberar outras operadoras no futuro.
 
-Na coluna **Cliente** e **Telefone(s)** da tabela principal:
+## Passos
 
-- Substituir o `<span>` + `<CopyButton>` do nome por um único `<Button size="sm" variant="outline" className="h-8">` com ícone `Copy` e o **nome do cliente como label** (chama `copiarNome(c)`). Mantém o destaque `animate-pulse-slow` quando `isHighlighted(c.cpf,'nome')` e o `line-through` quando contatado.
-- Para cada telefone, substituir o par `<span>` + `<Button icon>` por um único `<Button size="sm" variant="outline" className="h-8">` com:
-  - ícone de status à esquerda (`CheckCircle2` verde / `XCircle` vermelho / `HelpCircle` âmbar) quando houver `whatsappStatus`,
-  - número como label,
-  - classes de cor (`text-red-600 line-through`, `text-emerald-700`, `text-amber-600`) aplicadas ao label conforme o status atual,
-  - tooltip (`title`) com "Tem WhatsApp / Sem WhatsApp / Erro ao verificar / Clique para copiar",
-  - `onClick` mantém `copiarTel(c.cpf, t)` com `e.stopPropagation()`.
+### 1. Migração do banco
+- Adicionar coluna `pode_marcar_pago_global boolean NOT NULL DEFAULT false` em `public.user_permissions`.
+- Criar função `public.pode_marcar_pago_global(uid uuid)` (SECURITY DEFINER) que retorna true se a flag estiver ativa.
+- Criar policy `"Marcar pago global pode atualizar pagamentos"` em `public.pagamentos` (FOR UPDATE) usando essa função.
+- Habilitar a flag para Anna Flavia (`bb6a930c-c5e7-45c1-ab27-3cc4e63539f5`) via upsert em `user_permissions`.
 
-Visual ficará alinhado com os botões **Mensagem 1** / **Mensagem 2** (mesmo `variant="outline"`, mesma altura `h-8`, mesmo ícone `Copy`). Demais colunas (`#`, Contatado, Mensagens) ficam inalteradas.
+### 2. UI (Admin → Usuários → Permissões)
+- Em `src/components/EditPermissionsDialog.tsx`, adicionar um switch **"Pode marcar parcelas como pagas em qualquer acordo"** ligado à coluna nova, para que admins gerenciem essa permissão pela tela.
+- Atualizar `src/hooks/useUserPermissions.tsx` para expor `podeMarcarPagoGlobal`.
 
-## Fora de escopo
-- Não muda edge functions (`check-whatsapp-numbers` etc.).
-- Não muda `EnvioMetaSendingContext` nem persistência do `ModeloMensagem`.
+### 3. Frontend de marcação de pago
+- No componente que renderiza acordos de outros usuários (ex.: `AcordoDetalhe.tsx` / lista de parcelas), liberar o botão "Marcar como pago"/"Desfazer" também quando `podeMarcarPagoGlobal === true`, além das condições atuais (dono do acordo / admin / acordos compartilhados).
+
+### 4. Verificação
+- Logar como Anna, abrir um acordo de outro funcionário e confirmar que consegue marcar/desmarcar parcelas como pagas; verificar que continua sem botões de excluir acordo/parcela.
+
+## Detalhes técnicos
+
+```sql
+ALTER TABLE public.user_permissions
+  ADD COLUMN IF NOT EXISTS pode_marcar_pago_global boolean NOT NULL DEFAULT false;
+
+CREATE OR REPLACE FUNCTION public.pode_marcar_pago_global(_uid uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_permissions
+    WHERE user_id = _uid AND pode_marcar_pago_global = true
+  )
+$$;
+
+CREATE POLICY "Marcar pago global pode atualizar pagamentos"
+ON public.pagamentos FOR UPDATE TO authenticated
+USING (public.pode_marcar_pago_global(auth.uid()))
+WITH CHECK (public.pode_marcar_pago_global(auth.uid()));
+```
+
+E um upsert em `user_permissions` ligando a flag para o `user_id` da Anna.
