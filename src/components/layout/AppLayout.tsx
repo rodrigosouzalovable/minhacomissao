@@ -133,6 +133,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(null);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
+  const [metaInboxUnreadCount, setMetaInboxUnreadCount] = useState(0);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { sendingCampaignId, sendingProgress } = useVoiceCampaignSending();
   const { autoSending, autoProgress } = useAutoSend();
@@ -238,6 +239,27 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     return () => { supabase.removeChannel(channel); };
   }, [fetchUnreadCount]);
+
+  // Fetch Meta Inbox unread count
+  const fetchMetaUnreadCount = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('meta_whatsapp_contatos')
+      .select('id', { count: 'exact', head: true })
+      .gt('nao_lido', 0);
+    setMetaInboxUnreadCount(count ?? 0);
+  }, [user]);
+
+  useEffect(() => {
+    fetchMetaUnreadCount();
+    const channel = supabase
+      .channel('meta-inbox-unread-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos' }, () => {
+        fetchMetaUnreadCount();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchMetaUnreadCount]);
 
   // Save sidebar order with debounce
   const saveSidebarOrder = useCallback((newOrder: string[]) => {
@@ -357,7 +379,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                       icon={item.icon}
                       isActive={location.pathname === item.href}
                       onClick={() => setMobileMenuOpen(false)}
-                      badge={item.href === '/inbox' ? inboxUnreadCount : undefined}
+                      badge={
+                        item.href === '/inbox'
+                          ? inboxUnreadCount
+                          : item.href === '/admin/inbox-meta'
+                            ? metaInboxUnreadCount
+                            : undefined
+                      }
                       statusBadge={
                         item.href === '/campanhas-voz' && sendingCampaignId && sendingProgress
                           ? `${sendingProgress.sent + sendingProgress.errors}/${sendingProgress.total}`

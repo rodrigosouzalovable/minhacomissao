@@ -1,46 +1,30 @@
-## Diagnóstico encontrado
+## Plano
 
-- O número **62 98172-7082** está cadastrado como a instância **IPHONE B7**.
-- O webhook responde corretamente no teste de verificação.
-- Após o clique em **Assinar todas as instâncias ativas**, o backend registrou chamadas para a função de assinatura.
-- Porém, **não existe nenhum POST chegando no webhook `meta-whatsapp-webhook`** e as tabelas do Inbox Meta continuam sem mensagens.
+### 1. Badge vermelho na sidebar "Inbox Meta Oficial"
+- Em `src/components/AppLayout.tsx` (ou onde está o sidebar), localizar item "Inbox Meta Oficial" e adicionar contador igual ao do "WhatsApp Inbox".
+- Criar hook `useMetaInboxUnreadCount` que:
+  - Consulta `meta_whatsapp_contatos` somando `nao_lidas > 0` (ou `meta_whatsapp_mensagens` com `lida=false` e `direction='inbound'`).
+  - Inscreve Realtime em `meta_whatsapp_mensagens` para atualizar live.
+- Renderiza bolinha vermelha com o número, idêntica ao estilo do WhatsApp Inbox (referência da imagem 2).
 
-Conclusão: o problema ainda está antes do Inbox. A Meta não está entregando eventos `messages` para o nosso webhook, mesmo a tela mostrando “assinado”. Precisamos melhorar a assinatura para forçar o callback correto e criar um diagnóstico que mostre exatamente se o campo `messages` está ativo para cada WABA.
+### 2. Garantir que TODA mensagem (enviada e recebida) apareça no Inbox Meta
+- Recebidas: webhook `meta-whatsapp-webhook` já insere — confirmar que insere também mídias (image/audio/document/video/sticker/button/interactive) em `meta_whatsapp_mensagens` com `direction='inbound'`. Ajustar caso esteja filtrando só `text`.
+- Enviadas:
+  - Texto livre (`send-whatsapp-meta-text`): já insere com `direction='outbound'` — confirmar.
+  - Templates (envio em massa Meta e teste individual): garantir que cada envio bem-sucedido faça `INSERT` em `meta_whatsapp_mensagens` (direction='outbound', tipo='template', preview com nome do template + parâmetros renderizados) e crie/atualize contato em `meta_whatsapp_contatos`.
+  - Status callbacks (sent/delivered/read/failed) atualizam o `status` da linha via `wamid`.
+- InboxMeta.tsx: marcar mensagens como lidas (`nao_lidas=0` no contato) ao abrir a conversa, para o badge zerar.
 
-## Plano de correção
+### 3. UI InboxMeta
+- Confirmar que a lista de contatos mostra última mensagem (inbound ou outbound) ordenada por `updated_at` desc.
+- Conversa aberta exibe histórico completo (inbound à esquerda, outbound à direita com check-marks de status).
 
-1. **Corrigir a função de assinatura das WABAs**
-   - Atualizar `meta-subscribe-waba` para enviar também:
-     - `override_callback_uri` com o webhook oficial do sistema.
-     - `verify_token` compartilhado salvo no sistema.
-   - Isso força a WABA a usar o endpoint correto mesmo se o app Meta estiver com outro callback configurado.
+### Arquivos a alterar
+- `src/components/AppLayout.tsx` — badge sidebar.
+- `src/hooks/useMetaInboxUnreadCount.ts` — novo hook.
+- `src/pages/InboxMeta.tsx` — marcar como lida ao abrir; garantir render de todos os tipos.
+- `supabase/functions/meta-whatsapp-webhook/index.ts` — cobrir todos os tipos de mensagem inbound.
+- `supabase/functions/send-whatsapp-meta-text/index.ts` — confirmar insert outbound.
+- `supabase/functions/send-meta-whatsapp-template/index.ts` (ou equivalente do envio em massa) — inserir outbound + upsert contato.
 
-2. **Remover ação arriscada de registro com PIN fixo**
-   - A função hoje tenta chamar `/phone_number_id/register` com PIN `000000`.
-   - Isso não é necessário para receber webhook e pode gerar erro/confusão em números já conectados pela HookCloud/Meta.
-   - Vou remover essa etapa da assinatura automática.
-
-3. **Criar diagnóstico real por instância**
-   - A resposta do botão vai mostrar, para cada número:
-     - Se a assinatura da WABA deu certo.
-     - Se a Meta aceitou o callback do nosso webhook.
-     - A lista de apps inscritos retornada pela Meta.
-     - Qual erro bruto a Meta retornou, se houver.
-
-4. **Melhorar a tela “API Oficial Meta WhatsApp”**
-   - Exibir um status mais claro: “Assinado e callback confirmado” ou “Assinado, mas verifique o campo messages no painel Meta”.
-   - Adicionar orientação visual para o caso em que o subscribe está OK, mas o campo **messages** não está marcado no app da Meta.
-
-5. **Testar o fluxo após a correção**
-   - Revalidar o GET do webhook.
-   - Rodar novamente a assinatura das 3 instâncias.
-   - Conferir nos logs se, após você mandar nova mensagem para **62 98172-7082**, aparece POST no webhook e o contato entra no Inbox.
-
-## Arquivos envolvidos
-
-- `supabase/functions/meta-subscribe-waba/index.ts`
-- `src/pages/ConfigurarMeta.tsx`
-
-## Observação importante
-
-Se depois disso ainda não chegar POST, o único ponto restante será no painel da Meta: o campo **messages** precisa estar marcado nos Webhook Fields do produto WhatsApp. O sistema vai passar a mostrar essa suspeita claramente em vez de apenas exibir o check verde genérico.
+Pronto para executar?
