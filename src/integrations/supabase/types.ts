@@ -1887,6 +1887,105 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_envios_fila: {
+        Row: {
+          atraso_dias: number | null
+          cooldown_ate: string | null
+          cpf: string | null
+          created_at: string
+          enviado_em: string | null
+          erro: string | null
+          id: string
+          instancia_id: string | null
+          nome: string | null
+          prioridade: number
+          status: string
+          telefone: string
+          telefone_norm: string | null
+          template_id: string | null
+          updated_at: string
+          user_id: string
+          valor: number | null
+        }
+        Insert: {
+          atraso_dias?: number | null
+          cooldown_ate?: string | null
+          cpf?: string | null
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          nome?: string | null
+          prioridade?: number
+          status?: string
+          telefone: string
+          telefone_norm?: string | null
+          template_id?: string | null
+          updated_at?: string
+          user_id: string
+          valor?: number | null
+        }
+        Update: {
+          atraso_dias?: number | null
+          cooldown_ate?: string | null
+          cpf?: string | null
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          nome?: string | null
+          prioridade?: number
+          status?: string
+          telefone?: string
+          telefone_norm?: string | null
+          template_id?: string | null
+          updated_at?: string
+          user_id?: string
+          valor?: number | null
+        }
+        Relationships: []
+      }
+      meta_envios_meta_diaria: {
+        Row: {
+          created_at: string
+          data: string
+          dia_numero: number
+          id: string
+          meta_clientes_unicos: number
+          plano_dias: number
+          plano_inicio: string
+          plano_objetivo_unicos: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          dia_numero?: number
+          id?: string
+          meta_clientes_unicos?: number
+          plano_dias?: number
+          plano_inicio?: string
+          plano_objetivo_unicos?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          dia_numero?: number
+          id?: string
+          meta_clientes_unicos?: number
+          plano_dias?: number
+          plano_inicio?: string
+          plano_objetivo_unicos?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       meta_whatsapp_config: {
         Row: {
           atualizado_em: string
@@ -4695,6 +4794,10 @@ export type Database = {
           nome: string
           user_id: string
         }[]
+      }
+      meta_envios_resumo: {
+        Args: { _ate?: string; _uid?: string }
+        Returns: Json
       }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
