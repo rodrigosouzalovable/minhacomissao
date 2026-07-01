@@ -851,6 +851,7 @@ export default function InboxMeta() {
           )}
         </div>
       </div>
+      </div>
 
       <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
