@@ -35,6 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
 import { RetornoAlertChecker } from '@/components/RetornoAlertChecker';
+import { MetaAtendenteNotifier } from '@/components/MetaAtendenteNotifier';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import acordosIcon from '@/assets/acordos-icon.png';
 import { supabase } from '@/integrations/supabase/client';
