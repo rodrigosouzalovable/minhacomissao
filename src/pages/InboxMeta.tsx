@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Plus, Tag, X, Pin,
   Archive, Trash2, MessageSquarePlus, Paperclip, Reply, CheckSquare, Square, ChevronDown,
+  Mic, AudioLines, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -21,7 +22,8 @@ import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaCon
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
-import { MetaComposer } from '@/components/inbox/meta/MetaComposer';
+import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
+import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -100,6 +102,8 @@ export default function InboxMeta() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<MetaComposerHandle>(null);
+  const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
 
   // ============== Carregamento ==============
   useEffect(() => {
@@ -325,6 +329,33 @@ export default function InboxMeta() {
       toast({ title: 'Erro ao enviar', description: e.message, variant: 'destructive' });
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const audioRec = useMetaAudioRecorder({
+    instanciaId: contatoAtivo?.instancia_id || '',
+    telefone: contatoAtivo?.telefone || '',
+    userId: user?.id,
+    replyToWaId: respondendo?.wa_message_id || undefined,
+    conteudoCitado: respondendo?.conteudo || undefined,
+    onSent: () => setRespondendo(null),
+  });
+
+  const iniciarGravacaoModo = async (modo: 'audio' | 'transcrito') => {
+    if (!contatoAtivo || !janelaInfo.aberta) return;
+    setModoGravacao(modo);
+    await audioRec.iniciarGravacao();
+  };
+
+  const finalizarGravacao = async () => {
+    if (modoGravacao === 'transcrito') {
+      const texto = await audioRec.transcreverGravacao();
+      if (texto) {
+        composerRef.current?.appendText(texto);
+        toast({ title: 'Áudio transcrito', description: 'Revise o texto e clique em enviar.' });
+      }
+    } else {
+      await audioRec.enviarGravacao();
     }
   };
 
@@ -714,27 +745,76 @@ export default function InboxMeta() {
                     ))}
                   </div>
                 )}
-                <div className="p-3 flex gap-2 items-end">
-                  <input ref={fileInputRef} type="file" className="hidden"
-                    accept="image/*,audio/*,video/*,.pdf"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]; e.target.value = '';
-                      if (f) enviarMidia(f);
-                    }} />
-                  <Button variant="ghost" size="icon" className="shrink-0"
-                    disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
-                    onClick={() => fileInputRef.current?.click()}>
-                    {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                  </Button>
-                  <MetaComposer
-                    disabled={!janelaInfo.aberta || enviando}
-                    enviando={enviando}
-                    placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : 'Janela 24h expirada — use template HSM'}
-                    onSend={(t) => enviar(t)}
-                    onPaste={onPaste}
-                    onEscape={() => respondendo && setRespondendo(null)}
-                  />
-                </div>
+                {(audioRec.gravando || audioRec.transcrevendo) ? (
+                  <div className="p-3 flex items-center gap-2">
+                    <Button variant="ghost" size="icon"
+                      onClick={audioRec.cancelarGravacao}
+                      disabled={audioRec.enviandoAudio || audioRec.transcrevendo}>
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                    <div className="flex-1 flex items-center gap-2">
+                      {audioRec.transcrevendo ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          <span className="text-sm text-primary font-medium">Transcrevendo áudio...</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                          <span className="text-sm text-destructive font-medium">
+                            {modoGravacao === 'transcrito' ? 'Gravando para transcrever' : 'Gravando áudio'} {audioRec.formatTempo(audioRec.tempoGravacao)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <Button size="icon" onClick={finalizarGravacao}
+                      disabled={audioRec.enviandoAudio || audioRec.transcrevendo}>
+                      {audioRec.enviandoAudio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="p-3 flex gap-2 items-end">
+                    <input ref={fileInputRef} type="file" className="hidden"
+                      accept="image/*,audio/*,video/*,.pdf"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]; e.target.value = '';
+                        if (f) enviarMidia(f);
+                      }} />
+                    <Button variant="ghost" size="icon" className="shrink-0"
+                      disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
+                      onClick={() => fileInputRef.current?.click()}>
+                      {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="shrink-0"
+                          disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
+                          title="Gravar áudio">
+                          <Mic className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" side="top" className="w-56">
+                        <DropdownMenuItem onClick={() => iniciarGravacaoModo('audio')}>
+                          <AudioLines className="h-4 w-4 mr-2" />
+                          Enviar áudio
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => iniciarGravacaoModo('transcrito')}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Enviar áudio transcrito
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <MetaComposer
+                      ref={composerRef}
+                      disabled={!janelaInfo.aberta || enviando}
+                      enviando={enviando}
+                      placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : 'Janela 24h expirada — use template HSM'}
+                      onSend={(t) => enviar(t)}
+                      onPaste={onPaste}
+                      onEscape={() => respondendo && setRespondendo(null)}
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useCallback } from 'react';
+import { memo, useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Loader2, Send } from 'lucide-react';
@@ -12,9 +12,17 @@ interface Props {
   onEscape?: () => void;
 }
 
-function MetaComposerImpl({ disabled, enviando, placeholder, onSend, onPaste, onEscape }: Props) {
+export interface MetaComposerHandle {
+  appendText: (t: string) => void;
+  focus: () => void;
+}
+
+const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComposerImpl(
+  { disabled, enviando, placeholder, onSend, onPaste, onEscape },
+  ref,
+) {
   const [texto, setTexto] = useState('');
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
   const submit = useCallback(() => {
     const t = texto.trim();
@@ -23,10 +31,18 @@ function MetaComposerImpl({ disabled, enviando, placeholder, onSend, onPaste, on
     onSend(t);
   }, [texto, onSend]);
 
+  useImperativeHandle(ref, () => ({
+    appendText: (t: string) => {
+      setTexto(prev => (prev ? `${prev} ${t}` : t));
+      requestAnimationFrame(() => taRef.current?.focus());
+    },
+    focus: () => taRef.current?.focus(),
+  }), []);
+
   return (
     <>
       <Textarea
-        ref={ref}
+        ref={taRef}
         value={texto}
         onChange={e => setTexto(e.target.value)}
         onKeyDown={(e) => {
@@ -44,6 +60,6 @@ function MetaComposerImpl({ disabled, enviando, placeholder, onSend, onPaste, on
       </Button>
     </>
   );
-}
+});
 
 export const MetaComposer = memo(MetaComposerImpl);
