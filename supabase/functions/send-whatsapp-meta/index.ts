@@ -264,14 +264,37 @@ Deno.serve(async (req) => {
       try {
         const tel = formatTelefone(cliente.telefone);
         const nowIso = new Date().toISOString();
-        const preview = `[Template: ${template.nome_template}]`;
+
+        // Renderiza o corpo real do template com as variáveis substituídas
+        let bodyRendered: string = template.body_text || '';
+        const variaveis = (template.variaveis || {}) as Record<string, string>;
+        // Substitui {{1}}, {{2}}... via mapeamento variaveis
+        bodyRendered = bodyRendered.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, k) => {
+          const field = variaveis[k] || '';
+          return (
+            resolveVar(field, cliente) ||
+            resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
+            (cliente.nome || 'cliente')
+          );
+        });
+        // Substitui {{nome}}, {{primeiro_nome}}, etc.
+        bodyRendered = bodyRendered.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_m, k) =>
+          resolveNamedVar(k, cliente) || (cliente.nome || 'cliente'),
+        );
+
+        const headerFormat = getHeaderFormat(template);
+        const headerImageUrl = headerFormat === 'IMAGE' ? (template?.variaveis?._header_image_url || null) : null;
+        const tipoConteudo = headerImageUrl ? 'imagem' : 'texto';
+        const preview = bodyRendered || `[Template: ${template.nome_template}]`;
+
         await supabase.from('meta_whatsapp_mensagens').insert({
           user_id: user_id || inst.user_id,
           instancia_id: inst.id,
           telefone: tel,
           direcao: 'saida',
           conteudo: preview,
-          tipo_conteudo: 'texto',
+          tipo_conteudo: tipoConteudo,
+          media_url: headerImageUrl,
           timestamp_msg: nowIso,
           status_envio: 'enviada',
           wa_message_id: waId,
@@ -300,6 +323,7 @@ Deno.serve(async (req) => {
           } as any);
         }
       } catch (_) { /* não bloqueia o envio */ }
+
 
       return new Response(JSON.stringify({ success: true, waId, instancia_id }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
