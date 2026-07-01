@@ -141,7 +141,7 @@ export default function InboxMeta() {
   const fetchEtiquetas = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.from('meta_whatsapp_etiquetas')
-      .select('id, nome, cor').eq('user_id', user.id).order('nome');
+      .select('id, nome, cor').order('nome');
     setEtiquetas((data as MetaEtiqueta[]) ?? []);
   }, [user]);
 
