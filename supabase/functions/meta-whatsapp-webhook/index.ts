@@ -138,7 +138,7 @@ serve(async (req) => {
         if (!phoneNumberId) continue;
 
         const { data: inst } = await supabase
-          .from('meta_whatsapp_instances').select('id, user_id, display_phone')
+          .from('meta_whatsapp_instances').select('id, user_id, display_phone, access_token')
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
