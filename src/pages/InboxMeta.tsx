@@ -205,6 +205,7 @@ export default function InboxMeta() {
       setCarregandoMsgs(false);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
       if (contato.nao_lido > 0) {
+        setContatos(prev => prev.map(c => c.id === contato.id ? { ...c, nao_lido: 0 } : c));
         await supabase.from('meta_whatsapp_contatos').update({ nao_lido: 0 }).eq('id', contato.id);
       }
     }
