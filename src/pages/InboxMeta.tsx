@@ -21,6 +21,7 @@ import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaCon
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
+import { MetaComposer } from '@/components/inbox/meta/MetaComposer';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -71,7 +72,7 @@ export default function InboxMeta() {
   const [contatoAtivo, setContatoAtivo] = useState<MetaContato | null>(null);
   const [mensagens, setMensagens] = useState<MetaMensagem[]>([]);
   const [busca, setBusca] = useState('');
-  const [texto, setTexto] = useState('');
+  // texto local vive no Composer (evita re-render do inbox inteiro por tecla)
   const [enviando, setEnviando] = useState(false);
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
   const [carregandoMsgs, setCarregandoMsgs] = useState(false);
@@ -284,7 +285,7 @@ export default function InboxMeta() {
 
   // ============== Envio ==============
   const enviar = async (textoCustom?: string) => {
-    const t = (textoCustom ?? texto).trim();
+    const t = (textoCustom ?? '').trim();
     if (!contatoAtivo || !t || enviando) return;
     if (!janelaInfo.aberta) {
       toast({ title: 'Janela 24h expirada', description: 'Use um template HSM em "Envio Meta (massa)".', variant: 'destructive' });
@@ -300,7 +301,6 @@ export default function InboxMeta() {
       conteudo_citado: respondendo?.conteudo || null,
     };
     setMensagens(prev => [...prev, tempMsg]);
-    if (!textoCustom) setTexto('');
     const replyTo = respondendo?.wa_message_id;
     const replySnap = respondendo?.conteudo;
     setRespondendo(null);
@@ -726,21 +726,14 @@ export default function InboxMeta() {
                     onClick={() => fileInputRef.current?.click()}>
                     {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                   </Button>
-                  <Textarea
-                    ref={textareaRef}
-                    value={texto}
-                    onChange={e => setTexto(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); }
-                      else if (e.key === 'Escape' && respondendo) setRespondendo(null);
-                    }}
-                    onPaste={onPaste}
-                    placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : 'Janela 24h expirada — use template HSM'}
+                  <MetaComposer
                     disabled={!janelaInfo.aberta || enviando}
-                    className="min-h-[44px] max-h-[120px] resize-none" rows={1} />
-                  <Button onClick={() => enviar()} disabled={!janelaInfo.aberta || !texto.trim() || enviando} size="icon" className="shrink-0">
-                    {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
+                    enviando={enviando}
+                    placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : 'Janela 24h expirada — use template HSM'}
+                    onSend={(t) => enviar(t)}
+                    onPaste={onPaste}
+                    onEscape={() => respondendo && setRespondendo(null)}
+                  />
                 </div>
               </div>
             </>
