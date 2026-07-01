@@ -82,6 +82,7 @@ export default function InboxMeta() {
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'conversas' | 'arquivados'>('conversas');
+  const [filtroLeitura, setFiltroLeitura] = useState<'todas' | 'nao_lidas'>('todas');
 
   const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
@@ -267,17 +268,18 @@ export default function InboxMeta() {
           const ids = contatoEtiquetas[c.id] || [];
           if (!ids.includes(filtroEtiqueta)) return false;
         }
+        if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         return true;
       })
       .sort((a, b) => {
-        const rank = (c: MetaContato) => (c.fixado ? 0 : 10) + (c.nao_lido > 0 ? 0 : 1);
+        const rank = (c: MetaContato) => (c.fixado ? 0 : 1);
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
         const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura]);
 
   const janelaInfo = useMemo(() => {
     if (!contatoAtivo?.ultima_msg_entrada_em) return { aberta: false, expiraEm: null as string | null };
@@ -535,6 +537,17 @@ export default function InboxMeta() {
               <button onClick={() => setAbaAtiva('arquivados')}
                 className={cn('flex-1 text-xs py-1 rounded transition', abaAtiva === 'arquivados' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
                 Arquivados
+              </button>
+            </div>
+            {/* Filtro leitura */}
+            <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
+              <button onClick={() => setFiltroLeitura('todas')}
+                className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'todas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                Todas
+              </button>
+              <button onClick={() => setFiltroLeitura('nao_lidas')}
+                className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'nao_lidas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                Não lidas
               </button>
             </div>
             {selMultipla && (

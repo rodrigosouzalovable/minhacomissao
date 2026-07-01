@@ -1,37 +1,39 @@
-
 ## Objetivo
-Habilitar no Inbox Meta Oficial, dentro de cada conversa, os mesmos dois modos de gravação de voz que já existem no WhatsApp Inbox:
-1. **Enviar áudio** — grava e envia como mensagem de voz na conversa.
-2. **Enviar áudio transcrito** — grava, transcreve e coloca o texto no campo de digitação para edição antes do envio.
+
+Na aba **Inbox Meta Oficial**, adicionar um filtro de visualização estilo WhatsApp com dois botões: **Todas** e **Não lidas**. Também corrigir o comportamento em que, ao abrir uma conversa com mensagens não lidas, ela "pula" para o fim da lista.
 
 ## Mudanças
 
-### 1. `src/components/inbox/meta/MetaComposer.tsx`
-- Expor um método imperativo `appendText(t)` via `forwardRef` + `useImperativeHandle`, para que o pai consiga injetar o texto transcrito no `<Textarea>` (mantendo o estado interno que evita lag de digitação).
+Arquivo único: `src/pages/InboxMeta.tsx`
 
-### 2. `src/pages/InboxMeta.tsx`
-- Reutilizar o hook `useAudioRecorder`, mas como o hook atual chama a edge `send-whatsapp-audio` (UAZAPI), criaremos um wrapper Meta:
-  - Um novo hook leve `useMetaAudioRecorder` (ou uma variação inline no componente) que:
-    - Grava com `MediaRecorder` (`audio/ogg;codecs=opus` preferencial — compatível com WhatsApp Cloud API; fallback webm).
-    - No modo "enviar": faz upload em `inbox-media` (`meta/…/timestamp.ogg`) e chama `send-whatsapp-meta-media` com `type: 'audio'` (já suportado).
-    - No modo "transcrever": envia base64 para `transcribe-audio` (edge já existente) e devolve o texto.
-    - Estados: `gravando`, `tempoGravacao`, `enviandoAudio`, `transcrevendo`, `formatTempo`, além de `iniciar/cancelar/finalizar`.
-- No composer da conversa Meta:
-  - Substituir o ícone único do microfone por um `DropdownMenu` com dois itens:
-    - "Enviar áudio" (ícone `AudioLines`)
-    - "Enviar áudio transcrito" (ícone `FileText`)
-  - Quando `gravando` ou `transcrevendo`: trocar a barra do composer por um painel com timer, botão cancelar (X) e botão confirmar (Send / Loader).
-  - Ao confirmar em modo "transcrito": chamar `metaComposerRef.current?.appendText(textoTranscrito)` para preencher o campo.
-  - Bloquear a gravação quando `janelaInfo.aberta === false` (mesma regra dos demais envios).
-  - O botão do microfone só aparece quando o campo está vazio (comportamento igual ao `ChatInputBar` do WhatsApp Inbox); quando houver texto, mostra o botão de enviar do `MetaComposer`.
+### 1. Novo filtro "Todas / Não lidas"
 
-## Detalhes técnicos
-- MIME: `MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')` → usa `.ogg`; senão `.webm` (a Meta aceita `audio/ogg` opus como voz; para `.webm` o Meta Cloud pode não reproduzir como voice note — deixaremos o `.ogg` como preferencial e caímos em `.webm` com aviso).
-- Upload para bucket `inbox-media`, path `meta/{instancia_id}/{telefone}/{ts}.{ext}` (já usado pelo `enviarMidia`).
-- Envio via edge `send-whatsapp-meta-media` já existente (parâmetros: `instancia_id`, `telefone`, `media_url`, `type: 'audio'`, `user_id`, opcional `reply_to_wa_id`/`conteudo_citado`).
-- Transcrição via edge `transcribe-audio` já existente (mesmo fluxo do hook do WhatsApp Inbox).
-- Nenhuma alteração de schema ou de edge functions é necessária.
+- Adicionar estado `filtroLeitura: 'todas' | 'nao_lidas'` (default `'todas'`).
+- Adicionar dois botões-pílula na barra de filtros (próximo aos botões "Conversas / Arquivados" existentes), no mesmo estilo visual.
+  - **Todas** → mostra todas as conversas da aba atual.
+  - **Não lidas** → filtra apenas `c.nao_lido > 0`.
+- O filtro é aplicado dentro do `contatosFiltrados` (memo já existente).
 
-## Arquivos afetados
-- `src/pages/InboxMeta.tsx` — dropdown do microfone, painel de gravação, integração.
-- `src/components/inbox/meta/MetaComposer.tsx` — expor ref com `appendText`.
+### 2. Corrigir "salto" da conversa ao abrir mensagens não lidas
+
+Hoje a ordenação usa:
+```
+rank = (fixado ? 0 : 10) + (nao_lido > 0 ? 0 : 1)
+```
+Isso empurra conversas não lidas para o topo. Quando o usuário abre uma conversa não lida, `nao_lido` vira 0 e o rank sobe de 10 para 11 → a conversa "cai" para baixo da lista.
+
+Correção: remover o componente `nao_lido` do rank. A ordenação passa a ser:
+- Fixadas primeiro.
+- Depois por `ultima_mensagem_em` desc (mais recente no topo — comportamento igual ao WhatsApp comum).
+
+Assim, ler uma conversa não altera sua posição. Conversas não lidas continuam visualmente destacadas (negrito + badge verde, já existente).
+
+### 3. Sem mudanças em backend
+
+Nenhuma alteração de schema, RLS, Edge Function ou realtime. É só UI + lógica de ordenação/filtro no cliente.
+
+## Resultado esperado
+
+- Dois botões "Todas" / "Não lidas" acima da lista de conversas.
+- "Todas": lista estável ordenada por data (fixadas no topo). Abrir uma conversa não muda a ordem.
+- "Não lidas": mostra somente conversas com badge verde; ao abrir uma delas ela some do filtro (esperado, pois foi marcada como lida) mas isso não afeta a aba "Todas".
