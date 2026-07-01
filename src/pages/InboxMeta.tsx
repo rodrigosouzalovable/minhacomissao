@@ -539,6 +539,16 @@ export default function InboxMeta() {
                 Arquivados
               </button>
             </div>
+            {/* Filtro leitura */}
+            <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
+              <button onClick={() => setFiltroLeitura('todas')}
+                className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'todas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                Todas
+              </button>
+              <button onClick={() => setFiltroLeitura('nao_lidas')}
+                className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'nao_lidas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                Não lidas
+              </button>
             {selMultipla && (
               <div className="flex items-center gap-1 bg-primary/10 rounded p-1.5">
                 <span className="text-xs flex-1">{selecionados.size} selecionada(s)</span>
