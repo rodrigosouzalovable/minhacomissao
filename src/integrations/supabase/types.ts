@@ -1887,6 +1887,51 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_atendimento_estado: {
+        Row: {
+          atualizado_em: string
+          id: number
+          ultimo_index: number
+        }
+        Insert: {
+          atualizado_em?: string
+          id: number
+          ultimo_index?: number
+        }
+        Update: {
+          atualizado_em?: string
+          id?: number
+          ultimo_index?: number
+        }
+        Relationships: []
+      }
+      meta_atendimento_fila: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          etiqueta_id: string | null
+          id: string
+          ordem: number
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          etiqueta_id?: string | null
+          id?: string
+          ordem: number
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          etiqueta_id?: string | null
+          id?: string
+          ordem?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       meta_envios_fila: {
         Row: {
           atraso_dias: number | null
