@@ -64,6 +64,7 @@ serve(async (req) => {
       field: firstEntry?.field,
       phone_number_id: firstEntry?.value?.metadata?.phone_number_id,
       messages: firstEntry?.value?.messages?.length || 0,
+      message_echoes: firstEntry?.value?.message_echoes?.length || 0,
       statuses: firstEntry?.value?.statuses?.length || 0,
     });
 
@@ -80,11 +81,12 @@ serve(async (req) => {
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
-        const businessDigits = String(inst.display_phone || '').replace(/\D/g, '');
-        const isEchoField = String(change.field || '').toLowerCase() === 'message_echoes';
+        const businessDigits = String(inst.display_phone || value.metadata?.display_phone_number || '').replace(/\D/g, '');
+        const fieldName = String(change.field || '').toLowerCase();
+        const isEchoField = fieldName === 'message_echoes' || fieldName === 'smb_message_echoes';
 
         // ===== Mensagens recebidas =====
-        const messages = value.messages || [];
+        const messages = isEchoField ? (value.message_echoes || value.messages || []) : (value.messages || []);
         const contacts = value.contacts || [];
         const nomePorWaId: Record<string, string> = {};
         for (const c of contacts) {
@@ -102,14 +104,14 @@ serve(async (req) => {
           const fromDigits = String(from).replace(/\D/g, '');
           const isEcho = isEchoField || (!!businessDigits && fromDigits === businessDigits);
 
-          // Para echoes: destinatário está em contacts[0].wa_id ou m.to
+          // Para echoes: destinatário está em m.to; em mensagens recebidas, o outro lado é m.from
           const outroLado = isEcho
             ? (m.to || contacts?.[0]?.wa_id || null)
             : from;
           if (!outroLado) continue;
 
           // Insere mensagem (dedup via UNIQUE instancia_id + wa_message_id — envios feitos pelo próprio sistema não duplicam)
-          await supabase.from('meta_whatsapp_mensagens').insert({
+          const { error: msgError } = await supabase.from('meta_whatsapp_mensagens').insert({
             user_id: inst.user_id,
             instancia_id: inst.id,
             telefone: outroLado,
@@ -120,6 +122,11 @@ serve(async (req) => {
             status_envio: isEcho ? 'enviada' : 'entregue',
             wa_message_id: m.id,
           } as any);
+
+          if (msgError) {
+            const duplicate = String(msgError.message || '').toLowerCase().includes('duplicate') || msgError.code === '23505';
+            if (!duplicate) console.error('[MetaWebhook] erro ao inserir mensagem', { field: fieldName, isEcho, erro: msgError.message });
+          }
 
           // Upsert contato
           const { data: existente } = await supabase
@@ -158,11 +165,13 @@ serve(async (req) => {
 
 
           // Compatibilidade com o log de envios em massa
-          await supabase.from('meta_whatsapp_envios_log')
-            .update({ status: 'replied' })
-            .eq('instancia_id', inst.id)
-            .eq('telefone', from)
-            .neq('status', 'replied');
+          if (!isEcho) {
+            await supabase.from('meta_whatsapp_envios_log')
+              .update({ status: 'replied' })
+              .eq('instancia_id', inst.id)
+              .eq('telefone', from)
+              .neq('status', 'replied');
+          }
         }
 
         // ===== Atualizações de status =====
