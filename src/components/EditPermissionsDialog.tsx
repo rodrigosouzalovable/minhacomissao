@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
+import { navItems } from '@/components/layout/AppLayout';
 
 interface EditPermissionsDialogProps {
   open: boolean;
@@ -22,30 +23,11 @@ interface EditPermissionsDialogProps {
   userName: string;
 }
 
-const AVAILABLE_TABS = [
-  { path: '/conta', label: 'Minha Conta' },
-  { path: '/dashboard', label: 'Dashboard' },
-  { path: '/acordos', label: 'Meus Acordos' },
-  { path: '/acordos/novo', label: 'Novo Acordo' },
-  { path: '/retornos', label: 'Retornos' },
-  { path: '/clientes', label: 'Clientes' },
-  { path: '/comissoes', label: 'Minhas Comissões' },
-  { path: '/equipe/acordos', label: 'Acordos da Equipe' },
-  { path: '/admin/usuarios', label: 'Usuários' },
-  { path: '/admin/equipes', label: 'Equipes' },
-  { path: '/admin/auditoria', label: 'Auditoria' },
-  { path: '/admin/financeiro', label: 'Financeiro' },
-  { path: '/admin/importar-devedores', label: 'Importar Devedores' },
-  { path: '/admin/acionamento', label: 'Acionamento' },
-  { path: '/admin/automacao-cobmais', label: 'Automação CobMais' },
-  { path: '/meta', label: 'Meta' },
-  { path: '/campanhas-voz', label: 'Campanhas de Voz' },
-  { path: '/inbox', label: 'WhatsApp Inbox' },
-  { path: '/aquecimento', label: 'Aquecimento' },
-  { path: '/relatorios', label: 'Relatórios' },
-  { path: '/estrategias', label: 'Estratégias' },
-  { path: '/modelo-mensagem', label: 'Modelo Mensagem' },
-];
+// Derivado automaticamente da sidebar (AppLayout.navItems) para manter sincronia
+const AVAILABLE_TABS = navItems.map((item) => ({
+  path: item.href,
+  label: item.label,
+}));
 
 const CREDORES = [
   { value: 'ume_novo_mundo', label: 'UME | INADIMPLENTES' },

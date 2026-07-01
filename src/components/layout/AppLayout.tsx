@@ -69,7 +69,7 @@ interface NavItem {
   gestorOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
+export const navItems: NavItem[] = [
   { href: '/conta', label: 'Minha Conta', icon: User },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/acordos', label: 'Meus Acordos', icon: FileText },
