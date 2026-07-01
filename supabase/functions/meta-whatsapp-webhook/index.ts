@@ -30,6 +30,10 @@ function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_u
   return { texto: `[${tipo}]`, tipo: 'texto', media_url: null };
 }
 
+function normalizePhone(tel: any): string {
+  return String(tel || '').replace(/\D/g, '');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -81,7 +85,7 @@ serve(async (req) => {
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
-        const businessDigits = String(inst.display_phone || value.metadata?.display_phone_number || '').replace(/\D/g, '');
+        const businessDigits = normalizePhone(inst.display_phone || value.metadata?.display_phone_number);
         const fieldName = String(change.field || '').toLowerCase();
         const isEchoField = fieldName === 'message_echoes' || fieldName === 'smb_message_echoes';
 
@@ -94,19 +98,19 @@ serve(async (req) => {
         }
 
         for (const m of messages) {
-          const from = m.from;
+          const from = normalizePhone(m.from);
           if (!from) continue;
           const { texto, tipo } = extractTextoFromMessage(m);
           const tsMsg = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
           const nomeContato = nomePorWaId[from] || null;
 
           // Echo: mensagem enviada pelo próprio número (WhatsApp Web / celular via coexistência)
-          const fromDigits = String(from).replace(/\D/g, '');
+          const fromDigits = normalizePhone(from);
           const isEcho = isEchoField || (!!businessDigits && fromDigits === businessDigits);
 
           // Para echoes: destinatário está em m.to; em mensagens recebidas, o outro lado é m.from
           const outroLado = isEcho
-            ? (m.to || contacts?.[0]?.wa_id || null)
+            ? normalizePhone(m.to || contacts?.[0]?.wa_id || null)
             : from;
           if (!outroLado) continue;
 
