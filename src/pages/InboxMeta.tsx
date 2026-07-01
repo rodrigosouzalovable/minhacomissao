@@ -82,6 +82,7 @@ export default function InboxMeta() {
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'conversas' | 'arquivados'>('conversas');
+  const [filtroLeitura, setFiltroLeitura] = useState<'todas' | 'nao_lidas'>('todas');
 
   const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
