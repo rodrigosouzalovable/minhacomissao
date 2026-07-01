@@ -436,6 +436,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Global Retorno Alert Checker */}
       <RetornoAlertChecker />
+      <MetaAtendenteNotifier />
     </div>
   );
 }
