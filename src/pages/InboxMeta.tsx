@@ -268,17 +268,18 @@ export default function InboxMeta() {
           const ids = contatoEtiquetas[c.id] || [];
           if (!ids.includes(filtroEtiqueta)) return false;
         }
+        if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         return true;
       })
       .sort((a, b) => {
-        const rank = (c: MetaContato) => (c.fixado ? 0 : 10) + (c.nao_lido > 0 ? 0 : 1);
+        const rank = (c: MetaContato) => (c.fixado ? 0 : 1);
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
         const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura]);
 
   const janelaInfo = useMemo(() => {
     if (!contatoAtivo?.ultima_msg_entrada_em) return { aberta: false, expiraEm: null as string | null };
