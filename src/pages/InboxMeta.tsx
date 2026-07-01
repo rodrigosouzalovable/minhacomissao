@@ -22,7 +22,8 @@ import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaCon
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
-import { MetaComposer } from '@/components/inbox/meta/MetaComposer';
+import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
+import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
