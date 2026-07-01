@@ -551,19 +551,34 @@ export default function InboxMeta() {
                       'w-full text-left px-3 py-2.5 border-b hover:bg-accent/50 transition flex flex-col gap-0.5',
                       ativo && 'bg-accent',
                       sel && 'bg-primary/15',
+                      c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
                     )}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate flex items-center gap-1">
+                      <span className={cn(
+                        'text-sm truncate flex items-center gap-1',
+                        c.nao_lido > 0 ? 'font-bold text-foreground' : 'font-medium',
+                      )}>
                         {selMultipla && (sel ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" /> : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />)}
                         {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
                         <span className="truncate">{c.nome || formatTelefone(c.telefone)}</span>
                       </span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{formatContatoTime(c.ultima_mensagem_em)}</span>
+                      <span className={cn(
+                        'text-[10px] shrink-0',
+                        c.nao_lido > 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground',
+                      )}>{formatContatoTime(c.ultima_mensagem_em)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground truncate">{c.ultima_mensagem || '—'}</span>
+                      <span className={cn(
+                        'text-xs truncate',
+                        c.nao_lido > 0 ? 'text-foreground font-medium' : 'text-muted-foreground',
+                      )}>{c.ultima_mensagem || '—'}</span>
                       {c.nao_lido > 0 && (
-                        <Badge className="h-4 min-w-[16px] px-1 text-[10px] bg-emerald-500 text-white">{c.nao_lido}</Badge>
+                        <span
+                          className="shrink-0 inline-flex items-center justify-center h-[18px] min-w-[18px] px-1.5 rounded-full text-[10px] font-bold text-white"
+                          style={{ backgroundColor: '#10b981' }}
+                        >
+                          {c.nao_lido > 99 ? '99+' : c.nao_lido}
+                        </span>
                       )}
                     </div>
                     {ets.length > 0 && (
