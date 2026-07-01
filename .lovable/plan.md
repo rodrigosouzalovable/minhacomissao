@@ -1,42 +1,21 @@
-## Parte 1 — Som de notificação por atendente etiquetado (global)
+## Problema
 
-Sempre que chegar uma mensagem recebida no Inbox Meta cujo contato esteja com a etiqueta `Atendente: <nome do usuário logado>`, toca um som suave — **em qualquer tela** do sistema (Dashboard, Acordos, etc.), não só no Inbox Meta.
+Em `src/pages/InboxMeta.tsx` (linha 143-144), o carregamento das etiquetas filtra por `user_id = user.id`:
 
-### Como
+```ts
+.from('meta_whatsapp_etiquetas').select(...).eq('user_id', user.id)
+```
 
-- **Novo componente headless:** `src/components/MetaAtendenteNotifier.tsx`
-  - Roda para qualquer usuário logado que tenha uma etiqueta `Atendente: <nome>` correspondente.
-  - Ao montar:
-    1. Lê `profiles.nome` do usuário atual.
-    2. Busca em `meta_whatsapp_etiquetas` a etiqueta com `nome ILIKE 'Atendente: <nome>'`. Guarda `etiqueta_id`. Se não achar, sai silencioso.
-  - Assina Realtime em `meta_whatsapp_mensagens` (`event: INSERT`, `filter: direcao=eq.recebida`).
-  - Para cada nova mensagem:
-    - Consulta `meta_whatsapp_contato_etiquetas` pelo `contato_id`; se contém o `etiqueta_id` do atendente, toca `success-sound.mp3` em volume 0.35.
-    - Debounce de 2s por `contato_id` para não tocar em rajadas.
-  - Cleanup: `supabase.removeChannel` no unmount.
+Isso faz com que apenas o admin (que criou as etiquetas "Atendente: Yasmim", "Atendente: Wallace", etc.) veja os chips coloridos. Os atendentes com `inbox_compartilhado = true` já têm permissão de SELECT via RLS (`meta_etiquetas_shared_select`), mas o filtro no front-end esconde as etiquetas do dono.
 
-- **Montagem global:** em `src/components/layout/AppLayout.tsx`, adicionar `<MetaAtendenteNotifier />` ao lado de `<RetornoAlertChecker />`. Assim toca em qualquer rota autenticada.
+## Correção
 
-- Sem migração, sem edge function. As policies compartilhadas de leitura já cobrem os 4 atendentes.
+1. Em `fetchEtiquetas` (InboxMeta.tsx), remover o `.eq('user_id', user.id)` — a RLS já garante o acesso correto:
+   - Admin/dono continua vendo suas próprias etiquetas.
+   - Atendentes compartilhados passam a ver todas as etiquetas do inbox compartilhado (incluindo "Atendente: X").
 
-## Parte 2 — Modo claro/escuro **apenas** no Inbox Meta Oficial
+Nenhuma alteração em banco/RLS é necessária — as policies já suportam o acesso compartilhado. `fetchContatoEtiquetas` já não filtra e também funcionará normalmente.
 
-Um botão na topbar do `InboxMeta.tsx` alterna entre claro e escuro, e a preferência fica salva por usuário.
+## Verificação
 
-### Como
-
-- **Escopo local à página:** o toggle aplica/remove a classe `dark` num wrapper `<div>` que envolve todo o conteúdo do `InboxMeta` (não altera o tema global do app). O Tailwind já está configurado com `darkMode: ["class"]`, então todos os tokens `dark:` do design system funcionam dentro desse wrapper.
-- **Persistência:** `localStorage['inbox-meta-theme'] = 'light' | 'dark'` (chave por usuário: `inbox-meta-theme:<user.id>`).
-- **UI:** um `Button` com ícone `Sun`/`Moon` (lucide-react) no header do Inbox Meta, ao lado do título "Inbox Meta Oficial".
-- Verificar rapidamente que os componentes da página (`MetaComposer`, lista de conversas, bolhas de mensagem, dialogs) usam tokens semânticos (`bg-background`, `text-foreground`, `bg-card`, etc.). Onde encontrar cor hardcoded (`bg-white`, `text-black`, etc.), trocar por token — só no Inbox Meta, sem tocar em outras telas.
-
-### Arquivos alterados
-
-- `src/pages/InboxMeta.tsx` — wrapper com classe condicional `dark`, botão de toggle, hook de preferência.
-- `src/components/inbox/meta/MetaComposer.tsx` e demais dialogs do Inbox Meta — só se houver classes hardcoded que quebrem no dark.
-
-## Fora de escopo
-
-- Modo escuro global do sistema (só o Inbox Meta muda).
-- Notificação desktop / push nativo (só som dentro da aba do navegador aberta).
-- Som diferente por atendente ou configuração de volume pelo usuário.
+Logar como Anna Flavia / Yasmim / Fernanda / Wallace e conferir que os chips "Atendente: ..." agora aparecem ao lado dos nomes na lista de conversas do Inbox Meta Oficial.
