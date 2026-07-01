@@ -263,7 +263,14 @@ export default function InboxMeta() {
         }
         return true;
       })
-      .sort((a, b) => (b.fixado ? 1 : 0) - (a.fixado ? 1 : 0));
+      .sort((a, b) => {
+        const rank = (c: MetaContato) => (c.fixado ? 0 : 10) + (c.nao_lido > 0 ? 0 : 1);
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
+        const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
+        return tb - ta;
+      });
   }, [contatos, busca, filtroEtiqueta, contatoEtiquetas]);
 
   const janelaInfo = useMemo(() => {
