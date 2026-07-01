@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Plus, Tag, X, Pin,
-  Archive, Trash2, MessageSquarePlus, Paperclip, Reply, CheckSquare, Square, ChevronDown,
-  Mic, AudioLines, FileText,
+  Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
+  Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
+  Mic, AudioLines, FileText, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -21,7 +21,7 @@ import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaContextMenu';
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
-import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
+
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
 import {
@@ -89,7 +89,7 @@ export default function InboxMeta() {
   const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
 
-  const [novaOpen, setNovaOpen] = useState(false);
+  
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
   const [msgRapidasOpen, setMsgRapidasOpen] = useState(false);
   const [msgRapidas, setMsgRapidas] = useState<MetaMsgRapida[]>([]);
@@ -478,16 +478,8 @@ export default function InboxMeta() {
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
               <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">Oficial</Badge>
-            </div>
-            <div className="flex gap-1">
-              <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => setNovaOpen(true)}>
-                <MessageSquarePlus className="h-3.5 w-3.5 mr-1" /> Nova
-              </Button>
               <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setMsgRapidasOpen(true)} title="Mensagens rápidas">
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-              <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setEtiquetasOpen(true)} title="Etiquetas">
-                <Tag className="h-3.5 w-3.5" />
+                <Zap className="h-3.5 w-3.5 mr-1" /> Mensagens rápidas
               </Button>
             </div>
             <Select value={filtroInstancia} onValueChange={setFiltroInstancia}>
@@ -834,9 +826,6 @@ export default function InboxMeta() {
         </div>
       </div>
 
-      <MetaNovaConversaDialog open={novaOpen} onOpenChange={setNovaOpen} instancias={instancias}
-        defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
-        onSent={() => fetchContatos()} />
       <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
     </AppLayout>

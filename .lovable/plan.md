@@ -1,39 +1,30 @@
 ## Objetivo
+Limpar o topo do sidebar do Inbox Meta Oficial, removendo o botão redundante "Nova" e mantendo apenas o acesso a mensagens rápidas, com layout mais organizado e visualmente limpo.
 
-Na aba **Inbox Meta Oficial**, adicionar um filtro de visualização estilo WhatsApp com dois botões: **Todas** e **Não lidas**. Também corrigir o comportamento em que, ao abrir uma conversa com mensagens não lidas, ela "pula" para o fim da lista.
+## Contexto atual
+O topo do sidebar possui 3 botões em linha:
+- **"Nova"** → abre diálogo de nova conversa (`MetaNovaConversaDialog`)
+- **"+"** → abre mensagens rápidas (`MetaMensagensRapidasDialog`)  
+- **Ícone de etiqueta** → abre gerenciamento de etiquetas (`MetaEtiquetasDialog`)
 
-## Mudanças
+O usuário deseja remover o botão "Nova" e manter apenas o de mensagens rápidas, deixando o visual mais limpo.
 
-Arquivo único: `src/pages/InboxMeta.tsx`
+## Alterações
 
-### 1. Novo filtro "Todas / Não lidas"
+### 1. Remover botão "Nova" do topo do sidebar
+- Em `src/pages/InboxMeta.tsx`, remover o `<Button>` com ícone `MessageSquarePlus` e label "Nova" (linhas ~483-485).
+- Remover import não utilizado `MessageSquarePlus` se não for usado em outro lugar da página.
 
-- Adicionar estado `filtroLeitura: 'todas' | 'nao_lidas'` (default `'todas'`).
-- Adicionar dois botões-pílula na barra de filtros (próximo aos botões "Conversas / Arquivados" existentes), no mesmo estilo visual.
-  - **Todas** → mostra todas as conversas da aba atual.
-  - **Não lidas** → filtra apenas `c.nao_lido > 0`.
-- O filtro é aplicado dentro do `contatosFiltrados` (memo já existente).
+### 2. Reorganizar botões restantes
+- Manter o botão de mensagens rápidas (agora como botão principal do topo).
+- Reconsiderar posicionamento do botão de etiquetas: movê-lo para área de filtros/busca ou mantê-lo como ícone compacto ao lado da busca, deixando o topo com menos elementos.
+- Ajustar layout da primeira linha do sidebar: título + badge + botão de mensagens rápidas, eliminando a segunda linha de botões quando possível.
 
-### 2. Corrigir "salto" da conversa ao abrir mensagens não lidas
+### 3. Ajustar imports e estados
+- Verificar se `novaOpen` e `setNovaOpen` ainda são necessários em outras partes da página; se não, remover estado e import do `MetaNovaConversaDialog`.
+- Se o diálogo de nova conversa for removido do sidebar, verificar se ele é acionado de outro lugar (ex: atalho de teclado, outro botão) antes de eliminar completamente.
 
-Hoje a ordenação usa:
-```
-rank = (fixado ? 0 : 10) + (nao_lido > 0 ? 0 : 1)
-```
-Isso empurra conversas não lidas para o topo. Quando o usuário abre uma conversa não lida, `nao_lido` vira 0 e o rank sobe de 10 para 11 → a conversa "cai" para baixo da lista.
-
-Correção: remover o componente `nao_lido` do rank. A ordenação passa a ser:
-- Fixadas primeiro.
-- Depois por `ultima_mensagem_em` desc (mais recente no topo — comportamento igual ao WhatsApp comum).
-
-Assim, ler uma conversa não altera sua posição. Conversas não lidas continuam visualmente destacadas (negrito + badge verde, já existente).
-
-### 3. Sem mudanças em backend
-
-Nenhuma alteração de schema, RLS, Edge Function ou realtime. É só UI + lógica de ordenação/filtro no cliente.
-
-## Resultado esperado
-
-- Dois botões "Todas" / "Não lidas" acima da lista de conversas.
-- "Todas": lista estável ordenada por data (fixadas no topo). Abrir uma conversa não muda a ordem.
-- "Não lidas": mostra somente conversas com badge verde; ao abrir uma delas ela some do filtro (esperado, pois foi marcada como lida) mas isso não afeta a aba "Todas".
+## Escopo limitado
+- Apenas reorganização visual do topo do sidebar em `src/pages/InboxMeta.tsx`.
+- Nenhuma alteração em lógica de backend, rotas ou outros componentes.
+- Preservar todas as funcionalidades existentes (mensagens rápidas, etiquetas, filtros, busca, abas).
