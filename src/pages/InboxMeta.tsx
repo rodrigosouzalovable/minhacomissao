@@ -492,7 +492,8 @@ export default function InboxMeta() {
   // ============== Render ==============
   return (
     <AppLayout>
-      <div className="flex h-[calc(100vh-4rem)] gap-0 overflow-hidden">
+      <div className={cn(tema === 'dark' && 'dark')}>
+      <div className="flex h-[calc(100vh-4rem)] gap-0 overflow-hidden bg-background text-foreground">
         {/* Sidebar */}
         <div className="w-full sm:w-[360px] sm:min-w-[360px] sm:max-w-[360px] border-r flex flex-col bg-card overflow-hidden">
           <div className="p-3 border-b space-y-2">
@@ -500,6 +501,9 @@ export default function InboxMeta() {
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
               <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">Oficial</Badge>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={toggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo escuro'}>
+                {tema === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
               <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setMsgRapidasOpen(true)} title="Mensagens rápidas">
                 <Zap className="h-3.5 w-3.5 mr-1" /> Mensagens rápidas
               </Button>
