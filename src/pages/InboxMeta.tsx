@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Plus, Tag, X, Pin,
-  Archive, Trash2, MessageSquarePlus, Paperclip, Reply, CheckSquare, Square, ChevronDown,
+  Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
+  Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
