@@ -439,7 +439,7 @@ export default function InboxMeta() {
     <AppLayout>
       <div className="flex h-[calc(100vh-4rem)] gap-0 overflow-hidden">
         {/* Sidebar */}
-        <div className="w-full sm:w-[360px] border-r flex flex-col bg-card">
+        <div className="w-full sm:w-[360px] sm:min-w-[360px] sm:max-w-[360px] border-r flex flex-col bg-card overflow-hidden">
           <div className="p-3 border-b space-y-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
@@ -521,7 +521,8 @@ export default function InboxMeta() {
               </div>
             )}
           </div>
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 w-full max-w-full overflow-hidden">
+            <div className="w-full max-w-full overflow-hidden">
             {contatosFiltrados.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
                 {abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.'}
@@ -551,7 +552,7 @@ export default function InboxMeta() {
                     onClick={() => selMultipla ? toggleSel(c.id) : setContatoAtivo(c)}
                     onDoubleClick={() => { if (!selMultipla) { setSelMultipla(true); toggleSel(c.id); } }}
                     className={cn(
-                      'relative w-full min-h-[76px] text-left px-3 py-3 pr-14 border-b hover:bg-accent/50 transition flex flex-col justify-center gap-1 overflow-hidden',
+                      'relative block w-full max-w-full min-h-[76px] text-left px-3 py-3 pr-14 border-b hover:bg-accent/50 transition overflow-hidden',
                       ativo && 'bg-accent',
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
