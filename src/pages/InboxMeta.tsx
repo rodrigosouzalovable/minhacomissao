@@ -570,14 +570,14 @@ export default function InboxMeta() {
                         c.nao_lido > 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground',
                       )}>{formatContatoTime(c.ultima_mensagem_em)}</span>
                     </div>
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className={cn(
-                        'text-xs truncate pt-0.5',
+                        'text-xs truncate pt-0.5 flex-1 min-w-0',
                         c.nao_lido > 0 ? 'text-foreground font-medium' : 'text-muted-foreground',
                       )}>{c.ultima_mensagem || '—'}</span>
                       {c.nao_lido > 0 && (
                         <span
-                          className="shrink-0 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-primary text-[11px] font-bold leading-none text-primary-foreground shadow-sm"
+                          className="shrink-0 inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-emerald-500 text-[11px] font-bold leading-none text-white shadow-sm ring-2 ring-background"
                           aria-label={`${c.nao_lido} mensagem${c.nao_lido > 1 ? 's' : ''} não lida${c.nao_lido > 1 ? 's' : ''}`}
                         >
                           {c.nao_lido > 99 ? '99+' : c.nao_lido}
