@@ -171,6 +171,13 @@ serve(async (req) => {
             : from;
           if (!outroLado) continue;
 
+          // Baixar mídia (imagem/áudio/vídeo/documento/sticker) via Graph API e salvar no storage público
+          let mediaUrl: string | null = null;
+          const { mediaId, mime } = extractMediaId(m);
+          if (mediaId && mime && inst.access_token) {
+            mediaUrl = await baixarMidiaMeta(supabase, inst.access_token, mediaId, mime, inst.id, m.id || mediaId);
+          }
+
           // Insere mensagem (dedup via UNIQUE instancia_id + wa_message_id — envios feitos pelo próprio sistema não duplicam)
           const { error: msgError } = await supabase.from('meta_whatsapp_mensagens').insert({
             user_id: inst.user_id,
@@ -179,6 +186,7 @@ serve(async (req) => {
             direcao: isEcho ? 'saida' : 'entrada',
             conteudo: texto,
             tipo_conteudo: tipo,
+            media_url: mediaUrl,
             timestamp_msg: tsMsg,
             status_envio: isEcho ? 'enviada' : 'entregue',
             wa_message_id: m.id,
