@@ -98,50 +98,64 @@ serve(async (req) => {
           const tsMsg = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
           const nomeContato = nomePorWaId[from] || null;
 
-          // Insere mensagem (dedup via UNIQUE instancia_id + wa_message_id)
+          // Echo: mensagem enviada pelo próprio número (WhatsApp Web / celular via coexistência)
+          const fromDigits = String(from).replace(/\D/g, '');
+          const isEcho = isEchoField || (!!businessDigits && fromDigits === businessDigits);
+
+          // Para echoes: destinatário está em contacts[0].wa_id ou m.to
+          const outroLado = isEcho
+            ? (m.to || contacts?.[0]?.wa_id || null)
+            : from;
+          if (!outroLado) continue;
+
+          // Insere mensagem (dedup via UNIQUE instancia_id + wa_message_id — envios feitos pelo próprio sistema não duplicam)
           await supabase.from('meta_whatsapp_mensagens').insert({
             user_id: inst.user_id,
             instancia_id: inst.id,
-            telefone: from,
-            direcao: 'entrada',
+            telefone: outroLado,
+            direcao: isEcho ? 'saida' : 'entrada',
             conteudo: texto,
             tipo_conteudo: tipo,
             timestamp_msg: tsMsg,
-            status_envio: 'entregue',
+            status_envio: isEcho ? 'enviada' : 'entregue',
             wa_message_id: m.id,
           } as any);
 
-          // Upsert contato — incrementa não-lido e atualiza preview
+          // Upsert contato
           const { data: existente } = await supabase
             .from('meta_whatsapp_contatos')
             .select('id, nao_lido, nome')
             .eq('instancia_id', inst.id)
-            .eq('telefone', from)
+            .eq('telefone', outroLado)
             .maybeSingle();
 
           if (existente) {
-            await supabase.from('meta_whatsapp_contatos')
-              .update({
-                ultima_mensagem: texto,
-                ultima_mensagem_em: tsMsg,
-                ultima_msg_entrada_em: tsMsg,
-                nao_lido: (existente.nao_lido || 0) + 1,
-                nome: existente.nome || nomeContato,
-                atualizado_em: new Date().toISOString(),
-              })
-              .eq('id', existente.id);
+            const upd: any = {
+              ultima_mensagem: texto,
+              ultima_mensagem_em: tsMsg,
+              atualizado_em: new Date().toISOString(),
+            };
+            if (isEcho) {
+              // envio nosso — não incrementa não-lido, não atualiza ultima_msg_entrada_em
+            } else {
+              upd.ultima_msg_entrada_em = tsMsg;
+              upd.nao_lido = (existente.nao_lido || 0) + 1;
+              upd.nome = existente.nome || nomeContato;
+            }
+            await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', existente.id);
           } else {
             await supabase.from('meta_whatsapp_contatos').insert({
               user_id: inst.user_id,
               instancia_id: inst.id,
-              telefone: from,
-              nome: nomeContato,
+              telefone: outroLado,
+              nome: isEcho ? null : nomeContato,
               ultima_mensagem: texto,
               ultima_mensagem_em: tsMsg,
-              ultima_msg_entrada_em: tsMsg,
-              nao_lido: 1,
+              ultima_msg_entrada_em: isEcho ? null : tsMsg,
+              nao_lido: isEcho ? 0 : 1,
             } as any);
           }
+
 
           // Compatibilidade com o log de envios em massa
           await supabase.from('meta_whatsapp_envios_log')
