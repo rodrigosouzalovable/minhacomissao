@@ -102,6 +102,8 @@ export default function InboxMeta() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<MetaComposerHandle>(null);
+  const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
 
   // ============== Carregamento ==============
   useEffect(() => {
