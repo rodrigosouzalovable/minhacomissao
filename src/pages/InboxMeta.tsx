@@ -21,7 +21,7 @@ import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaContextMenu';
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
-import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
+
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
 import {
@@ -89,7 +89,7 @@ export default function InboxMeta() {
   const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
 
-  const [novaOpen, setNovaOpen] = useState(false);
+  
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
   const [msgRapidasOpen, setMsgRapidasOpen] = useState(false);
   const [msgRapidas, setMsgRapidas] = useState<MetaMsgRapida[]>([]);
@@ -826,9 +826,6 @@ export default function InboxMeta() {
         </div>
       </div>
 
-      <MetaNovaConversaDialog open={novaOpen} onOpenChange={setNovaOpen} instancias={instancias}
-        defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
-        onSent={() => fetchContatos()} />
       <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
     </AppLayout>
