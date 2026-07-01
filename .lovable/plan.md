@@ -1,86 +1,27 @@
-# Trazer todas as funções do WhatsApp Inbox para o Inbox Meta Oficial
+## Diagnóstico
 
-Vou recriar o Inbox Meta Oficial com paridade total ao WhatsApp Inbox, reaproveitando o máximo de componentes existentes (`ChatMessage`, `ChatInputBar`, `ConversaContextMenu`, `GerenciarEtiquetasDialog`, `NovaConversaDialog`, `MensagensRapidasDialog`) e adaptando o que a API Meta exige tratamento diferente.
+Confirmei no banco: existem **47 contatos com `nao_lido > 0`** (batendo com o "47" da bolinha vermelha da sidebar). Os dados estão corretos.
 
-## 1. Banco de dados (1 migration)
+O problema é **visual**, na lista de conversas em `src/pages/InboxMeta.tsx`:
 
-Adicionar nas tabelas Meta as colunas que faltam para suportar as mesmas features:
+1. **Falta destaque de "não lida"**: o nome, a prévia e o horário usam sempre o mesmo peso/opacidade. No WhatsApp Inbox tradicional, conversa não lida fica em **negrito** e o horário em verde. Aqui tudo aparece igual, dando a impressão de que já foi aberta.
+2. **A "bolinha verde" (badge com quantidade)** é renderizada com `<Badge>` (variant default = `bg-primary`) + override `bg-emerald-500`. Dependendo da resolução do tailwind-merge, o `bg-primary` pode vencer e o badge some no fundo azul quando a conversa está ativa (`bg-accent`), ficando praticamente invisível.
+3. **Ordenação não prioriza não lidas**: hoje só `fixado` sobe. Uma conversa não lida fica misturada com as já lidas, reforçando a percepção do usuário.
 
-- `meta_whatsapp_contatos`: `fixado boolean default false`, `arquivado boolean default false`, `historico_inicial_importado_em timestamptz`.
-- `meta_whatsapp_mensagens`: `lida boolean default false`, `whatsapp_msg_id_reply text` (id da mensagem citada), `conteudo_citado text`, `editada boolean default false`, `apagada_para_mim boolean default false`.
-- Novas tabelas espelhando o sistema de etiquetas e mensagens rápidas, escopadas por usuário:
-  - `meta_whatsapp_etiquetas` (nome, cor)
-  - `meta_whatsapp_contato_etiquetas` (contato_id, etiqueta_id)
-  - `meta_whatsapp_mensagens_rapidas` (titulo, tipo texto/audio/botoes, conteudo, audio_url, botoes_texto, botoes_choices)
-- RLS + GRANTs (`authenticated` + `service_role`) em todas, escopadas por `user_id` ou pelo dono da instância.
+## Correções (só UI, sem mexer em regra de negócio)
 
-## 2. Edge functions Meta novas/atualizadas
+Arquivo: `src/pages/InboxMeta.tsx`
 
-Equivalentes às que o inbox UAZAPI usa, todas respeitando a janela 24h da Meta:
+1. Substituir o `<Badge>` verde por um `<span>` puro com estilo inline (`bg-emerald-500 text-white rounded-full`), garantindo que sempre apareça — inclusive quando o item está selecionado — e com contraste claro. Mostrar `99+` quando `nao_lido > 99`.
+2. Adicionar estilo de **não lida**:
+   - Nome em `font-bold` (em vez de `font-medium`) quando `c.nao_lido > 0`.
+   - Prévia da última mensagem em `text-foreground font-medium` (em vez de `text-muted-foreground`) quando não lida.
+   - Horário em `text-emerald-600 font-semibold` quando não lida.
+3. Ajustar o `sort` de `contatosFiltrados` para priorizar, nesta ordem: fixadas → não lidas → resto (mantendo ordem por `ultima_mensagem_em` desc dentro de cada grupo).
+4. Garantir que ao abrir uma conversa (`fetchMensagens` sem `loadMore`), além de zerar no banco, o estado local `contatos` também zere aquele `nao_lido` imediatamente (hoje depende de esperar o realtime — o que dá impressão de "atraso"). Isso mantém a UI consistente sem esperar o round-trip.
 
-- `send-whatsapp-meta-media` — envia imagem / documento via `messages` API (upload no storage `inbox-media` + URL pública, igual ao UAZAPI).
-- `send-whatsapp-meta-audio` — envia áudio (voice) Meta.
-- `send-whatsapp-meta-interactive` — envia botões interativos (limite 3 botões, dentro de 24h).
-- `meta-whatsapp-webhook` — já recebe inbound; vou estender para gravar `whatsapp_msg_id_reply` (`context.id`) e `conteudo_citado`, e capturar respostas de botão/lista.
-- `transcribe-audio` — já existe e é reutilizada para "Áudio transcrito".
+## Verificação após implementar
 
-Limitações Meta intransponíveis (vou mostrar como toast/aviso na UI, não como funcionalidade quebrada):
-- **Editar mensagem**: a API oficial Meta não permite editar mensagens já enviadas. O botão fica oculto para mensagens Meta.
-- **Apagar para todos**: a Meta não expõe endpoint de "delete for everyone"; só excluímos localmente ("Apagar para mim").
-- **Texto livre / mídia / áudio / botões** só dentro da janela de 24h. Fora dela, a UI mostra o aviso atual e desativa só o envio livre.
-
-## 3. UI: reescrita do `src/pages/InboxMeta.tsx`
-
-Estrutura idêntica ao `WhatsAppInbox.tsx`, com as mesmas seções e componentes:
-
-- **Cabeçalho da sidebar**: busca, filtro por número Meta, filtro por etiqueta, botão "Nova conversa", botão "Mensagens rápidas".
-- **Abas Conversas / Arquivados** com badge de quantidade.
-- **Lista de contatos**:
-  - Ordenação: fixados no topo, depois por `ultima_mensagem_em`.
-  - Badge de não lidas, badge de etiquetas coloridas, nome da instância.
-  - Auto-arquivamento de números internos (mesmo critério já usado: sufixo das próprias instâncias Meta).
-  - **Context menu** (`ConversaContextMenu` reutilizado, com prop `tabela="meta"` para usar as tabelas Meta): marcar não lida, fixar, arquivar/desarquivar, excluir, gerenciar etiquetas.
-  - Modo seleção múltipla: arquivar várias, desarquivar várias, excluir várias.
-- **Realtime + auto-reconexão + polling 20s + refetch on visibilitychange** — porta direta da lógica do WhatsApp Inbox para as tabelas `meta_whatsapp_contatos` e `meta_whatsapp_mensagens`.
-- **Painel da conversa**:
-  - Cabeçalho com nome, telefone, instância, badge da janela 24h (mantém o atual).
-  - **Histórico paginado** (200 por página) com scroll infinito para carregar mensagens anteriores.
-  - **Botão Clock** para buscar histórico mais antigo na Meta (Meta não expõe endpoint de histórico → o botão fica desabilitado com tooltip explicando, mantendo paridade visual).
-  - Separadores de data (Hoje/Ontem/data).
-  - `ChatMessage` reutilizado, incluindo status_envio (relógio/check/duplo check/lido), respostas citadas, mídia, áudio, botões interativos recebidos.
-  - **Responder mensagem** (clicar → preenche `respondendoMsg`, envia com `context.message_id` na Meta).
-  - **Apagar para mim** disponível; **Apagar para todos** oculto para mensagens Meta com toast explicando a limitação.
-  - **Drag&drop** e **colar imagem** para enviar mídia.
-- **Barra de input**: reutilizar `ChatInputBar`, passando handlers Meta (`send-whatsapp-meta-text`, `-media`, `-audio`, `-interactive`). Suporta texto, mídia, áudio (gravação + envio), áudio transcrito, atalhos rápidos, resposta. Toda a barra fica desabilitada fora da janela 24h, mantendo o aviso atual.
-- **Diálogo Nova conversa Meta**: nova variante do `NovaConversaDialog` que lista instâncias Meta e envia via template HSM (única forma de iniciar fora de 24h) ou texto livre se já houver janela aberta.
-- **Diálogos de Etiquetas e Mensagens rápidas Meta**: variantes apontando para as novas tabelas Meta.
-
-## 4. Sidebar / badge
-
-O badge vermelho já implementado em `AppLayout.tsx` continua válido (lê `meta_whatsapp_contatos.nao_lido`).
-
-## 5. Detalhes técnicos
-
-```text
-src/pages/InboxMeta.tsx               (reescrito, ~1500 linhas, espelho do WhatsAppInbox.tsx)
-src/components/inbox/                 (reutilizados, com pequenas props para alternar tabela Meta)
-  ConversaContextMenu.tsx             → aceitar prop `mode: 'uazapi' | 'meta'`
-  GerenciarEtiquetasDialog.tsx        → idem
-  MensagensRapidasDialog.tsx          → idem
-  NovaConversaDialog.tsx              → idem
-supabase/functions/
-  send-whatsapp-meta-media/           (nova)
-  send-whatsapp-meta-audio/           (nova)
-  send-whatsapp-meta-interactive/     (nova)
-  meta-whatsapp-webhook/              (estendida: reply context + interactive responses)
-1 migration                           (colunas + 3 tabelas + RLS + GRANTs)
-```
-
-## O que fica diferente do WhatsApp Inbox por restrição da Meta
-
-- Editar mensagem enviada → botão oculto.
-- "Apagar para todos" → só apaga localmente, com toast explicando.
-- Botão de buscar histórico antigo na operadora → desabilitado (Meta não expõe).
-- Envio livre (texto, mídia, áudio, botões, atalhos) → bloqueado fora da janela 24h, com o aviso atual sugerindo template HSM.
-
-Quer que eu execute exatamente esse plano, ou prefere remover alguma dessas funções (ex.: pular áudio/botões interativos para reduzir custo de edge functions)?
+- Recarregar `/admin/inbox-meta`: as 47 conversas não lidas devem aparecer com nome em negrito, prévia destacada, horário verde e badge verde com o número (ex.: 12, 8, 4…).
+- Clicar em uma conversa: nome deve voltar a peso normal, badge some, `nao_lido` no card zera na hora.
+- A bolinha vermelha da sidebar deve cair para 46 após abrir uma delas.
