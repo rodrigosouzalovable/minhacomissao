@@ -478,16 +478,8 @@ export default function InboxMeta() {
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
               <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">Oficial</Badge>
-            </div>
-            <div className="flex gap-1">
-              <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => setNovaOpen(true)}>
-                <MessageSquarePlus className="h-3.5 w-3.5 mr-1" /> Nova
-              </Button>
               <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setMsgRapidasOpen(true)} title="Mensagens rápidas">
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-              <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setEtiquetasOpen(true)} title="Etiquetas">
-                <Tag className="h-3.5 w-3.5" />
+                <Zap className="h-3.5 w-3.5 mr-1" /> Mensagens rápidas
               </Button>
             </div>
             <Select value={filtroInstancia} onValueChange={setFiltroInstancia}>
