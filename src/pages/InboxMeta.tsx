@@ -105,6 +105,28 @@ export default function InboxMeta() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<MetaComposerHandle>(null);
   const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
+  const themeStorageKey = user ? `inbox-meta-theme:${user.id}` : 'inbox-meta-theme';
+  const [tema, setTema] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    try {
+      const k = user ? `inbox-meta-theme:${user.id}` : 'inbox-meta-theme';
+      return (localStorage.getItem(k) as 'light' | 'dark') || 'light';
+    } catch { return 'light'; }
+  });
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const saved = localStorage.getItem(themeStorageKey) as 'light' | 'dark' | null;
+      if (saved) setTema(saved);
+    } catch {}
+  }, [user, themeStorageKey]);
+  const toggleTema = () => {
+    setTema(prev => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      try { localStorage.setItem(themeStorageKey, next); } catch {}
+      return next;
+    });
+  };
 
   // ============== Carregamento ==============
   useEffect(() => {
