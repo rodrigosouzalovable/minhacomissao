@@ -522,7 +522,7 @@ export default function InboxMeta() {
             )}
           </div>
           <ScrollArea className="flex-1 w-full max-w-full overflow-hidden">
-            <div className="w-full max-w-full overflow-hidden">
+            <div className="w-full sm:w-[360px] max-w-full overflow-hidden">
               {contatosFiltrados.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
                 {abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.'}
