@@ -392,7 +392,10 @@ export default function InboxMeta() {
     await supabase.from('meta_whatsapp_contatos').update({ arquivado: arq }).eq('id', id);
     if (contatoAtivo?.id === id) setContatoAtivo(null);
   };
-  const handleMarcarNaoLida = () => { /* realtime já atualiza */ };
+  const handleMarcarNaoLida = (id: string) => {
+    setContatos(prev => prev.map(c => c.id === id ? { ...c, nao_lido: Math.max(c.nao_lido || 0, 1) } : c));
+    setContatoAtivo(prev => prev?.id === id ? { ...prev, nao_lido: Math.max(prev.nao_lido || 0, 1) } : prev);
+  };
   const handleEtiquetaToggle = (cId: string, eId: string, ativo: boolean) => {
     setContatoEtiquetas(prev => {
       const ids = prev[cId] || [];
@@ -537,7 +540,7 @@ export default function InboxMeta() {
                   contatoEtiquetaIds={etIds}
                   fixado={c.fixado}
                   arquivado={c.arquivado}
-                  onMarcarNaoLida={handleMarcarNaoLida}
+                  onMarcarNaoLida={() => handleMarcarNaoLida(c.id)}
                   onExcluirConversa={handleExcluirConversa}
                   onEtiquetaToggle={handleEtiquetaToggle}
                   onEtiquetasChange={fetchEtiquetas}
@@ -553,7 +556,7 @@ export default function InboxMeta() {
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
                     )}>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <span className={cn(
                         'text-sm truncate flex items-center gap-1',
                         c.nao_lido > 0 ? 'font-bold text-foreground' : 'font-medium',
@@ -567,15 +570,15 @@ export default function InboxMeta() {
                         c.nao_lido > 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground',
                       )}>{formatContatoTime(c.ultima_mensagem_em)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <span className={cn(
-                        'text-xs truncate',
+                        'text-xs truncate pt-0.5',
                         c.nao_lido > 0 ? 'text-foreground font-medium' : 'text-muted-foreground',
                       )}>{c.ultima_mensagem || '—'}</span>
                       {c.nao_lido > 0 && (
                         <span
-                          className="shrink-0 inline-flex items-center justify-center h-[18px] min-w-[18px] px-1.5 rounded-full text-[10px] font-bold text-white"
-                          style={{ backgroundColor: '#10b981' }}
+                          className="shrink-0 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-primary text-[11px] font-bold leading-none text-primary-foreground shadow-sm"
+                          aria-label={`${c.nao_lido} mensagem${c.nao_lido > 1 ? 's' : ''} não lida${c.nao_lido > 1 ? 's' : ''}`}
                         >
                           {c.nao_lido > 99 ? '99+' : c.nao_lido}
                         </span>

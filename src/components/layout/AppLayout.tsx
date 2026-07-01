@@ -243,9 +243,22 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Fetch Meta Inbox unread count
   const fetchMetaUnreadCount = useCallback(async () => {
     if (!user) return;
+    const { data: activeInstances } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id')
+      .eq('ativo', true);
+
+    const instanceIds = (activeInstances ?? []).map((i) => i.id);
+    if (instanceIds.length === 0) {
+      setMetaInboxUnreadCount(0);
+      return;
+    }
+
     const { count } = await supabase
       .from('meta_whatsapp_contatos')
       .select('id', { count: 'exact', head: true })
+      .in('instancia_id', instanceIds)
+      .eq('arquivado', false)
       .gt('nao_lido', 0);
     setMetaInboxUnreadCount(count ?? 0);
   }, [user]);
