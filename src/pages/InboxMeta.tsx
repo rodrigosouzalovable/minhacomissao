@@ -332,6 +332,33 @@ export default function InboxMeta() {
     }
   };
 
+  const audioRec = useMetaAudioRecorder({
+    instanciaId: contatoAtivo?.instancia_id || '',
+    telefone: contatoAtivo?.telefone || '',
+    userId: user?.id,
+    replyToWaId: respondendo?.wa_message_id || undefined,
+    conteudoCitado: respondendo?.conteudo || undefined,
+    onSent: () => setRespondendo(null),
+  });
+
+  const iniciarGravacaoModo = async (modo: 'audio' | 'transcrito') => {
+    if (!contatoAtivo || !janelaInfo.aberta) return;
+    setModoGravacao(modo);
+    await audioRec.iniciarGravacao();
+  };
+
+  const finalizarGravacao = async () => {
+    if (modoGravacao === 'transcrito') {
+      const texto = await audioRec.transcreverGravacao();
+      if (texto) {
+        composerRef.current?.appendText(texto);
+        toast({ title: 'Áudio transcrito', description: 'Revise o texto e clique em enviar.' });
+      }
+    } else {
+      await audioRec.enviarGravacao();
+    }
+  };
+
   const enviarMidia = async (file: File) => {
     if (!contatoAtivo) return;
     if (!janelaInfo.aberta) {
