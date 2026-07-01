@@ -1,32 +1,32 @@
 ## Problema
 
-Hoje o webhook Meta só grava mensagens **recebidas** (`messages` com `from` = cliente). Quando você responde pelo WhatsApp Web / celular no modo coexistência (Cloud API + app), a Meta envia esses envios como **echoes** — e o webhook atual ignora eles, então a conversa não atualiza no sistema.
+No Inbox Meta, mídias recebidas (imagem, áudio, PDF, vídeo) aparecem como "Mídia indisponível". A Meta Cloud API não envia a URL da mídia direto no webhook — envia só o `media_id`, e é preciso baixar em 2 passos autenticados com o `access_token` da instância, o que hoje o webhook não faz.
 
-## Sim, é possível
+## Solução
 
-A Meta manda esses envios em dois lugares do webhook que hoje não tratamos:
+Baixar a mídia no momento em que o webhook chega, salvar no bucket público de storage e gravar a URL pública em `meta_whatsapp_mensagens.media_url`. A partir daí o `InboxMeta.tsx` já sabe renderizar imagem/áudio/vídeo/PDF (mesma lógica do WhatsApp Inbox).
 
-1. **`message_echoes`** — campo separado que precisa estar assinado no app da Meta. Contém as mensagens que você enviou pelo aparelho/Web, com `from` = seu número business.
-2. **`statuses`** com `origin.type = "business_initiated"` fora do nosso fluxo — usado para conciliar.
+## Passos
 
-## O que vou fazer
+### 1. `supabase/functions/meta-whatsapp-webhook/index.ts`
+- Para cada `message` recebida (não echo) com `type ∈ {image, audio, video, document, sticker}`:
+  1. Ler `m[type].id` (media_id) e `m[type].mime_type`.
+  2. `GET https://graph.facebook.com/v21.0/{media_id}` com `Authorization: Bearer {inst.access_token}` → obtém `url`.
+  3. `GET url` com o mesmo Bearer → binário.
+  4. Upload em bucket público `meta-whatsapp-media` no path `{instancia_id}/{wa_message_id}.{ext}` (extensão derivada do mime).
+  5. Pegar `publicUrl` e gravar em `media_url` do insert.
+- Para documento, preservar `document.filename` no campo `conteudo`.
+- Se o download falhar (token expirado, mídia > 24h expirada na Meta): logar e seguir sem `media_url` (fallback atual "Mídia indisponível").
+- Echoes (`smb_message_echoes`) recebem o mesmo tratamento — a Meta também expõe `media_id` neles.
 
-### 1. Edge function `meta-whatsapp-webhook`
-- Detectar quando `change.field === "message_echoes"` **ou** quando uma mensagem em `messages` tem `from` igual ao número da instância (`display_phone_number`).
-- Inserir como `direcao = "saida"` em `meta_whatsapp_mensagens`, com `wa_message_id` para dedup (evita duplicar quando a mensagem sai pelo próprio sistema).
-- Atualizar `ultima_mensagem` / `ultima_mensagem_em` do contato, **sem** incrementar `nao_lido` (é envio nosso).
-- Criar o contato se ainda não existir (primeira interação vinda do celular).
+### 2. Storage
+- Criar bucket `meta-whatsapp-media` público (SELECT anon) via migration, se ainda não existir. Alinhado à regra do projeto de manter SELECT público para funcionar tanto no app quanto em previews externos.
 
-### 2. Edge function `meta-subscribe-waba`
-- Incluir `message_echoes` na lista de campos assinados ao clicar em "Assinar instâncias".
+### 3. UI (`src/pages/InboxMeta.tsx`)
+Nenhuma mudança necessária — a renderização de `media_url` por `tipo_conteudo` já existe. Só passa a receber URLs válidas.
 
-### 3. Instrução ao usuário
-Depois do deploy, é preciso reassinar as instâncias uma vez (botão já existente em Configurar Meta) para a Meta começar a enviar os echoes. Também exige que a conta esteja em **modo coexistência** habilitado pela Meta — se o número for Cloud API puro (sem app), não haverá WhatsApp Web para responder, então isso não se aplica.
+## Escopo / não-escopo
 
-## Detalhes técnicos
-
-- Dedup: se o `wa_message_id` já existir (envio feito pelo próprio sistema via `send-whatsapp-meta-text`), o insert é ignorado pelo UNIQUE. Assim mensagens enviadas por aqui não duplicam.
-- `tipo_conteudo` e `conteudo` reutilizam a função `extractTextoFromMessage` existente.
-- Timestamp: `m.timestamp` do echo.
-
-Nenhuma mudança de UI — o `InboxMeta.tsx` já renderiza `direcao = "saida"` corretamente.
+- Só afeta mensagens **novas** que chegam após o deploy. Mensagens antigas continuam como "Mídia indisponível" (a Meta descarta a mídia após alguns dias, não dá pra buscar retroativo).
+- Sem mudança em envio de mídia (já funciona via `send-whatsapp-meta-media`).
+- Sem mudança de custo relevante: storage é o mesmo que já usamos no WhatsApp Inbox.

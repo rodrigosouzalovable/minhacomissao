@@ -34,6 +34,63 @@ function normalizePhone(tel: any): string {
   return String(tel || '').replace(/\D/g, '');
 }
 
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/webm': 'webm', 'audio/amr': 'amr',
+  'video/mp4': 'mp4', 'video/3gpp': '3gp', 'video/webm': 'webm',
+  'application/pdf': 'pdf',
+};
+
+function extractMediaId(m: any): { mediaId: string | null; mime: string | null } {
+  const t = m.type;
+  if (t === 'image' && m.image?.id) return { mediaId: m.image.id, mime: m.image.mime_type || 'image/jpeg' };
+  if (t === 'audio' && m.audio?.id) return { mediaId: m.audio.id, mime: m.audio.mime_type || 'audio/ogg' };
+  if (t === 'video' && m.video?.id) return { mediaId: m.video.id, mime: m.video.mime_type || 'video/mp4' };
+  if (t === 'document' && m.document?.id) return { mediaId: m.document.id, mime: m.document.mime_type || 'application/pdf' };
+  if (t === 'sticker' && m.sticker?.id) return { mediaId: m.sticker.id, mime: m.sticker.mime_type || 'image/webp' };
+  return { mediaId: null, mime: null };
+}
+
+async function baixarMidiaMeta(
+  supabase: any, accessToken: string, mediaId: string, mime: string, instanciaId: string, waMessageId: string
+): Promise<string | null> {
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) {
+      console.error('[MetaWebhook] falha metadata mídia', mediaId, metaRes.status);
+      return null;
+    }
+    const meta = await metaRes.json();
+    const url = meta?.url;
+    if (!url) return null;
+
+    const binRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!binRes.ok) {
+      console.error('[MetaWebhook] falha download mídia', mediaId, binRes.status);
+      return null;
+    }
+    const buf = new Uint8Array(await binRes.arrayBuffer());
+    const ext = MIME_EXT[mime.toLowerCase()] || (mime.split('/')[1] || 'bin');
+    const safeMsgId = String(waMessageId || crypto.randomUUID()).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `meta/${instanciaId}/${safeMsgId}.${ext}`;
+
+    const { error: upErr } = await supabase.storage
+      .from('inbox-media')
+      .upload(path, buf, { contentType: mime, upsert: true });
+    if (upErr) {
+      console.error('[MetaWebhook] falha upload mídia', upErr.message);
+      return null;
+    }
+    const { data: pub } = supabase.storage.from('inbox-media').getPublicUrl(path);
+    return pub?.publicUrl || null;
+  } catch (e) {
+    console.error('[MetaWebhook] erro baixarMidiaMeta', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -81,7 +138,7 @@ serve(async (req) => {
         if (!phoneNumberId) continue;
 
         const { data: inst } = await supabase
-          .from('meta_whatsapp_instances').select('id, user_id, display_phone')
+          .from('meta_whatsapp_instances').select('id, user_id, display_phone, access_token')
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
@@ -114,6 +171,13 @@ serve(async (req) => {
             : from;
           if (!outroLado) continue;
 
+          // Baixar mídia (imagem/áudio/vídeo/documento/sticker) via Graph API e salvar no storage público
+          let mediaUrl: string | null = null;
+          const { mediaId, mime } = extractMediaId(m);
+          if (mediaId && mime && inst.access_token) {
+            mediaUrl = await baixarMidiaMeta(supabase, inst.access_token, mediaId, mime, inst.id, m.id || mediaId);
+          }
+
           // Insere mensagem (dedup via UNIQUE instancia_id + wa_message_id — envios feitos pelo próprio sistema não duplicam)
           const { error: msgError } = await supabase.from('meta_whatsapp_mensagens').insert({
             user_id: inst.user_id,
@@ -122,6 +186,7 @@ serve(async (req) => {
             direcao: isEcho ? 'saida' : 'entrada',
             conteudo: texto,
             tipo_conteudo: tipo,
+            media_url: mediaUrl,
             timestamp_msg: tsMsg,
             status_envio: isEcho ? 'enviada' : 'entregue',
             wa_message_id: m.id,
