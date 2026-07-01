@@ -76,9 +76,12 @@ serve(async (req) => {
         if (!phoneNumberId) continue;
 
         const { data: inst } = await supabase
-          .from('meta_whatsapp_instances').select('id, user_id')
+          .from('meta_whatsapp_instances').select('id, user_id, display_phone')
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
+
+        const businessDigits = String(inst.display_phone || '').replace(/\D/g, '');
+        const isEchoField = String(change.field || '').toLowerCase() === 'message_echoes';
 
         // ===== Mensagens recebidas =====
         const messages = value.messages || [];
