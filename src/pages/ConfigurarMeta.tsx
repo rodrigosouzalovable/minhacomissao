@@ -307,7 +307,7 @@ export default function ConfigurarMeta() {
           <div>
             <Label>Eventos a inscrever</Label>
             <p className="text-xs text-muted-foreground mt-1">
-              <code>messages</code> (respostas) e <code>message_template_status_update</code> (status de templates)
+              <code>messages</code> (respostas recebidas), <code>smb_message_echoes</code> (respostas pelo celular/WhatsApp Web) e <code>message_template_status_update</code> (status de templates)
             </p>
           </div>
         </CardContent>
@@ -347,7 +347,7 @@ export default function ConfigurarMeta() {
                     <div className="mt-2 flex gap-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
                       <span>
-                        Se as mensagens ainda não chegarem, confirme no app da Meta que o campo <strong>messages</strong> está marcado em Webhook Fields.
+                        Se as mensagens ainda não chegarem, confirme no app da Meta que os campos <strong>messages</strong> e <strong>smb_message_echoes</strong> estão marcados em Webhook Fields.
                       </span>
                     </div>
                   )}
