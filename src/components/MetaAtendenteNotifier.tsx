@@ -54,7 +54,18 @@ export function MetaAtendenteNotifier() {
           const etiquetaId = etiquetaIdRef.current;
           if (!etiquetaId) return;
           const msg = payload.new as any;
-          const contatoId = msg?.contato_id;
+          const instanciaId = msg?.instancia_id;
+          const telefone = msg?.telefone;
+          if (!instanciaId || !telefone) return;
+
+          // Localiza contato
+          const { data: contato } = await supabase
+            .from('meta_whatsapp_contatos')
+            .select('id')
+            .eq('instancia_id', instanciaId)
+            .eq('telefone', telefone)
+            .maybeSingle();
+          const contatoId = (contato as any)?.id;
           if (!contatoId) return;
 
           // Debounce 2s por contato
