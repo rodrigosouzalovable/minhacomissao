@@ -30,7 +30,8 @@ import {
   AtSign,
   Bell,
   MessageSquareText,
-  Send
+  Send,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -94,6 +95,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/configurar-meta', label: 'API Oficial Meta', icon: MessageSquare, adminOnly: true },
   { href: '/admin/inbox-meta', label: 'Inbox Meta Oficial', icon: MessageSquare, adminOnly: true },
   { href: '/admin/envio-meta', label: 'Envio Meta (massa)', icon: Send, adminOnly: true },
+  { href: '/admin/meta-billing', label: 'Cobranças Meta', icon: CreditCard, adminOnly: true },
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/admin/comite-novomundo', label: 'Comitê Novo Mundo', icon: BarChart3, adminOnly: true },
