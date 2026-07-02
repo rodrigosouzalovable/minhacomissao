@@ -218,10 +218,41 @@ serve(async (req) => {
           const isEcho = isEchoField || (!!businessDigits && fromDigits === businessDigits);
 
           // Para echoes: destinatário está em m.to; em mensagens recebidas, o outro lado é m.from
-          const outroLado = isEcho
+          let outroLado = isEcho
             ? normalizePhone(m.to || contacts?.[0]?.wa_id || null)
             : from;
           if (!outroLado) continue;
+
+          // Casa telefone pelo sufixo (últimos 8 dígitos) para unificar variações
+          // com/sem "9" do celular brasileiro entre envio (5562981079590) e resposta (556281079590)
+          const sufixo = outroLado.slice(-8);
+          if (sufixo.length === 8) {
+            const { data: contatoCanonico } = await supabase
+              .from('meta_whatsapp_contatos')
+              .select('telefone')
+              .eq('instancia_id', inst.id)
+              .ilike('telefone', `%${sufixo}`)
+              .neq('telefone', outroLado)
+              .order('atualizado_em', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (contatoCanonico?.telefone) {
+              outroLado = contatoCanonico.telefone;
+            } else {
+              const { data: envioCanonico } = await supabase
+                .from('meta_whatsapp_envios_log')
+                .select('telefone')
+                .eq('instancia_id', inst.id)
+                .ilike('telefone', `%${sufixo}`)
+                .neq('telefone', outroLado)
+                .order('enviado_em', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (envioCanonico?.telefone) {
+                outroLado = envioCanonico.telefone;
+              }
+            }
+          }
 
           // Baixar mídia (imagem/áudio/vídeo/documento/sticker) via Graph API e salvar no storage público
           let mediaUrl: string | null = null;
@@ -285,14 +316,15 @@ serve(async (req) => {
           }
 
 
-          // Compatibilidade com o log de envios em massa
-          if (!isEcho) {
+          // Compatibilidade com o log de envios em massa — casa por sufixo
+          if (!isEcho && sufixo.length === 8) {
             await supabase.from('meta_whatsapp_envios_log')
               .update({ status: 'replied' })
               .eq('instancia_id', inst.id)
-              .eq('telefone', from)
+              .ilike('telefone', `%${sufixo}`)
               .neq('status', 'replied');
           }
+
         }
 
         // ===== Atualizações de status =====
