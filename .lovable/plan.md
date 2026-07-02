@@ -1,80 +1,31 @@
-## Objetivo
+## Problema
 
-Preparar o sistema e a documentação para gravação do screencast de App Review da Meta (permissões `whatsapp_business_messaging` e `whatsapp_business_management`). Como eu não posso gravar o vídeo por você (não tenho acesso ao seu login em produção, e vídeo gerado por IA é reprovado pela Meta), vou entregar tudo que reduz a gravação a apenas apertar REC.
+Ao enviar via **Envio Meta** para `5562981079590` (13 dígitos, com o "9" extra do celular), a mensagem é gravada com esse telefone. Quando o cliente responde pelo WhatsApp, a Meta entrega o webhook com o número **sem o 9** (`556281079590`, 12 dígitos — número legado). O webhook grava a resposta com esse telefone diferente, e o Inbox mostra duas conversas separadas para o mesmo contato.
 
-## Entregáveis
+Isso viola a regra do projeto de sempre casar telefones pelo **sufixo (últimos 8 dígitos)**.
 
-### 1. Campo "Consentimento WhatsApp" no cadastro do cliente
+## Correção
 
-**Backend (migration):**
-- Adicionar em `public.devedores` as colunas:
-  - `whatsapp_opt_in` boolean default false
-  - `whatsapp_opt_in_em` timestamptz
-  - `whatsapp_opt_in_origem` text (ex: "acordo_assinado", "portal_publico", "manual")
-- Adicionar em `public.acordos` as mesmas 3 colunas (para consentimento amarrado à assinatura do acordo).
-- Trigger: ao criar/ativar um acordo, marcar `whatsapp_opt_in = true` no devedor correspondente com origem `acordo_assinado`.
+Somente em `supabase/functions/meta-whatsapp-webhook/index.ts`:
 
-**Frontend:**
-- Na página `DevedorDetalhe.tsx`, adicionar um card "Consentimento WhatsApp" mostrando:
-  - Badge verde "Opt-in confirmado em DD/MM/YYYY HH:mm — origem: X" quando `whatsapp_opt_in = true`
-  - Badge cinza "Sem consentimento registrado" quando falso, com botão "Registrar opt-in manualmente" (admin/gestor).
-- Nas telas `EnvioMeta.tsx` e `InboxMeta.tsx`, mostrar o badge de opt-in próximo ao nome do cliente para o revisor da Meta ver que o consentimento é rastreado.
+1. Ao processar cada mensagem (echo ou entrada), antes de inserir em `meta_whatsapp_mensagens` e antes de dar upsert em `meta_whatsapp_contatos`:
+   - Extrair o sufixo dos últimos 8 dígitos do `outroLado`.
+   - Buscar em `meta_whatsapp_contatos` (mesma `instancia_id`) um contato cujo `telefone` termine com esse sufixo (via `ilike '%<sufixo>'`).
+   - Se encontrado, usar o `telefone` canônico existente como valor gravado tanto na mensagem quanto no upsert de contato — assim a resposta cai na conversa já criada pelo Envio Meta.
+   - Se não encontrado, também procurar em `meta_whatsapp_envios_log` (por sufixo, mesma instância) para reaproveitar o telefone canônico do envio em massa mais recente.
+   - Caso nada seja encontrado, gravar com o telefone recebido (comportamento atual).
 
-### 2. Texto "How to test" em inglês (arquivo entregável)
+2. Atualizar o `update` de `meta_whatsapp_envios_log` para `status='replied'` para casar por sufixo também (`telefone ilike '%<sufixo>'`) em vez de igualdade estrita, garantindo que a resposta marque o log correto quando os formatos diferem.
 
-Gerar `/mnt/documents/meta-app-review-submission.md` contendo:
-- Descrição em inglês de cada permissão (`whatsapp_business_messaging`, `whatsapp_business_management`) explicando exatamente para que o MEUS ACORDOS usa cada uma
-- Credenciais de teste (você preenche antes de submeter)
-- URL do sistema em produção
-- URL da política de privacidade (`meusacordos.com.br/politica-privacidade`)
-- URL de exclusão de dados
-- Passo-a-passo em inglês que o revisor da Meta pode seguir
-- Justificativa de negócio (recuperação de crédito com clientes que assinaram acordo de pagamento)
-- Fluxo de opt-in documentado ("customer signs a payment agreement which includes explicit consent to receive WhatsApp payment reminders")
+3. Não alterar `send-whatsapp-meta` nem o frontend — o telefone canônico continua sendo o que o Envio Meta grava (13 dígitos com "55" + DDD + 9).
 
-Entregue como `<presentation-artifact>` para download.
+## Sem migração / sem impacto no envio
 
-### 3. Cliente de teste "TESTE META REVIEW"
+- Nenhuma tabela é alterada.
+- Envios continuam usando `formatTelefone` como hoje.
+- Conversas antigas duplicadas não são mescladas automaticamente (evita risco). Se você quiser, posso adicionar depois um passo manual para consolidar as duplicadas já criadas.
 
-Passo manual no plano (não faço INSERT automático porque preciso do seu número real):
-- Instrução para você criar via UI um devedor com nome "TESTE META REVIEW", CPF fictício válido (ex: 111.444.777-35), telefone do seu segundo celular, credor de teste
-- Marcar `whatsapp_opt_in = true` via o novo botão manual
-- Criar um acordo pequeno (R$ 100 em 1 parcela) para ter contexto real no vídeo
+## Verificação
 
-## Detalhes técnicos
-
-**Migration:**
-```sql
-ALTER TABLE public.devedores
-  ADD COLUMN whatsapp_opt_in boolean NOT NULL DEFAULT false,
-  ADD COLUMN whatsapp_opt_in_em timestamptz,
-  ADD COLUMN whatsapp_opt_in_origem text;
-
-ALTER TABLE public.acordos
-  ADD COLUMN whatsapp_opt_in boolean NOT NULL DEFAULT false,
-  ADD COLUMN whatsapp_opt_in_em timestamptz,
-  ADD COLUMN whatsapp_opt_in_origem text;
-
--- Trigger para propagar opt-in do acordo para o devedor
-CREATE OR REPLACE FUNCTION public.propagar_opt_in_acordo() ...
-```
-Sem grants novos (tabelas já existem).
-
-**Arquivos a editar:**
-- `supabase/migrations/` — nova migration
-- `src/pages/DevedorDetalhe.tsx` — card de consentimento
-- `src/pages/EnvioMeta.tsx` — badge por linha
-- `src/pages/InboxMeta.tsx` — badge no cabeçalho do chat
-
-**Artefato gerado:**
-- `/mnt/documents/meta-app-review-submission.md`
-
-## Fora do escopo
-
-- Gravação do vídeo em si (você faz com OBS/Loom seguindo os roteiros que já mandei na resposta anterior)
-- Arquivo `.srt` de legendas e narração TTS (você indicou apenas 2 dos 4 entregáveis)
-- Alteração no fluxo de assinatura pública do portal — o consentimento fica registrado apenas no momento da criação do acordo por enquanto
-
-## Confirmação necessária
-
-Aprove e eu executo tudo. Depois de aprovado eu já gero o markdown de submissão pronto para você colar no formulário da Meta.
+- Enviar novo template para o mesmo número de teste e responder pelo WhatsApp: a resposta deve aparecer dentro da conversa existente, sem criar nova linha no Inbox.
+- Logs do webhook devem mostrar o telefone canônico sendo reutilizado.
