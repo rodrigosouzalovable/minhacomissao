@@ -1,31 +1,31 @@
-## Problema
+## Diagnóstico
 
-Ao enviar via **Envio Meta** para `5562981079590` (13 dígitos, com o "9" extra do celular), a mensagem é gravada com esse telefone. Quando o cliente responde pelo WhatsApp, a Meta entrega o webhook com o número **sem o 9** (`556281079590`, 12 dígitos — número legado). O webhook grava a resposta com esse telefone diferente, e o Inbox mostra duas conversas separadas para o mesmo contato.
+O problema não é mais apenas formatação do telefone. O teste real mostrou dois eventos para a mesma ação:
 
-Isso viola a regra do projeto de sempre casar telefones pelo **sufixo (últimos 8 dígitos)**.
+- Conversa correta: instância `IPHONE B8`, telefone do cliente `5562982183144`, mensagem recebida `HELLO`.
+- Conversa espelho indevida: instância `Novo Mundo 3144`, telefone `556281748929`, também com `HELLO`.
 
-## Correção
+Isso acontece porque o número do cliente `62982183144` também está cadastrado como uma instância Meta oficial no sistema. Quando ele responde pelo WhatsApp Web, a Meta envia um evento de coexistência/eco nessa outra instância, e o webhook salva isso como se fosse uma nova conversa.
 
-Somente em `supabase/functions/meta-whatsapp-webhook/index.ts`:
+## Plano de correção
 
-1. Ao processar cada mensagem (echo ou entrada), antes de inserir em `meta_whatsapp_mensagens` e antes de dar upsert em `meta_whatsapp_contatos`:
-   - Extrair o sufixo dos últimos 8 dígitos do `outroLado`.
-   - Buscar em `meta_whatsapp_contatos` (mesma `instancia_id`) um contato cujo `telefone` termine com esse sufixo (via `ilike '%<sufixo>'`).
-   - Se encontrado, usar o `telefone` canônico existente como valor gravado tanto na mensagem quanto no upsert de contato — assim a resposta cai na conversa já criada pelo Envio Meta.
-   - Se não encontrado, também procurar em `meta_whatsapp_envios_log` (por sufixo, mesma instância) para reaproveitar o telefone canônico do envio em massa mais recente.
-   - Caso nada seja encontrado, gravar com o telefone recebido (comportamento atual).
+1. **Ajustar o webhook Meta para ignorar conversas entre instâncias próprias**
+   - Antes de salvar uma mensagem recebida/echo, verificar se o “outro lado” também pertence a algum número oficial Meta cadastrado no sistema.
+   - Se pertencer, não criar contato e não inserir mensagem no Inbox.
+   - Isso evita que respostas feitas por um número que também é instância oficial virem uma segunda conversa.
 
-2. Atualizar o `update` de `meta_whatsapp_envios_log` para `status='replied'` para casar por sufixo também (`telefone ilike '%<sufixo>'`) em vez de igualdade estrita, garantindo que a resposta marque o log correto quando os formatos diferem.
+2. **Fortalecer a detecção por sufixo de telefone**
+   - Comparar os últimos 8 dígitos dos telefones, mantendo a regra já usada no projeto.
+   - Funciona mesmo com variação com/sem nono dígito.
 
-3. Não alterar `send-whatsapp-meta` nem o frontend — o telefone canônico continua sendo o que o Envio Meta grava (13 dígitos com "55" + DDD + 9).
+3. **Limpar a conversa espelho já criada nesse teste**
+   - Remover apenas os registros indevidos do contato `556281748929` na instância `Novo Mundo 3144` referentes a esse eco.
+   - Não apagar a conversa correta do cliente na instância `IPHONE B8`.
 
-## Sem migração / sem impacto no envio
+4. **Deploy da função corrigida**
+   - Publicar a função `meta-whatsapp-webhook` atualizada.
+   - Validar consultando o banco depois: deve sobrar uma única conversa para esse atendimento.
 
-- Nenhuma tabela é alterada.
-- Envios continuam usando `formatTelefone` como hoje.
-- Conversas antigas duplicadas não são mescladas automaticamente (evita risco). Se você quiser, posso adicionar depois um passo manual para consolidar as duplicadas já criadas.
+## Resultado esperado
 
-## Verificação
-
-- Enviar novo template para o mesmo número de teste e responder pelo WhatsApp: a resposta deve aparecer dentro da conversa existente, sem criar nova linha no Inbox.
-- Logs do webhook devem mostrar o telefone canônico sendo reutilizado.
+Quando você enviar template para `629882183144` pela instância correta e responder pelo WhatsApp Web desse número, a resposta ficará dentro da mesma conversa do Inbox Meta, sem abrir uma segunda janela/conversa espelho.
