@@ -78,6 +78,9 @@ export type Database = {
           user_id: string
           valor_parcela: number
           valor_total: number
+          whatsapp_opt_in: boolean
+          whatsapp_opt_in_em: string | null
+          whatsapp_opt_in_origem: string | null
         }
         Insert: {
           atualizado_em?: string
@@ -100,6 +103,9 @@ export type Database = {
           user_id: string
           valor_parcela: number
           valor_total: number
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_em?: string | null
+          whatsapp_opt_in_origem?: string | null
         }
         Update: {
           atualizado_em?: string
@@ -122,6 +128,9 @@ export type Database = {
           user_id?: string
           valor_parcela?: number
           valor_total?: number
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_em?: string | null
+          whatsapp_opt_in_origem?: string | null
         }
         Relationships: [
           {
@@ -1287,6 +1296,9 @@ export type Database = {
           telefone: string | null
           valor_atualizado: number
           valor_original: number
+          whatsapp_opt_in: boolean
+          whatsapp_opt_in_em: string | null
+          whatsapp_opt_in_origem: string | null
         }
         Insert: {
           arquivo_importacao?: string | null
@@ -1306,6 +1318,9 @@ export type Database = {
           telefone?: string | null
           valor_atualizado?: number
           valor_original?: number
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_em?: string | null
+          whatsapp_opt_in_origem?: string | null
         }
         Update: {
           arquivo_importacao?: string | null
@@ -1325,6 +1340,9 @@ export type Database = {
           telefone?: string | null
           valor_atualizado?: number
           valor_original?: number
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_em?: string | null
+          whatsapp_opt_in_origem?: string | null
         }
         Relationships: [
           {
