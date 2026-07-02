@@ -986,6 +986,12 @@ ${bodyContent}
           </DialogContent>
         </Dialog>
 
+        {devedor && (
+          <div className="mb-6">
+            <ConsentimentoWhatsAppCard devedorId={devedor.id} cpf={devedor.cpf} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Contratos */}
           <div className="space-y-6">
