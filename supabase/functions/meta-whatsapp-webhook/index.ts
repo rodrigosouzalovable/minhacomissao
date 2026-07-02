@@ -34,6 +34,36 @@ function normalizePhone(tel: any): string {
   return String(tel || '').replace(/\D/g, '');
 }
 
+function phoneSuffix(tel: any): string {
+  const d = normalizePhone(tel);
+  return d.length >= 8 ? d.slice(-8) : '';
+}
+
+function samePhoneBySuffix(a: any, b: any): boolean {
+  const sa = phoneSuffix(a);
+  const sb = phoneSuffix(b);
+  return !!sa && !!sb && sa === sb;
+}
+
+function isOfficialInstancePhoneSuffix(sufixo: string, currentInstanceId: string, instances: any[]): boolean {
+  if (!sufixo) return false;
+  return instances.some((i) => i?.id !== currentInstanceId && phoneSuffix(i?.display_phone) === sufixo);
+}
+
+async function hasOutboundTemplateContext(supabase: any, instanciaId: string, sufixo: string): Promise<boolean> {
+  if (!sufixo) return false;
+  const { data } = await supabase
+    .from('meta_whatsapp_envios_log')
+    .select('id')
+    .eq('instancia_id', instanciaId)
+    .ilike('telefone', `%${sufixo}`)
+    .neq('status', 'failed')
+    .order('enviado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return !!data?.id;
+}
+
 const MIME_EXT: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
   'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/webm': 'webm', 'audio/amr': 'amr',
@@ -129,6 +159,11 @@ serve(async (req) => {
       statuses: firstEntry?.value?.statuses?.length || 0,
     });
 
+    const { data: officialInstances } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, display_phone')
+      .eq('ativo', true);
+
     const entries = payload.entry || [];
     for (const entry of entries) {
       const changes = entry.changes || [];
@@ -194,7 +229,7 @@ serve(async (req) => {
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
-        const businessDigits = normalizePhone(inst.display_phone || value.metadata?.display_phone_number);
+          const businessDigits = normalizePhone(inst.display_phone || value.metadata?.display_phone_number);
         const fieldName = String(change.field || '').toLowerCase();
         const isEchoField = fieldName === 'message_echoes' || fieldName === 'smb_message_echoes';
 
@@ -215,7 +250,7 @@ serve(async (req) => {
 
           // Echo: mensagem enviada pelo próprio número (WhatsApp Web / celular via coexistência)
           const fromDigits = normalizePhone(from);
-          const isEcho = isEchoField || (!!businessDigits && fromDigits === businessDigits);
+          const isEcho = isEchoField || (!!businessDigits && (fromDigits === businessDigits || samePhoneBySuffix(fromDigits, businessDigits)));
 
           // Para echoes: destinatário está em m.to; em mensagens recebidas, o outro lado é m.from
           let outroLado = isEcho
@@ -225,7 +260,7 @@ serve(async (req) => {
 
           // Casa telefone pelo sufixo (últimos 8 dígitos) para unificar variações
           // com/sem "9" do celular brasileiro entre envio (5562981079590) e resposta (556281079590)
-          const sufixo = outroLado.slice(-8);
+          const sufixo = phoneSuffix(outroLado);
           if (sufixo.length === 8) {
             const { data: contatoCanonico } = await supabase
               .from('meta_whatsapp_contatos')
@@ -251,6 +286,24 @@ serve(async (req) => {
               if (envioCanonico?.telefone) {
                 outroLado = envioCanonico.telefone;
               }
+            }
+          }
+
+          // Se o outro lado também é um número oficial cadastrado no sistema,
+          // a Meta pode enviar um webhook espelho pela outra instância (coexistência/WhatsApp Web).
+          // Mantemos apenas quando a instância atual iniciou o atendimento via template HSM;
+          // caso contrário, não cria conversa duplicada no Inbox Meta.
+          if (isOfficialInstancePhoneSuffix(sufixo, inst.id, officialInstances || [])) {
+            const hasTemplateContext = await hasOutboundTemplateContext(supabase, inst.id, sufixo);
+            if (!hasTemplateContext) {
+              console.log('[MetaWebhook] ignorando conversa espelho entre instâncias oficiais', {
+                instancia_id: inst.id,
+                telefone: outroLado,
+                sufixo,
+                field: fieldName,
+                isEcho,
+              });
+              continue;
             }
           }
 
