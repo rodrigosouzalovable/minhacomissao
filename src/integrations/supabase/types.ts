@@ -1932,6 +1932,84 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_billing_alerts: {
+        Row: {
+          criado_em: string
+          detalhes: Json
+          id: string
+          notificado_em: string | null
+          ocorreu_em: string
+          tipo: string
+          valor_brl: number | null
+          valor_usd: number | null
+          waba_id: string | null
+        }
+        Insert: {
+          criado_em?: string
+          detalhes?: Json
+          id?: string
+          notificado_em?: string | null
+          ocorreu_em?: string
+          tipo: string
+          valor_brl?: number | null
+          valor_usd?: number | null
+          waba_id?: string | null
+        }
+        Update: {
+          criado_em?: string
+          detalhes?: Json
+          id?: string
+          notificado_em?: string | null
+          ocorreu_em?: string
+          tipo?: string
+          valor_brl?: number | null
+          valor_usd?: number | null
+          waba_id?: string | null
+        }
+        Relationships: []
+      }
+      meta_billing_snapshot: {
+        Row: {
+          atualizado_em: string
+          conversation_category: string
+          conversation_type: string | null
+          conversations_count: number
+          cost_brl: number
+          cost_usd: number
+          criado_em: string
+          dia: string
+          fx_rate: number
+          id: string
+          waba_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          conversation_category: string
+          conversation_type?: string | null
+          conversations_count?: number
+          cost_brl?: number
+          cost_usd?: number
+          criado_em?: string
+          dia: string
+          fx_rate?: number
+          id?: string
+          waba_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          conversation_category?: string
+          conversation_type?: string | null
+          conversations_count?: number
+          cost_brl?: number
+          cost_usd?: number
+          criado_em?: string
+          dia?: string
+          fx_rate?: number
+          id?: string
+          waba_id?: string
+        }
+        Relationships: []
+      }
       meta_envios_fila: {
         Row: {
           atraso_dias: number | null

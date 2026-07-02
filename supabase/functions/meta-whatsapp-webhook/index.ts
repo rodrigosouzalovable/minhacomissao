@@ -132,8 +132,60 @@ serve(async (req) => {
     const entries = payload.entry || [];
     for (const entry of entries) {
       const changes = entry.changes || [];
+      const wabaIdEntry = entry.id || null;
       for (const change of changes) {
         const value = change.value || {};
+        const fieldRaw = String(change.field || '').toLowerCase();
+
+        // ===== Alertas de Billing / Account =====
+        if (fieldRaw === 'account_alerts' || fieldRaw === 'account_update' || fieldRaw === 'phone_number_quality_update') {
+          try {
+            let tipo = 'account_update';
+            let valorUsd: number | null = null;
+            if (fieldRaw === 'account_alerts') {
+              tipo = value?.alert_type || value?.event || 'account_alert';
+              valorUsd = Number(value?.amount_spent_since_last_bill || value?.amount || 0) || null;
+            } else if (fieldRaw === 'phone_number_quality_update') {
+              tipo = 'quality_update';
+            } else {
+              tipo = value?.event || 'account_update';
+            }
+            const fxRes = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL').catch(() => null);
+            const fxJson = fxRes && fxRes.ok ? await fxRes.json().catch(() => null) : null;
+            const fxRate = Number(fxJson?.USDBRL?.bid || 5.5);
+            const valorBrl = valorUsd ? Number((valorUsd * fxRate).toFixed(2)) : null;
+
+            const { data: alertRow } = await supabase.from('meta_billing_alerts').insert({
+              waba_id: wabaIdEntry,
+              tipo,
+              valor_usd: valorUsd,
+              valor_brl: valorBrl,
+              detalhes: value,
+            }).select('id').maybeSingle();
+
+            // Dispara notificação WhatsApp ao admin
+            try {
+              const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+              const brl = (v: number | null) => v == null ? '-' : `R$ ${v.toFixed(2).replace('.', ',')}`;
+              const usd = valorUsd ? `US$ ${valorUsd.toFixed(2)}` : '';
+              const mensagem = `💳 *Alerta Meta WhatsApp*\n\n*Tipo:* ${tipo}\n${usd ? `*Valor:* ${usd} (~${brl(valorBrl)})\n` : ''}*WABA:* ${wabaIdEntry || '-'}\n*Horário:* ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
+              await notificarAdmin(supabase, {
+                tipo: 'meta_billing_alert',
+                mensagem,
+                chaveIdempotencia: alertRow?.id || `${tipo}-${Date.now()}`,
+              });
+              if (alertRow?.id) {
+                await supabase.from('meta_billing_alerts').update({ notificado_em: new Date().toISOString() }).eq('id', alertRow.id);
+              }
+            } catch (e) {
+              console.error('[MetaWebhook] falha ao notificar admin billing', e);
+            }
+          } catch (e) {
+            console.error('[MetaWebhook] erro processando alerta billing', e);
+          }
+          continue;
+        }
+
         const phoneNumberId = value.metadata?.phone_number_id;
         if (!phoneNumberId) continue;
 
