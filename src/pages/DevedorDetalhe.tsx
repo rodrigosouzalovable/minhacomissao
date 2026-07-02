@@ -25,6 +25,7 @@ import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 import { TelefoneTab } from '@/components/devedor/TelefoneTab';
 import { CalculadoraDebitoDialog } from '@/components/devedor/CalculadoraDebitoDialog';
 import { AcordoDevedorSection } from '@/components/devedor/AcordoDevedorSection';
+import { ConsentimentoWhatsAppCard } from '@/components/devedor/ConsentimentoWhatsAppCard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface Devedor {
@@ -984,6 +985,12 @@ ${bodyContent}
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {devedor && (
+          <div className="mb-6">
+            <ConsentimentoWhatsAppCard devedorId={devedor.id} cpf={devedor.cpf} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Contratos */}
