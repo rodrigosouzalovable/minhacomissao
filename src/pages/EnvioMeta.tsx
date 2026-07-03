@@ -600,6 +600,7 @@ export default function EnvioMeta() {
               </div>
             )}
 
+            {templateGroup && instanciasIncompatíveis.length > 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
                 <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
