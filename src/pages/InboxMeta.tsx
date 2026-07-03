@@ -686,11 +686,20 @@ export default function InboxMeta() {
             <>
               <div className="p-3 border-b flex items-center justify-between bg-card">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold truncate">{contatoAtivo.nome || formatTelefone(contatoAtivo.telefone)}</div>
+                  <div className="text-sm font-semibold truncate flex items-center gap-2">
+                    {contatoAtivo.nome || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.whatsapp_username ? `@${contatoAtivo.whatsapp_username}` : 'Contato sem telefone'))}
+                    {contatoAtivo.whatsapp_username && (
+                      <Badge variant="secondary" className="text-[10px] py-0 h-4">@{contatoAtivo.whatsapp_username}</Badge>
+                    )}
+                    {!contatoAtivo.telefone && contatoAtivo.bsuid && (
+                      <Badge variant="outline" className="text-[10px] py-0 h-4" title={contatoAtivo.bsuid}>BSUID</Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground truncate">
-                    {formatTelefone(contatoAtivo.telefone)} · via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}
+                    {contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || '—')} · via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}
                   </div>
                 </div>
+
                 {janelaInfo.aberta ? (
                   <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
                     <Clock className="h-3 w-3" /> {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
