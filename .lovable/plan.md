@@ -1,36 +1,21 @@
-## Objetivo
+## Diagnóstico
 
-Na aba **Envio Meta Massa**, o dropdown de templates deve refletir as instâncias selecionadas: mostrar apenas os templates aprovados e habilitados para massa que existem nas instâncias marcadas. Sem instância selecionada, o dropdown fica vazio com um aviso pedindo para selecionar ao menos uma instância.
+Na aba Envio Meta Massa, ao selecionar a IPHONE B7, nenhum template aparece porque o carregamento em `EnvioMeta.tsx` (linha 287) filtra `.eq("status", "approved")`. O template `abertura_para_negociacao_de_debito` está aprovado em apenas 1/17 instâncias — se essa instância não for a IPHONE B7, nenhum registro é retornado para ela e o dropdown fica vazio.
 
-## Comportamento
+## Correção
 
-- 0 instâncias selecionadas → dropdown vazio + hint "Selecione uma ou mais instâncias para ver os templates disponíveis".
-- 1 instância selecionada → aparecem só os templates aprovados+massa daquela instância.
-- N instâncias selecionadas → união (todos os templates que existem em qualquer uma das selecionadas), com badge indicando "Disponível em X/N instâncias".
-- Se o template selecionado deixar de estar disponível em nenhuma das instâncias atuais, o `templateId` é limpo.
-- A validação atual de "instâncias incompatíveis" (aviso amarelo + botão Sincronizar) continua funcionando — ela agora só aparece quando o usuário escolhe um template presente em algumas mas não todas as instâncias selecionadas.
+Arquivo único: `src/pages/EnvioMeta.tsx`.
 
-## Alterações técnicas
+1. Remover o `.eq("status", "approved")` da query de `meta_whatsapp_templates` (mantendo `.eq("habilitado_envio_massa", true)`). Isso traz todas as instâncias em que o template existe (aprovado, pending, rejected).
 
-Arquivo único: `src/pages/EnvioMeta.tsx`
+2. O agrupamento existente já ignora status ao decidir se aparece na lista, mas conta em `instanciasAprovadasIds` apenas as linhas com `status === "approved"`. Consequência:
+   - IPHONE B7 selecionada sem aprovação → template aparece com badge "0/1 instâncias" em vermelho.
+   - O aviso amarelo já existente ("Este template não está aprovado em: IPHONE B7 … Remova essas instâncias ou sincronize/aprovar") aparece automaticamente, com o botão de sincronizar as instâncias incompatíveis.
+   - O botão "Iniciar envio" já é bloqueado quando há instâncias incompatíveis, então não há risco de disparo com template não aprovado.
 
-1. No `useMemo` de `templateGroups` (linha 316), filtrar `templates` por `instanciaIds` antes de agrupar:
-   ```ts
-   const templatesFiltrados = instanciaIds.length === 0
-     ? []
-     : templates.filter(t => instanciaIds.includes(t.instancia_id));
-   ```
-   Agrupa a partir desse array.
-
-2. Adicionar `useEffect` que, quando `templateGroups` muda, verifica se `templateId` ainda existe; se não, faz `setTemplateId("")`.
-
-3. Atualizar o texto vazio (linha ~505-508):
-   - Se `instanciaIds.length === 0`: "Selecione uma ou mais instâncias acima para ver os templates disponíveis."
-   - Se selecionou instâncias mas não há templates: mensagem atual sobre marcar "Massa" na aba API Oficial Meta.
-
-4. No item do `SelectItem` (linha ~513), acrescentar um contador tipo `g.instanciasAprovadasIds.size}/${instanciaIds.length}` para deixar claro em quantas das instâncias selecionadas aquele template está aprovado.
+3. Sem mudanças em backend, migrations ou outras páginas.
 
 ## Fora de escopo
 
-- Nenhuma mudança em backend, migrations, edge functions ou outras páginas.
-- Lógica de envio, round-robin, delay e round-robin de `templateIdByInstance` permanecem idênticos.
+- Alterar o comportamento de sincronização.
+- Alterar o botão "Marcar Massa" da aba API Oficial Meta (já toca todas as linhas do template).
