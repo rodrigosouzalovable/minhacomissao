@@ -497,32 +497,97 @@ export default function EnvioMeta() {
         <Card>
           <CardHeader>
             <CardTitle>1. Template HSM</CardTitle>
-            <CardDescription>Apenas templates aprovados pela Meta aparecem aqui.</CardDescription>
+            <CardDescription>
+              Apenas templates marcados como "Disponível em Envio em Massa" na aba <strong>API Oficial Meta</strong> aparecem aqui.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {templates.length === 0 ? (
+            {templateGroups.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum template aprovado. Sincronize templates na tela "API Oficial Meta".
+                Nenhum template liberado. Vá em <strong>API Oficial Meta → Templates HSM</strong> e marque a caixa "Massa" nos templates que quer usar aqui.
               </p>
             ) : (
               <Select value={templateId} onValueChange={setTemplateId}>
                 <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
                 <SelectContent>
-                  {templates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <div className="flex items-center gap-2 w-full">
-                        <span>{t.nome_template}</span>
-                        <span className="text-xs text-muted-foreground">({t.idioma})</span>
-                        {t.categoria && (
-                          <Badge variant={t.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                            {t.categoria === 'MARKETING' ? 'Marketing' : t.categoria === 'UTILITY' ? 'Utilidade' : t.categoria}
+                  {templateGroups.map((g) => {
+                    const total = instancias.length;
+                    const ok = g.instanciasAprovadasIds.size;
+                    const full = ok === total && total > 0;
+                    return (
+                      <SelectItem key={g.key} value={g.key}>
+                        <div className="flex items-center gap-2 w-full">
+                          <span>{g.nome}</span>
+                          <span className="text-xs text-muted-foreground">({g.idioma})</span>
+                          {g.categoria && (
+                            <Badge variant={g.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                              {g.categoria === 'MARKETING' ? 'Marketing' : g.categoria === 'UTILITY' ? 'Utilidade' : g.categoria}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant={full ? "default" : ok === 0 ? "destructive" : "secondary"}
+                            className={`text-[10px] px-1.5 py-0 ${full ? "bg-green-600" : ok > 0 && !full ? "bg-amber-500 text-white" : ""}`}
+                          >
+                            {ok}/{total} instâncias
                           </Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+            )}
+
+            {templateGroup && instanciasIncompatíveis.length > 0 && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      Este template não está aprovado em {instanciasIncompatíveis.length} instância(s) selecionada(s):
+                    </p>
+                    <ul className="list-disc ml-5 mt-1">
+                      {instanciasIncompatíveis.map((i) => (
+                        <li key={i.id}>{i.nome}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs">
+                      O envio está bloqueado para evitar erros. Remova as instâncias abaixo ou sincronize/aprovar o template nelas.
+                    </p>
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setInstanciaIds((prev) =>
+                            prev.filter((id) => !instanciasIncompatíveis.some((x) => x.id === id)),
+                          )
+                        }
+                      >
+                        Remover instâncias incompatíveis
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          toast.info("Sincronizando templates das instâncias incompatíveis...");
+                          for (const inst of instanciasIncompatíveis) {
+                            try {
+                              await supabase.functions.invoke("meta-sync-templates", {
+                                body: { instancia_id: inst.id },
+                              });
+                            } catch {}
+                          }
+                          await carregar();
+                          toast.success("Sincronização concluída");
+                        }}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar templates dessas instâncias
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {template && (
