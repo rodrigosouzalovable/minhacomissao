@@ -509,7 +509,7 @@ export default function EnvioMeta() {
           <CardHeader>
             <CardTitle>1. Template HSM</CardTitle>
             <CardDescription>
-              Apenas templates marcados como "Disponível em Envio em Massa" na aba <strong>API Oficial Meta</strong> aparecem aqui.
+              Selecione as instâncias ao lado — os templates disponíveis em cada instância selecionada aparecerão aqui, com badges indicando em quais instâncias existem.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -517,7 +517,7 @@ export default function EnvioMeta() {
               <p className="text-sm text-muted-foreground">
                 {instanciaIds.length === 0
                   ? "Selecione uma ou mais instâncias acima para ver os templates disponíveis."
-                  : <>Nenhum template liberado para as instâncias selecionadas. Vá em <strong>API Oficial Meta → Templates HSM</strong> e marque a caixa "Massa" nos templates que quer usar aqui.</>}
+                  : "Nenhum template encontrado para as instâncias selecionadas. Sincronize os templates em API Oficial Meta → Templates HSM."}
               </p>
             ) : (
               <Select value={templateId} onValueChange={setTemplateId}>
@@ -527,23 +527,48 @@ export default function EnvioMeta() {
                     const total = instanciaIds.length;
                     const ok = g.instanciasAprovadasIds.size;
                     const full = ok === total && total > 0;
+                    const rowsByInst = new Map(g.rows.map((r) => [r.instancia_id, r] as const));
+                    const instBadges = instanciaIds
+                      .map((id) => ({ inst: instancias.find((i) => i.id === id), row: rowsByInst.get(id) }))
+                      .filter((x) => x.inst && x.row);
                     return (
                       <SelectItem key={g.key} value={g.key}>
-                        <div className="flex items-center gap-2 w-full">
-
-                          <span>{g.nome}</span>
-                          <span className="text-xs text-muted-foreground">({g.idioma})</span>
-                          {g.categoria && (
-                            <Badge variant={g.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                              {g.categoria === 'MARKETING' ? 'Marketing' : g.categoria === 'UTILITY' ? 'Utilidade' : g.categoria}
+                        <div className="flex flex-col gap-1 w-full">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{g.nome}</span>
+                            <span className="text-xs text-muted-foreground">({g.idioma})</span>
+                            {g.categoria && (
+                              <Badge variant={g.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                                {g.categoria === 'MARKETING' ? 'Marketing' : g.categoria === 'UTILITY' ? 'Utilidade' : g.categoria}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant={full ? "default" : ok === 0 ? "destructive" : "secondary"}
+                              className={`text-[10px] px-1.5 py-0 ${full ? "bg-green-600" : ok > 0 && !full ? "bg-amber-500 text-white" : ""}`}
+                            >
+                              {ok}/{total} instâncias
                             </Badge>
+                          </div>
+                          {instBadges.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {instBadges.map(({ inst, row }) => {
+                                const aprov = row!.status === "approved";
+                                return (
+                                  <span
+                                    key={inst!.id}
+                                    className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                      aprov
+                                        ? "bg-green-600/15 border-green-600/40 text-green-700 dark:text-green-400"
+                                        : "bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-400"
+                                    }`}
+                                    title={aprov ? "Aprovado" : `Status: ${row!.status}`}
+                                  >
+                                    {inst!.nome}
+                                  </span>
+                                );
+                              })}
+                            </div>
                           )}
-                          <Badge
-                            variant={full ? "default" : ok === 0 ? "destructive" : "secondary"}
-                            className={`text-[10px] px-1.5 py-0 ${full ? "bg-green-600" : ok > 0 && !full ? "bg-amber-500 text-white" : ""}`}
-                          >
-                            {ok}/{total} instâncias
-                          </Badge>
                         </div>
                       </SelectItem>
                     );
@@ -551,6 +576,7 @@ export default function EnvioMeta() {
                 </SelectContent>
               </Select>
             )}
+
 
             {templateGroup && instanciasIncompatíveis.length > 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
