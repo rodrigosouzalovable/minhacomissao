@@ -372,6 +372,11 @@ export default function EnvioMeta() {
   const enviar = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (String(templateGroup.categoria || '').toUpperCase() === 'MARKETING') {
+      return toast.error(
+        `Envio bloqueado: template "${templateGroup.nome}" é categoria MARKETING. Só templates UTILITY são permitidos. Peça ao admin liberar em Configurar Meta → Segurança de Custos.`,
+      );
+    }
     if (instanciasIncompatíveis.length > 0) {
       return toast.error(
         `Este template não está aprovado em: ${instanciasIncompatíveis.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
@@ -577,6 +582,23 @@ export default function EnvioMeta() {
               </Select>
             )}
 
+
+            {templateGroup && String(templateGroup.categoria || '').toUpperCase() === 'MARKETING' && (
+              <div className="rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm">
+                <div className="flex items-start gap-2 text-red-700 dark:text-red-400">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">Template MARKETING — envio bloqueado</p>
+                    <p className="mt-1 text-xs">
+                      Este template está classificado como <strong>MARKETING</strong> pela Meta (~US$ 0,0625 por conversa).
+                      A trava anti-gasto do sistema bloqueia esse envio para evitar recargas automáticas surpresa.
+                      Use apenas templates de <strong>UTILIDADE</strong>. Se precisar liberar, o admin pode desativar a trava
+                      em <em>Configurar Meta → Segurança de Custos</em>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {templateGroup && instanciasIncompatíveis.length > 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
