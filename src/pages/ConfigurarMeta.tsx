@@ -41,76 +41,8 @@ type Template = {
   status: string;
   variaveis: any;
   sincronizado_em: string;
-  habilitado_envio_massa: boolean;
 };
 
-function MassaSelectAllCheckbox({
-  templates,
-  filtroInstancias,
-  setTemplates,
-}: {
-  templates: Template[];
-  filtroInstancias: string[];
-  setTemplates: React.Dispatch<React.SetStateAction<Template[]>>;
-}) {
-  const filtroSet = new Set(filtroInstancias);
-  const visiveis = filtroSet.size === 0 ? templates : templates.filter((t) => filtroSet.has(t.instancia_id));
-  // Group by nome+idioma to get "logical templates" visible
-  const nomes = new Set<string>();
-  for (const t of visiveis) nomes.add(`${t.nome_template}::${t.idioma}`);
-  const total = nomes.size;
-  let habilitados = 0;
-  for (const key of nomes) {
-    const [nome, idioma] = key.split("::");
-    const some = templates.some(
-      (t) => t.nome_template === nome && t.idioma === idioma && t.habilitado_envio_massa,
-    );
-    if (some) habilitados++;
-  }
-  const allOn = total > 0 && habilitados === total;
-
-  const toggleAll = async () => {
-    if (total === 0) return;
-    const novo = !allOn;
-    // Update all rows of templates whose (nome,idioma) is in `nomes`
-    const alvoIds = templates
-      .filter((t) => nomes.has(`${t.nome_template}::${t.idioma}`))
-      .map((t) => t.id);
-    if (alvoIds.length === 0) return;
-    const { error } = await supabase
-      .from("meta_whatsapp_templates")
-      .update({ habilitado_envio_massa: novo })
-      .in("id", alvoIds);
-    if (error) {
-      toast.error("Erro: " + error.message);
-      return;
-    }
-    toast.success(
-      novo
-        ? `${total} template(s) liberado(s) para Envio em Massa`
-        : `${total} template(s) removido(s) do Envio em Massa`,
-    );
-    setTemplates((prev) =>
-      prev.map((t) => (alvoIds.includes(t.id) ? { ...t, habilitado_envio_massa: novo } : t)),
-    );
-  };
-
-  return (
-    <div className="flex items-center gap-1" title={allOn ? "Desmarcar todos" : "Marcar todos"}>
-      <input
-        type="checkbox"
-        className="h-4 w-4 cursor-pointer accent-primary"
-        checked={allOn}
-        ref={(el) => {
-          if (el) el.indeterminate = habilitados > 0 && habilitados < total;
-        }}
-        onChange={toggleAll}
-        disabled={total === 0}
-      />
-      <span className="text-xs">Massa</span>
-    </div>
-  );
-}
 
 
 export default function ConfigurarMeta() {
@@ -123,7 +55,7 @@ export default function ConfigurarMeta() {
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
-  const [filtroInstancias, setFiltroInstancias] = useState<string[]>([]);
+  
 
   const [assinando, setAssinando] = useState(false);
   const [resultadosAssinatura, setResultadosAssinatura] = useState<any[] | null>(null);
@@ -523,72 +455,13 @@ export default function ConfigurarMeta() {
           ) : (
             <>
               <p className="text-sm text-muted-foreground mb-3">
-                Marque os templates que devem aparecer na aba <strong>Envio Meta Massa</strong>. A coluna <strong>Cobertura</strong> mostra em quantas instâncias ativas o template está aprovado — só é seguro disparar em massa quando estiver 100%.
+                A coluna <strong>Cobertura</strong> mostra em quantas instâncias ativas o template está aprovado — só é seguro disparar em massa quando estiver 100%.
               </p>
-              <Card className="mb-3">
-                <CardContent className="p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="text-sm font-medium">Filtrar por instâncias</div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setFiltroInstancias(instancias.filter((i) => i.ativo).map((i) => i.id))}
-                      >
-                        Todas
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setFiltroInstancias([])}
-                        disabled={filtroInstancias.length === 0}
-                      >
-                        Limpar
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {instancias.filter((i) => i.ativo).map((i) => {
-                      const sel = filtroInstancias.includes(i.id);
-                      return (
-                        <button
-                          key={i.id}
-                          type="button"
-                          onClick={() =>
-                            setFiltroInstancias((prev) =>
-                              prev.includes(i.id) ? prev.filter((x) => x !== i.id) : [...prev, i.id],
-                            )
-                          }
-                          className={`text-xs px-2 py-1 rounded-md border transition ${
-                            sel
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-background hover:bg-muted border-border"
-                          }`}
-                        >
-                          {i.nome}
-                        </button>
-                      );
-                    })}
-                    {filtroInstancias.length === 0 && (
-                      <span className="text-xs text-muted-foreground self-center">
-                        Nenhum filtro — mostrando todos os templates.
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
 
               <Card><CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-16">
-                        <MassaSelectAllCheckbox
-                          templates={templates}
-                          filtroInstancias={filtroInstancias}
-                          setTemplates={setTemplates}
-                        />
-                      </TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Idioma</TableHead>
@@ -600,18 +473,13 @@ export default function ConfigurarMeta() {
                     {(() => {
                       const ativas = instancias.filter((i) => i.ativo);
                       const totalAtivas = ativas.length;
-                      const filtroSet = new Set(filtroInstancias);
-                      const templatesVis = filtroSet.size === 0
-                        ? templates
-                        : templates.filter((t) => filtroSet.has(t.instancia_id));
                       // Group by nome_template + idioma
-                      const groupsMap = new Map<string, { chave: string; nome: string; idioma: string; categoria: string | null; body_text: string | null; habilitado: boolean; rows: Template[]; sampleRow: Template }>();
-                      for (const t of templatesVis) {
+                      const groupsMap = new Map<string, { chave: string; nome: string; idioma: string; categoria: string | null; body_text: string | null; rows: Template[]; sampleRow: Template }>();
+                      for (const t of templates) {
                         const k = `${t.nome_template}::${t.idioma}`;
                         const g = groupsMap.get(k);
                         if (g) {
                           g.rows.push(t);
-                          if (t.habilitado_envio_massa) g.habilitado = true;
                         } else {
                           groupsMap.set(k, {
                             chave: k,
@@ -619,29 +487,12 @@ export default function ConfigurarMeta() {
                             idioma: t.idioma,
                             categoria: t.categoria,
                             body_text: t.body_text,
-                            habilitado: t.habilitado_envio_massa,
                             rows: [t],
                             sampleRow: t,
                           });
                         }
                       }
                       const groups = Array.from(groupsMap.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-
-                      const toggleGrupo = async (g: typeof groups[number]) => {
-                        const novo = !g.habilitado;
-                        // Toggle across ALL rows of this template (all instances), not just visible
-                        const nome = g.nome, idioma = g.idioma;
-                        const allRows = templates.filter((t) => t.nome_template === nome && t.idioma === idioma);
-                        const ids = allRows.map((r) => r.id);
-                        const { error } = await supabase
-                          .from("meta_whatsapp_templates")
-                          .update({ habilitado_envio_massa: novo })
-                          .in("id", ids);
-                        if (error) { toast.error("Erro: " + error.message); return; }
-                        toast.success(novo ? "Template liberado para Envio em Massa" : "Template removido do Envio em Massa");
-                        setTemplates((prev) => prev.map((t) => ids.includes(t.id) ? { ...t, habilitado_envio_massa: novo } : t));
-                      };
-
 
                       return groups.map((g) => {
                         const aprovadasIds = new Set(g.rows.filter((r) => r.status === "approved").map((r) => r.instancia_id));
@@ -655,15 +506,6 @@ export default function ConfigurarMeta() {
                         const badgeClass = cor === "default" ? "bg-green-600" : cor === "secondary" ? "bg-amber-500 text-white" : "";
                         return (
                           <TableRow key={g.chave} className="hover:bg-muted/50">
-                            <TableCell onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 cursor-pointer accent-primary"
-                                checked={g.habilitado}
-                                onChange={() => toggleGrupo(g)}
-                                title={g.habilitado ? "Remover de Envio em Massa" : "Liberar para Envio em Massa"}
-                              />
-                            </TableCell>
                             <TableCell
                               className="font-mono text-xs cursor-pointer"
                               onClick={() => setPreviewTpl(g.sampleRow)}
@@ -700,6 +542,7 @@ export default function ConfigurarMeta() {
                 </Table>
               </CardContent></Card>
             </>
+
           )}
         </TabsContent>
       </Tabs>
