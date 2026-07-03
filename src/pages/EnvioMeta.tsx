@@ -315,7 +315,10 @@ export default function EnvioMeta() {
   };
   const templateGroups = useMemo<TemplateGroup[]>(() => {
     const map = new Map<string, TemplateGroup>();
-    for (const t of templates) {
+    const base = instanciaIds.length === 0
+      ? []
+      : templates.filter((t) => instanciaIds.includes(t.instancia_id));
+    for (const t of base) {
       const key = `${t.nome_template}::${t.idioma}`;
       const g = map.get(key);
       if (g) {
@@ -334,7 +337,15 @@ export default function EnvioMeta() {
       }
     }
     return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [templates]);
+  }, [templates, instanciaIds]);
+
+  // Clear selected template if it disappears after instance change
+  useEffect(() => {
+    if (templateId && !templateGroups.some((g) => g.key === templateId)) {
+      setTemplateId("");
+    }
+  }, [templateGroups, templateId]);
+
 
   const templateGroup = useMemo(
     () => templateGroups.find((g) => g.key === templateId) || null,
