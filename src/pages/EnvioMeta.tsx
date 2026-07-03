@@ -877,7 +877,7 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={enviando || validando} size="lg">
+            <Button onClick={enviar} disabled={enviando || validando || instanciasIncompatíveis.length > 0} size="lg">
               {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
               {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
