@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     const body: any = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to,
+      to: useBsuid ? bsuid : to,
       type: metaType,
       [metaType]: payload,
     };
@@ -95,7 +95,8 @@ Deno.serve(async (req) => {
     await supabase.from('meta_whatsapp_mensagens').insert({
       user_id: uid,
       instancia_id,
-      telefone: to,
+      telefone: to || null,
+      bsuid: useBsuid ? bsuid : (contato?.bsuid || null),
       direcao: 'saida',
       conteudo: caption || preview,
       tipo_conteudo: tipoConteudoLocal,
@@ -107,13 +108,16 @@ Deno.serve(async (req) => {
       conteudo_citado: conteudo_citado || null,
     } as any);
 
-    if (contato) {
+    if (contato?.id) {
       await supabase.from('meta_whatsapp_contatos')
         .update({ ultima_mensagem: preview, ultima_mensagem_em: nowIso, atualizado_em: nowIso })
         .eq('id', contato.id);
     } else {
       await supabase.from('meta_whatsapp_contatos').insert({
-        user_id: uid, instancia_id, telefone: to,
+        user_id: uid, instancia_id,
+        telefone: to || null,
+        telefone_visivel: !!to,
+        bsuid: useBsuid ? bsuid : null,
         ultima_mensagem: preview, ultima_mensagem_em: nowIso,
       } as any);
     }
