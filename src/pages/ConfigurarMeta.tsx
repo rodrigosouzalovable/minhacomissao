@@ -456,6 +456,59 @@ export default function ConfigurarMeta() {
               <p className="text-sm text-muted-foreground mb-3">
                 Marque os templates que devem aparecer na aba <strong>Envio Meta Massa</strong>. A coluna <strong>Cobertura</strong> mostra em quantas instâncias ativas o template está aprovado — só é seguro disparar em massa quando estiver 100%.
               </p>
+              <Card className="mb-3">
+                <CardContent className="p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="text-sm font-medium">Filtrar por instâncias</div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setFiltroInstancias(instancias.filter((i) => i.ativo).map((i) => i.id))}
+                      >
+                        Todas
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setFiltroInstancias([])}
+                        disabled={filtroInstancias.length === 0}
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {instancias.filter((i) => i.ativo).map((i) => {
+                      const sel = filtroInstancias.includes(i.id);
+                      return (
+                        <button
+                          key={i.id}
+                          type="button"
+                          onClick={() =>
+                            setFiltroInstancias((prev) =>
+                              prev.includes(i.id) ? prev.filter((x) => x !== i.id) : [...prev, i.id],
+                            )
+                          }
+                          className={`text-xs px-2 py-1 rounded-md border transition ${
+                            sel
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background hover:bg-muted border-border"
+                          }`}
+                        >
+                          {i.nome}
+                        </button>
+                      );
+                    })}
+                    {filtroInstancias.length === 0 && (
+                      <span className="text-xs text-muted-foreground self-center">
+                        Nenhum filtro — mostrando todos os templates.
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card><CardContent className="p-0">
                 <Table>
                   <TableHeader>
