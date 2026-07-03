@@ -41,6 +41,7 @@ type Template = {
   status: string;
   variaveis: any;
   sincronizado_em: string;
+  habilitado_envio_massa: boolean;
 };
 
 export default function ConfigurarMeta() {
