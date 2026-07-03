@@ -41,6 +41,7 @@ export type IniciarParams = {
   maxSec: number;
   semWhatsapp?: string[];
   erroValidacao?: string[];
+  templateIdByInstance?: Record<string, string>;
   onAfterEnvio?: () => void;
 };
 
@@ -207,8 +208,9 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       } : pr);
 
       try {
+        const tplIdParaEssaInst = p.templateIdByInstance?.[instId] || template.id;
         const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-          body: { template_id: template.id, instancia_id: instId, cliente },
+          body: { template_id: tplIdParaEssaInst, instancia_id: instId, cliente },
         });
         if (error) throw error;
         if (data?.tier_full) {

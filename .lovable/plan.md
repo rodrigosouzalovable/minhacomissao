@@ -1,31 +1,65 @@
-## Diagnóstico
+## Objetivo
 
-O problema não é mais apenas formatação do telefone. O teste real mostrou dois eventos para a mesma ação:
+1. Na aba **API Oficial Meta** (`/admin/configurar-meta`), permitir marcar quais templates HSM ficam disponíveis na aba **Envio Meta Massa**.
+2. Na aba **Envio Meta Massa** (`/admin/envio-meta`), mostrar apenas os templates marcados **e** indicar quais estão presentes/aprovados em TODAS as instâncias selecionadas — evitando erros de envio.
 
-- Conversa correta: instância `IPHONE B8`, telefone do cliente `5562982183144`, mensagem recebida `HELLO`.
-- Conversa espelho indevida: instância `Novo Mundo 3144`, telefone `556281748929`, também com `HELLO`.
+## Mudanças no banco
 
-Isso acontece porque o número do cliente `62982183144` também está cadastrado como uma instância Meta oficial no sistema. Quando ele responde pelo WhatsApp Web, a Meta envia um evento de coexistência/eco nessa outra instância, e o webhook salva isso como se fosse uma nova conversa.
+Adicionar coluna simples na tabela `meta_whatsapp_templates`:
 
-## Plano de correção
+- `habilitado_envio_massa boolean not null default false` — marca se o template aparece na aba de envio em massa.
 
-1. **Ajustar o webhook Meta para ignorar conversas entre instâncias próprias**
-   - Antes de salvar uma mensagem recebida/echo, verificar se o “outro lado” também pertence a algum número oficial Meta cadastrado no sistema.
-   - Se pertencer, não criar contato e não inserir mensagem no Inbox.
-   - Isso evita que respostas feitas por um número que também é instância oficial virem uma segunda conversa.
+Como a Meta sincroniza um registro por (instância, nome_template, idioma), a identidade "mesmo template" é feita pela chave `(nome_template, idioma)`. Vamos agrupar por essa chave nas duas telas.
 
-2. **Fortalecer a detecção por sufixo de telefone**
-   - Comparar os últimos 8 dígitos dos telefones, mantendo a regra já usada no projeto.
-   - Funciona mesmo com variação com/sem nono dígito.
+## API Oficial Meta — seleção de templates
 
-3. **Limpar a conversa espelho já criada nesse teste**
-   - Remover apenas os registros indevidos do contato `556281748929` na instância `Novo Mundo 3144` referentes a esse eco.
-   - Não apagar a conversa correta do cliente na instância `IPHONE B8`.
+Na seção "Templates HSM" da página `ConfigurarMeta.tsx`:
 
-4. **Deploy da função corrigida**
-   - Publicar a função `meta-whatsapp-webhook` atualizada.
-   - Validar consultando o banco depois: deve sobrar uma única conversa para esse atendimento.
+- Agrupar os registros por `nome_template + idioma` (dedup entre instâncias).
+- Cada linha do template mostra:
+  - Nome / categoria / idioma.
+  - Checkbox **"Disponível em Envio em Massa"** — grava `habilitado_envio_massa` em todos os registros do grupo (uma linha por instância).
+  - Coluna **Cobertura**: badge `X de Y instâncias` (quantas instâncias têm esse template com status `approved`). Verde se X=Y, âmbar se parcial, vermelho se zero.
+  - Tooltip listando quais instâncias têm/não têm o template aprovado — o usuário vê exatamente onde falta sincronizar ou aprovar.
+- Botão "Sincronizar templates" já existe por instância; adicionar botão **"Sincronizar todas"** que roda `meta-sync-templates` para cada instância ativa em sequência.
 
-## Resultado esperado
+## Envio Meta Massa — filtragem + compatibilidade
 
-Quando você enviar template para `629882183144` pela instância correta e responder pelo WhatsApp Web desse número, a resposta ficará dentro da mesma conversa do Inbox Meta, sem abrir uma segunda janela/conversa espelho.
+Em `EnvioMeta.tsx`:
+
+- Query passa a filtrar `.eq("habilitado_envio_massa", true).eq("status","approved")`.
+- Dedup por `(nome_template, idioma)` no dropdown — usuário vê cada template uma vez.
+- Ao selecionar um template E instâncias, calcular compatibilidade:
+  - Set de instâncias que têm esse `(nome, idioma)` com `status='approved'`.
+  - Se alguma instância selecionada NÃO estiver no set → mostrar alerta amarelo listando as instâncias incompatíveis, com botões:
+    - "Remover instâncias incompatíveis da seleção".
+    - "Sincronizar templates dessas instâncias" (chama `meta-sync-templates`).
+  - Botão **Iniciar envio** desabilita enquanto houver incompatíveis.
+- No dropdown, cada template também mostra badge de cobertura (`3/3`, `2/3`) para escolha consciente antes da seleção de instâncias.
+
+## Fluxo do usuário
+
+```text
+Configurar Meta
+  └── Templates HSM
+        ├── [x] boas_vindas_pt   Cobertura 3/3  ✅
+        ├── [ ] promo_black      Cobertura 2/3  ⚠  (falta em: IPHONE B8)
+        └── [x] cobranca_util    Cobertura 3/3  ✅
+
+Envio Meta Massa
+  └── Template: [ boas_vindas_pt ▾ ]   (só aparecem os marcados)
+        Instâncias: [x] A  [x] B  [x] C
+        ✅ Todas as instâncias têm este template aprovado.
+```
+
+## Arquivos a editar
+
+- `supabase/migrations/*` — adiciona coluna `habilitado_envio_massa`.
+- `src/pages/ConfigurarMeta.tsx` — nova UI de curadoria + cobertura + "Sincronizar todas".
+- `src/pages/EnvioMeta.tsx` — filtro por `habilitado_envio_massa`, dedup, checagem de compatibilidade, alerta bloqueante.
+
+## Fora do escopo
+
+- Não altera `meta-sync-templates` nem `send-whatsapp-meta`.
+- Não mexe em envio/agendamento/round-robin já existentes.
+- Sem novos custos de Cloud (apenas 1 coluna boolean e consultas já existentes).

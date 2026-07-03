@@ -282,7 +282,11 @@ export default function EnvioMeta() {
     setLoading(true);
     const [i, t, u] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
-      supabase.from("meta_whatsapp_templates").select("*").eq("status", "approved").order("nome_template"),
+      supabase.from("meta_whatsapp_templates")
+        .select("*")
+        .eq("status", "approved")
+        .eq("habilitado_envio_massa", true)
+        .order("nome_template"),
       (supabase as any).from("user_whatsapp_instances")
         .select("id, nome, telefone, ativo, server_url, instance_token")
         .eq("ativo", true)
@@ -298,20 +302,70 @@ export default function EnvioMeta() {
     carregar();
   }, []);
 
-  const template = useMemo(
-    () => templates.find((t) => t.id === templateId) || null,
-    [templates, templateId]
+  // Agrupa templates por (nome_template, idioma) — cada linha do dropdown é um "template lógico"
+  // que pode existir em várias instâncias. `templateId` guarda a chave do grupo.
+  type TemplateGroup = {
+    key: string;
+    nome: string;
+    idioma: string;
+    categoria: string | null;
+    sample: Template;
+    rows: Template[];
+    instanciasAprovadasIds: Set<string>;
+  };
+  const templateGroups = useMemo<TemplateGroup[]>(() => {
+    const map = new Map<string, TemplateGroup>();
+    for (const t of templates) {
+      const key = `${t.nome_template}::${t.idioma}`;
+      const g = map.get(key);
+      if (g) {
+        g.rows.push(t);
+        if (t.status === "approved") g.instanciasAprovadasIds.add(t.instancia_id);
+      } else {
+        map.set(key, {
+          key,
+          nome: t.nome_template,
+          idioma: t.idioma,
+          categoria: t.categoria,
+          sample: t,
+          rows: [t],
+          instanciasAprovadasIds: new Set(t.status === "approved" ? [t.instancia_id] : []),
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [templates]);
+
+  const templateGroup = useMemo(
+    () => templateGroups.find((g) => g.key === templateId) || null,
+    [templateGroups, templateId],
   );
+  // Usa o primeiro registro do grupo como "template" para preview/variáveis.
+  const template = templateGroup?.sample ?? null;
+
+  // Instâncias selecionadas que NÃO têm este template aprovado
+  const instanciasIncompatíveis = useMemo(() => {
+    if (!templateGroup) return [] as Instancia[];
+    return instancias.filter(
+      (i) => instanciaIds.includes(i.id) && !templateGroup.instanciasAprovadasIds.has(i.id),
+    );
+  }, [templateGroup, instanciaIds, instancias]);
 
   const recipients = useMemo(() => parseRecipients(recipientsRaw), [recipientsRaw]);
+
 
   const toggleInstancia = (id: string) => {
     setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const enviar = async () => {
-    if (!template) return toast.error("Selecione um template aprovado");
+    if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (instanciasIncompatíveis.length > 0) {
+      return toast.error(
+        `Este template não está aprovado em: ${instanciasIncompatíveis.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
+      );
+    }
 
     // Deduplica destinatários antes de qualquer coisa
     const dedup = dedupRecipientsRaw(recipientsRaw);
@@ -384,6 +438,14 @@ export default function EnvioMeta() {
 
 
 
+    // Mapa instância -> template_id específico daquela instância (mesmo nome/idioma)
+    const templateIdByInstance: Record<string, string> = {};
+    for (const r of templateGroup.rows) {
+      if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) {
+        templateIdByInstance[r.instancia_id] = r.id;
+      }
+    }
+
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
       instanciaIds,
@@ -393,6 +455,7 @@ export default function EnvioMeta() {
       maxSec: hi,
       semWhatsapp: semWa,
       erroValidacao: erroVal,
+      templateIdByInstance,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -434,32 +497,97 @@ export default function EnvioMeta() {
         <Card>
           <CardHeader>
             <CardTitle>1. Template HSM</CardTitle>
-            <CardDescription>Apenas templates aprovados pela Meta aparecem aqui.</CardDescription>
+            <CardDescription>
+              Apenas templates marcados como "Disponível em Envio em Massa" na aba <strong>API Oficial Meta</strong> aparecem aqui.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {templates.length === 0 ? (
+            {templateGroups.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum template aprovado. Sincronize templates na tela "API Oficial Meta".
+                Nenhum template liberado. Vá em <strong>API Oficial Meta → Templates HSM</strong> e marque a caixa "Massa" nos templates que quer usar aqui.
               </p>
             ) : (
               <Select value={templateId} onValueChange={setTemplateId}>
                 <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
                 <SelectContent>
-                  {templates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <div className="flex items-center gap-2 w-full">
-                        <span>{t.nome_template}</span>
-                        <span className="text-xs text-muted-foreground">({t.idioma})</span>
-                        {t.categoria && (
-                          <Badge variant={t.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                            {t.categoria === 'MARKETING' ? 'Marketing' : t.categoria === 'UTILITY' ? 'Utilidade' : t.categoria}
+                  {templateGroups.map((g) => {
+                    const total = instancias.length;
+                    const ok = g.instanciasAprovadasIds.size;
+                    const full = ok === total && total > 0;
+                    return (
+                      <SelectItem key={g.key} value={g.key}>
+                        <div className="flex items-center gap-2 w-full">
+                          <span>{g.nome}</span>
+                          <span className="text-xs text-muted-foreground">({g.idioma})</span>
+                          {g.categoria && (
+                            <Badge variant={g.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                              {g.categoria === 'MARKETING' ? 'Marketing' : g.categoria === 'UTILITY' ? 'Utilidade' : g.categoria}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant={full ? "default" : ok === 0 ? "destructive" : "secondary"}
+                            className={`text-[10px] px-1.5 py-0 ${full ? "bg-green-600" : ok > 0 && !full ? "bg-amber-500 text-white" : ""}`}
+                          >
+                            {ok}/{total} instâncias
                           </Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+            )}
+
+            {templateGroup && instanciasIncompatíveis.length > 0 && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      Este template não está aprovado em {instanciasIncompatíveis.length} instância(s) selecionada(s):
+                    </p>
+                    <ul className="list-disc ml-5 mt-1">
+                      {instanciasIncompatíveis.map((i) => (
+                        <li key={i.id}>{i.nome}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs">
+                      O envio está bloqueado para evitar erros. Remova as instâncias abaixo ou sincronize/aprovar o template nelas.
+                    </p>
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setInstanciaIds((prev) =>
+                            prev.filter((id) => !instanciasIncompatíveis.some((x) => x.id === id)),
+                          )
+                        }
+                      >
+                        Remover instâncias incompatíveis
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          toast.info("Sincronizando templates das instâncias incompatíveis...");
+                          for (const inst of instanciasIncompatíveis) {
+                            try {
+                              await supabase.functions.invoke("meta-sync-templates", {
+                                body: { instancia_id: inst.id },
+                              });
+                            } catch {}
+                          }
+                          await carregar();
+                          toast.success("Sincronização concluída");
+                        }}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar templates dessas instâncias
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {template && (
@@ -749,7 +877,7 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={enviando || validando} size="lg">
+            <Button onClick={enviar} disabled={enviando || validando || instanciasIncompatíveis.length > 0} size="lg">
               {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
               {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
