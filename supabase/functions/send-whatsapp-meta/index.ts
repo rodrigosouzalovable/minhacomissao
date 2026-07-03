@@ -221,6 +221,39 @@ Deno.serve(async (req) => {
     if (!template) throw new Error('Template não encontrado');
     if (template.status !== 'approved') throw new Error('Template não aprovado pela Meta');
 
+    // ===== GUARDRAIL: bloqueio anti-marketing =====
+    const categoria = String(template.categoria || '').toUpperCase();
+    if (categoria === 'MARKETING') {
+      const { data: guard } = await supabase
+        .from('meta_billing_guardrail').select('*').eq('id', 1).maybeSingle();
+      const bloquear = guard?.bloquear_marketing ?? true;
+      if (bloquear) {
+        // Notifica admin (idempotente por template + dia)
+        try {
+          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+          const chave = `meta_marketing_block_${template.nome_template}_${new Date().toISOString().slice(0,10)}`;
+          await notificarAdmin(supabase, {
+            tipo: 'meta_marketing_bloqueado',
+            mensagem:
+              `⚠️ Envio Meta BLOQUEADO\n\n` +
+              `Template: *${template.nome_template}*\n` +
+              `Categoria: *MARKETING* (custo alto ~US$0,0625/msg)\n` +
+              `Usuário: ${user_id || 'desconhecido'}\n` +
+              `Instância: ${instancia_id}\n\n` +
+              `Bloqueado pela trava anti-gasto. Para liberar: Configurar Meta → Segurança de Custos.`,
+            chaveIdempotencia: chave,
+          });
+        } catch (e) {
+          console.log('[guardrail] notificarAdmin falhou:', String(e).slice(0, 200));
+        }
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Envio bloqueado: template "${template.nome_template}" é categoria MARKETING. Trava anti-gasto ativa. Admin foi notificado.`,
+          blocked_marketing: true,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances').select('*').eq('id', instancia_id).eq('ativo', true).maybeSingle();
     if (!inst) throw new Error('Instância Meta não encontrada/ativa');
