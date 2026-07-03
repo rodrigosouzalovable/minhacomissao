@@ -278,7 +278,7 @@ serve(async (req) => {
           // Casa telefone pelo sufixo (últimos 8 dígitos) para unificar variações
           // com/sem "9" do celular brasileiro entre envio (5562981079590) e resposta (556281079590)
           const sufixo = phoneSuffix(outroLado);
-          if (sufixo.length === 8) {
+          if (!soBsuid && sufixo.length === 8) {
             const { data: contatoCanonico } = await supabase
               .from('meta_whatsapp_contatos')
               .select('telefone')
@@ -310,7 +310,7 @@ serve(async (req) => {
           // a Meta pode enviar um webhook espelho pela outra instância (coexistência/WhatsApp Web).
           // Mantemos apenas quando a instância atual iniciou o atendimento via template HSM;
           // caso contrário, não cria conversa duplicada no Inbox Meta.
-          if (isOfficialInstancePhoneSuffix(sufixo, inst.id, officialInstances || [])) {
+          if (!soBsuid && isOfficialInstancePhoneSuffix(sufixo, inst.id, officialInstances || [])) {
             const hasTemplateContext = await hasOutboundTemplateContext(supabase, inst.id, sufixo);
             if (!hasTemplateContext) {
               console.log('[MetaWebhook] ignorando conversa espelho entre instâncias oficiais', {
@@ -335,7 +335,8 @@ serve(async (req) => {
           const { error: msgError } = await supabase.from('meta_whatsapp_mensagens').insert({
             user_id: inst.user_id,
             instancia_id: inst.id,
-            telefone: outroLado,
+            telefone: outroLado || null,
+            bsuid: msgBsuid,
             direcao: isEcho ? 'saida' : 'entrada',
             conteudo: texto,
             tipo_conteudo: tipo,
@@ -350,37 +351,65 @@ serve(async (req) => {
             if (!duplicate) console.error('[MetaWebhook] erro ao inserir mensagem', { field: fieldName, isEcho, erro: msgError.message });
           }
 
-          // Upsert contato
-          const { data: existente } = await supabase
+          // Upsert contato — chave primária: BSUID quando disponível, senão telefone
+          let existenteQuery = supabase
             .from('meta_whatsapp_contatos')
-            .select('id, nao_lido, nome')
-            .eq('instancia_id', inst.id)
-            .eq('telefone', outroLado)
-            .maybeSingle();
+            .select('id, nao_lido, nome, bsuid, telefone, whatsapp_username')
+            .eq('instancia_id', inst.id);
+          if (msgBsuid) {
+            existenteQuery = existenteQuery.eq('bsuid', msgBsuid);
+          } else {
+            existenteQuery = existenteQuery.eq('telefone', outroLado);
+          }
+          const { data: existente } = await existenteQuery.maybeSingle();
 
-          if (existente) {
+          // Fallback: se não achou por BSUID mas tem telefone, tenta casar por telefone p/ correlacionar
+          let existenteFinal = existente;
+          if (!existenteFinal && msgBsuid && outroLado) {
+            const { data: existentePorTel } = await supabase
+              .from('meta_whatsapp_contatos')
+              .select('id, nao_lido, nome, bsuid, telefone, whatsapp_username')
+              .eq('instancia_id', inst.id)
+              .eq('telefone', outroLado)
+              .maybeSingle();
+            existenteFinal = existentePorTel;
+          }
+
+          if (existenteFinal) {
             const upd: any = {
               ultima_mensagem: texto,
               ultima_mensagem_em: tsMsg,
               atualizado_em: new Date().toISOString(),
             };
+            // Correlaciona BSUID/username/telefone quando chega dado novo
+            if (msgBsuid && !existenteFinal.bsuid) upd.bsuid = msgBsuid;
+            if (usernameContato && !existenteFinal.whatsapp_username) upd.whatsapp_username = usernameContato;
+            if (outroLado && !existenteFinal.telefone) {
+              upd.telefone = outroLado;
+              upd.telefone_visivel = true;
+            }
             if (isEcho) {
-              // envio nosso — não incrementa não-lido, não atualiza ultima_msg_entrada_em
+              // envio nosso — não incrementa não-lido, não atualiza ultima_msg_entrada_em/interacao
             } else {
               upd.ultima_msg_entrada_em = tsMsg;
-              upd.nao_lido = (existente.nao_lido || 0) + 1;
-              upd.nome = existente.nome || nomeContato;
+              upd.ultima_interacao_em = tsMsg;
+              upd.nao_lido = (existenteFinal.nao_lido || 0) + 1;
+              upd.nome = existenteFinal.nome || nomeContato;
             }
-            await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', existente.id);
+            await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', existenteFinal.id);
           } else {
             await supabase.from('meta_whatsapp_contatos').insert({
               user_id: inst.user_id,
               instancia_id: inst.id,
-              telefone: outroLado,
+              telefone: outroLado || null,
+              telefone_visivel: !!outroLado,
+              bsuid: msgBsuid,
+              whatsapp_username: usernameContato,
               nome: isEcho ? null : nomeContato,
               ultima_mensagem: texto,
               ultima_mensagem_em: tsMsg,
               ultima_msg_entrada_em: isEcho ? null : tsMsg,
+              ultima_interacao_em: isEcho ? null : tsMsg,
               nao_lido: isEcho ? 0 : 1,
             } as any);
           }
