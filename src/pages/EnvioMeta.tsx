@@ -359,8 +359,13 @@ export default function EnvioMeta() {
   };
 
   const enviar = async () => {
-    if (!template) return toast.error("Selecione um template aprovado");
+    if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (instanciasIncompatíveis.length > 0) {
+      return toast.error(
+        `Este template não está aprovado em: ${instanciasIncompatíveis.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
+      );
+    }
 
     // Deduplica destinatários antes de qualquer coisa
     const dedup = dedupRecipientsRaw(recipientsRaw);
