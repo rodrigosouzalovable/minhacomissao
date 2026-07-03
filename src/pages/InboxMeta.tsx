@@ -632,7 +632,8 @@ export default function InboxMeta() {
                       )}>
                         {selMultipla && (sel ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" /> : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />)}
                         {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
-                        <span className="truncate">{c.nome || formatTelefone(c.telefone)}</span>
+                        <span className="truncate">{c.nome || (c.telefone ? formatTelefone(c.telefone) : (c.whatsapp_username ? `@${c.whatsapp_username}` : 'Sem telefone'))}</span>
+                        {!c.telefone && c.bsuid && <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">BSUID</Badge>}
                       </span>
                       <span className={cn(
                         'block text-xs truncate',
