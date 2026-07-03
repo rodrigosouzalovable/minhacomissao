@@ -258,6 +258,27 @@ export default function InboxMeta() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contatoAtivo?.id]);
 
+  // Refresh saúde da instância em background (no máx 1x a cada 30 min por instância aberta)
+  useEffect(() => {
+    if (!contatoAtivo?.instancia_id) return;
+    const inst = instancias.find(i => i.id === contatoAtivo.instancia_id);
+    if (!inst) return;
+    const checkedAt = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
+    if (checkedAt && Date.now() - checkedAt < 30 * 60 * 1000) return;
+    (async () => {
+      try {
+        await supabase.functions.invoke('check-meta-instance-health', { body: { instancia_id: inst.id } });
+        const { data } = await supabase.from('meta_whatsapp_instances')
+          .select('id, nome, display_phone, ativo, saude_status, saude_quality, saude_name_status, saude_ban_info, saude_checked_at')
+          .eq('id', inst.id).maybeSingle();
+        if (data) {
+          setInstancias(prev => prev.map(p => p.id === inst.id ? { ...p, ...(data as MetaInstance) } : p));
+        }
+      } catch { /* silencioso — banner só aparece se houver problema */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contatoAtivo?.instancia_id]);
+
   // Realtime mensagens
   useEffect(() => {
     if (!contatoAtivo) return;
