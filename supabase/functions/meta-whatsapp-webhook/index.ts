@@ -256,20 +256,24 @@ serve(async (req) => {
 
         for (const m of messages) {
           const from = normalizePhone(m.from);
-          if (!from) continue;
+          // Meta 2026: pode vir só BSUID sem telefone (username-only)
+          const msgBsuid: string | null = m.from_user_id || m.from_userId || m.user_id || bsuidPorWaId[m.from] || null;
+          if (!from && !msgBsuid) continue;
           const { texto, tipo } = extractTextoFromMessage(m);
           const tsMsg = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
-          const nomeContato = nomePorWaId[from] || null;
+          const nomeContato = nomePorWaId[from] || (msgBsuid ? nomePorBsuid[msgBsuid] : null) || null;
+          const usernameContato = usernamePorWaId[from] || (msgBsuid ? usernamePorWaId[msgBsuid] : null) || null;
 
           // Echo: mensagem enviada pelo próprio número (WhatsApp Web / celular via coexistência)
           const fromDigits = normalizePhone(from);
-          const isEcho = isEchoField || (!!businessDigits && (fromDigits === businessDigits || samePhoneBySuffix(fromDigits, businessDigits)));
+          const isEcho = isEchoField || (!!businessDigits && !!fromDigits && (fromDigits === businessDigits || samePhoneBySuffix(fromDigits, businessDigits)));
 
           // Para echoes: destinatário está em m.to; em mensagens recebidas, o outro lado é m.from
           let outroLado = isEcho
             ? normalizePhone(m.to || contacts?.[0]?.wa_id || null)
             : from;
-          if (!outroLado) continue;
+          const soBsuid = !outroLado && !!msgBsuid;
+          if (!outroLado && !soBsuid) continue;
 
           // Casa telefone pelo sufixo (últimos 8 dígitos) para unificar variações
           // com/sem "9" do celular brasileiro entre envio (5562981079590) e resposta (556281079590)
