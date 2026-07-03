@@ -2512,6 +2512,7 @@ export type Database = {
         Row: {
           body_text: string | null
           categoria: string | null
+          habilitado_envio_massa: boolean
           id: string
           idioma: string
           instancia_id: string
@@ -2523,6 +2524,7 @@ export type Database = {
         Insert: {
           body_text?: string | null
           categoria?: string | null
+          habilitado_envio_massa?: boolean
           id?: string
           idioma?: string
           instancia_id: string
@@ -2534,6 +2536,7 @@ export type Database = {
         Update: {
           body_text?: string | null
           categoria?: string | null
+          habilitado_envio_massa?: boolean
           id?: string
           idioma?: string
           instancia_id?: string

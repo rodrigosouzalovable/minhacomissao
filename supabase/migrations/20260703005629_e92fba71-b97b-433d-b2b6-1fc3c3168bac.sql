@@ -1,0 +1,2 @@
+ALTER TABLE public.meta_whatsapp_templates ADD COLUMN IF NOT EXISTS habilitado_envio_massa boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_meta_templates_habilitado ON public.meta_whatsapp_templates(habilitado_envio_massa) WHERE habilitado_envio_massa = true;
