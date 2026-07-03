@@ -515,10 +515,22 @@ export default function EnvioMeta() {
           <CardContent className="space-y-3">
             {templateGroups.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum template liberado. Vá em <strong>API Oficial Meta → Templates HSM</strong> e marque a caixa "Massa" nos templates que quer usar aqui.
+                {instanciaIds.length === 0
+                  ? "Selecione uma ou mais instâncias acima para ver os templates disponíveis."
+                  : <>Nenhum template liberado para as instâncias selecionadas. Vá em <strong>API Oficial Meta → Templates HSM</strong> e marque a caixa "Massa" nos templates que quer usar aqui.</>}
               </p>
             ) : (
               <Select value={templateId} onValueChange={setTemplateId}>
+                <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
+                <SelectContent>
+                  {templateGroups.map((g) => {
+                    const total = instanciaIds.length;
+                    const ok = g.instanciasAprovadasIds.size;
+                    const full = ok === total && total > 0;
+                    return (
+                      <SelectItem key={g.key} value={g.key}>
+                        <div className="flex items-center gap-2 w-full">
+
                 <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
                 <SelectContent>
                   {templateGroups.map((g) => {
