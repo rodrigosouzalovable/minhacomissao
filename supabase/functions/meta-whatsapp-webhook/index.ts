@@ -416,7 +416,7 @@ serve(async (req) => {
 
 
           // Compatibilidade com o log de envios em massa — casa por sufixo
-          if (!isEcho && sufixo.length === 8) {
+          if (!isEcho && !soBsuid && sufixo.length === 8) {
             await supabase.from('meta_whatsapp_envios_log')
               .update({ status: 'replied' })
               .eq('instancia_id', inst.id)
