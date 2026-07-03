@@ -26,11 +26,25 @@ export function useMetaAudioRecorder({
   const iniciarGravacao = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-        ? 'audio/ogg;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm';
+      // Meta Cloud API aceita: audio/ogg (OPUS), audio/aac, audio/mp4, audio/mpeg, audio/amr.
+      // NÃO aceita audio/webm. Priorizamos ogg → mp4 (Safari/iOS).
+      const candidatos = [
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/aac',
+      ];
+      const mimeType = candidatos.find(m => MediaRecorder.isTypeSupported(m));
+      if (!mimeType) {
+        stream.getTracks().forEach(t => t.stop());
+        toast({
+          title: 'Navegador não suporta áudio compatível com WhatsApp',
+          description: 'Use um Chrome/Edge atualizado, ou Safari no iOS. O áudio em WebM não é aceito pela Meta.',
+          variant: 'destructive',
+        });
+        return;
+      }
       const rec = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = rec;
       chunksRef.current = [];
