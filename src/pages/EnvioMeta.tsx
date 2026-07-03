@@ -315,7 +315,10 @@ export default function EnvioMeta() {
   };
   const templateGroups = useMemo<TemplateGroup[]>(() => {
     const map = new Map<string, TemplateGroup>();
-    for (const t of templates) {
+    const base = instanciaIds.length === 0
+      ? []
+      : templates.filter((t) => instanciaIds.includes(t.instancia_id));
+    for (const t of base) {
       const key = `${t.nome_template}::${t.idioma}`;
       const g = map.get(key);
       if (g) {
@@ -334,7 +337,15 @@ export default function EnvioMeta() {
       }
     }
     return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [templates]);
+  }, [templates, instanciaIds]);
+
+  // Clear selected template if it disappears after instance change
+  useEffect(() => {
+    if (templateId && !templateGroups.some((g) => g.key === templateId)) {
+      setTemplateId("");
+    }
+  }, [templateGroups, templateId]);
+
 
   const templateGroup = useMemo(
     () => templateGroups.find((g) => g.key === templateId) || null,
@@ -504,19 +515,22 @@ export default function EnvioMeta() {
           <CardContent className="space-y-3">
             {templateGroups.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum template liberado. Vá em <strong>API Oficial Meta → Templates HSM</strong> e marque a caixa "Massa" nos templates que quer usar aqui.
+                {instanciaIds.length === 0
+                  ? "Selecione uma ou mais instâncias acima para ver os templates disponíveis."
+                  : <>Nenhum template liberado para as instâncias selecionadas. Vá em <strong>API Oficial Meta → Templates HSM</strong> e marque a caixa "Massa" nos templates que quer usar aqui.</>}
               </p>
             ) : (
               <Select value={templateId} onValueChange={setTemplateId}>
                 <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
                 <SelectContent>
                   {templateGroups.map((g) => {
-                    const total = instancias.length;
+                    const total = instanciaIds.length;
                     const ok = g.instanciasAprovadasIds.size;
                     const full = ok === total && total > 0;
                     return (
                       <SelectItem key={g.key} value={g.key}>
                         <div className="flex items-center gap-2 w-full">
+
                           <span>{g.nome}</span>
                           <span className="text-xs text-muted-foreground">({g.idioma})</span>
                           {g.categoria && (
