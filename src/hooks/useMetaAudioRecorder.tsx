@@ -84,10 +84,18 @@ export function useMetaAudioRecorder({
         if (blob.size === 0) { setTempoGravacao(0); resolve(); return; }
         setEnviandoAudio(true);
         try {
-          const ext = rec.mimeType.includes('ogg') ? 'ogg' : 'webm';
+          const mt = rec.mimeType || 'audio/ogg';
+          const ext = mt.includes('ogg') ? 'ogg'
+            : mt.includes('mp4') || mt.includes('m4a') ? 'm4a'
+            : mt.includes('aac') ? 'aac'
+            : 'ogg';
+          const uploadType = mt.includes('ogg') ? 'audio/ogg'
+            : mt.includes('mp4') || mt.includes('m4a') ? 'audio/mp4'
+            : mt.includes('aac') ? 'audio/aac'
+            : 'audio/ogg';
           const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${ext}`;
           const { error: upErr } = await supabase.storage.from('inbox-media')
-            .upload(path, blob, { contentType: rec.mimeType });
+            .upload(path, blob, { contentType: uploadType });
           if (upErr) throw upErr;
           const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(path);
           const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
