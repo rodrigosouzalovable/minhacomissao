@@ -55,7 +55,7 @@ export default function ConfigurarMeta() {
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
-  const [filtroInstancias, setFiltroInstancias] = useState<string[]>([]);
+  
 
   const [assinando, setAssinando] = useState(false);
   const [resultadosAssinatura, setResultadosAssinatura] = useState<any[] | null>(null);
