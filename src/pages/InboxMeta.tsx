@@ -144,7 +144,8 @@ export default function InboxMeta() {
     if (!user) return;
     (async () => {
       const { data } = await supabase.from('meta_whatsapp_instances')
-        .select('id, nome, display_phone, ativo').eq('ativo', true).order('nome');
+        .select('id, nome, display_phone, ativo, saude_status, saude_quality, saude_name_status, saude_ban_info, saude_checked_at')
+        .eq('ativo', true).order('nome');
       setInstancias((data as MetaInstance[]) ?? []);
     })();
   }, [user]);
