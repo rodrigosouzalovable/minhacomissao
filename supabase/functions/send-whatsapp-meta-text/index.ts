@@ -18,9 +18,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { instancia_id, telefone, texto, user_id, reply_to_wa_id, conteudo_citado } = await req.json();
-    if (!instancia_id || !telefone || !texto) {
-      return new Response(JSON.stringify({ success: false, error: 'instancia_id, telefone e texto são obrigatórios' }), {
+    const { instancia_id, telefone, bsuid, texto, user_id, reply_to_wa_id, conteudo_citado } = await req.json();
+    if (!instancia_id || (!telefone && !bsuid) || !texto) {
+      return new Response(JSON.stringify({ success: false, error: 'instancia_id, (telefone ou bsuid) e texto são obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -41,20 +41,23 @@ Deno.serve(async (req) => {
     }
 
     const uid = user_id || inst.user_id;
-    const to = formatTel(telefone);
-    if (!to) {
-      return new Response(JSON.stringify({ success: false, error: 'Telefone inválido' }), {
+    const to = telefone ? formatTel(telefone) : '';
+    // Modo BSUID (Meta 2026) — usado quando o cliente é username-only e não temos telefone
+    const useBsuid = !to && !!bsuid;
+    if (!to && !useBsuid) {
+      return new Response(JSON.stringify({ success: false, error: 'Telefone ou BSUID inválido' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Bloqueia se janela 24h estiver expirada
-    const { data: contato } = await supabase
+    // Bloqueia se janela 24h estiver expirada — checa por telefone OU bsuid
+    let contatoQuery = supabase
       .from('meta_whatsapp_contatos')
-      .select('ultima_msg_entrada_em')
-      .eq('instancia_id', instancia_id)
-      .eq('telefone', to)
-      .maybeSingle();
+      .select('id, ultima_msg_entrada_em, telefone, bsuid')
+      .eq('instancia_id', instancia_id);
+    if (useBsuid) contatoQuery = contatoQuery.eq('bsuid', bsuid);
+    else contatoQuery = contatoQuery.eq('telefone', to);
+    const { data: contato } = await contatoQuery.maybeSingle();
 
     const ultimaEntrada = contato?.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
     const agora = Date.now();
@@ -71,7 +74,7 @@ Deno.serve(async (req) => {
     const body: any = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to,
+      to: useBsuid ? bsuid : to,
       type: 'text',
       text: { preview_url: false, body: String(texto).slice(0, 4096) },
     };
@@ -99,7 +102,8 @@ Deno.serve(async (req) => {
     await supabase.from('meta_whatsapp_mensagens').insert({
       user_id: uid,
       instancia_id,
-      telefone: to,
+      telefone: to || null,
+      bsuid: useBsuid ? bsuid : (contato?.bsuid || null),
       direcao: 'saida',
       conteudo: texto,
       tipo_conteudo: 'texto',
@@ -111,26 +115,21 @@ Deno.serve(async (req) => {
     } as any);
 
     // Atualiza preview do contato (cria se não existir)
-    const { data: existente } = await supabase
-      .from('meta_whatsapp_contatos')
-      .select('id')
-      .eq('instancia_id', instancia_id)
-      .eq('telefone', to)
-      .maybeSingle();
-
-    if (existente) {
+    if (contato?.id) {
       await supabase.from('meta_whatsapp_contatos')
         .update({
           ultima_mensagem: texto,
           ultima_mensagem_em: nowIso,
           atualizado_em: nowIso,
         })
-        .eq('id', existente.id);
+        .eq('id', contato.id);
     } else {
       await supabase.from('meta_whatsapp_contatos').insert({
         user_id: uid,
         instancia_id,
-        telefone: to,
+        telefone: to || null,
+        telefone_visivel: !!to,
+        bsuid: useBsuid ? bsuid : null,
         ultima_mensagem: texto,
         ultima_mensagem_em: nowIso,
       } as any);
