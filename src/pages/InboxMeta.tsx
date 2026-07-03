@@ -342,7 +342,8 @@ export default function InboxMeta() {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
         body: {
           instancia_id: contatoAtivo.instancia_id,
-          telefone: contatoAtivo.telefone,
+          telefone: contatoAtivo.telefone || undefined,
+          bsuid: contatoAtivo.bsuid || undefined,
           texto: t,
           user_id: user?.id,
           reply_to_wa_id: replyTo,
