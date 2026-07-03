@@ -24,6 +24,7 @@ import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/me
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
+import { MetaInstanceHealthBanner } from '@/components/inbox/meta/MetaInstanceHealthBanner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
