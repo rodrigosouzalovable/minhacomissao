@@ -31,7 +31,14 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 
-interface MetaInstance { id: string; nome: string | null; display_phone: string | null; ativo: boolean; }
+interface MetaInstance {
+  id: string; nome: string | null; display_phone: string | null; ativo: boolean;
+  saude_status?: string | null;
+  saude_quality?: string | null;
+  saude_name_status?: string | null;
+  saude_ban_info?: any;
+  saude_checked_at?: string | null;
+}
 interface MetaContato {
   id: string; instancia_id: string; telefone: string; nome: string | null;
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
