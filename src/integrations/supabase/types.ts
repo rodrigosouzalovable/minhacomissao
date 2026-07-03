@@ -2191,6 +2191,7 @@ export type Database = {
         Row: {
           arquivado: boolean
           atualizado_em: string
+          bsuid: string | null
           criado_em: string
           fixado: boolean
           historico_inicial_importado_em: string | null
@@ -2198,15 +2199,19 @@ export type Database = {
           instancia_id: string
           nao_lido: number
           nome: string | null
-          telefone: string
+          telefone: string | null
+          telefone_visivel: boolean
+          ultima_interacao_em: string | null
           ultima_mensagem: string | null
           ultima_mensagem_em: string | null
           ultima_msg_entrada_em: string | null
           user_id: string
+          whatsapp_username: string | null
         }
         Insert: {
           arquivado?: boolean
           atualizado_em?: string
+          bsuid?: string | null
           criado_em?: string
           fixado?: boolean
           historico_inicial_importado_em?: string | null
@@ -2214,15 +2219,19 @@ export type Database = {
           instancia_id: string
           nao_lido?: number
           nome?: string | null
-          telefone: string
+          telefone?: string | null
+          telefone_visivel?: boolean
+          ultima_interacao_em?: string | null
           ultima_mensagem?: string | null
           ultima_mensagem_em?: string | null
           ultima_msg_entrada_em?: string | null
           user_id: string
+          whatsapp_username?: string | null
         }
         Update: {
           arquivado?: boolean
           atualizado_em?: string
+          bsuid?: string | null
           criado_em?: string
           fixado?: boolean
           historico_inicial_importado_em?: string | null
@@ -2230,11 +2239,14 @@ export type Database = {
           instancia_id?: string
           nao_lido?: number
           nome?: string | null
-          telefone?: string
+          telefone?: string | null
+          telefone_visivel?: boolean
+          ultima_interacao_em?: string | null
           ultima_mensagem?: string | null
           ultima_mensagem_em?: string | null
           ultima_msg_entrada_em?: string | null
           user_id?: string
+          whatsapp_username?: string | null
         }
         Relationships: [
           {
@@ -2248,6 +2260,7 @@ export type Database = {
       }
       meta_whatsapp_envios_log: {
         Row: {
+          bsuid: string | null
           enviado_em: string
           erro: string | null
           id: string
@@ -2259,6 +2272,7 @@ export type Database = {
           wa_message_id: string | null
         }
         Insert: {
+          bsuid?: string | null
           enviado_em?: string
           erro?: string | null
           id?: string
@@ -2270,6 +2284,7 @@ export type Database = {
           wa_message_id?: string | null
         }
         Update: {
+          bsuid?: string | null
           enviado_em?: string
           erro?: string | null
           id?: string
@@ -2398,6 +2413,7 @@ export type Database = {
       meta_whatsapp_mensagens: {
         Row: {
           apagada_para_mim: boolean
+          bsuid: string | null
           conteudo: string
           conteudo_citado: string | null
           criado_em: string
@@ -2418,6 +2434,7 @@ export type Database = {
         }
         Insert: {
           apagada_para_mim?: boolean
+          bsuid?: string | null
           conteudo?: string
           conteudo_citado?: string | null
           criado_em?: string
@@ -2438,6 +2455,7 @@ export type Database = {
         }
         Update: {
           apagada_para_mim?: boolean
+          bsuid?: string | null
           conteudo?: string
           conteudo_citado?: string | null
           criado_em?: string
