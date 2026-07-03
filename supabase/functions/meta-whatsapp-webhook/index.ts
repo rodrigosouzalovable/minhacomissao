@@ -237,8 +237,21 @@ serve(async (req) => {
         const messages = isEchoField ? (value.message_echoes || value.messages || []) : (value.messages || []);
         const contacts = value.contacts || [];
         const nomePorWaId: Record<string, string> = {};
+        // Novo: mapa de BSUID (user_id) e username por wa_id / BSUID
+        // Meta 2026: contact.user_id = BSUID (ex: BR.1349...) ; contact.username = @handle
+        const bsuidPorWaId: Record<string, string> = {};
+        const usernamePorWaId: Record<string, string> = {};
+        const nomePorBsuid: Record<string, string> = {};
         for (const c of contacts) {
-          if (c?.wa_id && c?.profile?.name) nomePorWaId[c.wa_id] = c.profile.name;
+          const waId = c?.wa_id || null;
+          const bsuid = c?.user_id || c?.userId || null;
+          const uname = c?.username || null;
+          const nome = c?.profile?.name || null;
+          if (waId && nome) nomePorWaId[waId] = nome;
+          if (waId && bsuid) bsuidPorWaId[waId] = bsuid;
+          if (waId && uname) usernamePorWaId[waId] = uname;
+          if (bsuid && nome) nomePorBsuid[bsuid] = nome;
+          if (bsuid && uname) usernamePorWaId[bsuid] = uname;
         }
 
         for (const m of messages) {
