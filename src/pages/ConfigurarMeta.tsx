@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
+import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -247,6 +248,8 @@ export default function ConfigurarMeta() {
           Configuração das instâncias conectadas via HookCloud e Meta Cloud API
         </p>
       </div>
+
+      <MetaGuardrailCard />
 
       <Card className="mb-6">
         <CardHeader>
