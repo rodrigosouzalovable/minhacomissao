@@ -1,21 +1,32 @@
-## Diagnóstico
+## Objetivo
 
-Na aba Envio Meta Massa, ao selecionar a IPHONE B7, nenhum template aparece porque o carregamento em `EnvioMeta.tsx` (linha 287) filtra `.eq("status", "approved")`. O template `abertura_para_negociacao_de_debito` está aprovado em apenas 1/17 instâncias — se essa instância não for a IPHONE B7, nenhum registro é retornado para ela e o dropdown fica vazio.
+1. Reverter tudo o que foi adicionado à aba **Templates HSM** dentro de **API Oficial Meta** (seleção de quais templates aparecem no Envio Meta Massa).
+2. Na aba **Envio Meta Massa**, mostrar todos os templates novamente e, ao selecionar instâncias, listar quais instâncias estão vinculadas a cada template.
 
-## Correção
+## 1. Reverter `src/pages/ConfigurarMeta.tsx`
 
-Arquivo único: `src/pages/EnvioMeta.tsx`.
+- Remover o componente `MassaSelectAllCheckbox` (linhas ~47-113).
+- Remover o estado `filtroInstancias` e seu setter.
+- Remover o card "Filtrar por instâncias" (linhas ~528-579) na aba Templates HSM.
+- Na tabela de templates HSM:
+  - Remover a coluna de checkbox `Massa` (cabeçalho e células).
+  - Remover a função `toggleGrupo` e o filtro por instâncias visíveis.
+  - Manter apenas as colunas: Nome, Categoria, Idioma, Cobertura, Corpo.
+- Ajustar o texto acima da tabela: remover a frase sobre "Marque os templates que devem aparecer na aba Envio Meta Massa" e deixar apenas a descrição da coluna Cobertura.
+- Remover a propriedade `habilitado_envio_massa` do type `Template` local (a coluna do banco permanece, apenas deixa de ser usada — sem migration).
 
-1. Remover o `.eq("status", "approved")` da query de `meta_whatsapp_templates` (mantendo `.eq("habilitado_envio_massa", true)`). Isso traz todas as instâncias em que o template existe (aprovado, pending, rejected).
+## 2. Ajustar `src/pages/EnvioMeta.tsx`
 
-2. O agrupamento existente já ignora status ao decidir se aparece na lista, mas conta em `instanciasAprovadasIds` apenas as linhas com `status === "approved"`. Consequência:
-   - IPHONE B7 selecionada sem aprovação → template aparece com badge "0/1 instâncias" em vermelho.
-   - O aviso amarelo já existente ("Este template não está aprovado em: IPHONE B7 … Remova essas instâncias ou sincronize/aprovar") aparece automaticamente, com o botão de sincronizar as instâncias incompatíveis.
-   - O botão "Iniciar envio" já é bloqueado quando há instâncias incompatíveis, então não há risco de disparo com template não aprovado.
-
-3. Sem mudanças em backend, migrations ou outras páginas.
+- Query em `carregar()`: remover `.eq("habilitado_envio_massa", true)` — carregar todos os templates das instâncias ativas.
+- No dropdown de templates (usando `templateGroups`), para cada template mostrar:
+  - Nome + idioma + categoria (já existe).
+  - Badge "X/Y instâncias" existente (aprovadas nas selecionadas).
+  - Nova linha logo abaixo com badges pequenas listando o nome de **cada instância selecionada em que o template existe**, com estilo diferenciado para `approved` (verde) vs. não aprovado (âmbar). Isso deixa visível "quais instâncias estão vinculadas àquele template".
+- Atualizar a descrição do card "1. Template HSM": trocar o texto atual ("Apenas templates marcados como Disponível em Envio em Massa...") por algo como "Selecione as instâncias ao lado — os templates disponíveis em cada instância selecionada aparecerão aqui, com badges indicando em quais instâncias existem."
+- Manter intacto o aviso amarelo de instâncias incompatíveis, o bloqueio do botão Iniciar envio, e o mapeamento `templateIdByInstance`.
 
 ## Fora de escopo
 
-- Alterar o comportamento de sincronização.
-- Alterar o botão "Marcar Massa" da aba API Oficial Meta (já toca todas as linhas do template).
+- Nenhuma alteração de banco/migration (coluna `habilitado_envio_massa` continua existindo, apenas sem uso na UI).
+- Nenhuma alteração em edge functions.
+- Nenhuma alteração em outras páginas.

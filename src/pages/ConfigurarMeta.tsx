@@ -41,76 +41,8 @@ type Template = {
   status: string;
   variaveis: any;
   sincronizado_em: string;
-  habilitado_envio_massa: boolean;
 };
 
-function MassaSelectAllCheckbox({
-  templates,
-  filtroInstancias,
-  setTemplates,
-}: {
-  templates: Template[];
-  filtroInstancias: string[];
-  setTemplates: React.Dispatch<React.SetStateAction<Template[]>>;
-}) {
-  const filtroSet = new Set(filtroInstancias);
-  const visiveis = filtroSet.size === 0 ? templates : templates.filter((t) => filtroSet.has(t.instancia_id));
-  // Group by nome+idioma to get "logical templates" visible
-  const nomes = new Set<string>();
-  for (const t of visiveis) nomes.add(`${t.nome_template}::${t.idioma}`);
-  const total = nomes.size;
-  let habilitados = 0;
-  for (const key of nomes) {
-    const [nome, idioma] = key.split("::");
-    const some = templates.some(
-      (t) => t.nome_template === nome && t.idioma === idioma && t.habilitado_envio_massa,
-    );
-    if (some) habilitados++;
-  }
-  const allOn = total > 0 && habilitados === total;
-
-  const toggleAll = async () => {
-    if (total === 0) return;
-    const novo = !allOn;
-    // Update all rows of templates whose (nome,idioma) is in `nomes`
-    const alvoIds = templates
-      .filter((t) => nomes.has(`${t.nome_template}::${t.idioma}`))
-      .map((t) => t.id);
-    if (alvoIds.length === 0) return;
-    const { error } = await supabase
-      .from("meta_whatsapp_templates")
-      .update({ habilitado_envio_massa: novo })
-      .in("id", alvoIds);
-    if (error) {
-      toast.error("Erro: " + error.message);
-      return;
-    }
-    toast.success(
-      novo
-        ? `${total} template(s) liberado(s) para Envio em Massa`
-        : `${total} template(s) removido(s) do Envio em Massa`,
-    );
-    setTemplates((prev) =>
-      prev.map((t) => (alvoIds.includes(t.id) ? { ...t, habilitado_envio_massa: novo } : t)),
-    );
-  };
-
-  return (
-    <div className="flex items-center gap-1" title={allOn ? "Desmarcar todos" : "Marcar todos"}>
-      <input
-        type="checkbox"
-        className="h-4 w-4 cursor-pointer accent-primary"
-        checked={allOn}
-        ref={(el) => {
-          if (el) el.indeterminate = habilitados > 0 && habilitados < total;
-        }}
-        onChange={toggleAll}
-        disabled={total === 0}
-      />
-      <span className="text-xs">Massa</span>
-    </div>
-  );
-}
 
 
 export default function ConfigurarMeta() {
