@@ -16,12 +16,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const {
-      instancia_id, telefone, media_url, type, file_name, caption, user_id,
+      instancia_id, telefone, bsuid, media_url, type, file_name, caption, user_id,
       reply_to_wa_id, conteudo_citado,
     } = await req.json();
 
-    if (!instancia_id || !telefone || !media_url || !type) {
-      return new Response(JSON.stringify({ success: false, error: 'instancia_id, telefone, media_url, type obrigatórios' }), {
+    if (!instancia_id || (!telefone && !bsuid) || !media_url || !type) {
+      return new Response(JSON.stringify({ success: false, error: 'instancia_id, (telefone ou bsuid), media_url, type obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -39,13 +39,17 @@ Deno.serve(async (req) => {
     }
 
     const uid = user_id || inst.user_id;
-    const to = formatTel(telefone);
+    const to = telefone ? formatTel(telefone) : '';
+    const useBsuid = !to && !!bsuid;
 
-    // Verifica janela 24h
-    const { data: contato } = await supabase
+    // Verifica janela 24h — busca contato por telefone ou BSUID
+    let contatoQuery = supabase
       .from('meta_whatsapp_contatos')
-      .select('id, ultima_msg_entrada_em')
-      .eq('instancia_id', instancia_id).eq('telefone', to).maybeSingle();
+      .select('id, ultima_msg_entrada_em, telefone, bsuid')
+      .eq('instancia_id', instancia_id);
+    if (useBsuid) contatoQuery = contatoQuery.eq('bsuid', bsuid);
+    else contatoQuery = contatoQuery.eq('telefone', to);
+    const { data: contato } = await contatoQuery.maybeSingle();
     const ultimaEntrada = contato?.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
     if (!ultimaEntrada || (Date.now() - ultimaEntrada) >= 24 * 60 * 60 * 1000) {
       return new Response(JSON.stringify({ success: false, janela_expirada: true, error: 'Janela 24h expirada' }), {
