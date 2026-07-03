@@ -41,6 +41,7 @@ export type IniciarParams = {
   maxSec: number;
   semWhatsapp?: string[];
   erroValidacao?: string[];
+  templateIdByInstance?: Record<string, string>;
   onAfterEnvio?: () => void;
 };
 
