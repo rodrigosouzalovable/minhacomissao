@@ -413,7 +413,8 @@ export default function InboxMeta() {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
         body: {
           instancia_id: contatoAtivo.instancia_id,
-          telefone: contatoAtivo.telefone,
+          telefone: contatoAtivo.telefone || undefined,
+          bsuid: contatoAtivo.bsuid || undefined,
           media_url: urlData.publicUrl,
           type,
           file_name: file.name,
