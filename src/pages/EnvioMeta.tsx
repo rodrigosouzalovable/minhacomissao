@@ -583,7 +583,23 @@ export default function EnvioMeta() {
             )}
 
 
-            {templateGroup && instanciasIncompatíveis.length > 0 && (
+            {templateGroup && String(templateGroup.categoria || '').toUpperCase() === 'MARKETING' && (
+              <div className="rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm">
+                <div className="flex items-start gap-2 text-red-700 dark:text-red-400">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">Template MARKETING — envio bloqueado</p>
+                    <p className="mt-1 text-xs">
+                      Este template está classificado como <strong>MARKETING</strong> pela Meta (~US$ 0,0625 por conversa).
+                      A trava anti-gasto do sistema bloqueia esse envio para evitar recargas automáticas surpresa.
+                      Use apenas templates de <strong>UTILIDADE</strong>. Se precisar liberar, o admin pode desativar a trava
+                      em <em>Configurar Meta → Segurança de Custos</em>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
               <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
                 <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
