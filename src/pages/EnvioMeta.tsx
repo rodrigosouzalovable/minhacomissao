@@ -284,9 +284,9 @@ export default function EnvioMeta() {
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates")
         .select("*")
-        .eq("status", "approved")
         .eq("habilitado_envio_massa", true)
         .order("nome_template"),
+
       (supabase as any).from("user_whatsapp_instances")
         .select("id, nome, telefone, ativo, server_url, instance_token")
         .eq("ativo", true)
