@@ -450,38 +450,118 @@ export default function ConfigurarMeta() {
               Nenhum template sincronizado. Clique em "Sincronizar todos os templates" acima ou em "Templates" em uma instância.
             </CardContent></Card>
           ) : (
-            <Card><CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Idioma</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Corpo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {templates.map((t) => (
-                    <TableRow
-                      key={t.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setPreviewTpl(t)}
-                    >
-                      <TableCell className="font-mono text-xs">{t.nome_template}</TableCell>
-                      <TableCell>{t.categoria || "—"}</TableCell>
-                      <TableCell>{t.idioma}</TableCell>
-                      <TableCell>
-                        <Badge variant={t.status === "approved" ? "default" : "secondary"}>
-                          {t.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-md truncate text-xs">{t.body_text}</TableCell>
+            <>
+              <p className="text-sm text-muted-foreground mb-3">
+                Marque os templates que devem aparecer na aba <strong>Envio Meta Massa</strong>. A coluna <strong>Cobertura</strong> mostra em quantas instâncias ativas o template está aprovado — só é seguro disparar em massa quando estiver 100%.
+              </p>
+              <Card><CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">Massa</TableHead>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead>Idioma</TableHead>
+                      <TableHead>Cobertura</TableHead>
+                      <TableHead>Corpo</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent></Card>
+                  </TableHeader>
+                  <TableBody>
+                    {(() => {
+                      const ativas = instancias.filter((i) => i.ativo);
+                      const totalAtivas = ativas.length;
+                      // Group by nome_template + idioma
+                      const groupsMap = new Map<string, { chave: string; nome: string; idioma: string; categoria: string | null; body_text: string | null; habilitado: boolean; rows: Template[]; sampleRow: Template }>();
+                      for (const t of templates) {
+                        const k = `${t.nome_template}::${t.idioma}`;
+                        const g = groupsMap.get(k);
+                        if (g) {
+                          g.rows.push(t);
+                          if (t.habilitado_envio_massa) g.habilitado = true;
+                        } else {
+                          groupsMap.set(k, {
+                            chave: k,
+                            nome: t.nome_template,
+                            idioma: t.idioma,
+                            categoria: t.categoria,
+                            body_text: t.body_text,
+                            habilitado: t.habilitado_envio_massa,
+                            rows: [t],
+                            sampleRow: t,
+                          });
+                        }
+                      }
+                      const groups = Array.from(groupsMap.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+
+                      const toggleGrupo = async (g: typeof groups[number]) => {
+                        const novo = !g.habilitado;
+                        const ids = g.rows.map((r) => r.id);
+                        const { error } = await supabase
+                          .from("meta_whatsapp_templates")
+                          .update({ habilitado_envio_massa: novo })
+                          .in("id", ids);
+                        if (error) { toast.error("Erro: " + error.message); return; }
+                        toast.success(novo ? "Template liberado para Envio em Massa" : "Template removido do Envio em Massa");
+                        setTemplates((prev) => prev.map((t) => ids.includes(t.id) ? { ...t, habilitado_envio_massa: novo } : t));
+                      };
+
+                      return groups.map((g) => {
+                        const aprovadasIds = new Set(g.rows.filter((r) => r.status === "approved").map((r) => r.instancia_id));
+                        const presentes = ativas.filter((i) => aprovadasIds.has(i.id));
+                        const faltantes = ativas.filter((i) => !aprovadasIds.has(i.id));
+                        const cobertura = presentes.length;
+                        const cor =
+                          totalAtivas === 0 ? "secondary" :
+                          cobertura === 0 ? "destructive" :
+                          cobertura === totalAtivas ? "default" : "secondary";
+                        const badgeClass = cor === "default" ? "bg-green-600" : cor === "secondary" ? "bg-amber-500 text-white" : "";
+                        return (
+                          <TableRow key={g.chave} className="hover:bg-muted/50">
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 cursor-pointer accent-primary"
+                                checked={g.habilitado}
+                                onChange={() => toggleGrupo(g)}
+                                title={g.habilitado ? "Remover de Envio em Massa" : "Liberar para Envio em Massa"}
+                              />
+                            </TableCell>
+                            <TableCell
+                              className="font-mono text-xs cursor-pointer"
+                              onClick={() => setPreviewTpl(g.sampleRow)}
+                            >
+                              {g.nome}
+                            </TableCell>
+                            <TableCell>{g.categoria || "—"}</TableCell>
+                            <TableCell>{g.idioma}</TableCell>
+                            <TableCell>
+                              <div
+                                title={
+                                  totalAtivas === 0
+                                    ? "Nenhuma instância ativa"
+                                    : `Aprovado em: ${presentes.map((i) => i.nome).join(", ") || "nenhuma"}\nFalta em: ${faltantes.map((i) => i.nome).join(", ") || "nenhuma"}`
+                                }
+                              >
+                                <Badge variant={cor as any} className={badgeClass}>
+                                  {cobertura}/{totalAtivas}
+                                  {cobertura === totalAtivas && totalAtivas > 0 ? " ✓" : faltantes.length ? " ⚠" : ""}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell
+                              className="max-w-md truncate text-xs cursor-pointer"
+                              onClick={() => setPreviewTpl(g.sampleRow)}
+                            >
+                              {g.body_text}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      });
+                    })()}
+                  </TableBody>
+                </Table>
+              </CardContent></Card>
+            </>
           )}
         </TabsContent>
       </Tabs>
