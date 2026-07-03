@@ -721,6 +721,10 @@ export default function InboxMeta() {
                 )}
               </div>
 
+              <MetaInstanceHealthBanner instancia={instAtiva} />
+
+
+
               <div ref={chatContainerRef} className={cn('flex-1 overflow-y-auto p-3 relative', dragOver && 'bg-primary/10')}>
                 {carregandoAnteriores && (
                   <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
