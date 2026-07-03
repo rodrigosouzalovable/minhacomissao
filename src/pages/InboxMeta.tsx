@@ -37,6 +37,10 @@ interface MetaContato {
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
   ultima_msg_entrada_em: string | null; nao_lido: number;
   fixado: boolean; arquivado: boolean;
+  // Meta 2026 — WhatsApp Username + BSUID
+  bsuid?: string | null;
+  whatsapp_username?: string | null;
+  telefone_visivel?: boolean | null;
 }
 interface MetaMensagem {
   id: string; instancia_id: string; telefone: string; conteudo: string;
