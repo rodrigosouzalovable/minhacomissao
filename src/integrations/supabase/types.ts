@@ -1986,6 +1986,33 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_billing_guardrail: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          bloquear_marketing: boolean
+          id: number
+          limite_diario_usd: number
+          notificar_admin: boolean
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          bloquear_marketing?: boolean
+          id?: number
+          limite_diario_usd?: number
+          notificar_admin?: boolean
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          bloquear_marketing?: boolean
+          id?: number
+          limite_diario_usd?: number
+          notificar_admin?: boolean
+        }
+        Relationships: []
+      }
       meta_billing_snapshot: {
         Row: {
           atualizado_em: string
