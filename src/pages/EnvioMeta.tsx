@@ -302,12 +302,57 @@ export default function EnvioMeta() {
     carregar();
   }, []);
 
-  const template = useMemo(
-    () => templates.find((t) => t.id === templateId) || null,
-    [templates, templateId]
+  // Agrupa templates por (nome_template, idioma) — cada linha do dropdown é um "template lógico"
+  // que pode existir em várias instâncias. `templateId` guarda a chave do grupo.
+  type TemplateGroup = {
+    key: string;
+    nome: string;
+    idioma: string;
+    categoria: string | null;
+    sample: Template;
+    rows: Template[];
+    instanciasAprovadasIds: Set<string>;
+  };
+  const templateGroups = useMemo<TemplateGroup[]>(() => {
+    const map = new Map<string, TemplateGroup>();
+    for (const t of templates) {
+      const key = `${t.nome_template}::${t.idioma}`;
+      const g = map.get(key);
+      if (g) {
+        g.rows.push(t);
+        if (t.status === "approved") g.instanciasAprovadasIds.add(t.instancia_id);
+      } else {
+        map.set(key, {
+          key,
+          nome: t.nome_template,
+          idioma: t.idioma,
+          categoria: t.categoria,
+          sample: t,
+          rows: [t],
+          instanciasAprovadasIds: new Set(t.status === "approved" ? [t.instancia_id] : []),
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [templates]);
+
+  const templateGroup = useMemo(
+    () => templateGroups.find((g) => g.key === templateId) || null,
+    [templateGroups, templateId],
   );
+  // Usa o primeiro registro do grupo como "template" para preview/variáveis.
+  const template = templateGroup?.sample ?? null;
+
+  // Instâncias selecionadas que NÃO têm este template aprovado
+  const instanciasIncompatíveis = useMemo(() => {
+    if (!templateGroup) return [] as Instancia[];
+    return instancias.filter(
+      (i) => instanciaIds.includes(i.id) && !templateGroup.instanciasAprovadasIds.has(i.id),
+    );
+  }, [templateGroup, instanciaIds, instancias]);
 
   const recipients = useMemo(() => parseRecipients(recipientsRaw), [recipientsRaw]);
+
 
   const toggleInstancia = (id: string) => {
     setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
