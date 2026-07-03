@@ -531,15 +531,6 @@ export default function EnvioMeta() {
                       <SelectItem key={g.key} value={g.key}>
                         <div className="flex items-center gap-2 w-full">
 
-                <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
-                <SelectContent>
-                  {templateGroups.map((g) => {
-                    const total = instancias.length;
-                    const ok = g.instanciasAprovadasIds.size;
-                    const full = ok === total && total > 0;
-                    return (
-                      <SelectItem key={g.key} value={g.key}>
-                        <div className="flex items-center gap-2 w-full">
                           <span>{g.nome}</span>
                           <span className="text-xs text-muted-foreground">({g.idioma})</span>
                           {g.categoria && (
