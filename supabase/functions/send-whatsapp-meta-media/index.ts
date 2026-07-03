@@ -1,4 +1,5 @@
-// Envia mídia (imagem, documento, áudio) pela API oficial Meta dentro da janela 24h.
+// Envia mídia (imagem, documento, áudio, vídeo) pela API oficial Meta dentro da janela 24h.
+// Áudio é enviado via Meta Media API (upload multipart) para evitar rejeição de container webm.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -6,10 +7,54 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const GRAPH = 'https://graph.facebook.com/v21.0';
+
 function formatTel(tel: string): string {
   const d = (tel || '').replace(/\D/g, '');
   if (!d) return '';
   return d.startsWith('55') ? d : `55${d}`;
+}
+
+function guessAudioMime(url: string): string {
+  const u = url.toLowerCase();
+  if (u.endsWith('.ogg') || u.includes('.ogg?')) return 'audio/ogg';
+  if (u.endsWith('.mp3') || u.includes('.mp3?')) return 'audio/mpeg';
+  if (u.endsWith('.m4a') || u.endsWith('.mp4') || u.includes('.m4a?') || u.includes('.mp4?')) return 'audio/mp4';
+  if (u.endsWith('.aac') || u.includes('.aac?')) return 'audio/aac';
+  if (u.endsWith('.amr') || u.includes('.amr?')) return 'audio/amr';
+  if (u.endsWith('.webm') || u.includes('.webm?')) return 'audio/webm';
+  return 'application/octet-stream';
+}
+
+// Sobe o binário para Meta /PHONE_ID/media e devolve o media id.
+async function uploadAudioToMeta(inst: any, mediaUrl: string): Promise<{ id?: string; error?: string; status?: number }> {
+  const res = await fetch(mediaUrl);
+  if (!res.ok) return { error: `Falha ao baixar áudio do storage (HTTP ${res.status})` };
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const mime = guessAudioMime(mediaUrl);
+
+  // Meta aceita: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg (OPUS).
+  if (mime === 'audio/webm' || mime === 'application/octet-stream') {
+    return { error: 'Formato de áudio não suportado pela Meta (WhatsApp aceita OGG/OPUS, AAC, MP3, M4A ou AMR). Grave novamente em um navegador atualizado (Chrome/Edge).' };
+  }
+
+  const ext = mime === 'audio/ogg' ? 'ogg' : mime === 'audio/mpeg' ? 'mp3' : mime === 'audio/mp4' ? 'm4a' : mime === 'audio/aac' ? 'aac' : 'amr';
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mime);
+  form.append('file', new Blob([buf], { type: mime }), `audio.${ext}`);
+
+  const up = await fetch(`${GRAPH}/${inst.phone_number_id}/media`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${inst.access_token}` },
+    body: form,
+  });
+  const upJson: any = await up.json().catch(() => ({}));
+  if (!up.ok) {
+    console.log('[send-whatsapp-meta-media] Meta upload error', upJson);
+    return { error: upJson?.error?.message || `HTTP ${up.status} no upload de mídia`, status: up.status };
+  }
+  return { id: upJson?.id };
 }
 
 Deno.serve(async (req) => {
@@ -59,12 +104,26 @@ Deno.serve(async (req) => {
 
     // Constrói body Meta
     const metaType = type === 'image' ? 'image' : type === 'audio' ? 'audio' : type === 'video' ? 'video' : 'document';
-    const payload: any = { link: media_url };
-    if (metaType === 'document') {
-      if (file_name) payload.filename = file_name;
-      if (caption) payload.caption = caption;
+
+    // Para áudio: fazer upload direto ao Meta e usar `id` — Meta rejeita audio/webm por link.
+    let payload: any;
+    if (metaType === 'audio') {
+      const up = await uploadAudioToMeta(inst, media_url);
+      if (!up.id) {
+        return new Response(JSON.stringify({ success: false, error: up.error || 'Falha ao subir áudio para a Meta' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      payload = { id: up.id };
+    } else {
+      payload = { link: media_url };
+      if (metaType === 'document') {
+        if (file_name) payload.filename = file_name;
+        if (caption) payload.caption = caption;
+      }
+      if (metaType === 'image' && caption) payload.caption = caption;
+      if (metaType === 'video' && caption) payload.caption = caption;
     }
-    if (metaType === 'image' && caption) payload.caption = caption;
 
     const body: any = {
       messaging_product: 'whatsapp',
@@ -75,13 +134,14 @@ Deno.serve(async (req) => {
     };
     if (reply_to_wa_id) body.context = { message_id: reply_to_wa_id };
 
-    const res = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
+    const res = await fetch(`${GRAPH}/${inst.phone_number_id}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      console.log('[send-whatsapp-meta-media] Meta send error', { metaType, err: data });
       return new Response(JSON.stringify({ success: false, error: data?.error?.message || `HTTP ${res.status}`, raw: data }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -126,6 +186,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    console.log('[send-whatsapp-meta-media] exception', err);
     return new Response(JSON.stringify({ success: false, error: err instanceof Error ? err.message : 'erro' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -26,11 +26,25 @@ export function useMetaAudioRecorder({
   const iniciarGravacao = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-        ? 'audio/ogg;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm';
+      // Meta Cloud API aceita: audio/ogg (OPUS), audio/aac, audio/mp4, audio/mpeg, audio/amr.
+      // NÃO aceita audio/webm. Priorizamos ogg → mp4 (Safari/iOS).
+      const candidatos = [
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/aac',
+      ];
+      const mimeType = candidatos.find(m => MediaRecorder.isTypeSupported(m));
+      if (!mimeType) {
+        stream.getTracks().forEach(t => t.stop());
+        toast({
+          title: 'Navegador não suporta áudio compatível com WhatsApp',
+          description: 'Use um Chrome/Edge atualizado, ou Safari no iOS. O áudio em WebM não é aceito pela Meta.',
+          variant: 'destructive',
+        });
+        return;
+      }
       const rec = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = rec;
       chunksRef.current = [];
@@ -70,10 +84,18 @@ export function useMetaAudioRecorder({
         if (blob.size === 0) { setTempoGravacao(0); resolve(); return; }
         setEnviandoAudio(true);
         try {
-          const ext = rec.mimeType.includes('ogg') ? 'ogg' : 'webm';
+          const mt = rec.mimeType || 'audio/ogg';
+          const ext = mt.includes('ogg') ? 'ogg'
+            : mt.includes('mp4') || mt.includes('m4a') ? 'm4a'
+            : mt.includes('aac') ? 'aac'
+            : 'ogg';
+          const uploadType = mt.includes('ogg') ? 'audio/ogg'
+            : mt.includes('mp4') || mt.includes('m4a') ? 'audio/mp4'
+            : mt.includes('aac') ? 'audio/aac'
+            : 'audio/ogg';
           const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${ext}`;
           const { error: upErr } = await supabase.storage.from('inbox-media')
-            .upload(path, blob, { contentType: rec.mimeType });
+            .upload(path, blob, { contentType: uploadType });
           if (upErr) throw upErr;
           const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(path);
           const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
