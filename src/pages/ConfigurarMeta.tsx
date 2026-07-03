@@ -513,7 +513,13 @@ export default function ConfigurarMeta() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-16">Massa</TableHead>
+                      <TableHead className="w-16">
+                        <MassaSelectAllCheckbox
+                          templates={templates}
+                          filtroInstancias={filtroInstancias}
+                          setTemplates={setTemplates}
+                        />
+                      </TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Idioma</TableHead>
@@ -525,9 +531,13 @@ export default function ConfigurarMeta() {
                     {(() => {
                       const ativas = instancias.filter((i) => i.ativo);
                       const totalAtivas = ativas.length;
+                      const filtroSet = new Set(filtroInstancias);
+                      const templatesVis = filtroSet.size === 0
+                        ? templates
+                        : templates.filter((t) => filtroSet.has(t.instancia_id));
                       // Group by nome_template + idioma
                       const groupsMap = new Map<string, { chave: string; nome: string; idioma: string; categoria: string | null; body_text: string | null; habilitado: boolean; rows: Template[]; sampleRow: Template }>();
-                      for (const t of templates) {
+                      for (const t of templatesVis) {
                         const k = `${t.nome_template}::${t.idioma}`;
                         const g = groupsMap.get(k);
                         if (g) {
@@ -550,7 +560,10 @@ export default function ConfigurarMeta() {
 
                       const toggleGrupo = async (g: typeof groups[number]) => {
                         const novo = !g.habilitado;
-                        const ids = g.rows.map((r) => r.id);
+                        // Toggle across ALL rows of this template (all instances), not just visible
+                        const nome = g.nome, idioma = g.idioma;
+                        const allRows = templates.filter((t) => t.nome_template === nome && t.idioma === idioma);
+                        const ids = allRows.map((r) => r.id);
                         const { error } = await supabase
                           .from("meta_whatsapp_templates")
                           .update({ habilitado_envio_massa: novo })
@@ -559,6 +572,7 @@ export default function ConfigurarMeta() {
                         toast.success(novo ? "Template liberado para Envio em Massa" : "Template removido do Envio em Massa");
                         setTemplates((prev) => prev.map((t) => ids.includes(t.id) ? { ...t, habilitado_envio_massa: novo } : t));
                       };
+
 
                       return groups.map((g) => {
                         const aprovadasIds = new Set(g.rows.filter((r) => r.status === "approved").map((r) => r.instancia_id));
