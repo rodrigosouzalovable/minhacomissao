@@ -83,10 +83,6 @@ export function PoolMetaPanel() {
     if (c.data) setCfg(c.data as any);
     setLoading(false);
   };
-    if (i.data) setInstancias(i.data as any);
-    if (c.data) setCfg(c.data as any);
-    setLoading(false);
-  };
   useEffect(() => { carregar(); }, []);
 
   const ativarNoPool = async (inst: MetaInst) => {
