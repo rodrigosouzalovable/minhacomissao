@@ -88,7 +88,7 @@ export function PoolMetaPanel() {
   const ativarNoPool = async (inst: MetaInst) => {
     if (!confirm(`Ativar "${inst.nome}" no pool? O ramp-up começa hoje (Dia 1 = 20 msg máx).`)) return;
     setSavingId(inst.id);
-    const { error } = await supabase.from("meta_whatsapp_instances")
+    const { error } = await (supabase as any).from("meta_whatsapp_instances")
       .update({
         estado_pool: "ativo",
         data_ativacao_api: new Date().toISOString().slice(0, 10),
@@ -105,7 +105,7 @@ export function PoolMetaPanel() {
 
   const pausarManual = async (inst: MetaInst) => {
     setSavingId(inst.id);
-    const { error } = await supabase.from("meta_whatsapp_instances")
+    const { error } = await (supabase as any).from("meta_whatsapp_instances")
       .update({ estado_pool: "pausado", pausa_automatica_motivo: "manual" })
       .eq("id", inst.id);
     setSavingId(null);
@@ -116,7 +116,7 @@ export function PoolMetaPanel() {
 
   const retomar = async (inst: MetaInst) => {
     setSavingId(inst.id);
-    const { error } = await supabase.from("meta_whatsapp_instances")
+    const { error } = await (supabase as any).from("meta_whatsapp_instances")
       .update({
         estado_pool: "ativo",
         pausa_automatica_ate: null,
