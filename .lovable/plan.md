@@ -1,24 +1,17 @@
-## Objetivo
-Personalizar o link do botão "Falar no WhatsApp" que aparece quando o CPF consultado no portal não retorna nenhum débito, incluindo o CPF digitado na mensagem pré-preenchida.
+## Problema
+Quando nenhum débito é encontrado, o botão "Falar no WhatsApp" abre a mensagem sem o CPF (aparece "meu CPF é ,"). Causa: o state `cpfCliente` só é preenchido quando `debitos.length > 0` (linha 89). No caminho "nenhum débito encontrado" ele fica vazio, então `formatCpfFull('')` retorna string vazia.
 
-## Alteração
-Arquivo: `src/pages/ConsultaResultado.tsx` (bloco "Nenhum débito encontrado", linhas ~272-287).
+## Correção
+Arquivo: `src/pages/ConsultaResultado.tsx` (linhas 280-283).
 
-Trocar o `<a href="https://wa.me/${PHONE}">` (sem texto) por um link com `?text=` codificado contendo:
+Usar como fallback o CPF vindo da URL (`cpf` do `useParams`), que já está disponível mesmo sem débitos. Sanitizar só os dígitos antes de formatar.
 
-`Olá, meu CPF é {CPF_FORMATADO}, e eu quero verificar as condições de negociação disponíveis para mim.`
-
-Onde `{CPF_FORMATADO}` usa o CPF digitado pelo cliente (`cpfCliente`) formatado como `000.000.000-00` via o helper `formatCpfFull` já existente no arquivo.
-
-## Detalhes técnicos
 ```tsx
-<a
-  href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
-    `Olá, meu CPF é ${formatCpfFull(cpfCliente)}, e eu quero verificar as condições de negociação disponíveis para mim.`
-  )}`}
-  target="_blank"
-  rel="noopener noreferrer"
->
+const cpfParaMensagem = (cpfCliente || cpf || '').replace(/\D/g, '');
+// ...
+href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
+  `Olá, meu CPF é ${formatCpfFull(cpfParaMensagem)}, e eu quero verificar as condições de negociação disponíveis para mim.`
+)}`}
 ```
 
-Nenhum outro botão será alterado (os outros dois "Falar no WhatsApp" já têm mensagens contextualizadas).
+Nenhuma outra lógica é alterada.
