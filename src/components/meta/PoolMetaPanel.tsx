@@ -228,7 +228,9 @@ export function PoolMetaPanel() {
 
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
                     <Badge variant="outline">Qualidade: {inst.saude_quality || "UNKNOWN"}</Badge>
-                    <Badge variant="outline">Tier: {inst.saude_tier?.replace("MESSAGING_LIMIT_", "") || "—"}</Badge>
+                    <Badge variant="outline" title={inst.messaging_limit_source === "manual" ? "Definido manualmente" : inst.messaging_limit_source === "meta_api" ? `Sincronizado da Meta ${inst.messaging_limit_synced_at ? "em " + new Date(inst.messaging_limit_synced_at).toLocaleString("pt-BR") : ""}` : "Padrão (permissão Meta pendente)"}>
+                      {inst.messaging_limit_source === "manual" ? "✋" : inst.messaging_limit_source === "meta_api" ? "🔄" : "•"} Tier: {(inst.messaging_limit_manual || inst.saude_tier)?.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "") || "—"}
+                    </Badge>
                     <Badge variant="outline">{FASE_LABEL[inst.fase_rampup || "aguardando"]}</Badge>
                     {inst.data_ativacao_api && <Badge variant="outline">{dias}d na API</Badge>}
                   </div>
