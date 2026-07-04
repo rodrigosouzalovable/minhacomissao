@@ -86,7 +86,16 @@ Deno.serve(async (req) => {
           saude_ban_info: r.ban_info,
           saude_raw: { phone: r.raw, waba: r.waba || null },
           saude_checked_at: new Date().toISOString(),
+          throughput_level: r.throughput?.level || null,
         };
+        // Se a Graph API retornou tier, marca origem como meta_api
+        // (só sobrescreve source se ainda não há override manual do usuário)
+        if (r.messaging_limit_tier) {
+          updatePayload.messaging_limit_synced_at = new Date().toISOString();
+          if (!inst.messaging_limit_manual) {
+            updatePayload.messaging_limit_source = 'meta_api';
+          }
+        }
 
         // ===== Auto-pausa por qualidade =====
         const qual = String(r.quality_rating || '').toUpperCase();
