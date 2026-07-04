@@ -15,6 +15,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 import EscalonamentoPanel from "@/components/meta/escalonamento/EscalonamentoPanel";
+import { AgendarCampanhaBox, CampanhasAgendadasList } from "@/components/meta/CampanhaAgendadaSection";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -363,6 +364,17 @@ export default function EnvioMeta() {
   }, [templateGroup, instanciaIds, instancias]);
 
   const recipients = useMemo(() => parseRecipients(recipientsRaw), [recipientsRaw]);
+
+  const templateIdByInstance = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    if (!templateGroup) return map;
+    for (const r of templateGroup.rows) {
+      if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) {
+        map[r.instancia_id] = r.id;
+      }
+    }
+    return map;
+  }, [templateGroup, instanciaIds]);
 
 
   const toggleInstancia = (id: string) => {
@@ -850,6 +862,20 @@ export default function EnvioMeta() {
         </CardContent>
       </Card>
 
+
+      {/* Agendamento multi-dia */}
+      <AgendarCampanhaBox
+        clientes={recipients}
+        instanciaIds={instanciaIds}
+        instancias={instancias.map((i) => ({ id: i.id, nome: i.nome }))}
+        template={template ? { id: template.id, nome_template: template.nome_template } : null}
+        templateIdByInstance={templateIdByInstance}
+        minSec={Math.max(1, Number(minSec) || 1)}
+        maxSec={Math.max(Math.max(1, Number(minSec) || 1), Number(maxSec) || 1)}
+        disabled={enviando || validando || instanciasIncompatíveis.length > 0}
+      />
+
+      <CampanhasAgendadasList />
 
       {/* Envio */}
       <Card>
