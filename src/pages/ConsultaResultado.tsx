@@ -277,7 +277,13 @@ export default function ConsultaResultado() {
                 <p className="mb-6" style={{ color: '#ffffffaa' }}>
                   Não encontramos débitos em aberto para o CPF informado.
                 </p>
-                <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
+                    `Olá, meu CPF é ${formatCpfFull(cpfCliente)}, e eu quero verificar as condições de negociação disponíveis para mim.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <Button style={{ background: '#00a86b', color: '#fff' }}>
                     <MessageCircle className="h-4 w-4 mr-2" />
                     Falar no WhatsApp
