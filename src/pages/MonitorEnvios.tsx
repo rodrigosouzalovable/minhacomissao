@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useMonitorEnvios, InstanceStats } from '@/hooks/useMonitorEnvios';
+import { PoolMetaPanel } from '@/components/meta/PoolMetaPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -236,7 +237,11 @@ export default function MonitorEnvios() {
           </div>
         </div>
 
+        {/* Pool Meta Oficial */}
+        <PoolMetaPanel />
+
         {/* Summary Cards */}
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">

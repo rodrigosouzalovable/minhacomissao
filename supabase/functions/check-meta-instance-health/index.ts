@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        await supabase.from('meta_whatsapp_instances').update({
+        const updatePayload: any = {
           saude_status: r.status,
           saude_quality: r.quality_rating,
           saude_tier: r.messaging_limit_tier,
@@ -86,12 +86,69 @@ Deno.serve(async (req) => {
           saude_ban_info: r.ban_info,
           saude_raw: { phone: r.raw, waba: r.waba || null },
           saude_checked_at: new Date().toISOString(),
-        }).eq('id', inst.id);
+        };
+
+        // ===== Auto-pausa por qualidade =====
+        const qual = String(r.quality_rating || '').toUpperCase();
+        const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
+        const dur = (cfg?.duracao_pausa_yellow_horas ?? 48) * 3600 * 1000;
+
+        let notificarPausa: { motivo: string; alcance: 'numero' | 'waba' } | null = null;
+
+        if (cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
+          updatePayload.pausa_automatica_ate = new Date(Date.now() + dur).toISOString();
+          updatePayload.pausa_automatica_motivo = 'quality=YELLOW';
+          updatePayload.estado_pool = 'pausado';
+          notificarPausa = { motivo: `Qualidade caiu para YELLOW (pausado por ${cfg?.duracao_pausa_yellow_horas ?? 48}h)`, alcance: 'numero' };
+        }
+        if (cfg?.auto_pausa_red_waba !== false && qual === 'RED' && !inst.pausa_automatica_ate) {
+          updatePayload.pausa_automatica_ate = new Date(Date.now() + dur * 2).toISOString();
+          updatePayload.pausa_automatica_motivo = 'quality=RED';
+          updatePayload.estado_pool = 'pausado';
+          notificarPausa = { motivo: `Qualidade RED — número pausado + WABA em risco`, alcance: 'waba' };
+          // Pausa WABA inteira
+          if (inst.waba_id) {
+            await supabase.from('meta_whatsapp_instances').update({
+              pausa_automatica_ate: new Date(Date.now() + dur).toISOString(),
+              pausa_automatica_motivo: 'quality=RED em irmão',
+              estado_pool: 'pausado',
+            }).eq('waba_id', inst.waba_id).neq('id', inst.id).is('pausa_automatica_ate', null);
+          }
+        }
+        const st = String(r.status || '').toUpperCase();
+        if ((st === 'FLAGGED' || st === 'RESTRICTED' || st === 'BANNED') && !inst.pausa_automatica_ate) {
+          updatePayload.pausa_automatica_ate = new Date(Date.now() + dur * 3).toISOString();
+          updatePayload.pausa_automatica_motivo = `status=${st}`;
+          updatePayload.estado_pool = 'pausado';
+          notificarPausa = { motivo: `Status Meta = ${st} — pausa preventiva`, alcance: 'numero' };
+        }
+
+        await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+
+        if (notificarPausa) {
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const chave = `meta_pausa_${inst.id}_${new Date().toISOString().slice(0,10)}`;
+            await notificarAdmin(supabase, {
+              tipo: 'meta_auto_pausa',
+              mensagem:
+                `🛑 Meta pausou número automaticamente\n\n` +
+                `Número: *${inst.nome || inst.display_phone}*\n` +
+                `Motivo: ${notificarPausa.motivo}\n` +
+                (notificarPausa.alcance === 'waba' ? `⚠️ Toda a WABA foi pausada preventivamente.\n` : '') +
+                `\nRetome manualmente em Monitor de Envios → Pool Meta quando quiser.`,
+              chaveIdempotencia: chave,
+            });
+          } catch (e) {
+            console.log('[health] notificarAdmin falhou:', String(e).slice(0, 200));
+          }
+        }
       } catch (e) {
         r.error = e instanceof Error ? e.message : String(e);
       }
       results.push(r);
     }
+
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -195,9 +195,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       if (cancelRef.current) { cancelado = true; break; }
 
       if (instAtivas.length === 0) { toast.error("Todas as instâncias atingiram o limite diário"); break; }
-      const instId = instAtivas[rr % instAtivas.length];
-      const instInfo = instMap.get(instId);
-      rr++;
+
+      // Seleção inteligente por score de saúde (respeita ramp-up, pausa, domingo, horário)
+      let instId: string;
+      let instInfo: InstanciaMin | undefined;
+      try {
+        const { data: pick, error: pickErr } = await supabase.functions.invoke("pick-meta-instance", {
+          body: { instancia_ids: instAtivas },
+        });
+        if (pickErr) throw pickErr;
+        if (!pick?.success) {
+          // Bloqueio global (domingo/horário/sem disponível): aborta
+          toast.error(pick?.error || "Nenhuma instância disponível");
+          break;
+        }
+        instId = pick.instancia_id;
+        instInfo = instMap.get(instId);
+        rr++;
+      } catch (e: any) {
+        // Fallback: round-robin simples se pick falhar
+        console.warn("[EnvioMeta] pick falhou, usando round-robin", e?.message);
+        instId = instAtivas[rr % instAtivas.length];
+        instInfo = instMap.get(instId);
+        rr++;
+      }
 
       const cliente = clientes[i];
       setProgresso((pr) => pr ? {
@@ -213,10 +234,14 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           body: { template_id: tplIdParaEssaInst, instancia_id: instId, cliente },
         });
         if (error) throw error;
-        if (data?.tier_full) {
+        if (data?.tier_full || data?.pool_blocked || data?.pool_paused) {
           const idx = instAtivas.indexOf(instId);
           if (idx >= 0) instAtivas.splice(idx, 1);
           i--; continue;
+        }
+        if (data?.blocked === 'domingo' || data?.blocked === 'horario') {
+          toast.error(data.error);
+          break;
         }
         if (!data?.success) throw new Error(data?.error || "Falha");
         enviados++;
@@ -240,6 +265,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         await sleepInterruptible(delay);
       }
     }
+
 
     setResultado({ enviados, erros, total });
     setProgresso(null);
