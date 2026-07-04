@@ -74,10 +74,15 @@ export function PoolMetaPanel() {
 
   const carregar = async () => {
     setLoading(true);
+    const sb = supabase as any;
     const [i, c] = await Promise.all([
-      supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
-      supabase.from("meta_envio_pool_config").select("*").eq("id", 1).maybeSingle(),
+      sb.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
+      sb.from("meta_envio_pool_config").select("*").eq("id", 1).maybeSingle(),
     ]);
+    if (i.data) setInstancias(i.data as any);
+    if (c.data) setCfg(c.data as any);
+    setLoading(false);
+  };
     if (i.data) setInstancias(i.data as any);
     if (c.data) setCfg(c.data as any);
     setLoading(false);
