@@ -2055,6 +2055,113 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_campanha_agendada: {
+        Row: {
+          created_at: string
+          data_fim_prevista: string | null
+          data_inicio: string | null
+          enviados: number
+          erros: number
+          folga_cota: number
+          id: string
+          instancia_ids: string[]
+          max_seg: number
+          min_seg: number
+          nome: string
+          status: string
+          template_id: string
+          template_id_by_instance: Json
+          template_nome: string
+          total_itens: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_fim_prevista?: string | null
+          data_inicio?: string | null
+          enviados?: number
+          erros?: number
+          folga_cota?: number
+          id?: string
+          instancia_ids: string[]
+          max_seg?: number
+          min_seg?: number
+          nome: string
+          status?: string
+          template_id: string
+          template_id_by_instance?: Json
+          template_nome: string
+          total_itens?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data_fim_prevista?: string | null
+          data_inicio?: string | null
+          enviados?: number
+          erros?: number
+          folga_cota?: number
+          id?: string
+          instancia_ids?: string[]
+          max_seg?: number
+          min_seg?: number
+          nome?: string
+          status?: string
+          template_id?: string
+          template_id_by_instance?: Json
+          template_nome?: string
+          total_itens?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meta_campanha_item: {
+        Row: {
+          campanha_id: string
+          cliente: Json
+          created_at: string
+          data_prevista: string
+          enviado_em: string | null
+          erro: string | null
+          id: string
+          instancia_id: string
+          status: string
+        }
+        Insert: {
+          campanha_id: string
+          cliente: Json
+          created_at?: string
+          data_prevista: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_id: string
+          status?: string
+        }
+        Update: {
+          campanha_id?: string
+          cliente?: Json
+          created_at?: string
+          data_prevista?: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_campanha_item_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "meta_campanha_agendada"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_envio_pool_config: {
         Row: {
           atualizado_em: string
