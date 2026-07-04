@@ -365,6 +365,17 @@ export default function EnvioMeta() {
 
   const recipients = useMemo(() => parseRecipients(recipientsRaw), [recipientsRaw]);
 
+  const templateIdByInstance = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    if (!templateGroup) return map;
+    for (const r of templateGroup.rows) {
+      if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) {
+        map[r.instancia_id] = r.id;
+      }
+    }
+    return map;
+  }, [templateGroup, instanciaIds]);
+
 
   const toggleInstancia = (id: string) => {
     setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
