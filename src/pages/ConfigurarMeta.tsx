@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -30,6 +31,11 @@ type Instancia = {
   ativo: boolean;
   webhook_verify_token: string | null;
   criado_em: string;
+  saude_tier?: string | null;
+  saude_quality?: string | null;
+  messaging_limit_manual?: string | null;
+  messaging_limit_source?: string | null;
+  messaging_limit_synced_at?: string | null;
 };
 
 type Template = {
@@ -222,6 +228,28 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  const salvarTierManual = async (inst: Instancia, valor: string) => {
+    const patch: any = valor === "__auto__"
+      ? { messaging_limit_manual: null, messaging_limit_source: inst.saude_tier ? "meta_api" : "default" }
+      : { messaging_limit_manual: valor, messaging_limit_source: "manual" };
+    const { error } = await (supabase as any).from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(valor === "__auto__" ? "Override removido — usando sync automático" : `Tier definido: ${valor.replace("TIER_", "")}`);
+    carregar();
+  };
+
+  const sincronizarSaude = async (inst: Instancia) => {
+    const toastId = toast.loading(`Sincronizando ${inst.nome}...`);
+    try {
+      const { error } = await supabase.functions.invoke("check-meta-instance-health", { body: { instancia_id: inst.id } });
+      if (error) throw error;
+      toast.success("Saúde e limite atualizados", { id: toastId });
+      carregar();
+    } catch (e: any) {
+      toast.error("Falhou: " + (e?.message || e), { id: toastId });
+    }
+  };
+
   const assinarWebhook = async () => {
     setAssinando(true);
     setResultadosAssinatura(null);
@@ -410,7 +438,41 @@ export default function ConfigurarMeta() {
                           <div><strong>Telefone:</strong> {inst.display_phone || "—"}</div>
                           <div><strong>Phone ID:</strong> <span className="font-mono">{inst.phone_number_id}</span></div>
                           <div><strong>WABA:</strong> <span className="font-mono">{inst.waba_id}</span></div>
-                          <div><strong>Tier:</strong> {inst.enviados_hoje}/{inst.tier_diario} hoje</div>
+                          <div><strong>Enviadas hoje:</strong> {inst.enviados_hoje}</div>
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-semibold">Limite de mensagens:</span>
+                          <Select
+                            value={inst.messaging_limit_manual || "__auto__"}
+                            onValueChange={(v) => salvarTierManual(inst, v)}
+                          >
+                            <SelectTrigger className="h-7 w-[210px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__auto__">
+                                🔄 Automático {inst.saude_tier ? `(Meta: ${inst.saude_tier.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "")})` : "(padrão TIER_1K)"}
+                              </SelectItem>
+                              <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
+                              <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
+                              <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
+                              <SelectItem value="TIER_10K">✋ TIER_10K (10.000/dia)</SelectItem>
+                              <SelectItem value="TIER_100K">✋ TIER_100K (100.000/dia)</SelectItem>
+                              <SelectItem value="TIER_UNLIMITED">✋ Ilimitado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Badge variant="outline" className="text-[10px]">
+                            Fonte: {inst.messaging_limit_source === "manual" ? "manual" : inst.messaging_limit_source === "meta_api" ? "sync Meta" : "padrão"}
+                          </Badge>
+                          {inst.messaging_limit_synced_at && (
+                            <span className="text-muted-foreground text-[10px]">
+                              últ. sync: {new Date(inst.messaging_limit_synced_at).toLocaleString("pt-BR")}
+                            </span>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => sincronizarSaude(inst)}>
+                            <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
+                          </Button>
                         </div>
                       </div>
                       <div className="flex gap-1 flex-wrap justify-end">

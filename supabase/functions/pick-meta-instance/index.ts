@@ -107,12 +107,18 @@ Deno.serve(async (req) => {
         : 0;
       const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'aguardando';
       if (fase === 'aguardando') continue;
-      const cota = Math.min(cotaFase(fase, cfg), inst.tier_diario || 999999);
+
+      // Cota efetiva via RPC (considera fase + tier manual/auto)
+      const { data: cotaRpc } = await supabase.rpc('get_effective_daily_quota', { _instance_id: inst.id });
+      const cota = typeof cotaRpc === 'number' && cotaRpc > 0
+        ? cotaRpc
+        : Math.min(cotaFase(fase, cfg), inst.tier_diario || 999999);
       if (uso >= cota) continue;
 
       const q = pesoQualidade(inst.saude_quality);
       if (q === 0) continue;
-      const score = q * pesoTier(inst.saude_tier) * fatorIdade(diasAtivo) * (1 - uso / Math.max(1, cota));
+      const tierEfetivo = inst.messaging_limit_manual || inst.saude_tier;
+      const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * (1 - uso / Math.max(1, cota));
       candidates.push({ inst, score, fase, cota, uso, diasAtivo });
     }
 
