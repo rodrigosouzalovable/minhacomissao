@@ -2055,6 +2055,63 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_envio_pool_config: {
+        Row: {
+          atualizado_em: string
+          auto_pausa_red_waba: boolean
+          auto_pausa_yellow: boolean
+          bloquear_domingo: boolean
+          cota_fase1: number
+          cota_fase2: number
+          cota_fase3: number
+          cota_fase4: number
+          delay_max_entre_numeros_seg: number
+          delay_max_mesmo_numero_seg: number
+          delay_min_entre_numeros_seg: number
+          delay_min_mesmo_numero_seg: number
+          duracao_pausa_yellow_horas: number
+          horario_fim: string
+          horario_inicio: string
+          id: number
+        }
+        Insert: {
+          atualizado_em?: string
+          auto_pausa_red_waba?: boolean
+          auto_pausa_yellow?: boolean
+          bloquear_domingo?: boolean
+          cota_fase1?: number
+          cota_fase2?: number
+          cota_fase3?: number
+          cota_fase4?: number
+          delay_max_entre_numeros_seg?: number
+          delay_max_mesmo_numero_seg?: number
+          delay_min_entre_numeros_seg?: number
+          delay_min_mesmo_numero_seg?: number
+          duracao_pausa_yellow_horas?: number
+          horario_fim?: string
+          horario_inicio?: string
+          id?: number
+        }
+        Update: {
+          atualizado_em?: string
+          auto_pausa_red_waba?: boolean
+          auto_pausa_yellow?: boolean
+          bloquear_domingo?: boolean
+          cota_fase1?: number
+          cota_fase2?: number
+          cota_fase3?: number
+          cota_fase4?: number
+          delay_max_entre_numeros_seg?: number
+          delay_max_mesmo_numero_seg?: number
+          delay_min_entre_numeros_seg?: number
+          delay_min_mesmo_numero_seg?: number
+          duracao_pausa_yellow_horas?: number
+          horario_fim?: string
+          horario_inicio?: string
+          id?: number
+        }
+        Relationships: []
+      }
       meta_envios_fila: {
         Row: {
           atraso_dias: number | null
@@ -2366,10 +2423,18 @@ export type Database = {
           atualizado_em: string
           business_id: string | null
           criado_em: string
+          data_ativacao_api: string | null
           display_phone: string | null
           enviados_hoje: number
+          estado_pool: string | null
+          fase_rampup: string | null
           id: string
+          messaging_limit_manual: string | null
+          messaging_limit_source: string | null
+          messaging_limit_synced_at: string | null
           nome: string
+          pausa_automatica_ate: string | null
+          pausa_automatica_motivo: string | null
           phone_number_id: string
           saude_ban_info: Json | null
           saude_checked_at: string | null
@@ -2379,6 +2444,8 @@ export type Database = {
           saude_status: string | null
           saude_throughput: Json | null
           saude_tier: string | null
+          score_saude_cache: number | null
+          throughput_level: string | null
           tier_diario: number
           ultimo_reset: string
           user_id: string
@@ -2391,10 +2458,18 @@ export type Database = {
           atualizado_em?: string
           business_id?: string | null
           criado_em?: string
+          data_ativacao_api?: string | null
           display_phone?: string | null
           enviados_hoje?: number
+          estado_pool?: string | null
+          fase_rampup?: string | null
           id?: string
+          messaging_limit_manual?: string | null
+          messaging_limit_source?: string | null
+          messaging_limit_synced_at?: string | null
           nome: string
+          pausa_automatica_ate?: string | null
+          pausa_automatica_motivo?: string | null
           phone_number_id: string
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
@@ -2404,6 +2479,8 @@ export type Database = {
           saude_status?: string | null
           saude_throughput?: Json | null
           saude_tier?: string | null
+          score_saude_cache?: number | null
+          throughput_level?: string | null
           tier_diario?: number
           ultimo_reset?: string
           user_id: string
@@ -2416,10 +2493,18 @@ export type Database = {
           atualizado_em?: string
           business_id?: string | null
           criado_em?: string
+          data_ativacao_api?: string | null
           display_phone?: string | null
           enviados_hoje?: number
+          estado_pool?: string | null
+          fase_rampup?: string | null
           id?: string
+          messaging_limit_manual?: string | null
+          messaging_limit_source?: string | null
+          messaging_limit_synced_at?: string | null
           nome?: string
+          pausa_automatica_ate?: string | null
+          pausa_automatica_motivo?: string | null
           phone_number_id?: string
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
@@ -2429,6 +2514,8 @@ export type Database = {
           saude_status?: string | null
           saude_throughput?: Json | null
           saude_tier?: string | null
+          score_saude_cache?: number | null
+          throughput_level?: string | null
           tier_diario?: number
           ultimo_reset?: string
           user_id?: string
@@ -5150,6 +5237,10 @@ export type Database = {
       get_acordos_compartilhados_admin: {
         Args: { _user_id: string }
         Returns: string
+      }
+      get_effective_daily_quota: {
+        Args: { _instance_id: string }
+        Returns: number
       }
       get_table_ddl: { Args: { p_table: string }; Returns: string }
       has_acordos_compartilhados: {
