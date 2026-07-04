@@ -438,7 +438,41 @@ export default function ConfigurarMeta() {
                           <div><strong>Telefone:</strong> {inst.display_phone || "—"}</div>
                           <div><strong>Phone ID:</strong> <span className="font-mono">{inst.phone_number_id}</span></div>
                           <div><strong>WABA:</strong> <span className="font-mono">{inst.waba_id}</span></div>
-                          <div><strong>Tier:</strong> {inst.enviados_hoje}/{inst.tier_diario} hoje</div>
+                          <div><strong>Enviadas hoje:</strong> {inst.enviados_hoje}</div>
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-semibold">Limite de mensagens:</span>
+                          <Select
+                            value={inst.messaging_limit_manual || "__auto__"}
+                            onValueChange={(v) => salvarTierManual(inst, v)}
+                          >
+                            <SelectTrigger className="h-7 w-[210px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__auto__">
+                                🔄 Automático {inst.saude_tier ? `(Meta: ${inst.saude_tier.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "")})` : "(padrão TIER_1K)"}
+                              </SelectItem>
+                              <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
+                              <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
+                              <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
+                              <SelectItem value="TIER_10K">✋ TIER_10K (10.000/dia)</SelectItem>
+                              <SelectItem value="TIER_100K">✋ TIER_100K (100.000/dia)</SelectItem>
+                              <SelectItem value="TIER_UNLIMITED">✋ Ilimitado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Badge variant="outline" className="text-[10px]">
+                            Fonte: {inst.messaging_limit_source === "manual" ? "manual" : inst.messaging_limit_source === "meta_api" ? "sync Meta" : "padrão"}
+                          </Badge>
+                          {inst.messaging_limit_synced_at && (
+                            <span className="text-muted-foreground text-[10px]">
+                              últ. sync: {new Date(inst.messaging_limit_synced_at).toLocaleString("pt-BR")}
+                            </span>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => sincronizarSaude(inst)}>
+                            <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
+                          </Button>
                         </div>
                       </div>
                       <div className="flex gap-1 flex-wrap justify-end">
