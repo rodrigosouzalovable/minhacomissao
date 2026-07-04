@@ -279,7 +279,7 @@ export default function ConsultaResultado() {
                 </p>
                 <a
                   href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
-                    `Olá, meu CPF é ${formatCpfFull(cpfCliente)}, e eu quero verificar as condições de negociação disponíveis para mim.`
+                    `Olá, meu CPF é ${formatCpfFull((cpfCliente || cpf || '').replace(/\D/g, ''))}, e eu quero verificar as condições de negociação disponíveis para mim.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
