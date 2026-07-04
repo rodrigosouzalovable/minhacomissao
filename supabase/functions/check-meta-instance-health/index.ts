@@ -143,6 +143,12 @@ Deno.serve(async (req) => {
             console.log('[health] notificarAdmin falhou:', String(e).slice(0, 200));
           }
         }
+      } catch (e) {
+        r.error = e instanceof Error ? e.message : String(e);
+      }
+      results.push(r);
+    }
+
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
