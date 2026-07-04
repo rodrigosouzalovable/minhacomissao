@@ -228,6 +228,28 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  const salvarTierManual = async (inst: Instancia, valor: string) => {
+    const patch: any = valor === "__auto__"
+      ? { messaging_limit_manual: null, messaging_limit_source: inst.saude_tier ? "meta_api" : "default" }
+      : { messaging_limit_manual: valor, messaging_limit_source: "manual" };
+    const { error } = await (supabase as any).from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(valor === "__auto__" ? "Override removido — usando sync automático" : `Tier definido: ${valor.replace("TIER_", "")}`);
+    carregar();
+  };
+
+  const sincronizarSaude = async (inst: Instancia) => {
+    const toastId = toast.loading(`Sincronizando ${inst.nome}...`);
+    try {
+      const { error } = await supabase.functions.invoke("check-meta-instance-health", { body: { instancia_id: inst.id } });
+      if (error) throw error;
+      toast.success("Saúde e limite atualizados", { id: toastId });
+      carregar();
+    } catch (e: any) {
+      toast.error("Falhou: " + (e?.message || e), { id: toastId });
+    }
+  };
+
   const assinarWebhook = async () => {
     setAssinando(true);
     setResultadosAssinatura(null);
