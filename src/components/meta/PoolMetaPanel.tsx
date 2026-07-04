@@ -23,6 +23,9 @@ type MetaInst = {
   pausa_automatica_motivo: string | null;
   score_saude_cache: number | null;
   estado_pool: string | null;
+  messaging_limit_manual: string | null;
+  messaging_limit_source: string | null;
+  messaging_limit_synced_at: string | null;
 };
 
 type PoolConfig = {
