@@ -1,17 +1,18 @@
-## Problema
-Quando nenhum débito é encontrado, o botão "Falar no WhatsApp" abre a mensagem sem o CPF (aparece "meu CPF é ,"). Causa: o state `cpfCliente` só é preenchido quando `debitos.length > 0` (linha 89). No caminho "nenhum débito encontrado" ele fica vazio, então `formatCpfFull('')` retorna string vazia.
+## Causa
+
+A chamada `supabase.functions.invoke('notify-cpf-consulta', ...)` em `src/pages/ConsultaResultado.tsx` está dentro do `if (debitosResult.data.length > 0)` (linha 85). Quando a pessoa consulta um CPF que não tem débito no sistema, o bloco inteiro é ignorado — inclusive a notificação. Nos últimos testes você usou CPFs aleatórios, então a função nunca foi chamada. A edge function `notify-cpf-consulta` continua funcional; o problema é só o gate no frontend.
 
 ## Correção
-Arquivo: `src/pages/ConsultaResultado.tsx` (linhas 280-283).
 
-Usar como fallback o CPF vindo da URL (`cpf` do `useParams`), que já está disponível mesmo sem débitos. Sanitizar só os dígitos antes de formatar.
+Em `src/pages/ConsultaResultado.tsx` (dentro do `useEffect` que carrega os débitos), disparar `notify-cpf-consulta` **sempre** que a consulta ocorre, independente de haver débitos:
 
-```tsx
-const cpfParaMensagem = (cpfCliente || cpf || '').replace(/\D/g, '');
-// ...
-href={`https://wa.me/${PHONE}?text=${encodeURIComponent(
-  `Olá, meu CPF é ${formatCpfFull(cpfParaMensagem)}, e eu quero verificar as condições de negociação disponíveis para mim.`
-)}`}
-```
+- Extrair a chamada para fora do `if (debitos.length > 0)`.
+- Quando não há débitos, enviar `cpf` vindo do `useParams`, `nome: null`, `totalDebitos: 0` e `credor` a partir do `config?.nome || creditor`.
+- Quando há débitos, manter o payload atual (nome e cpf normalizados do resultado).
+- Manter o `.catch(() => {})` (fire-and-forget) para não impactar a UI.
 
-Nenhuma outra lógica é alterada.
+Nenhuma outra lógica de negócio, template da mensagem ou edge function é alterada — a `notify-cpf-consulta` já formata o CPF, busca telefones e monta a mensagem para o 62 99167-2674 corretamente.
+
+## Verificação
+
+Após aplicar: consultar um CPF sem débito no portal e confirmar que a mensagem chega no WhatsApp do admin com `Débitos encontrados: 0`.

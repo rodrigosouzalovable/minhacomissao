@@ -82,22 +82,23 @@ export default function ConsultaResultado() {
         supabase.rpc('consultar_acordo_ativo_por_cpf', { p_cpf: cpf } as any),
       ]);
       
-      if (!debitosResult.error && debitosResult.data && debitosResult.data.length > 0) {
+      const temDebitos = !debitosResult.error && debitosResult.data && debitosResult.data.length > 0;
+      if (temDebitos) {
         const typedData = debitosResult.data as Debito[];
         setDebitos(typedData);
         setNomeCliente(typedData[0].nome);
         setCpfCliente(typedData[0].cpf);
-
-        // Notificar consulta via WhatsApp (fire-and-forget)
-        supabase.functions.invoke('notify-cpf-consulta', {
-          body: {
-            cpf: typedData[0].cpf,
-            nome: typedData[0].nome,
-            credor: config?.nome || creditor,
-            totalDebitos: typedData.length,
-          },
-        }).catch(() => {});
       }
+
+      // Notificar consulta via WhatsApp (fire-and-forget) — sempre, mesmo sem débitos
+      supabase.functions.invoke('notify-cpf-consulta', {
+        body: {
+          cpf: temDebitos ? (debitosResult.data as Debito[])[0].cpf : cpf,
+          nome: temDebitos ? (debitosResult.data as Debito[])[0].nome : null,
+          credor: config?.nome || creditor,
+          totalDebitos: temDebitos ? (debitosResult.data as Debito[]).length : 0,
+        },
+      }).catch(() => {});
       
       if (!acordoResult.error && acordoResult.data && (acordoResult.data as any[]).length > 0) {
         const acordo = (acordoResult.data as any[])[0];
