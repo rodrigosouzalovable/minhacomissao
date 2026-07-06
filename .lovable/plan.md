@@ -1,34 +1,31 @@
-## Diagnóstico
+## Objetivo
+No Inbox Meta Massa (`/admin/inbox-meta`), deixar a busca do topo da lista de conversas realmente funcional: encontrar conversa por **nome do contato salvo**, **nome do devedor vinculado (CRM)** ou **telefone** (com ou sem máscara, DDD, +55, etc.), ignorando acentos e maiúsculas.
 
-Vi na gravação da tela que você clicou no botão azul **"Disparar (1)"** (envio em massa) e recebeu o toast **"Nenhuma instância disponível (cota, pausa ou qualidade)"**.
+## O que muda
 
-Esse é exatamente o bloqueio que expliquei no plano anterior: o **"Disparar"** passa pela função `pick-meta-instance`, que respeita todas as travas de ramp-up. Como todas as 16 instâncias ainda estão em `estado_pool = 'aguardando_templates'`, ela recusa qualquer envio em massa.
+### 1. `src/pages/InboxMeta.tsx` — função `contatosFiltrados`
+Substituir o filtro atual (que só compara `nome` cru + telefone com dígitos) por uma versão robusta:
 
-O botão **verde "Enviar teste (1º número)"** que adicionei na rodada anterior **não passa** pelo `pick-meta-instance` e ignora essas travas — é justamente ele que você precisa usar para testar com o seu número. Mas percebo que a interface não deixa isso claro: os dois botões estão lado a lado com destaque parecido, e o "Disparar" é o primeiro/maior, então é natural clicar nele.
+- Normalizar tanto o termo digitado quanto o alvo usando `.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()` — remove acentos e caixa.
+- Detectar se o termo tem dígitos (`/\d/.test(b)`):
+  - Se tem dígitos → comparar contra `c.telefone` também normalizado só a dígitos, usando **match por sufixo** (últimos 8 dígitos) além de `includes`, mantendo o padrão de matching de telefone do projeto.
+  - Se não tem dígitos → busca somente textual.
+- Match textual bate contra:
+  - `c.nome` (nome salvo em `meta_whatsapp_contatos`)
+  - **novo**: `nomeDevedorPorTelefone[c.telefone]` — mapa carregado a partir da tabela `devedores` (campo `nome` + `telefone` normalizado por sufixo de 8 dígitos), para achar contatos que só têm número salvo.
 
-## Plano
+### 2. `src/pages/InboxMeta.tsx` — carregar nomes do CRM
+- Criar um `useEffect` que, sempre que `contatos` mudar, coleta os telefones sem `nome` e faz UM `select nome, telefone from devedores where suffix(telefone) in (...)` (via RPC existente ou query simples usando `ilike` por sufixo, no padrão já usado no projeto).
+- Guardar num `useState<Record<string,string>>` (`nomesCRM`) indexado por sufixo de 8 dígitos.
+- Exibir esse nome no card da conversa quando `c.nome` estiver vazio (fallback visual), para o usuário conseguir ler quem é.
 
-### 1. Fazer o "Disparar" cair automaticamente em modo teste quando não há instância ativa no pool
-No `EnvioMetaSendingContext`, quando `pick-meta-instance` retornar sucesso:false para **todas** as instâncias selecionadas e a lista de destinatários tiver **1 número apenas**, tentar reenviar aquele único envio com `modo_teste: true` diretamente pela `send-whatsapp-meta`, usando a primeira instância marcada.
-
-Motivação: se o usuário está disparando para 1 número só, é claramente um teste. Assim ele nunca precisa saber que existe um botão separado.
-
-Para 2+ destinatários, manter o bloqueio e mostrar o toast melhorado: "Nenhuma instância ativa no pool. Use 'Enviar teste' ou ative as instâncias em Configurar Meta → Pool."
-
-### 2. Destacar visualmente o botão "Enviar teste"
-- Trocar o `variant="secondary"` para uma cor de destaque (borda + fundo âmbar) e mover para a **esquerda do "Disparar"** quando `recipients.length === 1`, com um pequeno rótulo "Recomendado para teste" abaixo.
-- Quando `recipients.length > 1`, ele volta para depois do "Disparar" (secundário).
-
-### 3. Mostrar aviso ativo no card 2 (Instâncias)
-Quando **todas** as instâncias marcadas estão em `estado_pool !== 'ativo'`, exibir uma faixa amarela discreta:
-> "Nenhuma instância marcada está ativa no pool ainda. Só é possível enviar via 'Enviar teste' — o disparo em massa está bloqueado."
-
-Assim você entende antes de tentar clicar em "Disparar".
+### 3. Placeholder do input
+Trocar `placeholder="Buscar..."` por `placeholder="Buscar por nome ou telefone..."` no `Input` da linha 559.
 
 ## Fora do escopo
-- Não vou ativar as instâncias no pool automaticamente (mantém a proteção anti-ban/gasto Meta).
-- Nenhuma mudança na `send-whatsapp-meta`, que já suporta `modo_teste: true`.
+- Não mexe no Inbox UAZAPI (aba antiga).
+- Não altera schema de banco nem cria migrations — só lê `devedores`.
+- Não muda ordenação/filtros de etiqueta/lida-não-lida.
 
 ## Arquivos afetados
-- `src/contexts/EnvioMetaSendingContext.tsx` — fallback para modo teste quando 1 destinatário e todas as instâncias bloqueadas.
-- `src/pages/EnvioMeta.tsx` — destaque do botão "Enviar teste" e aviso no card 2.
+- `src/pages/InboxMeta.tsx` (único)
