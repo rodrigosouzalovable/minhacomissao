@@ -537,27 +537,28 @@ export default function ConsultaResultado() {
                         {formatCurrency(valorTotal)}
                       </p>
 
-                      {/* Destaque à vista */}
-                      <div className="rounded-xl p-4 mt-3" style={{ background: 'linear-gradient(135deg, #00a86b15, #00cc8815)', border: '1px solid #00a86b33' }}>
-                        <p className="text-sm mb-1" style={{ color: '#ffffffaa' }}>
-                          Mas você pode pagar à vista por apenas:
-                        </p>
-                        <p className="text-3xl font-black" style={{ color: '#00ff88', animation: 'float 4s ease-in-out infinite' }}>
-                          {formatCurrency(valorAvista)}
-                        </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
-                          <span className="text-sm font-bold" style={{ color: '#00a86b' }}>
-                            Economize {formatCurrency(valorTotal - valorAvista)}
-                          </span>
-                          <span
-                            className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
-                            style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}
-                          >
-                            {descontoMaximo}% OFF
-                          </span>
+                      {descontoMaximo > 0 && (
+                        <div className="rounded-xl p-4 mt-3" style={{ background: 'linear-gradient(135deg, #00a86b15, #00cc8815)', border: '1px solid #00a86b33' }}>
+                          <p className="text-sm mb-1" style={{ color: '#ffffffaa' }}>
+                            Mas você pode pagar à vista por apenas:
+                          </p>
+                          <p className="text-3xl font-black" style={{ color: '#00ff88', animation: 'float 4s ease-in-out infinite' }}>
+                            {formatCurrency(valorAvista)}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
+                            <span className="text-sm font-bold" style={{ color: '#00a86b' }}>
+                              Economize {formatCurrency(valorTotal - valorAvista)}
+                            </span>
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
+                              style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}
+                            >
+                              {descontoMaximo}% OFF
+                            </span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </CardHeader>
 
                     <CardContent>
