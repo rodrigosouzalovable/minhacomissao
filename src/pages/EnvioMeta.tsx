@@ -36,6 +36,8 @@ type Instancia = {
   tier_diario: number;
   enviados_hoje: number;
   ativo: boolean;
+  estado_pool?: string | null;
+  fase_rampup?: string | null;
   saude_status?: string | null;
   saude_quality?: string | null;
   saude_tier?: string | null;
@@ -44,6 +46,7 @@ type Instancia = {
   saude_raw?: any;
   saude_checked_at?: string | null;
 };
+
 
 type Template = {
   id: string;
