@@ -36,6 +36,13 @@ type ItemResult =
   | { advanced: true; delayMs: number }
   | { advanced: false; waitMs?: number; done?: boolean; stop?: boolean };
 
+function delayUsuarioMs(job: any): number {
+  const lo = Math.max(1, Number(job?.min_seg) || 30);
+  const hi = Math.max(lo, Number(job?.max_seg) || 90);
+  const sec = Math.floor(Math.random() * (hi - lo + 1)) + lo;
+  return sec * 1000;
+}
+
 async function processarItem(job: any): Promise<ItemResult> {
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
 
@@ -50,7 +57,7 @@ async function processarItem(job: any): Promise<ItemResult> {
     .order('ordem', { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (pendErr) { console.error('[tick pendErr]', pendErr); return { advanced: false, waitMs: 5_000 }; }
+  if (pendErr) { console.error('[tick pendErr]', pendErr); return { advanced: false, waitMs: delayUsuarioMs(job) }; }
 
   if (!pend) {
     await supabase.from('envio_meta_job').update({
@@ -82,18 +89,11 @@ async function processarItem(job: any): Promise<ItemResult> {
       }).eq('id', job.id);
       return { advanced: false, waitMs };
     }
-    if (blocked === 'sem_disponivel') {
-      const waitMs = 60_000;
-      await supabase.from('envio_meta_job').update({
-        proximo_em: new Date(Date.now() + waitMs).toISOString(),
-        status_motivo: pickResp?.error || blocked,
-      }).eq('id', job.id);
-      return { advanced: false, waitMs };
-    }
-    const waitMs = 30_000;
+    // soft block: sem_disponivel ou erro genérico → respeita delay do usuário
+    const waitMs = delayUsuarioMs(job);
     await supabase.from('envio_meta_job').update({
       proximo_em: new Date(Date.now() + waitMs).toISOString(),
-      status_motivo: pickResp?.error || 'pick falhou',
+      status_motivo: pickResp?.error || blocked || 'pick falhou',
     }).eq('id', job.id);
     return { advanced: false, waitMs };
   }
@@ -140,7 +140,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       await supabase.from('envio_meta_job_item')
         .update({ status: 'pendente', instancia_id: null, instancia_nome: null })
         .eq('id', pend.id);
-      const waitMs = 30_000;
+      const waitMs = delayUsuarioMs(job);
       await supabase.from('envio_meta_job').update({
         proximo_em: new Date(Date.now() + waitMs).toISOString(),
         status_motivo: sendResp?.error || 'instância indisponível',

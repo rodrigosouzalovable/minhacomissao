@@ -109,15 +109,32 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
-    // Dispara um primeiro tick imediato (sem esperar 20s do cron)
-    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-      },
-      body: JSON.stringify({ job_id: job.id }),
-    }).catch(() => {});
+    // Aguarda o primeiro tick por até ~8s para que a UI já veja 1 envio processado.
+    // Se demorar mais, seguimos em background via self-invoke normal.
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ job_id: job.id }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+    } catch {
+      // Se abortou/timeout, dispara novamente fire-and-forget para o loop continuar.
+      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ job_id: job.id }),
+      }).catch(() => {});
+    }
 
     return new Response(JSON.stringify({ success: true, job_id: job.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
