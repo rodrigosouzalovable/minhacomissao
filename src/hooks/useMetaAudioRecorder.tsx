@@ -17,7 +17,9 @@ let _ffmpegPromise: Promise<any> | null = null;
 async function getFFmpeg(): Promise<any> {
   if (_ffmpegPromise) return _ffmpegPromise;
   _ffmpegPromise = (async () => {
+    // @ts-ignore - remote esm module
     const { FFmpeg } = await import(/* @vite-ignore */ 'https://esm.sh/@ffmpeg/ffmpeg@0.12.10?bundle');
+    // @ts-ignore - remote esm module
     const { toBlobURL } = await import(/* @vite-ignore */ 'https://esm.sh/@ffmpeg/util@0.12.1?bundle');
     const ffmpeg = new FFmpeg();
     const baseURL = 'https://esm.sh/@ffmpeg/core@0.12.6/dist/umd';
