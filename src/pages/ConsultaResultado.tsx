@@ -451,9 +451,21 @@ export default function ConsultaResultado() {
               ) : (
                 /* === ORIGINAL DEBTS VIEW === */
                 <>
-                  <p className="mt-2 text-base mb-6" style={{ color: '#ffffffcc' }}>
-                    Aproveite esta oportunidade única para regularizar sua situação com <strong style={{ color: '#00a86b' }}>até 50% de desconto</strong>!
+                  <p className="mt-2 text-base mb-3" style={{ color: '#ffffffcc' }}>
+                    Aproveite esta oportunidade única para regularizar sua situação com <strong style={{ color: '#00a86b' }}>até {descontoMaximo}% de desconto</strong>!
                   </p>
+
+                  {diasAtraso > 0 && (
+                    <div
+                      className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full"
+                      style={{ background: '#ff6b6b18', border: '1px solid #ff6b6b44' }}
+                    >
+                      <Clock className="h-3.5 w-3.5" style={{ color: '#ff6b6b' }} />
+                      <span className="text-xs font-bold" style={{ color: '#ff6b6b' }}>
+                        {diasAtraso} {diasAtraso === 1 ? 'dia' : 'dias'} em atraso com a loja
+                      </span>
+                    </div>
+                  )}
 
                   {/* Cards de débito colapsáveis */}
                   <div className="space-y-2 mb-6">
