@@ -1354,6 +1354,137 @@ export type Database = {
           },
         ]
       }
+      envio_meta_job: {
+        Row: {
+          atual_instancia: string | null
+          atual_telefone: string | null
+          concluido_em: string | null
+          created_at: string
+          enviados: number
+          erros: number
+          id: string
+          iniciado_em: string
+          instancia_ids: string[]
+          max_seg: number
+          min_seg: number
+          proximo_em: string | null
+          status: string
+          status_motivo: string | null
+          template_id: string | null
+          template_id_by_instance: Json
+          template_nome: string | null
+          total: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          atual_instancia?: string | null
+          atual_telefone?: string | null
+          concluido_em?: string | null
+          created_at?: string
+          enviados?: number
+          erros?: number
+          id?: string
+          iniciado_em?: string
+          instancia_ids?: string[]
+          max_seg?: number
+          min_seg?: number
+          proximo_em?: string | null
+          status?: string
+          status_motivo?: string | null
+          template_id?: string | null
+          template_id_by_instance?: Json
+          template_nome?: string | null
+          total?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          atual_instancia?: string | null
+          atual_telefone?: string | null
+          concluido_em?: string | null
+          created_at?: string
+          enviados?: number
+          erros?: number
+          id?: string
+          iniciado_em?: string
+          instancia_ids?: string[]
+          max_seg?: number
+          min_seg?: number
+          proximo_em?: string | null
+          status?: string
+          status_motivo?: string | null
+          template_id?: string | null
+          template_id_by_instance?: Json
+          template_nome?: string | null
+          total?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      envio_meta_job_item: {
+        Row: {
+          atraso: string | null
+          cpf: string | null
+          created_at: string
+          erro: string | null
+          id: string
+          instancia_id: string | null
+          instancia_nome: string | null
+          job_id: string
+          nome: string | null
+          ordem: number
+          processado_em: string | null
+          saldo: number | null
+          status: string
+          telefone: string
+          updated_at: string
+        }
+        Insert: {
+          atraso?: string | null
+          cpf?: string | null
+          created_at?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          instancia_nome?: string | null
+          job_id: string
+          nome?: string | null
+          ordem: number
+          processado_em?: string | null
+          saldo?: number | null
+          status?: string
+          telefone: string
+          updated_at?: string
+        }
+        Update: {
+          atraso?: string | null
+          cpf?: string | null
+          created_at?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          instancia_nome?: string | null
+          job_id?: string
+          nome?: string | null
+          ordem?: number
+          processado_em?: string | null
+          saldo?: number | null
+          status?: string
+          telefone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envio_meta_job_item_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "envio_meta_job"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estrategia_cliente: {
         Row: {
           acordo_quebrado: boolean
@@ -5301,6 +5432,15 @@ export type Database = {
       delete_importacao_em_lotes: {
         Args: { p_importacao_id: string }
         Returns: Json
+      }
+      envio_meta_job_bump: {
+        Args: {
+          _enviados_inc: number
+          _erros_inc: number
+          _job_id: string
+          _proximo_em: string
+        }
+        Returns: undefined
       }
       estrategia_liberar_reservas: {
         Args: { p_user_id?: string }
