@@ -194,7 +194,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       }
       if (cancelRef.current) { cancelado = true; break; }
 
-      if (instAtivas.length === 0) { toast.error("Todas as instâncias atingiram o limite diário"); break; }
+      if (instAtivas.length === 0) { toast.error("Nenhuma instância disponível para envio. Se acabou de aprovar templates, ative-as em Configurar Meta → Pool, ou use o botão 'Enviar teste' na página de envio para validar antes do ramp-up."); break; }
 
       // Seleção inteligente por score de saúde (respeita ramp-up, pausa, domingo, horário)
       let instId: string;
