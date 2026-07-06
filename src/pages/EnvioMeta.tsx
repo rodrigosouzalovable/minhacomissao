@@ -1111,7 +1111,12 @@ export default function EnvioMeta() {
 
 
           {resultado && (
-            <div className="text-sm">
+            <div className="text-sm space-y-2">
+              {resultado.enviados === 0 && resultado.statusMotivo && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive">
+                  Nenhuma mensagem foi enviada: {resultado.statusMotivo}
+                </div>
+              )}
               <Badge variant="default" className="bg-green-600 mr-2">{resultado.enviados} enviados</Badge>
               {resultado.erros > 0 && <Badge variant="destructive" className="mr-2">{resultado.erros} erros</Badge>}
               <span className="text-muted-foreground">de {resultado.total} contatos</span>
