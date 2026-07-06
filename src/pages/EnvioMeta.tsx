@@ -408,6 +408,24 @@ export default function EnvioMeta() {
     const recipientsDedup = parseRecipients(dedup.texto);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
+    // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
+    // dispara em modo teste automaticamente (bypassa ramp-up / horário / domingo).
+    const todasForaPool = instanciaIds.every((id) => {
+      const inst = instancias.find((x) => x.id === id);
+      return (inst?.estado_pool || "aguardando_templates") !== "ativo";
+    });
+    if (todasForaPool && recipientsDedup.length === 1) {
+      toast.message("Nenhuma instância ativa no pool — enviando em modo teste");
+      await enviarTeste();
+      return;
+    }
+    if (todasForaPool) {
+      return toast.error(
+        "Nenhuma instância marcada está ativa no pool. Ative-as em Configurar Meta → Pool, ou use 'Enviar teste' para validar com 1 número.",
+      );
+    }
+
+
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
 
