@@ -1,42 +1,34 @@
-## Causa raiz do erro
+## Diagnóstico
 
-O envio falha porque **todas as 16 instâncias Meta estão com `estado_pool = 'aguardando_templates'` e `fase_rampup = 'aguardando'`** — nenhuma foi promovida a "ativa" no pool ainda. A edge function `send-whatsapp-meta` tem duas travas que bloqueiam qualquer envio nesse estado:
+Vi na gravação da tela que você clicou no botão azul **"Disparar (1)"** (envio em massa) e recebeu o toast **"Nenhuma instância disponível (cota, pausa ou qualidade)"**.
 
-1. `if (inst.estado_pool !== 'ativo') → "Instância não está ativa no pool"`
-2. `cota da fase 'aguardando' = 0 → "Instância ainda aguardando templates"`
+Esse é exatamente o bloqueio que expliquei no plano anterior: o **"Disparar"** passa pela função `pick-meta-instance`, que respeita todas as travas de ramp-up. Como todas as 16 instâncias ainda estão em `estado_pool = 'aguardando_templates'`, ela recusa qualquer envio em massa.
 
-Como toda instância é rejeitada, o loop do frontend remove uma a uma e no fim mostra o erro genérico "Falha ao enviar / Todas as instâncias atingiram o limite diário". Por isso o teste com o seu número (55 62 99167-2674) não passa.
-
-Essas travas foram criadas para proteger o ramp-up (evitar banimento/gasto Meta), mas hoje elas impedem até um simples envio de teste — que é exatamente o que você precisa fazer antes de disparar em massa.
+O botão **verde "Enviar teste (1º número)"** que adicionei na rodada anterior **não passa** pelo `pick-meta-instance` e ignora essas travas — é justamente ele que você precisa usar para testar com o seu número. Mas percebo que a interface não deixa isso claro: os dois botões estão lado a lado com destaque parecido, e o "Disparar" é o primeiro/maior, então é natural clicar nele.
 
 ## Plano
 
-### 1. Novo modo `envio_teste` na função `send-whatsapp-meta`
-- Aceitar um parâmetro opcional `modo_teste: true` no body.
-- Quando `true`, pular as verificações de: `estado_pool`, `fase_rampup / cota`, `bloquear_domingo` e `horario_inicio/fim`.
-- Manter as verificações que **não podem** ser puladas: template aprovado, guardrail anti-MARKETING, imagem de header configurada, pausa automática por saúde da instância, `ativo=true`.
-- Continuar gravando o envio no `meta_whatsapp_envios_log` marcando `template_nome` normal (comportamento inalterado).
+### 1. Fazer o "Disparar" cair automaticamente em modo teste quando não há instância ativa no pool
+No `EnvioMetaSendingContext`, quando `pick-meta-instance` retornar sucesso:false para **todas** as instâncias selecionadas e a lista de destinatários tiver **1 número apenas**, tentar reenviar aquele único envio com `modo_teste: true` diretamente pela `send-whatsapp-meta`, usando a primeira instância marcada.
 
-### 2. Botão "Enviar teste" na página `Envio Meta`
-No card **3. Destinatários**, adicionar ao lado de "Iniciar envio":
-- Botão secundário **"Enviar teste para o 1º número"** (ícone `TestTube`).
-- Chama diretamente `send-whatsapp-meta` (sem passar pelo `pick-meta-instance` e sem o loop) usando:
-  - a **primeira instância marcada** no card 2 (independente do estado_pool),
-  - o **primeiro destinatário** da lista (no seu caso: `5562991672674, Rodrigo`),
-  - `modo_teste: true`.
-- Mostra toast com o resultado real da Meta (sucesso + `waId`, ou o erro exato retornado — ex.: "(#132000) parâmetro faltando", "(#131053) mídia inacessível", etc.), em vez do genérico "Falha".
+Motivação: se o usuário está disparando para 1 número só, é claramente um teste. Assim ele nunca precisa saber que existe um botão separado.
 
-### 3. Melhorar a mensagem de erro do envio em massa
-No `EnvioMetaSendingContext`, quando **todas** as instâncias forem removidas por `pool_blocked` / `tier_full`, mostrar toast explicativo:
-> "Nenhuma instância está ativa no pool ainda. Use 'Enviar teste' para validar o template ou ative as instâncias em Configurar Meta → Pool."
+Para 2+ destinatários, manter o bloqueio e mostrar o toast melhorado: "Nenhuma instância ativa no pool. Use 'Enviar teste' ou ative as instâncias em Configurar Meta → Pool."
 
-Em vez do atual "Todas as instâncias atingiram o limite diário", que é enganoso.
+### 2. Destacar visualmente o botão "Enviar teste"
+- Trocar o `variant="secondary"` para uma cor de destaque (borda + fundo âmbar) e mover para a **esquerda do "Disparar"** quando `recipients.length === 1`, com um pequeno rótulo "Recomendado para teste" abaixo.
+- Quando `recipients.length > 1`, ele volta para depois do "Disparar" (secundário).
+
+### 3. Mostrar aviso ativo no card 2 (Instâncias)
+Quando **todas** as instâncias marcadas estão em `estado_pool !== 'ativo'`, exibir uma faixa amarela discreta:
+> "Nenhuma instância marcada está ativa no pool ainda. Só é possível enviar via 'Enviar teste' — o disparo em massa está bloqueado."
+
+Assim você entende antes de tentar clicar em "Disparar".
 
 ## Fora do escopo
-- Não vou ativar automaticamente as 16 instâncias no pool nem forçar `data_ativacao_api`, porque isso libera envios em massa que ainda não passaram pelo ramp-up e pode gerar banimento/custo. A ativação continua sendo decisão sua no painel do Pool.
-- Sem mudanças no template `solicitacao_de_renegociacao` nem na imagem já salva (já corrigido na rodada anterior).
+- Não vou ativar as instâncias no pool automaticamente (mantém a proteção anti-ban/gasto Meta).
+- Nenhuma mudança na `send-whatsapp-meta`, que já suporta `modo_teste: true`.
 
 ## Arquivos afetados
-- `supabase/functions/send-whatsapp-meta/index.ts` — aceitar `modo_teste`.
-- `src/pages/EnvioMeta.tsx` — botão "Enviar teste".
-- `src/contexts/EnvioMetaSendingContext.tsx` — mensagem de erro mais útil quando todas as instâncias caem por pool.
+- `src/contexts/EnvioMetaSendingContext.tsx` — fallback para modo teste quando 1 destinatário e todas as instâncias bloqueadas.
+- `src/pages/EnvioMeta.tsx` — destaque do botão "Enviar teste" e aviso no card 2.
