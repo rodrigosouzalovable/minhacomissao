@@ -25,6 +25,7 @@ export function getDiasAtraso(
 // 301 - 500 dias:  parcelado 20% / à vista 30%
 // 501 - 10000 dias: parcelado 30% / à vista 50%
 export function getDescontoPortal(dias: number, modalidade: ModalidadePortal): number {
+  if (dias <= 0) return 0;
   if (dias <= 200) return modalidade === 'avista' ? 10 : 0;
   if (dias <= 300) return modalidade === 'avista' ? 20 : 10;
   if (dias <= 500) return modalidade === 'avista' ? 30 : 20;
