@@ -1,62 +1,37 @@
-## Diagnóstico
+## Problema
 
-Encontrei a causa raiz do som nunca tocar em `src/components/MetaAtendenteNotifier.tsx`:
+Na aba **Envio Meta Massa** cada instância mostra "0/250 hoje" e "250 restantes" mesmo depois de você configurar TIER_2K (2.000/dia) na aba **API Oficial Meta**. Isso acontece porque o painel lê a coluna `tier_diario` da tabela `meta_whatsapp_instances`, que é um campo antigo/independente e não é atualizado quando você troca o tier na outra aba (que grava em `messaging_limit_manual` / `messaging_limit_source` ou é sincronizado da Meta em `saude_tier`).
 
-**Bug principal (linha 51):** o filtro do Realtime é
+## Solução
+
+Fazer o "limite diário" do Envio Meta Massa refletir automaticamente o tier efetivo configurado — sem duplicar dado nem exigir sincronização manual.
+
+### Passo único: atualizar a RPC `meta_envios_resumo`
+
+Alterar a função para calcular `tier_diario` on the fly a partir do tier efetivo de cada instância, na seguinte ordem de precedência:
+
+1. `messaging_limit_manual` (override manual definido em API Oficial Meta)
+2. `saude_tier` (sincronizado automaticamente da Graph API Meta)
+3. Fallback `TIER_250`
+
+Mapeamento tag → número diário:
+
+```text
+TIER_50        →      50
+TIER_250       →     250
+TIER_1K        →   1.000
+TIER_2K        →   2.000
+TIER_10K       →  10.000
+TIER_100K      → 100.000
+TIER_UNLIMITED → 100.000 (teto exibido)
 ```
-filter: 'direcao=eq.recebida'
-```
-mas no banco a coluna `direcao` de `meta_whatsapp_mensagens` só usa dois valores: **`entrada`** (recebida) e **`saida`** (enviada). Consulta confirmou: 140 `entrada` e 279 `saida` nos últimos 2 dias, zero `recebida`. Ou seja, o handler **nunca é acionado** — o canal Realtime fica em silêncio para sempre.
 
-**Bug secundário (autoplay):** mesmo depois de corrigir, navegadores modernos bloqueiam `new Audio().play()` se o usuário ainda não interagiu com a aba (sem clique/tecla). Vale um fallback silencioso já existe (`catch {}`), mas precisamos "destravar" o áudio no primeiro gesto do usuário.
+A função aceita as tags com ou sem o prefixo `MESSAGING_LIMIT_` retornado pela Graph API (ex.: `MESSAGING_LIMIT_TIER_2K`).
 
-As etiquetas `Atendente: Anna Flavia`, `Atendente: Fernanda`, `Atendente: Wallace`, `Atendente: Yasmim` existem, então a lógica de matching de nome está OK.
+### Efeito no frontend
 
-## Plano de correção
+Nenhuma mudança de código no `EnvioMeta.tsx` é necessária: ele já lê `i.tier_diario` do resumo. Ao trocar o tier em **API Oficial Meta** (manual ou via botão "Sincronizar agora"), o card de Envio Meta Massa passa a mostrar imediatamente o novo limite (ex.: "13/2000 hoje", "1987 restantes") no próximo refetch (30s) ou ao recarregar a aba.
 
-Alterações apenas em `src/components/MetaAtendenteNotifier.tsx` (sem mudanças de backend, migração, ou UI visível):
+## Detalhe técnico
 
-1. **Corrigir o filtro do Realtime**  
-   Trocar `filter: 'direcao=eq.recebida'` por `filter: 'direcao=eq.entrada'`.
-
-2. **Destravar o áudio no primeiro gesto do usuário (autoplay unlock)**  
-   Ao montar, adicionar um listener único (`pointerdown` + `keydown`) que faz um `audio.play()` mudo (volume 0) e remove os listeners. Isso "libera" o `Audio` para tocar depois via Realtime sem gesto direto.
-
-3. **Tocar um som de teste único por usuário logado (agora, para todo mundo verificar)**  
-   Ao montar o componente e ter o `user` disponível, checar `localStorage.getItem('meta-atendente-som-teste-v1')`. Se ausente, disparar 1 vez o `successSound` (volume 0.35) já no próximo gesto do usuário (usando o mesmo listener do passo 2 — o unlock toca o beep e marca a flag). Assim cada funcionário, ao abrir/atualizar a aba após esse deploy e clicar em qualquer coisa, ouve o som de confirmação uma única vez. Sem flag global no banco, sem custo em Lovable Cloud.
-
-4. **Não alterar** o restante do fluxo (matching de etiqueta, debounce 2s, escopo por `contato_id`) — está correto.
-
-## Detalhes técnicos
-
-- Estrutura do listener de unlock:
-  ```ts
-  const unlock = async () => {
-    // toca o teste, se ainda não tocou
-    if (!localStorage.getItem('meta-atendente-som-teste-v1')) {
-      try {
-        const a = new Audio(successSound); a.volume = 0.35; await a.play();
-        localStorage.setItem('meta-atendente-som-teste-v1', String(Date.now()));
-      } catch {}
-    } else {
-      // apenas destrava
-      try { const a = new Audio(successSound); a.volume = 0; await a.play(); } catch {}
-    }
-    window.removeEventListener('pointerdown', unlock);
-    window.removeEventListener('keydown', unlock);
-  };
-  window.addEventListener('pointerdown', unlock, { once: true });
-  window.addEventListener('keydown', unlock, { once: true });
-  ```
-- O canal Realtime já está inscrito em INSERT de `meta_whatsapp_mensagens`. Basta trocar o valor do filtro.
-- Nenhum toque em `direcao=eq.recebida` no restante do código; grep confirmou uso isolado.
-
-## Arquivo afetado
-
-- `src/components/MetaAtendenteNotifier.tsx` (edição pontual)
-
-## Como validar
-
-1. Após o deploy, cada funcionário abre a aba e clica em qualquer lugar → ouve o `successSound` uma vez (teste).
-2. Uma mensagem real chegando de um contato etiquetado com `Atendente: <nome do usuário>` passa a disparar o som automaticamente.
-3. Se não tocar: abrir DevTools → Console → confirmar que não há erro `NotAllowedError` (autoplay). Se houver, é sinal de que o usuário ainda não interagiu com a aba.
+Migration única substituindo `public.meta_envios_resumo(uuid, date)`. O bloco alterado é o `SELECT ... FROM public.meta_whatsapp_instances i` dentro do agregado `v_por_instancia`, trocando `i.tier_diario` por uma expressão `CASE` que resolve o tier efetivo. O restante da função (unicos, série 7d, envios) permanece idêntico. A coluna `tier_diario` da tabela não é removida — apenas deixa de ser a fonte usada pelo painel.
