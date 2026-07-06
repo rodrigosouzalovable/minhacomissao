@@ -36,6 +36,8 @@ type Instancia = {
   tier_diario: number;
   enviados_hoje: number;
   ativo: boolean;
+  estado_pool?: string | null;
+  fase_rampup?: string | null;
   saude_status?: string | null;
   saude_quality?: string | null;
   saude_tier?: string | null;
@@ -44,6 +46,7 @@ type Instancia = {
   saude_raw?: any;
   saude_checked_at?: string | null;
 };
+
 
 type Template = {
   id: string;
@@ -405,6 +408,24 @@ export default function EnvioMeta() {
     const recipientsDedup = parseRecipients(dedup.texto);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
+    // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
+    // dispara em modo teste automaticamente (bypassa ramp-up / horário / domingo).
+    const todasForaPool = instanciaIds.every((id) => {
+      const inst = instancias.find((x) => x.id === id);
+      return (inst?.estado_pool || "aguardando_templates") !== "ativo";
+    });
+    if (todasForaPool && recipientsDedup.length === 1) {
+      toast.message("Nenhuma instância ativa no pool — enviando em modo teste");
+      await enviarTeste();
+      return;
+    }
+    if (todasForaPool) {
+      return toast.error(
+        "Nenhuma instância marcada está ativa no pool. Ative-as em Configurar Meta → Pool, ou use 'Enviar teste' para validar com 1 número.",
+      );
+    }
+
+
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
 
@@ -736,6 +757,17 @@ export default function EnvioMeta() {
                 Nenhuma instância ativa. Cadastre em "API Oficial Meta".
               </p>
             ) : (
+              <>
+              {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
+                <div className="mb-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium mb-0.5">Nenhuma instância marcada está ativa no pool</div>
+                    <div>O disparo em massa está bloqueado. Use <strong>"Enviar teste (1º número)"</strong> abaixo para validar o template com 1 contato, ou ative as instâncias em Configurar Meta → Pool.</div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 {instancias.map((i) => {
                   const isEditing = editingId === i.id;
@@ -844,7 +876,9 @@ export default function EnvioMeta() {
                   );
                 })}
               </div>
+              </>
             )}
+
           </CardContent>
         </Card>
       </div>
@@ -1007,11 +1041,13 @@ export default function EnvioMeta() {
               disabled={enviando || validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
               size="lg"
               variant="secondary"
+              className="border-2 border-amber-500 bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 dark:border-amber-400 shadow-sm"
               title="Envia 1 mensagem para o primeiro destinatário via a primeira instância marcada, ignorando trava de ramp-up/horário. Útil para validar template e imagem antes do disparo em massa."
             >
               {enviandoTeste ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
               {enviandoTeste ? "Enviando teste..." : "Enviar teste (1º número)"}
             </Button>
+
             {enviando && (
               <>
                 <Button type="button" variant="secondary" size="lg" onClick={togglePausa}>
