@@ -138,6 +138,7 @@ export default function EnvioMeta() {
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
+  const [enviandoTeste, setEnviandoTeste] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
