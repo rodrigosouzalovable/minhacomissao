@@ -1,4 +1,5 @@
-import { Percent, Star, Zap, Lock, TrendingDown } from 'lucide-react';
+import { Star, Zap, Lock, TrendingDown } from 'lucide-react';
+import { getDescontoPortal } from '@/lib/descontoPortal';
 
 export type DescontoFaixa = 'avista' | 'parcelado';
 
@@ -12,15 +13,19 @@ interface DiscountTierSelectorProps {
   selected: DescontoFaixa | undefined;
   onSelect: (faixa: DescontoFaixa) => void;
   valorTotal: number;
+  diasAtraso: number;
 }
 
-export default function DiscountTierSelector({ selected, onSelect, valorTotal }: DiscountTierSelectorProps) {
-  const avistaValor = valorTotal * 0.5;
+export default function DiscountTierSelector({ selected, onSelect, valorTotal, diasAtraso }: DiscountTierSelectorProps) {
+  const descAvista = getDescontoPortal(diasAtraso, 'avista');
+  const descParcelado = getDescontoPortal(diasAtraso, 'parcelado');
+
+  const avistaValor = valorTotal * (1 - descAvista / 100);
   const avistaEconomia = valorTotal - avistaValor;
   const avistaSelected = selected === 'avista';
   const avistaDisabled = avistaValor < VALOR_MINIMO_PARCELA;
 
-  const parceladoValor = valorTotal * 0.7;
+  const parceladoValor = valorTotal * (1 - descParcelado / 100);
   const parceladoEconomia = valorTotal - parceladoValor;
   const parceladoSelected = selected === 'parcelado';
   const parceladoDisabled = (parceladoValor / 2) < VALOR_MINIMO_PARCELA;
@@ -71,9 +76,11 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
             </div>
 
             <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-sm line-through" style={{ color: '#ff6b6b' }}>
-                {formatCurrency(valorTotal)}
-              </span>
+              {descAvista > 0 && (
+                <span className="text-sm line-through" style={{ color: '#ff6b6b' }}>
+                  {formatCurrency(valorTotal)}
+                </span>
+              )}
               <span className="text-3xl font-black" style={{ color: avistaSelected ? '#fff' : '#00ff88' }}>
                 {formatCurrency(avistaValor)}
               </span>
@@ -92,24 +99,26 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
                 border: '1px solid #00ff8844',
               }}
             >
-              <p className="text-2xl font-black" style={{ color: '#00ff88' }}>50%</p>
+              <p className="text-2xl font-black" style={{ color: '#00ff88' }}>{descAvista}%</p>
               <p className="text-[10px] font-bold uppercase" style={{ color: '#00ff88cc' }}>OFF</p>
             </div>
           </div>
         </div>
 
-        <div
-          className="mt-3 rounded-lg px-3 py-2 flex items-center gap-2"
-          style={{
-            background: avistaSelected ? '#ffffff15' : '#00a86b15',
-            border: '1px solid #00ff8833',
-          }}
-        >
-          <TrendingDown className="h-4 w-4" style={{ color: '#00ff88' }} />
-          <p className="text-sm font-bold" style={{ color: '#00ff88' }}>
-            Você economiza {formatCurrency(avistaEconomia)}
-          </p>
-        </div>
+        {descAvista > 0 && (
+          <div
+            className="mt-3 rounded-lg px-3 py-2 flex items-center gap-2"
+            style={{
+              background: avistaSelected ? '#ffffff15' : '#00a86b15',
+              border: '1px solid #00ff8833',
+            }}
+          >
+            <TrendingDown className="h-4 w-4" style={{ color: '#00ff88' }} />
+            <p className="text-sm font-bold" style={{ color: '#00ff88' }}>
+              Você economiza {formatCurrency(avistaEconomia)}
+            </p>
+          </div>
+        )}
 
         {avistaDisabled && (
           <div className="absolute inset-0 flex items-center justify-center rounded-2xl" style={{ background: '#000000aa' }}>
@@ -125,7 +134,7 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
       <div className="flex items-center gap-3 py-1">
         <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, transparent, #ffffff22, transparent)' }} />
         <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#ffffff55' }}>
-          ou parcele com desconto
+          {descParcelado > 0 ? 'ou parcele com desconto' : 'ou parcele sem juros'}
         </span>
         <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, transparent, #ffffff22, transparent)' }} />
       </div>
@@ -157,16 +166,18 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
             </div>
 
             <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-sm line-through" style={{ color: '#ff6b6b' }}>
-                {formatCurrency(valorTotal)}
-              </span>
+              {descParcelado > 0 && (
+                <span className="text-sm line-through" style={{ color: '#ff6b6b' }}>
+                  {formatCurrency(valorTotal)}
+                </span>
+              )}
               <span className="text-3xl font-black" style={{ color: '#00a86b' }}>
                 {formatCurrency(parceladoValor)}
               </span>
             </div>
 
             <p className="text-sm font-bold" style={{ color: '#ffffffaa' }}>
-              Parcele com desconto especial
+              {descParcelado > 0 ? 'Parcele com desconto especial' : 'Parcele em até 24x sem juros'}
             </p>
           </div>
 
@@ -178,28 +189,26 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
                 border: '1px solid #00a86b44',
               }}
             >
-              <p className="text-2xl font-black" style={{ color: '#00a86b' }}>30%</p>
+              <p className="text-2xl font-black" style={{ color: '#00a86b' }}>{descParcelado}%</p>
               <p className="text-[10px] font-bold uppercase" style={{ color: '#00a86bcc' }}>OFF</p>
             </div>
           </div>
         </div>
 
-        <div
-          className="mt-3 rounded-lg px-3 py-2 flex items-center gap-2"
-          style={{
-            background: parceladoSelected ? '#00a86b15' : '#ffffff08',
-            border: '1px solid #00a86b22',
-          }}
-        >
-          <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
-          <p className="text-sm font-bold" style={{ color: '#00a86b' }}>
-            Você economiza {formatCurrency(parceladoEconomia)}
-          </p>
-        </div>
-
-        <p className="text-[9px] mt-2" style={{ color: '#ff6b6b99' }}>
-          -20% desconto vs à vista
-        </p>
+        {descParcelado > 0 && (
+          <div
+            className="mt-3 rounded-lg px-3 py-2 flex items-center gap-2"
+            style={{
+              background: parceladoSelected ? '#00a86b15' : '#ffffff08',
+              border: '1px solid #00a86b22',
+            }}
+          >
+            <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
+            <p className="text-sm font-bold" style={{ color: '#00a86b' }}>
+              Você economiza {formatCurrency(parceladoEconomia)}
+            </p>
+          </div>
+        )}
 
         {parceladoDisabled && (
           <div className="absolute inset-0 flex items-center justify-center rounded-2xl" style={{ background: '#000000aa' }}>
@@ -214,8 +223,8 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal }:
   );
 }
 
-export function getDesconto(faixa: DescontoFaixa): number {
-  return faixa === 'avista' ? 50 : 30;
+export function getDesconto(faixa: DescontoFaixa, diasAtraso: number): number {
+  return getDescontoPortal(diasAtraso, faixa);
 }
 
 export function getMinParcelas(faixa: DescontoFaixa): number {
