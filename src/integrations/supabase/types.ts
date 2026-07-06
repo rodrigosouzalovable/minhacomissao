@@ -5433,6 +5433,15 @@ export type Database = {
         Args: { p_importacao_id: string }
         Returns: Json
       }
+      envio_meta_job_bump: {
+        Args: {
+          _enviados_inc: number
+          _erros_inc: number
+          _job_id: string
+          _proximo_em: string
+        }
+        Returns: undefined
+      }
       estrategia_liberar_reservas: {
         Args: { p_user_id?: string }
         Returns: number
