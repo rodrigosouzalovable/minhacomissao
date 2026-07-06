@@ -11,6 +11,53 @@ interface UseMetaAudioRecorderProps {
   onSent: () => void;
 }
 
+// Lazy-loaded ffmpeg.wasm instance — used to remux non-OGG audio into OGG/OPUS
+// (the only voice-note container the Meta Cloud API reliably accepts).
+let _ffmpegPromise: Promise<any> | null = null;
+async function getFFmpeg(): Promise<any> {
+  if (_ffmpegPromise) return _ffmpegPromise;
+  _ffmpegPromise = (async () => {
+    // @ts-ignore - remote esm module
+    const { FFmpeg } = await import(/* @vite-ignore */ 'https://esm.sh/@ffmpeg/ffmpeg@0.12.10?bundle');
+    // @ts-ignore - remote esm module
+    const { toBlobURL } = await import(/* @vite-ignore */ 'https://esm.sh/@ffmpeg/util@0.12.1?bundle');
+    const ffmpeg = new FFmpeg();
+    const baseURL = 'https://esm.sh/@ffmpeg/core@0.12.6/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    return ffmpeg;
+  })();
+  return _ffmpegPromise;
+}
+
+async function ensureOggOpus(blob: Blob, mimeType: string): Promise<{ blob: Blob; ext: 'ogg'; contentType: 'audio/ogg' }> {
+  // If we already recorded OGG/OPUS, ship it as-is (fast path, no wasm).
+  if (mimeType.includes('ogg')) {
+    return { blob, ext: 'ogg', contentType: 'audio/ogg' };
+  }
+  // Otherwise (webm, mp4, aac, …) remux/transcode to OGG/OPUS.
+  const ffmpeg = await getFFmpeg();
+  const inExt = mimeType.includes('webm') ? 'webm'
+    : mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a'
+    : mimeType.includes('aac') ? 'aac'
+    : 'bin';
+  const inName = `in.${inExt}`;
+  const outName = 'out.ogg';
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  await ffmpeg.writeFile(inName, buf);
+  // WebM + Opus → remux without re-encode (fast). Other formats → transcode to Opus.
+  const args = mimeType.includes('webm')
+    ? ['-i', inName, '-c:a', 'copy', '-vn', outName]
+    : ['-i', inName, '-c:a', 'libopus', '-b:a', '32k', '-vn', outName];
+  await ffmpeg.exec(args);
+  const data = await ffmpeg.readFile(outName);
+  const out = new Blob([data as unknown as BlobPart], { type: 'audio/ogg' });
+  try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
+  return { blob: out, ext: 'ogg', contentType: 'audio/ogg' };
+}
+
 export function useMetaAudioRecorder({
   instanciaId, telefone, userId, replyToWaId, conteudoCitado, onSent,
 }: UseMetaAudioRecorderProps) {
@@ -26,11 +73,14 @@ export function useMetaAudioRecorder({
   const iniciarGravacao = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Meta Cloud API aceita: audio/ogg (OPUS), audio/aac, audio/mp4, audio/mpeg, audio/amr.
-      // NÃO aceita audio/webm. Priorizamos ogg → mp4 (Safari/iOS).
+      // Ordem preferida: OGG/OPUS (aceito nativo pela Meta). Se o navegador não
+      // suportar (Safari/iOS ou Chrome sem mux OGG), caímos para webm/mp4/aac e
+      // o áudio é remuxado para OGG/OPUS via ffmpeg.wasm antes do envio.
       const candidatos = [
         'audio/ogg;codecs=opus',
         'audio/ogg',
+        'audio/webm;codecs=opus',
+        'audio/webm',
         'audio/mp4;codecs=mp4a.40.2',
         'audio/mp4',
         'audio/aac',
@@ -39,8 +89,8 @@ export function useMetaAudioRecorder({
       if (!mimeType) {
         stream.getTracks().forEach(t => t.stop());
         toast({
-          title: 'Navegador não suporta áudio compatível com WhatsApp',
-          description: 'Use um Chrome/Edge atualizado, ou Safari no iOS. O áudio em WebM não é aceito pela Meta.',
+          title: 'Navegador não suporta gravação de áudio',
+          description: 'Atualize seu Chrome/Edge/Safari e tente novamente.',
           variant: 'destructive',
         });
         return;
@@ -79,23 +129,28 @@ export function useMetaAudioRecorder({
         rec.stream.getTracks().forEach(t => t.stop());
         if (timerRef.current) clearInterval(timerRef.current);
         setGravando(false);
-        const blob = new Blob(chunksRef.current, { type: rec.mimeType });
+        const rawBlob = new Blob(chunksRef.current, { type: rec.mimeType });
         chunksRef.current = [];
-        if (blob.size === 0) { setTempoGravacao(0); resolve(); return; }
+        if (rawBlob.size === 0) { setTempoGravacao(0); resolve(); return; }
         setEnviandoAudio(true);
         try {
-          const mt = rec.mimeType || 'audio/ogg';
-          const ext = mt.includes('ogg') ? 'ogg'
-            : mt.includes('mp4') || mt.includes('m4a') ? 'm4a'
-            : mt.includes('aac') ? 'aac'
-            : 'ogg';
-          const uploadType = mt.includes('ogg') ? 'audio/ogg'
-            : mt.includes('mp4') || mt.includes('m4a') ? 'audio/mp4'
-            : mt.includes('aac') ? 'audio/aac'
-            : 'audio/ogg';
-          const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${ext}`;
+          // Garantir OGG/OPUS — a Meta recusa audio/webm e tem sido inconsistente com audio/mp4.
+          let prepared: { blob: Blob; ext: 'ogg'; contentType: 'audio/ogg' };
+          try {
+            prepared = await ensureOggOpus(rawBlob, rec.mimeType || 'audio/ogg');
+          } catch (convErr) {
+            console.error('[useMetaAudioRecorder] falha ao converter para OGG', convErr);
+            toast({
+              title: 'Não foi possível preparar o áudio',
+              description: 'Seu navegador gerou um formato incompatível e a conversão falhou. Tente usar Chrome ou Edge atualizado.',
+              variant: 'destructive',
+            });
+            resolve();
+            return;
+          }
+          const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${prepared.ext}`;
           const { error: upErr } = await supabase.storage.from('inbox-media')
-            .upload(path, blob, { contentType: uploadType });
+            .upload(path, prepared.blob, { contentType: prepared.contentType });
           if (upErr) throw upErr;
           const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(path);
           const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {

@@ -295,6 +295,19 @@ export default function InboxMeta() {
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
           } else if (payload.eventType === 'UPDATE') {
             setMensagens(prev => prev.map(m => m.id === row.id ? { ...m, ...row } : m));
+            // Feedback quando a Meta recusa uma mídia enviada por nós.
+            if (row.direcao === 'saida' && row.status_envio === 'erro') {
+              const errMsg = (row as any).erro as string | undefined;
+              if (row.tipo_conteudo === 'audio') {
+                toast({
+                  title: 'WhatsApp recusou o áudio',
+                  description: errMsg || 'Grave novamente — o formato foi rejeitado pelo WhatsApp.',
+                  variant: 'destructive',
+                });
+              } else if (errMsg) {
+                toast({ title: 'Falha no envio', description: errMsg, variant: 'destructive' });
+              }
+            }
           }
         }
       )
