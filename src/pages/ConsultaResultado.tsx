@@ -462,8 +462,6 @@ export default function ConsultaResultado() {
                     </p>
                     {debitosVisiveis.map((debito, index) => {
                       const isAporte = (debito.credor || '').toLowerCase().includes('aporte');
-                      const valorEfetivo = getValorEfetivo(debito);
-                      const temJuros = isAporte && valorEfetivo > debito.valor_original;
                       return (
                       <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : isAporte ? '3px solid #f59e0b' : '3px solid #ffffff15' }}>
                         <CardContent className="p-4 flex items-center justify-between">
@@ -498,13 +496,8 @@ export default function ConsultaResultado() {
                           </div>
                           <div className="text-right">
                             <p className="text-lg font-black" style={{ color: isAporte ? '#f59e0b' : '#ff6b6b' }}>
-                              {formatCurrency(valorEfetivo)}
+                              {formatCurrency(debito.valor_original)}
                             </p>
-                            {temJuros && (
-                              <p className="text-[10px]" style={{ color: '#ffffff66' }}>
-                                Original: {formatCurrency(debito.valor_original)}
-                              </p>
-                            )}
                           </div>
                         </CardContent>
                       </Card>
