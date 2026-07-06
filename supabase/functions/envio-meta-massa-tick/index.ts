@@ -43,6 +43,17 @@ function delayUsuarioMs(job: any): number {
   return sec * 1000;
 }
 
+async function encerrarJobSemDisponibilidade(job: any, motivo: string) {
+  await supabase.from('envio_meta_job').update({
+    status: 'erro',
+    status_motivo: motivo,
+    concluido_em: new Date().toISOString(),
+    atual_telefone: null,
+    atual_instancia: null,
+    proximo_em: null,
+  }).eq('id', job.id);
+}
+
 async function processarItem(job: any): Promise<ItemResult> {
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
 
@@ -89,7 +100,11 @@ async function processarItem(job: any): Promise<ItemResult> {
       }).eq('id', job.id);
       return { advanced: false, waitMs };
     }
-    // soft block: sem_disponivel ou erro genérico → respeita delay do usuário
+    if (blocked === 'sem_disponivel') {
+      await encerrarJobSemDisponibilidade(job, pickResp?.error || 'Nenhuma instância disponível para envio');
+      return { advanced: false, stop: true };
+    }
+    // erro transitório genérico → respeita delay do usuário
     const waitMs = delayUsuarioMs(job);
     await supabase.from('envio_meta_job').update({
       proximo_em: new Date(Date.now() + waitMs).toISOString(),
@@ -236,6 +251,7 @@ Deno.serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch {}
     const jobId: string | undefined = body?.job_id;
+    const single = body?.single === true;
 
     let query = supabase.from('envio_meta_job').select('*').eq('status', 'rodando');
     if (jobId) query = query.eq('id', jobId);
@@ -245,7 +261,10 @@ Deno.serve(async (req) => {
     let processadosTotal = 0;
 
     if (jobs && jobs.length > 0) {
-      if (jobId && jobs.length === 1) {
+      if (jobId && jobs.length === 1 && single) {
+        const r = await processarItem(jobs[0]);
+        if ('advanced' in r && r.advanced) processadosTotal++;
+      } else if (jobId && jobs.length === 1) {
         const r = await rodarJobLoop(jobs[0]);
         processadosTotal += r.processados;
         if (r.selfInvokeNeeded) selfInvoke(r.jobId);

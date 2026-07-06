@@ -21,7 +21,7 @@ export type EnvioProgresso = {
   proximoEmSeg: number;
 };
 
-export type EnvioResultado = { enviados: number; erros: number; total: number } | null;
+export type EnvioResultado = { enviados: number; erros: number; total: number; statusMotivo?: string } | null;
 
 type ClienteRow = {
   telefone: string;
@@ -192,7 +192,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const resultado: EnvioResultado = useMemo(() => {
     if (!job) return null;
     if (["concluido", "cancelado", "erro"].includes(job.status)) {
-      return { enviados: job.enviados || 0, erros: job.erros || 0, total: job.total || 0 };
+      return { enviados: job.enviados || 0, erros: job.erros || 0, total: job.total || 0, statusMotivo: job.status_motivo || undefined };
     }
     return null;
   }, [job]);
