@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
     // ===== Pool checks =====
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
 
-    if (inst.estado_pool && inst.estado_pool !== 'ativo') {
+    if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste) {
       return new Response(JSON.stringify({
         success: false, error: `Instância não está ativa no pool (estado: ${inst.estado_pool})`,
         pool_blocked: true, instancia_id,
@@ -275,9 +275,9 @@ Deno.serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Bloqueio domingo/horário
+    // Bloqueio domingo/horário (ignorado em modo teste)
     const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    if (cfg?.bloquear_domingo && nowBrt.getDay() === 0) {
+    if (!isTeste && cfg?.bloquear_domingo && nowBrt.getDay() === 0) {
       return new Response(JSON.stringify({ success: false, error: 'Envios Meta bloqueados aos domingos', blocked: 'domingo' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -285,7 +285,7 @@ Deno.serve(async (req) => {
     const hh = nowBrt.getHours() + nowBrt.getMinutes() / 60;
     const [hIni] = String(cfg?.horario_inicio || '08:00:00').split(':').map(Number);
     const [hFim] = String(cfg?.horario_fim || '20:00:00').split(':').map(Number);
-    if (hh < hIni || hh >= hFim) {
+    if (!isTeste && (hh < hIni || hh >= hFim)) {
       return new Response(JSON.stringify({ success: false, error: `Fora do horário permitido (${hIni}h–${hFim}h BRT)`, blocked: 'horario' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -300,25 +300,27 @@ Deno.serve(async (req) => {
       inst.enviados_hoje = 0; inst.ultimo_reset = today;
     }
 
-    // Cota efetiva = min(tier_diario, cota_da_fase)
-    const cotasFase: Record<string, number> = {
-      fase1: cfg?.cota_fase1 ?? 20,
-      fase2: cfg?.cota_fase2 ?? 50,
-      fase3: cfg?.cota_fase3 ?? 150,
-      fase4: cfg?.cota_fase4 ?? 400,
-      livre: 999999,
-    };
-    const cotaFaseAtual = cotasFase[inst.fase_rampup] ?? 0;
-    const cotaEfetiva = Math.min(cotaFaseAtual, inst.tier_diario || 250);
-    if (cotaEfetiva === 0) {
-      return new Response(JSON.stringify({ success: false, error: 'Instância ainda aguardando templates (fase de ramp-up não iniciada)', tier_full: true, instancia_id }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    if ((inst.enviados_hoje || 0) >= cotaEfetiva) {
-      return new Response(JSON.stringify({ success: false, error: `Cota da fase (${inst.fase_rampup}: ${cotaEfetiva}/dia) atingida`, tier_full: true, instancia_id }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Cota efetiva = min(tier_diario, cota_da_fase) — ignorado em modo teste
+    if (!isTeste) {
+      const cotasFase: Record<string, number> = {
+        fase1: cfg?.cota_fase1 ?? 20,
+        fase2: cfg?.cota_fase2 ?? 50,
+        fase3: cfg?.cota_fase3 ?? 150,
+        fase4: cfg?.cota_fase4 ?? 400,
+        livre: 999999,
+      };
+      const cotaFaseAtual = cotasFase[inst.fase_rampup] ?? 0;
+      const cotaEfetiva = Math.min(cotaFaseAtual, inst.tier_diario || 250);
+      if (cotaEfetiva === 0) {
+        return new Response(JSON.stringify({ success: false, error: 'Instância ainda aguardando templates (fase de ramp-up não iniciada)', tier_full: true, instancia_id }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if ((inst.enviados_hoje || 0) >= cotaEfetiva) {
+        return new Response(JSON.stringify({ success: false, error: `Cota da fase (${inst.fase_rampup}: ${cotaEfetiva}/dia) atingida`, tier_full: true, instancia_id }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     try {
