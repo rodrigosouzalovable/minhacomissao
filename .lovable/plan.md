@@ -1,70 +1,40 @@
-## Problema
+## Objetivo
 
-O envio está travado em 20/dia por instância porque:
+Na tela de resultado da consulta de CPF (`src/pages/ConsultaResultado.tsx`), o cliente precisa ver logo de cara **as duas propostas (à vista e parcelada)** antes de qualquer clique. Só depois de escolher uma das opções o botão principal de "Negociar via WhatsApp" fica ativo. Também será adicionado um botão secundário de "Fazer contraproposta".
 
-- `get_effective_daily_quota` retorna `min(fase_quota, tier_quota)`, e em `fase1` (instância com <=3 dias de idade) `fase_quota = 20`.
-- Todas as instâncias hoje já bateram 20 envios, então `pick-meta-instance` responde `sem_disponivel` e o job encerra sem enviar.
-- Existe também um segundo bloqueio dentro de `send-whatsapp-meta` usando `cotasFase[inst.fase_rampup]`.
+## Mudanças na tela principal do resultado
 
-Você quer controlar o volume manualmente pelo delay/planilha, sem que o sistema aplique cota diária automática.
+Hoje, o card inferior mostra apenas o valor à vista e um botão "NEGOCIAR AGORA COM DESCONTO", que abre um fluxo completo de montagem de proposta (com data, parcelas, entrada etc.) só depois do clique.
 
-## Mudança
+Novo comportamento:
 
-Remover completamente a cota de ramp-up do fluxo de envio em massa Meta, mantendo apenas os bloqueios de segurança reais.
+1. **Substituir o bloco "Mas você pode pagar à vista por apenas…"** por dois cards de escolha lado a lado (reutilizando o `DiscountTierSelector` já existente, que já mostra:
+   - À vista: valor com desconto + % OFF + economia
+   - 2 a 24x: valor com desconto + % OFF + economia
+   
+   O componente já trata bloqueios por valor mínimo de parcela, então é só posicioná-lo no card principal.
 
-### 1. `pick-meta-instance`
+2. **CTA principal desabilitado até a escolha:**
+   - Sem seleção → botão "Escolha uma opção acima" (cinza, disabled).
+   - Com "À vista" selecionado → "QUITAR À VISTA NO WHATSAPP" (verde, habilitado).
+   - Com "Parcelado" selecionado → "PARCELAR NO WHATSAPP" (verde, habilitado).
+   - Ao clicar, abre o WhatsApp direto com a mensagem já usada hoje (nome, CPF, contratos, valor com desconto, modalidade escolhida). Pula todo o fluxo antigo de "monte sua proposta / confirmar proposta".
 
-- Remover `if (fase === 'aguardando') continue`.
-- Remover cálculo de `cotaFase` e o `if (uso >= cota) continue`.
-- Manter:
-  - `estado_pool = 'ativo'`
-  - `pausa_automatica_ate`
-  - qualidade `RED/YELLOW` bloqueia (`pesoQualidade = 0`)
-  - bloqueio de domingo e horário 08–20h BRT
+3. **Botão "Fazer contraproposta":**
+   - Aparece logo abaixo do CTA principal, sempre visível (independe da escolha).
+   - Estilo secundário/outline para não competir com o verde principal.
+   - Link para: `https://wa.me/${PHONE}?text=Olá, quero negociar meu débito e tenho uma contraproposta.` (texto exato pedido, sem variáveis adicionais).
 
-### 2. `send-whatsapp-meta`
+4. **Se já existe acordo ativo:** manter o comportamento atual (botão cinza "NEGOCIAÇÃO EM ANDAMENTO"), sem seletor nem contraproposta.
 
-- Remover o bloco `cotaFase` / `tier_full` por fase (linhas ~304–324).
-- Manter:
-  - `estado_pool` diferente de ativo → `pool_blocked`
-  - `pausa_automatica_ate` no futuro → `pool_paused`
-  - domingo / fora do horário → `blocked`
-  - contador `enviados_hoje` continua sendo incrementado só para telemetria
+## Escopo técnico (para referência)
 
-### 3. `envio-meta-massa-iniciar` + `envio-meta-massa-tick`
+Arquivo único: `src/pages/ConsultaResultado.tsx`.
 
-Sem alteração de regra — já foram ajustados para:
+- Adicionar estado local `faixaEscolhida: 'avista' | 'parcelado' | undefined` no card principal (independente do estado `negociacao` usado no fluxo antigo).
+- Renderizar `<DiscountTierSelector selected={faixaEscolhida} onSelect={setFaixaEscolhida} valorTotal={valorTotal} diasAtraso={diasAtraso} />` dentro do card de valor total.
+- Botão principal: disabled quando `!faixaEscolhida`; onClick monta a mensagem no mesmo padrão do fluxo atual (usando `getDesconto`, `formatCurrency`, contratos, nome, CPF) e faz `window.open(wa.me/...)`.
+- Botão contraproposta: link `wa.me/${PHONE}` com texto fixo "Olá, quero negociar meu débito e tenho uma contraproposta.".
+- Remover (ou manter escondido) o fluxo antigo de "Monte sua proposta / Confirmar proposta" para não duplicar a experiência — não é mais necessário porque a escolha e o envio agora acontecem direto no card principal. Se preferir preservar o código, envolvo em um flag e mantenho off.
 
-- disparar o primeiro envio na hora ao clicar em `Disparar`
-- respeitar o delay 5–10s entre envios
-- encerrar com motivo real caso todas as instâncias estejam pausadas/qualidade ruim/fora do horário
-
-Como as cotas caem, o `sem_disponivel` só vai aparecer nos casos legítimos (pausa/qualidade/horário).
-
-## O que continua bloqueando (intencional)
-
-- Domingo
-- Fora do horário 08–20h BRT
-- Instância com qualidade RED/YELLOW
-- Instância em pausa automática (após incidente)
-- Instância inativa no pool
-
-Esses continuam porque são proteções anti-ban da API Oficial Meta, não limites de volume.
-
-## Aviso importante sobre custo e risco
-
-Remover a cota de ramp-up significa:
-
-- O sistema não vai mais frear você em 20/50/150/400 mensagens por número por dia.
-- Você poderá enviar até o limite real que a Meta impõe por chip (250, 1K, 10K, 100K, Unlimited).
-- Custo de envio Meta escala junto — cada template disparado é cobrado pela Meta.
-- Chips novos (<7 dias) ficam mais expostos a `Quality Rating` cair para YELLOW/RED se receberem volume alto sem opt-in.
-
-Recomendo manter a checagem de saúde diária ligada para reagir rápido caso alguma instância caia de qualidade.
-
-## Validação depois da implementação
-
-1. Rodar um novo disparo com o mesmo template e mesmos números para confirmar que `pick-meta-instance` retorna `success` mesmo com `enviados_hoje = 20`.
-2. Verificar que a primeira mensagem sai em menos de 10s após o clique em `Disparar`.
-3. Confirmar que o contador `Próximo envio em Xs` mostra entre 5s e 10s.
-4. Confirmar no log de `meta_whatsapp_envios_log` que as mensagens estão sendo enviadas.
+Sem mudanças em backend, edge functions, banco ou regras de desconto (`src/lib/descontoPortal.ts` continua sendo a fonte).
