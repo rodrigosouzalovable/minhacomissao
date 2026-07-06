@@ -1041,11 +1041,13 @@ export default function EnvioMeta() {
               disabled={enviando || validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
               size="lg"
               variant="secondary"
+              className="border-2 border-amber-500 bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 dark:border-amber-400 shadow-sm"
               title="Envia 1 mensagem para o primeiro destinatário via a primeira instância marcada, ignorando trava de ramp-up/horário. Útil para validar template e imagem antes do disparo em massa."
             >
               {enviandoTeste ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
               {enviandoTeste ? "Enviando teste..." : "Enviar teste (1º número)"}
             </Button>
+
             {enviando && (
               <>
                 <Button type="button" variant="secondary" size="lg" onClick={togglePausa}>
