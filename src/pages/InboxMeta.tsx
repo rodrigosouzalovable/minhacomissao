@@ -316,11 +316,51 @@ export default function InboxMeta() {
   }, [contatoAtivo, temMaisAnteriores, carregandoAnteriores, carregandoMsgs, fetchMensagens]);
 
   // ============== Filtros derivados ==============
+  const norm = (s: string) =>
+    (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const suffix8 = (tel: string) => (tel || '').replace(/\D/g, '').slice(-8);
+
+  // Carrega nomes do CRM (devedores) para contatos que não têm nome salvo
+  useEffect(() => {
+    (async () => {
+      const semNome = contatos.filter(c => !c.nome && c.telefone);
+      if (semNome.length === 0) return;
+      const suffixes = Array.from(new Set(semNome.map(c => suffix8(c.telefone)).filter(Boolean)));
+      const faltando = suffixes.filter(s => !(s in nomesCRM));
+      if (faltando.length === 0) return;
+      const ors = faltando.map(s => `telefone.ilike.%${s}`).join(',');
+      const { data } = await supabase.from('devedores').select('nome, telefone').or(ors).limit(2000);
+      if (!data) return;
+      setNomesCRM(prev => {
+        const next = { ...prev };
+        for (const s of faltando) if (!(s in next)) next[s] = '';
+        for (const row of data as any[]) {
+          const sfx = suffix8(row.telefone || '');
+          if (sfx && row.nome && !next[sfx]) next[sfx] = row.nome;
+        }
+        return next;
+      });
+    })();
+  }, [contatos]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const contatosFiltrados = useMemo(() => {
-    const b = busca.trim().toLowerCase();
+    const bRaw = busca.trim();
+    const b = norm(bRaw);
+    const bDigits = bRaw.replace(/\D/g, '');
+    const bTemDigito = /\d/.test(bRaw);
+    const bSuffix = bDigits.slice(-8);
     return contatos
       .filter(c => {
-        if (b && !((c.nome || '').toLowerCase().includes(b) || c.telefone.includes(b.replace(/\D/g, '')))) return false;
+        if (b) {
+          const nomeContato = norm(c.nome || '');
+          const nomeCRM = norm(nomesCRM[suffix8(c.telefone)] || '');
+          const telDigits = (c.telefone || '').replace(/\D/g, '');
+          const telSfx = telDigits.slice(-8);
+          const matchTexto = nomeContato.includes(b) || (nomeCRM && nomeCRM.includes(b));
+          const matchTel = bTemDigito && bDigits.length > 0 &&
+            (telDigits.includes(bDigits) || (bSuffix.length >= 4 && telSfx.includes(bSuffix)));
+          if (!matchTexto && !matchTel) return false;
+        }
         if (filtroEtiqueta) {
           const ids = contatoEtiquetas[c.id] || [];
           if (!ids.includes(filtroEtiqueta)) return false;
@@ -336,7 +376,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM]);
 
   const janelaInfo = useMemo(() => {
     if (!contatoAtivo?.ultima_msg_entrada_em) return { aberta: false, expiraEm: null as string | null };
