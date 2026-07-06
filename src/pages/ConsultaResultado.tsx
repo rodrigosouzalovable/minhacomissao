@@ -584,6 +584,7 @@ export default function ConsultaResultado() {
                             selected={negociacao.descontoFaixa}
                             onSelect={handleSelectFaixa}
                             valorTotal={valorTotal}
+                            diasAtraso={diasAtraso}
                           />
 
                           {negociacao.descontoFaixa && (
