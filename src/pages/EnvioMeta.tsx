@@ -998,9 +998,19 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={enviando || validando || instanciasIncompatíveis.length > 0} size="lg">
+            <Button onClick={enviar} disabled={enviando || validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
               {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
               {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
+            </Button>
+            <Button
+              onClick={enviarTeste}
+              disabled={enviando || validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
+              size="lg"
+              variant="secondary"
+              title="Envia 1 mensagem para o primeiro destinatário via a primeira instância marcada, ignorando trava de ramp-up/horário. Útil para validar template e imagem antes do disparo em massa."
+            >
+              {enviandoTeste ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
+              {enviandoTeste ? "Enviando teste..." : "Enviar teste (1º número)"}
             </Button>
             {enviando && (
               <>
