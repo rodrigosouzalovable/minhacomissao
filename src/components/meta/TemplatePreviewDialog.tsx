@@ -69,18 +69,37 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
   const headerFormat = String(header?.format || template.variaveis?._header_format || "").toUpperCase();
   const headerText = header?.format === "TEXT" ? header?.text : null;
 
+  const persistImagemEmTodasInstancias = async (url: string) => {
+    // Busca todos os registros do mesmo template (uma linha por instância)
+    // e atualiza cada um preservando as variáveis existentes.
+    const { data: rows, error: selErr } = await supabase
+      .from("meta_whatsapp_templates")
+      .select("id, variaveis")
+      .eq("nome_template", template.nome_template)
+      .eq("idioma", template.idioma);
+    if (selErr) throw selErr;
+    const targets = rows && rows.length > 0 ? rows : [{ id: template.id, variaveis: template.variaveis }];
+    for (const r of targets) {
+      const newVars = { ...((r.variaveis as any) || {}), _header_image_url: url };
+      const { error: upErr } = await supabase
+        .from("meta_whatsapp_templates")
+        .update({ variaveis: newVars })
+        .eq("id", r.id);
+      if (upErr) throw upErr;
+    }
+    return targets.length;
+  };
+
   const salvarImagem = async () => {
     setSaving(true);
-    const newVars = { ...(template.variaveis || {}), _header_image_url: imageUrl.trim() };
-    const { error } = await supabase
-      .from("meta_whatsapp_templates")
-      .update({ variaveis: newVars })
-      .eq("id", template.id);
-    setSaving(false);
-    if (error) toast.error("Erro: " + error.message);
-    else {
-      toast.success("Imagem do header salva");
+    try {
+      const count = await persistImagemEmTodasInstancias(imageUrl.trim());
+      toast.success(`Imagem salva em ${count} instância(s)`);
       onSaved?.();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "falhou"));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -106,13 +125,8 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
       const { data: pub } = supabase.storage.from("inbox-media").getPublicUrl(path);
       const url = pub.publicUrl;
       setImageUrl(url);
-      const newVars = { ...(template.variaveis || {}), _header_image_url: url };
-      const { error: dbErr } = await supabase
-        .from("meta_whatsapp_templates")
-        .update({ variaveis: newVars })
-        .eq("id", template.id);
-      if (dbErr) throw dbErr;
-      toast.success("Imagem enviada e salva");
+      const count = await persistImagemEmTodasInstancias(url);
+      toast.success(`Imagem enviada e salva em ${count} instância(s)`);
       onSaved?.();
     } catch (err: any) {
       toast.error("Erro ao enviar: " + (err?.message || "falhou"));
