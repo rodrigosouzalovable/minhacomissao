@@ -42,6 +42,31 @@ export function MetaAtendenteNotifier() {
     return () => { cancelado = true; };
   }, [user]);
 
+  // Destrava o áudio no primeiro gesto do usuário e toca 1x um som de teste
+  // (uma vez por navegador). Necessário porque browsers bloqueiam autoplay
+  // até o primeiro clique/tecla.
+  useEffect(() => {
+    if (!user) return;
+    const TEST_KEY = 'meta-atendente-som-teste-v1';
+    const unlock = async () => {
+      try {
+        const a = new Audio(successSound);
+        const jaTestou = !!localStorage.getItem(TEST_KEY);
+        a.volume = jaTestou ? 0 : 0.35;
+        await a.play();
+        if (!jaTestou) localStorage.setItem(TEST_KEY, String(Date.now()));
+      } catch {}
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -49,7 +74,7 @@ export function MetaAtendenteNotifier() {
       .channel('meta-atendente-notifier')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'meta_whatsapp_mensagens', filter: 'direcao=eq.recebida' },
+        { event: 'INSERT', schema: 'public', table: 'meta_whatsapp_mensagens', filter: 'direcao=eq.entrada' },
         async (payload) => {
           const etiquetaId = etiquetaIdRef.current;
           if (!etiquetaId) return;
