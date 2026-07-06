@@ -300,28 +300,8 @@ Deno.serve(async (req) => {
       inst.enviados_hoje = 0; inst.ultimo_reset = today;
     }
 
-    // Cota efetiva = min(tier_diario, cota_da_fase) — ignorado em modo teste
-    if (!isTeste) {
-      const cotasFase: Record<string, number> = {
-        fase1: cfg?.cota_fase1 ?? 20,
-        fase2: cfg?.cota_fase2 ?? 50,
-        fase3: cfg?.cota_fase3 ?? 150,
-        fase4: cfg?.cota_fase4 ?? 400,
-        livre: 999999,
-      };
-      const cotaFaseAtual = cotasFase[inst.fase_rampup] ?? 0;
-      const cotaEfetiva = Math.min(cotaFaseAtual, inst.tier_diario || 250);
-      if (cotaEfetiva === 0) {
-        return new Response(JSON.stringify({ success: false, error: 'Instância ainda aguardando templates (fase de ramp-up não iniciada)', tier_full: true, instancia_id }), {
-          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if ((inst.enviados_hoje || 0) >= cotaEfetiva) {
-        return new Response(JSON.stringify({ success: false, error: `Cota da fase (${inst.fase_rampup}: ${cotaEfetiva}/dia) atingida`, tier_full: true, instancia_id }), {
-          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    }
+    // Cotas de ramp-up removidas: o usuário controla volume via delay e planilha.
+    // Bloqueios reais (pool/pausa/qualidade/horário/domingo) permanecem acima.
 
     try {
       const { waId, formatUsed } = await sendOne(inst, template, cliente);

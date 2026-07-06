@@ -1,47 +1,70 @@
 ## Problema
 
-Ao clicar em "Iniciar envio" com delay 5–10s, a UI mostra "Próximo envio em ~38–60s" e o primeiro disparo demora. A causa é dupla:
+O envio está travado em 20/dia por instância porque:
 
-1. O `iniciar` grava `proximo_em = agora` e faz um `self-invoke` fire-and-forget do `tick`. Como o boot da edge function não é instantâneo (frio + auth + query), a UI já monta o card com o `proximo_em` atrasando poucos segundos, e qualquer bloqueio interno (ex.: `pick-meta-instance` sem instância elegível no primeiro segundo, `send-whatsapp-meta` retornando `tier_full`/`pool_blocked`) empurra `proximo_em` para **+30s ou +60s fixos**, ignorando o delay 5–10s do usuário.
-2. Os blocos "moles" (`sem_disponivel`, `tier_full`, `pool_blocked`) no `tick` estão hardcoded em `60_000` / `30_000` ms. Isso é o que aparece no contador.
+- `get_effective_daily_quota` retorna `min(fase_quota, tier_quota)`, e em `fase1` (instância com <=3 dias de idade) `fase_quota = 20`.
+- Todas as instâncias hoje já bateram 20 envios, então `pick-meta-instance` responde `sem_disponivel` e o job encerra sem enviar.
+- Existe também um segundo bloqueio dentro de `send-whatsapp-meta` usando `cotasFase[inst.fase_rampup]`.
 
-Blocos "duros" reais (domingo, fora do horário permitido) continuam com 10min — isso é intencional e não muda.
+Você quer controlar o volume manualmente pelo delay/planilha, sem que o sistema aplique cota diária automática.
 
-## Objetivo
+## Mudança
 
-- Ao clicar Iniciar, começar a enviar **imediatamente**, sem 60s de espera visual.
-- Retries por indisponibilidade momentânea devem respeitar o `min_seg`/`max_seg` configurado (5–10s no exemplo), não 30/60s fixos.
+Remover completamente a cota de ramp-up do fluxo de envio em massa Meta, mantendo apenas os bloqueios de segurança reais.
 
-## Mudanças
+### 1. `pick-meta-instance`
 
-### 1. `supabase/functions/envio-meta-massa-iniciar/index.ts`
-- Após inserir job + itens, **executar o primeiro item de forma síncrona** antes de responder ao cliente, chamando internamente a mesma lógica do `tick` para 1 item. Assim, quando a UI recebe a resposta e monta o card, o `enviados` já é `1` (ou o item ficou `erro` com motivo real) e o `proximo_em` já reflete um delay 5–10s real.
-- Depois disparar o self-invoke para continuar o loop.
+- Remover `if (fase === 'aguardando') continue`.
+- Remover cálculo de `cotaFase` e o `if (uso >= cota) continue`.
+- Manter:
+  - `estado_pool = 'ativo'`
+  - `pausa_automatica_ate`
+  - qualidade `RED/YELLOW` bloqueia (`pesoQualidade = 0`)
+  - bloqueio de domingo e horário 08–20h BRT
 
-Alternativa mais simples (preferida): apenas aguardar a primeira chamada de `tick` (com `await fetch(...tick, { job_id })`) por até ~8s antes de retornar. Assim o front só recebe `success` depois que 1 item já tentou enviar.
+### 2. `send-whatsapp-meta`
 
-### 2. `supabase/functions/envio-meta-massa-tick/index.ts`
-Substituir os `waitMs` fixos por um helper `delayUsuario(job)` que sorteia entre `job.min_seg` e `job.max_seg` (segundos) quando o motivo for **soft**:
+- Remover o bloco `cotaFase` / `tier_full` por fase (linhas ~304–324).
+- Manter:
+  - `estado_pool` diferente de ativo → `pool_blocked`
+  - `pausa_automatica_ate` no futuro → `pool_paused`
+  - domingo / fora do horário → `blocked`
+  - contador `enviados_hoje` continua sendo incrementado só para telemetria
 
-- `pick` → `sem_disponivel`: usar `delayUsuario` (antes: 60s).
-- `pick` → outros erros genéricos: usar `delayUsuario` (antes: 30s).
-- `send` → `tier_full` / `pool_blocked` / `pool_paused`: usar `delayUsuario` (antes: 30s). O item volta a `pendente` como já faz.
-- `send` → `blocked=domingo|horario`: **manter 10min** (bloqueio duro real).
-- `pick` → `blocked=domingo|horario`: **manter 10min**.
+### 3. `envio-meta-massa-iniciar` + `envio-meta-massa-tick`
 
-Isso garante que o "Próximo envio em Xs" mostre sempre 5–10s (ou o intervalo configurado), exceto nos dois bloqueios duros legítimos.
+Sem alteração de regra — já foram ajustados para:
 
-### 3. UI — `src/pages/EnvioMeta.tsx` (opcional, cosmético)
-Quando `job.status_motivo` estiver preenchido (ex.: `sem_disponivel`, `tier_full`), mostrar uma linha discreta ao lado de "Próximo envio em Xs" com o motivo, para o usuário entender que o retry curto é intencional. Nenhuma mudança de layout maior.
+- disparar o primeiro envio na hora ao clicar em `Disparar`
+- respeitar o delay 5–10s entre envios
+- encerrar com motivo real caso todas as instâncias estejam pausadas/qualidade ruim/fora do horário
 
-## O que não muda
+Como as cotas caem, o `sem_disponivel` só vai aparecer nos casos legítimos (pausa/qualidade/horário).
 
-- Domingo e fora do horário permitido continuam com espera de 10 minutos (comportamento correto de segurança).
-- Cron de 10s como safety-net permanece.
-- Frontend do `EnvioMetaSendingContext` não muda (já lê `proximo_em` corretamente).
-- Nada em `pick-meta-instance` / `send-whatsapp-meta`.
+## O que continua bloqueando (intencional)
 
-## Resultado esperado
+- Domingo
+- Fora do horário 08–20h BRT
+- Instância com qualidade RED/YELLOW
+- Instância em pausa automática (após incidente)
+- Instância inativa no pool
 
-- Clicar em Iniciar → em ≤8s o primeiro envio acontece (ou falha com motivo real) → contador passa a mostrar 5–10s entre disparos, respeitando o delay configurado.
-- Retries por instância momentaneamente indisponível também respeitam 5–10s em vez de 30–60s.
+Esses continuam porque são proteções anti-ban da API Oficial Meta, não limites de volume.
+
+## Aviso importante sobre custo e risco
+
+Remover a cota de ramp-up significa:
+
+- O sistema não vai mais frear você em 20/50/150/400 mensagens por número por dia.
+- Você poderá enviar até o limite real que a Meta impõe por chip (250, 1K, 10K, 100K, Unlimited).
+- Custo de envio Meta escala junto — cada template disparado é cobrado pela Meta.
+- Chips novos (<7 dias) ficam mais expostos a `Quality Rating` cair para YELLOW/RED se receberem volume alto sem opt-in.
+
+Recomendo manter a checagem de saúde diária ligada para reagir rápido caso alguma instância caia de qualidade.
+
+## Validação depois da implementação
+
+1. Rodar um novo disparo com o mesmo template e mesmos números para confirmar que `pick-meta-instance` retorna `success` mesmo com `enviados_hoje = 20`.
+2. Verificar que a primeira mensagem sai em menos de 10s após o clique em `Disparar`.
+3. Confirmar que o contador `Próximo envio em Xs` mostra entre 5s e 10s.
+4. Confirmar no log de `meta_whatsapp_envios_log` que as mensagens estão sendo enviadas.

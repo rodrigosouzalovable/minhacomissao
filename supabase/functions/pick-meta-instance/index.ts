@@ -97,29 +97,23 @@ Deno.serve(async (req) => {
       if (inst.estado_pool && inst.estado_pool !== 'ativo') continue;
       if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) continue;
 
-      // Reset diário
+      // Reset diário (telemetria — não bloqueia envio)
       let uso = inst.enviados_hoje || 0;
       if (inst.ultimo_reset !== hoje) uso = 0;
 
-      // Fase
       const diasAtivo = inst.data_ativacao_api
         ? Math.floor((Date.now() - new Date(inst.data_ativacao_api).getTime()) / 86400000) + 1
         : 0;
-      const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'aguardando';
-      if (fase === 'aguardando') continue;
+      const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'livre';
 
-      // Cota efetiva via RPC (considera fase + tier manual/auto)
-      const { data: cotaRpc } = await supabase.rpc('get_effective_daily_quota', { _instance_id: inst.id });
-      const cota = typeof cotaRpc === 'number' && cotaRpc > 0
-        ? cotaRpc
-        : Math.min(cotaFase(fase, cfg), inst.tier_diario || 999999);
-      if (uso >= cota) continue;
-
+      // Cotas de ramp-up removidas: usuário controla volume via delay + planilha.
+      // Mantém bloqueios anti-ban reais (pool, pausa, qualidade, horário).
       const q = pesoQualidade(inst.saude_quality);
       if (q === 0) continue;
       const tierEfetivo = inst.messaging_limit_manual || inst.saude_tier;
-      const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * (1 - uso / Math.max(1, cota));
-      candidates.push({ inst, score, fase, cota, uso, diasAtivo });
+      // Score prioriza chips com menos uso hoje para distribuição no round-robin.
+      const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * (1 / (1 + uso));
+      candidates.push({ inst, score, fase, cota: 999999, uso, diasAtivo });
     }
 
     if (!candidates.length) {
