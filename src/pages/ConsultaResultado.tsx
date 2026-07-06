@@ -122,32 +122,13 @@ export default function ConsultaResultado() {
     fetchDebitos();
   }, [cpf]);
 
-  // Separate APORTE and INADIMPLENTES debts
-  const debitosAporte = debitos.filter(d => (d.credor || '').toLowerCase().includes('aporte'));
-  const debitosInadimplentes = debitos.filter(d => !(d.credor || '').toLowerCase().includes('aporte'));
-  const hasAporte = debitosAporte.length > 0;
-  const hasInadimplentes = debitosInadimplentes.length > 0;
+  // Dias em atraso a partir da parcela mais antiga
+  const diasAtraso = getDiasAtraso(debitos);
+  const descontoMaximo = getDescontoMaximoPortal(diasAtraso);
 
-  // Calculate effective value per debt (with interest for APORTE)
-  const getValorEfetivo = (d: Debito) => {
-    if (!(d.credor || '').toLowerCase().includes('aporte')) return d.valor_original;
-    if (!d.data_vencimento) return d.valor_original;
-    const vencimento = new Date(d.data_vencimento + 'T00:00:00');
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const diffMs = hoje.getTime() - vencimento.getTime();
-    const diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-    if (diasAtraso === 0) return d.valor_original;
-    return calcularJurosAporte(d.valor_original, diasAtraso);
-  };
-
-  // Total for INADIMPLENTES (eligible for discount)
-  const valorTotalInadimplentes = debitosInadimplentes.reduce((acc, d) => acc + d.valor_original, 0);
-  // Total for APORTE (with interest, no discount)
-  const valorTotalAporte = debitosAporte.reduce((acc, d) => acc + getValorEfetivo(d), 0);
-  // Grand total
-  const valorTotal = valorTotalInadimplentes + valorTotalAporte;
-  const valorAvista = valorTotalInadimplentes * 0.5 + valorTotalAporte;
+  // Valor total: soma direta dos valores originais (sem juros)
+  const valorTotal = debitos.reduce((acc, d) => acc + Number(d.valor_original || 0), 0);
+  const valorAvista = valorTotal * (1 - descontoMaximo / 100);
 
   const toggleNegociacao = () => {
     setNegociacao(prev =>
@@ -163,9 +144,8 @@ export default function ConsultaResultado() {
 
   const getValorComDesconto = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return valorTotal;
-    const desconto = getDesconto(neg.descontoFaixa);
-    // Discount applies only to INADIMPLENTES; APORTE pays full + interest
-    return valorTotalInadimplentes * (1 - desconto / 100) + valorTotalAporte;
+    const desconto = getDesconto(neg.descontoFaixa, diasAtraso);
+    return valorTotal * (1 - desconto / 100);
   };
 
   const getValorParcela = (neg: NegociacaoState) => {
