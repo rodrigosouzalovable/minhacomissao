@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ArrowLeft, MessageCircle, FileText, Phone, AlertCircle, CalendarIcon, Check, Shield, Lock, Clock, ChevronDown, TrendingDown, Sparkles } from 'lucide-react';
 import DiscountTierSelector, { type DescontoFaixa, getDesconto, getMinParcelas, getMaxParcelasFaixa } from '@/components/negociacao/DiscountTierSelector';
 import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
-import { calcularJurosAporte } from '@/lib/comissao';
+import { getDiasAtraso, getDescontoMaximoPortal } from '@/lib/descontoPortal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -122,32 +122,13 @@ export default function ConsultaResultado() {
     fetchDebitos();
   }, [cpf]);
 
-  // Separate APORTE and INADIMPLENTES debts
-  const debitosAporte = debitos.filter(d => (d.credor || '').toLowerCase().includes('aporte'));
-  const debitosInadimplentes = debitos.filter(d => !(d.credor || '').toLowerCase().includes('aporte'));
-  const hasAporte = debitosAporte.length > 0;
-  const hasInadimplentes = debitosInadimplentes.length > 0;
+  // Dias em atraso a partir da parcela mais antiga
+  const diasAtraso = getDiasAtraso(debitos);
+  const descontoMaximo = getDescontoMaximoPortal(diasAtraso);
 
-  // Calculate effective value per debt (with interest for APORTE)
-  const getValorEfetivo = (d: Debito) => {
-    if (!(d.credor || '').toLowerCase().includes('aporte')) return d.valor_original;
-    if (!d.data_vencimento) return d.valor_original;
-    const vencimento = new Date(d.data_vencimento + 'T00:00:00');
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const diffMs = hoje.getTime() - vencimento.getTime();
-    const diasAtraso = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-    if (diasAtraso === 0) return d.valor_original;
-    return calcularJurosAporte(d.valor_original, diasAtraso);
-  };
-
-  // Total for INADIMPLENTES (eligible for discount)
-  const valorTotalInadimplentes = debitosInadimplentes.reduce((acc, d) => acc + d.valor_original, 0);
-  // Total for APORTE (with interest, no discount)
-  const valorTotalAporte = debitosAporte.reduce((acc, d) => acc + getValorEfetivo(d), 0);
-  // Grand total
-  const valorTotal = valorTotalInadimplentes + valorTotalAporte;
-  const valorAvista = valorTotalInadimplentes * 0.5 + valorTotalAporte;
+  // Valor total: soma direta dos valores originais (sem juros)
+  const valorTotal = debitos.reduce((acc, d) => acc + Number(d.valor_original || 0), 0);
+  const valorAvista = valorTotal * (1 - descontoMaximo / 100);
 
   const toggleNegociacao = () => {
     setNegociacao(prev =>
@@ -163,9 +144,8 @@ export default function ConsultaResultado() {
 
   const getValorComDesconto = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return valorTotal;
-    const desconto = getDesconto(neg.descontoFaixa);
-    // Discount applies only to INADIMPLENTES; APORTE pays full + interest
-    return valorTotalInadimplentes * (1 - desconto / 100) + valorTotalAporte;
+    const desconto = getDesconto(neg.descontoFaixa, diasAtraso);
+    return valorTotal * (1 - desconto / 100);
   };
 
   const getValorParcela = (neg: NegociacaoState) => {
@@ -203,7 +183,7 @@ export default function ConsultaResultado() {
   const gerarWhatsappLink = (neg: NegociacaoState) => {
     const valorParcela = getValorParcela(neg);
     const valorDesc = getValorComDesconto(neg);
-    const desconto = neg.descontoFaixa ? getDesconto(neg.descontoFaixa) : 0;
+    const desconto = neg.descontoFaixa ? getDesconto(neg.descontoFaixa, diasAtraso) : 0;
     const dataFormatada = neg.dataPrimeiroPagamento
       ? format(neg.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
       : '';
@@ -471,9 +451,21 @@ export default function ConsultaResultado() {
               ) : (
                 /* === ORIGINAL DEBTS VIEW === */
                 <>
-                  <p className="mt-2 text-base mb-6" style={{ color: '#ffffffcc' }}>
-                    Aproveite esta oportunidade única para regularizar sua situação com <strong style={{ color: '#00a86b' }}>até 50% de desconto</strong>!
+                  <p className="mt-2 text-base mb-3" style={{ color: '#ffffffcc' }}>
+                    Aproveite esta oportunidade única para regularizar sua situação com <strong style={{ color: '#00a86b' }}>até {descontoMaximo}% de desconto</strong>!
                   </p>
+
+                  {diasAtraso > 0 && (
+                    <div
+                      className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full"
+                      style={{ background: '#ff6b6b18', border: '1px solid #ff6b6b44' }}
+                    >
+                      <Clock className="h-3.5 w-3.5" style={{ color: '#ff6b6b' }} />
+                      <span className="text-xs font-bold" style={{ color: '#ff6b6b' }}>
+                        {diasAtraso} {diasAtraso === 1 ? 'dia' : 'dias'} em atraso com a loja
+                      </span>
+                    </div>
+                  )}
 
                   {/* Cards de débito colapsáveis */}
                   <div className="space-y-2 mb-6">
@@ -482,8 +474,6 @@ export default function ConsultaResultado() {
                     </p>
                     {debitosVisiveis.map((debito, index) => {
                       const isAporte = (debito.credor || '').toLowerCase().includes('aporte');
-                      const valorEfetivo = getValorEfetivo(debito);
-                      const temJuros = isAporte && valorEfetivo > debito.valor_original;
                       return (
                       <Card key={debito.id} className="border-0" style={{ background: '#ffffff0a', borderLeft: isDebitoVencido(debito) ? '3px solid #ff6b6b' : isAporte ? '3px solid #f59e0b' : '3px solid #ffffff15' }}>
                         <CardContent className="p-4 flex items-center justify-between">
@@ -518,13 +508,8 @@ export default function ConsultaResultado() {
                           </div>
                           <div className="text-right">
                             <p className="text-lg font-black" style={{ color: isAporte ? '#f59e0b' : '#ff6b6b' }}>
-                              {formatCurrency(valorEfetivo)}
+                              {formatCurrency(debito.valor_original)}
                             </p>
-                            {temJuros && (
-                              <p className="text-[10px]" style={{ color: '#ffffff66' }}>
-                                Original: {formatCurrency(debito.valor_original)}
-                              </p>
-                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -552,27 +537,28 @@ export default function ConsultaResultado() {
                         {formatCurrency(valorTotal)}
                       </p>
 
-                      {/* Destaque à vista */}
-                      <div className="rounded-xl p-4 mt-3" style={{ background: 'linear-gradient(135deg, #00a86b15, #00cc8815)', border: '1px solid #00a86b33' }}>
-                        <p className="text-sm mb-1" style={{ color: '#ffffffaa' }}>
-                          Mas você pode pagar à vista por apenas:
-                        </p>
-                        <p className="text-3xl font-black" style={{ color: '#00ff88', animation: 'float 4s ease-in-out infinite' }}>
-                          {formatCurrency(valorAvista)}
-                        </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
-                          <span className="text-sm font-bold" style={{ color: '#00a86b' }}>
-                            Economize {formatCurrency(valorTotal - valorAvista)}
-                          </span>
-                          <span
-                            className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
-                            style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}
-                          >
-                            50% OFF
-                          </span>
+                      {descontoMaximo > 0 && (
+                        <div className="rounded-xl p-4 mt-3" style={{ background: 'linear-gradient(135deg, #00a86b15, #00cc8815)', border: '1px solid #00a86b33' }}>
+                          <p className="text-sm mb-1" style={{ color: '#ffffffaa' }}>
+                            Mas você pode pagar à vista por apenas:
+                          </p>
+                          <p className="text-3xl font-black" style={{ color: '#00ff88', animation: 'float 4s ease-in-out infinite' }}>
+                            {formatCurrency(valorAvista)}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <TrendingDown className="h-4 w-4" style={{ color: '#00a86b' }} />
+                            <span className="text-sm font-bold" style={{ color: '#00a86b' }}>
+                              Economize {formatCurrency(valorTotal - valorAvista)}
+                            </span>
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
+                              style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}
+                            >
+                              {descontoMaximo}% OFF
+                            </span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </CardHeader>
 
                     <CardContent>
@@ -611,6 +597,7 @@ export default function ConsultaResultado() {
                             selected={negociacao.descontoFaixa}
                             onSelect={handleSelectFaixa}
                             valorTotal={valorTotal}
+                            diasAtraso={diasAtraso}
                           />
 
                           {negociacao.descontoFaixa && (
@@ -633,7 +620,7 @@ export default function ConsultaResultado() {
                                   <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: '#00a86b22', border: '1px solid #00a86b44' }}>
                                     <TrendingDown className="h-3.5 w-3.5" style={{ color: '#00a86b' }} />
                                     <p className="text-xs font-bold" style={{ color: '#00a86b' }}>
-                                      Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto(negociacao.descontoFaixa)}%)
+                                      Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto(negociacao.descontoFaixa, diasAtraso)}%)
                                     </p>
                                   </div>
                                 </div>
@@ -730,7 +717,7 @@ export default function ConsultaResultado() {
                                     Resumo da negociação
                                   </p>
                               <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
-                                      Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                                      Desconto: {getDesconto(negociacao.descontoFaixa, diasAtraso)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
                                     </p>
                                   {negociacao.entrada > 0 && (
                                     <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
@@ -799,7 +786,7 @@ export default function ConsultaResultado() {
                             <p className="text-lg font-bold mb-3" style={{ color: '#00ff88' }}>✓ Proposta confirmada!</p>
                             {negociacao.descontoFaixa && (
                               <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
-                                Desconto: {getDesconto(negociacao.descontoFaixa)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                                Desconto: {getDesconto(negociacao.descontoFaixa, diasAtraso)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
                               </p>
                             )}
                             {negociacao.entrada > 0 && (
