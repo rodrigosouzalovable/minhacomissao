@@ -1,47 +1,42 @@
+## Causa raiz do erro
+
+O envio falha porque **todas as 16 instâncias Meta estão com `estado_pool = 'aguardando_templates'` e `fase_rampup = 'aguardando'`** — nenhuma foi promovida a "ativa" no pool ainda. A edge function `send-whatsapp-meta` tem duas travas que bloqueiam qualquer envio nesse estado:
+
+1. `if (inst.estado_pool !== 'ativo') → "Instância não está ativa no pool"`
+2. `cota da fase 'aguardando' = 0 → "Instância ainda aguardando templates"`
+
+Como toda instância é rejeitada, o loop do frontend remove uma a uma e no fim mostra o erro genérico "Falha ao enviar / Todas as instâncias atingiram o limite diário". Por isso o teste com o seu número (55 62 99167-2674) não passa.
+
+Essas travas foram criadas para proteger o ramp-up (evitar banimento/gasto Meta), mas hoje elas impedem até um simples envio de teste — que é exatamente o que você precisa fazer antes de disparar em massa.
+
 ## Plano
 
-### 1. Remover juros e mostrar apenas o valor original
-- Em `src/pages/ConsultaResultado.tsx`, remover o cálculo de juros para APORTE (`calcularJurosAporte` / `getValorEfetivo`) e passar a exibir e somar sempre `debito.valor_original`.
-- Remover a linha "Original: R$ …" abaixo do valor de cada parcela — vai existir apenas um valor por parcela, que é o original.
-- `valorTotal` passa a ser a soma simples de `valor_original` de todos os débitos (INADIMPLENTES + APORTE).
+### 1. Novo modo `envio_teste` na função `send-whatsapp-meta`
+- Aceitar um parâmetro opcional `modo_teste: true` no body.
+- Quando `true`, pular as verificações de: `estado_pool`, `fase_rampup / cota`, `bloquear_domingo` e `horario_inicio/fim`.
+- Manter as verificações que **não podem** ser puladas: template aprovado, guardrail anti-MARKETING, imagem de header configurada, pausa automática por saúde da instância, `ativo=true`.
+- Continuar gravando o envio no `meta_whatsapp_envios_log` marcando `template_nome` normal (comportamento inalterado).
 
-### 2. Calcular dias de atraso do cliente
-- Considerar dias de atraso = (hoje − menor `data_vencimento` entre todos os débitos em aberto do cliente).
-- Se todos os vencimentos forem futuros, tratar como 0 dias de atraso.
-- Exibir esse número no topo da tela, num badge próximo ao nome/CPF, ex.: `⏱ 187 dias em atraso com a loja`.
+### 2. Botão "Enviar teste" na página `Envio Meta`
+No card **3. Destinatários**, adicionar ao lado de "Iniciar envio":
+- Botão secundário **"Enviar teste para o 1º número"** (ícone `TestTube`).
+- Chama diretamente `send-whatsapp-meta` (sem passar pelo `pick-meta-instance` e sem o loop) usando:
+  - a **primeira instância marcada** no card 2 (independente do estado_pool),
+  - o **primeiro destinatário** da lista (no seu caso: `5562991672674, Rodrigo`),
+  - `modo_teste: true`.
+- Mostra toast com o resultado real da Meta (sucesso + `waId`, ou o erro exato retornado — ex.: "(#132000) parâmetro faltando", "(#131053) mídia inacessível", etc.), em vez do genérico "Falha".
 
-### 3. Novas faixas de desconto (por dias de atraso)
-Aplicar o desconto sobre o valor total (INADIMPLENTES + APORTE, sem distinção de carteira):
+### 3. Melhorar a mensagem de erro do envio em massa
+No `EnvioMetaSendingContext`, quando **todas** as instâncias forem removidas por `pool_blocked` / `tier_full`, mostrar toast explicativo:
+> "Nenhuma instância está ativa no pool ainda. Use 'Enviar teste' para validar o template ou ative as instâncias em Configurar Meta → Pool."
 
-```text
-Dias atraso     À vista   Parcelado
-1  – 200        10%       0%   (parcelado sem juros e sem desconto)
-201 – 300       20%       10%
-301 – 500       30%       20%
-501 – 10000     50%       30%
-```
+Em vez do atual "Todas as instâncias atingiram o limite diário", que é enganoso.
 
-- Criar util `src/lib/descontoPortal.ts` com:
-  - `getDiasAtraso(debitos)`
-  - `getDescontoPortal(diasAtraso, modalidade: 'avista' | 'parcelado')`
-- Ajustar `DiscountTierSelector` para receber `diasAtraso` e derivar dinamicamente:
-  - percentual à vista e parcelado
-  - `avistaValor` = `valorTotal * (1 - descontoAvista/100)`
-  - `parceladoValor` = `valorTotal * (1 - descontoParcelado/100)`
-  - Se `descontoParcelado === 0`, o card parcelado mostra "sem juros, sem desconto" e o selo "0% OFF" some (fica apenas "Parcele em até 24x sem juros").
-- Ajustar `getDesconto` / `getMinParcelas` / `getMaxParcelasFaixa` (ou substituir por props/derivados) para usar as novas faixas.
+## Fora do escopo
+- Não vou ativar automaticamente as 16 instâncias no pool nem forçar `data_ativacao_api`, porque isso libera envios em massa que ainda não passaram pelo ramp-up e pode gerar banimento/custo. A ativação continua sendo decisão sua no painel do Pool.
+- Sem mudanças no template `solicitacao_de_renegociacao` nem na imagem já salva (já corrigido na rodada anterior).
 
-### 4. Ajustes em `ConsultaResultado.tsx`
-- `getValorComDesconto`: aplica o desconto vigente sobre `valorTotal` (não mais só sobre INADIMPLENTES).
-- `valorAvista` do hero (o "até 50%") passa a mostrar o desconto real da faixa do cliente ("Aproveite até X% de desconto"), calculado a partir de `diasAtraso`.
-- Mensagem do WhatsApp: continua usando o `valorTotal` original e o valor com desconto — só muda a origem do percentual.
-
-### 5. Escopo do que não muda
-- Sem alteração no backend, RPC, banco ou custos.
-- Sem alteração no fluxo de notificação de consulta por WhatsApp.
-- Sem alteração em telas internas (Acordos, Novo Acordo, admin) — regras de comissão continuam iguais.
-
-### Detalhes técnicos
-- `calcularJurosAporte` deixa de ser chamado em `ConsultaResultado.tsx` (a função em `src/lib/comissao.ts` permanece, para não afetar outros consumidores).
-- Dias de atraso usa `Math.floor((hoje - vencMaisAntigo) / 86400000)` com `setHours(0,0,0,0)`.
-- Todas as mudanças ficam confinadas a: `src/pages/ConsultaResultado.tsx`, `src/components/negociacao/DiscountTierSelector.tsx`, novo `src/lib/descontoPortal.ts`.
+## Arquivos afetados
+- `supabase/functions/send-whatsapp-meta/index.ts` — aceitar `modo_teste`.
+- `src/pages/EnvioMeta.tsx` — botão "Enviar teste".
+- `src/contexts/EnvioMetaSendingContext.tsx` — mensagem de erro mais útil quando todas as instâncias caem por pool.

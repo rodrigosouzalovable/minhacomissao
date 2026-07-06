@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
@@ -138,6 +138,7 @@ export default function EnvioMeta() {
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
+  const [enviandoTeste, setEnviandoTeste] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
@@ -490,6 +491,38 @@ export default function EnvioMeta() {
       },
     });
   };
+
+  const enviarTeste = async () => {
+    if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
+    if (instanciaIds.length === 0) return toast.error("Marque ao menos uma instância no card 2");
+    const dedup = dedupRecipientsRaw(recipientsRaw);
+    const rows = parseRecipients(dedup.texto);
+    if (rows.length === 0) return toast.error("Cole ao menos um destinatário");
+
+    // usa 1ª instância marcada + 1º destinatário
+    const instId = instanciaIds[0];
+    const instInfo = instancias.find((i) => i.id === instId);
+    const tplId = templateIdByInstance[instId] || template.id;
+    const cliente = rows[0];
+
+    setEnviandoTeste(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
+        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Teste enviado para ${cliente.telefone} via ${instInfo?.nome || instId} (wa_id: ${data.waId || "—"})`);
+      } else {
+        toast.error(`Falha no teste: ${data?.error || "erro desconhecido"}`);
+      }
+    } catch (e: any) {
+      toast.error("Erro ao enviar teste: " + (e?.message || e));
+    } finally {
+      setEnviandoTeste(false);
+    }
+  };
+
 
 
   const variaveisDoTemplate = template?.variaveis
@@ -965,9 +998,19 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={enviando || validando || instanciasIncompatíveis.length > 0} size="lg">
+            <Button onClick={enviar} disabled={enviando || validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
               {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
               {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
+            </Button>
+            <Button
+              onClick={enviarTeste}
+              disabled={enviando || validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
+              size="lg"
+              variant="secondary"
+              title="Envia 1 mensagem para o primeiro destinatário via a primeira instância marcada, ignorando trava de ramp-up/horário. Útil para validar template e imagem antes do disparo em massa."
+            >
+              {enviandoTeste ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
+              {enviandoTeste ? "Enviando teste..." : "Enviar teste (1º número)"}
             </Button>
             {enviando && (
               <>
