@@ -140,7 +140,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       await supabase.from('envio_meta_job_item')
         .update({ status: 'pendente', instancia_id: null, instancia_nome: null })
         .eq('id', pend.id);
-      const waitMs = 30_000;
+      const waitMs = delayUsuarioMs(job);
       await supabase.from('envio_meta_job').update({
         proximo_em: new Date(Date.now() + waitMs).toISOString(),
         status_motivo: sendResp?.error || 'instância indisponível',
