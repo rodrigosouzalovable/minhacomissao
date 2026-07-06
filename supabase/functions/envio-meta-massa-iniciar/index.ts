@@ -109,32 +109,43 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
-    // Aguarda o primeiro tick por até ~8s para que a UI já veja 1 envio processado.
-    // Se demorar mais, seguimos em background via self-invoke normal.
+    // Executa somente a primeira tentativa agora. Se não houver instância disponível,
+    // o job encerra com motivo real em vez de ficar contando 60s sem enviar nada.
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
-      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
+      const firstTick = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
         },
-        body: JSON.stringify({ job_id: job.id }),
+        body: JSON.stringify({ job_id: job.id, single: true }),
         signal: ctrl.signal,
       });
       clearTimeout(timer);
+      if (!firstTick.ok) throw new Error('primeiro tick falhou');
     } catch {
-      // Se abortou/timeout, dispara novamente fire-and-forget para o loop continuar.
+      // Se abortou/timeout, dispara novamente fire-and-forget para tentar a primeira execução.
       fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
         },
-        body: JSON.stringify({ job_id: job.id }),
+        body: JSON.stringify({ job_id: job.id, single: true }),
       }).catch(() => {});
     }
+
+    // Continua o loop em background apenas se o primeiro envio realmente avançou.
+    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      },
+      body: JSON.stringify({ job_id: job.id }),
+    }).catch(() => {});
 
     return new Response(JSON.stringify({ success: true, job_id: job.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
