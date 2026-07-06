@@ -492,6 +492,38 @@ export default function EnvioMeta() {
     });
   };
 
+  const enviarTeste = async () => {
+    if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
+    if (instanciaIds.length === 0) return toast.error("Marque ao menos uma instância no card 2");
+    const dedup = dedupRecipientsRaw(recipientsRaw);
+    const rows = parseRecipients(dedup.texto);
+    if (rows.length === 0) return toast.error("Cole ao menos um destinatário");
+
+    // usa 1ª instância marcada + 1º destinatário
+    const instId = instanciaIds[0];
+    const instInfo = instancias.find((i) => i.id === instId);
+    const tplId = templateIdByInstance[instId] || template.id;
+    const cliente = rows[0];
+
+    setEnviandoTeste(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
+        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Teste enviado para ${cliente.telefone} via ${instInfo?.nome || instId} (wa_id: ${data.waId || "—"})`);
+      } else {
+        toast.error(`Falha no teste: ${data?.error || "erro desconhecido"}`);
+      }
+    } catch (e: any) {
+      toast.error("Erro ao enviar teste: " + (e?.message || e));
+    } finally {
+      setEnviandoTeste(false);
+    }
+  };
+
+
 
   const variaveisDoTemplate = template?.variaveis
     ? Object.entries(template.variaveis)
