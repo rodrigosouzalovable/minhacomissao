@@ -183,7 +183,7 @@ export default function ConsultaResultado() {
   const gerarWhatsappLink = (neg: NegociacaoState) => {
     const valorParcela = getValorParcela(neg);
     const valorDesc = getValorComDesconto(neg);
-    const desconto = neg.descontoFaixa ? getDesconto(neg.descontoFaixa) : 0;
+    const desconto = neg.descontoFaixa ? getDesconto(neg.descontoFaixa, diasAtraso) : 0;
     const dataFormatada = neg.dataPrimeiroPagamento
       ? format(neg.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
       : '';
