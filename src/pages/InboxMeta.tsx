@@ -597,7 +597,7 @@ export default function InboxMeta() {
             <div className="flex gap-1.5">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar..."
+                <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou telefone..."
                   className="pl-7 h-8 text-xs" />
               </div>
               <Popover open={filtroEtOpen} onOpenChange={setFiltroEtOpen}>
