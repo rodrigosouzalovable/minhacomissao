@@ -558,26 +558,176 @@ export default function ConsultaResultado() {
                         <div className="space-y-5">
                           <DiscountTierSelector
                             selected={faixaEscolhida}
-                            onSelect={setFaixaEscolhida}
+                            onSelect={(faixa) => {
+                              setFaixaEscolhida(faixa);
+                              if (faixa === 'parcelado') {
+                                setNegociacao({
+                                  negociando: true,
+                                  confirmado: false,
+                                  entrada: 0,
+                                  parcelas: getMinParcelas('parcelado'),
+                                  dataPrimeiroPagamento: undefined,
+                                  descontoFaixa: 'parcelado',
+                                });
+                              } else {
+                                setNegociacao(null);
+                              }
+                            }}
                             valorTotal={valorTotal}
                             diasAtraso={diasAtraso}
                           />
 
+                          {faixaEscolhida === 'parcelado' && negociacao && (
+                            <div className="space-y-4 pt-2">
+                              <div
+                                className="rounded-xl p-5 text-center"
+                                style={{
+                                  background: 'linear-gradient(135deg, #00a86b15, #00cc8815)',
+                                  border: '1px solid #00a86b44',
+                                  boxShadow: '0 0 30px rgba(0, 168, 107, 0.1)',
+                                }}
+                              >
+                                <p className="text-xs mb-1" style={{ color: '#ffffffaa' }}>
+                                  De <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> por
+                                </p>
+                                <p className="text-4xl font-black" style={{ color: '#00ff88' }}>
+                                  {formatCurrency(getValorComDesconto(negociacao))}
+                                </p>
+                                <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: '#00a86b22', border: '1px solid #00a86b44' }}>
+                                  <TrendingDown className="h-3.5 w-3.5" style={{ color: '#00a86b' }} />
+                                  <p className="text-xs font-bold" style={{ color: '#00a86b' }}>
+                                    Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto('parcelado', diasAtraso)}%)
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={getValorComDesconto(negociacao)}
+                                  step={0.01}
+                                  placeholder="R$ 0,00"
+                                  value={negociacao.entrada || ''}
+                                  onChange={(e) => handleEntradaChange(e.target.value)}
+                                  className="mt-1 border-0 h-12 rounded-xl text-base"
+                                  style={{ background: '#ffffff12', color: '#fff' }}
+                                />
+                                {negociacao.entrada > getValorComDesconto(negociacao) && (
+                                  <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor com desconto</p>
+                                )}
+                              </div>
+
+                              <div>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
+                                <Select
+                                  value={String(negociacao.parcelas)}
+                                  onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}
+                                >
+                                  <SelectTrigger className="mt-1 border-0 h-12 rounded-xl text-base" style={{ background: '#ffffff12', color: '#fff' }}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {Array.from(
+                                      { length: getMaxParcelas(negociacao) - getMinParcelas('parcelado') + 1 },
+                                      (_, i) => i + getMinParcelas('parcelado')
+                                    ).map(n => (
+                                      <SelectItem key={n} value={String(n)}>
+                                        {n}x de {formatCurrency((getValorComDesconto(negociacao) - (negociacao.entrada || 0)) / n)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Data do primeiro pagamento</Label>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className={cn("w-full mt-1 justify-start text-left font-normal border-0 h-12 rounded-xl text-base", !negociacao.dataPrimeiroPagamento && "opacity-70")}
+                                      style={{ background: '#ffffff12', color: '#fff' }}
+                                    >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {negociacao.dataPrimeiroPagamento
+                                        ? format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
+                                        : 'Selecione a data'}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={negociacao.dataPrimeiroPagamento}
+                                      onSelect={(d) => updateNegociacao({ dataPrimeiroPagamento: d })}
+                                      disabled={(date) => {
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+                                        return date < today;
+                                      }}
+                                      initialFocus
+                                      className={cn("p-3 pointer-events-auto")}
+                                      locale={ptBR}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+
+                              {negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
+                                <div
+                                  className="rounded-xl p-4"
+                                  style={{
+                                    background: 'linear-gradient(135deg, #00a86b08, #00cc8808)',
+                                    border: '1px solid #00a86b33',
+                                  }}
+                                >
+                                  <p className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#00a86b' }}>
+                                    <Check className="h-4 w-4" />
+                                    Resumo da negociação
+                                  </p>
+                                  <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
+                                    Desconto: {getDesconto('parcelado', diasAtraso)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                                  </p>
+                                  {negociacao.entrada > 0 && (
+                                    <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>
+                                  )}
+                                  <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
+                                    {negociacao.parcelas}x de <strong style={{ color: '#00ff88' }}>{formatCurrency(getValorParcela(negociacao))}</strong>
+                                  </p>
+                                  <p className="text-sm" style={{ color: '#ffffffcc' }}>
+                                    Primeiro pagamento: {format(negociacao.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {(() => {
-                            const habilitado = !!faixaEscolhida;
-                            const descontoSel = faixaEscolhida ? getDesconto(faixaEscolhida, diasAtraso) : 0;
-                            const valorSel = valorTotal * (1 - descontoSel / 100);
+                            const isAvista = faixaEscolhida === 'avista';
+                            const isParcelado = faixaEscolhida === 'parcelado';
+                            const parceladoValido = isParcelado && negociacao && isNegociacaoValida(negociacao);
+                            const habilitado = isAvista || !!parceladoValido;
+
                             const contratosStr = debitos.map(d => d.contrato).filter(Boolean).join(', ');
-                            const descontoStr = descontoSel > 0 ? `, com desconto de ${descontoSel}%, totalizando ${formatCurrency(valorSel)}` : '';
-                            const msgPrincipal = faixaEscolhida === 'avista'
-                              ? `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}. Quero pagar à vista. Me envie o boleto por gentileza.`
-                              : `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStr}. Quero parcelar. Me envie as condições por gentileza.`;
-                            const linkPrincipal = `https://wa.me/${PHONE}?text=${encodeURIComponent(msgPrincipal)}`;
-                            const labelPrincipal = !habilitado
+                            const descontoAvista = getDesconto('avista', diasAtraso);
+                            const valorAvistaSel = valorTotal * (1 - descontoAvista / 100);
+                            const descontoStrAvista = descontoAvista > 0 ? `, com desconto de ${descontoAvista}%, totalizando ${formatCurrency(valorAvistaSel)}` : '';
+                            const msgAvista = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStrAvista}. Quero pagar à vista. Me envie o boleto por gentileza.`;
+
+                            const linkPrincipal = isAvista
+                              ? `https://wa.me/${PHONE}?text=${encodeURIComponent(msgAvista)}`
+                              : parceladoValido
+                                ? gerarWhatsappLink(negociacao!)
+                                : '#';
+
+                            const labelPrincipal = !faixaEscolhida
                               ? 'ESCOLHA UMA OPÇÃO ACIMA'
-                              : faixaEscolhida === 'avista'
+                              : isAvista
                                 ? 'QUITAR À VISTA NO WHATSAPP'
-                                : 'PARCELAR NO WHATSAPP';
+                                : parceladoValido
+                                  ? 'ENVIAR PROPOSTA PELO WHATSAPP'
+                                  : 'PREENCHA A PROPOSTA ACIMA';
 
                             const msgContra = `Olá, quero negociar meu débito e tenho uma contraproposta.`;
                             const linkContra = `https://wa.me/${PHONE}?text=${encodeURIComponent(msgContra)}`;
@@ -629,6 +779,7 @@ export default function ConsultaResultado() {
                           })()}
                         </div>
                       )}
+
                     </CardContent>
                   </Card>
                 </>
