@@ -125,13 +125,8 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
       const { data: pub } = supabase.storage.from("inbox-media").getPublicUrl(path);
       const url = pub.publicUrl;
       setImageUrl(url);
-      const newVars = { ...(template.variaveis || {}), _header_image_url: url };
-      const { error: dbErr } = await supabase
-        .from("meta_whatsapp_templates")
-        .update({ variaveis: newVars })
-        .eq("id", template.id);
-      if (dbErr) throw dbErr;
-      toast.success("Imagem enviada e salva");
+      const count = await persistImagemEmTodasInstancias(url);
+      toast.success(`Imagem enviada e salva em ${count} instância(s)`);
       onSaved?.();
     } catch (err: any) {
       toast.error("Erro ao enviar: " + (err?.message || "falhou"));
