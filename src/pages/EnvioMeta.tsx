@@ -297,7 +297,25 @@ export default function EnvioMeta() {
         .eq("ativo", true)
         .order("nome"),
     ]);
-    if (i.data) setInstancias(i.data as any);
+    if (i.data) {
+      const tierParaNumero = (tag?: string | null): number | null => {
+        if (!tag) return null;
+        const t = String(tag).toUpperCase();
+        if (t.includes("UNLIMITED")) return 100000;
+        if (t.includes("100K")) return 100000;
+        if (t.includes("10K")) return 10000;
+        if (t.includes("2K")) return 2000;
+        if (t.includes("1K")) return 1000;
+        if (t.includes("250")) return 250;
+        if (t.includes("50")) return 50;
+        return null;
+      };
+      const mapped = (i.data as any[]).map((inst) => {
+        const efetivo = tierParaNumero(inst.messaging_limit_manual) ?? tierParaNumero(inst.saude_tier);
+        return { ...inst, tier_diario: efetivo ?? inst.tier_diario ?? 250 };
+      });
+      setInstancias(mapped as any);
+    }
     if (t.data) setTemplates(t.data as any);
     if (u.data) setUazInstancias(u.data as any);
     setLoading(false);
