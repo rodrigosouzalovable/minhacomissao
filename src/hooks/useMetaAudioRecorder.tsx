@@ -53,7 +53,7 @@ async function ensureOggOpus(blob: Blob, mimeType: string): Promise<{ blob: Blob
     : ['-i', inName, '-c:a', 'libopus', '-b:a', '32k', '-vn', outName];
   await ffmpeg.exec(args);
   const data = await ffmpeg.readFile(outName);
-  const out = new Blob([data as Uint8Array], { type: 'audio/ogg' });
+  const out = new Blob([data as unknown as BlobPart], { type: 'audio/ogg' });
   try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
   return { blob: out, ext: 'ogg', contentType: 'audio/ogg' };
 }
