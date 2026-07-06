@@ -66,6 +66,7 @@ export default function ConsultaResultado() {
   const [cpfCliente, setCpfCliente] = useState('');
   const [mostrarTodosDebitos, setMostrarTodosDebitos] = useState(false);
   const [negociacao, setNegociacao] = useState<NegociacaoState | null>(null);
+  const [faixaEscolhida, setFaixaEscolhida] = useState<DescontoFaixa | undefined>(undefined);
   const [acordoExistente, setAcordoExistente] = useState<{ status: string; criadoEm: string; funcionarioNome: string } | null>(null);
   const [parcelasAcordo, setParcelasAcordo] = useState<ParcelaAcordo[]>([]);
 
