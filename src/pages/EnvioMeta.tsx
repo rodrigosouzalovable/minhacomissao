@@ -757,6 +757,17 @@ export default function EnvioMeta() {
                 Nenhuma instância ativa. Cadastre em "API Oficial Meta".
               </p>
             ) : (
+              <>
+              {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
+                <div className="mb-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium mb-0.5">Nenhuma instância marcada está ativa no pool</div>
+                    <div>O disparo em massa está bloqueado. Use <strong>"Enviar teste (1º número)"</strong> abaixo para validar o template com 1 contato, ou ative as instâncias em Configurar Meta → Pool.</div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 {instancias.map((i) => {
                   const isEditing = editingId === i.id;
