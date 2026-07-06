@@ -554,7 +554,7 @@ export default function ConsultaResultado() {
                             className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
                             style={{ background: '#00a86b22', color: '#00a86b', border: '1px solid #00a86b44' }}
                           >
-                            50% OFF
+                            {descontoMaximo}% OFF
                           </span>
                         </div>
                       </div>
