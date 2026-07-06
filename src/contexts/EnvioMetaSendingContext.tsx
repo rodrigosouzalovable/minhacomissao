@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export type EnvioItem = { telefone: string; instancia?: string; erro?: string; ts: number };
 
@@ -60,232 +61,234 @@ type Ctx = {
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
 
-const STORAGE_KEY = "envio_meta_state_v1";
 const EMPTY_DETALHES: EnvioDetalhes = { enviados: [], erros: [], semWhatsapp: [], erroValidacao: [] };
+const LOCAL_EXTRAS_KEY = "envio_meta_extras_v1"; // guarda apenas sem_whatsapp / erro_validacao (não voltam da server)
 
-type Persisted = {
-  enviando: boolean;
-  pausado: boolean;
-  progresso: EnvioProgresso | null;
-  detalhes: EnvioDetalhes;
-  resultado: EnvioResultado;
-  templateNome: string | null;
-};
+type LocalExtras = { jobId?: string; semWhatsapp: string[]; erroValidacao: string[] };
 
-function loadPersisted(): Persisted | null {
+function loadExtras(): LocalExtras {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as Persisted;
-    // If reload happened mid-send, the loop is dead — show snapshot as stopped.
-    if (p.enviando) {
-      p.enviando = false;
-      p.pausado = false;
-      if (p.progresso && !p.resultado) {
-        p.resultado = { enviados: p.progresso.enviados, erros: p.progresso.erros, total: p.progresso.total };
-      }
-      p.progresso = null;
-    }
-    return p;
-  } catch {
-    return null;
-  }
+    const raw = localStorage.getItem(LOCAL_EXTRAS_KEY);
+    if (!raw) return { semWhatsapp: [], erroValidacao: [] };
+    return JSON.parse(raw);
+  } catch { return { semWhatsapp: [], erroValidacao: [] }; }
+}
+function saveExtras(x: LocalExtras) {
+  try { localStorage.setItem(LOCAL_EXTRAS_KEY, JSON.stringify(x)); } catch {}
 }
 
 export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) {
-  const initial = typeof window !== "undefined" ? loadPersisted() : null;
+  const { user } = useAuth();
+  const uid = user?.id;
 
-  const [enviando, setEnviando] = useState<boolean>(initial?.enviando ?? false);
-  const [pausado, setPausado] = useState<boolean>(initial?.pausado ?? false);
-  const [progresso, setProgresso] = useState<EnvioProgresso | null>(initial?.progresso ?? null);
-  const [detalhes, setDetalhes] = useState<EnvioDetalhes>(initial?.detalhes ?? EMPTY_DETALHES);
-  const [resultado, setResultado] = useState<EnvioResultado>(initial?.resultado ?? null);
-  const [templateNome, setTemplateNome] = useState<string | null>(initial?.templateNome ?? null);
+  const [job, setJob] = useState<any | null>(null);
+  const [itens, setItens] = useState<any[]>([]);
+  const [extras, setExtras] = useState<LocalExtras>(loadExtras());
+  const [tick, setTick] = useState(0);
+  const onAfterRef = useRef<(() => void) | undefined>();
 
-  const pausedRef = useRef<boolean>(false);
-  const cancelRef = useRef<boolean>(false);
-  const runningRef = useRef<boolean>(false);
-
-  // Persist every change
-  useEffect(() => {
-    try {
-      const snap: Persisted = { enviando, pausado, progresso, detalhes, resultado, templateNome };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
-    } catch {}
-  }, [enviando, pausado, progresso, detalhes, resultado, templateNome]);
-
-  const togglePausa = useCallback(() => {
-    const novo = !pausedRef.current;
-    pausedRef.current = novo;
-    setPausado(novo);
-    toast.info(novo ? "Envio pausado" : "Envio retomado");
-  }, []);
-
-  const cancelar = useCallback(() => {
-    if (!confirm("Cancelar o envio? Os contatos restantes não serão disparados.")) return;
-    cancelRef.current = true;
-    pausedRef.current = false;
-    setPausado(false);
-    toast.warning("Cancelando envio...");
-  }, []);
-
-  const limpar = useCallback(() => {
-    if (runningRef.current) {
-      toast.error("Não é possível limpar enquanto há envio em andamento");
-      return;
+  // Carrega job mais recente do usuário (rodando, pausado ou o último finalizado)
+  const carregar = useCallback(async () => {
+    if (!uid) { setJob(null); setItens([]); return; }
+    const { data: ativo } = await (supabase as any)
+      .from("envio_meta_job")
+      .select("*")
+      .eq("user_id", uid)
+      .in("status", ["rodando", "pausado"])
+      .order("iniciado_em", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let j = ativo;
+    if (!j) {
+      const { data: ult } = await (supabase as any)
+        .from("envio_meta_job")
+        .select("*")
+        .eq("user_id", uid)
+        .order("iniciado_em", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      j = ult;
     }
-    setProgresso(null);
-    setResultado(null);
-    setDetalhes(EMPTY_DETALHES);
-    setTemplateNome(null);
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
-  }, []);
+    setJob(j || null);
+    if (j) {
+      const { data: its } = await (supabase as any)
+        .from("envio_meta_job_item")
+        .select("*")
+        .eq("job_id", j.id)
+        .in("status", ["enviado", "erro"])
+        .order("processado_em", { ascending: false })
+        .limit(2000);
+      setItens(its || []);
+    } else {
+      setItens([]);
+    }
+  }, [uid]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  // Realtime: assina mudanças em job + itens do usuário
+  useEffect(() => {
+    if (!uid) return;
+    const channel = supabase
+      .channel(`envio_meta_${uid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "envio_meta_job", filter: `user_id=eq.${uid}` },
+        () => { carregar(); }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "envio_meta_job_item" },
+        (payload: any) => {
+          const jobId = (payload.new || payload.old)?.job_id;
+          if (job && jobId === job.id) carregar();
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [uid, job?.id, carregar]);
+
+  // Ticker para atualizar "próximo em Xs"
+  useEffect(() => {
+    if (!job || job.status !== "rodando") return;
+    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [job?.status, job?.id]);
+
+  const enviando = !!job && (job.status === "rodando" || job.status === "pausado");
+  const pausado = !!job && job.status === "pausado";
+
+  const progresso: EnvioProgresso | null = useMemo(() => {
+    if (!job || !enviando) return null;
+    const proximoMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
+    return {
+      enviados: job.enviados || 0,
+      erros: job.erros || 0,
+      total: job.total || 0,
+      atualTelefone: job.atual_telefone || "",
+      atualInstancia: job.atual_instancia || "",
+      proximoEmSeg: Math.max(0, Math.ceil(proximoMs / 1000)),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job, enviando, tick]);
+
+  const detalhes: EnvioDetalhes = useMemo(() => {
+    const enviados: EnvioItem[] = [];
+    const erros: EnvioItem[] = [];
+    for (const it of itens) {
+      const ts = it.processado_em ? new Date(it.processado_em).getTime() : Date.now();
+      if (it.status === "enviado") {
+        enviados.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, ts });
+      } else if (it.status === "erro") {
+        erros.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts });
+      }
+    }
+    const extrasForJob = extras.jobId === job?.id
+      ? { semWhatsapp: extras.semWhatsapp, erroValidacao: extras.erroValidacao }
+      : { semWhatsapp: [], erroValidacao: [] };
+    return { enviados, erros, ...extrasForJob };
+  }, [itens, extras, job?.id]);
+
+  const resultado: EnvioResultado = useMemo(() => {
+    if (!job) return null;
+    if (["concluido", "cancelado", "erro"].includes(job.status)) {
+      return { enviados: job.enviados || 0, erros: job.erros || 0, total: job.total || 0 };
+    }
+    return null;
+  }, [job]);
+
+  // Dispara callback quando o job conclui
+  useEffect(() => {
+    if (job && ["concluido", "cancelado"].includes(job.status)) {
+      onAfterRef.current?.();
+    }
+  }, [job?.status, job?.id]);
 
   const iniciar = useCallback(async (p: IniciarParams) => {
-    if (runningRef.current) {
-      toast.error("Já existe um envio em andamento");
+    if (!uid) { toast.error("Faça login para iniciar o envio"); return; }
+    onAfterRef.current = p.onAfterEnvio;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-iniciar", {
+        body: {
+          template: p.template,
+          instanciaIds: p.instanciaIds,
+          clientes: p.clientes,
+          minSec: p.minSec,
+          maxSec: p.maxSec,
+          templateIdByInstance: p.templateIdByInstance ?? {},
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha ao iniciar envio");
+
+      const jobId = data.job_id as string;
+      const novo: LocalExtras = {
+        jobId,
+        semWhatsapp: p.semWhatsapp ?? [],
+        erroValidacao: p.erroValidacao ?? [],
+      };
+      setExtras(novo);
+      saveExtras(novo);
+      toast.success("Envio iniciado no servidor — vai continuar mesmo se você fechar o navegador");
+      carregar();
+    } catch (e: any) {
+      toast.error("Erro ao iniciar envio: " + (e?.message || e));
+    }
+  }, [uid, carregar]);
+
+  const togglePausa = useCallback(async () => {
+    if (!job) return;
+    const acao = job.status === "rodando" ? "pausar" : "retomar";
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
+        body: { job_id: job.id, acao },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha");
+      toast.info(acao === "pausar" ? "Envio pausado" : "Envio retomado");
+      carregar();
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e));
+    }
+  }, [job, carregar]);
+
+  const cancelar = useCallback(async () => {
+    if (!job) return;
+    if (!confirm("Cancelar o envio? Os contatos restantes não serão disparados.")) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
+        body: { job_id: job.id, acao: "cancelar" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha");
+      toast.warning("Envio cancelado");
+      carregar();
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e));
+    }
+  }, [job, carregar]);
+
+  const limpar = useCallback(async () => {
+    if (!job) return;
+    if (["rodando", "pausado"].includes(job.status)) {
+      toast.error("Não é possível limpar enquanto o envio está em andamento");
       return;
     }
-    runningRef.current = true;
-    pausedRef.current = false;
-    cancelRef.current = false;
-
-    const { template, instanciaIds, instancias, clientes, minSec, maxSec } = p;
-    const lo = Math.max(1, minSec);
-    const hi = Math.max(lo, maxSec);
-    const total = clientes.length;
-
-    setTemplateNome(template.nome_template);
-    setDetalhes({
-      enviados: [],
-      erros: [],
-      semWhatsapp: p.semWhatsapp ?? [],
-      erroValidacao: p.erroValidacao ?? [],
-    });
-    setResultado(null);
-    setEnviando(true);
-    setPausado(false);
-    setProgresso({ enviados: 0, erros: 0, total, atualTelefone: "", atualInstancia: "", proximoEmSeg: 0 });
-
-    const instAtivas = [...instanciaIds];
-    const instMap = new Map(instancias.map((i) => [i.id, i] as const));
-    let enviados = 0;
-    let erros = 0;
-    let rr = 0;
-    let cancelado = false;
-
-    const sleepInterruptible = async (segs: number) => {
-      const ate = Date.now() + segs * 1000;
-      while (Date.now() < ate) {
-        if (cancelRef.current) return;
-        while (pausedRef.current && !cancelRef.current) {
-          await new Promise((r) => setTimeout(r, 250));
-        }
-        const restanteMs = Math.max(0, ate - Date.now());
-        setProgresso((pr) => pr ? { ...pr, proximoEmSeg: Math.ceil(restanteMs / 1000) } : pr);
-        await new Promise((r) => setTimeout(r, Math.min(250, restanteMs)));
-      }
-    };
-
-    for (let i = 0; i < clientes.length; i++) {
-      if (cancelRef.current) { cancelado = true; break; }
-      while (pausedRef.current && !cancelRef.current) {
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      if (cancelRef.current) { cancelado = true; break; }
-
-      if (instAtivas.length === 0) { toast.error("Nenhuma instância disponível para envio. Se acabou de aprovar templates, ative-as em Configurar Meta → Pool, ou use o botão 'Enviar teste' na página de envio para validar antes do ramp-up."); break; }
-
-      // Seleção inteligente por score de saúde (respeita ramp-up, pausa, domingo, horário)
-      let instId: string;
-      let instInfo: InstanciaMin | undefined;
-      try {
-        const { data: pick, error: pickErr } = await supabase.functions.invoke("pick-meta-instance", {
-          body: { instancia_ids: instAtivas },
-        });
-        if (pickErr) throw pickErr;
-        if (!pick?.success) {
-          // Bloqueio global (domingo/horário/sem disponível): aborta
-          toast.error(pick?.error || "Nenhuma instância disponível");
-          break;
-        }
-        instId = pick.instancia_id;
-        instInfo = instMap.get(instId);
-        rr++;
-      } catch (e: any) {
-        // Fallback: round-robin simples se pick falhar
-        console.warn("[EnvioMeta] pick falhou, usando round-robin", e?.message);
-        instId = instAtivas[rr % instAtivas.length];
-        instInfo = instMap.get(instId);
-        rr++;
-      }
-
-      const cliente = clientes[i];
-      setProgresso((pr) => pr ? {
-        ...pr,
-        atualTelefone: cliente.telefone,
-        atualInstancia: instInfo?.nome || "",
-        proximoEmSeg: 0,
-      } : pr);
-
-      try {
-        const tplIdParaEssaInst = p.templateIdByInstance?.[instId] || template.id;
-        const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-          body: { template_id: tplIdParaEssaInst, instancia_id: instId, cliente },
-        });
-        if (error) throw error;
-        if (data?.tier_full || data?.pool_blocked || data?.pool_paused) {
-          const idx = instAtivas.indexOf(instId);
-          if (idx >= 0) instAtivas.splice(idx, 1);
-          i--; continue;
-        }
-        if (data?.blocked === 'domingo' || data?.blocked === 'horario') {
-          toast.error(data.error);
-          break;
-        }
-        if (!data?.success) throw new Error(data?.error || "Falha");
-        enviados++;
-        setDetalhes((d) => ({
-          ...d,
-          enviados: [...d.enviados, { telefone: cliente.telefone, instancia: instInfo?.nome, ts: Date.now() }],
-        }));
-      } catch (e: any) {
-        erros++;
-        const msg = e?.message || String(e);
-        console.error("[EnvioMeta]", msg);
-        setDetalhes((d) => ({
-          ...d,
-          erros: [...d.erros, { telefone: cliente.telefone, instancia: instInfo?.nome, erro: msg, ts: Date.now() }],
-        }));
-      }
-      setProgresso((pr) => pr ? { ...pr, enviados, erros } : pr);
-
-      if (i < clientes.length - 1 && !cancelRef.current) {
-        const delay = Math.floor(Math.random() * (hi - lo + 1)) + lo;
-        await sleepInterruptible(delay);
-      }
+    try {
+      await supabase.functions.invoke("envio-meta-massa-control", {
+        body: { job_id: job.id, acao: "limpar" },
+      });
+      setJob(null);
+      setItens([]);
+      setExtras({ semWhatsapp: [], erroValidacao: [] });
+      saveExtras({ semWhatsapp: [], erroValidacao: [] });
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e));
     }
+  }, [job]);
 
-
-    setResultado({ enviados, erros, total });
-    setProgresso(null);
-    setEnviando(false);
-    setPausado(false);
-    pausedRef.current = false;
-    cancelRef.current = false;
-    runningRef.current = false;
-    toast.success(`${enviados} enviados • ${erros} erros${cancelado ? " (cancelado)" : ""}`);
-    p.onAfterEnvio?.();
-  }, []);
-
-  // Warn on close if sending
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (runningRef.current) { e.preventDefault(); e.returnValue = ""; }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, []);
+  const templateNome = job?.template_nome || null;
 
   return (
     <EnvioMetaSendingContext.Provider
