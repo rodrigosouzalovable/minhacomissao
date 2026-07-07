@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2 } from 'lucide-react';
 
 interface MetaInst { id: string; nome: string | null; display_phone: string | null; }
-interface Template { id: string; nome_template: string; idioma: string; categoria: string; }
+interface Template { id: string; nome_template: string; idioma: string; categoria: string; body_text: string | null; variaveis: any; }
 
 interface Props {
   open: boolean;
@@ -30,15 +30,31 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   useEffect(() => { if (defaultInstancia) setInstId(defaultInstancia); }, [defaultInstancia]);
 
   useEffect(() => {
+    if (!open || !instId) { setTemplates([]); setTemplateName(''); return; }
     (async () => {
       const { data } = await supabase.from('meta_whatsapp_templates')
-        .select('id, nome_template, idioma, categoria')
+        .select('id, nome_template, idioma, categoria, body_text, variaveis')
         .eq('status', 'approved')
         .eq('categoria', 'UTILITY')
+        .eq('instancia_id', instId)
         .order('nome_template');
       setTemplates((data as Template[]) ?? []);
+      setTemplateName('');
     })();
-  }, [open]);
+  }, [open, instId]);
+
+  const selectedTemplate = useMemo(
+    () => templates.find(t => t.nome_template === templateName),
+    [templates, templateName]
+  );
+
+  const preview = useMemo(() => {
+    if (!selectedTemplate?.body_text) return '';
+    const nomeValor = nome.trim() || 'Cliente';
+    return selectedTemplate.body_text
+      .replace(/\{\{\s*name\s*\}\}/gi, nomeValor)
+      .replace(/\{\{\s*1\s*\}\}/g, nomeValor);
+  }, [selectedTemplate, nome]);
 
   const enviar = async () => {
     if (!instId || !tel.trim() || !templateName) return;
@@ -85,8 +101,10 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           </Select>
           <Input placeholder="Telefone (DDI+DDD+número)" value={tel} onChange={e => setTel(e.target.value)} />
           <Input placeholder="Nome (opcional, para {{name}})" value={nome} onChange={e => setNome(e.target.value)} />
-          <Select value={templateName} onValueChange={setTemplateName}>
-            <SelectTrigger><SelectValue placeholder="Template de utilidade" /></SelectTrigger>
+          <Select value={templateName} onValueChange={setTemplateName} disabled={!instId || templates.length === 0}>
+            <SelectTrigger>
+              <SelectValue placeholder={!instId ? 'Selecione uma instância' : templates.length === 0 ? 'Nenhum template para esta instância' : 'Template de utilidade'} />
+            </SelectTrigger>
             <SelectContent>
               {templates.map(t => (
                 <SelectItem key={t.id} value={t.nome_template}>
@@ -95,6 +113,12 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
               ))}
             </SelectContent>
           </Select>
+          {preview && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Pré-visualização</p>
+              <div className="bg-muted rounded-md p-3 text-sm whitespace-pre-wrap">{preview}</div>
+            </div>
+          )}
           <Button onClick={enviar} disabled={!instId || !tel.trim() || !templateName || enviando} className="w-full">
             {enviando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
             Enviar template
