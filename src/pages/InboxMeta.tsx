@@ -106,6 +106,7 @@ export default function InboxMeta() {
   
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
   const [msgRapidasOpen, setMsgRapidasOpen] = useState(false);
+  const [novaConversaOpen, setNovaConversaOpen] = useState(false);
   const [msgRapidas, setMsgRapidas] = useState<MetaMsgRapida[]>([]);
 
   const [selMultipla, setSelMultipla] = useState(false);
