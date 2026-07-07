@@ -77,16 +77,60 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
         },
       });
       if (error) throw new Error(error.message);
+
+      // Instância bloqueada/pausada/restrita (síncrono)
+      if (!data?.success && (data?.instance_restricted || data?.pool_blocked || data?.pool_paused)) {
+        toast({
+          title: 'Instância indisponível',
+          description:
+            (data?.error || 'A instância selecionada está restringida/banida pela Meta.') +
+            ' Escolha outra instância ou avise o administrador.',
+          variant: 'destructive',
+          duration: 10000,
+        });
+        return;
+      }
+
       if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
+
       toast({ title: 'Template enviado', description: 'Aguardando resposta para abrir a janela de 24h.' });
       const telFormat = tel.replace(/\D/g, '').startsWith('55') ? tel.replace(/\D/g, '') : '55' + tel.replace(/\D/g, '');
+      const waId: string | undefined = data?.waId;
       onSent(instId, telFormat);
       onOpenChange(false);
       setTel(''); setNome(''); setTemplateName('');
+
+      // Polling assíncrono: se o webhook da Meta reportar falha (ex. Business Account locked),
+      // avisa o funcionário com toast destrutivo.
+      if (waId) {
+        (async () => {
+          for (let i = 0; i < 4; i++) {
+            await new Promise(r => setTimeout(r, 4000));
+            const { data: msg } = await supabase
+              .from('meta_whatsapp_mensagens')
+              .select('status_envio, erro')
+              .eq('wa_message_id', waId)
+              .maybeSingle();
+            if (msg?.status_envio === 'erro') {
+              toast({
+                title: 'Falha na entrega',
+                description:
+                  `A Meta rejeitou o envio: ${msg.erro || 'erro desconhecido'}.` +
+                  ' A instância pode estar restringida/banida — verifique com o administrador.',
+                variant: 'destructive',
+                duration: 12000,
+              });
+              return;
+            }
+            if (msg && msg.status_envio !== 'enviada') return; // entregue/lida => sucesso
+          }
+        })();
+      }
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     } finally { setEnviando(false); }
   };
+
 
   const templatePlaceholder = !instId
     ? 'Selecione uma instância'
