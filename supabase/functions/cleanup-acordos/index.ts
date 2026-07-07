@@ -22,6 +22,38 @@ serve(async (req) => {
     const trintaDiasAtras = new Date(hoje);
     trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
     const trintaDiasAtrasStr = trintaDiasAtras.toISOString().split('T')[0];
+    const dezDiasAtras = new Date(hoje);
+    dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
+    const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
+
+    const normalizeCpf = (c: string | null | undefined) =>
+      (c || '').replace(/\D/g, '');
+
+    const reativarDevedoresCpf = async (cpf: string | null | undefined) => {
+      const cpfN = normalizeCpf(cpf);
+      if (!cpfN) return;
+      const { data: rows, error } = await supabase
+        .from('devedores')
+        .select('id, cpf')
+        .eq('ativo', false);
+      if (error) {
+        console.error('Erro ao buscar devedores para reativar:', error);
+        return;
+      }
+      const ids = (rows || [])
+        .filter((r: any) => normalizeCpf(r.cpf) === cpfN)
+        .map((r: any) => r.id);
+      if (!ids.length) return;
+      const { error: updErr } = await supabase
+        .from('devedores')
+        .update({ ativo: true })
+        .in('id', ids);
+      if (updErr) {
+        console.error('Erro ao reativar devedores:', updErr);
+      } else {
+        console.log(`Reativadas ${ids.length} linha(s) em devedores para CPF ${cpfN}`);
+      }
+    };
 
     let excluidos = 0;
     let quebrados = 0;
@@ -30,7 +62,7 @@ serve(async (req) => {
     // Buscar todos os acordos ativos
     const { data: acordosAtivos, error: acordosErr } = await supabase
       .from('acordos')
-      .select('id')
+      .select('id, cliente_cpf')
       .eq('status', 'ativo');
 
     if (acordosErr) {
@@ -65,9 +97,9 @@ serve(async (req) => {
 
         if (prErr || !primeiraParcela || primeiraParcela.length === 0) continue;
 
-        if (primeiraParcela[0].data_prevista <= trintaDiasAtrasStr) {
-          // 30+ dias sem pagamento - excluir acordo e parcelas
-          console.log(`Excluindo acordo ${acordo.id} (sem pagamentos, vencido há 30+ dias)`);
+        if (primeiraParcela[0].data_prevista <= dezDiasAtrasStr) {
+          // 10+ dias sem pagamento - excluir acordo, parcelas e reativar dívida original
+          console.log(`Excluindo acordo ${acordo.id} (sem pagamentos, vencido há 10+ dias)`);
           
           const { error: delPagErr } = await supabase
             .from('pagamentos')
@@ -88,6 +120,8 @@ serve(async (req) => {
             console.error(`Erro ao excluir acordo ${acordo.id}:`, delAcErr);
             continue;
           }
+
+          await reativarDevedoresCpf((acordo as any).cliente_cpf);
 
           excluidos++;
         }
