@@ -994,6 +994,13 @@ export default function InboxMeta() {
 
       <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
+      <MetaNovaConversaDialog
+        open={novaConversaOpen}
+        onOpenChange={setNovaConversaOpen}
+        instancias={instancias}
+        defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
+        onSent={() => { fetchContatos(); }}
+      />
     </AppLayout>
   );
 }
