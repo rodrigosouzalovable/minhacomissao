@@ -53,9 +53,11 @@ type Ctx = {
   detalhes: EnvioDetalhes;
   resultado: EnvioResultado;
   templateNome: string | null;
+  restantes: number;
   iniciar: (p: IniciarParams) => Promise<void>;
   togglePausa: () => void;
   cancelar: () => void;
+  reativar: () => void;
   limpar: () => void;
 };
 
