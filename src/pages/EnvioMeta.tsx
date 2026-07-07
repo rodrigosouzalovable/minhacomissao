@@ -1134,7 +1134,7 @@ export default function EnvioMeta() {
           )}
 
           {(enviando || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
-            <DetalhesEnvioPainel detalhes={detalhes} />
+            <DetalhesEnvioPainel detalhes={detalhes} deliveryResumo={deliveryResumo} onRefresh={refreshStatus} />
           )}
         </CardContent>
       </Card>
