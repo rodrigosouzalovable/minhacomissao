@@ -418,12 +418,13 @@ export default function InboxMeta() {
 
   // ============== Envio ==============
   const enviar = async (textoCustom?: string) => {
-    const t = (textoCustom ?? '').trim();
-    if (!contatoAtivo || !t || enviando) return;
+    const raw = (textoCustom ?? '').trim();
+    if (!contatoAtivo || !raw || enviando) return;
     if (!janelaInfo.aberta) {
       toast({ title: 'Janela 24h expirada', description: 'Use um template HSM em "Envio Meta (massa)".', variant: 'destructive' });
       return;
     }
+    const t = formatarMensagemAtendente(raw);
     setEnviando(true);
     const tempId = `temp-${Date.now()}`;
     const tempMsg: MetaMensagem = {
