@@ -482,7 +482,11 @@ export default function InboxMeta() {
     if (modoGravacao === 'transcrito') {
       const texto = await audioRec.transcreverGravacao();
       if (texto) {
-        composerRef.current?.appendText(texto);
+        if (composerRef.current) {
+          composerRef.current.appendText(texto);
+        } else {
+          setPendingTranscricao(texto);
+        }
         toast({ title: 'Áudio transcrito', description: 'Revise o texto e clique em enviar.' });
       }
     } else {
