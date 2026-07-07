@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
-  Mic, AudioLines, FileText, Zap, Sun, Moon,
+  Mic, AudioLines, FileText, Zap, Sun, Moon, Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
