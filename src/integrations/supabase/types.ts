@@ -5489,6 +5489,20 @@ export type Database = {
         Args: { _instance_id: string }
         Returns: number
       }
+      get_meta_whatsapp_active_instances_for_sending: {
+        Args: never
+        Returns: {
+          ativo: boolean
+          display_phone: string
+          id: string
+          nome: string
+          saude_ban_info: Json
+          saude_checked_at: string
+          saude_name_status: string
+          saude_quality: string
+          saude_status: string
+        }[]
+      }
       get_table_ddl: { Args: { p_table: string }; Returns: string }
       has_acordos_compartilhados: {
         Args: { _user_id: string }
@@ -5525,6 +5539,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      is_active_meta_whatsapp_instance: {
+        Args: { _instancia_id: string }
+        Returns: boolean
       }
       is_admin_user: { Args: { uid: string }; Returns: boolean }
       listar_credores_distintos: {
