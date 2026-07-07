@@ -16,10 +16,12 @@ interface Props {
   onOpenChange: (o: boolean) => void;
   instancias: MetaInst[];
   defaultInstancia?: string;
+  atendenteNome?: string;
   onSent: (instancia_id: string, telefone: string) => void;
 }
 
-export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, onSent }: Props) {
+export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, atendenteNome, onSent }: Props) {
+
   const { toast } = useToast();
   const [instId, setInstId] = useState<string>(defaultInstancia || '');
   const [tel, setTel] = useState('');
@@ -74,8 +76,10 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           template_id: tpl.id,
           instancia_id: instId,
           cliente: { telefone: tel.replace(/\D/g, ''), nome: nome.trim() || undefined },
+          atendente_nome: atendenteNome?.trim() || undefined,
         },
       });
+
       if (error) throw new Error(error.message);
 
       // Instância bloqueada/pausada/restrita (síncrono)
