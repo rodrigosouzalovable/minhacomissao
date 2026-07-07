@@ -505,12 +505,16 @@ serve(async (req) => {
           if (!waId) continue;
 
           const novoStatus = mapStatusMeta(status);
+          const err0 = s.errors?.[0] || null;
+          const errTitle = err0?.title || err0?.message || null;
+          const errCode = Number(err0?.code || 0);
+          const errText = String(errTitle || '').toLowerCase();
 
           // Atualiza mensagem do inbox
           await supabase.from('meta_whatsapp_mensagens')
             .update({
               status_envio: novoStatus,
-              erro: status === 'failed' ? (s.errors?.[0]?.title || s.errors?.[0]?.message || 'falha') : null,
+              erro: status === 'failed' ? (errTitle || 'falha') : null,
             })
             .eq('wa_message_id', waId);
 
@@ -518,7 +522,43 @@ serve(async (req) => {
           await supabase.from('meta_whatsapp_envios_log')
             .update({ status })
             .eq('wa_message_id', waId);
+
+          // Detecta bloqueio/restrição/banimento da instância
+          if (status === 'failed') {
+            const restrictedCodes = new Set([131031, 131049, 368, 130429]);
+            const restrictedKeywords = ['locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio'];
+            const isRestricted =
+              restrictedCodes.has(errCode) ||
+              restrictedKeywords.some((k) => errText.includes(k));
+
+            if (isRestricted) {
+              const motivo = errTitle || `Restrição Meta (#${errCode})`;
+              const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+              await supabase.from('meta_whatsapp_instances').update({
+                estado_pool: 'restrita',
+                pausa_automatica_ate: ate,
+                pausa_automatica_motivo: motivo,
+              }).eq('id', inst.id);
+
+              try {
+                const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+                const chave = `meta_instancia_restrita_${inst.id}_${new Date().toISOString().slice(0, 10)}`;
+                await notificarAdmin(supabase, {
+                  tipo: 'meta_instancia_restrita',
+                  mensagem:
+                    `🚫 Instância Meta restringida/bloqueada\n\n` +
+                    `Instância: *${inst.nome || inst.display_phone || inst.id}*\n` +
+                    `Motivo: *${motivo}*${errCode ? ` (#${errCode})` : ''}\n\n` +
+                    `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
+                  chaveIdempotencia: chave,
+                });
+              } catch (e) {
+                console.log('[MetaWebhook] notificarAdmin falhou:', String(e).slice(0, 200));
+              }
+            }
+          }
         }
+
       }
     }
 
