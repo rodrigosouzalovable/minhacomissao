@@ -97,9 +97,9 @@ serve(async (req) => {
 
         if (prErr || !primeiraParcela || primeiraParcela.length === 0) continue;
 
-        if (primeiraParcela[0].data_prevista <= trintaDiasAtrasStr) {
-          // 30+ dias sem pagamento - excluir acordo e parcelas
-          console.log(`Excluindo acordo ${acordo.id} (sem pagamentos, vencido há 30+ dias)`);
+        if (primeiraParcela[0].data_prevista <= dezDiasAtrasStr) {
+          // 10+ dias sem pagamento - excluir acordo, parcelas e reativar dívida original
+          console.log(`Excluindo acordo ${acordo.id} (sem pagamentos, vencido há 10+ dias)`);
           
           const { error: delPagErr } = await supabase
             .from('pagamentos')
@@ -120,6 +120,8 @@ serve(async (req) => {
             console.error(`Erro ao excluir acordo ${acordo.id}:`, delAcErr);
             continue;
           }
+
+          await reativarDevedoresCpf((acordo as any).cliente_cpf);
 
           excluidos++;
         }
