@@ -2575,13 +2575,6 @@ export type Database = {
             foreignKeyName: "meta_whatsapp_contatos_instancia_id_fkey"
             columns: ["instancia_id"]
             isOneToOne: false
-            referencedRelation: "meta_whatsapp_active_instances_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "meta_whatsapp_contatos_instancia_id_fkey"
-            columns: ["instancia_id"]
-            isOneToOne: false
             referencedRelation: "meta_whatsapp_instances"
             referencedColumns: ["id"]
           },
@@ -2625,13 +2618,6 @@ export type Database = {
           wa_message_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "meta_whatsapp_envios_log_instancia_id_fkey"
-            columns: ["instancia_id"]
-            isOneToOne: false
-            referencedRelation: "meta_whatsapp_active_instances_public"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "meta_whatsapp_envios_log_instancia_id_fkey"
             columns: ["instancia_id"]
@@ -2845,13 +2831,6 @@ export type Database = {
             foreignKeyName: "meta_whatsapp_mensagens_instancia_id_fkey"
             columns: ["instancia_id"]
             isOneToOne: false
-            referencedRelation: "meta_whatsapp_active_instances_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "meta_whatsapp_mensagens_instancia_id_fkey"
-            columns: ["instancia_id"]
-            isOneToOne: false
             referencedRelation: "meta_whatsapp_instances"
             referencedColumns: ["id"]
           },
@@ -2937,13 +2916,6 @@ export type Database = {
           variaveis?: Json
         }
         Relationships: [
-          {
-            foreignKeyName: "meta_whatsapp_templates_instancia_id_fkey"
-            columns: ["instancia_id"]
-            isOneToOne: false
-            referencedRelation: "meta_whatsapp_active_instances_public"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "meta_whatsapp_templates_instancia_id_fkey"
             columns: ["instancia_id"]
@@ -5352,42 +5324,7 @@ export type Database = {
       }
     }
     Views: {
-      meta_whatsapp_active_instances_public: {
-        Row: {
-          ativo: boolean | null
-          display_phone: string | null
-          id: string | null
-          nome: string | null
-          saude_ban_info: Json | null
-          saude_checked_at: string | null
-          saude_name_status: string | null
-          saude_quality: string | null
-          saude_status: string | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          display_phone?: string | null
-          id?: string | null
-          nome?: string | null
-          saude_ban_info?: Json | null
-          saude_checked_at?: string | null
-          saude_name_status?: string | null
-          saude_quality?: string | null
-          saude_status?: string | null
-        }
-        Update: {
-          ativo?: boolean | null
-          display_phone?: string | null
-          id?: string | null
-          nome?: string | null
-          saude_ban_info?: Json | null
-          saude_checked_at?: string | null
-          saude_name_status?: string | null
-          saude_quality?: string | null
-          saude_status?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       buscar_devedores_por_documento: {
@@ -5551,6 +5488,20 @@ export type Database = {
       get_effective_daily_quota: {
         Args: { _instance_id: string }
         Returns: number
+      }
+      get_meta_whatsapp_active_instances_for_sending: {
+        Args: never
+        Returns: {
+          ativo: boolean
+          display_phone: string
+          id: string
+          nome: string
+          saude_ban_info: Json
+          saude_checked_at: string
+          saude_name_status: string
+          saude_quality: string
+          saude_status: string
+        }[]
       }
       get_table_ddl: { Args: { p_table: string }; Returns: string }
       has_acordos_compartilhados: {
