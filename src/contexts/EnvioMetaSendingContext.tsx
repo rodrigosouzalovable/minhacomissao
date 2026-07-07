@@ -62,6 +62,7 @@ type Ctx = {
   pausado: boolean;
   progresso: EnvioProgresso | null;
   detalhes: EnvioDetalhes;
+  deliveryResumo: DeliveryResumo;
   resultado: EnvioResultado;
   templateNome: string | null;
   restantes: number;
@@ -70,6 +71,7 @@ type Ctx = {
   cancelar: () => void;
   reativar: () => void;
   limpar: () => void;
+  refreshStatus: () => Promise<void>;
 };
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
