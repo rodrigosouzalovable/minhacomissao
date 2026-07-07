@@ -98,13 +98,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   const [job, setJob] = useState<any | null>(null);
   const [itens, setItens] = useState<any[]>([]);
+  const [logStatus, setLogStatus] = useState<Map<string, { status: DeliveryStatus; erro?: string }>>(new Map());
   const [extras, setExtras] = useState<LocalExtras>(loadExtras());
   const [tick, setTick] = useState(0);
   const onAfterRef = useRef<(() => void) | undefined>();
 
+  function normTel(t: string): string {
+    const d = String(t || "").replace(/\D+/g, "");
+    if (!d) return "";
+    if (d.startsWith("55") && d.length >= 12) return d;
+    if (d.length === 10 || d.length === 11) return "55" + d;
+    return d;
+  }
+
+  const mapStatusMeta = (s: string): DeliveryStatus => {
+    const v = String(s || "").toLowerCase();
+    if (v === "delivered") return "delivered";
+    if (v === "read") return "read";
+    if (v === "failed") return "failed";
+    return "sent";
+  };
+
   // Carrega job mais recente do usuário (rodando, pausado ou o último finalizado)
   const carregar = useCallback(async () => {
-    if (!uid) { setJob(null); setItens([]); return; }
+    if (!uid) { setJob(null); setItens([]); setLogStatus(new Map()); return; }
     const { data: ativo } = await (supabase as any)
       .from("envio_meta_job")
       .select("*")
@@ -134,8 +151,34 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         .order("processado_em", { ascending: false })
         .limit(2000);
       setItens(its || []);
+
+      // Puxa status de entrega da Meta (webhook grava em meta_whatsapp_envios_log)
+      try {
+        const desde = j.iniciado_em || new Date(Date.now() - 7 * 86400_000).toISOString();
+        const { data: logs } = await (supabase as any)
+          .from("meta_whatsapp_envios_log")
+          .select("telefone,status,erro,enviado_em")
+          .eq("user_id", uid)
+          .gte("enviado_em", desde)
+          .order("enviado_em", { ascending: false })
+          .limit(5000);
+        const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
+        // Ordem: mais forte vence (read > delivered > sent; failed = terminal)
+        const rank = (s: DeliveryStatus) => s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
+        for (const l of logs || []) {
+          const key = normTel(l.telefone);
+          if (!key) continue;
+          const st = mapStatusMeta(l.status);
+          const prev = m.get(key);
+          if (!prev || rank(st) > rank(prev.status)) {
+            m.set(key, { status: st, erro: l.erro || undefined });
+          }
+        }
+        setLogStatus(m);
+      } catch { /* ignora */ }
     } else {
       setItens([]);
+      setLogStatus(new Map());
     }
   }, [uid]);
 
