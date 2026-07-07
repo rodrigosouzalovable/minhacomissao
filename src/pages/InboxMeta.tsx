@@ -21,6 +21,7 @@ import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaContextMenu';
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
+import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
