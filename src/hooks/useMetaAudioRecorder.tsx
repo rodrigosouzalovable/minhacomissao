@@ -12,17 +12,15 @@ interface UseMetaAudioRecorderProps {
 }
 
 // Lazy-loaded ffmpeg.wasm instance — used to remux non-OGG audio into OGG/OPUS
-// (the only voice-note container the Meta Cloud API reliably accepts).
+// (the container the Meta Cloud API accepts most reliably).
 let _ffmpegPromise: Promise<any> | null = null;
 async function getFFmpeg(): Promise<any> {
   if (_ffmpegPromise) return _ffmpegPromise;
   _ffmpegPromise = (async () => {
-    // @ts-ignore - remote esm module
-    const { FFmpeg } = await import(/* @vite-ignore */ 'https://esm.sh/@ffmpeg/ffmpeg@0.12.10?bundle');
-    // @ts-ignore - remote esm module
-    const { toBlobURL } = await import(/* @vite-ignore */ 'https://esm.sh/@ffmpeg/util@0.12.1?bundle');
+    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+    const { toBlobURL } = await import('@ffmpeg/util');
     const ffmpeg = new FFmpeg();
-    const baseURL = 'https://esm.sh/@ffmpeg/core@0.12.6/dist/umd';
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -32,22 +30,25 @@ async function getFFmpeg(): Promise<any> {
   return _ffmpegPromise;
 }
 
-async function ensureOggOpus(blob: Blob, mimeType: string): Promise<{ blob: Blob; ext: 'ogg'; contentType: 'audio/ogg' }> {
-  // If we already recorded OGG/OPUS, ship it as-is (fast path, no wasm).
+async function ensureMetaAudio(
+  blob: Blob,
+  mimeType: string,
+): Promise<{ blob: Blob; ext: 'ogg' | 'mp4' | 'm4a'; contentType: string }> {
+  // Fast path: OGG/OPUS already — ship as-is.
   if (mimeType.includes('ogg')) {
     return { blob, ext: 'ogg', contentType: 'audio/ogg' };
   }
-  // Otherwise (webm, mp4, aac, …) remux/transcode to OGG/OPUS.
+  // Fast path: MP4/AAC (Safari default) — Meta accepts audio/mp4, no wasm needed.
+  if (mimeType.includes('mp4') || mimeType.includes('m4a') || mimeType.includes('aac')) {
+    return { blob, ext: 'm4a', contentType: 'audio/mp4' };
+  }
+  // Otherwise (webm/opus on Chrome/Edge/Firefox) → remux to OGG/OPUS via ffmpeg.wasm.
   const ffmpeg = await getFFmpeg();
-  const inExt = mimeType.includes('webm') ? 'webm'
-    : mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a'
-    : mimeType.includes('aac') ? 'aac'
-    : 'bin';
+  const inExt = mimeType.includes('webm') ? 'webm' : 'bin';
   const inName = `in.${inExt}`;
   const outName = 'out.ogg';
   const buf = new Uint8Array(await blob.arrayBuffer());
   await ffmpeg.writeFile(inName, buf);
-  // WebM + Opus → remux without re-encode (fast). Other formats → transcode to Opus.
   const args = mimeType.includes('webm')
     ? ['-i', inName, '-c:a', 'copy', '-vn', outName]
     : ['-i', inName, '-c:a', 'libopus', '-b:a', '32k', '-vn', outName];
@@ -57,6 +58,7 @@ async function ensureOggOpus(blob: Blob, mimeType: string): Promise<{ blob: Blob
   try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
   return { blob: out, ext: 'ogg', contentType: 'audio/ogg' };
 }
+
 
 export function useMetaAudioRecorder({
   instanciaId, telefone, userId, replyToWaId, conteudoCitado, onSent,
