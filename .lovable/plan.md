@@ -1,30 +1,17 @@
-## Objetivo
-Corrigir o fluxo “Nova conversa Meta” para qualquer usuário autenticado conseguir selecionar instância, ver apenas os templates aprovados daquela instância, pré-visualizar no mesmo formato da tela Envio Meta (massa) e enviar o template.
+## Problema
 
-## Plano de implementação
+O componente `TemplateWhatsAppPreview` usa uma constante fixa `SAMPLE = "Rodrigo"` para substituir variáveis `{{...}}` do template. Por isso, mesmo quando o usuário digita "Yasmim" no diálogo "Nova conversa Meta", a pré-visualização continua exibindo "Rodrigo".
 
-1. **Permissões de leitura para funcionários**
-   - Criar uma migração para permitir que usuários autenticados visualizem instâncias Meta ativas e templates aprovados de utilidade.
-   - Manter alterações administrativas restritas aos donos/admins atuais.
-   - Não liberar templates de marketing nesse fluxo, para preservar a trava de economia/custos.
+## Correção
 
-2. **Diálogo “Nova conversa Meta”**
-   - Ajustar a busca de templates para carregar somente templates `approved` + `UTILITY` + `instancia_id` da instância selecionada.
-   - Adicionar estado de carregamento/erro para evitar o dropdown ficar vazio sem explicação.
-   - Garantir que o botão “Enviar template” só dependa de: instância, telefone e template selecionados, sem restrição por cargo.
+1. **`src/components/meta/TemplateWhatsAppPreview.tsx`**
+   - Adicionar prop opcional `sampleName?: string` no componente.
+   - Passar esse valor para `renderBodyWithVars` (transformar em função interna ou receber o valor via closure) para que substitua `{{name}}`/variáveis pelo nome real quando fornecido, mantendo `"Rodrigo"` como fallback quando vazio.
 
-3. **Pré-visualização igual ao Envio Meta (massa)**
-   - Reutilizar o componente visual `TemplateWhatsAppPreview` dentro do diálogo.
-   - A prévia aparecerá após selecionar instância e template, mostrando header/imagem, texto, rodapé e botões exatamente como no preview da tela de envio em massa.
-   - Substituir o preview simples em bloco cinza pelo card estilo WhatsApp.
+2. **`src/components/inbox/meta/MetaNovaConversaDialog.tsx`**
+   - Repassar `sampleName={nome.trim() || undefined}` para `<TemplateWhatsAppPreview />`.
+   - Como `nome` já está no state e o componente re-renderiza a cada digitação, a pré-visualização atualiza automaticamente enquanto o usuário digita.
 
-4. **Consistência do envio**
-   - Confirmar que o envio continua chamando a função com `template_id`, `instancia_id` e `cliente.telefone`.
-   - Preservar nome digitado para preencher variáveis quando o template for enviado.
+## Fora de escopo
 
-## Arquivos previstos
-- `src/components/inbox/meta/MetaNovaConversaDialog.tsx`
-- Nova migração SQL em `supabase/migrations/` para permissões de leitura autenticada em instâncias/templates Meta aprovados.
-
-## Observação de custo
-Essa mudança não cria infraestrutura nova nem aumenta custos por si só. O único custo segue sendo o envio real de mensagens Meta quando o usuário clicar em enviar.
+- Nenhuma mudança em edge functions, permissões, RLS ou lógica de envio. Somente ajuste visual da pré-visualização.
