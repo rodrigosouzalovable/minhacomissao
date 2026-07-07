@@ -33,7 +33,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
     (async () => {
       const { data } = await supabase.from('meta_whatsapp_templates')
         .select('id, nome_template, idioma, categoria')
-        .eq('status', 'APPROVED')
+        .eq('status', 'approved')
         .eq('categoria', 'UTILITY')
         .order('nome_template');
       setTemplates((data as Template[]) ?? []);
