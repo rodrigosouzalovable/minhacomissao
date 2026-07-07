@@ -412,9 +412,13 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
   }, [job, restantes, carregar]);
 
+  const refreshStatus = useCallback(async () => {
+    await carregar();
+  }, [carregar]);
+
   return (
     <EnvioMetaSendingContext.Provider
-      value={{ enviando, pausado, progresso, detalhes, resultado, templateNome, restantes, iniciar, togglePausa, cancelar, reativar, limpar }}
+      value={{ enviando, pausado, progresso, detalhes, deliveryResumo, resultado, templateNome, restantes, iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus }}
     >
       {children}
     </EnvioMetaSendingContext.Provider>
