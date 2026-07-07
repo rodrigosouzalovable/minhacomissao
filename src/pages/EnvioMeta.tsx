@@ -123,9 +123,11 @@ export default function EnvioMeta() {
     progresso,
     detalhes,
     resultado,
+    restantes,
     iniciar,
     togglePausa,
     cancelar,
+    reativar,
     limpar,
   } = useEnvioMetaSending();
 
