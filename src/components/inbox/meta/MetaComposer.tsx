@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { memo, useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Loader2, Send } from 'lucide-react';
@@ -10,6 +10,8 @@ interface Props {
   onSend: (texto: string) => void;
   onPaste?: (e: React.ClipboardEvent) => void;
   onEscape?: () => void;
+  initialText?: string;
+  onInitialTextConsumed?: () => void;
 }
 
 export interface MetaComposerHandle {
@@ -18,7 +20,7 @@ export interface MetaComposerHandle {
 }
 
 const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComposerImpl(
-  { disabled, enviando, placeholder, onSend, onPaste, onEscape },
+  { disabled, enviando, placeholder, onSend, onPaste, onEscape, initialText, onInitialTextConsumed },
   ref,
 ) {
   const [texto, setTexto] = useState('');
@@ -31,13 +33,26 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
     onSend(t);
   }, [texto, onSend]);
 
+  const doAppend = useCallback((t: string) => {
+    setTexto(prev => (prev ? `${prev} ${t}` : t));
+    const focus = () => taRef.current?.focus();
+    requestAnimationFrame(focus);
+    setTimeout(focus, 50);
+  }, []);
+
   useImperativeHandle(ref, () => ({
-    appendText: (t: string) => {
-      setTexto(prev => (prev ? `${prev} ${t}` : t));
-      requestAnimationFrame(() => taRef.current?.focus());
-    },
+    appendText: doAppend,
     focus: () => taRef.current?.focus(),
-  }), []);
+  }), [doAppend]);
+
+  // Fallback: apply text passed via prop when ref wasn't available at call site.
+  useEffect(() => {
+    if (initialText && initialText.trim()) {
+      doAppend(initialText);
+      onInitialTextConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText]);
 
   return (
     <>
