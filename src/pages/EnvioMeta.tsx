@@ -123,9 +123,11 @@ export default function EnvioMeta() {
     progresso,
     detalhes,
     resultado,
+    restantes,
     iniciar,
     togglePausa,
     cancelar,
+    reativar,
     limpar,
   } = useEnvioMetaSending();
 
@@ -1077,6 +1079,12 @@ export default function EnvioMeta() {
                   Cancelar
                 </Button>
               </>
+            )}
+            {!enviando && resultado && restantes > 0 && (
+              <Button type="button" size="lg" onClick={reativar} className="bg-green-600 hover:bg-green-700 text-white">
+                <Send className="h-4 w-4 mr-2" />
+                Reativar envio ({restantes} restantes)
+              </Button>
             )}
             {!enviando && (resultado || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
               <Button type="button" variant="outline" size="lg" onClick={limpar}>
