@@ -997,8 +997,10 @@ export default function InboxMeta() {
         onOpenChange={setNovaConversaOpen}
         instancias={instancias}
         defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
+        atendenteNome={atendenteNome}
         onSent={() => { fetchContatos(); }}
       />
+
     </AppLayout>
   );
 }
