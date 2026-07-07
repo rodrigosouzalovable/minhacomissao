@@ -33,7 +33,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   useEffect(() => { if (defaultInstancia) setInstId(defaultInstancia); }, [defaultInstancia]);
 
   useEffect(() => {
-    if (!open || !instId) { setTemplates([]); setTemplateName(''); setErroTemplates(''); return; }
+    if (!open || !instId) { setTemplates([]); setTemplateName(''); setErroTemplates(''); setCarregandoTemplates(false); return; }
     let active = true;
     (async () => {
       setCarregandoTemplates(true);
