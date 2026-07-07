@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2 } from 'lucide-react';
+import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
 
 interface MetaInst { id: string; nome: string | null; display_phone: string | null; }
 interface Template { id: string; nome_template: string; idioma: string; categoria: string; body_text: string | null; variaveis: any; }
@@ -25,36 +26,42 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   const [nome, setNome] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateName, setTemplateName] = useState('');
+  const [carregandoTemplates, setCarregandoTemplates] = useState(false);
+  const [erroTemplates, setErroTemplates] = useState('');
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => { if (defaultInstancia) setInstId(defaultInstancia); }, [defaultInstancia]);
 
   useEffect(() => {
-    if (!open || !instId) { setTemplates([]); setTemplateName(''); return; }
+    if (!open || !instId) { setTemplates([]); setTemplateName(''); setErroTemplates(''); return; }
+    let active = true;
     (async () => {
-      const { data } = await supabase.from('meta_whatsapp_templates')
+      setCarregandoTemplates(true);
+      setErroTemplates('');
+      setTemplates([]);
+      setTemplateName('');
+      const { data, error } = await supabase.from('meta_whatsapp_templates')
         .select('id, nome_template, idioma, categoria, body_text, variaveis')
         .eq('status', 'approved')
         .eq('categoria', 'UTILITY')
         .eq('instancia_id', instId)
         .order('nome_template');
-      setTemplates((data as Template[]) ?? []);
-      setTemplateName('');
+      if (!active) return;
+      if (error) {
+        setErroTemplates(error.message);
+        setTemplates([]);
+      } else {
+        setTemplates((data as Template[]) ?? []);
+      }
+      setCarregandoTemplates(false);
     })();
+    return () => { active = false; };
   }, [open, instId]);
 
   const selectedTemplate = useMemo(
     () => templates.find(t => t.nome_template === templateName),
     [templates, templateName]
   );
-
-  const preview = useMemo(() => {
-    if (!selectedTemplate?.body_text) return '';
-    const nomeValor = nome.trim() || 'Cliente';
-    return selectedTemplate.body_text
-      .replace(/\{\{\s*name\s*\}\}/gi, nomeValor)
-      .replace(/\{\{\s*1\s*\}\}/g, nomeValor);
-  }, [selectedTemplate, nome]);
 
   const enviar = async () => {
     if (!instId || !tel.trim() || !templateName) return;
@@ -81,9 +88,19 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
     } finally { setEnviando(false); }
   };
 
+  const templatePlaceholder = !instId
+    ? 'Selecione uma instância'
+    : carregandoTemplates
+      ? 'Carregando templates...'
+      : erroTemplates
+        ? 'Erro ao carregar templates'
+        : templates.length === 0
+          ? 'Nenhum template para esta instância'
+          : 'Template de utilidade';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova conversa Meta</DialogTitle>
           <DialogDescription>
@@ -101,9 +118,9 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           </Select>
           <Input placeholder="Telefone (DDI+DDD+número)" value={tel} onChange={e => setTel(e.target.value)} />
           <Input placeholder="Nome (opcional, para {{name}})" value={nome} onChange={e => setNome(e.target.value)} />
-          <Select value={templateName} onValueChange={setTemplateName} disabled={!instId || templates.length === 0}>
+          <Select value={templateName} onValueChange={setTemplateName} disabled={!instId || carregandoTemplates || templates.length === 0}>
             <SelectTrigger>
-              <SelectValue placeholder={!instId ? 'Selecione uma instância' : templates.length === 0 ? 'Nenhum template para esta instância' : 'Template de utilidade'} />
+              <SelectValue placeholder={templatePlaceholder} />
             </SelectTrigger>
             <SelectContent>
               {templates.map(t => (
@@ -113,10 +130,19 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
               ))}
             </SelectContent>
           </Select>
-          {preview && (
+          {carregandoTemplates && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Buscando templates aprovados desta instância...
+            </div>
+          )}
+          {erroTemplates && (
+            <p className="text-xs text-destructive">Não foi possível carregar os templates: {erroTemplates}</p>
+          )}
+          {selectedTemplate && (
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Pré-visualização</p>
-              <div className="bg-muted rounded-md p-3 text-sm whitespace-pre-wrap">{preview}</div>
+              <TemplateWhatsAppPreview template={selectedTemplate} />
             </div>
           )}
           <Button onClick={enviar} disabled={!instId || !tel.trim() || !templateName || enviando} className="w-full">
