@@ -85,7 +85,7 @@ export default function TemplateWhatsAppPreview({
           </div>
         )}
         {headerFormat === "TEXT" && headerText && (
-          <div className="px-3 pt-2 font-bold text-sm">{renderBodyWithVars(headerText)}</div>
+          <div className="px-3 pt-2 font-bold text-sm">{renderBodyWithVars(headerText, sample)}</div>
         )}
         {(headerFormat === "VIDEO" || headerFormat === "DOCUMENT") && (
           <div className="bg-zinc-300 aspect-video flex items-center justify-center text-xs text-zinc-700">
