@@ -207,7 +207,7 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { template_id, instancia_id, cliente, user_id, modo_teste } = await req.json();
+    const { template_id, instancia_id, cliente, user_id, modo_teste, atendente_nome } = await req.json();
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
