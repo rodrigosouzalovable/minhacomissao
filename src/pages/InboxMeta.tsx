@@ -118,6 +118,23 @@ export default function InboxMeta() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<MetaComposerHandle>(null);
   const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
+  const [atendenteNome, setAtendenteNome] = useState<string>('');
+  const [pendingTranscricao, setPendingTranscricao] = useState<string>('');
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle();
+      const nome = (data?.nome || '').trim();
+      if (nome) setAtendenteNome(nome);
+    })();
+  }, [user]);
+
+  const formatarMensagemAtendente = useCallback((t: string): string => {
+    if (!atendenteNome) return t;
+    if (/^\*Atendente\s/i.test(t)) return t;
+    return `*Atendente ${atendenteNome}:*\n\n${t}`;
+  }, [atendenteNome]);
   const themeStorageKey = user ? `inbox-meta-theme:${user.id}` : 'inbox-meta-theme';
   const [tema, setTema] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light';
