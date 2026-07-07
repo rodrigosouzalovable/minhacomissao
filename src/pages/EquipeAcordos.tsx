@@ -685,6 +685,7 @@ export default function EquipeAcordos() {
                 {enviandoRelatorio ? 'Enviando...' : 'Enviar Relatório'}
               </Button>
             )}
+            {isAdmin && <AcordosAbandonadosDialog />}
             {isAdmin && (
               <Button
                 variant="outline"
