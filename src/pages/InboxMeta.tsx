@@ -128,9 +128,18 @@ export default function InboxMeta() {
     (async () => {
       const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle();
       const nome = (data?.nome || '').trim();
-      if (nome) setAtendenteNome(nome);
+      if (!nome) return;
+      const APELIDOS: { match: RegExp; nome: string }[] = [
+        { match: /^anna\s*fl[aá]via/i, nome: 'Anna Flavia' },
+        { match: /^fernanda/i, nome: 'Fernanda' },
+        { match: /^wallace/i, nome: 'Wallace' },
+        { match: /^yasmi?n/i, nome: 'Yasmim' },
+      ];
+      const match = APELIDOS.find(a => a.match.test(nome));
+      setAtendenteNome(match ? match.nome : nome.split(' ')[0]);
     })();
   }, [user]);
+
 
   const formatarMensagemAtendente = useCallback((t: string): string => {
     if (!atendenteNome) return t;
