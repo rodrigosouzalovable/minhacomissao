@@ -7,9 +7,9 @@ type Template = {
   variaveis?: any;
 };
 
-const SAMPLE = "Rodrigo";
+const DEFAULT_SAMPLE = "Rodrigo";
 
-function renderBodyWithVars(text: string) {
+function renderBodyWithVars(text: string, sample: string = DEFAULT_SAMPLE) {
   const parts: (string | JSX.Element)[] = [];
   const regex = /\{\{\s*([a-zA-Z_0-9]+)\s*\}\}/g;
   let last = 0;
@@ -22,7 +22,7 @@ function renderBodyWithVars(text: string) {
         key={`v-${i++}`}
         className="bg-yellow-200/70 dark:bg-yellow-500/30 px-1 rounded text-xs font-medium"
       >
-        {SAMPLE}
+        {sample}
       </span>
     );
     last = m.index + m[0].length;
@@ -30,6 +30,7 @@ function renderBodyWithVars(text: string) {
   if (last < text.length) parts.push(text.slice(last));
   return parts;
 }
+
 
 export default function TemplateWhatsAppPreview({
   template,
