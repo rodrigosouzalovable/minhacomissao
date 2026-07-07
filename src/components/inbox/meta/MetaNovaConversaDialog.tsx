@@ -86,7 +86,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           <Input placeholder="Telefone (DDI+DDD+número)" value={tel} onChange={e => setTel(e.target.value)} />
           <Input placeholder="Nome (opcional, para {{name}})" value={nome} onChange={e => setNome(e.target.value)} />
           <Select value={templateName} onValueChange={setTemplateName}>
-            <SelectTrigger><SelectValue placeholder="Template HSM" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Template de utilidade" /></SelectTrigger>
             <SelectContent>
               {templates.map(t => (
                 <SelectItem key={t.id} value={t.nome_template}>
