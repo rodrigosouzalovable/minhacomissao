@@ -76,8 +76,10 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           template_id: tpl.id,
           instancia_id: instId,
           cliente: { telefone: tel.replace(/\D/g, ''), nome: nome.trim() || undefined },
+          atendente_nome: atendenteNome?.trim() || undefined,
         },
       });
+
       if (error) throw new Error(error.message);
 
       // Instância bloqueada/pausada/restrita (síncrono)
