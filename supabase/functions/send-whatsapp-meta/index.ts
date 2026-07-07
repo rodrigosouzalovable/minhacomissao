@@ -401,10 +401,50 @@ Deno.serve(async (req) => {
         status: 'failed',
         erro: msg,
       });
+
+      // Detecta bloqueio/restrição/banimento síncrono da Meta
+      const restrictedCodes = [131031, 131049, 368, 130429];
+      const lower = msg.toLowerCase();
+      const restrictedKeywords = ['locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio'];
+      const isRestricted =
+        restrictedCodes.some((c) => msg.includes(`#${c}`)) ||
+        restrictedKeywords.some((k) => lower.includes(k));
+
+      if (isRestricted) {
+        const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        await supabase.from('meta_whatsapp_instances').update({
+          estado_pool: 'restrita',
+          pausa_automatica_ate: ate,
+          pausa_automatica_motivo: msg.slice(0, 200),
+        }).eq('id', inst.id);
+
+        try {
+          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+          const chave = `meta_instancia_restrita_${inst.id}_${new Date().toISOString().slice(0, 10)}`;
+          await notificarAdmin(supabase, {
+            tipo: 'meta_instancia_restrita',
+            mensagem:
+              `🚫 Instância Meta restringida/bloqueada\n\n` +
+              `Instância: *${inst.nome || inst.display_phone || inst.id}*\n` +
+              `Motivo: *${msg}*\n\n` +
+              `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
+            chaveIdempotencia: chave,
+          });
+        } catch (_) { /* ignore */ }
+
+        return new Response(JSON.stringify({
+          success: false,
+          instance_restricted: true,
+          error: `Instância restringida/banida pela Meta: ${msg}`,
+          instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       return new Response(JSON.stringify({ success: false, error: msg, instancia_id }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
   } catch (err) {
     return new Response(JSON.stringify({ success: false, error: err instanceof Error ? err.message : 'Erro' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
