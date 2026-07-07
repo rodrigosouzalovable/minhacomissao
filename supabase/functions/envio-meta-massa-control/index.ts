@@ -68,6 +68,37 @@ Deno.serve(async (req) => {
         status: 'cancelado',
         concluido_em: new Date().toISOString(),
       }).eq('id', jobId);
+    } else if (acao === 'reativar') {
+      if (!['cancelado', 'erro', 'concluido'].includes(job.status)) {
+        return new Response(JSON.stringify({ success: false, error: 'só é possível reativar jobs finalizados' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      // Conta pendentes; se não houver, nada a fazer
+      const { count: pendentes } = await supabase
+        .from('envio_meta_job_item')
+        .select('id', { count: 'exact', head: true })
+        .eq('job_id', jobId)
+        .eq('status', 'pendente');
+      if (!pendentes || pendentes === 0) {
+        return new Response(JSON.stringify({ success: false, error: 'não há contatos pendentes para reativar' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      await supabase.from('envio_meta_job').update({
+        status: 'rodando',
+        concluido_em: null,
+        status_motivo: null,
+        proximo_em: new Date().toISOString(),
+      }).eq('id', jobId);
+      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ job_id: jobId }),
+      }).catch(() => {});
     } else if (acao === 'limpar') {
       // Só remove jobs concluídos/cancelados
       if (!['concluido', 'cancelado', 'erro'].includes(job.status)) {
