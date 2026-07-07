@@ -969,6 +969,8 @@ export default function InboxMeta() {
                       onSend={(t) => enviar(t)}
                       onPaste={onPaste}
                       onEscape={() => respondendo && setRespondendo(null)}
+                      initialText={pendingTranscricao}
+                      onInitialTextConsumed={() => setPendingTranscricao('')}
                     />
                   </div>
                 )}
