@@ -348,7 +348,11 @@ Deno.serve(async (req) => {
         const headerFormat = getHeaderFormat(template);
         const headerImageUrl = headerFormat === 'IMAGE' ? (template?.variaveis?._header_image_url || null) : null;
         const tipoConteudo = headerImageUrl ? 'imagem' : 'texto';
-        const preview = bodyRendered || `[Template: ${template.nome_template}]`;
+        const previewBody = bodyRendered || `[Template: ${template.nome_template}]`;
+        const atendenteNome = String(atendente_nome || '').trim();
+        const preview = atendenteNome && !/^\*Atendente\s/i.test(previewBody)
+          ? `*Atendente ${atendenteNome}:*\n\n${previewBody}`
+          : previewBody;
 
         await supabase.from('meta_whatsapp_mensagens').insert({
           user_id: user_id || inst.user_id,
@@ -363,6 +367,7 @@ Deno.serve(async (req) => {
           wa_message_id: waId,
           template_nome: template.nome_template,
         } as any);
+        let contatoIdFinal: string | null = null;
         const { data: ex } = await supabase
           .from('meta_whatsapp_contatos')
           .select('id')
@@ -370,22 +375,49 @@ Deno.serve(async (req) => {
           .eq('telefone', tel)
           .maybeSingle();
         if (ex) {
+          contatoIdFinal = (ex as any).id;
           await supabase.from('meta_whatsapp_contatos').update({
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
             atualizado_em: nowIso,
           }).eq('id', ex.id);
         } else {
-          await supabase.from('meta_whatsapp_contatos').insert({
+          const { data: novo } = await supabase.from('meta_whatsapp_contatos').insert({
             user_id: user_id || inst.user_id,
             instancia_id: inst.id,
             telefone: tel,
             nome: (cliente.nome || '').trim() || null,
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
-          } as any);
+          } as any).select('id').maybeSingle();
+          contatoIdFinal = (novo as any)?.id ?? null;
+        }
+
+        // Auto-atribuir etiqueta "Atendente: {nome}" ao contato
+        if (atendenteNome && contatoIdFinal) {
+          try {
+            const { data: etiq } = await supabase
+              .from('meta_whatsapp_etiquetas')
+              .select('id, nome')
+              .eq('user_id', inst.user_id)
+              .ilike('nome', `Atendente: ${atendenteNome}`)
+              .maybeSingle();
+            if (etiq?.id) {
+              const { error: linkErr } = await supabase
+                .from('meta_whatsapp_contato_etiquetas')
+                .insert({ contato_id: contatoIdFinal, etiqueta_id: etiq.id } as any);
+              if (linkErr && linkErr.code !== '23505' && !String(linkErr.message || '').toLowerCase().includes('duplicate')) {
+                console.log('[send-whatsapp-meta] falha ao vincular etiqueta atendente:', linkErr.message);
+              }
+            } else {
+              console.log(`[send-whatsapp-meta] etiqueta "Atendente: ${atendenteNome}" não encontrada para user ${inst.user_id}`);
+            }
+          } catch (e) {
+            console.log('[send-whatsapp-meta] erro auto-etiqueta:', String(e).slice(0, 200));
+          }
         }
       } catch (_) { /* não bloqueia o envio */ }
+
 
 
       return new Response(JSON.stringify({ success: true, waId, instancia_id }), {
