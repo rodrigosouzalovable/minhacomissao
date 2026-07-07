@@ -202,6 +202,25 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           if (job && jobId === job.id) carregar();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "meta_whatsapp_envios_log", filter: `user_id=eq.${uid}` },
+        (payload: any) => {
+          const row = payload.new || payload.old;
+          if (!row?.telefone || !row?.status) return;
+          const key = normTel(row.telefone);
+          setLogStatus((prev) => {
+            const next = new Map(prev);
+            const st = mapStatusMeta(row.status);
+            const rank = (s: DeliveryStatus) => s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
+            const cur = next.get(key);
+            if (!cur || rank(st) > rank(cur.status)) {
+              next.set(key, { status: st, erro: row.erro || undefined });
+            }
+            return next;
+          });
+        }
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [uid, job?.id, carregar]);
