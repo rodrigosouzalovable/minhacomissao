@@ -122,6 +122,7 @@ export default function EnvioMeta() {
     pausado,
     progresso,
     detalhes,
+    deliveryResumo,
     resultado,
     restantes,
     iniciar,
@@ -129,6 +130,7 @@ export default function EnvioMeta() {
     cancelar,
     reativar,
     limpar,
+    refreshStatus,
   } = useEnvioMetaSending();
 
   const [instancias, setInstancias] = useState<Instancia[]>([]);
@@ -1132,7 +1134,7 @@ export default function EnvioMeta() {
           )}
 
           {(enviando || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
-            <DetalhesEnvioPainel detalhes={detalhes} />
+            <DetalhesEnvioPainel detalhes={detalhes} deliveryResumo={deliveryResumo} onRefresh={refreshStatus} />
           )}
         </CardContent>
       </Card>
@@ -1202,30 +1204,28 @@ function SaudeBadgeQuality({ quality }: { quality?: string | null }) {
   return <Badge className={`text-[10px] px-1.5 py-0 ${cls}`}>QUALIDADE {q}</Badge>;
 }
 
-function DetalhesEnvioPainel({ detalhes }: {
+function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
   detalhes: {
-    enviados: { telefone: string; instancia?: string; erro?: string; ts: number }[];
+    enviados: { telefone: string; instancia?: string; erro?: string; ts: number; deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed'; deliveryErro?: string }[];
     erros: { telefone: string; instancia?: string; erro?: string; ts: number }[];
     semWhatsapp: string[];
     erroValidacao: string[];
   };
+  deliveryResumo: { aceito: number; entregue: number; lida: number; falhou: number; aguardando: number };
+  onRefresh: () => Promise<void>;
 }) {
-  const copiar = async (linhas: string[], label: string) => {
-    try {
-      await navigator.clipboard.writeText(linhas.join("\n"));
-      toast.success(`${label}: ${linhas.length} número(s) copiado(s)`);
-    } catch {
-      toast.error("Não foi possível copiar");
-    }
+  const copiar = (arr: string[], titulo: string) => {
+    navigator.clipboard.writeText(arr.join("\n"));
+    toast.success(`${titulo}: ${arr.length} números copiados`);
   };
 
   const exportarCSV = () => {
-    const rows: string[] = ["telefone,status,instancia,erro"];
+    const rows: string[] = ["telefone,status,instancia,delivery_status,delivery_erro,erro"];
     const esc = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
-    detalhes.enviados.forEach((e) => rows.push(`${esc(e.telefone)},enviado,${esc(e.instancia || "")},`));
-    detalhes.erros.forEach((e) => rows.push(`${esc(e.telefone)},erro,${esc(e.instancia || "")},${esc(e.erro || "")}`));
-    detalhes.semWhatsapp.forEach((t) => rows.push(`${esc(t)},sem_whatsapp,,`));
-    detalhes.erroValidacao.forEach((t) => rows.push(`${esc(t)},erro_validacao,,`));
+    detalhes.enviados.forEach((e) => rows.push(`${esc(e.telefone)},enviado,${esc(e.instancia || "")},${esc(e.deliveryStatus || "aguardando")},${esc(e.deliveryErro || "")},`));
+    detalhes.erros.forEach((e) => rows.push(`${esc(e.telefone)},erro,${esc(e.instancia || "")},,,${esc(e.erro || "")}`));
+    detalhes.semWhatsapp.forEach((t) => rows.push(`${esc(t)},sem_whatsapp,,,,`));
+    detalhes.erroValidacao.forEach((t) => rows.push(`${esc(t)},erro_validacao,,,,`));
     const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1235,10 +1235,25 @@ function DetalhesEnvioPainel({ detalhes }: {
     URL.revokeObjectURL(url);
   };
 
-  const Section = ({ titulo, cor, count, children, onCopy }: { titulo: string; cor: string; count: number; children: React.ReactNode; onCopy?: () => void }) => (
+  const DeliveryBadge = ({ s, erro }: { s?: 'sent' | 'delivered' | 'read' | 'failed'; erro?: string }) => {
+    if (!s) return <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Aguardando…</span>;
+    if (s === 'sent') return <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Aceito</span>;
+    if (s === 'delivered') return <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400">Entregue</span>;
+    if (s === 'read') return <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-600 dark:text-green-400">Lida</span>;
+    return (
+      <span title={erro || 'Falhou'} className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-600 dark:text-red-400">
+        Falhou
+      </span>
+    );
+  };
+
+  const Section = ({ titulo, cor, count, children, onCopy, headerExtra }: { titulo: string; cor: string; count: number; children: React.ReactNode; onCopy?: () => void; headerExtra?: React.ReactNode }) => (
     <details className="rounded-md border bg-card" open={count > 0 && count <= 20}>
       <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between gap-2">
-        <span className={cor}>{titulo} <span className="text-muted-foreground font-normal">({count})</span></span>
+        <span className={cor}>
+          {titulo} <span className="text-muted-foreground font-normal">({count})</span>
+          {headerExtra}
+        </span>
         {onCopy && count > 0 && (
           <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); onCopy(); }}>
             Copiar
@@ -1251,11 +1266,29 @@ function DetalhesEnvioPainel({ detalhes }: {
     </details>
   );
 
+  const resumoText = detalhes.enviados.length > 0 ? (
+    <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+      · {deliveryResumo.entregue} entregues · {deliveryResumo.lida} lidas
+      {deliveryResumo.falhou > 0 && <> · <span className="text-red-600">{deliveryResumo.falhou} falharam</span></>}
+      {deliveryResumo.aguardando > 0 && <> · {deliveryResumo.aguardando} aguardando</>}
+    </span>
+  ) : null;
+
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h4 className="text-sm font-semibold">Detalhamento dos envios</h4>
-        <Button type="button" size="sm" variant="outline" onClick={exportarCSV}>Exportar CSV</Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={() => onRefresh()} title="Buscar status mais recente da Meta">
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Atualizar status
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={exportarCSV}>Exportar CSV</Button>
+        </div>
+      </div>
+
+      <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-[11px] text-blue-700 dark:text-blue-300 leading-snug">
+        <strong>Por que não vejo essas mensagens no WhatsApp do celular?</strong> Envios pela API oficial da Meta (Cloud API) são feitos direto pelos servidores da Meta e <u>não aparecem no aparelho do chip</u> — só existem no Meta Business Manager e no Inbox Meta interno. O status abaixo (Aceito → Entregue → Lida) vem direto da Meta via webhook.
       </div>
 
       <Section
@@ -1263,10 +1296,14 @@ function DetalhesEnvioPainel({ detalhes }: {
         cor="text-green-600"
         count={detalhes.enviados.length}
         onCopy={() => copiar(detalhes.enviados.map((e) => e.telefone), "Enviados")}
+        headerExtra={resumoText}
       >
         {detalhes.enviados.map((e, i) => (
           <div key={i} className="flex items-center justify-between gap-2">
-            <span>{e.telefone}</span>
+            <span className="flex items-center gap-2">
+              {e.telefone}
+              <DeliveryBadge s={e.deliveryStatus} erro={e.deliveryErro} />
+            </span>
             <span className="text-muted-foreground">{e.instancia} · {new Date(e.ts).toLocaleTimeString()}</span>
           </div>
         ))}

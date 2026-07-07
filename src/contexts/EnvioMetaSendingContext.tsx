@@ -3,7 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
-export type EnvioItem = { telefone: string; instancia?: string; erro?: string; ts: number };
+export type DeliveryStatus = 'sent' | 'delivered' | 'read' | 'failed';
+
+export type EnvioItem = {
+  telefone: string;
+  instancia?: string;
+  erro?: string;
+  ts: number;
+  deliveryStatus?: DeliveryStatus;
+  deliveryErro?: string;
+};
 
 export type EnvioDetalhes = {
   enviados: EnvioItem[];
@@ -11,6 +20,8 @@ export type EnvioDetalhes = {
   semWhatsapp: string[];
   erroValidacao: string[];
 };
+
+export type DeliveryResumo = { aceito: number; entregue: number; lida: number; falhou: number; aguardando: number };
 
 export type EnvioProgresso = {
   enviados: number;
@@ -51,6 +62,7 @@ type Ctx = {
   pausado: boolean;
   progresso: EnvioProgresso | null;
   detalhes: EnvioDetalhes;
+  deliveryResumo: DeliveryResumo;
   resultado: EnvioResultado;
   templateNome: string | null;
   restantes: number;
@@ -59,6 +71,7 @@ type Ctx = {
   cancelar: () => void;
   reativar: () => void;
   limpar: () => void;
+  refreshStatus: () => Promise<void>;
 };
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
@@ -85,13 +98,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   const [job, setJob] = useState<any | null>(null);
   const [itens, setItens] = useState<any[]>([]);
+  const [logStatus, setLogStatus] = useState<Map<string, { status: DeliveryStatus; erro?: string }>>(new Map());
   const [extras, setExtras] = useState<LocalExtras>(loadExtras());
   const [tick, setTick] = useState(0);
   const onAfterRef = useRef<(() => void) | undefined>();
 
+  function normTel(t: string): string {
+    const d = String(t || "").replace(/\D+/g, "");
+    if (!d) return "";
+    if (d.startsWith("55") && d.length >= 12) return d;
+    if (d.length === 10 || d.length === 11) return "55" + d;
+    return d;
+  }
+
+  const mapStatusMeta = (s: string): DeliveryStatus => {
+    const v = String(s || "").toLowerCase();
+    if (v === "delivered") return "delivered";
+    if (v === "read") return "read";
+    if (v === "failed") return "failed";
+    return "sent";
+  };
+
   // Carrega job mais recente do usuário (rodando, pausado ou o último finalizado)
   const carregar = useCallback(async () => {
-    if (!uid) { setJob(null); setItens([]); return; }
+    if (!uid) { setJob(null); setItens([]); setLogStatus(new Map()); return; }
     const { data: ativo } = await (supabase as any)
       .from("envio_meta_job")
       .select("*")
@@ -121,8 +151,34 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         .order("processado_em", { ascending: false })
         .limit(2000);
       setItens(its || []);
+
+      // Puxa status de entrega da Meta (webhook grava em meta_whatsapp_envios_log)
+      try {
+        const desde = j.iniciado_em || new Date(Date.now() - 7 * 86400_000).toISOString();
+        const { data: logs } = await (supabase as any)
+          .from("meta_whatsapp_envios_log")
+          .select("telefone,status,erro,enviado_em")
+          .eq("user_id", uid)
+          .gte("enviado_em", desde)
+          .order("enviado_em", { ascending: false })
+          .limit(5000);
+        const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
+        // Ordem: mais forte vence (read > delivered > sent; failed = terminal)
+        const rank = (s: DeliveryStatus) => s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
+        for (const l of logs || []) {
+          const key = normTel(l.telefone);
+          if (!key) continue;
+          const st = mapStatusMeta(l.status);
+          const prev = m.get(key);
+          if (!prev || rank(st) > rank(prev.status)) {
+            m.set(key, { status: st, erro: l.erro || undefined });
+          }
+        }
+        setLogStatus(m);
+      } catch { /* ignora */ }
     } else {
       setItens([]);
+      setLogStatus(new Map());
     }
   }, [uid]);
 
@@ -144,6 +200,25 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         (payload: any) => {
           const jobId = (payload.new || payload.old)?.job_id;
           if (job && jobId === job.id) carregar();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "meta_whatsapp_envios_log", filter: `user_id=eq.${uid}` },
+        (payload: any) => {
+          const row = payload.new || payload.old;
+          if (!row?.telefone || !row?.status) return;
+          const key = normTel(row.telefone);
+          setLogStatus((prev) => {
+            const next = new Map(prev);
+            const st = mapStatusMeta(row.status);
+            const rank = (s: DeliveryStatus) => s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
+            const cur = next.get(key);
+            if (!cur || rank(st) > rank(cur.status)) {
+              next.set(key, { status: st, erro: row.erro || undefined });
+            }
+            return next;
+          });
         }
       )
       .subscribe();
@@ -179,8 +254,16 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     const erros: EnvioItem[] = [];
     for (const it of itens) {
       const ts = it.processado_em ? new Date(it.processado_em).getTime() : Date.now();
+      const key = normTel(it.telefone);
+      const dlv = logStatus.get(key);
       if (it.status === "enviado") {
-        enviados.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, ts });
+        enviados.push({
+          telefone: it.telefone,
+          instancia: it.instancia_nome || undefined,
+          ts,
+          deliveryStatus: dlv?.status,
+          deliveryErro: dlv?.erro,
+        });
       } else if (it.status === "erro") {
         erros.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts });
       }
@@ -189,7 +272,20 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       ? { semWhatsapp: extras.semWhatsapp, erroValidacao: extras.erroValidacao }
       : { semWhatsapp: [], erroValidacao: [] };
     return { enviados, erros, ...extrasForJob };
-  }, [itens, extras, job?.id]);
+  }, [itens, extras, job?.id, logStatus]);
+
+  const deliveryResumo: DeliveryResumo = useMemo(() => {
+    const r: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
+    for (const e of detalhes.enviados) {
+      const s = e.deliveryStatus;
+      if (s === "delivered") r.entregue++;
+      else if (s === "read") r.lida++;
+      else if (s === "failed") r.falhou++;
+      else if (s === "sent") r.aceito++;
+      else r.aguardando++;
+    }
+    return r;
+  }, [detalhes.enviados]);
 
   const resultado: EnvioResultado = useMemo(() => {
     if (!job) return null;
@@ -316,9 +412,13 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
   }, [job, restantes, carregar]);
 
+  const refreshStatus = useCallback(async () => {
+    await carregar();
+  }, [carregar]);
+
   return (
     <EnvioMetaSendingContext.Provider
-      value={{ enviando, pausado, progresso, detalhes, resultado, templateNome, restantes, iniciar, togglePausa, cancelar, reativar, limpar }}
+      value={{ enviando, pausado, progresso, detalhes, deliveryResumo, resultado, templateNome, restantes, iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus }}
     >
       {children}
     </EnvioMetaSendingContext.Provider>
