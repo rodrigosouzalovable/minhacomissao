@@ -71,7 +71,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
         <DialogHeader>
           <DialogTitle>Nova conversa Meta</DialogTitle>
           <DialogDescription>
-            A API oficial só permite iniciar conversa via template HSM aprovado. Após o cliente responder, abre a janela de 24h para texto livre.
+            Para iniciar uma nova conversa é necessário enviar um template de utilidade aprovado. Após o cliente responder, abre a janela de 24h para texto livre.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
