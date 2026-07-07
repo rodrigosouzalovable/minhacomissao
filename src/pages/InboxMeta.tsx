@@ -118,6 +118,23 @@ export default function InboxMeta() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<MetaComposerHandle>(null);
   const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
+  const [atendenteNome, setAtendenteNome] = useState<string>('');
+  const [pendingTranscricao, setPendingTranscricao] = useState<string>('');
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle();
+      const nome = (data?.nome || '').trim();
+      if (nome) setAtendenteNome(nome);
+    })();
+  }, [user]);
+
+  const formatarMensagemAtendente = useCallback((t: string): string => {
+    if (!atendenteNome) return t;
+    if (/^\*Atendente\s/i.test(t)) return t;
+    return `*Atendente ${atendenteNome}:*\n\n${t}`;
+  }, [atendenteNome]);
   const themeStorageKey = user ? `inbox-meta-theme:${user.id}` : 'inbox-meta-theme';
   const [tema, setTema] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light';
@@ -401,12 +418,13 @@ export default function InboxMeta() {
 
   // ============== Envio ==============
   const enviar = async (textoCustom?: string) => {
-    const t = (textoCustom ?? '').trim();
-    if (!contatoAtivo || !t || enviando) return;
+    const raw = (textoCustom ?? '').trim();
+    if (!contatoAtivo || !raw || enviando) return;
     if (!janelaInfo.aberta) {
       toast({ title: 'Janela 24h expirada', description: 'Use um template HSM em "Envio Meta (massa)".', variant: 'destructive' });
       return;
     }
+    const t = formatarMensagemAtendente(raw);
     setEnviando(true);
     const tempId = `temp-${Date.now()}`;
     const tempMsg: MetaMensagem = {
@@ -464,7 +482,11 @@ export default function InboxMeta() {
     if (modoGravacao === 'transcrito') {
       const texto = await audioRec.transcreverGravacao();
       if (texto) {
-        composerRef.current?.appendText(texto);
+        if (composerRef.current) {
+          composerRef.current.appendText(texto);
+        } else {
+          setPendingTranscricao(texto);
+        }
         toast({ title: 'Áudio transcrito', description: 'Revise o texto e clique em enviar.' });
       }
     } else {
@@ -947,6 +969,8 @@ export default function InboxMeta() {
                       onSend={(t) => enviar(t)}
                       onPaste={onPaste}
                       onEscape={() => respondendo && setRespondendo(null)}
+                      initialText={pendingTranscricao}
+                      onInitialTextConsumed={() => setPendingTranscricao('')}
                     />
                   </div>
                 )}
