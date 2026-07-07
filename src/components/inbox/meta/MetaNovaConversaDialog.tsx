@@ -61,12 +61,12 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
     setEnviando(true);
     try {
       const tpl = templates.find(t => t.nome_template === templateName);
+      if (!tpl) throw new Error('Template não encontrado');
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
         body: {
+          template_id: tpl.id,
           instancia_id: instId,
-          recipient: { telefone: tel.replace(/\D/g, ''), nome: nome.trim() || null },
-          template_name: templateName,
-          template_language: tpl?.idioma || 'pt_BR',
+          cliente: { telefone: tel.replace(/\D/g, ''), nome: nome.trim() || undefined },
         },
       });
       if (error) throw new Error(error.message);
