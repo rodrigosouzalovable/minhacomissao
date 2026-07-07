@@ -35,10 +35,14 @@ function renderBodyWithVars(text: string, sample: string = DEFAULT_SAMPLE) {
 export default function TemplateWhatsAppPreview({
   template,
   imageUrlOverride,
+  sampleName,
 }: {
   template: Template;
   imageUrlOverride?: string;
+  sampleName?: string;
 }) {
+  const sample = (sampleName && sampleName.trim()) || DEFAULT_SAMPLE;
+
   const components: any[] = Array.isArray(template.variaveis?._components)
     ? template.variaveis._components
     : [];
