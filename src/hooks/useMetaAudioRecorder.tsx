@@ -136,15 +136,14 @@ export function useMetaAudioRecorder({
         if (rawBlob.size === 0) { setTempoGravacao(0); resolve(); return; }
         setEnviandoAudio(true);
         try {
-          // Garantir OGG/OPUS — a Meta recusa audio/webm e tem sido inconsistente com audio/mp4.
-          let prepared: { blob: Blob; ext: 'ogg'; contentType: 'audio/ogg' };
+          let prepared: { blob: Blob; ext: 'ogg' | 'mp4' | 'm4a'; contentType: string };
           try {
-            prepared = await ensureOggOpus(rawBlob, rec.mimeType || 'audio/ogg');
+            prepared = await ensureMetaAudio(rawBlob, rec.mimeType || 'audio/ogg');
           } catch (convErr) {
-            console.error('[useMetaAudioRecorder] falha ao converter para OGG', convErr);
+            console.error('[useMetaAudioRecorder] falha ao preparar áudio', { convErr, mimeType: rec.mimeType });
             toast({
               title: 'Não foi possível preparar o áudio',
-              description: 'Seu navegador gerou um formato incompatível e a conversão falhou. Tente usar Chrome ou Edge atualizado.',
+              description: `Formato "${rec.mimeType || 'desconhecido'}" — falha na conversão. Tente Chrome/Edge atualizado.`,
               variant: 'destructive',
             });
             resolve();
