@@ -3,7 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
-export type EnvioItem = { telefone: string; instancia?: string; erro?: string; ts: number };
+export type DeliveryStatus = 'sent' | 'delivered' | 'read' | 'failed';
+
+export type EnvioItem = {
+  telefone: string;
+  instancia?: string;
+  erro?: string;
+  ts: number;
+  deliveryStatus?: DeliveryStatus;
+  deliveryErro?: string;
+};
 
 export type EnvioDetalhes = {
   enviados: EnvioItem[];
@@ -11,6 +20,8 @@ export type EnvioDetalhes = {
   semWhatsapp: string[];
   erroValidacao: string[];
 };
+
+export type DeliveryResumo = { aceito: number; entregue: number; lida: number; falhou: number; aguardando: number };
 
 export type EnvioProgresso = {
   enviados: number;
