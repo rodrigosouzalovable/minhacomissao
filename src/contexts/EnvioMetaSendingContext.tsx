@@ -291,10 +291,34 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   }, [job]);
 
   const templateNome = job?.template_nome || null;
+  const restantes = job ? Math.max(0, (job.total || 0) - (job.enviados || 0) - (job.erros || 0)) : 0;
+
+  const reativar = useCallback(async () => {
+    if (!job) return;
+    if (!["cancelado", "erro", "concluido"].includes(job.status)) {
+      toast.error("Só é possível reativar jobs finalizados");
+      return;
+    }
+    if (restantes <= 0) {
+      toast.info("Não há contatos pendentes para reativar");
+      return;
+    }
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
+        body: { job_id: job.id, acao: "reativar" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha");
+      toast.success(`Envio reativado — ${restantes} contatos restantes`);
+      carregar();
+    } catch (e: any) {
+      toast.error("Erro ao reativar: " + (e?.message || e));
+    }
+  }, [job, restantes, carregar]);
 
   return (
     <EnvioMetaSendingContext.Provider
-      value={{ enviando, pausado, progresso, detalhes, resultado, templateNome, iniciar, togglePausa, cancelar, limpar }}
+      value={{ enviando, pausado, progresso, detalhes, resultado, templateNome, restantes, iniciar, togglePausa, cancelar, reativar, limpar }}
     >
       {children}
     </EnvioMetaSendingContext.Provider>
