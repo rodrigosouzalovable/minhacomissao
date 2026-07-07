@@ -1,55 +1,42 @@
-## Contexto
+## Objetivo
 
-Os envios da aba **Envio Meta Massa** usam a **WhatsApp Cloud API oficial da Meta**. Diferente da UAZAPI (que pareia um celular), essas mensagens são enviadas server-to-server pela Meta e **não aparecem no aplicativo WhatsApp do celular** — só existem no Meta Business Manager e no Inbox Meta interno. Portanto, o fato de LD 18 / LD 02 / LD 03 não mostrarem mensagens no aparelho é esperado e não indica falha.
+No Inbox Meta Oficial, sempre que um cliente enviar mensagem (direção `entrada`) e a conversa **ainda não tiver** nenhuma etiqueta do tipo `Atendente: X`, atribuir automaticamente uma etiqueta de atendente via rodízio, para garantir que toda conversa respondida por cliente tenha um responsável.
 
-O que importa saber é o **status real de entrega** que a Meta devolve via webhook. Hoje o painel "Detalhamento dos envios" mostra apenas "Enviado" (= aceito pela Meta), sem revelar se a mensagem foi *delivered*, *read* ou *failed depois de aceita*.
+## Onde entra a lógica
 
-O webhook `meta-whatsapp-webhook` já grava esses status na tabela `meta_whatsapp_envios_log` (colunas `status` = `sent|delivered|read|failed` e `erro`). Basta cruzar com os itens do job para exibir.
+Único ponto: `supabase/functions/meta-whatsapp-webhook/index.ts`, logo após o `upsert` do contato (linhas 378–415), e **somente quando `!isEcho`** (mensagem recebida). Nada muda no frontend nem no schema.
 
-## O que será feito
+## Regras
 
-### 1. Contexto de envio (`src/contexts/EnvioMetaSendingContext.tsx`)
-- Estender `EnvioItem` com `deliveryStatus?: 'sent'|'delivered'|'read'|'failed'` e `deliveryErro?: string`.
-- Após carregar `envio_meta_job_item`, fazer uma segunda query em `meta_whatsapp_envios_log` filtrando por `user_id` e por `enviado_em >= job.iniciado_em`. Indexar por `telefone` (último registro por telefone).
-- No `useMemo` de `detalhes`, casar `it.telefone` normalizado com o log e preencher `deliveryStatus`/`deliveryErro` em cada `EnvioItem` da lista "enviados".
-- Expor um contador agregado `deliveryResumo: { aceito, entregue, lida, falhou }` no contexto para uso no painel.
-- Atualizar realtime: também escutar `meta_whatsapp_envios_log` (INSERT/UPDATE por `user_id`) para atualizar status ao vivo.
-
-### 2. Painel de detalhes (`src/pages/EnvioMeta.tsx` → `DetalhesEnvioPainel`)
-- Adicionar um banner informativo curto no topo do "Detalhamento dos envios":
-  > *"Envios pela API oficial da Meta não aparecem no WhatsApp do celular do chip. O status abaixo vem direto da Meta."*
-- Na seção "✅ Enviados", ao lado do telefone/instância, mostrar um badge do `deliveryStatus`:
-  - `sent` → cinza · "Aceito"
-  - `delivered` → azul · "Entregue"
-  - `read` → verde · "Lida"
-  - `failed` → vermelho · "Falhou" (com tooltip do `deliveryErro`)
-  - `undefined` → cinza-claro · "Aguardando…"
-- Exibir resumo de contagem no cabeçalho da seção: `599 aceitos · 512 entregues · 340 lidas · 47 falharam`.
-- Botão "Atualizar status" ao lado de "Exportar CSV" que força um `carregar()` do contexto (útil se o realtime estiver atrasado).
-- Adicionar coluna `delivery_status` e `delivery_erro` ao CSV exportado.
-
-### 3. Nenhuma mudança de backend / schema
-Todo o dado já é registrado pelo webhook Meta hoje. Zero mudança em edge functions, políticas RLS, tabelas, cron ou custos.
+1. Só age quando `isEcho === false` (mensagem do cliente).
+2. Resolve o `contato_id` (do `existenteFinal` ou do insert recém-criado).
+3. Verifica se já existe qualquer vínculo em `meta_whatsapp_contato_etiquetas` cuja etiqueta case `nome ILIKE 'Atendente:%'` para aquele `user_id` (dono da instância). Se já houver → não faz nada.
+4. Se não houver → seleciona todas as etiquetas `Atendente: %` do `user_id = inst.user_id` e escolhe a **menos carregada** (menor número de contatos atualmente vinculados a ela), com desempate alfabético pelo `nome`. Isso é rodízio estável e não depende de estado adicional.
+5. Insere `meta_whatsapp_contato_etiquetas { contato_id, etiqueta_id }`. Usa `on conflict do nothing` para evitar corrida entre webhooks concorrentes.
+6. Se não existir nenhuma etiqueta `Atendente: %` cadastrada, apenas loga e sai — comportamento antigo preservado.
 
 ## Detalhes técnicos
 
-- Match telefone: normalizar via `normalizeTelKey` (já existe no arquivo) e o campo `telefone` do log já vem em formato `55DDDNNNNNNNN`.
-- Query do log limitada a `job.total * 2` linhas ou 5000, ordenada por `enviado_em desc`, pegando o registro mais recente por telefone (Map em memória).
-- Realtime na tabela `meta_whatsapp_envios_log` filtrada por `user_id=eq.<uid>`; debounce simples para não recarregar em rajada.
+- Consulta de carga por atendente:
+  ```sql
+  select e.id, e.nome, count(ce.contato_id) as carga
+    from meta_whatsapp_etiquetas e
+    left join meta_whatsapp_contato_etiquetas ce on ce.etiqueta_id = e.id
+   where e.user_id = :userId and e.nome ilike 'Atendente:%'
+   group by e.id, e.nome
+   order by carga asc, e.nome asc
+   limit 1;
+  ```
+  Implementado no edge com duas queries simples (etiquetas + contagens) porque o cliente supabase-js do Deno não suporta agregação direta; ou via `rpc` inline. Vou fazer com duas queries + agregação em memória (poucas etiquetas, custo desprezível).
+- Envolvido em `try/catch` isolado — falha na atribuição **não** interrompe o processamento do webhook.
+- Log estruturado `[MetaWebhook] atendente atribuido { contato_id, etiqueta_id, atendente }`.
 
-## Diagrama de status
+## Fora de escopo
 
-```text
-send-whatsapp-meta  ──►  Meta API  ──►  wa_message_id (status: sent)
-                                              │
-                              webhook meta-whatsapp-webhook
-                                              │
-                       ┌──────────────────────┼──────────────────────┐
-                       ▼                      ▼                      ▼
-                   delivered                 read                 failed
-                (chegou no cel)         (cliente abriu)    (Meta rejeitou/bloqueou)
-```
+- Não altera contatos antigos que já estão sem atendente (só reage a novas mensagens recebidas). Se quiser um backfill único para os já existentes, é uma segunda tarefa — posso fazer depois se pedir.
+- Não muda regras do notificador de som (`MetaAtendenteNotifier`).
+- Nenhuma mudança visual.
 
-## Fora do escopo
-- Reenvio automático dos "failed pós-envio" (posso adicionar em iteração futura se quiser).
-- Diagnóstico de saúde das instâncias LD 18/02/03 (rodar `check-meta-instance-health`) — separado deste plano.
+## Arquivos alterados
+
+- `supabase/functions/meta-whatsapp-webhook/index.ts` — novo bloco de auto-atribuição após o upsert de contato no laço de mensagens.
