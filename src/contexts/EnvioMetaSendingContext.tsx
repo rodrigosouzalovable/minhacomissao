@@ -254,8 +254,16 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     const erros: EnvioItem[] = [];
     for (const it of itens) {
       const ts = it.processado_em ? new Date(it.processado_em).getTime() : Date.now();
+      const key = normTel(it.telefone);
+      const dlv = logStatus.get(key);
       if (it.status === "enviado") {
-        enviados.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, ts });
+        enviados.push({
+          telefone: it.telefone,
+          instancia: it.instancia_nome || undefined,
+          ts,
+          deliveryStatus: dlv?.status,
+          deliveryErro: dlv?.erro,
+        });
       } else if (it.status === "erro") {
         erros.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts });
       }
@@ -264,7 +272,20 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       ? { semWhatsapp: extras.semWhatsapp, erroValidacao: extras.erroValidacao }
       : { semWhatsapp: [], erroValidacao: [] };
     return { enviados, erros, ...extrasForJob };
-  }, [itens, extras, job?.id]);
+  }, [itens, extras, job?.id, logStatus]);
+
+  const deliveryResumo: DeliveryResumo = useMemo(() => {
+    const r: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
+    for (const e of detalhes.enviados) {
+      const s = e.deliveryStatus;
+      if (s === "delivered") r.entregue++;
+      else if (s === "read") r.lida++;
+      else if (s === "failed") r.falhou++;
+      else if (s === "sent") r.aceito++;
+      else r.aguardando++;
+    }
+    return r;
+  }, [detalhes.enviados]);
 
   const resultado: EnvioResultado = useMemo(() => {
     if (!job) return null;
