@@ -62,7 +62,7 @@ serve(async (req) => {
     // Buscar todos os acordos ativos
     const { data: acordosAtivos, error: acordosErr } = await supabase
       .from('acordos')
-      .select('id')
+      .select('id, cliente_cpf')
       .eq('status', 'ativo');
 
     if (acordosErr) {
