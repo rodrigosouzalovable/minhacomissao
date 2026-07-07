@@ -23,6 +23,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { AcordosAbandonadosDialog } from '@/components/AcordosAbandonadosDialog';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
@@ -684,6 +685,7 @@ export default function EquipeAcordos() {
                 {enviandoRelatorio ? 'Enviando...' : 'Enviar Relatório'}
               </Button>
             )}
+            {isAdmin && <AcordosAbandonadosDialog />}
             {isAdmin && (
               <Button
                 variant="outline"
