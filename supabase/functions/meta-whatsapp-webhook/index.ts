@@ -375,6 +375,7 @@ serve(async (req) => {
             existenteFinal = existentePorTel;
           }
 
+          let contatoIdFinal: string | null = existenteFinal?.id ?? null;
           if (existenteFinal) {
             const upd: any = {
               ultima_mensagem: texto,
@@ -398,7 +399,7 @@ serve(async (req) => {
             }
             await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', existenteFinal.id);
           } else {
-            await supabase.from('meta_whatsapp_contatos').insert({
+            const { data: inseridoContato } = await supabase.from('meta_whatsapp_contatos').insert({
               user_id: inst.user_id,
               instancia_id: inst.id,
               telefone: outroLado || null,
@@ -411,9 +412,77 @@ serve(async (req) => {
               ultima_msg_entrada_em: isEcho ? null : tsMsg,
               ultima_interacao_em: isEcho ? null : tsMsg,
               nao_lido: isEcho ? 0 : 1,
-            } as any);
+            } as any).select('id').maybeSingle();
+            contatoIdFinal = (inseridoContato as any)?.id ?? null;
           }
 
+          // ===== Rodízio de atendentes =====
+          // Se a mensagem é do cliente (entrada) e a conversa ainda não tem
+          // nenhuma etiqueta "Atendente: X", atribui automaticamente a etiqueta
+          // do atendente com menor carga atual (desempate alfabético).
+          if (!isEcho && contatoIdFinal) {
+            try {
+              const { data: atendentes } = await supabase
+                .from('meta_whatsapp_etiquetas')
+                .select('id, nome')
+                .eq('user_id', inst.user_id)
+                .ilike('nome', 'Atendente:%');
+
+              if (atendentes && atendentes.length > 0) {
+                const atendenteIds = atendentes.map((a: any) => a.id);
+
+                // Já tem atendente atribuído?
+                const { data: jaAtribuido } = await supabase
+                  .from('meta_whatsapp_contato_etiquetas')
+                  .select('etiqueta_id')
+                  .eq('contato_id', contatoIdFinal)
+                  .in('etiqueta_id', atendenteIds)
+                  .limit(1);
+
+                if (!jaAtribuido || jaAtribuido.length === 0) {
+                  // Conta carga de cada atendente
+                  const { data: vinculos } = await supabase
+                    .from('meta_whatsapp_contato_etiquetas')
+                    .select('etiqueta_id')
+                    .in('etiqueta_id', atendenteIds);
+
+                  const carga: Record<string, number> = {};
+                  for (const id of atendenteIds) carga[id] = 0;
+                  for (const v of (vinculos || [])) {
+                    const eid = (v as any).etiqueta_id;
+                    if (eid in carga) carga[eid] += 1;
+                  }
+
+                  const ordenados = [...atendentes].sort((a: any, b: any) => {
+                    const ca = carga[a.id] ?? 0;
+                    const cb = carga[b.id] ?? 0;
+                    if (ca !== cb) return ca - cb;
+                    return String(a.nome).localeCompare(String(b.nome));
+                  });
+                  const escolhido: any = ordenados[0];
+
+                  const { error: linkErr } = await supabase
+                    .from('meta_whatsapp_contato_etiquetas')
+                    .insert({ contato_id: contatoIdFinal, etiqueta_id: escolhido.id } as any);
+
+                  if (linkErr) {
+                    const dup = String(linkErr.message || '').toLowerCase().includes('duplicate') || linkErr.code === '23505';
+                    if (!dup) {
+                      console.error('[MetaWebhook] falha ao atribuir atendente', linkErr.message);
+                    }
+                  } else {
+                    console.log('[MetaWebhook] atendente atribuido', {
+                      contato_id: contatoIdFinal,
+                      etiqueta_id: escolhido.id,
+                      atendente: escolhido.nome,
+                    });
+                  }
+                }
+              }
+            } catch (e: any) {
+              console.error('[MetaWebhook] erro no rodízio de atendentes', e?.message || e);
+            }
+          }
 
           // Compatibilidade com o log de envios em massa — casa por sufixo
           if (!isEcho && !soBsuid && sufixo.length === 8) {
@@ -423,6 +492,8 @@ serve(async (req) => {
               .ilike('telefone', `%${sufixo}`)
               .neq('status', 'replied');
           }
+
+
 
         }
 
