@@ -94,7 +94,7 @@ export default function TemplateWhatsAppPreview({
         )}
 
         <div className="px-3 py-2 text-sm whitespace-pre-wrap leading-snug">
-          {renderBodyWithVars(body?.text || template.body_text || "")}
+          {renderBodyWithVars(body?.text || template.body_text || "", sample)}
         </div>
 
         {footer?.text && (
