@@ -142,7 +142,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           {selectedTemplate && (
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Pré-visualização</p>
-              <TemplateWhatsAppPreview template={selectedTemplate} />
+              <TemplateWhatsAppPreview template={selectedTemplate} sampleName={nome} />
             </div>
           )}
           <Button onClick={enviar} disabled={!instId || !tel.trim() || !templateName || enviando} className="w-full">
