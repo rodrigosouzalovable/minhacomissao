@@ -32,7 +32,10 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('meta_whatsapp_templates')
-        .select('id, nome_template, idioma, categoria').eq('status', 'APPROVED').order('nome_template');
+        .select('id, nome_template, idioma, categoria')
+        .eq('status', 'APPROVED')
+        .eq('categoria', 'UTILITY')
+        .order('nome_template');
       setTemplates((data as Template[]) ?? []);
     })();
   }, [open]);
@@ -68,7 +71,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
         <DialogHeader>
           <DialogTitle>Nova conversa Meta</DialogTitle>
           <DialogDescription>
-            A API oficial só permite iniciar conversa via template HSM aprovado. Após o cliente responder, abre a janela de 24h para texto livre.
+            Para iniciar uma nova conversa é necessário enviar um template de utilidade aprovado. Após o cliente responder, abre a janela de 24h para texto livre.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -83,7 +86,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           <Input placeholder="Telefone (DDI+DDD+número)" value={tel} onChange={e => setTel(e.target.value)} />
           <Input placeholder="Nome (opcional, para {{name}})" value={nome} onChange={e => setNome(e.target.value)} />
           <Select value={templateName} onValueChange={setTemplateName}>
-            <SelectTrigger><SelectValue placeholder="Template HSM" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Template de utilidade" /></SelectTrigger>
             <SelectContent>
               {templates.map(t => (
                 <SelectItem key={t.id} value={t.nome_template}>

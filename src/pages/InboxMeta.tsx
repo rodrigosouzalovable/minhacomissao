@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
-  Mic, AudioLines, FileText, Zap, Sun, Moon,
+  Mic, AudioLines, FileText, Zap, Sun, Moon, Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +21,7 @@ import { ChatMessage } from '@/components/inbox/ChatMessage';
 import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaContextMenu';
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
+import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
@@ -105,6 +106,7 @@ export default function InboxMeta() {
   
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
   const [msgRapidasOpen, setMsgRapidasOpen] = useState(false);
+  const [novaConversaOpen, setNovaConversaOpen] = useState(false);
   const [msgRapidas, setMsgRapidas] = useState<MetaMsgRapida[]>([]);
 
   const [selMultipla, setSelMultipla] = useState(false);
@@ -126,9 +128,18 @@ export default function InboxMeta() {
     (async () => {
       const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle();
       const nome = (data?.nome || '').trim();
-      if (nome) setAtendenteNome(nome);
+      if (!nome) return;
+      const APELIDOS: { match: RegExp; nome: string }[] = [
+        { match: /^anna\s*fl[aá]via/i, nome: 'Anna Flavia' },
+        { match: /^fernanda/i, nome: 'Fernanda' },
+        { match: /^wallace/i, nome: 'Wallace' },
+        { match: /^yasmi?n/i, nome: 'Yasmim' },
+      ];
+      const match = APELIDOS.find(a => a.match.test(nome));
+      setAtendenteNome(match ? match.nome : nome.split(' ')[0]);
     })();
   }, [user]);
+
 
   const formatarMensagemAtendente = useCallback((t: string): string => {
     if (!atendenteNome) return t;
@@ -616,8 +627,8 @@ export default function InboxMeta() {
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={toggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo escuro'}>
                 {tema === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
-              <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => setMsgRapidasOpen(true)} title="Mensagens rápidas">
-                <Zap className="h-3.5 w-3.5 mr-1" /> Mensagens rápidas
+              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setNovaConversaOpen(true)} title="Nova conversa">
+                <Plus className="h-4 w-4" />
               </Button>
             </div>
             <Select value={filtroInstancia} onValueChange={setFiltroInstancia}>
@@ -983,6 +994,13 @@ export default function InboxMeta() {
 
       <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
+      <MetaNovaConversaDialog
+        open={novaConversaOpen}
+        onOpenChange={setNovaConversaOpen}
+        instancias={instancias}
+        defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
+        onSent={() => { fetchContatos(); }}
+      />
     </AppLayout>
   );
 }
