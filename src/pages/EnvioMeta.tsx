@@ -122,6 +122,7 @@ export default function EnvioMeta() {
     pausado,
     progresso,
     detalhes,
+    deliveryResumo,
     resultado,
     restantes,
     iniciar,
@@ -129,6 +130,7 @@ export default function EnvioMeta() {
     cancelar,
     reativar,
     limpar,
+    refreshStatus,
   } = useEnvioMetaSending();
 
   const [instancias, setInstancias] = useState<Instancia[]>([]);
