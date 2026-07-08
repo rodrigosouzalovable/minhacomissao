@@ -1323,14 +1323,22 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
         headerExtra={resumoText}
       >
         {detalhes.enviados.map((e, i) => (
-          <div key={i} className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2">
-              {e.telefone}
-              <DeliveryBadge s={e.deliveryStatus} erro={e.deliveryErro} />
-            </span>
-            <span className="text-muted-foreground">{e.instancia} · {new Date(e.ts).toLocaleTimeString()}</span>
+          <div key={i} className="border-b last:border-b-0 py-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 min-w-0">
+                {e.telefone}
+                <DeliveryBadge s={e.deliveryStatus} erro={e.deliveryErro} />
+              </span>
+              <span className="text-muted-foreground whitespace-nowrap">{e.instancia} · {new Date(e.ts).toLocaleTimeString()}</span>
+            </div>
+            {e.deliveryStatus === 'failed' && e.deliveryErro && (
+              <div className="text-[10px] text-red-600/80 break-words pl-1">
+                ⚠ {e.deliveryErro}
+              </div>
+            )}
           </div>
         ))}
+
       </Section>
 
       <Section

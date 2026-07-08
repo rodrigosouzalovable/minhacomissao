@@ -1,18 +1,41 @@
-## Diagnóstico
+## O que "Falhou" significa
 
-Revisei `NotificacoesCpfBell.tsx`: o botão de copiar (`Copy` / `Check` verde quando `cpf_copiado_em` está preenchido) é renderizado **incondicionalmente** dentro do `.map(...)` — não há gate por `isAdmin` nem por role. Ou seja, no código atual o botão já aparece para todo usuário logado que abre o sino, inclusive Fernanda.
+Falhou = a Meta rejeitou aquela mensagem específica. Nem sempre é banimento do chip — pode ser: número inválido / sem WhatsApp, janela de 24h expirada, template pausado/rejeitado, limite de qualidade do número, política de mensagens, ou, sim, restrição/pausa/banimento do número.
 
-O motivo mais provável de Fernanda não estar vendo o botão é que **o login dela está usando a versão publicada antiga do app**, anterior ao ajuste do sino. As alterações que fiz existem só no ambiente de preview até a próxima publicação (`meusacordos.com.br` / `minhacomissao.lovable.app` continuam servindo a versão antiga).
+Hoje o webhook até recebe o motivo (título + código) da Meta, mas só grava esse texto na tabela do inbox — na tabela usada pelo painel "Envio Meta (massa)" (`meta_whatsapp_envios_log`) o campo `erro` fica vazio. Por isso o tooltip do "Falhou" aparece sem explicação.
 
-## Plano
+## Correção 1 — mostrar o motivo ao lado de "Falhou"
 
-1. Confirmar por leitura do arquivo que o botão de copiar está fora de qualquer condicional de role — nenhum código a alterar aqui.
-2. **Publicar o app** para que a versão nova (com botão de copiar + verde no card + rodízio com fallback admin) chegue ao login da Fernanda e dos demais funcionários.
-3. Instruir Fernanda a fazer um refresh forçado (Ctrl+F5 / Cmd+Shift+R) depois do publish, para descartar cache do bundle JS antigo.
+**Backend (`supabase/functions/meta-whatsapp-webhook/index.ts`)**
+- Quando `status === 'failed'` chega no webhook, gravar também `erro: <título + código>` no `UPDATE` de `meta_whatsapp_envios_log` (hoje só o `status` é atualizado).
 
-Nenhuma alteração de código é necessária para o comportamento pedido — o botão já é universal. O passo faltante é publicar.
+**Frontend (`src/pages/EnvioMeta.tsx` + `EnvioMetaSendingContext.tsx`)**
+- No card "Enviados", ao lado do badge "Falhou", exibir o texto do erro em vermelho pequeno (não só como tooltip).
+- Já existe `deliveryErro` no contexto — só passar adiante e renderizar.
+
+## Correção 2 — WhatsApp de aviso no fim do lote
+
+**Backend (`supabase/functions/envio-meta-massa-tick/index.ts`)**
+Quando o job passa para `concluido` (todos processados) ou `erro` (encerrado por falta de instância), disparar `notificarAdmin` (helper já existente que envia para 62991672674) com:
+
+- Total enviados, erros, sem WhatsApp.
+- Template e horário de início/fim.
+- Instâncias que ficaram `estado_pool = 'restrita'` durante a janela do job (consulta `meta_whatsapp_instances` por `pausa_automatica_ate > iniciado_em` do job) — listando nome/número e motivo.
+- Idempotência com chave `envio_meta_job_concluido_<job_id>` para não duplicar avisos.
+
+Exemplo de mensagem:
+```
+✅ Envio Meta concluído
+Template: {nome}
+Total: 257 · Enviados: 210 · Falharam: 47
+
+⚠️ Instâncias restringidas durante o envio:
+- {nome} ({fone}) — Restrição Meta #131049
+```
+
+Se nenhuma instância foi restringida, a linha final vira "Nenhuma instância restringida.".
 
 ## Escopo excluído
-
-- Sem mudanças em RLS, edge functions ou outros componentes.
-- Sem novo layout para o card.
+- Sem novas tabelas ou colunas — reaproveita `erro` de `meta_whatsapp_envios_log` e `estado_pool`/`pausa_automatica_motivo` das instâncias.
+- Sem mudança no rodízio/pool ou nas regras de envio.
+- Sem mudança na UI dos cards "Erros no envio" (esses já mostram o erro; foco é o "Falhou" dentro de "Enviados").
