@@ -767,10 +767,27 @@ export default function EnvioMeta() {
                 <CardTitle>2. Instâncias</CardTitle>
                 <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
               </div>
-              <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
-                {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
-                Verificar saúde
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={instancias.length === 0}
+                  onClick={() => {
+                    if (instanciaIds.length === instancias.length) {
+                      setInstanciaIds([]);
+                    } else {
+                      setInstanciaIds(instancias.map((i) => i.id));
+                    }
+                  }}
+                >
+                  {instanciaIds.length === instancias.length && instancias.length > 0 ? "Limpar seleção" : "Selecionar todas"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
+                  {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
+                  Verificar saúde
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -1247,24 +1264,31 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
     );
   };
 
-  const Section = ({ titulo, cor, count, children, onCopy, headerExtra }: { titulo: string; cor: string; count: number; children: React.ReactNode; onCopy?: () => void; headerExtra?: React.ReactNode }) => (
-    <details className="rounded-md border bg-card" open={count > 0 && count <= 20}>
-      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between gap-2">
-        <span className={cor}>
-          {titulo} <span className="text-muted-foreground font-normal">({count})</span>
-          {headerExtra}
-        </span>
-        {onCopy && count > 0 && (
-          <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); onCopy(); }}>
-            Copiar
-          </Button>
-        )}
-      </summary>
-      <div className="max-h-48 overflow-auto px-3 pb-3 font-mono text-xs space-y-0.5">
-        {count === 0 ? <div className="text-muted-foreground italic">Nenhum</div> : children}
-      </div>
-    </details>
-  );
+  const Section = ({ titulo, cor, count, children, onCopy, headerExtra }: { titulo: string; cor: string; count: number; children: React.ReactNode; onCopy?: () => void; headerExtra?: React.ReactNode }) => {
+    const [aberto, setAberto] = useState<boolean>(count > 0 && count <= 20);
+    return (
+      <details
+        className="rounded-md border bg-card"
+        open={aberto}
+        onToggle={(e) => setAberto((e.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between gap-2">
+          <span className={cor}>
+            {titulo} <span className="text-muted-foreground font-normal">({count})</span>
+            {headerExtra}
+          </span>
+          {onCopy && count > 0 && (
+            <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); onCopy(); }}>
+              Copiar
+            </Button>
+          )}
+        </summary>
+        <div className="max-h-48 overflow-auto px-3 pb-3 font-mono text-xs space-y-0.5">
+          {count === 0 ? <div className="text-muted-foreground italic">Nenhum</div> : children}
+        </div>
+      </details>
+    );
+  };
 
   const resumoText = detalhes.enviados.length > 0 ? (
     <span className="ml-2 text-[11px] font-normal text-muted-foreground">
