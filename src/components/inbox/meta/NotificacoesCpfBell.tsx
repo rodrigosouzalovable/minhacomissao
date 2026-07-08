@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
-import { Bell, Check, CheckCheck } from "lucide-react";
+import { Bell, Check, CheckCheck, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Notificacao {
   id: string;
@@ -14,6 +16,8 @@ interface Notificacao {
   total_debitos: number;
   telefones: string | null;
   lida_em: string | null;
+  cpf_copiado_em: string | null;
+  assigned_user_id: string | null;
   created_at: string;
 }
 
@@ -36,34 +40,62 @@ function tempoRelativo(iso: string) {
 
 export function NotificacoesCpfBell() {
   const { user } = useAuth();
+  const { isAdmin, loading: loadingRole } = useUserRole();
   const [open, setOpen] = useState(false);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [nomesUsuarios, setNomesUsuarios] = useState<Record<string, string>>({});
 
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id) return;
-    const { data } = await supabase
+    let query = supabase
       .from("consulta_cpf_notificacoes" as any)
       .select("*")
-      .eq("assigned_user_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(20);
-    setNotificacoes((data as any) || []);
-  }, [user?.id]);
+      .limit(50);
+
+    if (!isAdmin) {
+      query = query.eq("assigned_user_id", user.id);
+    }
+
+    const { data } = await query;
+    const rows = ((data as any) || []) as Notificacao[];
+    setNotificacoes(rows);
+
+    if (isAdmin) {
+      const ids = Array.from(
+        new Set(rows.map((n) => n.assigned_user_id).filter(Boolean) as string[])
+      );
+      const faltantes = ids.filter((id) => !(id in nomesUsuarios));
+      if (faltantes.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, nome, email")
+          .in("id", faltantes);
+        const map: Record<string, string> = { ...nomesUsuarios };
+        for (const p of (profs || []) as any[]) {
+          map[p.id] = p.nome || p.email || p.id.slice(0, 8);
+        }
+        setNomesUsuarios(map);
+      }
+    }
+  }, [user?.id, isAdmin, nomesUsuarios]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || loadingRole) return;
     fetchNotificacoes();
 
     const channel = supabase
-      .channel(`consulta-cpf-notif-${user.id}`)
+      .channel(`consulta-cpf-notif-${user.id}-${isAdmin ? "admin" : "user"}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "consulta_cpf_notificacoes",
-          filter: `assigned_user_id=eq.${user.id}`,
-        },
+        isAdmin
+          ? { event: "*", schema: "public", table: "consulta_cpf_notificacoes" }
+          : {
+              event: "*",
+              schema: "public",
+              table: "consulta_cpf_notificacoes",
+              filter: `assigned_user_id=eq.${user.id}`,
+            },
         () => fetchNotificacoes()
       )
       .subscribe();
@@ -71,7 +103,7 @@ export function NotificacoesCpfBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, fetchNotificacoes]);
+  }, [user?.id, isAdmin, loadingRole, fetchNotificacoes]);
 
   const naoLidas = notificacoes.filter((n) => !n.lida_em).length;
 
@@ -85,12 +117,30 @@ export function NotificacoesCpfBell() {
 
   const marcarTodasLidas = async () => {
     if (!user?.id) return;
-    await supabase
+    let q = supabase
       .from("consulta_cpf_notificacoes" as any)
       .update({ lida_em: new Date().toISOString() })
-      .eq("assigned_user_id", user.id)
       .is("lida_em", null);
+    if (!isAdmin) q = q.eq("assigned_user_id", user.id);
+    await q;
     fetchNotificacoes();
+  };
+
+  const copiarCpf = async (n: Notificacao) => {
+    const digits = (n.cpf || "").replace(/\D/g, "");
+    try {
+      await navigator.clipboard.writeText(digits);
+      toast.success("CPF copiado!");
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+    if (!n.cpf_copiado_em) {
+      await supabase
+        .from("consulta_cpf_notificacoes" as any)
+        .update({ cpf_copiado_em: new Date().toISOString() })
+        .eq("id", n.id);
+      fetchNotificacoes();
+    }
   };
 
   return (
@@ -112,7 +162,9 @@ export function NotificacoesCpfBell() {
       </PopoverTrigger>
       <PopoverContent className="w-96 p-0" align="end">
         <div className="flex items-center justify-between px-3 py-2 border-b">
-          <div className="text-sm font-semibold">Consultas de CPF</div>
+          <div className="text-sm font-semibold">
+            Consultas de CPF {isAdmin && <span className="text-xs text-muted-foreground font-normal">(todos)</span>}
+          </div>
           {naoLidas > 0 && (
             <Button
               size="sm"
@@ -131,69 +183,96 @@ export function NotificacoesCpfBell() {
               Nenhuma notificação por enquanto.
             </div>
           ) : (
-            notificacoes.map((n) => (
-              <div
-                key={n.id}
-                className={cn(
-                  "px-3 py-2 border-b last:border-b-0 flex gap-2 items-start",
-                  !n.lida_em && "bg-primary/5"
-                )}
-              >
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "text-xs font-medium",
-                        !n.lida_em && "text-foreground",
-                        n.lida_em && "text-muted-foreground"
+            notificacoes.map((n) => {
+              const copiado = !!n.cpf_copiado_em;
+              return (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "px-3 py-2 border-b last:border-b-0 flex gap-2 items-start transition-colors",
+                    copiado
+                      ? "bg-green-500/15 border-l-2 border-l-green-500"
+                      : !n.lida_em && "bg-primary/5"
+                  )}
+                >
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "text-xs font-medium",
+                          copiado ? "text-green-700 dark:text-green-400" : (!n.lida_em ? "text-foreground" : "text-muted-foreground")
+                        )}
+                      >
+                        📋 CONSULTA NO PORTAL
+                      </span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">
+                        {tempoRelativo(n.created_at)}
+                      </span>
+                    </div>
+                    <div className="text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">CPF:</span>{" "}
+                        <span className="font-mono">{formatarCpf(n.cpf)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => copiarCpf(n)}
+                          title="Copiar CPF"
+                        >
+                          {copiado ? (
+                            <Check className="h-3 w-3 text-green-600" />
+                          ) : (
+                            <Copy className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                      {n.nome && (
+                        <div>
+                          <span className="text-muted-foreground">Nome:</span> {n.nome}
+                        </div>
                       )}
+                      {n.credor && (
+                        <div>
+                          <span className="text-muted-foreground">Credor:</span> {n.credor}
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-muted-foreground">Débitos:</span>{" "}
+                        {n.total_debitos}
+                      </div>
+                      {n.telefones && (
+                        <div className="break-all">
+                          <span className="text-muted-foreground">Telefone(s):</span>{" "}
+                          {n.telefones}
+                        </div>
+                      )}
+                      {isAdmin && (
+                        <div>
+                          <span className="text-muted-foreground">Atribuído a:</span>{" "}
+                          <span className="font-medium">
+                            {n.assigned_user_id
+                              ? nomesUsuarios[n.assigned_user_id] || "..."
+                              : "—"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {!n.lida_em && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 flex-shrink-0"
+                      onClick={() => marcarLida(n.id)}
+                      title="Marcar como lida"
                     >
-                      📋 CONSULTA NO PORTAL
-                    </span>
-                    <span className="text-[10px] text-muted-foreground ml-auto">
-                      {tempoRelativo(n.created_at)}
-                    </span>
-                  </div>
-                  <div className="text-xs">
-                    <div>
-                      <span className="text-muted-foreground">CPF:</span>{" "}
-                      <span className="font-mono">{formatarCpf(n.cpf)}</span>
-                    </div>
-                    {n.nome && (
-                      <div>
-                        <span className="text-muted-foreground">Nome:</span> {n.nome}
-                      </div>
-                    )}
-                    {n.credor && (
-                      <div>
-                        <span className="text-muted-foreground">Credor:</span> {n.credor}
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-muted-foreground">Débitos:</span>{" "}
-                      {n.total_debitos}
-                    </div>
-                    {n.telefones && (
-                      <div className="break-all">
-                        <span className="text-muted-foreground">Telefone(s):</span>{" "}
-                        {n.telefones}
-                      </div>
-                    )}
-                  </div>
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
-                {!n.lida_em && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 flex-shrink-0"
-                    onClick={() => marcarLida(n.id)}
-                    title="Marcar como lida"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </PopoverContent>
