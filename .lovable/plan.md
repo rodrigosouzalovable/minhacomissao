@@ -1,41 +1,37 @@
-## O que "Falhou" significa
+## Problema
 
-Falhou = a Meta rejeitou aquela mensagem específica. Nem sempre é banimento do chip — pode ser: número inválido / sem WhatsApp, janela de 24h expirada, template pausado/rejeitado, limite de qualidade do número, política de mensagens, ou, sim, restrição/pausa/banimento do número.
+A Meta bloqueia botões de template que apontam diretamente para `wa.me` / `api.whatsapp.com`. Precisamos de uma URL "neutra" que, ao ser clicada, redirecione o cliente para o WhatsApp já com o número e a mensagem pré-preenchida.
 
-Hoje o webhook até recebe o motivo (título + código) da Meta, mas só grava esse texto na tabela do inbox — na tabela usada pelo painel "Envio Meta (massa)" (`meta_whatsapp_envios_log`) o campo `erro` fica vazio. Por isso o tooltip do "Falhou" aparece sem explicação.
+## Solução proposta
 
-## Correção 1 — mostrar o motivo ao lado de "Falhou"
+Criar uma rota de redirecionamento no próprio domínio do app (`meusacordos.com.br`), que a Meta aceita normalmente por ser um domínio próprio (não é `wa.me`).
 
-**Backend (`supabase/functions/meta-whatsapp-webhook/index.ts`)**
-- Quando `status === 'failed'` chega no webhook, gravar também `erro: <título + código>` no `UPDATE` de `meta_whatsapp_envios_log` (hoje só o `status` é atualizado).
+### Link final que você vai colar no botão da Meta
 
-**Frontend (`src/pages/EnvioMeta.tsx` + `EnvioMetaSendingContext.tsx`)**
-- No card "Enviados", ao lado do badge "Falhou", exibir o texto do erro em vermelho pequeno (não só como tooltip).
-- Já existe `deliveryErro` no contexto — só passar adiante e renderizar.
-
-## Correção 2 — WhatsApp de aviso no fim do lote
-
-**Backend (`supabase/functions/envio-meta-massa-tick/index.ts`)**
-Quando o job passa para `concluido` (todos processados) ou `erro` (encerrado por falta de instância), disparar `notificarAdmin` (helper já existente que envia para 62991672674) com:
-
-- Total enviados, erros, sem WhatsApp.
-- Template e horário de início/fim.
-- Instâncias que ficaram `estado_pool = 'restrita'` durante a janela do job (consulta `meta_whatsapp_instances` por `pausa_automatica_ate > iniciado_em` do job) — listando nome/número e motivo.
-- Idempotência com chave `envio_meta_job_concluido_<job_id>` para não duplicar avisos.
-
-Exemplo de mensagem:
 ```
-✅ Envio Meta concluído
-Template: {nome}
-Total: 257 · Enviados: 210 · Falharam: 47
-
-⚠️ Instâncias restringidas durante o envio:
-- {nome} ({fone}) — Restrição Meta #131049
+https://meusacordos.com.br/ir/boleto
 ```
 
-Se nenhuma instância foi restringida, a linha final vira "Nenhuma instância restringida.".
+Quando o cliente clicar, o navegador abre nossa página, que imediatamente executa `window.location.replace(...)` para:
 
-## Escopo excluído
-- Sem novas tabelas ou colunas — reaproveita `erro` de `meta_whatsapp_envios_log` e `estado_pool`/`pausa_automatica_motivo` das instâncias.
-- Sem mudança no rodízio/pool ou nas regras de envio.
-- Sem mudança na UI dos cards "Erros no envio" (esses já mostram o erro; foco é o "Falhou" dentro de "Enviados").
+```
+https://wa.me/5562982183144?text=Ol%C3%A1!%20Recebi%20uma%20mensagem%20e%20quero%20solicitar%20meu%20boleto%20para%20pagamento.
+```
+
+Resultado: o WhatsApp abre com a conversa do 62 98218-3144 e a mensagem "Olá! Recebi uma mensagem e quero solicitar meu boleto para pagamento." já digitada.
+
+### Implementação
+
+1. **Novo arquivo `src/pages/RedirectBoleto.tsx`** — componente mínimo que, no `useEffect`, faz `window.location.replace` para o `wa.me`. Mostra um "Abrindo WhatsApp..." como fallback caso o redirect demore.
+
+2. **`src/App.tsx`** — registrar a rota pública `/ir/boleto` apontando para o novo componente (fora de qualquer guarda de autenticação).
+
+3. **(Opcional futuro)** deixar a rota parametrizável por slug (`/ir/:slug`) lendo destinos de uma tabela, caso queira criar outros links curtos depois. Não faz parte deste plano.
+
+### Por que funciona com a Meta
+
+O botão do template aponta para `https://meusacordos.com.br/ir/boleto` — um domínio próprio, categoria "URL do site". A Meta valida somente o domínio de destino do botão; o redirect subsequente para o WhatsApp acontece no navegador do cliente, exatamente como qualquer link encurtado (bit.ly, etc.).
+
+### Alternativa sem código
+
+Se preferir não publicar código agora, dá para usar um encurtador (bit.ly, tinyurl) apontando para o mesmo `wa.me`. Funciona, mas fica dependente de serviço externo — recomendo a rota própria acima.
