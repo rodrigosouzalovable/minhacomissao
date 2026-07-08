@@ -1,18 +1,18 @@
 ## Diagnóstico
 
-O sino está vazio porque a edge function `notify-cpf-consulta` só grava a notificação quando existe pelo menos um usuário com `recebe_consulta_cpf = true` em `user_permissions`. Como nenhum funcionário tem esse toggle ativado ainda, o pool retorna vazio e nada é inserido em `consulta_cpf_notificacoes` — por isso o WhatsApp do admin recebe (fallback funciona), mas o sino não mostra nada.
+Revisei `NotificacoesCpfBell.tsx`: o botão de copiar (`Copy` / `Check` verde quando `cpf_copiado_em` está preenchido) é renderizado **incondicionalmente** dentro do `.map(...)` — não há gate por `isAdmin` nem por role. Ou seja, no código atual o botão já aparece para todo usuário logado que abre o sino, inclusive Fernanda.
 
-## Correção
+O motivo mais provável de Fernanda não estar vendo o botão é que **o login dela está usando a versão publicada antiga do app**, anterior ao ajuste do sino. As alterações que fiz existem só no ambiente de preview até a próxima publicação (`meusacordos.com.br` / `minhacomissao.lovable.app` continuam servindo a versão antiga).
 
-Editar `supabase/functions/notify-cpf-consulta/index.ts`:
+## Plano
 
-1. Manter a lógica de rodízio quando existir pool com `recebe_consulta_cpf = true`.
-2. **Se o pool estiver vazio**, buscar todos os admins em `user_roles` (`role = 'admin'`) e aplicar o mesmo rodízio entre eles (menos recentemente atribuído primeiro). Inserir a notificação normalmente atribuída ao admin escolhido.
-3. Se não houver nem admins (caso extremo), inserir a notificação com `assigned_user_id = null` — o admin ainda vê pelo policy "Admins can view all cpf notifs".
-4. Manter o WhatsApp de admin como fallback (sem alteração nesse trecho).
+1. Confirmar por leitura do arquivo que o botão de copiar está fora de qualquer condicional de role — nenhum código a alterar aqui.
+2. **Publicar o app** para que a versão nova (com botão de copiar + verde no card + rodízio com fallback admin) chegue ao login da Fernanda e dos demais funcionários.
+3. Instruir Fernanda a fazer um refresh forçado (Ctrl+F5 / Cmd+Shift+R) depois do publish, para descartar cache do bundle JS antigo.
 
-Nenhuma mudança em schema, RLS ou UI. Só a edge function.
+Nenhuma alteração de código é necessária para o comportamento pedido — o botão já é universal. O passo faltante é publicar.
 
 ## Escopo excluído
 
-- Não alterar `EditPermissionsDialog`, componente do sino, portal público ou outras notificações.
+- Sem mudanças em RLS, edge functions ou outros componentes.
+- Sem novo layout para o card.
