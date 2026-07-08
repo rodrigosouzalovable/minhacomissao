@@ -146,8 +146,10 @@ async function processarItem(job: any): Promise<ItemResult> {
       atual_instancia: null,
       proximo_em: null,
     }).eq('id', job.id);
+    await notificarConclusao(job.id, 'concluido');
     return { advanced: false, done: true };
   }
+
 
   const pickResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/pick-meta-instance`, {
     method: 'POST',
