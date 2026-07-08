@@ -52,6 +52,7 @@ export function EditPermissionsDialog({
   const [acordosCompartilhados, setAcordosCompartilhados] = useState(false);
   const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
+  const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -76,6 +77,7 @@ export function EditPermissionsDialog({
       setAcordosCompartilhados((permissions as any).acordos_compartilhados ?? false);
       setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
       setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
+      setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -84,6 +86,7 @@ export function EditPermissionsDialog({
       setAcordosCompartilhados(false);
       setPermiteCpfDuplicado(false);
       setPodeExcluirAcordos(false);
+      setRecebeConsultaCpf(false);
     }
   }, [permissions, open]);
 
@@ -99,6 +102,7 @@ export function EditPermissionsDialog({
             acordos_compartilhados: acordosCompartilhados,
             permite_cpf_duplicado: permiteCpfDuplicado,
             pode_excluir_acordos: podeExcluirAcordos,
+            recebe_consulta_cpf: recebeConsultaCpf,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
@@ -236,6 +240,17 @@ export function EditPermissionsDialog({
               <Switch
                 checked={podeExcluirAcordos}
                 onCheckedChange={setPodeExcluirAcordos}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Receber notificações de consulta de CPF</Label>
+                <p className="text-xs text-muted-foreground">Inclui este usuário no rodízio de notificações quando alguém consulta um CPF no portal público. As notificações aparecem no sino do Inbox Meta Oficial.</p>
+              </div>
+              <Switch
+                checked={recebeConsultaCpf}
+                onCheckedChange={setRecebeConsultaCpf}
               />
             </div>
 
