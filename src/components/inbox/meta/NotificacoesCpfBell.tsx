@@ -38,12 +38,46 @@ function tempoRelativo(iso: string) {
   return `${d} d`;
 }
 
+// Retorna a data (YYYY-MM-DD) no fuso America/Sao_Paulo
+function dataBRT(iso: string): string {
+  const d = new Date(iso);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const dd = parts.find((p) => p.type === "day")?.value;
+  return `${y}-${m}-${dd}`;
+}
+
+function hojeBRT(): string {
+  return dataBRT(new Date().toISOString());
+}
+
+function rotuloDia(dateStr: string): string {
+  const hoje = hojeBRT();
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const hojeDt = new Date(hoje + "T12:00:00Z");
+  const diff = Math.round((hojeDt.getTime() - dt.getTime()) / 86400000);
+  if (diff === 0) return "Hoje";
+  if (diff === 1) return "Ontem";
+  const dow = dt.toLocaleDateString("pt-BR", { weekday: "short", timeZone: "UTC" }).replace(".", "");
+  const dm = `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
+  return `${dow.charAt(0).toUpperCase() + dow.slice(1)} ${dm}`;
+}
+
 export function NotificacoesCpfBell() {
   const { user } = useAuth();
   const { isAdmin, loading: loadingRole } = useUserRole();
   const [open, setOpen] = useState(false);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [nomesUsuarios, setNomesUsuarios] = useState<Record<string, string>>({});
+  const [statsPorDia, setStatsPorDia] = useState<{ data: string; total: number }[]>([]);
+  const [totalHoje, setTotalHoje] = useState(0);
 
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id) return;
@@ -80,9 +114,52 @@ export function NotificacoesCpfBell() {
     }
   }, [user?.id, isAdmin, nomesUsuarios]);
 
+  const fetchStats = useCallback(async () => {
+    if (!user?.id) return;
+    // Últimos 7 dias (inclui hoje) em BRT — buscamos por created_at >= inicio (UTC)
+    const inicio = new Date();
+    inicio.setDate(inicio.getDate() - 7);
+    inicio.setHours(0, 0, 0, 0);
+    const inicioISO = inicio.toISOString();
+
+    let q = supabase
+      .from("consulta_cpf_notificacoes" as any)
+      .select("created_at, assigned_user_id")
+      .gte("created_at", inicioISO)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+
+    if (!isAdmin) {
+      q = q.eq("assigned_user_id", user.id);
+    }
+
+    const { data } = await q;
+    const rows = ((data as any) || []) as { created_at: string; assigned_user_id: string | null }[];
+
+    const contagem = new Map<string, number>();
+    // pré-popula últimos 7 dias com zero
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      contagem.set(dataBRT(d.toISOString()), 0);
+    }
+    for (const r of rows) {
+      const dia = dataBRT(r.created_at);
+      contagem.set(dia, (contagem.get(dia) || 0) + 1);
+    }
+
+    const dias = Array.from(contagem.entries())
+      .map(([data, total]) => ({ data, total }))
+      .sort((a, b) => (a.data < b.data ? 1 : -1));
+
+    setStatsPorDia(dias);
+    setTotalHoje(contagem.get(hojeBRT()) || 0);
+  }, [user?.id, isAdmin]);
+
   useEffect(() => {
     if (!user?.id || loadingRole) return;
     fetchNotificacoes();
+    fetchStats();
 
     const channel = supabase
       .channel(`consulta-cpf-notif-${user.id}-${isAdmin ? "admin" : "user"}`)
@@ -96,16 +173,33 @@ export function NotificacoesCpfBell() {
               table: "consulta_cpf_notificacoes",
               filter: `assigned_user_id=eq.${user.id}`,
             },
-        () => fetchNotificacoes()
+        () => {
+          fetchNotificacoes();
+          fetchStats();
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, isAdmin, loadingRole, fetchNotificacoes]);
+  }, [user?.id, isAdmin, loadingRole, fetchNotificacoes, fetchStats]);
 
   const naoLidas = notificacoes.filter((n) => !n.lida_em).length;
+
+  // Não lidas de hoje (funcionário: disponíveis para atender)
+  const naoLidasHoje = notificacoes.filter(
+    (n) => !n.lida_em && dataBRT(n.created_at) === hojeBRT()
+  ).length;
+
+  // Média dos últimos 7 dias excluindo hoje
+  const diasAnteriores = statsPorDia.filter((d) => d.data !== hojeBRT());
+  const mediaDiaria =
+    diasAnteriores.length > 0
+      ? Math.round(
+          diasAnteriores.reduce((s, d) => s + d.total, 0) / diasAnteriores.length
+        )
+      : 0;
 
   const marcarLida = async (id: string) => {
     await supabase
@@ -177,6 +271,79 @@ export function NotificacoesCpfBell() {
             </Button>
           )}
         </div>
+
+        {/* Painel de estatísticas */}
+        <div className="px-3 py-2 border-b bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1 rounded-md bg-background border p-2">
+              <div className="text-[10px] uppercase text-muted-foreground font-medium">
+                {isAdmin ? "Hoje (todos)" : "Hoje"}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-bold text-foreground">{totalHoje}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {isAdmin ? "consultas" : "atribuídas"}
+                </span>
+              </div>
+            </div>
+            {!isAdmin && (
+              <div className="flex-1 rounded-md bg-background border p-2">
+                <div className="text-[10px] uppercase text-muted-foreground font-medium">
+                  Disponíveis
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-primary">{naoLidasHoje}</span>
+                  <span className="text-[10px] text-muted-foreground">não lidas hoje</span>
+                </div>
+              </div>
+            )}
+            {isAdmin && (
+              <div className="flex-1 rounded-md bg-background border p-2">
+                <div className="text-[10px] uppercase text-muted-foreground font-medium">
+                  Média 7d
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-foreground">{mediaDiaria}</span>
+                  <span className="text-[10px] text-muted-foreground">por dia</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {isAdmin && statsPorDia.length > 0 && (
+            <div className="rounded-md bg-background border">
+              <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground font-medium border-b">
+                Últimos 7 dias
+              </div>
+              <div className="divide-y">
+                {statsPorDia.map((d) => (
+                  <div
+                    key={d.data}
+                    className="flex items-center justify-between px-2 py-1 text-xs"
+                  >
+                    <span
+                      className={cn(
+                        "text-muted-foreground",
+                        d.data === hojeBRT() && "font-semibold text-foreground"
+                      )}
+                    >
+                      {rotuloDia(d.data)}
+                    </span>
+                    <span
+                      className={cn(
+                        "font-mono tabular-nums",
+                        d.data === hojeBRT() ? "font-bold text-foreground" : "text-foreground"
+                      )}
+                    >
+                      {d.total}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="max-h-[420px] overflow-y-auto">
           {notificacoes.length === 0 ? (
             <div className="px-3 py-8 text-center text-xs text-muted-foreground">
