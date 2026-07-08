@@ -1,49 +1,36 @@
-## Sino de notificações no Inbox Meta Oficial + rodízio de consultas CPF
+## Objetivo
 
-### Fluxo
-1. Consulta no portal público (edge fn `notify-cpf-consulta`) → grava um registro em nova tabela e escolhe um funcionário do rodízio.
-2. O funcionário escolhido vê a notificação em tempo real no sino do cabeçalho da aba **Inbox Meta Oficial**.
-3. Uma cópia da notificação continua indo pelo WhatsApp para o admin (fallback), como já ocorre hoje.
+No sino de "Consultas de CPF" do Inbox Meta Oficial:
+1. Admin vê todas as notificações + para qual funcionário cada uma foi atribuída.
+2. Cada card ganha botão de copiar CPF ao lado do número.
+3. Ao clicar em copiar, o card fica verde na tela do funcionário responsável E na tela do admin, em tempo real.
 
-### 1. Nova permissão por usuário
-Em `user_permissions` (tabela já usada pelo `EditPermissionsDialog`), adicionar coluna:
-- `recebe_consulta_cpf boolean not null default false`
+## Mudanças
 
-Interface (arquivo `src/components/EditPermissionsDialog.tsx`): adicionar um switch **"Receber notificações de consulta de CPF (rodízio)"** junto às demais permissões, para o admin escolher quais logins participam do pool.
+### 1. Banco de dados (migração)
+- Adicionar coluna `cpf_copiado_em timestamptz` (nullable) em `consulta_cpf_notificacoes`.
+- Ajustar RLS:
+  - `SELECT`: manter regra atual do funcionário (vê os próprios) **e** adicionar policy permitindo admin ver todos via `has_role(auth.uid(), 'admin')`.
+  - `UPDATE`: permitir que o funcionário atribuído marque `lida_em` / `cpf_copiado_em`; admin também pode atualizar (para consistência).
+- Garantir GRANT `SELECT, UPDATE` em `authenticated` (já existente, revisar).
 
-### 2. Nova tabela `consulta_cpf_notificacoes`
-Colunas de domínio:
-- `cpf`, `nome`, `credor`, `total_debitos`, `telefones`
-- `assigned_user_id` (uuid → auth.users)
-- `lida_em` (timestamp nullable)
+### 2. Edge function `notify-cpf-consulta`
+- Nenhuma mudança funcional necessária — já grava `assigned_user_id`. Confirmar que continua salvando corretamente.
 
-Índices: `(assigned_user_id, created_at desc)`, `(assigned_user_id, lida_em)`.
-GRANTs: `authenticated` (SELECT/UPDATE), `service_role` (ALL).
-RLS: usuário só vê/atualiza suas próprias linhas (`assigned_user_id = auth.uid()`); admin pode ver todas via `has_role(auth.uid(),'admin')`. Só edge functions inserem (nenhuma policy de INSERT para authenticated).
-Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.consulta_cpf_notificacoes`.
+### 3. Componente `NotificacoesCpfBell.tsx`
+- Detectar se o usuário logado é admin (via `useUserRole` / `has_role`).
+- **Se admin**: buscar todas as notificações (sem filtro `assigned_user_id`); realtime sem filtro. Mostrar linha extra "Atribuído a: {nome do funcionário}" em cada card. Fazer join/lookup em `profiles` pelo `assigned_user_id` para obter o nome.
+- **Se funcionário**: comportamento atual (apenas as suas).
+- Adicionar botão `CopyButton` (componente existente) ao lado do CPF, com `preserveText={false}` (copia só dígitos). No `onClick`, além de copiar, disparar `UPDATE consulta_cpf_notificacoes SET cpf_copiado_em = now() WHERE id = ...`.
+- Estilo do card quando `cpf_copiado_em IS NOT NULL`: fundo verde (`bg-green-500/10 border-l-2 border-green-500`) sobrescrevendo o azul de "não lida".
+- Realtime já reflete o UPDATE em ambos (admin sem filtro; funcionário pelo filtro atual), então admin vê a mudança de cor assim que o funcionário clicar.
 
-### 3. Edge function `notify-cpf-consulta`
-Manter o envio WhatsApp atual (`notificarAdmin`) como fallback. Adicionar antes do return:
-1. Buscar `user_id` em `user_permissions WHERE recebe_consulta_cpf = true`.
-2. Se pool vazio: só WhatsApp; retorna normal.
-3. Se pool com N usuários, escolher o próximo por **rodízio real**:
-   - Ordenar por `(SELECT max(created_at) FROM consulta_cpf_notificacoes WHERE assigned_user_id = u.user_id) NULLS FIRST, user_id`.
-   - O primeiro da lista é o próximo a receber.
-4. Inserir uma linha em `consulta_cpf_notificacoes` com dados da consulta e `assigned_user_id`.
+### 4. Escopo excluído
+- Nenhuma mudança em outros fluxos de notificação, portal público ou permissões.
+- Sem novos campos além de `cpf_copiado_em`.
 
-### 4. Sino no cabeçalho do Inbox Meta Oficial
-Novo componente `src/components/inbox/meta/NotificacoesCpfBell.tsx`:
-- Ícone `Bell` do lucide com badge do total de `lida_em IS NULL` do usuário.
-- Popover ao clicar, mostrando as últimas 20 notificações:
-  - CPF formatado, nome, credor, débitos, telefones, data/hora relativa.
-  - Não lidas em destaque; lidas apagadas.
-  - Botão "Marcar como lida" por item + "Marcar todas como lidas".
-- Fetch inicial via Supabase (`.eq('assigned_user_id', user.id)`).
-- Realtime `postgres_changes` filtrado por `assigned_user_id=eq.<user.id>` — dentro de `useEffect`, com cleanup (`removeChannel`) no unmount.
+## Detalhes técnicos
 
-Integração em `src/pages/InboxMeta.tsx` (linha ~621, dentro do header do sidebar): inserir `<NotificacoesCpfBell />` entre o título "Inbox API Oficial Meta" e o botão de tema — visível para todos os usuários da página.
-
-### Fora de escopo
-- Nada muda em outros usos de `notificar-admin` (aquecimento, boletos, etc.).
-- Não há nova página; a interface é apenas o sino dentro do Inbox Meta Oficial.
-- O WhatsApp do admin continua recebendo — fallback preservado.
+- Verde deve ter prioridade visual sobre "não lida" (aplicar condicional na className).
+- Para o admin, exibir o nome do funcionário buscando `profiles.nome` (fallback para email/id curto se faltar). Fazer numa query separada por `in('id', userIds)` após carregar as notificações, para evitar problemas de RLS em join.
+- Copiar CPF usa o `CopyButton` já existente (`src/components/CopyButton.tsx`) com `value={cpf}`.
