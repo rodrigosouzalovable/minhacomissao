@@ -77,6 +77,7 @@ export function EditPermissionsDialog({
       setAcordosCompartilhados((permissions as any).acordos_compartilhados ?? false);
       setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
       setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
+      setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -85,6 +86,7 @@ export function EditPermissionsDialog({
       setAcordosCompartilhados(false);
       setPermiteCpfDuplicado(false);
       setPodeExcluirAcordos(false);
+      setRecebeConsultaCpf(false);
     }
   }, [permissions, open]);
 
