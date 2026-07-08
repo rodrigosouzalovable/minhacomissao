@@ -767,10 +767,27 @@ export default function EnvioMeta() {
                 <CardTitle>2. Instâncias</CardTitle>
                 <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
               </div>
-              <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
-                {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
-                Verificar saúde
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={instancias.length === 0}
+                  onClick={() => {
+                    if (instanciaIds.length === instancias.length) {
+                      setInstanciaIds([]);
+                    } else {
+                      setInstanciaIds(instancias.map((i) => i.id));
+                    }
+                  }}
+                >
+                  {instanciaIds.length === instancias.length && instancias.length > 0 ? "Limpar seleção" : "Selecionar todas"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
+                  {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
+                  Verificar saúde
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
