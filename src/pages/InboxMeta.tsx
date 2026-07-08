@@ -623,6 +623,7 @@ export default function InboxMeta() {
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
               <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">Oficial</Badge>
+              <NotificacoesCpfBell />
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={toggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo escuro'}>
                 {tema === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
