@@ -243,6 +243,17 @@ export function EditPermissionsDialog({
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Receber notificações de consulta de CPF</Label>
+                <p className="text-xs text-muted-foreground">Inclui este usuário no rodízio de notificações quando alguém consulta um CPF no portal público. As notificações aparecem no sino do Inbox Meta Oficial.</p>
+              </div>
+              <Switch
+                checked={recebeConsultaCpf}
+                onCheckedChange={setRecebeConsultaCpf}
+              />
+            </div>
+
           </div>
         </div>
 
