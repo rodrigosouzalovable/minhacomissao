@@ -1248,7 +1248,7 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
   };
 
   const Section = ({ titulo, cor, count, children, onCopy, headerExtra }: { titulo: string; cor: string; count: number; children: React.ReactNode; onCopy?: () => void; headerExtra?: React.ReactNode }) => {
-    const [aberto, setAberto] = React.useState<boolean>(count > 0 && count <= 20);
+    const [aberto, setAberto] = useState<boolean>(count > 0 && count <= 20);
     return (
       <details
         className="rounded-md border bg-card"
