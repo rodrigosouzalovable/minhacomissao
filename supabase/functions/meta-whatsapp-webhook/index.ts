@@ -520,8 +520,12 @@ serve(async (req) => {
 
           // Compatibilidade com log de massa
           await supabase.from('meta_whatsapp_envios_log')
-            .update({ status })
+            .update({
+              status,
+              erro: status === 'failed' ? ((errTitle ? String(errTitle) : 'falha') + (errCode ? ` (#${errCode})` : '')) : null,
+            })
             .eq('wa_message_id', waId);
+
 
           // Detecta bloqueio/restrição/banimento da instância
           if (status === 'failed') {
