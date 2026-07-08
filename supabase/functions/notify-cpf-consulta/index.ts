@@ -59,14 +59,24 @@ serve(async (req) => {
 
 _Portal de Acordos - Souza e Ribeiro_`;
 
-    // Rodízio: distribui a notificação entre usuários com permissão
+    // Rodízio: distribui a notificação entre usuários com permissão.
+    // Fallback: se ninguém tiver a permissão ativada, cai no rodízio entre admins.
     try {
       const { data: pool } = await supabase
         .from('user_permissions')
         .select('user_id')
         .eq('recebe_consulta_cpf', true);
 
-      const userIds = (pool || []).map((p: any) => p.user_id).filter(Boolean);
+      let userIds = (pool || []).map((p: any) => p.user_id).filter(Boolean);
+
+      if (userIds.length === 0) {
+        const { data: admins } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'admin');
+        userIds = (admins || []).map((a: any) => a.user_id).filter(Boolean);
+        console.log('Pool vazio, usando fallback admins:', userIds.length);
+      }
 
       if (userIds.length > 0) {
         // Busca último atribuído por usuário para ordenar (menos recente primeiro)
@@ -105,9 +115,12 @@ _Portal de Acordos - Souza e Ribeiro_`;
             assigned_user_id: proximo,
           });
         if (insErr) console.error('Erro inserindo notificação rodízio:', insErr);
+      } else {
+        console.warn('Sem usuários elegíveis (nem pool nem admins) para notificação de CPF');
       }
     } catch (rodizioErr) {
       console.error('Erro no rodízio de notificação:', rodizioErr);
+
     }
 
     // Mantém fallback WhatsApp para o admin
