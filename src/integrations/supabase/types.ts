@@ -1134,6 +1134,45 @@ export type Database = {
         }
         Relationships: []
       }
+      consulta_cpf_notificacoes: {
+        Row: {
+          assigned_user_id: string
+          cpf: string
+          created_at: string
+          credor: string | null
+          id: string
+          lida_em: string | null
+          nome: string | null
+          telefones: string | null
+          total_debitos: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_id: string
+          cpf: string
+          created_at?: string
+          credor?: string | null
+          id?: string
+          lida_em?: string | null
+          nome?: string | null
+          telefones?: string | null
+          total_debitos?: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_id?: string
+          cpf?: string
+          created_at?: string
+          credor?: string | null
+          id?: string
+          lida_em?: string | null
+          nome?: string | null
+          telefones?: string | null
+          total_debitos?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean
