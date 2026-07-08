@@ -1,29 +1,26 @@
-## Objetivo
+## Ajustes na aba "Envio Meta Massa"
 
-Quando o funcionário iniciar uma nova conversa pelo diálogo "Nova conversa Meta":
-1. A mensagem no inbox aparece com o cabeçalho **"*Atendente {nome}:*"** antes do corpo do template (mesmo estilo das respostas dentro da janela de 24h).
-2. O contato recém-criado recebe automaticamente a etiqueta **"Atendente: {nome}"** correspondente ao funcionário que iniciou a conversa (mesmo comportamento do rodízio, mas fixando no atendente que abriu).
+### 1. Aba "Enviados" fecha sozinha durante o disparo
 
-Importante: o corpo do template enviado à Meta continua exatamente como aprovado (não podemos alterar o texto do template HSM). O prefixo "Atendente" é aplicado somente no **espelho local** da mensagem em `meta_whatsapp_mensagens.conteudo`, que é o que o inbox exibe.
+**Causa:** o componente `Section` (em `src/pages/EnvioMeta.tsx`) usa um `<details>` com a prop `open={count > 0 && count <= 20}` sempre controlada. Como a página faz polling durante o envio, a cada atualização o React re-renderiza e reforça o `open` conforme a contagem. Quando `count` passa de 20 (ex.: 44 enviados na tela), a expressão vira `false` e fecha o painel automaticamente, mesmo que o usuário tenha clicado para abrir.
 
-## Alterações
+**Correção:** trocar o `open` controlado por um estado inicial não controlado (`defaultOpen` interno), preservando a interação do usuário:
+- Adicionar um `useState` dentro de `Section` inicializado com `count > 0 && count <= 20` (ou receber `defaultOpen` por prop).
+- Usar `open={aberto}` + `onToggle` do `<details>` para sincronizar apenas quando o usuário clica, ignorando mudanças de `count`.
+- Resultado: uma vez aberto pelo usuário, o painel permanece aberto durante o disparo; se ele fechar manualmente, permanece fechado.
 
-### 1. `src/pages/InboxMeta.tsx`
-- Passar a prop `atendenteNome` (já existente no state) para `<MetaNovaConversaDialog />`.
+### 2. Botão "Selecionar todas" no campo "2. Instâncias"
 
-### 2. `src/components/inbox/meta/MetaNovaConversaDialog.tsx`
-- Aceitar prop `atendenteNome?: string`.
-- Repassar `atendente_nome` no body da chamada `supabase.functions.invoke('send-whatsapp-meta', …)`.
+Em `src/pages/EnvioMeta.tsx`, no `CardHeader` do card "2. Instâncias", adicionar um botão ao lado (ou acima) do "Verificar saúde":
 
-### 3. `supabase/functions/send-whatsapp-meta/index.ts`
-- Ler `atendente_nome` do payload.
-- No trecho que faz `insert` em `meta_whatsapp_mensagens`, prefixar `conteudo` com `*Atendente {atendente_nome}:*\n\n` (quando informado e ainda não presente).
-- Após o `upsert` do contato (`meta_whatsapp_contatos`), se `atendente_nome` estiver presente:
-  - Buscar em `meta_whatsapp_etiquetas` (filtrando por `user_id = inst.user_id`) a etiqueta com `nome ilike 'Atendente: {atendente_nome}'` (case-insensitive).
-  - Se existir e o contato ainda não tiver essa etiqueta vinculada em `meta_whatsapp_contato_etiquetas`, inserir o vínculo (`contato_id`, `etiqueta_id`), tolerando duplicidade (código `23505`).
-  - Se não existir etiqueta com esse nome, apenas logar e seguir (sem criar automaticamente, para não poluir a lista de etiquetas do admin).
+- Texto alterna entre **"Selecionar todas"** e **"Limpar seleção"** conforme o estado atual (`instanciaIds.length === instancias.length`).
+- Ao clicar:
+  - Se nem todas estão marcadas: `setInstanciaIds(instancias.map(i => i.id))`.
+  - Se todas já estão marcadas: `setInstanciaIds([])`.
+- Desabilitado quando `instancias.length === 0`.
+- Estilo compatível com o botão "Verificar saúde" (variant `outline`, size `sm`).
 
-## Fora de escopo
-- Não altera o corpo real enviado à Meta (templates HSM são fixos).
-- Não muda o rodízio automático das mensagens recebidas — a lógica atual continua funcionando para conversas iniciadas pelo cliente.
-- Não cria novas etiquetas automaticamente: reutiliza somente as que o admin já cadastrou ("Atendente: X").
+### Fora de escopo
+
+- Nenhuma mudança em edge functions, backend, lógica de round-robin ou pooling.
+- Nenhuma mudança nas outras seções ("Erros", "Sem WhatsApp", "Erro na validação") além do mesmo ajuste de comportamento aberto/fechado que já compartilham o mesmo `Section`.
