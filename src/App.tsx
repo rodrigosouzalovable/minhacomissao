@@ -173,6 +173,7 @@ const App = () => (
           <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
+            <Route path="/ir/boleto" element={<RedirectBoleto />} />
             <Route path="/inbox" element={<PermissionRoute><WhatsAppInbox /></PermissionRoute>} />
             <Route path="/:creditor" element={<PortalConsulta />} />
             <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
