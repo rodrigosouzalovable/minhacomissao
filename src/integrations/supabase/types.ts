@@ -3709,6 +3709,7 @@ export type Database = {
           permite_cpf_duplicado: boolean
           pode_excluir_acordos: boolean
           pode_marcar_pago_global: boolean
+          recebe_consulta_cpf: boolean | null
           user_id: string
           visivel_ranking: boolean
         }
@@ -3724,6 +3725,7 @@ export type Database = {
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
           pode_marcar_pago_global?: boolean
+          recebe_consulta_cpf?: boolean | null
           user_id: string
           visivel_ranking?: boolean
         }
@@ -3739,6 +3741,7 @@ export type Database = {
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
           pode_marcar_pago_global?: boolean
+          recebe_consulta_cpf?: boolean | null
           user_id?: string
           visivel_ranking?: boolean
         }
