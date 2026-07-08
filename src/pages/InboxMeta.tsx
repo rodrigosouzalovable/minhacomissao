@@ -22,6 +22,7 @@ import { MetaConversaContextMenu } from '@/components/inbox/meta/MetaConversaCon
 import { MetaEtiquetasDialog, MetaEtiqueta } from '@/components/inbox/meta/MetaEtiquetasDialog';
 import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/meta/MetaMensagensRapidasDialog';
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
+import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
