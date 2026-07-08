@@ -46,6 +46,7 @@ const WhatsAppInbox = lazy(() => import("./pages/WhatsAppInbox"));
 const Aquecimento = lazy(() => import("./pages/Aquecimento"));
 const MonitorEnvios = lazy(() => import("./pages/MonitorEnvios"));
 const ExportarDados = lazy(() => import("./pages/ExportarDados"));
+const RedirectBoleto = lazy(() => import("./pages/RedirectBoleto"));
 
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const ComiteNovoMundo = lazy(() => import("./pages/ComiteNovoMundo"));
