@@ -52,7 +52,75 @@ async function encerrarJobSemDisponibilidade(job: any, motivo: string) {
     atual_instancia: null,
     proximo_em: null,
   }).eq('id', job.id);
+  await notificarConclusao(job.id, 'erro', motivo);
 }
+
+async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'erro', motivo?: string) {
+  try {
+    const { data: job } = await supabase
+      .from('envio_meta_job')
+      .select('*')
+      .eq('id', jobId)
+      .maybeSingle();
+    if (!job) return;
+
+    const { count: semWaCount } = await supabase
+      .from('envio_meta_job_item')
+      .select('id', { count: 'exact', head: true })
+      .eq('job_id', jobId)
+      .eq('status', 'sem_whatsapp');
+
+    // Instâncias que ficaram restritas durante o job
+    const { data: restritas } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('nome, display_phone, pausa_automatica_motivo, pausa_automatica_ate')
+      .in('id', job.instancia_ids || [])
+      .eq('estado_pool', 'restrita')
+      .gte('pausa_automatica_ate', job.iniciado_em);
+
+    const total = job.total || 0;
+    const enviados = job.enviados || 0;
+    const erros = job.erros || 0;
+    const semWa = semWaCount || 0;
+    const template = job.template_nome || '—';
+    const inicio = new Date(job.iniciado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const fim = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+    const cabec = statusFinal === 'concluido'
+      ? '✅ *Envio Meta concluído*'
+      : `⚠️ *Envio Meta encerrado*${motivo ? ` — ${motivo}` : ''}`;
+
+    let msg = `${cabec}\n\n` +
+      `📄 Template: *${template}*\n` +
+      `📊 Total: ${total}\n` +
+      `✅ Enviados: ${enviados}\n` +
+      `❌ Falharam: ${erros}\n` +
+      (semWa > 0 ? `🚫 Sem WhatsApp: ${semWa}\n` : '') +
+      `🕐 Início: ${inicio}\n` +
+      `🕐 Fim: ${fim}\n\n`;
+
+    if (restritas && restritas.length > 0) {
+      msg += `🚫 *Instâncias restringidas durante o envio:*\n`;
+      for (const r of restritas as any[]) {
+        const label = r.nome || r.display_phone || 'instância';
+        const fone = r.display_phone && r.nome ? ` (${r.display_phone})` : '';
+        msg += `• ${label}${fone} — ${r.pausa_automatica_motivo || 'restrição Meta'}\n`;
+      }
+    } else {
+      msg += `✅ Nenhuma instância restringida.`;
+    }
+
+    const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+    await notificarAdmin(supabase, {
+      tipo: 'envio_meta_concluido',
+      mensagem: msg,
+      chaveIdempotencia: `envio_meta_job_${statusFinal}_${jobId}`,
+    });
+  } catch (e) {
+    console.error('[tick] notificarConclusao falhou:', String(e).slice(0, 300));
+  }
+}
+
 
 async function processarItem(job: any): Promise<ItemResult> {
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
