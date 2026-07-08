@@ -59,6 +59,58 @@ serve(async (req) => {
 
 _Portal de Acordos - Souza e Ribeiro_`;
 
+    // Rodízio: distribui a notificação entre usuários com permissão
+    try {
+      const { data: pool } = await supabase
+        .from('user_permissions')
+        .select('user_id')
+        .eq('recebe_consulta_cpf', true);
+
+      const userIds = (pool || []).map((p: any) => p.user_id).filter(Boolean);
+
+      if (userIds.length > 0) {
+        // Busca último atribuído por usuário para ordenar (menos recente primeiro)
+        const { data: ultimos } = await supabase
+          .from('consulta_cpf_notificacoes')
+          .select('assigned_user_id, created_at')
+          .in('assigned_user_id', userIds)
+          .order('created_at', { ascending: false });
+
+        const ultimoPorUsuario = new Map<string, string>();
+        for (const row of (ultimos || []) as any[]) {
+          if (!ultimoPorUsuario.has(row.assigned_user_id)) {
+            ultimoPorUsuario.set(row.assigned_user_id, row.created_at);
+          }
+        }
+
+        // Ordena: quem nunca recebeu primeiro; empates pelo user_id (estável)
+        const ordenados = [...userIds].sort((a, b) => {
+          const ua = ultimoPorUsuario.get(a);
+          const ub = ultimoPorUsuario.get(b);
+          if (!ua && !ub) return a.localeCompare(b);
+          if (!ua) return -1;
+          if (!ub) return 1;
+          return ua.localeCompare(ub); // ISO strings ordenam cronologicamente
+        });
+
+        const proximo = ordenados[0];
+        const { error: insErr } = await supabase
+          .from('consulta_cpf_notificacoes')
+          .insert({
+            cpf: cpfLimpo,
+            nome: nome || null,
+            credor: credor || null,
+            total_debitos: totalDebitos ?? 0,
+            telefones: telefonesFormatados,
+            assigned_user_id: proximo,
+          });
+        if (insErr) console.error('Erro inserindo notificação rodízio:', insErr);
+      }
+    } catch (rodizioErr) {
+      console.error('Erro no rodízio de notificação:', rodizioErr);
+    }
+
+    // Mantém fallback WhatsApp para o admin
     const result = await notificarAdmin(supabase, {
       tipo: 'consulta_cpf',
       mensagem,
