@@ -22,6 +22,8 @@ import { AgendarCampanhaBox, CampanhasAgendadasList } from "@/components/meta/Ca
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
+import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 
 type UazInstancia = {
   id: string;
