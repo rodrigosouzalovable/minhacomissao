@@ -666,7 +666,7 @@ export default function WhatsAppInbox() {
       if (data && data.length > 0) {
         (data as Mensagem[]).forEach(handleNew);
       }
-    }, 15000);
+    }, 30000);
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
