@@ -158,6 +158,39 @@ export default function EnvioMeta() {
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[]; duplicados?: number } | null>(null);
+  const [custoDlg, setCustoDlg] = useState<{
+    open: boolean;
+    cobrados: number;
+    gratis: number;
+    total: number;
+    usd: number;
+    brl: number;
+    categoria: string;
+    valorDigitado: string;
+    resolver: ((ok: boolean) => void) | null;
+  }>({ open: false, cobrados: 0, gratis: 0, total: 0, usd: 0, brl: 0, categoria: "", valorDigitado: "", resolver: null });
+
+  const pedirConfirmacaoCusto = async (
+    telefones: string[],
+    instIds: string[],
+    categoria: string | null,
+  ): Promise<boolean> => {
+    const est = await calcularCustoEstimado(telefones, instIds, categoria);
+    if (est.brl <= 0) return true; // nada a cobrar (tudo grátis / preço zero)
+    return await new Promise<boolean>((resolve) => {
+      setCustoDlg({
+        open: true,
+        cobrados: est.cobrados,
+        gratis: est.gratis,
+        total: est.total,
+        usd: est.usd,
+        brl: est.brl,
+        categoria: est.categoria,
+        valorDigitado: "",
+        resolver: resolve,
+      });
+    });
+  };
 
   const importarExcel = async (file: File) => {
     try {
