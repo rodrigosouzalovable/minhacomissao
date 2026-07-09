@@ -64,10 +64,27 @@ Deno.serve(async (req) => {
     const janelaAberta = ultimaEntrada > 0 && (agora - ultimaEntrada) < 24 * 60 * 60 * 1000;
 
     if (!janelaAberta) {
+      // Notifica admin (idempotente user+dia) para acompanhar tentativas de burlar a barreira
+      try {
+        const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+        const chave = `janela_bloqueio_texto_${uid}_${new Date().toISOString().slice(0, 10)}`;
+        await notificarAdmin(supabase, {
+          tipo: 'janela_24h_bloqueio',
+          mensagem:
+            `🔒 Tentativa de envio livre fora da janela 24h (BLOQUEADA)\n\n` +
+            `Usuário: ${uid}\n` +
+            `Instância: ${inst.nome || inst.display_phone || inst.id}\n` +
+            `Destino: ${to || bsuid}\n` +
+            `Tipo: texto\n\n` +
+            `Enviar agora reclassificaria como MARKETING. Oriente a usar template UTILITY.`,
+          chaveIdempotencia: chave,
+        });
+      } catch (_) { /* não bloqueia resposta */ }
+
       return new Response(JSON.stringify({
         success: false,
         janela_expirada: true,
-        error: 'Janela de 24h expirada. Envie um template HSM para reabrir a conversa.',
+        error: 'Janela de 24h fechada. Envie um template UTILITY aprovado para reabrir a conversa.',
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 

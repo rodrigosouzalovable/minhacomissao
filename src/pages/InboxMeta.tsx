@@ -61,6 +61,7 @@ interface MetaMensagem {
 
 const PAGE_SIZE = 200;
 const JANELA_24H_MS = 24 * 60 * 60 * 1000;
+const ALERTA_1H_MS = 60 * 60 * 1000;
 
 function formatTelefone(t: string) {
   const d = t.replace(/\D/g, '');
@@ -418,11 +419,29 @@ export default function InboxMeta() {
       });
   }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM]);
 
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const computeJanela = useCallback((ultimaEntradaIso?: string | null) => {
+    if (!ultimaEntradaIso) return { status: 'fechada' as const, fim: 0, msRestante: 0 };
+    const fim = new Date(ultimaEntradaIso).getTime() + JANELA_24H_MS;
+    const msRestante = fim - nowTick;
+    if (msRestante <= 0) return { status: 'fechada' as const, fim, msRestante: 0 };
+    if (msRestante <= ALERTA_1H_MS) return { status: 'alerta' as const, fim, msRestante };
+    return { status: 'aberta' as const, fim, msRestante };
+  }, [nowTick]);
+
   const janelaInfo = useMemo(() => {
-    if (!contatoAtivo?.ultima_msg_entrada_em) return { aberta: false, expiraEm: null as string | null };
-    const fim = new Date(contatoAtivo.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
-    return { aberta: fim - Date.now() > 0, expiraEm: new Date(fim).toISOString() };
-  }, [contatoAtivo]);
+    const j = computeJanela(contatoAtivo?.ultima_msg_entrada_em);
+    return {
+      ...j,
+      aberta: j.status !== 'fechada',
+      expiraEm: j.fim ? new Date(j.fim).toISOString() : null,
+    };
+  }, [contatoAtivo, computeJanela]);
 
   const instAtiva = useMemo(() => instancias.find(i => i.id === contatoAtivo?.instancia_id), [instancias, contatoAtivo]);
 
@@ -431,7 +450,7 @@ export default function InboxMeta() {
     const raw = (textoCustom ?? '').trim();
     if (!contatoAtivo || !raw || enviando) return;
     if (!janelaInfo.aberta) {
-      toast({ title: 'Janela 24h expirada', description: 'Use um template HSM em "Envio Meta (massa)".', variant: 'destructive' });
+      toast({ title: 'Janela 24h fechada', description: 'Envie um template UTILITY em Envio Meta (massa) para reabrir. Texto livre agora custaria como MARKETING.', variant: 'destructive' });
       return;
     }
     const t = formatarMensagemAtendente(raw);
@@ -718,6 +737,7 @@ export default function InboxMeta() {
               const etIds = contatoEtiquetas[c.id] || [];
               const ets = etiquetas.filter(e => etIds.includes(e.id));
               const sel = selecionados.has(c.id);
+              const jan = computeJanela(c.ultima_msg_entrada_em);
               return (
                 <MetaConversaContextMenu
                   key={c.id}
@@ -762,6 +782,19 @@ export default function InboxMeta() {
                         'text-[10px] whitespace-nowrap',
                         c.nao_lido > 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground',
                       )}>{formatContatoTime(c.ultima_mensagem_em)}</span>
+                      <span
+                        className={cn(
+                          'h-2 w-2 rounded-full ring-2 ring-background',
+                          jan.status === 'aberta' && 'bg-emerald-500',
+                          jan.status === 'alerta' && 'bg-amber-500 animate-pulse',
+                          jan.status === 'fechada' && 'bg-red-500',
+                        )}
+                        title={
+                          jan.status === 'aberta' ? 'Janela 24h aberta'
+                            : jan.status === 'alerta' ? 'Janela fecha em menos de 1h'
+                            : 'Janela fechada — só template UTILITY'
+                        }
+                      />
                       {c.nao_lido > 0 && (
                         <span
                           className="inline-flex items-center justify-center h-6 min-w-6 px-1.5 rounded-full bg-emerald-500 text-[11px] font-bold leading-none text-white shadow-md ring-2 ring-background"
@@ -818,13 +851,17 @@ export default function InboxMeta() {
                   </div>
                 </div>
 
-                {janelaInfo.aberta ? (
+                {janelaInfo.status === 'aberta' ? (
                   <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
-                    <Clock className="h-3 w-3" /> {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
+                    <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
+                  </Badge>
+                ) : janelaInfo.status === 'alerta' ? (
+                  <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 animate-pulse">
+                    <AlertCircle className="h-3 w-3" /> Janela fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="border-amber-500/40 text-amber-500 gap-1">
-                    <AlertCircle className="h-3 w-3" /> 24h expiradas
+                  <Badge variant="outline" className="border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400 gap-1">
+                    <AlertCircle className="h-3 w-3" /> Fechada · envio bloqueado
                   </Badge>
                 )}
               </div>
@@ -881,9 +918,26 @@ export default function InboxMeta() {
               </div>
 
               <div className="border-t bg-card">
-                {!janelaInfo.aberta && (
-                  <div className="m-3 text-xs bg-amber-500/10 border border-amber-500/30 rounded p-2 text-amber-700 dark:text-amber-400">
-                    <strong>Janela 24h expirada.</strong> Use template HSM em <strong>Envio Meta (massa)</strong> para reabrir.
+                {janelaInfo.status === 'fechada' && (
+                  <div className="m-3 text-xs bg-red-500/10 border-2 border-red-500/40 rounded p-3 text-red-700 dark:text-red-400 space-y-1">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <AlertCircle className="h-4 w-4" />
+                      Janela de 24h encerrada — envio livre bloqueado
+                    </div>
+                    <p>
+                      Enviar texto livre agora reclassifica a conversa como <strong>MARKETING (~R$ 0,35/msg)</strong>.
+                      Para reabrir, envie um <strong>template UTILITY aprovado</strong> em <strong>Envio Meta (massa)</strong> ou
+                      aguarde o cliente responder.
+                    </p>
+                  </div>
+                )}
+                {janelaInfo.status === 'alerta' && (
+                  <div className="m-3 text-xs bg-amber-500/10 border border-amber-500/40 rounded p-2 text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>
+                      <strong>Atenção:</strong> a janela de 24h fecha em <strong>{formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}</strong>.
+                      Após isso, só será possível reabrir via template UTILITY.
+                    </span>
                   </div>
                 )}
                 {respondendo && (
@@ -976,7 +1030,7 @@ export default function InboxMeta() {
                       ref={composerRef}
                       disabled={!janelaInfo.aberta || enviando}
                       enviando={enviando}
-                      placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : 'Janela 24h expirada — use template HSM'}
+                      placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : '🔒 Janela 24h fechada — envie template UTILITY para reabrir'}
                       onSend={(t) => enviar(t)}
                       onPaste={onPaste}
                       onEscape={() => respondendo && setRespondendo(null)}
