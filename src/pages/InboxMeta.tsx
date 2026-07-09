@@ -419,11 +419,29 @@ export default function InboxMeta() {
       });
   }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM]);
 
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const computeJanela = useCallback((ultimaEntradaIso?: string | null) => {
+    if (!ultimaEntradaIso) return { status: 'fechada' as const, fim: 0, msRestante: 0 };
+    const fim = new Date(ultimaEntradaIso).getTime() + JANELA_24H_MS;
+    const msRestante = fim - nowTick;
+    if (msRestante <= 0) return { status: 'fechada' as const, fim, msRestante: 0 };
+    if (msRestante <= ALERTA_1H_MS) return { status: 'alerta' as const, fim, msRestante };
+    return { status: 'aberta' as const, fim, msRestante };
+  }, [nowTick]);
+
   const janelaInfo = useMemo(() => {
-    if (!contatoAtivo?.ultima_msg_entrada_em) return { aberta: false, expiraEm: null as string | null };
-    const fim = new Date(contatoAtivo.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
-    return { aberta: fim - Date.now() > 0, expiraEm: new Date(fim).toISOString() };
-  }, [contatoAtivo]);
+    const j = computeJanela(contatoAtivo?.ultima_msg_entrada_em);
+    return {
+      ...j,
+      aberta: j.status !== 'fechada',
+      expiraEm: j.fim ? new Date(j.fim).toISOString() : null,
+    };
+  }, [contatoAtivo, computeJanela]);
 
   const instAtiva = useMemo(() => instancias.find(i => i.id === contatoAtivo?.instancia_id), [instancias, contatoAtivo]);
 
