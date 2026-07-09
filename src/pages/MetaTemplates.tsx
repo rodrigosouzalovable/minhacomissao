@@ -215,11 +215,11 @@ export default function MetaTemplates() {
     carregar();
   };
 
-  const contagemPorMestre = (mestreId: string) => {
+  const contagemPorMestre = (mestreId: string): Record<string, number> => {
     const filhas = templInst.filter((t) => t.template_mestre_id === mestreId);
-    const c: Record<string, number> = {};
+    const c: Record<string, number> = { total: filhas.length };
     filhas.forEach((f) => { c[f.status] = (c[f.status] || 0) + 1; });
-    return { total: filhas.length, ...c };
+    return c;
   };
 
   const instAtivas = instancias.filter((i) => i.ativo);
