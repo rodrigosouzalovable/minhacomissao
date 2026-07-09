@@ -209,6 +209,46 @@ serve(async (req) => {
         }
 
         try {
+          // Obter header_handle específico deste app/instância quando for mídia
+          let headerHandle: string | null = null;
+          if (precisaMidia && mediaBytes) {
+            if (!metaAppId) {
+              throw new Error(
+                "Configure a chave 'meta_app_id' em meta_whatsapp_config antes de enviar templates com mídia",
+              );
+            }
+            // reaproveita handle já obtido nesta instância (cache)
+            const { data: prev } = await supabase
+              .from("meta_templates_instancia").select("header_handle")
+              .eq("template_mestre_id", mestre_id).eq("instancia_id", inst.id).maybeSingle();
+            if (prev?.header_handle) {
+              headerHandle = prev.header_handle;
+            } else {
+              headerHandle = await obterHeaderHandle({
+                appId: metaAppId,
+                accessToken: inst.access_token,
+                fileBytes: mediaBytes,
+                fileType: mediaMime,
+                fileName: mediaName,
+              });
+              await supabase.from("meta_templates_instancia").upsert({
+                template_mestre_id: mestre_id,
+                instancia_id: inst.id,
+                waba_id: inst.waba_id,
+                phone_number_id: inst.phone_number_id,
+                header_handle: headerHandle,
+              }, { onConflict: "template_mestre_id,instancia_id" });
+            }
+          }
+
+          const components = buildComponents(mestre, headerHandle);
+          const payload = {
+            name: mestre.nome,
+            language: mestre.idioma || "pt_BR",
+            category: mestre.categoria,
+            components,
+          };
+
           const res = await fetch(
             `https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates`,
             {
@@ -217,7 +257,7 @@ serve(async (req) => {
                 Authorization: `Bearer ${inst.access_token}`,
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify(payloadBase),
+              body: JSON.stringify(payload),
             },
           );
           const data = await res.json();
@@ -249,6 +289,7 @@ serve(async (req) => {
             }, { onConflict: "template_mestre_id,instancia_id" });
             detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: true, meta_id: data?.id, status: metaStatus });
           }
+
         } catch (err) {
           falhas++;
           const msg = err instanceof Error ? err.message : String(err);
