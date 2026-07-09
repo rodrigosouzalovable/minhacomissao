@@ -2228,6 +2228,42 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_business_managers: {
+        Row: {
+          app_id: string
+          ativo: boolean
+          atualizado_em: string
+          business_id: string | null
+          criado_em: string
+          descricao: string | null
+          id: string
+          nome: string
+          padrao: boolean
+        }
+        Insert: {
+          app_id: string
+          ativo?: boolean
+          atualizado_em?: string
+          business_id?: string | null
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+          padrao?: boolean
+        }
+        Update: {
+          app_id?: string
+          ativo?: boolean
+          atualizado_em?: string
+          business_id?: string | null
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+          padrao?: boolean
+        }
+        Relationships: []
+      }
       meta_campanha_agendada: {
         Row: {
           created_at: string
@@ -2867,6 +2903,7 @@ export type Database = {
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
           messaging_limit_synced_at: string | null
+          meta_bm_id: string | null
           nome: string
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
@@ -2902,6 +2939,7 @@ export type Database = {
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
           messaging_limit_synced_at?: string | null
+          meta_bm_id?: string | null
           nome: string
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
@@ -2937,6 +2975,7 @@ export type Database = {
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
           messaging_limit_synced_at?: string | null
+          meta_bm_id?: string | null
           nome?: string
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
@@ -2957,7 +2996,15 @@ export type Database = {
           waba_id?: string
           webhook_verify_token?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "meta_whatsapp_instances_meta_bm_id_fkey"
+            columns: ["meta_bm_id"]
+            isOneToOne: false
+            referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_whatsapp_mensagens: {
         Row: {
