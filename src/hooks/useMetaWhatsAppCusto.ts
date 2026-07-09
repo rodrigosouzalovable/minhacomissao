@@ -17,9 +17,18 @@ export type CustoJanela = {
   qtdUtility: number;
   qtdMarketing: number;
   qtdOutros: number;
+  qtdConfirmado: number; // envios com pricing_category vindo da Meta
+  qtdTotal: number;      // total de envios computados
 };
 
-const ZERO: CustoJanela = { valor: 0, qtdUtility: 0, qtdMarketing: 0, qtdOutros: 0 };
+const ZERO: CustoJanela = {
+  valor: 0,
+  qtdUtility: 0,
+  qtdMarketing: 0,
+  qtdOutros: 0,
+  qtdConfirmado: 0,
+  qtdTotal: 0,
+};
 
 function inicioDiaBRT(): string {
   const agora = new Date();
@@ -60,11 +69,21 @@ export function useMetaWhatsAppCusto() {
           .or("foi_gratis.is.null,foi_gratis.eq.false");
         if (desde) q = q.gte("enviado_em", desde);
         const { data } = await q.limit(100000);
-        const r: CustoJanela = { valor: 0, qtdUtility: 0, qtdMarketing: 0, qtdOutros: 0 };
+        const r: CustoJanela = {
+          valor: 0,
+          qtdUtility: 0,
+          qtdMarketing: 0,
+          qtdOutros: 0,
+          qtdConfirmado: 0,
+          qtdTotal: 0,
+        };
         (data || []).forEach((row: any) => {
-          const cat = String(row.pricing_category || catByNome.get(row.template_nome) || "").toUpperCase();
+          const catReal = String(row.pricing_category || "").toUpperCase();
+          const cat = catReal || String(catByNome.get(row.template_nome) || "").toUpperCase();
           const preco = PRECO[cat] ?? 0;
           r.valor += preco;
+          r.qtdTotal++;
+          if (catReal) r.qtdConfirmado++;
           if (cat === "MARKETING") r.qtdMarketing++;
           else if (cat === "UTILITY" || cat === "AUTHENTICATION") r.qtdUtility++;
           else r.qtdOutros++;

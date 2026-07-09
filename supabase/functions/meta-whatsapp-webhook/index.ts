@@ -548,13 +548,24 @@ serve(async (req) => {
             .eq('wa_message_id', waId);
 
           // Compatibilidade com log de massa + pricing (para separar cobrado vs grátis CSW)
+          // A Meta envia `pricing` em alguns eventos e `conversation.origin.type` em outros.
+          // Lemos os dois e usamos como fallback um do outro para maximizar captura.
           const pricing = s.pricing || null;
-          const pricingCategory = pricing?.category ? String(pricing.category).toUpperCase() : null;
-          const pricingType = pricing?.pricing_model ? String(pricing.pricing_model) : (pricing?.type ? String(pricing.type) : null);
-          // billable=false OU type contendo "free" => envio grátis (janela CSW)
-          const foiGratis = pricing
-            ? (pricing.billable === false || String(pricing.type || pricing.pricing_model || '').toLowerCase().includes('free'))
+          const conversation = s.conversation || null;
+          const originType = conversation?.origin?.type
+            ? String(conversation.origin.type).toUpperCase()
             : null;
+          const pricingCategory =
+            (pricing?.category ? String(pricing.category).toUpperCase() : null) ||
+            originType; // fallback: utility | marketing | authentication | service
+          const pricingType = pricing?.pricing_model
+            ? String(pricing.pricing_model)
+            : (pricing?.type ? String(pricing.type) : null);
+          // billable=false OU type contendo "free" OU origem = service (dentro CSW) => grátis
+          const foiGratis = pricing
+            ? (pricing.billable === false ||
+               String(pricing.type || pricing.pricing_model || '').toLowerCase().includes('free'))
+            : (originType === 'SERVICE' ? true : null);
 
           const updateLog: any = {
             status,
