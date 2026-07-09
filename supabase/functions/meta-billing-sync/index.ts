@@ -64,9 +64,11 @@ Deno.serve(async (req) => {
 
     for (const [wabaId, token] of wabas.entries()) {
       const tokenToUse = systemToken || token;
+      // pricing_analytics é o substituto do conversation_analytics (descontinuado).
+      // Retorna volume real de mensagens cobradas por dia, categoria e tipo.
       const fields =
-        `conversation_analytics.start(${start}).end(${now}).granularity(DAILY).phone_numbers([]).dimensions(["CONVERSATION_CATEGORY","CONVERSATION_TYPE"])`;
-      const url = `https://graph.facebook.com/v21.0/${wabaId}?fields=${encodeURIComponent(fields)}`;
+        `pricing_analytics.start(${start}).end(${now}).granularity(DAILY).dimensions(["PRICING_CATEGORY","PRICING_TYPE","COUNTRY"])`;
+      const url = `https://graph.facebook.com/v24.0/${wabaId}?fields=${encodeURIComponent(fields)}`;
 
       try {
         const res = await fetch(url, {
@@ -78,23 +80,23 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const dataPoints = data?.conversation_analytics?.data?.[0]?.data_points || [];
+        const dataPoints = data?.pricing_analytics?.data?.[0]?.data_points || [];
+        console.log(`[meta-billing-sync] waba=${wabaId} points=${dataPoints.length}`);
         for (const dp of dataPoints) {
           const dia = new Date((dp.start || 0) * 1000).toISOString().slice(0, 10);
-          const cat = String(dp.conversation_category || 'UNKNOWN').toUpperCase();
-          const tipo = String(dp.conversation_type || '').toUpperCase() || null;
-          const qtd = Number(dp.conversation || 0);
-          // A Meta às vezes retorna 'cost' diretamente
-          const costUsdReal = Number(dp.cost || 0);
-          const costUsd = costUsdReal > 0 ? costUsdReal : qtd * (PRECO_USD[cat] || 0);
-          const costBrl = Number((costUsd * fxRate).toFixed(2));
+          const cat = String(dp.pricing_category || 'UNKNOWN').toUpperCase();
+          const tipo = String(dp.pricing_type || '').toUpperCase() || null;
+          const volume = Number(dp.volume || 0);
+          const gratis = tipo === 'FREE_CUSTOMER_SERVICE' || tipo === 'FREE_ENTRY_POINT' || cat === 'SERVICE';
+          const costUsd = gratis ? 0 : volume * (PRECO_USD[cat] || 0);
+          const costBrl = Number((costUsd * fxRate).toFixed(4));
 
           const { error } = await supabase.from('meta_billing_snapshot').upsert({
             waba_id: wabaId,
             dia,
             conversation_category: cat,
             conversation_type: tipo,
-            conversations_count: qtd,
+            conversations_count: volume,
             cost_usd: costUsd,
             cost_brl: costBrl,
             fx_rate: fxRate,
