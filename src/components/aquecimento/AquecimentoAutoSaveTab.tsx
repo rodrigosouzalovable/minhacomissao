@@ -126,7 +126,7 @@ export default function AquecimentoAutoSaveTab() {
 
   // Polling 30s para envios, stats e silenciosos
   useEffect(() => {
-    const t = setInterval(() => { carregarEnvios(); carregarStats(); carregarSilenciosos(); }, 30000);
+    const t = setInterval(() => { carregarEnvios(); carregarStats(); carregarSilenciosos(); }, 60000);
     return () => clearInterval(t);
   }, [carregarEnvios, carregarStats, carregarSilenciosos]);
 

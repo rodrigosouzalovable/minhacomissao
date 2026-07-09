@@ -84,7 +84,7 @@ export default function MetaPessoal() {
       return data || [];
     },
     enabled: !!user?.id,
-    refetchInterval: 30000, // refresh every 30s
+    refetchInterval: 2 * 60 * 1000, // refresh every 30s
   });
 
   // Save/update meta

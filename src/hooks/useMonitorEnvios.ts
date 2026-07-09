@@ -92,7 +92,7 @@ export function useMonitorEnvios(limiteDiario: number = 30, delaySegundos: numbe
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 30000);
+    const interval = setInterval(() => { if (document.visibilityState === "visible") fetchStats(); }, 60000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 

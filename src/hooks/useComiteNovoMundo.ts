@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 const liveQueryOpts = {
   staleTime: 30_000,
   refetchOnWindowFocus: true as const,
-  refetchInterval: 60_000,
+  refetchInterval: 5 * 60_000,
 };
 
 export function useComiteRealtime() {
