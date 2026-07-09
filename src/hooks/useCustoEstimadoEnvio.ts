@@ -18,6 +18,42 @@ function normalizeTel(t: string): string {
   return d;
 }
 
+export async function calcularCustoEstimado(
+  telefones: string[],
+  instanciaIds: string[],
+  categoria: string | null,
+): Promise<{ cobrados: number; gratis: number; total: number; precoUsd: number; usd: number; brl: number; fxRate: number; categoria: string }> {
+  const cat = String(categoria || "").toUpperCase();
+  const precoUsd = PRECO_USD[cat] ?? 0;
+  const fxRate = FX_FALLBACK;
+  const tels = Array.from(new Set(telefones.map(normalizeTel).filter(Boolean)));
+  const total = tels.length;
+  let gratis = 0;
+  if (total > 0 && instanciaIds.length > 0) {
+    const janela = Date.now() - 24 * 60 * 60 * 1000;
+    const found = new Set<string>();
+    const CHUNK = 300;
+    for (let i = 0; i < tels.length; i += CHUNK) {
+      const slice = tels.slice(i, i + CHUNK);
+      const { data } = await supabase
+        .from("meta_whatsapp_contatos")
+        .select("telefone,ultima_msg_entrada_em")
+        .in("instancia_id", instanciaIds)
+        .in("telefone", slice)
+        .not("ultima_msg_entrada_em", "is", null);
+      for (const r of data || []) {
+        const ts = r.ultima_msg_entrada_em ? new Date(r.ultima_msg_entrada_em).getTime() : 0;
+        if (ts >= janela) found.add(String(r.telefone));
+      }
+    }
+    gratis = found.size;
+  }
+  const cobrados = Math.max(0, total - gratis);
+  const usd = cobrados * precoUsd;
+  const brl = usd * fxRate;
+  return { cobrados, gratis, total, precoUsd, usd, brl, fxRate, categoria: cat };
+}
+
 export type CustoEstimado = {
   cobrados: number;
   gratis: number;
