@@ -1255,6 +1255,70 @@ export default function EnvioMeta() {
         )}
       </DialogContent>
     </Dialog>
+
+    <AlertDialog
+      open={custoDlg.open}
+      onOpenChange={(o) => {
+        if (!o && custoDlg.resolver) {
+          custoDlg.resolver(false);
+          setCustoDlg((prev) => ({ ...prev, open: false, resolver: null }));
+        }
+      }}
+    >
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            💰 Confirme o custo deste envio
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 pt-2">
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span>Destinatários totais:</span><strong>{custoDlg.total.toLocaleString("pt-BR")}</strong></div>
+                <div className="flex justify-between"><span>Grátis (janela 24h):</span><strong className="text-emerald-600">{custoDlg.gratis.toLocaleString("pt-BR")}</strong></div>
+                <div className="flex justify-between"><span>Cobrados ({custoDlg.categoria}):</span><strong>{custoDlg.cobrados.toLocaleString("pt-BR")}</strong></div>
+                <div className="flex justify-between border-t pt-1 mt-1"><span>Custo USD:</span><strong>{custoDlg.usd.toLocaleString("en-US", { style: "currency", currency: "USD" })}</strong></div>
+                <div className="flex justify-between text-base"><span>Custo BRL:</span><strong className={custoDlg.brl > LIMITE_CUSTO_BRL_DEFAULT ? "text-red-600" : ""}>{custoDlg.brl.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></div>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Para confirmar, digite abaixo o valor exato em reais (ex.: <code>{custoDlg.brl.toFixed(2).replace(".", ",")}</code>).
+                Isso protege contra envios acidentais de custo alto.
+              </div>
+              <Input
+                autoFocus
+                inputMode="decimal"
+                placeholder="0,00"
+                value={custoDlg.valorDigitado}
+                onChange={(e) => setCustoDlg((p) => ({ ...p, valorDigitado: e.target.value }))}
+              />
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            onClick={() => {
+              custoDlg.resolver?.(false);
+              setCustoDlg((prev) => ({ ...prev, open: false, resolver: null }));
+            }}
+          >
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction
+            disabled={(() => {
+              const digitado = Number(String(custoDlg.valorDigitado).replace(/\./g, "").replace(",", "."));
+              const alvo = Number(custoDlg.brl.toFixed(2));
+              // aceita margem de 1 centavo
+              return !Number.isFinite(digitado) || Math.abs(digitado - alvo) > 0.01;
+            })()}
+            onClick={() => {
+              custoDlg.resolver?.(true);
+              setCustoDlg((prev) => ({ ...prev, open: false, resolver: null }));
+            }}
+          >
+            Confirmar disparo
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </AppLayout>
   );
 }
