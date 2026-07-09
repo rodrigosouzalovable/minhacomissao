@@ -8,12 +8,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Tabela de preço estimada por conversation_category (fallback quando a Meta não retorna 'cost')
-// Valores oficiais em USD para região Brasil (aproximados; a Meta ajusta periodicamente).
+// Preço por conversation_category — Brasil, vigente 01/07/2026.
+// Fonte: developers.facebook.com/docs/whatsapp/pricing (rate card BR).
+// Utility/Authentication caíram para US$ 0,0068. Service dentro da CSW = grátis.
 const PRECO_USD: Record<string, number> = {
   MARKETING: 0.0625,
-  UTILITY: 0.008,
-  AUTHENTICATION: 0.0315,
+  UTILITY: 0.0068,
+  AUTHENTICATION: 0.0068,
   SERVICE: 0,
 };
 
