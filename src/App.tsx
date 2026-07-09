@@ -58,6 +58,7 @@ const ConfigurarMeta = lazy(() => import("./pages/ConfigurarMeta"));
 const EnvioMeta = lazy(() => import("./pages/EnvioMeta"));
 const InboxMeta = lazy(() => import("./pages/InboxMeta"));
 const MetaBilling = lazy(() => import("./pages/MetaBilling"));
+const MetaTemplates = lazy(() => import("./pages/MetaTemplates"));
 
 const queryClient = new QueryClient();
 
