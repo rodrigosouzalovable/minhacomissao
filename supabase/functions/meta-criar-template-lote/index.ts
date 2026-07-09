@@ -8,7 +8,54 @@ const corsHeaders = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function buildComponents(mestre: any) {
+const MEDIA_BUCKET = "meta-template-media";
+
+// Uploads a media file to Meta via Resumable Upload API and returns the header handle.
+async function obterHeaderHandle(params: {
+  appId: string;
+  accessToken: string;
+  fileBytes: Uint8Array;
+  fileType: string;
+  fileName: string;
+}): Promise<string> {
+  const { appId, accessToken, fileBytes, fileType, fileName } = params;
+
+  // 1) start upload session
+  const startUrl = new URL(`https://graph.facebook.com/v21.0/${appId}/uploads`);
+  startUrl.searchParams.set("file_length", String(fileBytes.byteLength));
+  startUrl.searchParams.set("file_type", fileType);
+  startUrl.searchParams.set("file_name", fileName);
+  startUrl.searchParams.set("access_token", accessToken);
+
+  const startRes = await fetch(startUrl.toString(), { method: "POST" });
+  const startData = await startRes.json();
+  if (!startRes.ok || !startData?.id) {
+    throw new Error(
+      `resumable start falhou: ${startData?.error?.message || startRes.status}`,
+    );
+  }
+  const sessionId: string = startData.id;
+
+  // 2) upload binary
+  const uploadRes = await fetch(`https://graph.facebook.com/v21.0/${sessionId}`, {
+    method: "POST",
+    headers: {
+      Authorization: `OAuth ${accessToken}`,
+      file_offset: "0",
+      "Content-Type": fileType,
+    },
+    body: fileBytes,
+  });
+  const uploadData = await uploadRes.json();
+  if (!uploadRes.ok || !uploadData?.h) {
+    throw new Error(
+      `upload binário falhou: ${uploadData?.error?.message || uploadRes.status}`,
+    );
+  }
+  return uploadData.h as string;
+}
+
+function buildComponents(mestre: any, headerHandle: string | null) {
   const components: any[] = [];
 
   if (mestre.cabecalho_tipo) {
@@ -19,6 +66,11 @@ function buildComponents(mestre: any) {
       if (headerVars.length > 0) {
         header.example = { header_text: headerVars };
       }
+    } else if (
+      ["IMAGE", "VIDEO", "DOCUMENT"].includes(mestre.cabecalho_tipo) &&
+      headerHandle
+    ) {
+      header.example = { header_handle: [headerHandle] };
     }
     components.push(header);
   }
@@ -49,6 +101,7 @@ function buildComponents(mestre: any) {
 
   return components;
 }
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
