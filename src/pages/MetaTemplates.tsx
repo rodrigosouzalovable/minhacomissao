@@ -155,6 +155,12 @@ export default function MetaTemplates() {
     const exemplo: any = {};
     if (nVarsCorpo > 0) exemplo.body_text = [exemploBody];
 
+    if (["IMAGE", "VIDEO", "DOCUMENT"].includes(cabecalhoTipo) && !mediaPath) {
+      toast.error("Faça upload da amostra de mídia do cabeçalho");
+      setSalvando(false);
+      return;
+    }
+
     const { data: user } = await supabase.auth.getUser();
     const { error } = await supabase.from("meta_templates_mestre").insert({
       nome,
@@ -163,18 +169,52 @@ export default function MetaTemplates() {
       corpo,
       cabecalho_tipo: cabecalhoTipo === "NONE" ? null : cabecalhoTipo,
       cabecalho_texto: cabecalhoTipo === "TEXT" ? cabecalhoTexto : null,
+      cabecalho_media_url: ["IMAGE", "VIDEO", "DOCUMENT"].includes(cabecalhoTipo) ? mediaPath : null,
+      cabecalho_media_mime: ["IMAGE", "VIDEO", "DOCUMENT"].includes(cabecalhoTipo) ? mediaMime : null,
       rodape: rodape || null,
       botoes: botoes as any,
       exemplo,
       criado_por: user.user?.id,
-    });
+    } as any);
     setSalvando(false);
     if (error) { toast.error(error.message); return; }
     toast.success("Template mestre criado. Vá em 'Aplicar em lote'.");
     setNome(""); setCorpo(""); setRodape(""); setCabecalhoTexto("");
     setCabecalhoTipo("NONE"); setBotoes([]); setExemploBody([]);
+    setMediaPath(null); setMediaMime(null); setMediaSignedUrl(null);
     setTab("lote");
   };
+
+  const uploadMedia = async (file: File) => {
+    setUploadingMedia(true);
+    try {
+      const ext = file.name.split(".").pop() || "bin";
+      const path = `templates/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage
+        .from("meta-template-media")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (error) throw error;
+      const { data: signed } = await supabase.storage
+        .from("meta-template-media")
+        .createSignedUrl(path, 3600);
+      setMediaPath(path);
+      setMediaMime(file.type);
+      setMediaSignedUrl(signed?.signedUrl || null);
+      toast.success("Mídia enviada");
+    } catch (e: any) {
+      toast.error(e.message || "Falha no upload");
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
+  const removerMedia = async () => {
+    if (mediaPath) {
+      await supabase.storage.from("meta-template-media").remove([mediaPath]);
+    }
+    setMediaPath(null); setMediaMime(null); setMediaSignedUrl(null);
+  };
+
 
   const addBotao = (tipo: BotaoTipo) => {
     if (botoes.length >= 3) { toast.error("Máximo 3 botões"); return; }
