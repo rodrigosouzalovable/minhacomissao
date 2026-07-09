@@ -2491,6 +2491,152 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_templates_instancia: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          erro: string | null
+          id: string
+          instancia_id: string
+          meta_template_id: string | null
+          motivo_rejeicao: string | null
+          phone_number_id: string | null
+          status: string
+          template_mestre_id: string
+          waba_id: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id: string
+          meta_template_id?: string | null
+          motivo_rejeicao?: string | null
+          phone_number_id?: string | null
+          status?: string
+          template_mestre_id: string
+          waba_id?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string
+          meta_template_id?: string | null
+          motivo_rejeicao?: string | null
+          phone_number_id?: string | null
+          status?: string
+          template_mestre_id?: string
+          waba_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_templates_instancia_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_templates_instancia_template_mestre_id_fkey"
+            columns: ["template_mestre_id"]
+            isOneToOne: false
+            referencedRelation: "meta_templates_mestre"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_templates_lote_log: {
+        Row: {
+          criado_em: string
+          detalhes: Json
+          falhas: number
+          id: string
+          sucessos: number
+          template_mestre_id: string | null
+          total_instancias: number
+          usuario_id: string | null
+        }
+        Insert: {
+          criado_em?: string
+          detalhes?: Json
+          falhas?: number
+          id?: string
+          sucessos?: number
+          template_mestre_id?: string | null
+          total_instancias?: number
+          usuario_id?: string | null
+        }
+        Update: {
+          criado_em?: string
+          detalhes?: Json
+          falhas?: number
+          id?: string
+          sucessos?: number
+          template_mestre_id?: string | null
+          total_instancias?: number
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_templates_lote_log_template_mestre_id_fkey"
+            columns: ["template_mestre_id"]
+            isOneToOne: false
+            referencedRelation: "meta_templates_mestre"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_templates_mestre: {
+        Row: {
+          atualizado_em: string
+          botoes: Json
+          cabecalho_texto: string | null
+          cabecalho_tipo: string | null
+          categoria: string
+          corpo: string
+          criado_em: string
+          criado_por: string | null
+          exemplo: Json
+          id: string
+          idioma: string
+          nome: string
+          rodape: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          botoes?: Json
+          cabecalho_texto?: string | null
+          cabecalho_tipo?: string | null
+          categoria: string
+          corpo: string
+          criado_em?: string
+          criado_por?: string | null
+          exemplo?: Json
+          id?: string
+          idioma?: string
+          nome: string
+          rodape?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          botoes?: Json
+          cabecalho_texto?: string | null
+          cabecalho_tipo?: string | null
+          categoria?: string
+          corpo?: string
+          criado_em?: string
+          criado_por?: string | null
+          exemplo?: Json
+          id?: string
+          idioma?: string
+          nome?: string
+          rodape?: string | null
+        }
+        Relationships: []
+      }
       meta_whatsapp_config: {
         Row: {
           atualizado_em: string
