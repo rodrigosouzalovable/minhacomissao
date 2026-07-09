@@ -2186,6 +2186,72 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_billing_meta_mensal: {
+        Row: {
+          alerta_100pct_enviado: boolean
+          alerta_50pct_enviado: boolean
+          alerta_80pct_enviado: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          limite_brl: number
+          mes_ano: string
+        }
+        Insert: {
+          alerta_100pct_enviado?: boolean
+          alerta_50pct_enviado?: boolean
+          alerta_80pct_enviado?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          limite_brl?: number
+          mes_ano: string
+        }
+        Update: {
+          alerta_100pct_enviado?: boolean
+          alerta_50pct_enviado?: boolean
+          alerta_80pct_enviado?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          limite_brl?: number
+          mes_ano?: string
+        }
+        Relationships: []
+      }
+      meta_billing_relatorio_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          hora_envio: string
+          id: number
+          incluir_projecao: boolean
+          incluir_top_templates: boolean
+          telefone_destino: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          hora_envio?: string
+          id?: number
+          incluir_projecao?: boolean
+          incluir_top_templates?: boolean
+          telefone_destino?: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          hora_envio?: string
+          id?: number
+          incluir_projecao?: boolean
+          incluir_top_templates?: boolean
+          telefone_destino?: string
+        }
+        Relationships: []
+      }
       meta_billing_snapshot: {
         Row: {
           atualizado_em: string
@@ -2818,8 +2884,11 @@ export type Database = {
           bsuid: string | null
           enviado_em: string
           erro: string | null
+          foi_gratis: boolean | null
           id: string
           instancia_id: string
+          pricing_category: string | null
+          pricing_type: string | null
           status: string
           telefone: string
           template_nome: string | null
@@ -2830,8 +2899,11 @@ export type Database = {
           bsuid?: string | null
           enviado_em?: string
           erro?: string | null
+          foi_gratis?: boolean | null
           id?: string
           instancia_id: string
+          pricing_category?: string | null
+          pricing_type?: string | null
           status?: string
           telefone: string
           template_nome?: string | null
@@ -2842,8 +2914,11 @@ export type Database = {
           bsuid?: string | null
           enviado_em?: string
           erro?: string | null
+          foi_gratis?: boolean | null
           id?: string
           instancia_id?: string
+          pricing_category?: string | null
+          pricing_type?: string | null
           status?: string
           telefone?: string
           template_nome?: string | null
