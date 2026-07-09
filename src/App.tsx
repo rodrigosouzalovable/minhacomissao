@@ -58,6 +58,7 @@ const ConfigurarMeta = lazy(() => import("./pages/ConfigurarMeta"));
 const EnvioMeta = lazy(() => import("./pages/EnvioMeta"));
 const InboxMeta = lazy(() => import("./pages/InboxMeta"));
 const MetaBilling = lazy(() => import("./pages/MetaBilling"));
+const MetaTemplates = lazy(() => import("./pages/MetaTemplates"));
 
 const queryClient = new QueryClient();
 
@@ -217,6 +218,7 @@ const App = () => (
             <Route path="/admin/envio-meta" element={<PermissionRoute><EnvioMeta /></PermissionRoute>} />
             <Route path="/admin/inbox-meta" element={<PermissionRoute><InboxMeta /></PermissionRoute>} />
             <Route path="/admin/meta-billing" element={<AdminRoute><MetaBilling /></AdminRoute>} />
+            <Route path="/admin/meta-templates" element={<AdminRoute><MetaTemplates /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>

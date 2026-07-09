@@ -172,6 +172,35 @@ serve(async (req) => {
         const value = change.value || {};
         const fieldRaw = String(change.field || '').toLowerCase();
 
+        // ===== Atualização de status de template =====
+        if (fieldRaw === 'message_template_status_update') {
+          try {
+            const metaId = value?.message_template_id ? String(value.message_template_id) : null;
+            const nome = value?.message_template_name || null;
+            const idioma = value?.message_template_language || null;
+            const novoStatus = String(value?.event || value?.new_status || 'PENDING').toUpperCase();
+            const motivo = value?.reason || value?.rejected_reason || null;
+
+            let query = supabase.from('meta_templates_instancia').update({
+              status: novoStatus,
+              motivo_rejeicao: motivo,
+              ...(metaId ? { meta_template_id: metaId } : {}),
+            });
+            if (metaId) {
+              query = query.eq('meta_template_id', metaId);
+            } else if (nome && idioma) {
+              const { data: mestre } = await supabase.from('meta_templates_mestre')
+                .select('id').eq('nome', nome).eq('idioma', idioma).maybeSingle();
+              if (mestre?.id) query = query.eq('template_mestre_id', mestre.id);
+              if (wabaIdEntry) query = query.eq('waba_id', wabaIdEntry);
+            }
+            await query;
+          } catch (e) {
+            console.error('[MetaWebhook] erro processando message_template_status_update', e);
+          }
+          continue;
+        }
+
         // ===== Alertas de Billing / Account =====
         if (fieldRaw === 'account_alerts' || fieldRaw === 'account_update' || fieldRaw === 'phone_number_quality_update') {
           try {
