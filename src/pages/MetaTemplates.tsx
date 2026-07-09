@@ -388,6 +388,38 @@ export default function MetaTemplates() {
                   </Select>
                 </div>
 
+                {selMestre && (() => {
+                  const m = mestres.find((x) => x.id === selMestre);
+                  if (!m) return null;
+                  const _components: any[] = [];
+                  if (m.cabecalho_tipo) {
+                    _components.push({
+                      type: "HEADER",
+                      format: m.cabecalho_tipo,
+                      text: m.cabecalho_texto || undefined,
+                    });
+                  }
+                  _components.push({ type: "BODY", text: m.corpo });
+                  if (m.rodape) _components.push({ type: "FOOTER", text: m.rodape });
+                  if (Array.isArray(m.botoes) && m.botoes.length > 0) {
+                    _components.push({ type: "BUTTONS", buttons: m.botoes });
+                  }
+                  return (
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <div className="text-xs font-medium text-muted-foreground mb-2">
+                        Pré-visualização (como aparece no WhatsApp)
+                      </div>
+                      <TemplateWhatsAppPreview
+                        template={{
+                          nome_template: m.nome,
+                          body_text: m.corpo,
+                          variaveis: { _components },
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
+
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Checkbox
