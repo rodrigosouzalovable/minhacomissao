@@ -97,7 +97,22 @@ Deno.serve(async (req) => {
     const { data: contato } = await contatoQuery.maybeSingle();
     const ultimaEntrada = contato?.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
     if (!ultimaEntrada || (Date.now() - ultimaEntrada) >= 24 * 60 * 60 * 1000) {
-      return new Response(JSON.stringify({ success: false, janela_expirada: true, error: 'Janela 24h expirada' }), {
+      try {
+        const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+        const chave = `janela_bloqueio_midia_${uid}_${new Date().toISOString().slice(0, 10)}`;
+        await notificarAdmin(supabase, {
+          tipo: 'janela_24h_bloqueio',
+          mensagem:
+            `🔒 Tentativa de envio de mídia fora da janela 24h (BLOQUEADA)\n\n` +
+            `Usuário: ${uid}\n` +
+            `Instância: ${inst.nome || inst.display_phone || inst.id}\n` +
+            `Destino: ${to || bsuid}\n` +
+            `Tipo: ${type}\n\n` +
+            `Enviar agora reclassificaria como MARKETING. Oriente a usar template UTILITY.`,
+          chaveIdempotencia: chave,
+        });
+      } catch (_) { /* ignore */ }
+      return new Response(JSON.stringify({ success: false, janela_expirada: true, error: 'Janela de 24h fechada. Envie um template UTILITY aprovado para reabrir a conversa.' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
