@@ -1,22 +1,29 @@
-## Diagnóstico dos status
+## O que muda
 
-Verifiquei no banco:
+### 1. Preview WhatsApp ao selecionar um template
 
-- **REJECTED (20 instâncias)** — a Meta aceitou o POST (todas têm `meta_template_id`) e depois reprovou na revisão. É decisão de conteúdo da Meta, não bug do sistema. `motivo_rejeicao` ficou vazio porque a listagem geral de templates da Graph API raramente traz `rejected_reason` — precisamos consultar cada template individualmente (`GET /{template_id}?fields=status,rejected_reason,quality_score,category`).
-- **FALHA_ENVIO (LD 06 YASMIM)** — Meta bloqueou já no POST: *"Essa conta do WhatsApp Business não pode criar um novo modelo"*. Causas típicas: WABA sem verificação business, conta em restrição ou limite de templates atingido nessa WABA específica.
-- **6 instâncias sem linha** — o lote anterior travou no timeout de 150s antes do fix de background. Agora processa até o fim.
+Na aba **Aplicar em Lote**, quando um template mestre for escolhido no dropdown, aparecerá um bloco (não dialog modal — pode ser um card colapsável logo abaixo do select, mais fluido para o fluxo atual, mas se preferir modal eu troco) mostrando o preview no estilo WhatsApp, igual ao print da Meta:
 
-## Correção
+- Balão verde/creme com sombra e "papel de parede" ao fundo.
+- Cabeçalho (se houver): TEXT / IMAGE / DOCUMENT.
+- Corpo com variáveis destacadas (`{{name}}` amarelo).
+- Rodapé em cinza.
+- Botões (QUICK_REPLY com ícone de resposta, URL com seta externa, PHONE com telefone).
+- Horário fictício no canto do balão.
 
-1. **Enriquecer o `meta-verificar-status-templates`** para, quando encontrar um filho `REJECTED` sem `motivo_rejeicao`, chamar `GET https://graph.facebook.com/v21.0/{meta_template_id}?fields=status,rejected_reason,quality_score,category` e gravar o motivo real (`INVALID_FORMAT`, `PROMOTIONAL`, `TAG_CONTENT_MISMATCH`, `ABUSIVE_CONTENT`, etc.).
-2. **Mostrar o motivo/erro na aba "Aplicar em lote"** — hoje o badge só mostra o status. Vou adicionar um tooltip (ou linha abaixo do nome) exibindo `motivo_rejeicao` para REJECTED e `erro` para FALHA_ENVIO. Isso responde na hora "por que essa foi rejeitada".
-3. **Botão "Atualizar motivos agora"** na aba Status, que dispara `meta-verificar-status-templates` sob demanda em vez de esperar o cron de 30 min.
-4. **Reprocessar as 6 instâncias faltantes**: elas voltam automaticamente quando você clicar "Enviar para Meta" de novo (o filtro `apenas_falhas` não é necessário — mestre novo, sem linha, entra no lote).
+Reaproveito o componente **`TemplateWhatsAppPreview`** que já existe (usado em outras telas), passando os campos do mestre convertidos para o formato `_components` que ele espera. Fica um código único, sem duplicação.
 
-## Fora do escopo agora
+### 2. Botão excluir apenas quando não anexado
 
-- Editar o conteúdo do template mestre para tentar aprovação: uma vez REJECTED com aquele `name`, a Meta pede um nome diferente. Se quiser, posso adicionar depois um botão "Duplicar como novo template" que copia o mestre com sufixo `_v2`.
+Regra: só mostra o botão de excluir o **template mestre** se **não existir nenhuma linha em `meta_templates_instancia`** para aquele mestre — ou seja, ele nunca foi enviado a nenhuma WABA. Assim que houver 1 envio (mesmo FALHA_ENVIO ou REJECTED), o botão some, para evitar apagar histórico de auditoria.
+
+Aplica-se na aba **Status & Aprovação** (onde o botão já existe hoje). O ícone da lixeira só renderiza quando `filhas.length === 0`.
+
+## Fora do escopo
+
+- Excluir templates já enviados: a Meta não permite realmente "deletar" um template criado. O que dá para fazer no futuro é um botão "Descartar mestre + limpar registros" que apaga o mestre e as linhas locais, mas isso é potencialmente destrutivo — deixo para uma próxima iteração se você pedir.
+- Modal completamente separado: se preferir modal em vez do card inline abaixo do select, é ajuste rápido — me diz.
 
 ## Custo
 
-Desprezível — 20 fetches extras (um por template REJECTED) só na próxima verificação; depois fica cacheado no banco.
+Zero. Só render no cliente.

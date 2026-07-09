@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Plus, Send, Trash2, RefreshCw, X } from "lucide-react";
+import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 
 type Categoria = "UTILITY" | "MARKETING" | "AUTHENTICATION";
 type BotaoTipo = "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
@@ -387,6 +388,38 @@ export default function MetaTemplates() {
                   </Select>
                 </div>
 
+                {selMestre && (() => {
+                  const m = mestres.find((x) => x.id === selMestre);
+                  if (!m) return null;
+                  const _components: any[] = [];
+                  if (m.cabecalho_tipo) {
+                    _components.push({
+                      type: "HEADER",
+                      format: m.cabecalho_tipo,
+                      text: m.cabecalho_texto || undefined,
+                    });
+                  }
+                  _components.push({ type: "BODY", text: m.corpo });
+                  if (m.rodape) _components.push({ type: "FOOTER", text: m.rodape });
+                  if (Array.isArray(m.botoes) && m.botoes.length > 0) {
+                    _components.push({ type: "BUTTONS", buttons: m.botoes });
+                  }
+                  return (
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <div className="text-xs font-medium text-muted-foreground mb-2">
+                        Pré-visualização (como aparece no WhatsApp)
+                      </div>
+                      <TemplateWhatsAppPreview
+                        template={{
+                          nome_template: m.nome,
+                          body_text: m.corpo,
+                          variaveis: { _components },
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
+
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Checkbox
@@ -471,9 +504,16 @@ export default function MetaTemplates() {
                       <Button size="sm" variant="outline" onClick={() => reenviarFalhas(m.id)} disabled={enviando}>
                         <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => deletarMestre(m.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {filhas.length === 0 && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => deletarMestre(m.id)}
+                          title="Excluir template (não anexado a nenhuma instância)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
