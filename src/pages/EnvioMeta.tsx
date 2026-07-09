@@ -94,7 +94,7 @@ function parseRecipients(input: string): ClienteRow[] {
     rows.push({
       telefone,
       nome: parts[1] || "",
-      cpf: parts[2] || "",
+      cpf: (parts[2] || "").replace(/\D/g, ""),
       atraso: parts[3] || "",
       saldo: parts[4] ? Number(parts[4].replace(",", ".")) : 0,
     });
