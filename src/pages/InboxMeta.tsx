@@ -61,6 +61,7 @@ interface MetaMensagem {
 
 const PAGE_SIZE = 200;
 const JANELA_24H_MS = 24 * 60 * 60 * 1000;
+const ALERTA_1H_MS = 60 * 60 * 1000;
 
 function formatTelefone(t: string) {
   const d = t.replace(/\D/g, '');
