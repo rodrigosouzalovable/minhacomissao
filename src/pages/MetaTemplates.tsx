@@ -143,6 +143,26 @@ export default function MetaTemplates() {
     });
   }, [nVarsCorpo]);
 
+  // Gera URL assinada para a mídia do template selecionado na aba Lote
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const m = mestres.find((x) => x.id === selMestre);
+      const path = m?.cabecalho_media_url;
+      if (!path || !["IMAGE", "VIDEO", "DOCUMENT"].includes(m?.cabecalho_tipo || "")) {
+        setLoteMediaUrl(null);
+        return;
+      }
+      const { data } = await supabase.storage
+        .from("meta-template-media")
+        .createSignedUrl(path, 3600);
+      if (!cancelled) setLoteMediaUrl(data?.signedUrl || null);
+    })();
+    return () => { cancelled = true; };
+  }, [selMestre, mestres]);
+
+
+
   const validarSlug = (v: string) => /^[a-z0-9_]+$/.test(v);
 
   const salvarMestre = async () => {
