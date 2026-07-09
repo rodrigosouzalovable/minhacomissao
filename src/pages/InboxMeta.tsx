@@ -1030,7 +1030,7 @@ export default function InboxMeta() {
                       ref={composerRef}
                       disabled={!janelaInfo.aberta || enviando}
                       enviando={enviando}
-                      placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : 'Janela 24h expirada — use template HSM'}
+                      placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : '🔒 Janela 24h fechada — envie template UTILITY para reabrir'}
                       onSend={(t) => enviar(t)}
                       onPaste={onPaste}
                       onEscape={() => respondendo && setRespondendo(null)}
