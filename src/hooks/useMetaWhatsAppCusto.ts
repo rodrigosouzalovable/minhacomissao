@@ -55,8 +55,9 @@ export function useMetaWhatsAppCusto() {
       const fetchJanela = async (desde: string | null): Promise<CustoJanela> => {
         let q = supabase
           .from("meta_whatsapp_envios_log")
-          .select("template_nome")
-          .eq("status", "sent");
+          .select("template_nome, foi_gratis, pricing_category")
+          .eq("status", "sent")
+          .or("foi_gratis.is.null,foi_gratis.eq.false");
         if (desde) q = q.gte("enviado_em", desde);
         const { data } = await q.limit(100000);
         const r: CustoJanela = { valor: 0, qtdUtility: 0, qtdMarketing: 0, qtdOutros: 0 };
