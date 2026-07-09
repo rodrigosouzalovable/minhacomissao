@@ -137,13 +137,34 @@ serve(async (req) => {
     const { data: instancias, error: ie } = await query;
     if (ie || !instancias) throw new Error("Falha ao carregar instâncias");
 
-    const components = buildComponents(mestre);
-    const payloadBase = {
-      name: mestre.nome,
-      language: mestre.idioma || "pt_BR",
-      category: mestre.categoria,
-      components,
-    };
+    // Se o mestre usa cabeçalho de mídia, pré-carregamos o arquivo do Storage
+    const precisaMidia =
+      ["IMAGE", "VIDEO", "DOCUMENT"].includes(mestre.cabecalho_tipo || "") &&
+      !!mestre.cabecalho_media_url;
+
+    let mediaBytes: Uint8Array | null = null;
+    let mediaMime: string = mestre.cabecalho_media_mime || "application/octet-stream";
+    let mediaName: string = "media";
+    let metaAppId: string | null = null;
+
+    if (precisaMidia) {
+      // busca app_id da Meta
+      const { data: cfg } = await supabase
+        .from("meta_whatsapp_config").select("valor").eq("chave", "meta_app_id").maybeSingle();
+      metaAppId = (cfg?.valor || "").trim() || null;
+
+      const path = String(mestre.cabecalho_media_url);
+      const { data: fileBlob, error: dlErr } = await supabase.storage
+        .from(MEDIA_BUCKET).download(path);
+      if (dlErr || !fileBlob) {
+        throw new Error(`Falha ao baixar mídia do cabeçalho: ${dlErr?.message || "arquivo não encontrado"}`);
+      }
+      mediaBytes = new Uint8Array(await fileBlob.arrayBuffer());
+      mediaMime = fileBlob.type || mediaMime;
+      const parts = path.split("/");
+      mediaName = parts[parts.length - 1] || "media";
+    }
+
 
     // pré-marca todas como ENVIADO para feedback imediato na UI
     const preRows = instancias.map((inst) => ({
