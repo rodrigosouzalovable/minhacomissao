@@ -459,6 +459,8 @@ export default function MetaTemplates() {
                   <CardHeader className="pb-2"><CardTitle className="text-base">Prévia do modelo</CardTitle></CardHeader>
                   <CardContent>
                     <TemplateWhatsAppPreview
+                      sampleValues={exemploBody}
+
                       template={{
                         nome_template: nome,
                         body_text: corpo || "Digite o corpo da mensagem...",
