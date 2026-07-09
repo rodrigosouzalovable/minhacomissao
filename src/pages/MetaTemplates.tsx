@@ -504,9 +504,16 @@ export default function MetaTemplates() {
                       <Button size="sm" variant="outline" onClick={() => reenviarFalhas(m.id)} disabled={enviando}>
                         <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => deletarMestre(m.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {filhas.length === 0 && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => deletarMestre(m.id)}
+                          title="Excluir template (não anexado a nenhuma instância)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
