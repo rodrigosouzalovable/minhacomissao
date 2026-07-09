@@ -1,73 +1,44 @@
-## Objetivo
+## Problema
+- Ao importar Excel na aba **Destinatários**, o código só lê a coluna A (telefone) e a coluna B (nome) — todas as demais colunas (CNPJ, atraso, saldo, etc.) são descartadas. Por isso o `{cpf}` sai vazio ({}) na mensagem enviada.
+- O mapeamento de placeholders do template (`{{1}} = {cpf}`) é fixo, gravado em `meta_whatsapp_templates.variaveis`, sem UI de edição — se estiver errado, não há como corrigir na tela de envio.
 
-Mostrar, na aba **Envio Meta em Massa**, uma **previsão de custo real** assim que houver template + instâncias + destinatários carregados, e **exigir confirmação explícita** do custo antes de disparar. Assim você nunca mais é surpreendido com cobranças de US$ 25 acumulando.
+## Escopo (somente frontend, sem tocar em edge functions / banco)
 
-## Como o custo será calculado
+### 1. Diálogo de mapeamento de colunas ao importar planilha
+Novo componente `src/components/meta/MapearColunasImportDialog.tsx`:
+- Aberto automaticamente após clicar em **Importar Excel** (substitui o fluxo atual que grava direto no textarea).
+- Lê as primeiras 8 linhas da planilha e mostra uma tabela: **Coluna A / B / C / …** com preview dos valores.
+- Para cada coluna detectada, um `<Select>` permite escolher o papel:
+  - `Telefone` (obrigatório, único)
+  - `Nome`
+  - `CPF / CNPJ`
+  - `Atraso (dias)`
+  - `Saldo (R$)`
+  - `Ignorar` (default)
+- Auto-detecção por cabeçalho (regex em `telefone|celular|whats`, `nome`, `cpf|cnpj|documento`, `atraso|dias`, `saldo|valor|divida`) — se acertar, deixa pré-selecionado; senão, o admin ajusta.
+- Botão **Confirmar** transforma cada linha da planilha na string CSV que o `parseRecipients` já entende: `telefone, nome, cpf, atraso, saldo` (na ordem fixa esperada), grava em `recipientsRaw` e fecha o dialog.
+- Trata a linha de cabeçalho: se a coluna de telefone da linha 0 não tiver dígitos, pula.
 
-Meta cobra por **conversa** (janela 24h), não por mensagem. Regras já usadas no projeto:
+### 2. Editor de variáveis do template
+Novo componente `src/components/meta/EditarVariaveisTemplateDialog.tsx`:
+- Botão "Editar variáveis" ao lado do bloco `<strong>Variáveis:</strong> {{1}}={cpf} · …` (linhas 793-802 de `EnvioMeta.tsx`).
+- Detecta os placeholders reais do `body_text` do template (`{{1}}`, `{{2}}`, `{{nome}}`, etc.).
+- Para cada placeholder, um `<Select>` com as opções válidas: `{nome}`, `{primeiro_nome}`, `{cpf}`, `{atraso}`, `{saldo}`, `{avista}`, `{parcelado}`.
+- Ao salvar, faz `update` em `meta_whatsapp_templates.variaveis` preservando as chaves internas (`_format`, `_components`, `_header_image_url`, `_header_format`) e chama `carregar()` para refletir a mudança.
+- Só admin/usuário dono pode editar (usa a RLS existente da tabela — sem migration).
 
-- **MARKETING**: US$ 0,0625 por conversa (BR, jul/2026)
-- **UTILITY / AUTHENTICATION**: US$ 0,0068 por conversa
-- **SERVICE / janela 24h aberta**: grátis
-- Câmbio USD→BRL: mesmo `fxRate` usado no `meta-billing-sync` (fallback ~R$ 5,55)
+### 3. Ajuste no `parseRecipients`
+- Aceitar CPF/CNPJ com pontuação: já hoje pega `parts[2]` como CPF cru — mudar para remover não-dígitos ao popular `cpf`. Isso resolve o caso do usuário (`67853380000188`) sair corretamente na mensagem quando o template estiver mapeado para `{cpf}`.
 
-Para cada destinatário da lista o sistema vai:
-
-1. Verificar em `meta_whatsapp_contatos` se existe `ultima_msg_entrada_em` dentro das últimas 24h para aquele telefone em **qualquer** instância selecionada → conta como **grátis**.
-2. Caso contrário, conta como **1 conversa cobrada** na categoria do template selecionado.
-
-Total = (nº cobrados) × preço da categoria × fxRate.
-
-## Onde vai aparecer
-
-Novo card **"Custo estimado deste envio"** entre a seção *3. Destinatários* e *Agendamento multi-dia* em `src/pages/EnvioMeta.tsx`. Só aparece quando há template + ≥1 instância + ≥1 destinatário.
-
-Layout:
-
-```text
-┌─────────────────────────────────────────────────────────┐
-│ 💰 Custo estimado deste envio                           │
-├─────────────────────────────────────────────────────────┤
-│ 2.000 destinatários  ·  Categoria: MARKETING            │
-│                                                         │
-│ Cobrados:    1.847  →  US$ 115,44   ≈  R$ 640,69       │
-│ Grátis (24h):  153  →  US$ 0,00     (janela aberta)    │
-│                                                         │
-│ ⚠️ Este valor SERÁ debitado no cartão da Meta.          │
-│    Cada WABA cobra ao atingir US$ 25 acumulados.        │
-└─────────────────────────────────────────────────────────┘
-```
-
-Se a categoria for MARKETING, o card fica em vermelho reforçando o alerta (já existe bloqueio, mas mostra o valor caso destravem).
-
-## Fluxo de confirmação reforçado
-
-O `confirm()` atual já mostra "Disparar para X contatos". Vai ser trocado por um **AlertDialog** com o custo estimado impresso e um campo onde você digita o valor em reais (ex.: `640,69`) para liberar o botão *Confirmar disparo*. Sem digitar o valor, não envia.
-
-Limite duro adicional: se o custo estimado passar de um teto configurável (default **R$ 100** por envio, ajustável em `meta_billing_guardrail`), aparece **"Envio bloqueado — pedir liberação ao admin"** como já acontece com MARKETING.
-
-## Implementação técnica
-
-**Novo componente** `src/components/meta/CustoEstimadoEnvio.tsx`
-- Recebe `recipients`, `instanciaIds`, `templateGroup` (categoria), fxRate.
-- Faz `supabase.from('meta_whatsapp_contatos').select('telefone,ultima_msg_entrada_em').in('instancia_id', instanciaIds).in('telefone', lote)` em lotes de 500 para achar janelas 24h abertas.
-- Calcula cobrados × preço × fx. Debounce de 400ms ao digitar destinatários.
-- Query com `staleTime: 60_000` (custo memory: cost-awareness — consulta leve, sem cron/realtime novo).
-
-**Edição em** `src/pages/EnvioMeta.tsx`
-- Renderizar `<CustoEstimadoEnvio ... />` após o card de Destinatários.
-- Substituir `if (!confirm(...))` do `handleEnviar` por um `AlertDialog` novo que exibe o custo e exige confirmação por digitação.
-- Ler teto de `meta_billing_guardrail` (tabela já existe) e bloquear acima dele.
-
-**Hook auxiliar** `src/hooks/useCustoEstimadoEnvio.ts`
-- Encapsula: consulta janelas 24h, cálculo, memoização, retorna `{ cobrados, gratis, usd, brl, loading }`.
+## Arquivos
+- **Criar**: `src/components/meta/MapearColunasImportDialog.tsx`
+- **Criar**: `src/components/meta/EditarVariaveisTemplateDialog.tsx`
+- **Editar**: `src/pages/EnvioMeta.tsx`
+  - `importarExcel` passa a abrir o dialog em vez de gravar direto.
+  - Adiciona botão "Editar variáveis" no bloco de variáveis do template.
+  - `parseRecipients` normaliza CPF (`replace(/\D/g, "")`).
 
 ## Fora do escopo
-
-- Nenhuma mudança em edge functions, webhooks, migrations, cron, realtime, tabelas, `client.ts`, `types.ts`, `.env`, `config.toml`.
-- Não altera a lógica de disparo em si (`envio-meta-massa-iniciar`/`-tick`) — só antecipa e exige confirmação do custo no frontend.
-- Não mexe no dialog de "Custos Detalhados" existente (esse mostra o passado; este novo mostra o futuro do envio).
-
-## Por que isso resolve o susto
-
-Hoje você seleciona planilha → clica enviar → só descobre o custo depois via cobrança da Meta. Com o card, **antes de qualquer envio** você vê "R$ 640" na tela, e o sistema te obriga a digitar o valor para confirmar. Combinado com o teto de R$ 100/envio, é impossível um envio grande passar despercebido.
+- Nenhuma migration, edge function, cron, realtime, tabela nova ou mudança no `send-whatsapp-meta`.
+- Sem mexer em `client.ts`, `types.ts`, `.env`, `config.toml`.
+- Nenhum novo polling / channel — custo Lovable Cloud inalterado.

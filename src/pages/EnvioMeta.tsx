@@ -22,6 +22,8 @@ import { AgendarCampanhaBox, CampanhasAgendadasList } from "@/components/meta/Ca
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
+import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 
 type UazInstancia = {
   id: string;
@@ -92,7 +94,7 @@ function parseRecipients(input: string): ClienteRow[] {
     rows.push({
       telefone,
       nome: parts[1] || "",
-      cpf: parts[2] || "",
+      cpf: (parts[2] || "").replace(/\D/g, ""),
       atraso: parts[3] || "",
       saldo: parts[4] ? Number(parts[4].replace(",", ".")) : 0,
     });
@@ -192,6 +194,9 @@ export default function EnvioMeta() {
     });
   };
 
+  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
+  const [editVarsOpen, setEditVarsOpen] = useState(false);
+
   const importarExcel = async (file: File) => {
     try {
       const buf = await file.arrayBuffer();
@@ -199,31 +204,8 @@ export default function EnvioMeta() {
       const ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) throw new Error("Planilha vazia");
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
-      const linhas: string[] = [];
-      const seen = new Set<string>();
-      let ignorados = 0;
-      let duplicados = 0;
-      let cabecalhoPulado = false;
-      for (let idx = 0; idx < rows.length; idx++) {
-        const r = rows[idx] || [];
-        const telRaw = String(r[0] ?? "").trim();
-        const nomeRaw = String(r[1] ?? "").trim();
-        const digitos = telRaw.replace(/\D/g, "");
-        if (idx === 0 && !digitos && !cabecalhoPulado) { cabecalhoPulado = true; continue; }
-        if (!digitos) { if (telRaw || nomeRaw) ignorados++; continue; }
-        const key = normalizeTelKey(telRaw);
-        if (seen.has(key)) { duplicados++; continue; }
-        seen.add(key);
-        linhas.push(nomeRaw ? `${telRaw}, ${nomeRaw}` : telRaw);
-      }
-      if (linhas.length === 0) { toast.error("Nenhum telefone válido encontrado"); return; }
-      setRecipientsRaw(linhas.join("\n"));
-      setValidacaoPreview(null);
-      toast.success(
-        `${linhas.length} contato(s) importado(s)` +
-        (ignorados ? ` • ${ignorados} ignorado(s)` : "") +
-        (duplicados ? ` • ${duplicados} duplicado(s) removido(s)` : "")
-      );
+      if (!rows || rows.length === 0) { toast.error("Planilha vazia"); return; }
+      setMapDlg({ open: true, rows });
     } catch (e: any) {
       toast.error("Erro ao ler planilha: " + (e?.message || e));
     }
@@ -790,12 +772,21 @@ export default function EnvioMeta() {
               </div>
             )}
 
-            {variaveisDoTemplate.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                <strong>Variáveis:</strong>{" "}
-                {variaveisDoTemplate.map(([k, v]) => `{{${k}}}=${v}`).join(" · ")}
-                <p className="mt-1">
-                  Use os campos abaixo nos placeholders mapeados:
+            {template && (
+              <div className="text-xs text-muted-foreground space-y-1">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <strong>Variáveis:</strong>{" "}
+                    {variaveisDoTemplate.length > 0
+                      ? variaveisDoTemplate.map(([k, v]) => `{{${k}}}=${v}`).join(" · ")
+                      : <span className="italic">nenhuma configurada</span>}
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setEditVarsOpen(true)}>
+                    <Pencil className="h-3 w-3 mr-1" /> Editar variáveis
+                  </Button>
+                </div>
+                <p>
+                  Campos disponíveis:
                   <code className="ml-1">{"{nome} {primeiro_nome} {cpf} {atraso} {saldo} {avista} {parcelado}"}</code>
                 </p>
               </div>
@@ -974,7 +965,7 @@ export default function EnvioMeta() {
               <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
               <CardDescription>
                 Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>. Apenas <code>telefone</code> é obrigatório.
-                Ou importe uma planilha Excel com <strong>Coluna A = Telefone</strong> e <strong>Coluna B = Nome</strong>.
+                Ou importe uma planilha Excel — ao importar, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Atraso, Saldo).
               </CardDescription>
             </div>
             <div>
@@ -1319,6 +1310,26 @@ export default function EnvioMeta() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+      <MapearColunasImportDialog
+        open={mapDlg.open}
+        onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
+        rows={mapDlg.rows}
+        onConfirm={(linhas, stats) => {
+          setRecipientsRaw(linhas.join("\n"));
+          setValidacaoPreview(null);
+          toast.success(
+            `${stats.total} contato(s) importado(s)` +
+            (stats.ignorados ? ` • ${stats.ignorados} ignorado(s)` : "") +
+            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "")
+          );
+        }}
+      />
+      <EditarVariaveisTemplateDialog
+        open={editVarsOpen}
+        onOpenChange={setEditVarsOpen}
+        template={template as any}
+        onSaved={() => carregar()}
+      />
     </AppLayout>
   );
 }
