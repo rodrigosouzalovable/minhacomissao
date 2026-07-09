@@ -105,6 +105,8 @@ export default function MetaTemplates() {
   // aplicar em lote
   const [selMestre, setSelMestre] = useState<string>("");
   const [selInst, setSelInst] = useState<Set<string>>(new Set());
+  const [loteMediaUrl, setLoteMediaUrl] = useState<string | null>(null);
+
   const [enviando, setEnviando] = useState(false);
 
   const carregar = async () => {
