@@ -318,7 +318,13 @@ export default function MetaTemplates() {
             <TabsTrigger value="criar">Criar Template</TabsTrigger>
             <TabsTrigger value="lote">Aplicar em Lote</TabsTrigger>
             <TabsTrigger value="status">Status & Aprovação</TabsTrigger>
+            <TabsTrigger value="bms">Business Managers</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="bms" className="space-y-4">
+            <BusinessManagersManager />
+          </TabsContent>
+
 
           {/* ===== Criar ===== */}
           <TabsContent value="criar" className="space-y-4">
