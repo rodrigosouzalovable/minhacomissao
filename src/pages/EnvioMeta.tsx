@@ -194,6 +194,9 @@ export default function EnvioMeta() {
     });
   };
 
+  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
+  const [editVarsOpen, setEditVarsOpen] = useState(false);
+
   const importarExcel = async (file: File) => {
     try {
       const buf = await file.arrayBuffer();
@@ -201,31 +204,8 @@ export default function EnvioMeta() {
       const ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) throw new Error("Planilha vazia");
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
-      const linhas: string[] = [];
-      const seen = new Set<string>();
-      let ignorados = 0;
-      let duplicados = 0;
-      let cabecalhoPulado = false;
-      for (let idx = 0; idx < rows.length; idx++) {
-        const r = rows[idx] || [];
-        const telRaw = String(r[0] ?? "").trim();
-        const nomeRaw = String(r[1] ?? "").trim();
-        const digitos = telRaw.replace(/\D/g, "");
-        if (idx === 0 && !digitos && !cabecalhoPulado) { cabecalhoPulado = true; continue; }
-        if (!digitos) { if (telRaw || nomeRaw) ignorados++; continue; }
-        const key = normalizeTelKey(telRaw);
-        if (seen.has(key)) { duplicados++; continue; }
-        seen.add(key);
-        linhas.push(nomeRaw ? `${telRaw}, ${nomeRaw}` : telRaw);
-      }
-      if (linhas.length === 0) { toast.error("Nenhum telefone válido encontrado"); return; }
-      setRecipientsRaw(linhas.join("\n"));
-      setValidacaoPreview(null);
-      toast.success(
-        `${linhas.length} contato(s) importado(s)` +
-        (ignorados ? ` • ${ignorados} ignorado(s)` : "") +
-        (duplicados ? ` • ${duplicados} duplicado(s) removido(s)` : "")
-      );
+      if (!rows || rows.length === 0) { toast.error("Planilha vazia"); return; }
+      setMapDlg({ open: true, rows });
     } catch (e: any) {
       toast.error("Erro ao ler planilha: " + (e?.message || e));
     }
