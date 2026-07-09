@@ -373,6 +373,9 @@ export default function EnvioMeta() {
       ? []
       : templates.filter((t) => instanciaIds.includes(t.instancia_id));
     for (const t of base) {
+      // Trava anti-gasto: templates MARKETING não aparecem no dropdown de envio em massa.
+      // A versão UTILITY do mesmo template continua disponível.
+      if (String(t.categoria || '').toUpperCase() === 'MARKETING') continue;
       const key = `${t.nome_template}::${t.idioma}`;
       const g = map.get(key);
       if (g) {
