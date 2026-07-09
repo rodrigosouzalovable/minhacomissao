@@ -62,6 +62,29 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
+    // Verifica todos os template_ids (por instância + o principal).
+    const allTemplateIds = Array.from(new Set([
+      template.id,
+      ...Object.values(templateIdByInstance || {}).filter(Boolean) as string[],
+    ]));
+    const { data: tplCats } = await supabase
+      .from('meta_whatsapp_templates')
+      .select('id, nome_template, categoria')
+      .in('id', allTemplateIds);
+    const marketing = (tplCats || []).find(
+      (t: any) => String(t.categoria || '').toUpperCase() === 'MARKETING',
+    );
+    if (marketing) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Envio bloqueado: template "${marketing.nome_template}" é categoria MARKETING (cobrado como marketing pela Meta, ~7x mais caro que utility). Use apenas templates UTILITY para envio em massa.`,
+      }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
     // Cancela silenciosamente jobs "rodando/pausado" antigos do mesmo usuário para não competir.
     const { data: ativos } = await supabase
       .from('envio_meta_job')
