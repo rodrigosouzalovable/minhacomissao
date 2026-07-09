@@ -1067,7 +1067,7 @@ export default function Acionamento() {
   useEffect(() => {
     if (activeTab !== 'enviados' || enviados.length === 0) return;
     fetchConversas();
-    const interval = setInterval(fetchConversas, 30000);
+    const interval = setInterval(() => { if (document.visibilityState === 'visible') fetchConversas(); }, 90000);
     return () => clearInterval(interval);
   }, [activeTab, fetchConversas, enviados.length]);
 
