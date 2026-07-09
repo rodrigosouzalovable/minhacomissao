@@ -554,6 +554,14 @@ export default function EnvioMeta() {
       }
     }
 
+    // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
+    const okCusto = await pedirConfirmacaoCusto(
+      clientesFinal.map((c) => c.telefone),
+      instanciaIds,
+      templateGroup.categoria,
+    );
+    if (!okCusto) return;
+
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
       instanciaIds,
