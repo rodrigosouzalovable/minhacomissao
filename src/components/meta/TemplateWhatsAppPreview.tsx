@@ -98,7 +98,7 @@ export default function TemplateWhatsAppPreview({
           </div>
         )}
         {headerFormat === "TEXT" && headerText && (
-          <div className="px-3 pt-2 font-bold text-sm">{renderBodyWithVars(headerText, sample)}</div>
+          <div className="px-3 pt-2 font-bold text-sm">{renderBodyWithVars(headerText, sample, sampleValues)}</div>
         )}
         {(headerFormat === "VIDEO" || headerFormat === "DOCUMENT") && (
           <div className="bg-zinc-300 aspect-video flex items-center justify-center text-xs text-zinc-700">
@@ -107,7 +107,8 @@ export default function TemplateWhatsAppPreview({
         )}
 
         <div className="px-3 py-2 text-sm whitespace-pre-wrap leading-snug">
-          {renderBodyWithVars(body?.text || template.body_text || "", sample)}
+          {renderBodyWithVars(body?.text || template.body_text || "", sample, sampleValues)}
+
         </div>
 
         {footer?.text && (
