@@ -473,10 +473,10 @@ export default function WhatsAppInbox() {
     };
     connect();
 
-    // Polling leve a cada 20s — fallback caso realtime falhe silenciosamente
+    // Polling leve a cada 60s — fallback caso realtime falhe silenciosamente (economia Cloud)
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchContatos();
-    }, 20000);
+    }, 60000);
 
     // Refetch imediato quando a aba volta a ficar visível
     const onVisibility = () => {
