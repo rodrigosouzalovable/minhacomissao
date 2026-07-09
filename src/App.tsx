@@ -218,6 +218,7 @@ const App = () => (
             <Route path="/admin/envio-meta" element={<PermissionRoute><EnvioMeta /></PermissionRoute>} />
             <Route path="/admin/inbox-meta" element={<PermissionRoute><InboxMeta /></PermissionRoute>} />
             <Route path="/admin/meta-billing" element={<AdminRoute><MetaBilling /></AdminRoute>} />
+            <Route path="/admin/meta-templates" element={<AdminRoute><MetaTemplates /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
