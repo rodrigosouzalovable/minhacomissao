@@ -1,42 +1,73 @@
-## Diagnóstico
-Testei diretamente a Graph API da Meta com o token de uma das instâncias e descobri a causa: a edge function `meta-billing-sync` usa o campo `conversation_analytics` na v21.0. Esse endpoint foi **descontinuado** — hoje ele responde `{"id":"..."}` vazio (sem `data_points`), por isso o banco `meta_billing_snapshot` está zerado e o dialog fica em branco.
+## Objetivo
 
-O substituto correto é `pricing_analytics` na v24.0, que retorna volume de mensagens cobradas por dia, categoria e tipo. Testei e voltou dados reais:
+Mostrar, na aba **Envio Meta em Massa**, uma **previsão de custo real** assim que houver template + instâncias + destinatários carregados, e **exigir confirmação explícita** do custo antes de disparar. Assim você nunca mais é surpreendido com cobranças de US$ 25 acumulando.
 
+## Como o custo será calculado
+
+Meta cobra por **conversa** (janela 24h), não por mensagem. Regras já usadas no projeto:
+
+- **MARKETING**: US$ 0,0625 por conversa (BR, jul/2026)
+- **UTILITY / AUTHENTICATION**: US$ 0,0068 por conversa
+- **SERVICE / janela 24h aberta**: grátis
+- Câmbio USD→BRL: mesmo `fxRate` usado no `meta-billing-sync` (fallback ~R$ 5,55)
+
+Para cada destinatário da lista o sistema vai:
+
+1. Verificar em `meta_whatsapp_contatos` se existe `ultima_msg_entrada_em` dentro das últimas 24h para aquele telefone em **qualquer** instância selecionada → conta como **grátis**.
+2. Caso contrário, conta como **1 conversa cobrada** na categoria do template selecionado.
+
+Total = (nº cobrados) × preço da categoria × fxRate.
+
+## Onde vai aparecer
+
+Novo card **"Custo estimado deste envio"** entre a seção *3. Destinatários* e *Agendamento multi-dia* em `src/pages/EnvioMeta.tsx`. Só aparece quando há template + ≥1 instância + ≥1 destinatário.
+
+Layout:
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│ 💰 Custo estimado deste envio                           │
+├─────────────────────────────────────────────────────────┤
+│ 2.000 destinatários  ·  Categoria: MARKETING            │
+│                                                         │
+│ Cobrados:    1.847  →  US$ 115,44   ≈  R$ 640,69       │
+│ Grátis (24h):  153  →  US$ 0,00     (janela aberta)    │
+│                                                         │
+│ ⚠️ Este valor SERÁ debitado no cartão da Meta.          │
+│    Cada WABA cobra ao atingir US$ 25 acumulados.        │
+└─────────────────────────────────────────────────────────┘
 ```
-pricing_category=SERVICE  pricing_type=FREE_CUSTOMER_SERVICE  volume=131  (grátis)
-pricing_category=UTILITY  pricing_type=REGULAR                volume=56   (cobrado)
-pricing_category=UTILITY  pricing_type=FREE_CUSTOMER_SERVICE  volume=1    (grátis)
-```
 
-## Correção
+Se a categoria for MARKETING, o card fica em vermelho reforçando o alerta (já existe bloqueio, mas mostra o valor caso destravem).
 
-Ajustar **apenas** `supabase/functions/meta-billing-sync/index.ts`:
+## Fluxo de confirmação reforçado
 
-1. Trocar versão da Graph API para `v24.0`.
-2. Trocar o campo de `conversation_analytics(...)` por:
-   ```
-   pricing_analytics.start(START).end(END).granularity(DAILY)
-     .dimensions(["PRICING_CATEGORY","PRICING_TYPE","COUNTRY"])
-   ```
-3. Ler `pricing_analytics.data[0].data_points`.
-4. Mapear cada ponto para `meta_billing_snapshot`:
-   - `conversation_category` ← `pricing_category`
-   - `conversation_type` ← `pricing_type`
-   - `conversations_count` ← `volume`
-   - `dia` ← `new Date(start*1000).toISOString().slice(0,10)`
-   - `cost_usd`: `0` quando `pricing_type = FREE_CUSTOMER_SERVICE`, caso contrário `volume * PRECO_USD[pricing_category]`
-   - `cost_brl`: `cost_usd * fx_rate`
-5. Manter a chave de upsert atual `(waba_id, dia, conversation_category, conversation_type)`.
+O `confirm()` atual já mostra "Disparar para X contatos". Vai ser trocado por um **AlertDialog** com o custo estimado impresso e um campo onde você digita o valor em reais (ex.: `640,69`) para liberar o botão *Confirmar disparo*. Sem digitar o valor, não envia.
 
-## Efeito no frontend
-Nenhuma mudança de código. Após rodar "Sincronizar com Meta" no dialog, ele vai popular as três abas automaticamente (o dialog já consome `meta_billing_snapshot` e `meta_whatsapp_envios_log`).
+Limite duro adicional: se o custo estimado passar de um teto configurável (default **R$ 100** por envio, ajustável em `meta_billing_guardrail`), aparece **"Envio bloqueado — pedir liberação ao admin"** como já acontece com MARKETING.
 
-## Fora de escopo
-- Sem alterações no dialog, no webhook, nas tabelas, em migrations, em client.ts/types.ts/.env/config.toml.
-- Sem novos endpoints, sem cron novo.
+## Implementação técnica
 
-⚠️ **ALERTA DE CUSTO ALTO LOVABLE CLOUD**: impacto zero. Só corrige uma chamada externa que já existia (para a API da Meta, não Lovable Cloud). Nenhum novo cron, polling, realtime, tabela ou índice.
+**Novo componente** `src/components/meta/CustoEstimadoEnvio.tsx`
+- Recebe `recipients`, `instanciaIds`, `templateGroup` (categoria), fxRate.
+- Faz `supabase.from('meta_whatsapp_contatos').select('telefone,ultima_msg_entrada_em').in('instancia_id', instanciaIds).in('telefone', lote)` em lotes de 500 para achar janelas 24h abertas.
+- Calcula cobrados × preço × fx. Debounce de 400ms ao digitar destinatários.
+- Query com `staleTime: 60_000` (custo memory: cost-awareness — consulta leve, sem cron/realtime novo).
 
-## Arquivo afetado
-- `supabase/functions/meta-billing-sync/index.ts`
+**Edição em** `src/pages/EnvioMeta.tsx`
+- Renderizar `<CustoEstimadoEnvio ... />` após o card de Destinatários.
+- Substituir `if (!confirm(...))` do `handleEnviar` por um `AlertDialog` novo que exibe o custo e exige confirmação por digitação.
+- Ler teto de `meta_billing_guardrail` (tabela já existe) e bloquear acima dele.
+
+**Hook auxiliar** `src/hooks/useCustoEstimadoEnvio.ts`
+- Encapsula: consulta janelas 24h, cálculo, memoização, retorna `{ cobrados, gratis, usd, brl, loading }`.
+
+## Fora do escopo
+
+- Nenhuma mudança em edge functions, webhooks, migrations, cron, realtime, tabelas, `client.ts`, `types.ts`, `.env`, `config.toml`.
+- Não altera a lógica de disparo em si (`envio-meta-massa-iniciar`/`-tick`) — só antecipa e exige confirmação do custo no frontend.
+- Não mexe no dialog de "Custos Detalhados" existente (esse mostra o passado; este novo mostra o futuro do envio).
+
+## Por que isso resolve o susto
+
+Hoje você seleciona planilha → clica enviar → só descobre o custo depois via cobrança da Meta. Com o card, **antes de qualquer envio** você vê "R$ 640" na tela, e o sistema te obriga a digitar o valor para confirmar. Combinado com o teto de R$ 100/envio, é impossível um envio grande passar despercebido.
