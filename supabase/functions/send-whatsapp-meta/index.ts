@@ -79,6 +79,18 @@ function resolveNamedVar(name: string, c: ClienteData): string {
   return resolveVar(`{${n}}`, c) || ' ';
 }
 
+function inferFieldForPlaceholder(template: any, key: string): string {
+  const bodyText = String(template?.body_text || '');
+  const rx = new RegExp(`(.{0,40})\\{\\{\\s*${key}\\s*\\}\\}(.{0,40})`, 'i');
+  const match = bodyText.match(rx);
+  const context = `${match?.[1] || ''} ${match?.[2] || ''}`.toLowerCase();
+  if (/cnpj|cpf|documento|doc\b/.test(context)) return '{cpf}';
+  if (/nome|cliente/.test(context)) return '{nome}';
+  if (/atraso|dias/.test(context)) return '{atraso}';
+  if (/saldo|valor|d[ií]vida/.test(context)) return '{saldo}';
+  return '';
+}
+
 function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'named' | 'positional'): { parameters: any[]; format: 'named' | 'positional' | 'none' } {
   const variaveis = (template.variaveis || {}) as Record<string, string>;
   const bodyText: string = template.body_text || '';
@@ -107,7 +119,7 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
         const k = m[1];
         if (seen2.has(k)) continue;
         seen2.add(k);
-        const field = variaveis[k] || 'name';
+        const field = variaveis[k] || inferFieldForPlaceholder(template, k) || 'name';
         const value = resolveNamedVar(field.replace(/[{}]/g, ''), cliente) || 'cliente';
         parameters.push({ type: 'text', parameter_name: field.replace(/[{}]/g, '') || 'name', text: value });
       }
@@ -118,7 +130,7 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
   const parameters: any[] = [];
   if (sortedKeys.length > 0) {
     for (const k of sortedKeys) {
-      const field = variaveis[k] || '';
+      const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
       const value =
         resolveVar(field, cliente) ||
         resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
@@ -353,7 +365,7 @@ Deno.serve(async (req) => {
         const variaveis = (template.variaveis || {}) as Record<string, string>;
         // Substitui {{1}}, {{2}}... via mapeamento variaveis
         bodyRendered = bodyRendered.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, k) => {
-          const field = variaveis[k] || '';
+          const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
           return (
             resolveVar(field, cliente) ||
             resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
