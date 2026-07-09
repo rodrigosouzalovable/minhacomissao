@@ -450,7 +450,7 @@ export default function InboxMeta() {
     const raw = (textoCustom ?? '').trim();
     if (!contatoAtivo || !raw || enviando) return;
     if (!janelaInfo.aberta) {
-      toast({ title: 'Janela 24h expirada', description: 'Use um template HSM em "Envio Meta (massa)".', variant: 'destructive' });
+      toast({ title: 'Janela 24h fechada', description: 'Envie um template UTILITY em Envio Meta (massa) para reabrir. Texto livre agora custaria como MARKETING.', variant: 'destructive' });
       return;
     }
     const t = formatarMensagemAtendente(raw);
