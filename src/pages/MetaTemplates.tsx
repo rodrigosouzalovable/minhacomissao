@@ -36,7 +36,10 @@ interface Mestre {
   rodape: string | null;
   botoes: Botao[];
   exemplo: any;
+  cabecalho_media_url?: string | null;
+  cabecalho_media_mime?: string | null;
   criado_em: string;
+
 }
 
 interface Instancia {
@@ -102,6 +105,8 @@ export default function MetaTemplates() {
   // aplicar em lote
   const [selMestre, setSelMestre] = useState<string>("");
   const [selInst, setSelInst] = useState<Set<string>>(new Set());
+  const [loteMediaUrl, setLoteMediaUrl] = useState<string | null>(null);
+
   const [enviando, setEnviando] = useState(false);
 
   const carregar = async () => {
@@ -138,6 +143,26 @@ export default function MetaTemplates() {
     });
   }, [nVarsCorpo]);
 
+  // Gera URL assinada para a mídia do template selecionado na aba Lote
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const m = mestres.find((x) => x.id === selMestre);
+      const path = m?.cabecalho_media_url;
+      if (!path || !["IMAGE", "VIDEO", "DOCUMENT"].includes(m?.cabecalho_tipo || "")) {
+        setLoteMediaUrl(null);
+        return;
+      }
+      const { data } = await supabase.storage
+        .from("meta-template-media")
+        .createSignedUrl(path, 3600);
+      if (!cancelled) setLoteMediaUrl(data?.signedUrl || null);
+    })();
+    return () => { cancelled = true; };
+  }, [selMestre, mestres]);
+
+
+
   const validarSlug = (v: string) => /^[a-z0-9_]+$/.test(v);
 
   const salvarMestre = async () => {
@@ -162,7 +187,7 @@ export default function MetaTemplates() {
     }
 
     const { data: user } = await supabase.auth.getUser();
-    const { error } = await supabase.from("meta_templates_mestre").insert({
+    const { data: novo, error } = await supabase.from("meta_templates_mestre").insert({
       nome,
       categoria,
       idioma,
@@ -175,15 +200,21 @@ export default function MetaTemplates() {
       botoes: botoes as any,
       exemplo,
       criado_por: user.user?.id,
-    } as any);
+    } as any).select().single();
     setSalvando(false);
     if (error) { toast.error(error.message); return; }
+    if (novo) {
+      setMestres((prev) => [novo as any, ...prev.filter((m) => m.id !== (novo as any).id)]);
+      setSelMestre((novo as any).id);
+    }
+    carregar();
     toast.success("Template mestre criado. Vá em 'Aplicar em lote'.");
     setNome(""); setCorpo(""); setRodape(""); setCabecalhoTexto("");
     setCabecalhoTipo("NONE"); setBotoes([]); setExemploBody([]);
     setMediaPath(null); setMediaMime(null); setMediaSignedUrl(null);
     setTab("lote");
   };
+
 
   const uploadMedia = async (file: File) => {
     setUploadingMedia(true);
@@ -532,12 +563,15 @@ export default function MetaTemplates() {
                         Pré-visualização (como aparece no WhatsApp)
                       </div>
                       <TemplateWhatsAppPreview
+                        imageUrlOverride={loteMediaUrl || undefined}
+                        sampleValues={(m.exemplo?.body_text?.[0] as string[]) || []}
                         template={{
                           nome_template: m.nome,
                           body_text: m.corpo,
                           variaveis: { _components },
                         }}
                       />
+
                     </div>
                   );
                 })()}
