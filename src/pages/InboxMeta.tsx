@@ -782,6 +782,19 @@ export default function InboxMeta() {
                         'text-[10px] whitespace-nowrap',
                         c.nao_lido > 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground',
                       )}>{formatContatoTime(c.ultima_mensagem_em)}</span>
+                      <span
+                        className={cn(
+                          'h-2 w-2 rounded-full ring-2 ring-background',
+                          jan.status === 'aberta' && 'bg-emerald-500',
+                          jan.status === 'alerta' && 'bg-amber-500 animate-pulse',
+                          jan.status === 'fechada' && 'bg-red-500',
+                        )}
+                        title={
+                          jan.status === 'aberta' ? 'Janela 24h aberta'
+                            : jan.status === 'alerta' ? 'Janela fecha em menos de 1h'
+                            : 'Janela fechada — só template UTILITY'
+                        }
+                      />
                       {c.nao_lido > 0 && (
                         <span
                           className="inline-flex items-center justify-center h-6 min-w-6 px-1.5 rounded-full bg-emerald-500 text-[11px] font-bold leading-none text-white shadow-md ring-2 ring-background"
