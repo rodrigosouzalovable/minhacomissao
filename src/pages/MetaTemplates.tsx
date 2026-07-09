@@ -418,7 +418,17 @@ export default function MetaTemplates() {
                             <div className="text-xs text-muted-foreground">{inst.display_phone || "-"}</div>
                           </div>
                           {status && (
-                            <Badge className={STATUS_COLORS[status] || ""}>{status}</Badge>
+                            <div className="flex flex-col items-end gap-1 max-w-[260px]">
+                              <Badge className={STATUS_COLORS[status] || ""}>{status}</Badge>
+                              {(t?.erro || t?.motivo_rejeicao) && (
+                                <span
+                                  className="text-[11px] text-destructive text-right leading-tight line-clamp-2"
+                                  title={t?.erro || t?.motivo_rejeicao || ""}
+                                >
+                                  {t?.erro || t?.motivo_rejeicao}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       );
