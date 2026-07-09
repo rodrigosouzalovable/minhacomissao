@@ -14,6 +14,8 @@ import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, A
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
+import CustosDetalhadosDialog from "@/components/meta/CustosDetalhadosDialog";
+import { DollarSign } from "lucide-react";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -62,6 +64,7 @@ export default function ConfigurarMeta() {
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
+  const [custosOpen, setCustosOpen] = useState(false);
   
 
   const [assinando, setAssinando] = useState(false);
@@ -276,6 +279,27 @@ export default function ConfigurarMeta() {
           Configuração das instâncias conectadas via HookCloud e Meta Cloud API
         </p>
       </div>
+
+      <Card className="mb-6 border-primary/40 bg-primary/5">
+        <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2">
+              <DollarSign className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <div className="font-semibold">Custos detalhados dos envios</div>
+              <p className="text-sm text-muted-foreground">
+                Veja o custo de cada dia, cada conversa e cada mensagem enviada pela API oficial da Meta.
+              </p>
+            </div>
+          </div>
+          <Button onClick={() => setCustosOpen(true)}>
+            <DollarSign className="h-4 w-4 mr-2" /> Ver custos detalhados
+          </Button>
+        </CardContent>
+      </Card>
+
+      <CustosDetalhadosDialog open={custosOpen} onOpenChange={setCustosOpen} />
 
       <MetaGuardrailCard />
 
