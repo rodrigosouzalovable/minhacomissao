@@ -92,103 +92,132 @@ serve(async (req) => {
       components,
     };
 
-    const detalhes: any[] = [];
-    let sucessos = 0;
-    let falhas = 0;
+    // pré-marca todas como ENVIADO para feedback imediato na UI
+    const preRows = instancias.map((inst) => ({
+      template_mestre_id: mestre_id,
+      instancia_id: inst.id,
+      waba_id: inst.waba_id,
+      phone_number_id: inst.phone_number_id,
+      status: "ENVIADO",
+      erro: null,
+    }));
+    if (preRows.length > 0) {
+      await supabase.from("meta_templates_instancia")
+        .upsert(preRows, { onConflict: "template_mestre_id,instancia_id" });
+    }
 
-    for (const inst of instancias) {
-      // filtra apenas_falhas
-      if (apenas_falhas) {
-        const { data: cur } = await supabase
-          .from("meta_templates_instancia").select("status")
-          .eq("template_mestre_id", mestre_id).eq("instancia_id", inst.id).maybeSingle();
-        if (cur && !["FALHA_ENVIO", "REJECTED"].includes(cur.status)) continue;
-      }
+    // processa em background para evitar timeout de 150s
+    const processar = async () => {
+      const detalhes: any[] = [];
+      let sucessos = 0;
+      let falhas = 0;
 
-      if (!inst.waba_id || !inst.access_token) {
-        falhas++;
-        await supabase.from("meta_templates_instancia").upsert({
-          template_mestre_id: mestre_id,
-          instancia_id: inst.id,
-          waba_id: inst.waba_id,
-          phone_number_id: inst.phone_number_id,
-          status: "FALHA_ENVIO",
-          erro: "waba_id ou access_token ausente",
-        }, { onConflict: "template_mestre_id,instancia_id" });
-        detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: "credenciais ausentes" });
-        continue;
-      }
+      for (const inst of instancias) {
+        if (apenas_falhas) {
+          const { data: cur } = await supabase
+            .from("meta_templates_instancia").select("status")
+            .eq("template_mestre_id", mestre_id).eq("instancia_id", inst.id).maybeSingle();
+          if (cur && !["FALHA_ENVIO", "REJECTED"].includes(cur.status)) continue;
+        }
 
-      try {
-        const res = await fetch(
-          `https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${inst.access_token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payloadBase),
-          },
-        );
-        const data = await res.json();
-
-        if (!res.ok) {
+        if (!inst.waba_id || !inst.access_token) {
           falhas++;
-          const errMsg = data?.error?.error_user_msg || data?.error?.message || `HTTP ${res.status}`;
           await supabase.from("meta_templates_instancia").upsert({
             template_mestre_id: mestre_id,
             instancia_id: inst.id,
             waba_id: inst.waba_id,
             phone_number_id: inst.phone_number_id,
             status: "FALHA_ENVIO",
-            erro: errMsg,
+            erro: "waba_id ou access_token ausente",
           }, { onConflict: "template_mestre_id,instancia_id" });
-          detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: errMsg });
-        } else {
-          sucessos++;
-          const metaStatus = (data?.status || "PENDING").toUpperCase();
+          detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: "credenciais ausentes" });
+          continue;
+        }
+
+        try {
+          const res = await fetch(
+            `https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${inst.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(payloadBase),
+            },
+          );
+          const data = await res.json();
+
+          if (!res.ok) {
+            falhas++;
+            const errMsg = data?.error?.error_user_msg || data?.error?.message || `HTTP ${res.status}`;
+            await supabase.from("meta_templates_instancia").upsert({
+              template_mestre_id: mestre_id,
+              instancia_id: inst.id,
+              waba_id: inst.waba_id,
+              phone_number_id: inst.phone_number_id,
+              status: "FALHA_ENVIO",
+              erro: errMsg,
+            }, { onConflict: "template_mestre_id,instancia_id" });
+            detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: errMsg });
+          } else {
+            sucessos++;
+            const metaStatus = (data?.status || "PENDING").toUpperCase();
+            await supabase.from("meta_templates_instancia").upsert({
+              template_mestre_id: mestre_id,
+              instancia_id: inst.id,
+              waba_id: inst.waba_id,
+              phone_number_id: inst.phone_number_id,
+              meta_template_id: data?.id ? String(data.id) : null,
+              status: metaStatus,
+              erro: null,
+              motivo_rejeicao: null,
+            }, { onConflict: "template_mestre_id,instancia_id" });
+            detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: true, meta_id: data?.id, status: metaStatus });
+          }
+        } catch (err) {
+          falhas++;
+          const msg = err instanceof Error ? err.message : String(err);
           await supabase.from("meta_templates_instancia").upsert({
             template_mestre_id: mestre_id,
             instancia_id: inst.id,
             waba_id: inst.waba_id,
             phone_number_id: inst.phone_number_id,
-            meta_template_id: data?.id ? String(data.id) : null,
-            status: metaStatus,
-            erro: null,
-            motivo_rejeicao: null,
+            status: "FALHA_ENVIO",
+            erro: msg,
           }, { onConflict: "template_mestre_id,instancia_id" });
-          detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: true, meta_id: data?.id, status: metaStatus });
+          detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: msg });
         }
-      } catch (err) {
-        falhas++;
-        const msg = err instanceof Error ? err.message : String(err);
-        await supabase.from("meta_templates_instancia").upsert({
-          template_mestre_id: mestre_id,
-          instancia_id: inst.id,
-          waba_id: inst.waba_id,
-          phone_number_id: inst.phone_number_id,
-          status: "FALHA_ENVIO",
-          erro: msg,
-        }, { onConflict: "template_mestre_id,instancia_id" });
-        detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: msg });
+
+        await sleep(400);
       }
 
-      await sleep(400);
+      await supabase.from("meta_templates_lote_log").insert({
+        template_mestre_id: mestre_id,
+        usuario_id,
+        total_instancias: detalhes.length,
+        sucessos,
+        falhas,
+        detalhes,
+      });
+    };
+
+    // @ts-ignore EdgeRuntime existe no runtime do Supabase
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(processar());
+    } else {
+      processar();
     }
 
-    await supabase.from("meta_templates_lote_log").insert({
-      template_mestre_id: mestre_id,
-      usuario_id,
-      total_instancias: detalhes.length,
-      sucessos,
-      falhas,
-      detalhes,
-    });
-
     return new Response(
-      JSON.stringify({ success: true, sucessos, falhas, total: detalhes.length, detalhes }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({
+        success: true,
+        queued: true,
+        total: instancias.length,
+        message: "Processamento iniciado em background. Acompanhe pela aba Status.",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 202 },
     );
   } catch (err) {
     return new Response(
@@ -197,3 +226,4 @@ serve(async (req) => {
     );
   }
 });
+
