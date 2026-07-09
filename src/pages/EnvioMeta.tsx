@@ -772,12 +772,21 @@ export default function EnvioMeta() {
               </div>
             )}
 
-            {variaveisDoTemplate.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                <strong>Variáveis:</strong>{" "}
-                {variaveisDoTemplate.map(([k, v]) => `{{${k}}}=${v}`).join(" · ")}
-                <p className="mt-1">
-                  Use os campos abaixo nos placeholders mapeados:
+            {template && (
+              <div className="text-xs text-muted-foreground space-y-1">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <strong>Variáveis:</strong>{" "}
+                    {variaveisDoTemplate.length > 0
+                      ? variaveisDoTemplate.map(([k, v]) => `{{${k}}}=${v}`).join(" · ")
+                      : <span className="italic">nenhuma configurada</span>}
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setEditVarsOpen(true)}>
+                    <Pencil className="h-3 w-3 mr-1" /> Editar variáveis
+                  </Button>
+                </div>
+                <p>
+                  Campos disponíveis:
                   <code className="ml-1">{"{nome} {primeiro_nome} {cpf} {atraso} {saldo} {avista} {parcelado}"}</code>
                 </p>
               </div>
