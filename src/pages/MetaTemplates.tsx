@@ -92,6 +92,12 @@ export default function MetaTemplates() {
   const [botoes, setBotoes] = useState<Botao[]>([]);
   const [exemploBody, setExemploBody] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
+  // mídia do cabeçalho
+  const [mediaPath, setMediaPath] = useState<string | null>(null);
+  const [mediaMime, setMediaMime] = useState<string | null>(null);
+  const [mediaSignedUrl, setMediaSignedUrl] = useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+
 
   // aplicar em lote
   const [selMestre, setSelMestre] = useState<string>("");
