@@ -273,7 +273,7 @@ export default function MetaTemplates() {
 
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto space-y-4">
+      <div className="max-w-7xl mx-auto space-y-4">
         <div>
           <h1 className="text-2xl font-bold">Templates Meta (em lote)</h1>
           <p className="text-sm text-muted-foreground">
