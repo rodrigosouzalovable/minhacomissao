@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Plus, Send, Trash2, RefreshCw, X } from "lucide-react";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
+import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
 
 type Categoria = "UTILITY" | "MARKETING" | "AUTHENTICATION";
 type BotaoTipo = "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
