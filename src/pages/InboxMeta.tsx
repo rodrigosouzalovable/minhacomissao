@@ -737,6 +737,7 @@ export default function InboxMeta() {
               const etIds = contatoEtiquetas[c.id] || [];
               const ets = etiquetas.filter(e => etIds.includes(e.id));
               const sel = selecionados.has(c.id);
+              const jan = computeJanela(c.ultima_msg_entrada_em);
               return (
                 <MetaConversaContextMenu
                   key={c.id}
