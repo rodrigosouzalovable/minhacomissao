@@ -904,9 +904,26 @@ export default function InboxMeta() {
               </div>
 
               <div className="border-t bg-card">
-                {!janelaInfo.aberta && (
-                  <div className="m-3 text-xs bg-amber-500/10 border border-amber-500/30 rounded p-2 text-amber-700 dark:text-amber-400">
-                    <strong>Janela 24h expirada.</strong> Use template HSM em <strong>Envio Meta (massa)</strong> para reabrir.
+                {janelaInfo.status === 'fechada' && (
+                  <div className="m-3 text-xs bg-red-500/10 border-2 border-red-500/40 rounded p-3 text-red-700 dark:text-red-400 space-y-1">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <AlertCircle className="h-4 w-4" />
+                      Janela de 24h encerrada — envio livre bloqueado
+                    </div>
+                    <p>
+                      Enviar texto livre agora reclassifica a conversa como <strong>MARKETING (~R$ 0,35/msg)</strong>.
+                      Para reabrir, envie um <strong>template UTILITY aprovado</strong> em <strong>Envio Meta (massa)</strong> ou
+                      aguarde o cliente responder.
+                    </p>
+                  </div>
+                )}
+                {janelaInfo.status === 'alerta' && (
+                  <div className="m-3 text-xs bg-amber-500/10 border border-amber-500/40 rounded p-2 text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>
+                      <strong>Atenção:</strong> a janela de 24h fecha em <strong>{formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}</strong>.
+                      Após isso, só será possível reabrir via template UTILITY.
+                    </span>
                   </div>
                 )}
                 {respondendo && (
