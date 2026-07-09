@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+// Preço estimado em BRL por categoria — fallback quando ainda não há dado real
+// da Meta em meta_billing_snapshot. Baseado no rate card BR (jul/2026):
+// UTILITY/AUTH: US$ 0,0068 · MARKETING: US$ 0,0625 · câmbio ~5,50.
+// Envios dentro da janela CSW (foi_gratis=true) não são somados.
 const PRECO: Record<string, number> = {
-  UTILITY: 0.05,
-  AUTHENTICATION: 0.05,
-  MARKETING: 0.35,
+  UTILITY: 0.037,
+  AUTHENTICATION: 0.037,
+  MARKETING: 0.344,
   SERVICE: 0,
 };
 
