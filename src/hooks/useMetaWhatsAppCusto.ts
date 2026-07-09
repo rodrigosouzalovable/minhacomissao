@@ -62,7 +62,7 @@ export function useMetaWhatsAppCusto() {
         const { data } = await q.limit(100000);
         const r: CustoJanela = { valor: 0, qtdUtility: 0, qtdMarketing: 0, qtdOutros: 0 };
         (data || []).forEach((row: any) => {
-          const cat = catByNome.get(row.template_nome) || "";
+          const cat = String(row.pricing_category || catByNome.get(row.template_nome) || "").toUpperCase();
           const preco = PRECO[cat] ?? 0;
           r.valor += preco;
           if (cat === "MARKETING") r.qtdMarketing++;
