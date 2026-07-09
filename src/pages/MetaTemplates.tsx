@@ -563,12 +563,15 @@ export default function MetaTemplates() {
                         Pré-visualização (como aparece no WhatsApp)
                       </div>
                       <TemplateWhatsAppPreview
+                        imageUrlOverride={loteMediaUrl || undefined}
+                        sampleValues={(m.exemplo?.body_text?.[0] as string[]) || []}
                         template={{
                           nome_template: m.nome,
                           body_text: m.corpo,
                           variaveis: { _components },
                         }}
                       />
+
                     </div>
                   );
                 })()}
