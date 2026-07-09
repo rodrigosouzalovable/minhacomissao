@@ -1,38 +1,42 @@
-## Objetivo
-Na página `/admin/configurar-meta` (aba **API Oficial Meta**), adicionar um botão destacado (ex.: "Ver custos detalhados") que abre um dialog mostrando, minuciosamente, o custo de cada dia, cada conversa e cada mensagem enviada via API oficial da Meta.
+## Diagnóstico
+Testei diretamente a Graph API da Meta com o token de uma das instâncias e descobri a causa: a edge function `meta-billing-sync` usa o campo `conversation_analytics` na v21.0. Esse endpoint foi **descontinuado** — hoje ele responde `{"id":"..."}` vazio (sem `data_points`), por isso o banco `meta_billing_snapshot` está zerado e o dialog fica em branco.
 
-## Onde colocar
-Em `src/pages/ConfigurarMeta.tsx`, logo abaixo do título "API Oficial Meta WhatsApp" e acima do card `MetaGuardrailCard` (Segurança de Custos). Um card compacto com valor gasto hoje + botão "Ver custos detalhados".
+O substituto correto é `pricing_analytics` na v24.0, que retorna volume de mensagens cobradas por dia, categoria e tipo. Testei e voltou dados reais:
 
-## O que o dialog mostra
-Componente novo `src/components/meta/CustosDetalhadosDialog.tsx`, com 3 abas:
+```
+pricing_category=SERVICE  pricing_type=FREE_CUSTOMER_SERVICE  volume=131  (grátis)
+pricing_category=UTILITY  pricing_type=REGULAR                volume=56   (cobrado)
+pricing_category=UTILITY  pricing_type=FREE_CUSTOMER_SERVICE  volume=1    (grátis)
+```
 
-### Aba 1 — Por dia (últimos 35 dias)
-Fonte: `meta_billing_snapshot` (dados reais cobrados pela Meta).
-Tabela com: data · conversas iniciadas · categoria (MKT/UTIL/AUTH/SERVICE) · custo USD · custo BRL · câmbio aplicado. Total do dia em destaque. Ordenado do mais recente. Cada linha expansível mostra o detalhamento por categoria/WABA.
+## Correção
 
-### Aba 2 — Por conversa (hoje + filtro de data)
-Fonte: `meta_whatsapp_envios_log` agrupado por `waba_conversation_id` (ou por contato+dia quando não houver). Colunas: hora início · contato · categoria pricing · tipo (`marketing`/`utility`/`authentication`/`service`/`referral_conversion`) · foi_gratis · qtd mensagens · custo estimado. Badge verde quando `foi_gratis=true` (CSW).
+Ajustar **apenas** `supabase/functions/meta-billing-sync/index.ts`:
 
-### Aba 3 — Por mensagem (hoje + filtro)
-Fonte: `meta_whatsapp_envios_log` linha a linha. Colunas: hora · contato · template · `pricing_category` · `pricing_type` · status · foi_gratis · custo unitário estimado (0 se grátis, caso contrário `PRECO_USD[categoria] * fx_rate` do snapshot do dia). Paginação de 100 em 100. Busca por contato/template.
+1. Trocar versão da Graph API para `v24.0`.
+2. Trocar o campo de `conversation_analytics(...)` por:
+   ```
+   pricing_analytics.start(START).end(END).granularity(DAILY)
+     .dimensions(["PRICING_CATEGORY","PRICING_TYPE","COUNTRY"])
+   ```
+3. Ler `pricing_analytics.data[0].data_points`.
+4. Mapear cada ponto para `meta_billing_snapshot`:
+   - `conversation_category` ← `pricing_category`
+   - `conversation_type` ← `pricing_type`
+   - `conversations_count` ← `volume`
+   - `dia` ← `new Date(start*1000).toISOString().slice(0,10)`
+   - `cost_usd`: `0` quando `pricing_type = FREE_CUSTOMER_SERVICE`, caso contrário `volume * PRECO_USD[pricing_category]`
+   - `cost_brl`: `cost_usd * fx_rate`
+5. Manter a chave de upsert atual `(waba_id, dia, conversation_category, conversation_type)`.
 
-Rodapé fixo do dialog: total do período filtrado em BRL e USD, quantidade grátis vs paga, alerta se divergir mais de 15% do `meta_billing_snapshot` do mesmo dia (indicativo de conversas não fechadas ainda pela Meta).
-
-## Detalhes técnicos
-- Reutilizar `PRECO_USD` (MARKETING 0.0625 / UTILITY 0.0068 / AUTH 0.0068 / SERVICE 0) e o `fx_rate` do snapshot do dia (fallback 5.5).
-- Botão "Sincronizar com Meta agora" no header do dialog chamando a edge function existente `meta-billing-sync` (mesma usada em `MetaBilling.tsx`), para forçar refresh antes de inspecionar.
-- Link secundário "Ver histórico completo" apontando para a página existente `/admin/meta-billing` (não duplicar aquela tela; o dialog é resumo minucioso do dia-a-dia inline).
-- Queries com `staleTime` alto e paginação para respeitar a regra de custo Cloud (memória Core "ALERTA DE CUSTO ALTO").
-- Sem novas tabelas, sem cron novo, sem edge functions novas.
+## Efeito no frontend
+Nenhuma mudança de código. Após rodar "Sincronizar com Meta" no dialog, ele vai popular as três abas automaticamente (o dialog já consome `meta_billing_snapshot` e `meta_whatsapp_envios_log`).
 
 ## Fora de escopo
-- Nenhuma mudança em `client.ts`, `types.ts`, `.env`, `config.toml`.
-- Nenhuma alteração no motor de envio, nas categorias de templates ou no webhook.
-- Sem novas migrations.
+- Sem alterações no dialog, no webhook, nas tabelas, em migrations, em client.ts/types.ts/.env/config.toml.
+- Sem novos endpoints, sem cron novo.
 
-## Arquivos afetados
-- `src/pages/ConfigurarMeta.tsx` — adicionar card com botão.
-- `src/components/meta/CustosDetalhadosDialog.tsx` — novo componente.
+⚠️ **ALERTA DE CUSTO ALTO LOVABLE CLOUD**: impacto zero. Só corrige uma chamada externa que já existia (para a API da Meta, não Lovable Cloud). Nenhum novo cron, polling, realtime, tabela ou índice.
 
-⚠️ **ALERTA DE CUSTO ALTO LOVABLE CLOUD**: impacto mínimo. Só lê tabelas já existentes (`meta_billing_snapshot`, `meta_whatsapp_envios_log`) sob demanda quando o dialog abrir, com paginação e `staleTime` alto. Sem cron/polling/realtime novo.
+## Arquivo afetado
+- `supabase/functions/meta-billing-sync/index.ts`
