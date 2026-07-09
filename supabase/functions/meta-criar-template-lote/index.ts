@@ -128,7 +128,7 @@ serve(async (req) => {
     if (me || !mestre) throw new Error("Template mestre não encontrado");
 
     let query = supabase.from("meta_whatsapp_instances")
-      .select("id, nome, waba_id, phone_number_id, access_token, ativo");
+      .select("id, nome, waba_id, phone_number_id, access_token, ativo, meta_bm_id");
     if (Array.isArray(instancia_ids) && instancia_ids.length > 0) {
       query = query.in("id", instancia_ids);
     } else {
@@ -145,13 +145,25 @@ serve(async (req) => {
     let mediaBytes: Uint8Array | null = null;
     let mediaMime: string = mestre.cabecalho_media_mime || "application/octet-stream";
     let mediaName: string = "media";
-    let metaAppId: string | null = null;
+    const bmAppIdCache = new Map<string, string>();
+    let defaultAppId: string | null = null;
 
     if (precisaMidia) {
-      // busca app_id da Meta
-      const { data: cfg } = await supabase
-        .from("meta_whatsapp_config").select("valor").eq("chave", "meta_app_id").maybeSingle();
-      metaAppId = (cfg?.valor || "").trim() || null;
+      // Carrega BM padrão + todas as BMs vinculadas às instâncias
+      const { data: bms } = await supabase
+        .from("meta_business_managers").select("id, app_id, padrao, ativo").eq("ativo", true);
+      if (bms) {
+        for (const b of bms) {
+          bmAppIdCache.set(b.id, b.app_id);
+          if (b.padrao) defaultAppId = b.app_id;
+        }
+      }
+      // fallback legado: chave em meta_whatsapp_config
+      if (!defaultAppId) {
+        const { data: cfg } = await supabase
+          .from("meta_whatsapp_config").select("valor").eq("chave", "meta_app_id").maybeSingle();
+        defaultAppId = (cfg?.valor || "").trim() || null;
+      }
 
       const path = String(mestre.cabecalho_media_url);
       const { data: fileBlob, error: dlErr } = await supabase.storage
@@ -164,6 +176,7 @@ serve(async (req) => {
       const parts = path.split("/");
       mediaName = parts[parts.length - 1] || "media";
     }
+
 
 
     // pré-marca todas como ENVIADO para feedback imediato na UI
@@ -212,9 +225,11 @@ serve(async (req) => {
           // Obter header_handle específico deste app/instância quando for mídia
           let headerHandle: string | null = null;
           if (precisaMidia && mediaBytes) {
+            const appIdInst = (inst as any).meta_bm_id ? bmAppIdCache.get((inst as any).meta_bm_id) : null;
+            const metaAppId = appIdInst || defaultAppId;
             if (!metaAppId) {
               throw new Error(
-                "Configure a chave 'meta_app_id' em meta_whatsapp_config antes de enviar templates com mídia",
+                "Nenhuma Business Manager (App ID) configurada. Cadastre em Meta Templates → Business Managers.",
               );
             }
             // reaproveita handle já obtido nesta instância (cache)
@@ -226,6 +241,7 @@ serve(async (req) => {
             } else {
               headerHandle = await obterHeaderHandle({
                 appId: metaAppId,
+
                 accessToken: inst.access_token,
                 fileBytes: mediaBytes,
                 fileType: mediaMime,
