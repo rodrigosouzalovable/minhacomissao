@@ -2496,6 +2496,7 @@ export type Database = {
           atualizado_em: string
           criado_em: string
           erro: string | null
+          header_handle: string | null
           id: string
           instancia_id: string
           meta_template_id: string | null
@@ -2509,6 +2510,7 @@ export type Database = {
           atualizado_em?: string
           criado_em?: string
           erro?: string | null
+          header_handle?: string | null
           id?: string
           instancia_id: string
           meta_template_id?: string | null
@@ -2522,6 +2524,7 @@ export type Database = {
           atualizado_em?: string
           criado_em?: string
           erro?: string | null
+          header_handle?: string | null
           id?: string
           instancia_id?: string
           meta_template_id?: string | null
@@ -2593,6 +2596,8 @@ export type Database = {
         Row: {
           atualizado_em: string
           botoes: Json
+          cabecalho_media_mime: string | null
+          cabecalho_media_url: string | null
           cabecalho_texto: string | null
           cabecalho_tipo: string | null
           categoria: string
@@ -2608,6 +2613,8 @@ export type Database = {
         Insert: {
           atualizado_em?: string
           botoes?: Json
+          cabecalho_media_mime?: string | null
+          cabecalho_media_url?: string | null
           cabecalho_texto?: string | null
           cabecalho_tipo?: string | null
           categoria: string
@@ -2623,6 +2630,8 @@ export type Database = {
         Update: {
           atualizado_em?: string
           botoes?: Json
+          cabecalho_media_mime?: string | null
+          cabecalho_media_url?: string | null
           cabecalho_texto?: string | null
           cabecalho_tipo?: string | null
           categoria?: string

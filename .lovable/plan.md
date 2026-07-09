@@ -1,29 +1,68 @@
-## O que muda
+# Criar Template estilo Meta com prévia ao vivo + upload de mídia no cabeçalho
 
-### 1. Preview WhatsApp ao selecionar um template
+## O que muda visualmente
 
-Na aba **Aplicar em Lote**, quando um template mestre for escolhido no dropdown, aparecerá um bloco (não dialog modal — pode ser um card colapsável logo abaixo do select, mais fluido para o fluxo atual, mas se preferir modal eu troco) mostrando o preview no estilo WhatsApp, igual ao print da Meta:
+Reorganizar a aba **Criar Template** em duas colunas (igual aos prints da Meta):
 
-- Balão verde/creme com sombra e "papel de parede" ao fundo.
-- Cabeçalho (se houver): TEXT / IMAGE / DOCUMENT.
-- Corpo com variáveis destacadas (`{{name}}` amarelo).
-- Rodapé em cinza.
-- Botões (QUICK_REPLY com ícone de resposta, URL com seta externa, PHONE com telefone).
-- Horário fictício no canto do balão.
+```text
+┌──────────────────────────────────┬────────────────────────┐
+│  Formulário (nome, categoria,    │  Prévia do modelo      │
+│  idioma, cabeçalho, corpo,       │  (sticky, atualiza     │
+│  rodapé, botões, exemplos)       │   em tempo real)       │
+│                                  │                        │
+│                                  │  [balão WhatsApp com   │
+│                                  │   header + corpo +     │
+│                                  │   rodapé + botões]     │
+└──────────────────────────────────┴────────────────────────┘
+```
 
-Reaproveito o componente **`TemplateWhatsAppPreview`** que já existe (usado em outras telas), passando os campos do mestre convertidos para o formato `_components` que ele espera. Fica um código único, sem duplicação.
+- A prévia usa o componente `TemplateWhatsAppPreview` já existente, ligado ao **estado do formulário** (não mais só ao mestre salvo). Cada tecla digitada em nome/corpo/rodapé/botões reflete no balão à direita, com placeholders amarelos para `{{1}}`, `{{2}}` etc.
+- No mobile a prévia vira um card empilhado abaixo do formulário.
 
-### 2. Botão excluir apenas quando não anexado
+## Upload de mídia no Cabeçalho
 
-Regra: só mostra o botão de excluir o **template mestre** se **não existir nenhuma linha em `meta_templates_instancia`** para aquele mestre — ou seja, ele nunca foi enviado a nenhuma WABA. Assim que houver 1 envio (mesmo FALHA_ENVIO ou REJECTED), o botão some, para evitar apagar histórico de auditoria.
+Hoje, ao escolher **Imagem / Vídeo / Documento**, não aparece nenhum campo — é o bug relatado. Corrigir:
 
-Aplica-se na aba **Status & Aprovação** (onde o botão já existe hoje). O ícone da lixeira só renderiza quando `filhas.length === 0`.
+- Quando `Cabeçalho = IMAGE | VIDEO | DOCUMENT`, mostrar um campo **"Amostra de mídia"** com:
+  - Input de arquivo (`accept` conforme tipo: `image/jpeg,image/png` / `video/mp4` / `application/pdf`).
+  - Ao selecionar, upload para o bucket público `meta-template-media` no Storage e salvar a URL em `cabecalho_media_url` no template mestre.
+  - Thumbnail/nome do arquivo abaixo do input; botão para remover.
+- A prévia à direita passa a mostrar a imagem/vídeo/documento real no topo do balão.
 
-## Fora do escopo
+## Envio à Meta com header de mídia
 
-- Excluir templates já enviados: a Meta não permite realmente "deletar" um template criado. O que dá para fazer no futuro é um botão "Descartar mestre + limpar registros" que apaga o mestre e as linhas locais, mas isso é potencialmente destrutivo — deixo para uma próxima iteração se você pedir.
-- Modal completamente separado: se preferir modal em vez do card inline abaixo do select, é ajuste rápido — me diz.
+Para a Meta aprovar templates com cabeçalho de mídia é obrigatório enviar `example.header_handle`, obtido via **Resumable Upload API** (não basta a URL). Fluxo no edge function `meta-criar-template-lote`, por instância:
 
-## Custo
+1. Ler `meta_app_id` da tabela `meta_whatsapp_config` (nova chave configurável no admin).
+2. `POST https://graph.facebook.com/v20.0/{app_id}/uploads?file_length=..&file_type=..&access_token={token_instancia}` → devolve `id` de sessão.
+3. Baixar o arquivo da URL do Storage, `POST https://graph.facebook.com/v20.0/{session_id}` com header `Authorization: OAuth {token}` e body binário → devolve `{ h: "<handle>" }`.
+4. Adicionar ao componente HEADER: `format: "IMAGE"`, `example: { header_handle: ["<handle>"] }`.
+5. Cachear o handle em `meta_templates_instancia.header_handle` (opcional) para retries.
 
-Zero. Só render no cliente.
+Se `meta_app_id` não estiver configurado, retornar erro amigável na linha da instância ("Configure META_APP_ID em Config antes de enviar templates com mídia").
+
+## Banco (migração)
+
+- `meta_templates_mestre`: adicionar `cabecalho_media_url text`, `cabecalho_media_mime text`.
+- `meta_templates_instancia`: adicionar `header_handle text` (cache do handle Meta).
+- Bucket `meta-template-media` (público SELECT — regra do projeto para UAZAPI/Meta baixarem).
+- Chave `meta_app_id` documentada em `meta_whatsapp_config` (inserção manual pelo admin, sem UI nova nesta etapa).
+
+## Arquivos afetados
+
+- `src/pages/MetaTemplates.tsx` — split layout na aba Criar, prévia ao vivo, campo de upload condicional.
+- `src/components/meta/TemplateWhatsAppPreview.tsx` — já suporta `format: "IMAGE"`; garantir que aceita `mediaUrl` para renderizar a imagem real.
+- `supabase/functions/meta-criar-template-lote/index.ts` — fluxo resumable upload quando cabeçalho é mídia.
+- Nova migração Supabase (colunas + bucket).
+
+## Custo / impacto
+
+- Storage: uploads pequenos (poucos KB a alguns MB por template) — custo desprezível.
+- Sem novas chamadas de IA. Chamadas extras à Meta (uploads) apenas ao criar templates com mídia — cobrança da Meta é zero para uploads.
+- Sem impacto em envios existentes (templates só de texto continuam idênticos).
+
+## Fora de escopo
+
+- UI para editar `META_APP_ID` (por ora inserido direto em `meta_whatsapp_config`).
+- Suporte a variáveis dentro do cabeçalho de texto além do que já existe.
+- O botão condicional de excluir mestre (já entregue na iteração anterior) permanece como está.
