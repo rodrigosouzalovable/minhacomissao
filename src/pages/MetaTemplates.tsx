@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Plus, Send, Trash2, RefreshCw, X } from "lucide-react";
+import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 
 type Categoria = "UTILITY" | "MARKETING" | "AUTHENTICATION";
 type BotaoTipo = "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
