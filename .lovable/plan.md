@@ -1,25 +1,15 @@
-# Correções na aba "Aplicar em Lote"
+# Configurar Meta App ID
 
-## 1. Imagem do cabeçalho não aparece na prévia
+Inserir o App ID informado (`1041751302126373`) na tabela `meta_whatsapp_config` como chave `meta_app_id`. Isso libera o upload de mídia para os templates com cabeçalho Imagem/Vídeo/Documento.
 
-Causa: `cabecalho_media_url` guarda o **path do Storage** (bucket privado), não uma URL pública. A prévia tenta usar isso direto no `<img src>` e falha.
+SQL:
 
-Correção em `src/pages/MetaTemplates.tsx` (aba Lote):
+```sql
+INSERT INTO public.meta_whatsapp_config (chave, valor)
+VALUES ('meta_app_id', '1041751302126373')
+ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now();
+```
 
-- Adicionar `useEffect` que, ao mudar `selMestre`, verifica se o mestre selecionado tem `cabecalho_media_url` + tipo IMAGE. Se sim, chama `supabase.storage.from("meta-template-media").createSignedUrl(path, 3600)` e guarda em `loteMediaUrl`.
-- Passar `imageUrlOverride={loteMediaUrl}` para `<TemplateWhatsAppPreview>` na aba de lote (o componente já suporta esse prop).
-- Fazer o mesmo tratamento (fallback amigável) para VIDEO/DOCUMENT — mostrar nome do arquivo.
+Depois, na aba **Aplicar em Lote**, clicar em "Reenviar falhas" (ou selecionar as instâncias com FALHA_ENVIO novamente e clicar em "Enviar para Meta") — a chamada agora conseguirá fazer o upload da imagem e obter o `header_handle`.
 
-## 2. Template recém-criado não aparece imediatamente em "Aplicar em Lote"
-
-Causa: `salvarMestre` troca de aba antes que o Realtime dispare `carregar()`, então o `<Select>` de templates ainda está com a lista antiga.
-
-Correção:
-- Em `salvarMestre`, após o `insert`, obter o registro criado com `.insert(...).select().single()` e **adicionar o novo mestre no início do state `mestres`** (mais rápido que refetch).
-- Ainda chamar `carregar()` em paralelo como garantia.
-- Pré-selecionar automaticamente o mestre recém-criado (`setSelMestre(novo.id)`) antes do `setTab("lote")` — assim a prévia aparece já com ele selecionado.
-
-## Fora de escopo
-
-- Sem novas migrações, sem mudanças no edge function. Só ajustes de UI/estado no `MetaTemplates.tsx`.
-- Custo: zero.
+Sem custo, sem novo código, sem migração de schema.
