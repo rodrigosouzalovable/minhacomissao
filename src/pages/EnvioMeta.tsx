@@ -1310,6 +1310,26 @@ export default function EnvioMeta() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+      <MapearColunasImportDialog
+        open={mapDlg.open}
+        onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
+        rows={mapDlg.rows}
+        onConfirm={(linhas, stats) => {
+          setRecipientsRaw(linhas.join("\n"));
+          setValidacaoPreview(null);
+          toast.success(
+            `${stats.total} contato(s) importado(s)` +
+            (stats.ignorados ? ` • ${stats.ignorados} ignorado(s)` : "") +
+            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "")
+          );
+        }}
+      />
+      <EditarVariaveisTemplateDialog
+        open={editVarsOpen}
+        onOpenChange={setEditVarsOpen}
+        template={template as any}
+        onSaved={() => carregar()}
+      />
     </AppLayout>
   );
 }
