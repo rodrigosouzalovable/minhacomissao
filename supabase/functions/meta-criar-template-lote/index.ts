@@ -225,9 +225,11 @@ serve(async (req) => {
           // Obter header_handle específico deste app/instância quando for mídia
           let headerHandle: string | null = null;
           if (precisaMidia && mediaBytes) {
+            const appIdInst = (inst as any).meta_bm_id ? bmAppIdCache.get((inst as any).meta_bm_id) : null;
+            const metaAppId = appIdInst || defaultAppId;
             if (!metaAppId) {
               throw new Error(
-                "Configure a chave 'meta_app_id' em meta_whatsapp_config antes de enviar templates com mídia",
+                "Nenhuma Business Manager (App ID) configurada. Cadastre em Meta Templates → Business Managers.",
               );
             }
             // reaproveita handle já obtido nesta instância (cache)
@@ -239,6 +241,7 @@ serve(async (req) => {
             } else {
               headerHandle = await obterHeaderHandle({
                 appId: metaAppId,
+
                 accessToken: inst.access_token,
                 fileBytes: mediaBytes,
                 fileType: mediaMime,
