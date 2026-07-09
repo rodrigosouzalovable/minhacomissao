@@ -35,13 +35,27 @@ function detectRoleFromHeader(header: string): ColRole {
 function detectRoleFromSample(samples: string[]): ColRole {
   const nonEmpty = samples.map((s) => String(s || "").trim()).filter(Boolean);
   if (nonEmpty.length === 0) return "ignore";
-  const digitRatio = nonEmpty.filter((v) => /^\+?\d[\d\s().-]{6,}$/.test(v)).length / nonEmpty.length;
+  const digitLike = nonEmpty.filter((v) => /^\+?\d[\d\s().-]{6,}$/.test(v));
+  const digitRatio = digitLike.length / nonEmpty.length;
   if (digitRatio > 0.6) {
-    const avgDigits = nonEmpty.reduce((a, v) => a + v.replace(/\D/g, "").length, 0) / nonEmpty.length;
-    if (avgDigits >= 10 && avgDigits <= 13) return "telefone";
-    if (avgDigits === 11 || avgDigits === 14) return "cpf";
+    const digitLengths = digitLike.map((v) => v.replace(/\D/g, "").length);
+    const docRatio = digitLengths.filter((len) => len === 14 || len === 11).length / digitLengths.length;
+    const phoneRatio = digitLengths.filter((len) => len >= 10 && len <= 13).length / digitLengths.length;
+    // CNPJ (14 dígitos) precisa ganhar de telefone; antes ele podia cair como Nome/Telefone.
+    if (digitLengths.filter((len) => len === 14).length / digitLengths.length > 0.6) return "cpf";
+    if (phoneRatio > 0.6) return "telefone";
+    if (docRatio > 0.6) return "cpf";
   }
   return "ignore";
+}
+
+function columnLooksLikeDocument(rows: any[][], col: number, skipHeader: boolean): boolean {
+  const samples = rows
+    .slice(skipHeader ? 1 : 0, skipHeader ? 11 : 10)
+    .map((r) => String((r || [])[col] ?? "").replace(/\D/g, ""))
+    .filter(Boolean);
+  if (samples.length === 0) return false;
+  return samples.filter((d) => d.length === 11 || d.length === 14).length / samples.length > 0.6;
 }
 
 type Props = {
@@ -82,6 +96,10 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, on
       if (idx >= 0) initial[idx] = "telefone";
       else if (initial.length > 0) initial[0] = "telefone";
     }
+    if (!initial.includes("cpf")) {
+      const idx = initial.findIndex((role, c) => role !== "telefone" && columnLooksLikeDocument(rows, c, firstIsHeader));
+      if (idx >= 0) initial[idx] = "cpf";
+    }
     setMapping(initial);
   }, [open, nCols, firstIsHeader]);
 
@@ -112,6 +130,11 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, on
     const idxCpf = mapping.findIndex((r) => r === "cpf");
     const idxAtraso = mapping.findIndex((r) => r === "atraso");
     const idxSaldo = mapping.findIndex((r) => r === "saldo");
+
+    if (idxCpf < 0 && idxNome >= 0 && columnLooksLikeDocument(rows, idxNome, firstIsHeader)) {
+      toast.error(`A coluna ${colLetter(idxNome)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" para preencher a variável {cpf}.`);
+      return;
+    }
 
     const dataRows = firstIsHeader ? rows.slice(1) : rows;
     const seen = new Set<string>();

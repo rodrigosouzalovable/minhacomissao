@@ -80,6 +80,11 @@ function normalizeTelKey(t: string): string {
   return d;
 }
 
+function normalizeDocument(value: string): string {
+  const d = String(value || "").replace(/\D/g, "");
+  return d.length === 11 || d.length === 14 ? d : "";
+}
+
 function parseRecipients(input: string): ClienteRow[] {
   const linhas = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows: ClienteRow[] = [];
@@ -87,14 +92,18 @@ function parseRecipients(input: string): ClienteRow[] {
   for (const linha of linhas) {
     const parts = linha.split(/[,;\t]/).map((p) => p.trim());
     const telefone = parts[0] || "";
+    const secondAsDoc = normalizeDocument(parts[1] || "");
+    const thirdAsDoc = normalizeDocument(parts[2] || "");
+    const cpf = thirdAsDoc || (!parts[2] && secondAsDoc ? secondAsDoc : (parts[2] || "").replace(/\D/g, ""));
+    const nome = !parts[2] && secondAsDoc ? "" : (parts[1] || "");
     const key = normalizeTelKey(telefone);
     if (!key) continue;
     if (seen.has(key)) continue;
     seen.add(key);
     rows.push({
       telefone,
-      nome: parts[1] || "",
-      cpf: (parts[2] || "").replace(/\D/g, ""),
+      nome,
+      cpf,
       atraso: parts[3] || "",
       saldo: parts[4] ? Number(parts[4].replace(",", ".")) : 0,
     });
@@ -997,7 +1006,9 @@ export default function EnvioMeta() {
           />
           {recipients.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              Primeiro: <code>{recipients[0].telefone}</code> {recipients[0].nome && `• ${recipients[0].nome}`}
+              Primeiro: <code>{recipients[0].telefone}</code>
+              {recipients[0].nome && <> • {recipients[0].nome}</>}
+              {recipients[0].cpf && <> • CNPJ/CPF: <code>{recipients[0].cpf}</code></>}
             </p>
           )}
         </CardContent>
@@ -1328,6 +1339,7 @@ export default function EnvioMeta() {
         open={editVarsOpen}
         onOpenChange={setEditVarsOpen}
         template={template as any}
+        templates={(templateGroup?.rows.filter((r) => r.status === "approved" && instanciaIds.includes(r.instancia_id)) || []) as any}
         onSaved={() => carregar()}
       />
     </AppLayout>
