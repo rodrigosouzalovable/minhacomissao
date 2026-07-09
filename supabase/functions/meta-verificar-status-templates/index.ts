@@ -15,11 +15,11 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // pega todas as instâncias que têm ao menos um template PENDING/ENVIADO
+    // inclui PENDING/ENVIADO (para atualizar status) e REJECTED sem motivo (para enriquecer)
     const { data: pendentes } = await supabase
       .from("meta_templates_instancia")
-      .select("instancia_id")
-      .in("status", ["PENDING", "ENVIADO"]);
+      .select("instancia_id, status, motivo_rejeicao")
+      .or("status.in.(PENDING,ENVIADO),and(status.eq.REJECTED,motivo_rejeicao.is.null)");
 
     const instIds = Array.from(new Set((pendentes || []).map((r) => r.instancia_id)));
     if (instIds.length === 0) {
@@ -52,9 +52,9 @@ serve(async (req) => {
 
         const { data: locais } = await supabase
           .from("meta_templates_instancia")
-          .select("id, meta_template_id, template_mestre_id, status")
+          .select("id, meta_template_id, template_mestre_id, status, motivo_rejeicao")
           .eq("instancia_id", inst.id)
-          .in("status", ["PENDING", "ENVIADO"]);
+          .or("status.in.(PENDING,ENVIADO),and(status.eq.REJECTED,motivo_rejeicao.is.null)");
 
         for (const local of locais || []) {
           let remoto: any = null;
@@ -68,12 +68,31 @@ serve(async (req) => {
           if (!remoto) continue;
 
           const novoStatus = String(remoto.status || "PENDING").toUpperCase();
-          if (novoStatus === local.status) continue;
+          let motivo: string | null = remoto.rejected_reason || null;
+
+          // Se REJECTED sem motivo, busca detalhe individual do template
+          if (novoStatus === "REJECTED" && !motivo && remoto.id) {
+            try {
+              const detRes = await fetch(
+                `https://graph.facebook.com/v21.0/${remoto.id}?fields=status,rejected_reason,quality_score,category`,
+                { headers: { Authorization: `Bearer ${inst.access_token}` } },
+              );
+              const det = await detRes.json();
+              if (detRes.ok) {
+                motivo = det?.rejected_reason || motivo;
+                const qs = det?.quality_score?.score;
+                if (!motivo && qs) motivo = `quality_score=${qs}`;
+              }
+            } catch (_e) { /* segue */ }
+          }
+
+          // pula se nada mudou
+          if (novoStatus === local.status && motivo === (local as any).motivo_rejeicao) continue;
 
           await supabase.from("meta_templates_instancia").update({
             status: novoStatus,
             meta_template_id: remoto.id ? String(remoto.id) : local.meta_template_id,
-            motivo_rejeicao: remoto.rejected_reason || null,
+            motivo_rejeicao: motivo,
           }).eq("id", local.id);
           atualizados++;
         }
@@ -81,6 +100,7 @@ serve(async (req) => {
         // segue para próxima instância
       }
     }
+
 
     return new Response(JSON.stringify({ success: true, atualizados }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
