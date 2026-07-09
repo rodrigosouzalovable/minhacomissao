@@ -547,12 +547,25 @@ serve(async (req) => {
             })
             .eq('wa_message_id', waId);
 
-          // Compatibilidade com log de massa
+          // Compatibilidade com log de massa + pricing (para separar cobrado vs grátis CSW)
+          const pricing = s.pricing || null;
+          const pricingCategory = pricing?.category ? String(pricing.category).toUpperCase() : null;
+          const pricingType = pricing?.pricing_model ? String(pricing.pricing_model) : (pricing?.type ? String(pricing.type) : null);
+          // billable=false OU type contendo "free" => envio grátis (janela CSW)
+          const foiGratis = pricing
+            ? (pricing.billable === false || String(pricing.type || pricing.pricing_model || '').toLowerCase().includes('free'))
+            : null;
+
+          const updateLog: any = {
+            status,
+            erro: status === 'failed' ? ((errTitle ? String(errTitle) : 'falha') + (errCode ? ` (#${errCode})` : '')) : null,
+          };
+          if (pricingCategory) updateLog.pricing_category = pricingCategory;
+          if (pricingType) updateLog.pricing_type = pricingType;
+          if (foiGratis !== null) updateLog.foi_gratis = foiGratis;
+
           await supabase.from('meta_whatsapp_envios_log')
-            .update({
-              status,
-              erro: status === 'failed' ? ((errTitle ? String(errTitle) : 'falha') + (errCode ? ` (#${errCode})` : '')) : null,
-            })
+            .update(updateLog)
             .eq('wa_message_id', waId);
 
 

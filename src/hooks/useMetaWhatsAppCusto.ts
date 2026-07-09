@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+// Preço estimado em BRL por categoria — fallback quando ainda não há dado real
+// da Meta em meta_billing_snapshot. Baseado no rate card BR (jul/2026):
+// UTILITY/AUTH: US$ 0,0068 · MARKETING: US$ 0,0625 · câmbio ~5,50.
+// Envios dentro da janela CSW (foi_gratis=true) não são somados.
 const PRECO: Record<string, number> = {
-  UTILITY: 0.05,
-  AUTHENTICATION: 0.05,
-  MARKETING: 0.35,
+  UTILITY: 0.037,
+  AUTHENTICATION: 0.037,
+  MARKETING: 0.344,
   SERVICE: 0,
 };
 
@@ -51,13 +55,14 @@ export function useMetaWhatsAppCusto() {
       const fetchJanela = async (desde: string | null): Promise<CustoJanela> => {
         let q = supabase
           .from("meta_whatsapp_envios_log")
-          .select("template_nome")
-          .eq("status", "sent");
+          .select("template_nome, foi_gratis, pricing_category")
+          .eq("status", "sent")
+          .or("foi_gratis.is.null,foi_gratis.eq.false");
         if (desde) q = q.gte("enviado_em", desde);
         const { data } = await q.limit(100000);
         const r: CustoJanela = { valor: 0, qtdUtility: 0, qtdMarketing: 0, qtdOutros: 0 };
         (data || []).forEach((row: any) => {
-          const cat = catByNome.get(row.template_nome) || "";
+          const cat = String(row.pricing_category || catByNome.get(row.template_nome) || "").toUpperCase();
           const preco = PRECO[cat] ?? 0;
           r.valor += preco;
           if (cat === "MARKETING") r.qtdMarketing++;

@@ -1,74 +1,129 @@
-# Plano de Economia — Lovable Cloud
 
-## Diagnóstico (o que consumiu os US$ 10)
+## Custo real Meta hoje (09/07/2026) — pesquisado agora
 
-Rodei o diagnóstico do banco. O gasto NÃO é de disco (20%) nem de memória (49%). É **compute/egress** por volume absurdo de queries repetidas do PostgREST:
+Fonte: rate card oficial da Meta em `developers.facebook.com/docs/whatsapp/pricing` (vigente 01/07/2026), cruzado com Gupshup, Omnidigital e Whautomate.
 
-| Query | Chamadas | Tempo total |
+| Categoria | Preço/mensagem (USD) | ~BRL (câmbio 5,50) |
 |---|---|---|
-| `whatsapp_contatos` listagem com JOIN LATERAL | **665.299** | 48h de CPU |
-| `whatsapp_contatos` telefones | 629.940 | 21h |
-| `pagamentos` (order by acordo_id) | 194.573 | 16h |
-| `whatsapp_contatos` count | 590.569 | 16h |
-| `pagamentos` (parcelas vencidas) | 194.573 | 4h |
-| `meta_whatsapp_contatos` listagem | 50.176 | 1,9h |
+| **Utility (utilidade)** | **US$ 0,0068** | ~R$ 0,037 |
+| Authentication | US$ 0,0068 | ~R$ 0,037 |
+| Marketing | US$ 0,0625 | ~R$ 0,344 |
+| Service / não-template dentro da CSW | US$ 0 | R$ 0 |
+| Utility dentro da CSW aberta (24h) | US$ 0 | R$ 0 |
 
-Além disso: **1.553.507 transações revertidas** desde o boot — provavelmente RLS negando ou erros em cascata em loops de polling.
+**A IA da Meta te passou errado:** "0,035 USD" não corresponde a nenhuma categoria BR hoje. O valor real de utility no Brasil é **US$ 0,0068** (5x menor). Provavelmente ela confundiu com rate antigo pré-julho/2025 ou com authentication-international de outro país.
 
-**Causa provável**: hooks React (useEffect/useQuery/Realtime) recarregando a lista de conversas do Inbox, pagamentos do Dashboard e reminders repetidamente, sem cache, sem debounce e sem paginação eficiente.
-
----
-
-## Ações (ordenadas por retorno)
-
-### 1. Adicionar índices que faltam (impacto imediato, custo zero)
-Uma migration com:
-- `whatsapp_contatos (instancia_id, arquivado, ultima_mensagem_em DESC)` — cobre as 3 queries mais caras
-- `whatsapp_contatos (instancia_id, arquivado, nao_lido)` — cobre count de não lidos
-- `meta_whatsapp_contatos (arquivado, ultima_mensagem_em DESC)`
-- `pagamentos (status, data_prevista)` — parcelas vencidas
-- `pagamentos (acordo_id, status)` — join com acordos
-
-Reduz o tempo médio de cada query de 100–300ms para <20ms → menos CPU-segundo cobrado.
-
-### 2. Cortar frequência de polling do frontend
-Aumentar `staleTime` e `refetchInterval` dos useQuery pesados:
-- Inbox contatos: de "sempre" para `staleTime: 30s`
-- Pagamentos/Dashboard: `staleTime: 60s`
-- Metas/rankings: `staleTime: 5min`
-
-Trocar polling por Realtime só onde já existe canal, e ligar polling de fallback só quando a aba está visível (`document.visibilityState === 'visible'`).
-
-### 3. Paginar e limitar SELECTs
-- Inbox: `limit(50)` na listagem inicial + infinite scroll (hoje traz tudo).
-- Dashboard de pagamentos: usar RPC agregado em vez de `select *` de `pagamentos`.
-
-### 4. Cron/edge functions
-Auditar crons em `supabase/functions/`. Muitos rodam a cada minuto (aquecimento, monitor, notificações). Reduzir onde possível:
-- `daily-report-*`: já são diários → OK
-- Monitores contínuos: aumentar intervalo de 1min → 5min
-
-### 5. Guardrail no editor Lovable
-Adicionar à memória do projeto uma regra core:
-> **Antes de qualquer alteração que aumente custo em Lovable Cloud (nova tabela pesada, novo cron, novo polling, novo Realtime, novo edge function em loop), a IA deve exibir: `⚠️ ALERTA DE CUSTO ALTO LOVABLE CLOUD` com estimativa do impacto e aguardar confirmação.**
-
-Já existe memory `cloud-cost-awareness` — vou reforçá-la e adicionar o texto exato do alerta na regra Core do `mem://index.md`.
+**Onde seu sistema está desatualizado:**
+- `meta-billing-sync/index.ts`: UTILITY 0,008 (18% acima do real) e AUTHENTICATION 0,0315 (**4,6× acima do real**).
+- `useMetaWhatsAppCusto.ts`: preços em BRL fixos, sem câmbio, sem desconto de CSW.
+- Nenhum dos dois desconta envios grátis dentro da janela de 24h.
 
 ---
 
-## Detalhes técnicos
+## Plano — controle e redução de custo
 
-- Migration com `CREATE INDEX IF NOT EXISTS` (sem CONCURRENTLY — roda dentro da migration).
-- Todos os índices usam colunas já presentes em WHERE/ORDER BY das queries do pg_stat_statements.
-- Ajustes de `staleTime` são só no cliente (React Query); zero mudança de schema/regra de negócio.
-- Nenhum recurso será removido — só reduzido em frequência.
-- Fora de escopo: reescrever Inbox (grande refactor); ajustar RLS que causa rollbacks (precisa investigação separada).
+### Etapa 1 — Corrigir a base de cálculo (sem custo extra)
+
+1.1 Atualizar `PRECO_USD` em `supabase/functions/meta-billing-sync/index.ts`:
+```
+MARKETING: 0.0625
+UTILITY: 0.0068       (era 0.008)
+AUTHENTICATION: 0.0068 (era 0.0315 — erro grande)
+SERVICE: 0
+```
+
+1.2 Atualizar `src/hooks/useMetaWhatsAppCusto.ts` para consumir `meta_billing_snapshot` (dados reais da Meta) em vez de estimar por template. Fallback só quando ainda não sincronizou.
+
+1.3 Registrar `pricing.type` e `pricing.category` no webhook `meta-whatsapp-webhook` → gravar em `meta_whatsapp_envios_log` uma coluna `foi_gratis boolean` (quando `pricing.type = free_customer_service`). Assim o painel separa "cobrado" de "grátis dentro da janela".
+
+### Etapa 2 — Relatório diário via WhatsApp (o que você pediu)
+
+2.1 Nova edge function `daily-report-meta-billing` (baseada no padrão `daily-report-whatsapp` / `notificar-admin` que já existem):
+- Roda todo dia às **08:30 BRT** via pg_cron (não em domingo — regra Core do projeto).
+- Executa `meta-billing-sync` para ter dados frescos das últimas 24h.
+- Monta mensagem e envia via `notificarAdmin` para 62991672674 (WhatsApp admin).
+
+Exemplo do relatório que chega no seu WhatsApp:
+```
+💰 Custo Meta WhatsApp — 08/07/2026
+
+Ontem: R$ 47,32  (US$ 8,60)
+  📢 Marketing:    82 msgs · R$ 28,21
+  🔧 Utility:     530 msgs · R$ 19,11
+  ✅ Grátis(CSW): 1.204 msgs · R$ 0,00
+
+Mês atual (1-8/jul):   R$ 312,48
+Projeção fim do mês:    R$ 1.210,86
+Meta configurada:       R$ 800,00  ⚠️ EXCEDERÁ
+
+Top 3 templates mais caros:
+  1. promo_black (MKT) — 45 envios — R$ 15,48
+  2. lembrete_boleto (UTIL) — 210 envios — R$ 7,77
+  3. cobranca_atraso (MKT) — 22 envios — R$ 7,57
+
+📌 Dica do dia:
+  60% dos utility foram DENTRO da janela (grátis).
+  Se movesse "promo_black" p/ dentro da janela,
+  economizava R$ 15,48/dia.
+```
+
+2.2 Nova tabela `meta_billing_meta_mensal` (limite/alerta que você define):
+```
+id, mes_ano, limite_brl, alerta_50pct_enviado, alerta_80pct_enviado, alerta_100pct_enviado
+```
+Quando projeção diária > limite → alerta extra no WhatsApp na hora.
+
+2.3 Card de configuração em `MetaBilling.tsx`: "Meta mensal de gasto" + toggle "Receber relatório diário" + horário.
+
+### Etapa 3 — Ações que reduzem custo AGORA
+
+Além do relatório, o plano identifica onde economizar:
+
+**A) Utility dentro da CSW = grátis.** Desde 01/07/2025 a Meta não cobra utility templates enviados nas 24h após o cliente ter respondido. Ação: nova tela "Diagnóstico de envios" mostrando quantos % dos seus utility hoje estão sendo cobrados porque foram fora da janela. Sugestão automática: reordenar envios para logo após o cliente responder.
+
+**B) Templates classificados como MARKETING que deveriam ser UTILITY.** Marketing custa **9× mais** (US$ 0,0625 vs US$ 0,0068). Ação: aba de auditoria em `MetaTemplates` marcando templates suspeitos (palavras como "boleto", "lembrete", "confirmação", "vencimento", "acordo") aprovados como MARKETING — sugestão de reclassificar na Meta.
+
+**C) Volume tiers.** A partir de certos volumes/mês o utility BR cai ainda mais automaticamente. Relatório mostra em qual tier você está e quanto falta para o próximo.
+
+**D) Guardrail duro.** Nova tabela `meta_billing_guardrail` (já existe!). Vou popular com `limite_diario_brl` e `pausar_ao_estourar`. Quando o gasto do dia bate no limite, envios não-essenciais ficam bloqueados até 00h.
+
+### Etapa 4 — Painel de acompanhamento
+
+Card novo em `MetaBilling.tsx`:
+- Gasto de hoje vs média dos últimos 7 dias.
+- Projeção de fim de mês baseada no ritmo atual.
+- % de envios grátis (dentro da CSW) — quanto maior, melhor.
+- Divisão marketing vs utility (visual: você quer virar essa proporção).
 
 ---
 
-## Escopo fora
-- Não vou mexer em lógica de aquecimento, envio, cobrança, permissões.
-- Não vou desativar features — só otimizar acessos ao banco.
-- Não vou tocar em `client.ts`, `types.ts`, `.env`, `config.toml`.
+## ⚠️ ALERTA DE CUSTO ALTO LOVABLE CLOUD
 
-Após sua aprovação, aplico as ações 1, 2, 4 e 5 numa única passada. Ação 3 (paginação do Inbox) fica opcional — me avise se quer incluir.
+Este plano adiciona:
+- **1 cron novo/dia** (`daily-report-meta-billing` — 1 execução às 08:30). Custo Cloud desprezível.
+- **1 coluna** em `meta_whatsapp_envios_log` (`foi_gratis boolean`). Custo zero.
+- **1 tabela** pequena (`meta_billing_meta_mensal`, ~12 linhas/ano). Custo zero.
+- Nenhum polling novo, nenhum Realtime novo, nenhum edge function em loop.
+
+**Impacto no Cloud: mínimo.** Impacto na sua fatura da Meta: potencialmente **-40% a -70%** se você reclassificar marketing→utility e mover utility para dentro da janela.
+
+---
+
+## Fora de escopo
+
+- Não vou reprocessar histórico já cobrado — só corrijo daqui para frente.
+- Reclassificar templates na Meta você precisa fazer no Business Manager — o sistema só sugere.
+- Não vou alterar motor de envio, warming, round-robin ou permissões.
+- Não vou mexer em `client.ts`, `types.ts`, `.env`, `config.toml`.
+
+---
+
+## Ordem de execução após aprovar
+
+1. Corrigir preços (`meta-billing-sync` + `useMetaWhatsAppCusto`) — 5 min.
+2. Criar `daily-report-meta-billing` + cron 08:30 BRT — 15 min.
+3. Adicionar `foi_gratis` no log + capturar no webhook — 10 min.
+4. Criar tabela `meta_billing_meta_mensal` + UI de configuração de limite — 15 min.
+5. Aba "Diagnóstico" com template audit + % grátis — 20 min.
+
+Total estimado: ~1h de build. Após aprovar, aplico tudo numa passada.
