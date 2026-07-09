@@ -23,11 +23,30 @@ const formatPrimeiroNome = (nome: string): string => {
 const fmtBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+function normalizeDoc(value?: string | number | null): string {
+  const d = String(value ?? '').replace(/\D/g, '');
+  return d.length === 11 || d.length === 14 ? d : '';
+}
+
+function getCpfCnpj(c: ClienteData): string {
+  return normalizeDoc(c.cpf) || normalizeDoc(c.nome);
+}
+
+function normalizeCliente(c: ClienteData): ClienteData {
+  const cpf = getCpfCnpj(c);
+  const nomeLooksLikeDoc = !!normalizeDoc(c.nome);
+  return {
+    ...c,
+    cpf: cpf || c.cpf,
+    nome: nomeLooksLikeDoc && !normalizeDoc(c.cpf) ? '' : c.nome,
+  };
+}
+
 function resolveVar(field: string, c: ClienteData): string {
   switch (field) {
     case '{nome}': return (c.nome || '').trim();
     case '{primeiro_nome}': return formatPrimeiroNome(c.nome || '');
-    case '{cpf}': return c.cpf || '';
+    case '{cpf}': return getCpfCnpj(c);
     case '{atraso}': return String(c.atraso ?? '');
     case '{saldo}': return fmtBRL(Number(c.saldo || 0));
     case '{avista}': return fmtBRL(Number(c.saldo || 0) * 0.5);
@@ -53,11 +72,23 @@ function resolveNamedVar(name: string, c: ClienteData): string {
   const full = (c.nome || '').trim();
   if (n === 'primeiro_nome' || n === 'first_name') return formatPrimeiroNome(full) || 'cliente';
   if (n === 'name' || n === 'nome' || n === 'nome_completo' || n === 'full_name') return full || 'cliente';
-  if (n === 'cpf') return c.cpf || '';
+  if (n === 'cpf') return getCpfCnpj(c);
   if (n === 'atraso' || n === 'delay') return String(c.atraso ?? '');
   if (n === 'saldo' || n === 'valor' || n === 'value') return fmtBRL(Number(c.saldo || 0));
   if (n === 'avista') return fmtBRL(Number(c.saldo || 0) * 0.5);
   return resolveVar(`{${n}}`, c) || ' ';
+}
+
+function inferFieldForPlaceholder(template: any, key: string): string {
+  const bodyText = String(template?.body_text || '');
+  const rx = new RegExp(`(.{0,40})\\{\\{\\s*${key}\\s*\\}\\}(.{0,40})`, 'i');
+  const match = bodyText.match(rx);
+  const context = `${match?.[1] || ''} ${match?.[2] || ''}`.toLowerCase();
+  if (/cnpj|cpf|documento|doc\b/.test(context)) return '{cpf}';
+  if (/nome|cliente/.test(context)) return '{nome}';
+  if (/atraso|dias/.test(context)) return '{atraso}';
+  if (/saldo|valor|d[ií]vida/.test(context)) return '{saldo}';
+  return '';
 }
 
 function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'named' | 'positional'): { parameters: any[]; format: 'named' | 'positional' | 'none' } {
@@ -88,7 +119,7 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
         const k = m[1];
         if (seen2.has(k)) continue;
         seen2.add(k);
-        const field = variaveis[k] || 'name';
+        const field = variaveis[k] || inferFieldForPlaceholder(template, k) || 'name';
         const value = resolveNamedVar(field.replace(/[{}]/g, ''), cliente) || 'cliente';
         parameters.push({ type: 'text', parameter_name: field.replace(/[{}]/g, '') || 'name', text: value });
       }
@@ -99,7 +130,7 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
   const parameters: any[] = [];
   if (sortedKeys.length > 0) {
     for (const k of sortedKeys) {
-      const field = variaveis[k] || '';
+      const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
       const value =
         resolveVar(field, cliente) ||
         resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
@@ -207,7 +238,8 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { template_id, instancia_id, cliente, user_id, modo_teste, atendente_nome } = await req.json();
+    const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome } = await req.json();
+    const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -333,7 +365,7 @@ Deno.serve(async (req) => {
         const variaveis = (template.variaveis || {}) as Record<string, string>;
         // Substitui {{1}}, {{2}}... via mapeamento variaveis
         bodyRendered = bodyRendered.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, k) => {
-          const field = variaveis[k] || '';
+          const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
           return (
             resolveVar(field, cliente) ||
             resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||

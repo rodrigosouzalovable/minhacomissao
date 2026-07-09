@@ -27,10 +27,11 @@ type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   template: Template | null;
+  templates?: Template[];
   onSaved?: () => void;
 };
 
-export default function EditarVariaveisTemplateDialog({ open, onOpenChange, template, onSaved }: Props) {
+export default function EditarVariaveisTemplateDialog({ open, onOpenChange, template, templates, onSaved }: Props) {
   const placeholders = useMemo(() => {
     if (!template?.body_text) return [] as string[];
     const set = new Set<string>();
@@ -60,16 +61,21 @@ export default function EditarVariaveisTemplateDialog({ open, onOpenChange, temp
     if (!template) return;
     setSaving(true);
     try {
-      const current = (template.variaveis || {}) as Record<string, any>;
-      const merged: Record<string, any> = { ...current };
-      // Substitui apenas as chaves de placeholders (preserva _format, _components, etc.)
-      for (const k of placeholders) merged[k] = mapping[k] || "{nome}";
-      const { error } = await supabase
-        .from("meta_whatsapp_templates")
-        .update({ variaveis: merged })
-        .eq("id", template.id);
-      if (error) throw error;
-      toast.success("Variáveis atualizadas");
+      const targets = (templates && templates.length > 0 ? templates : [template]).filter(
+        (t, idx, arr) => t?.id && arr.findIndex((x) => x.id === t.id) === idx,
+      );
+      for (const t of targets) {
+        const current = (t.variaveis || {}) as Record<string, any>;
+        const merged: Record<string, any> = { ...current };
+        // Substitui apenas as chaves de placeholders (preserva _format, _components, mídia/header de cada instância, etc.)
+        for (const k of placeholders) merged[k] = mapping[k] || "{nome}";
+        const { error } = await supabase
+          .from("meta_whatsapp_templates")
+          .update({ variaveis: merged })
+          .eq("id", t.id);
+        if (error) throw error;
+      }
+      toast.success(`Variáveis atualizadas em ${targets.length} template(s)`);
       onSaved?.();
       onOpenChange(false);
     } catch (e: any) {
