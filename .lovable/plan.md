@@ -1,17 +1,22 @@
-## Problema
+## Diagnóstico dos status
 
-O botão "Enviar para Meta" chama `supabase.functions.invoke("meta-criar-template-lote")`, mas a função retorna **404 NOT_FOUND** — o código está no repositório (`supabase/functions/meta-criar-template-lote/index.ts` e `meta-verificar-status-templates/index.ts`), porém as funções nunca foram publicadas no ambiente. É por isso que o toast mostra "Failed to send a request to the Edge Function".
+Verifiquei no banco:
+
+- **REJECTED (20 instâncias)** — a Meta aceitou o POST (todas têm `meta_template_id`) e depois reprovou na revisão. É decisão de conteúdo da Meta, não bug do sistema. `motivo_rejeicao` ficou vazio porque a listagem geral de templates da Graph API raramente traz `rejected_reason` — precisamos consultar cada template individualmente (`GET /{template_id}?fields=status,rejected_reason,quality_score,category`).
+- **FALHA_ENVIO (LD 06 YASMIM)** — Meta bloqueou já no POST: *"Essa conta do WhatsApp Business não pode criar um novo modelo"*. Causas típicas: WABA sem verificação business, conta em restrição ou limite de templates atingido nessa WABA específica.
+- **6 instâncias sem linha** — o lote anterior travou no timeout de 150s antes do fix de background. Agora processa até o fim.
 
 ## Correção
 
-1. Fazer o deploy das duas edge functions que já existem:
-   - `meta-criar-template-lote` (a que o botão chama)
-   - `meta-verificar-status-templates` (usada pelo cron de status)
-2. Validar com um POST direto na função para garantir que responde `200` (com o `mestre_id` real seria enviado à Meta; para o teste uso um id inválido só para confirmar que roda e retorna JSON).
-3. Se o deploy falhar por causa do `deno.lock` (problema comum em edge-runtime), removê-lo e refazer.
+1. **Enriquecer o `meta-verificar-status-templates`** para, quando encontrar um filho `REJECTED` sem `motivo_rejeicao`, chamar `GET https://graph.facebook.com/v21.0/{meta_template_id}?fields=status,rejected_reason,quality_score,category` e gravar o motivo real (`INVALID_FORMAT`, `PROMOTIONAL`, `TAG_CONTENT_MISMATCH`, `ABUSIVE_CONTENT`, etc.).
+2. **Mostrar o motivo/erro na aba "Aplicar em lote"** — hoje o badge só mostra o status. Vou adicionar um tooltip (ou linha abaixo do nome) exibindo `motivo_rejeicao` para REJECTED e `erro` para FALHA_ENVIO. Isso responde na hora "por que essa foi rejeitada".
+3. **Botão "Atualizar motivos agora"** na aba Status, que dispara `meta-verificar-status-templates` sob demanda em vez de esperar o cron de 30 min.
+4. **Reprocessar as 6 instâncias faltantes**: elas voltam automaticamente quando você clicar "Enviar para Meta" de novo (o filtro `apenas_falhas` não é necessário — mestre novo, sem linha, entra no lote).
 
-Nenhuma mudança de código é necessária — a lógica atual já está correta e as GRANTs no banco foram aplicadas na mensagem anterior.
+## Fora do escopo agora
+
+- Editar o conteúdo do template mestre para tentar aprovação: uma vez REJECTED com aquele `name`, a Meta pede um nome diferente. Se quiser, posso adicionar depois um botão "Duplicar como novo template" que copia o mestre com sufixo `_v2`.
 
 ## Custo
 
-Zero adicional além do que já foi planejado — as funções já estavam previstas.
+Desprezível — 20 fetches extras (um por template REJECTED) só na próxima verificação; depois fica cacheado no banco.
