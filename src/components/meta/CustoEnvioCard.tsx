@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2, ShieldCheck } from "lucide-react";
 import { CustoJanela, useMetaWhatsAppCusto } from "@/hooks/useMetaWhatsAppCusto";
 import { forwardRef, useImperativeHandle } from "react";
 
@@ -8,6 +8,9 @@ const brl = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
 function Coluna({ titulo, dados }: { titulo: string; dados: CustoJanela }) {
+  const pctConfirmado = dados.qtdTotal > 0
+    ? Math.round((dados.qtdConfirmado / dados.qtdTotal) * 100)
+    : 0;
   return (
     <div className="space-y-1">
       <div className="text-xs uppercase text-muted-foreground tracking-wide">{titulo}</div>
@@ -16,6 +19,14 @@ function Coluna({ titulo, dados }: { titulo: string; dados: CustoJanela }) {
         {dados.qtdUtility.toLocaleString("pt-BR")} utilidade · {dados.qtdMarketing.toLocaleString("pt-BR")} marketing
         {dados.qtdOutros > 0 && ` · ${dados.qtdOutros} outros`}
       </div>
+      {dados.qtdTotal > 0 && (
+        <div className="flex items-center gap-1 text-[10px]">
+          <ShieldCheck className={`h-3 w-3 ${pctConfirmado >= 80 ? "text-emerald-600" : pctConfirmado >= 30 ? "text-amber-600" : "text-muted-foreground"}`} />
+          <span className={pctConfirmado >= 80 ? "text-emerald-600" : pctConfirmado >= 30 ? "text-amber-600" : "text-muted-foreground"}>
+            {pctConfirmado}% confirmado pela Meta
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -38,10 +49,11 @@ const CustoEnvioCard = forwardRef<CustoEnvioCardHandle>((_, ref) => {
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent className="max-w-xs">
                     <p className="text-xs">
-                      Utilidade/Auth: R$ 0,05 · Marketing: R$ 0,35<br />
-                      Calculado sobre mensagens enviadas com sucesso.
+                      <strong>Preços de referência (BR):</strong><br />
+                      Utilidade/Auth: R$ 0,04 · Marketing: R$ 0,34<br /><br />
+                      <strong>Confirmado pela Meta:</strong> percentual de envios cuja categoria de cobrança veio direto no webhook da Meta. Os demais usam a categoria do template como estimativa.
                     </p>
                   </TooltipContent>
                 </Tooltip>
