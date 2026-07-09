@@ -235,7 +235,7 @@ export default function InboxMeta() {
         fetchEtiquetas();
       })
       .subscribe();
-    const poll = setInterval(() => fetchContatos(), 20000);
+    const poll = setInterval(() => { if (document.visibilityState === 'visible') fetchContatos(); }, 60000);
     const onVis = () => { if (!document.hidden) fetchContatos(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVis); };

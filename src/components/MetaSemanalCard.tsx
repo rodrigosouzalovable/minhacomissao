@@ -57,7 +57,7 @@ export function MetaSemanalCard({ valorMeta }: Props) {
       return data || [];
     },
     enabled: !!user?.id,
-    refetchInterval: 60000,
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const { data: premios } = useQuery({

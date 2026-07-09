@@ -50,7 +50,7 @@ export function MetaMesBanner() {
       return data || [];
     },
     enabled: !!user?.id,
-    refetchInterval: 60000,
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const valorMeta = meta ? Number(meta.valor_meta) : 0;

@@ -1,48 +1,74 @@
-## Objetivo
-Criar uma aba de gerenciamento de **Meta App IDs por BM (Business Manager)**, permitindo cadastrar, editar e escolher qual App ID usar ao enviar templates para aprovação da Meta.
+# Plano de Economia — Lovable Cloud
 
-## Por que
-Hoje só existe uma chave única `meta_app_id` em `meta_whatsapp_config`. Como você tem múltiplas BMs (ex.: `1041751302126373` e `2328366971280850`) e criará novas, precisamos suportar vários App IDs e associar cada instância WhatsApp ao App ID correto.
+## Diagnóstico (o que consumiu os US$ 10)
 
-## Escopo
+Rodei o diagnóstico do banco. O gasto NÃO é de disco (20%) nem de memória (49%). É **compute/egress** por volume absurdo de queries repetidas do PostgREST:
 
-### 1. Backend (migration)
-Nova tabela `meta_business_managers`:
-- `id` (uuid, pk)
-- `nome` (texto — ex.: "BM Principal", "BM Certificadora")
-- `app_id` (texto, único)
-- `business_id` (texto, opcional — o `business_id` da URL do Facebook)
-- `descricao` (texto, opcional)
-- `ativo` (bool)
-- `padrao` (bool — marca qual App ID é usado por padrão)
-- `created_at`, `updated_at`
+| Query | Chamadas | Tempo total |
+|---|---|---|
+| `whatsapp_contatos` listagem com JOIN LATERAL | **665.299** | 48h de CPU |
+| `whatsapp_contatos` telefones | 629.940 | 21h |
+| `pagamentos` (order by acordo_id) | 194.573 | 16h |
+| `whatsapp_contatos` count | 590.569 | 16h |
+| `pagamentos` (parcelas vencidas) | 194.573 | 4h |
+| `meta_whatsapp_contatos` listagem | 50.176 | 1,9h |
 
-GRANT + RLS: leitura/escrita apenas para admins (via `has_role`).
+Além disso: **1.553.507 transações revertidas** desde o boot — provavelmente RLS negando ou erros em cascata em loops de polling.
 
-Adicionar coluna `meta_bm_id uuid` em `meta_whatsapp_instances` (FK opcional para `meta_business_managers.id`) para vincular cada instância à sua BM.
+**Causa provável**: hooks React (useEffect/useQuery/Realtime) recarregando a lista de conversas do Inbox, pagamentos do Dashboard e reminders repetidamente, sem cache, sem debounce e sem paginação eficiente.
 
-Migrar o valor atual de `meta_whatsapp_config.meta_app_id` (`1041751302126373`) como primeira BM padrão, e inserir também `2328366971280850` como segunda BM.
+---
 
-### 2. Frontend
-Nova aba **"Business Managers"** em `/admin/meta-templates` (ou página dedicada em `/admin/meta-business-managers`):
-- Lista das BMs cadastradas com App ID, business_id, status, botão padrão.
-- Formulário para **Adicionar nova BM** (nome, app_id, business_id opcional, descrição).
-- Editar / desativar / definir como padrão.
+## Ações (ordenadas por retorno)
 
-Na aba de instâncias Meta, permitir escolher a **BM** de cada instância (dropdown das BMs ativas).
+### 1. Adicionar índices que faltam (impacto imediato, custo zero)
+Uma migration com:
+- `whatsapp_contatos (instancia_id, arquivado, ultima_mensagem_em DESC)` — cobre as 3 queries mais caras
+- `whatsapp_contatos (instancia_id, arquivado, nao_lido)` — cobre count de não lidos
+- `meta_whatsapp_contatos (arquivado, ultima_mensagem_em DESC)`
+- `pagamentos (status, data_prevista)` — parcelas vencidas
+- `pagamentos (acordo_id, status)` — join com acordos
 
-### 3. Edge function (envio de template)
-Atualizar a função que envia template para Meta:
-- Buscar o App ID pela BM vinculada à instância; se não houver, cair no App ID marcado como `padrao=true`; se nenhum, retornar o erro atual.
-- Isto substitui o lookup fixo em `meta_whatsapp_config.meta_app_id` (que fica só como fallback/legado).
+Reduz o tempo médio de cada query de 100–300ms para <20ms → menos CPU-segundo cobrado.
+
+### 2. Cortar frequência de polling do frontend
+Aumentar `staleTime` e `refetchInterval` dos useQuery pesados:
+- Inbox contatos: de "sempre" para `staleTime: 30s`
+- Pagamentos/Dashboard: `staleTime: 60s`
+- Metas/rankings: `staleTime: 5min`
+
+Trocar polling por Realtime só onde já existe canal, e ligar polling de fallback só quando a aba está visível (`document.visibilityState === 'visible'`).
+
+### 3. Paginar e limitar SELECTs
+- Inbox: `limit(50)` na listagem inicial + infinite scroll (hoje traz tudo).
+- Dashboard de pagamentos: usar RPC agregado em vez de `select *` de `pagamentos`.
+
+### 4. Cron/edge functions
+Auditar crons em `supabase/functions/`. Muitos rodam a cada minuto (aquecimento, monitor, notificações). Reduzir onde possível:
+- `daily-report-*`: já são diários → OK
+- Monitores contínuos: aumentar intervalo de 1min → 5min
+
+### 5. Guardrail no editor Lovable
+Adicionar à memória do projeto uma regra core:
+> **Antes de qualquer alteração que aumente custo em Lovable Cloud (nova tabela pesada, novo cron, novo polling, novo Realtime, novo edge function em loop), a IA deve exibir: `⚠️ ALERTA DE CUSTO ALTO LOVABLE CLOUD` com estimativa do impacto e aguardar confirmação.**
+
+Já existe memory `cloud-cost-awareness` — vou reforçá-la e adicionar o texto exato do alerta na regra Core do `mem://index.md`.
+
+---
 
 ## Detalhes técnicos
-- Não removeremos `meta_whatsapp_config.meta_app_id` agora — ele fica como fallback para não quebrar nada.
-- Todos os GRANTs na tabela nova + RLS admin-only.
-- UI segue design system existente (shadcn tabs / cards / forms).
 
-## Fora de escopo
-- Multi-tenant real (cada empresa com sua BM isolada) — permanece admin global.
-- Rotação automática de App IDs / balanceamento entre BMs.
+- Migration com `CREATE INDEX IF NOT EXISTS` (sem CONCURRENTLY — roda dentro da migration).
+- Todos os índices usam colunas já presentes em WHERE/ORDER BY das queries do pg_stat_statements.
+- Ajustes de `staleTime` são só no cliente (React Query); zero mudança de schema/regra de negócio.
+- Nenhum recurso será removido — só reduzido em frequência.
+- Fora de escopo: reescrever Inbox (grande refactor); ajustar RLS que causa rollbacks (precisa investigação separada).
 
-Confirma que posso implementar assim?
+---
+
+## Escopo fora
+- Não vou mexer em lógica de aquecimento, envio, cobrança, permissões.
+- Não vou desativar features — só otimizar acessos ao banco.
+- Não vou tocar em `client.ts`, `types.ts`, `.env`, `config.toml`.
+
+Após sua aprovação, aplico as ações 1, 2, 4 e 5 numa única passada. Ação 3 (paginação do Inbox) fica opcional — me avise se quer incluir.

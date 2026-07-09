@@ -57,7 +57,7 @@ export function useMetaEscalonamento() {
   const resumo = useQuery({
     queryKey: ["meta-envios-resumo", uid],
     enabled: !!uid,
-    refetchInterval: 30_000,
+    refetchInterval: 2 * 60_000,
     queryFn: async (): Promise<ResumoEnvios> => {
       const { data, error } = await (supabase as any).rpc("meta_envios_resumo", {
         _uid: uid,
