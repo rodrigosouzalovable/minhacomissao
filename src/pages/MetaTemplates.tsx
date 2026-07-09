@@ -162,7 +162,7 @@ export default function MetaTemplates() {
     }
 
     const { data: user } = await supabase.auth.getUser();
-    const { error } = await supabase.from("meta_templates_mestre").insert({
+    const { data: novo, error } = await supabase.from("meta_templates_mestre").insert({
       nome,
       categoria,
       idioma,
@@ -175,15 +175,21 @@ export default function MetaTemplates() {
       botoes: botoes as any,
       exemplo,
       criado_por: user.user?.id,
-    } as any);
+    } as any).select().single();
     setSalvando(false);
     if (error) { toast.error(error.message); return; }
+    if (novo) {
+      setMestres((prev) => [novo as any, ...prev.filter((m) => m.id !== (novo as any).id)]);
+      setSelMestre((novo as any).id);
+    }
+    carregar();
     toast.success("Template mestre criado. Vá em 'Aplicar em lote'.");
     setNome(""); setCorpo(""); setRodape(""); setCabecalhoTexto("");
     setCabecalhoTipo("NONE"); setBotoes([]); setExemploBody([]);
     setMediaPath(null); setMediaMime(null); setMediaSignedUrl(null);
     setTab("lote");
   };
+
 
   const uploadMedia = async (file: File) => {
     setUploadingMedia(true);
