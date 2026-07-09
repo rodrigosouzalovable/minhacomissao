@@ -290,132 +290,206 @@ export default function MetaTemplates() {
 
           {/* ===== Criar ===== */}
           <TabsContent value="criar" className="space-y-4">
-            <Card>
-              <CardHeader><CardTitle>Novo template mestre</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Nome (slug)</Label>
-                    <Input value={nome} onChange={(e) => setNome(e.target.value.toLowerCase())}
-                      placeholder="boleto_vencimento_novo_mundo" />
-                    <p className="text-xs text-muted-foreground mt-1">apenas a-z, 0-9 e _</p>
-                  </div>
-                  <div>
-                    <Label>Categoria</Label>
-                    <Select value={categoria} onValueChange={(v) => setCategoria(v as Categoria)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="UTILITY">UTILITY</SelectItem>
-                        <SelectItem value="MARKETING">MARKETING</SelectItem>
-                        <SelectItem value="AUTHENTICATION">AUTHENTICATION</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Idioma</Label>
-                    <Input value={idioma} onChange={(e) => setIdioma(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Cabeçalho</Label>
-                    <Select value={cabecalhoTipo} onValueChange={setCabecalhoTipo}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="NONE">Sem cabeçalho</SelectItem>
-                        <SelectItem value="TEXT">Texto</SelectItem>
-                        <SelectItem value="IMAGE">Imagem</SelectItem>
-                        <SelectItem value="DOCUMENT">Documento</SelectItem>
-                        <SelectItem value="VIDEO">Vídeo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {cabecalhoTipo === "TEXT" && (
+            <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-4">
+              <Card>
+                <CardHeader><CardTitle>Novo template mestre</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid md:grid-cols-3 gap-4">
                     <div>
-                      <Label>Texto do cabeçalho</Label>
-                      <Input value={cabecalhoTexto} onChange={(e) => setCabecalhoTexto(e.target.value)} maxLength={60} />
+                      <Label>Nome (slug)</Label>
+                      <Input value={nome} onChange={(e) => setNome(e.target.value.toLowerCase())}
+                        placeholder="boleto_vencimento_novo_mundo" />
+                      <p className="text-xs text-muted-foreground mt-1">apenas a-z, 0-9 e _</p>
+                    </div>
+                    <div>
+                      <Label>Categoria</Label>
+                      <Select value={categoria} onValueChange={(v) => setCategoria(v as Categoria)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="UTILITY">UTILITY</SelectItem>
+                          <SelectItem value="MARKETING">MARKETING</SelectItem>
+                          <SelectItem value="AUTHENTICATION">AUTHENTICATION</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Idioma</Label>
+                      <Input value={idioma} onChange={(e) => setIdioma(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Cabeçalho</Label>
+                      <Select value={cabecalhoTipo} onValueChange={(v) => { setCabecalhoTipo(v); if (v !== "TEXT") setCabecalhoTexto(""); if (!["IMAGE","VIDEO","DOCUMENT"].includes(v)) { setMediaPath(null); setMediaMime(null); setMediaSignedUrl(null); } }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NONE">Sem cabeçalho</SelectItem>
+                          <SelectItem value="TEXT">Texto</SelectItem>
+                          <SelectItem value="IMAGE">Imagem</SelectItem>
+                          <SelectItem value="DOCUMENT">Documento</SelectItem>
+                          <SelectItem value="VIDEO">Vídeo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {cabecalhoTipo === "TEXT" && (
+                      <div>
+                        <Label>Texto do cabeçalho</Label>
+                        <Input value={cabecalhoTexto} onChange={(e) => setCabecalhoTexto(e.target.value)} maxLength={60} />
+                      </div>
+                    )}
+                  </div>
+
+                  {["IMAGE", "VIDEO", "DOCUMENT"].includes(cabecalhoTipo) && (
+                    <div className="rounded-md border p-3 bg-muted/30 space-y-2">
+                      <Label>Amostra de mídia · Obrigatório para aprovação Meta</Label>
+                      {!mediaPath ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="file"
+                            accept={
+                              cabecalhoTipo === "IMAGE" ? "image/jpeg,image/png" :
+                              cabecalhoTipo === "VIDEO" ? "video/mp4,video/3gpp" :
+                              "application/pdf"
+                            }
+                            disabled={uploadingMedia}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMedia(f); }}
+                          />
+                          {uploadingMedia && <Loader2 className="w-4 h-4 animate-spin" />}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          {cabecalhoTipo === "IMAGE" && mediaSignedUrl && (
+                            <img src={mediaSignedUrl} alt="preview" className="h-16 w-16 object-cover rounded border" />
+                          )}
+                          <div className="flex-1 text-xs text-muted-foreground truncate">
+                            {mediaPath.split("/").pop()} · {mediaMime}
+                          </div>
+                          <Button size="sm" variant="outline" type="button" onClick={removerMedia}>
+                            <X className="w-3 h-3 mr-1" /> Remover
+                          </Button>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">
+                        A Meta usa este arquivo como referência para aprovar o template. Requer <code>meta_app_id</code> configurado.
+                      </p>
                     </div>
                   )}
-                </div>
 
-                <div>
-                  <Label>Corpo *</Label>
-                  <Textarea rows={5} value={corpo} onChange={(e) => setCorpo(e.target.value)}
-                    placeholder="Olá {{1}}, seu boleto de R$ {{2}} vence em {{3}}." />
-                  <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
-                    <span>Use {"{{1}}"}, {"{{2}}"}... para variáveis. {nVarsCorpo} variável(is) detectada(s).</span>
-                    <span>{corpo.length}/1024</span>
+                  <div>
+                    <Label>Corpo *</Label>
+                    <Textarea rows={5} value={corpo} onChange={(e) => setCorpo(e.target.value)}
+                      placeholder="Olá {{1}}, seu boleto de R$ {{2}} vence em {{3}}." />
+                    <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
+                      <span>Use {"{{1}}"}, {"{{2}}"}... para variáveis. {nVarsCorpo} variável(is) detectada(s).</span>
+                      <span>{corpo.length}/1024</span>
+                    </div>
                   </div>
-                </div>
 
-                {nVarsCorpo > 0 && (
-                  <div className="space-y-2 rounded-md border p-3 bg-muted/30">
-                    <Label>Exemplos para aprovação Meta *</Label>
-                    {exemploBody.map((v, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground w-14">{`{{${idx + 1}}}`}</span>
-                        <Input value={v} onChange={(e) => {
-                          const arr = [...exemploBody]; arr[idx] = e.target.value; setExemploBody(arr);
-                        }} placeholder={`Exemplo para variável ${idx + 1}`} />
+                  {nVarsCorpo > 0 && (
+                    <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                      <Label>Exemplos para aprovação Meta *</Label>
+                      {exemploBody.map((v, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground w-14">{`{{${idx + 1}}}`}</span>
+                          <Input value={v} onChange={(e) => {
+                            const arr = [...exemploBody]; arr[idx] = e.target.value; setExemploBody(arr);
+                          }} placeholder={`Exemplo para variável ${idx + 1}`} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div>
+                    <Label>Rodapé</Label>
+                    <Input value={rodape} onChange={(e) => setRodape(e.target.value)} maxLength={60} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <Label>Botões (opcional, máx 3)</Label>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" type="button" onClick={() => addBotao("QUICK_REPLY")}>
+                          <Plus className="w-3 h-3 mr-1" /> Resposta Rápida
+                        </Button>
+                        <Button size="sm" variant="outline" type="button" onClick={() => addBotao("URL")}>
+                          <Plus className="w-3 h-3 mr-1" /> URL
+                        </Button>
+                        <Button size="sm" variant="outline" type="button" onClick={() => addBotao("PHONE_NUMBER")}>
+                          <Plus className="w-3 h-3 mr-1" /> Telefone
+                        </Button>
+                      </div>
+                    </div>
+                    {botoes.map((b, idx) => (
+                      <div key={idx} className="flex items-center gap-2 rounded-md border p-2">
+                        <Badge variant="secondary">{b.type}</Badge>
+                        <Input placeholder="Texto do botão" value={b.text} maxLength={25}
+                          onChange={(e) => {
+                            const arr = [...botoes]; arr[idx] = { ...b, text: e.target.value }; setBotoes(arr);
+                          }} />
+                        {b.type === "URL" && (
+                          <Input placeholder="https://..." value={b.url || ""}
+                            onChange={(e) => {
+                              const arr = [...botoes]; arr[idx] = { ...b, url: e.target.value }; setBotoes(arr);
+                            }} />
+                        )}
+                        {b.type === "PHONE_NUMBER" && (
+                          <Input placeholder="+55..." value={b.phone_number || ""}
+                            onChange={(e) => {
+                              const arr = [...botoes]; arr[idx] = { ...b, phone_number: e.target.value }; setBotoes(arr);
+                            }} />
+                        )}
+                        <Button size="icon" variant="ghost" onClick={() => setBotoes(botoes.filter((_, i) => i !== idx))}>
+                          <X className="w-4 h-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
-                )}
 
-                <div>
-                  <Label>Rodapé</Label>
-                  <Input value={rodape} onChange={(e) => setRodape(e.target.value)} maxLength={60} />
-                </div>
+                  <Button onClick={salvarMestre} disabled={salvando}>
+                    {salvando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Salvar template mestre
+                  </Button>
+                </CardContent>
+              </Card>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Botões (opcional, máx 3)</Label>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" type="button" onClick={() => addBotao("QUICK_REPLY")}>
-                        <Plus className="w-3 h-3 mr-1" /> Resposta Rápida
-                      </Button>
-                      <Button size="sm" variant="outline" type="button" onClick={() => addBotao("URL")}>
-                        <Plus className="w-3 h-3 mr-1" /> URL
-                      </Button>
-                      <Button size="sm" variant="outline" type="button" onClick={() => addBotao("PHONE_NUMBER")}>
-                        <Plus className="w-3 h-3 mr-1" /> Telefone
-                      </Button>
-                    </div>
-                  </div>
-                  {botoes.map((b, idx) => (
-                    <div key={idx} className="flex items-center gap-2 rounded-md border p-2">
-                      <Badge variant="secondary">{b.type}</Badge>
-                      <Input placeholder="Texto do botão" value={b.text} maxLength={25}
-                        onChange={(e) => {
-                          const arr = [...botoes]; arr[idx] = { ...b, text: e.target.value }; setBotoes(arr);
-                        }} />
-                      {b.type === "URL" && (
-                        <Input placeholder="https://..." value={b.url || ""}
-                          onChange={(e) => {
-                            const arr = [...botoes]; arr[idx] = { ...b, url: e.target.value }; setBotoes(arr);
-                          }} />
-                      )}
-                      {b.type === "PHONE_NUMBER" && (
-                        <Input placeholder="+55..." value={b.phone_number || ""}
-                          onChange={(e) => {
-                            const arr = [...botoes]; arr[idx] = { ...b, phone_number: e.target.value }; setBotoes(arr);
-                          }} />
-                      )}
-                      <Button size="icon" variant="ghost" onClick={() => setBotoes(botoes.filter((_, i) => i !== idx))}>
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                <Button onClick={salvarMestre} disabled={salvando}>
-                  {salvando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Salvar template mestre
-                </Button>
-              </CardContent>
-            </Card>
+              {/* Prévia ao vivo */}
+              <div>
+                <Card className="lg:sticky lg:top-4">
+                  <CardHeader className="pb-2"><CardTitle className="text-base">Prévia do modelo</CardTitle></CardHeader>
+                  <CardContent>
+                    <TemplateWhatsAppPreview
+                      template={{
+                        nome_template: nome,
+                        body_text: corpo || "Digite o corpo da mensagem...",
+                        variaveis: {
+                          _components: (() => {
+                            const c: any[] = [];
+                            if (cabecalhoTipo !== "NONE") {
+                              c.push({
+                                type: "HEADER",
+                                format: cabecalhoTipo,
+                                text: cabecalhoTipo === "TEXT" ? cabecalhoTexto : undefined,
+                              });
+                            }
+                            c.push({ type: "BODY", text: corpo });
+                            if (rodape) c.push({ type: "FOOTER", text: rodape });
+                            if (botoes.length > 0) c.push({ type: "BUTTONS", buttons: botoes });
+                            return c;
+                          })(),
+                          _header_image_url: mediaSignedUrl || undefined,
+                        },
+                      }}
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-2 text-center">
+                      Assim a mensagem aparecerá no WhatsApp do destinatário.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
+
 
           {/* ===== Lote ===== */}
           <TabsContent value="lote" className="space-y-4">
