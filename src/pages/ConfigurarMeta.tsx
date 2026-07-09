@@ -14,6 +14,8 @@ import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, A
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
+import CustosDetalhadosDialog from "@/components/meta/CustosDetalhadosDialog";
+import { DollarSign } from "lucide-react";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
