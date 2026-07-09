@@ -1012,6 +1012,15 @@ export default function EnvioMeta() {
         </CardContent>
       </Card>
 
+      {/* Custo estimado deste envio */}
+      <CustoEstimadoEnvio
+        telefones={recipients.map((r) => r.telefone)}
+        instanciaIds={instanciaIds}
+        categoria={templateGroup?.categoria ?? null}
+      />
+
+
+
 
       {/* Agendamento multi-dia */}
       <AgendarCampanhaBox
