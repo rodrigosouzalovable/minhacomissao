@@ -996,6 +996,25 @@ export default function InboxMeta() {
                       {audioRec.enviandoAudio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                   </div>
+                ) : janelaInfo.status === 'fechada' ? (
+                  <div className="p-3">
+                    <button
+                      type="button"
+                      onClick={() => setReabrirTemplateOpen(true)}
+                      className="w-full flex items-center gap-3 rounded-md border-2 border-dashed border-red-500/40 bg-red-500/5 hover:bg-red-500/10 transition-colors px-4 py-3 text-left"
+                    >
+                      <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                          Janela 24h fechada — clique para reabrir com template UTILITY
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Apenas templates <strong>UTILITY aprovados</strong> são permitidos aqui. MARKETING é bloqueado.
+                        </p>
+                      </div>
+                      <Send className="h-4 w-4 text-primary shrink-0" />
+                    </button>
+                  </div>
                 ) : (
                   <div className="p-3 flex gap-2 items-end">
                     <input ref={fileInputRef} type="file" className="hidden"
