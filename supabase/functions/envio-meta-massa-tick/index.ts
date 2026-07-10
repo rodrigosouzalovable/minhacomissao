@@ -142,16 +142,19 @@ async function processarItem(job: any): Promise<ItemResult> {
   if (pendErr) { console.error('[tick pendErr]', pendErr); return { advanced: false, waitMs: delayUsuarioMs(job) }; }
 
   if (!pend) {
-    await supabase.from('envio_meta_job').update({
+    const { data: transitioned } = await supabase.from('envio_meta_job').update({
       status: 'concluido',
       concluido_em: new Date().toISOString(),
       atual_telefone: null,
       atual_instancia: null,
       proximo_em: null,
-    }).eq('id', job.id);
-    await notificarConclusao(job.id, 'concluido');
+    }).eq('id', job.id).eq('status', 'rodando').select('id').maybeSingle();
+    if (transitioned) {
+      await notificarConclusao(job.id, 'concluido');
+    }
     return { advanced: false, done: true };
   }
+
 
 
   const pickResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/pick-meta-instance`, {
