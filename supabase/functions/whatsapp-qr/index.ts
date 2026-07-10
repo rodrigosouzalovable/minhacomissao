@@ -105,7 +105,27 @@ async function createInstance(userId: string) {
   try { data = JSON.parse(text); } catch (_) {}
 
   if (!res.ok) {
-    return json({ ok: false, error: `UAZAPI returned ${res.status}`, detail: data || text }, res.status);
+    const uazMsg = String(data?.error || data?.info || text || "").toLowerCase();
+    const isLimit =
+      res.status === 429 ||
+      uazMsg.includes("maximum number of instances") ||
+      uazMsg.includes("cannot create more than") ||
+      (data?.max_instances !== undefined && Number(data?.current_instances) >= Number(data?.max_instances));
+
+    if (isLimit) {
+      const cur = data?.current_instances ?? "?";
+      const max = data?.max_instances ?? 0;
+      return json(
+        {
+          ok: false,
+          code: "UAZAPI_INSTANCE_LIMIT",
+          error: `Limite de instâncias da UAZAPI atingido (${cur}/${max}). Entre em contato com o suporte da UAZAPI para aumentar o limite ou remova instâncias antigas no painel https://meusacordos.uazapi.com.`,
+          detail: data || text,
+        },
+        200,
+      );
+    }
+    return json({ ok: false, error: `UAZAPI returned ${res.status}`, detail: data || text }, 200);
   }
 
   const token = data?.token || data?.instance?.token || data?.apitoken || null;
