@@ -1077,6 +1077,17 @@ export default function InboxMeta() {
         atendenteNome={atendenteNome}
         onSent={() => { fetchContatos(); }}
       />
+      {contatoAtivo && (
+        <ReabrirComTemplateDialog
+          open={reabrirTemplateOpen}
+          onOpenChange={setReabrirTemplateOpen}
+          instancia_id={contatoAtivo.instancia_id}
+          telefone={contatoAtivo.telefone || ''}
+          contato_nome={contatoAtivo.nome || undefined}
+          atendente_nome={atendenteNome}
+          onSent={() => { if (contatoAtivo) fetchMensagens(contatoAtivo, false); }}
+        />
+      )}
 
     </AppLayout>
   );
