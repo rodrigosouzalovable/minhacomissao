@@ -425,15 +425,45 @@ Deno.serve(async (req) => {
           contatoIdFinal = (novo as any)?.id ?? null;
         }
 
-        // Auto-atribuir etiqueta "Atendente: {nome}" ao contato
+        // Auto-atribuir etiqueta "Atendente: {nome}" ao contato (cria se não existir)
         if (atendenteNome && contatoIdFinal) {
           try {
-            const { data: etiq } = await supabase
+            const nomeEtiqueta = `Atendente: ${atendenteNome}`;
+            const PALETA = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+            let hash = 0;
+            for (let i = 0; i < atendenteNome.length; i++) hash = (hash + atendenteNome.charCodeAt(i)) % PALETA.length;
+            const cor = PALETA[hash];
+
+            let { data: etiq } = await supabase
               .from('meta_whatsapp_etiquetas')
-              .select('id, nome')
+              .select('id')
               .eq('user_id', inst.user_id)
-              .ilike('nome', `Atendente: ${atendenteNome}`)
+              .ilike('nome', nomeEtiqueta)
               .maybeSingle();
+
+            if (!etiq?.id) {
+              const { data: nova, error: insErr } = await supabase
+                .from('meta_whatsapp_etiquetas')
+                .insert({ user_id: inst.user_id, nome: nomeEtiqueta, cor } as any)
+                .select('id')
+                .maybeSingle();
+              if (nova?.id) {
+                etiq = nova as any;
+              } else if (insErr) {
+                // conflito (unique) → re-selecionar
+                const { data: again } = await supabase
+                  .from('meta_whatsapp_etiquetas')
+                  .select('id')
+                  .eq('user_id', inst.user_id)
+                  .ilike('nome', nomeEtiqueta)
+                  .maybeSingle();
+                etiq = again as any;
+                if (!etiq?.id) {
+                  console.log('[send-whatsapp-meta] falha ao criar etiqueta atendente:', insErr.message);
+                }
+              }
+            }
+
             if (etiq?.id) {
               const { error: linkErr } = await supabase
                 .from('meta_whatsapp_contato_etiquetas')
@@ -441,8 +471,6 @@ Deno.serve(async (req) => {
               if (linkErr && linkErr.code !== '23505' && !String(linkErr.message || '').toLowerCase().includes('duplicate')) {
                 console.log('[send-whatsapp-meta] falha ao vincular etiqueta atendente:', linkErr.message);
               }
-            } else {
-              console.log(`[send-whatsapp-meta] etiqueta "Atendente: ${atendenteNome}" não encontrada para user ${inst.user_id}`);
             }
           } catch (e) {
             console.log('[send-whatsapp-meta] erro auto-etiqueta:', String(e).slice(0, 200));
