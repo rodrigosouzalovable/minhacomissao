@@ -14,6 +14,35 @@ function normalizeCpf(raw: unknown): string {
   return digits;
 }
 
+async function coletarCpfsPresentes(
+  tabela: 'devedores' | 'acordos_devedor',
+  coluna: 'cpf' | 'devedor_cpf',
+  lote: string[],
+  onPage: (n: number) => void,
+  filtroAtivo: boolean,
+): Promise<Set<string>> {
+  const encontrados = new Set<string>();
+  const PAGE = 1000;
+  let from = 0;
+  let pagina = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    pagina++;
+    onPage(pagina);
+    let q = supabase.from(tabela).select(coluna).in(coluna, lote).range(from, from + PAGE - 1);
+    if (filtroAtivo) q = (q as any).eq('ativo', true);
+    const { data, error } = await q;
+    if (error) throw error;
+    for (const r of data ?? []) {
+      const v = (r as any)[coluna];
+      if (v != null) encontrados.add(String(v));
+    }
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+  return encontrados;
+}
+
 export function BatimentoCpfsPortalCard() {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -61,30 +90,24 @@ export function BatimentoCpfsPortalCard() {
     setRunning(true);
     reset();
     try {
-      const BATCH = 500;
+      const BATCH = 200;
       const presentes = new Set<string>();
       const total = cpfs.length;
+      const totalLotes = Math.ceil(total / BATCH);
 
       for (let i = 0; i < total; i += BATCH) {
         const lote = cpfs.slice(i, i + BATCH);
-        setProgressMsg(`Verificando lote ${Math.floor(i / BATCH) + 1}/${Math.ceil(total / BATCH)}…`);
+        const loteIdx = Math.floor(i / BATCH) + 1;
 
-        // devedores ativos
-        const { data: dev, error: e1 } = await supabase
-          .from('devedores')
-          .select('cpf')
-          .in('cpf', lote)
-          .eq('ativo', true);
-        if (e1) throw e1;
-        for (const r of dev ?? []) presentes.add(String((r as any).cpf));
+        const setPageMsg = (tabelaLabel: string) => (n: number) => {
+          setProgressMsg(`Verificando lote ${loteIdx}/${totalLotes} — ${tabelaLabel} (página ${n})…`);
+        };
 
-        // parcelas de acordos (portal exibe estas quando há acordo ativo)
-        const { data: ac, error: e2 } = await supabase
-          .from('acordos_devedor')
-          .select('devedor_cpf')
-          .in('devedor_cpf', lote);
-        if (e2) throw e2;
-        for (const r of ac ?? []) presentes.add(String((r as any).devedor_cpf));
+        const devPresentes = await coletarCpfsPresentes('devedores', 'cpf', lote, setPageMsg('devedores'), true);
+        for (const c of devPresentes) presentes.add(c);
+
+        const acPresentes = await coletarCpfsPresentes('acordos_devedor', 'devedor_cpf', lote, setPageMsg('acordos'), false);
+        for (const c of acPresentes) presentes.add(c);
 
         setProgress(Math.min(100, Math.round(((i + lote.length) / total) * 100)));
       }
@@ -107,7 +130,6 @@ export function BatimentoCpfsPortalCard() {
     if (!ausentes || ausentes.length === 0) return;
     const aoa: any[][] = [['CPF'], ...ausentes.map((c) => [c])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    // força coluna CPF como texto para preservar zeros à esquerda
     for (let i = 1; i <= ausentes.length; i++) {
       const addr = `A${i + 1}`;
       if (ws[addr]) {

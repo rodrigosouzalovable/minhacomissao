@@ -1,60 +1,61 @@
-# Batimento de CPFs — Portal de Negociação
+## Problema
 
-Adicionar um novo card na página `/admin/importar-devedores` que permite subir uma planilha (xlsx/csv) com uma coluna de CPFs e devolver um arquivo `.xlsx` contendo apenas os CPFs que **não** estão presentes no portal de negociação.
+O batimento reportou 35.053 CPFs "ausentes" de 41.268, mas o CPF `99997231104` (último da planilha) está presente no portal. A causa é o limite de linhas do PostgREST:
 
-## Definição de "presente no portal"
+- Cada CPF tem várias linhas em `devedores` (parcelas). O CPF testado tem **24 linhas**.
+- O batimento consulta 500 CPFs por lote via `.in('cpf', [...])` em `devedores` e `acordos_devedor`.
+- 500 CPFs × ~10 parcelas em média = milhares de linhas, mas o PostgREST devolve **no máximo 1000 linhas por request** (default do Supabase).
+- Os CPFs cujas linhas caíram além das primeiras 1000 do lote nunca entraram no `Set` de presentes → foram marcados como ausentes.
 
-Um CPF é considerado presente quando existe pelo menos uma parcela em aberto que apareceria no portal público hoje. Ou seja, para o CPF (normalizado em 11 dígitos):
+Ou seja, o resultado atual é falso-negativo em massa.
 
-- Existe linha em `devedores` com `ativo = true` **E**
-- (a parcela não está paga: `pago IS NOT TRUE`) **E**
-- Não existe acordo ativo (`acordos.status = 'ativo'`) cobrindo aquela parcela
+## Correção
 
-Se todas as pendências do CPF estão quitadas por um acordo ativo (portal exibe as parcelas do acordo em vez das originais — regra `active-agreement-sync-logic`), o CPF continua "presente" desde que o acordo tenha parcelas em aberto. Ausente = CPF sem qualquer débito exibível no portal.
+Ajustar `src/components/BatimentoCpfsPortalCard.tsx` para paginar cada lote até esgotar as linhas, e reduzir o tamanho do lote para dar margem:
 
-## UI
+1. Reduzir `BATCH` de 500 → **200 CPFs** por lote (evita bater no limite em quase todos os casos).
+2. Envolver a consulta em `devedores` e em `acordos_devedor` num loop de paginação com `.range(from, from + 999)`, repetindo enquanto `data.length === 1000`. Como só precisamos saber *quais* CPFs aparecem, basta `.select('cpf')` / `.select('devedor_cpf')` sem outros campos — reduz payload.
+3. Assim que um CPF do lote entra no `Set presentes`, ele fica marcado e o restante das páginas do mesmo lote continua alimentando o mesmo `Set`.
+4. Manter o mesmo filtro `.eq('ativo', true)` em `devedores`. Em `acordos_devedor` continuar sem filtro (uma parcela de acordo já indica presença no portal).
+5. Ajustar a mensagem de progresso para "Verificando lote X/Y (página N)…" para o usuário perceber quando um lote tem múltiplas páginas.
 
-Novo card em `src/pages/ImportarDevedores.tsx`, abaixo do card "Upload de Planilha" e acima do "Histórico de Importações":
+Sem alterações de schema, RLS, edge function, portal ou fluxo de importação. Apenas o componente client-side é modificado.
 
-```text
-┌─ Batimento de CPFs no Portal ─────────────────────┐
-│ Envie uma planilha com uma coluna de CPFs.         │
-│ O sistema devolve um .xlsx com os CPFs que NÃO    │
-│ estão no portal de negociação.                    │
-│                                                    │
-│ [Escolher arquivo]  arquivo.xlsx (1.234 CPFs)     │
-│ [Rodar batimento]                                  │
-│                                                    │
-│ Resultado: 312 ausentes de 1.234                  │
-│ [Baixar CPFs ausentes.xlsx]                       │
-└────────────────────────────────────────────────────┘
-```
+## Verificação após o fix
 
-- Aceita `.xlsx`, `.xls` e `.csv`.
-- Primeira coluna = CPF (ignora cabeçalho se a primeira linha não for número/CPF válido).
-- Normaliza para 11 dígitos, remove duplicados e vazios.
-- Processamento client-side (sem edge function): lê planilha com `xlsx`, consulta o Supabase em lotes de 500 CPFs via `.in('cpf', [...])`, monta a saída com `exportarParaExcel`.
-- Feedback: progresso "Verificando lote X/Y…" e toast ao final.
-- Botão de download só aparece após o batimento; nome do arquivo: `cpfs-ausentes-portal-YYYY-MM-DD.xlsx`.
+Rodar novamente com a mesma planilha (41.268 CPFs) e conferir que:
+- O CPF `99997231104` **não** aparece na lista de ausentes.
+- O total de ausentes cai drasticamente (o portal claramente tem esses CPFs).
 
 ## Detalhes técnicos
 
-- Novo componente: `src/components/BatimentoCpfsPortalCard.tsx`.
-- Reutiliza `xlsx` (já usado em `parseCobmaisPlanilha.ts`) e `exportarParaExcel` de `src/lib/exportExcel.ts`.
-- Query por lote:
-  ```ts
-  supabase
-    .from('devedores')
-    .select('cpf, pago, acordo_id')
-    .in('cpf', loteCpfs)
-    .eq('ativo', true)
-  ```
-  Depois, para cada CPF, considerar presente se existir ao menos uma linha com `pago IS NOT TRUE` cujo `acordo_id` é `NULL` **ou** cujo `acordo` está com `status = 'ativo'` e tem parcelas em aberto (`acordos_devedor` com `pago IS NOT TRUE`). Para simplificar, faz-se uma segunda consulta agregada em `acordos_devedor` juntando por `cpf` no mesmo lote.
-- Saída: `.xlsx` com única coluna `CPF` (formatada como texto para preservar zeros à esquerda), ordenada.
-- Nada é gravado no banco — é apenas leitura e download.
+Trecho central do novo loop por lote:
 
-## Fora do escopo
+```ts
+async function coletarCpfsPresentes(
+  tabela: 'devedores' | 'acordos_devedor',
+  coluna: 'cpf' | 'devedor_cpf',
+  lote: string[],
+  onPage: (n: number) => void,
+  filtroAtivo: boolean,
+): Promise<Set<string>> {
+  const encontrados = new Set<string>();
+  let from = 0;
+  const PAGE = 1000;
+  let pagina = 0;
+  while (true) {
+    pagina++;
+    onPage(pagina);
+    let q = supabase.from(tabela).select(coluna).in(coluna, lote).range(from, from + PAGE - 1);
+    if (filtroAtivo) q = q.eq('ativo', true);
+    const { data, error } = await q;
+    if (error) throw error;
+    for (const r of data ?? []) encontrados.add(String((r as any)[coluna]));
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+  return encontrados;
+}
+```
 
-- Não altera o fluxo de importação existente.
-- Não cria tabela, migração, edge function nem RLS nova.
-- Não altera o portal de negociação em si.
+Combina-se em um `Set presentes` global; ao final, `ausentes = cpfs.filter(c => !presentes.has(c))`.
