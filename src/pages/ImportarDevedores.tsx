@@ -1575,12 +1575,17 @@ export default function ImportarDevedores() {
       importacao_id: importacaoId,
     }));
 
+    const { paraInserir: recordsDedup1, jaExistentes: pulados1 } = await filtrarParcelasNovas(records);
+    if (pulados1 > 0) {
+      toast({ title: 'Parcelas já existentes ignoradas', description: `${pulados1} linha(s) puladas por já existirem ativas.` });
+    }
+
     const BATCH_SIZE = 500;
     let inserted = 0;
     let batchError: any = null;
 
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-      const batch = records.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < recordsDedup1.length; i += BATCH_SIZE) {
+      const batch = recordsDedup1.slice(i, i + BATCH_SIZE);
       const { error } = await supabase.from('devedores' as any).insert(batch as any);
       if (error) {
         batchError = error;
@@ -1588,13 +1593,13 @@ export default function ImportarDevedores() {
       }
       inserted += batch.length;
       setInsertedCount(inserted);
-      setImportProgress(Math.round((inserted / records.length) * 100));
+      setImportProgress(Math.round((inserted / Math.max(1, recordsDedup1.length)) * 100));
     }
 
     if (batchError) {
       toast({
         title: 'Erro na importação',
-        description: `${inserted} de ${records.length} registros inseridos antes do erro: ${batchError.message}`,
+        description: `${inserted} de ${recordsDedup1.length} registros inseridos antes do erro: ${batchError.message}`,
         variant: 'destructive',
       });
     } else {
