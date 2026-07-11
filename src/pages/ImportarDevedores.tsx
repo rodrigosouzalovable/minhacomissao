@@ -1273,12 +1273,16 @@ export default function ImportarDevedores() {
         data_vencimento: parseDate(r.atraso), telefone: r.telefone || null,
         importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
       }));
+      const { paraInserir: recordsDedup, jaExistentes: puladosMA } = await filtrarParcelasNovas(records);
+      if (puladosMA > 0) {
+        toast({ title: 'Parcelas já existentes ignoradas', description: `${puladosMA} linha(s) puladas por já existirem ativas.` });
+      }
       const BATCH_SIZE = 500;
       let inserted = 0;
-      for (let i = 0; i < records.length; i += BATCH_SIZE) {
-        const { error } = await supabase.from('devedores' as any).insert(records.slice(i, i + BATCH_SIZE) as any);
+      for (let i = 0; i < recordsDedup.length; i += BATCH_SIZE) {
+        const { error } = await supabase.from('devedores' as any).insert(recordsDedup.slice(i, i + BATCH_SIZE) as any);
         if (error) break;
-        inserted += records.slice(i, i + BATCH_SIZE).length;
+        inserted += recordsDedup.slice(i, i + BATCH_SIZE).length;
       }
       if (inserted > 0) await insertTelefonesFromRows(parsed.montrealRows, user.id);
       return inserted;
