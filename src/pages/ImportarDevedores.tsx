@@ -1304,12 +1304,16 @@ export default function ImportarDevedores() {
       telefone: r.telefone || null,
       importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
     }));
+    const { paraInserir: recordsStdDedup, jaExistentes: puladosStd } = await filtrarParcelasNovas(records);
+    if (puladosStd > 0) {
+      toast({ title: 'Parcelas já existentes ignoradas', description: `${puladosStd} linha(s) puladas por já existirem ativas.` });
+    }
     const BATCH_SIZE = 500;
     let inserted = 0;
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-      const { error } = await supabase.from('devedores' as any).insert(records.slice(i, i + BATCH_SIZE) as any);
+    for (let i = 0; i < recordsStdDedup.length; i += BATCH_SIZE) {
+      const { error } = await supabase.from('devedores' as any).insert(recordsStdDedup.slice(i, i + BATCH_SIZE) as any);
       if (error) break;
-      inserted += records.slice(i, i + BATCH_SIZE).length;
+      inserted += recordsStdDedup.slice(i, i + BATCH_SIZE).length;
     }
     if (inserted > 0 && credorSelecionado === 'montreal') {
       await insertTelefonesFromRows(rowsToImport, user.id);
