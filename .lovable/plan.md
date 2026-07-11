@@ -1,31 +1,60 @@
-# Fix: 30+ notificações duplicadas de "Envio Meta concluído"
+# Batimento de CPFs — Portal de Negociação
 
-## Causa
+Adicionar um novo card na página `/admin/importar-devedores` que permite subir uma planilha (xlsx/csv) com uma coluna de CPFs e devolver um arquivo `.xlsx` contendo apenas os CPFs que **não** estão presentes no portal de negociação.
 
-O tick do envio Meta roda em várias invocações concorrentes. Quando o último item é processado, várias delas entram no bloco "sem pendentes" ao mesmo tempo e chamam `notificarConclusao(job.id, 'concluido')`.
+## Definição de "presente no portal"
 
-A idempotência atual em `_shared/notificar-admin.ts` é `SELECT` → `INSERT`, sem constraint única. Como todas as chamadas rodam no mesmo segundo, o SELECT retorna vazio para todas antes de qualquer INSERT — e todas enviam a mensagem no WhatsApp. Foi exatamente o que aconteceu (30x no mesmo segundo).
+Um CPF é considerado presente quando existe pelo menos uma parcela em aberto que apareceria no portal público hoje. Ou seja, para o CPF (normalizado em 11 dígitos):
 
-O update de `envio_meta_job.status = 'concluido'` (linhas 142-148 de `envio-meta-massa-tick/index.ts`) também não é guardado por status atual, então não serve de trava.
+- Existe linha em `devedores` com `ativo = true` **E**
+- (a parcela não está paga: `pago IS NOT TRUE`) **E**
+- Não existe acordo ativo (`acordos.status = 'ativo'`) cobrindo aquela parcela
 
-## Correção (mínima, cirúrgica)
+Se todas as pendências do CPF estão quitadas por um acordo ativo (portal exibe as parcelas do acordo em vez das originais — regra `active-agreement-sync-logic`), o CPF continua "presente" desde que o acordo tenha parcelas em aberto. Ausente = CPF sem qualquer débito exibível no portal.
 
-**Arquivo:** `supabase/functions/envio-meta-massa-tick/index.ts`
+## UI
 
-1. **Transição atômica de status** no bloco "sem pendentes" (linhas 141-151):
-   - Trocar o `update(...).eq('id', job.id)` por `.eq('id', job.id).eq('status', 'rodando').select('id').maybeSingle()`.
-   - Só chamar `notificarConclusao(job.id, 'concluido')` se o update devolveu uma linha (ou seja, esta invocação foi a única que ganhou a transição `rodando → concluido`). As demais concorrentes recebem `null` e retornam sem notificar.
+Novo card em `src/pages/ImportarDevedores.tsx`, abaixo do card "Upload de Planilha" e acima do "Histórico de Importações":
 
-2. **Mesma proteção em `encerrarJobSemDisponibilidade`** (linhas 46-56): trocar para `.eq('status', 'rodando').select('id').maybeSingle()` e só chamar `notificarConclusao(job.id, 'erro', motivo)` quando a transição ocorreu.
+```text
+┌─ Batimento de CPFs no Portal ─────────────────────┐
+│ Envie uma planilha com uma coluna de CPFs.         │
+│ O sistema devolve um .xlsx com os CPFs que NÃO    │
+│ estão no portal de negociação.                    │
+│                                                    │
+│ [Escolher arquivo]  arquivo.xlsx (1.234 CPFs)     │
+│ [Rodar batimento]                                  │
+│                                                    │
+│ Resultado: 312 ausentes de 1.234                  │
+│ [Baixar CPFs ausentes.xlsx]                       │
+└────────────────────────────────────────────────────┘
+```
 
-Isso resolve o problema na raiz (só um tick pode notificar por job) e não depende de mudança de schema.
+- Aceita `.xlsx`, `.xls` e `.csv`.
+- Primeira coluna = CPF (ignora cabeçalho se a primeira linha não for número/CPF válido).
+- Normaliza para 11 dígitos, remove duplicados e vazios.
+- Processamento client-side (sem edge function): lê planilha com `xlsx`, consulta o Supabase em lotes de 500 CPFs via `.in('cpf', [...])`, monta a saída com `exportarParaExcel`.
+- Feedback: progresso "Verificando lote X/Y…" e toast ao final.
+- Botão de download só aparece após o batimento; nome do arquivo: `cpfs-ausentes-portal-YYYY-MM-DD.xlsx`.
 
-## Fora de escopo
+## Detalhes técnicos
 
-- Não alterar `_shared/notificar-admin.ts`, `admin_notificacoes_log`, RLS, nem outros callers de `notificarAdmin`.
-- Não mexer em UI nem em regras de negócio de envio.
+- Novo componente: `src/components/BatimentoCpfsPortalCard.tsx`.
+- Reutiliza `xlsx` (já usado em `parseCobmaisPlanilha.ts`) e `exportarParaExcel` de `src/lib/exportExcel.ts`.
+- Query por lote:
+  ```ts
+  supabase
+    .from('devedores')
+    .select('cpf, pago, acordo_id')
+    .in('cpf', loteCpfs)
+    .eq('ativo', true)
+  ```
+  Depois, para cada CPF, considerar presente se existir ao menos uma linha com `pago IS NOT TRUE` cujo `acordo_id` é `NULL` **ou** cujo `acordo` está com `status = 'ativo'` e tem parcelas em aberto (`acordos_devedor` com `pago IS NOT TRUE`). Para simplificar, faz-se uma segunda consulta agregada em `acordos_devedor` juntando por `cpf` no mesmo lote.
+- Saída: `.xlsx` com única coluna `CPF` (formatada como texto para preservar zeros à esquerda), ordenada.
+- Nada é gravado no banco — é apenas leitura e download.
 
-## Verificação
+## Fora do escopo
 
-- Reprocessar mentalmente o cenário: N ticks concorrentes veem `pend = null`; todas tentam `UPDATE ... WHERE status='rodando'`; o Postgres serializa e apenas uma afeta linha; as outras seguem sem notificar.
-- Lint/typecheck automático do harness após a edição.
+- Não altera o fluxo de importação existente.
+- Não cria tabela, migração, edge function nem RLS nova.
+- Não altera o portal de negociação em si.
