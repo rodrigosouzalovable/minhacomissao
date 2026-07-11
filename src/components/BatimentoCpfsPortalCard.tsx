@@ -29,11 +29,11 @@ async function coletarCpfsPresentes(
   while (true) {
     pagina++;
     onPage(pagina);
-    let q = supabase.from(tabela).select(coluna).in(coluna, lote).range(from, from + PAGE - 1);
-    if (filtroAtivo) q = (q as any).eq('ativo', true);
+    let q: any = (supabase as any).from(tabela).select(coluna).in(coluna, lote).range(from, from + PAGE - 1);
+    if (filtroAtivo) q = q.eq('ativo', true);
     const { data, error } = await q;
     if (error) throw error;
-    for (const r of data ?? []) {
+    for (const r of (data ?? []) as any[]) {
       const v = (r as any)[coluna];
       if (v != null) encontrados.add(String(v));
     }
