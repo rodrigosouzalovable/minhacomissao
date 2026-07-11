@@ -85,10 +85,42 @@ Deno.serve(async (req) => {
 
         const importacaoId = importacao?.id;
 
+        // Dedupe: skip parcelas that already exist active (cpf+contrato+descricao+data_vencimento)
+        const dedupeKey = (r: any) =>
+          `${String(r.cpf ?? '')}|${r.contrato ?? ''}|${r.descricao ?? ''}|${r.data_vencimento ?? ''}`;
+        const cpfs = Array.from(new Set(records.map((r: any) => String(r.cpf)).filter(Boolean)));
+        const existentes = new Set<string>();
+        const CPF_CHUNK = 200;
+        const PAGE = 1000;
+        for (let i = 0; i < cpfs.length; i += CPF_CHUNK) {
+          const lote = cpfs.slice(i, i + CPF_CHUNK);
+          let from = 0;
+          while (true) {
+            const { data, error } = await supabase
+              .from('devedores')
+              .select('cpf, contrato, descricao, data_vencimento')
+              .eq('ativo', true)
+              .in('cpf', lote)
+              .range(from, from + PAGE - 1);
+            if (error) throw new Error(`Dedup lookup error: ${error.message}`);
+            const rows = (data ?? []) as any[];
+            for (const r of rows) existentes.add(dedupeKey(r));
+            if (rows.length < PAGE) break;
+            from += PAGE;
+          }
+        }
+        const vistas = new Set<string>();
+        const recordsDedup = records.filter((r: any) => {
+          const k = dedupeKey(r);
+          if (existentes.has(k) || vistas.has(k)) return false;
+          vistas.add(k);
+          return true;
+        });
+
         // Batch insert
         const BATCH = 500;
-        for (let i = 0; i < records.length; i += BATCH) {
-          const batch = records.slice(i, i + BATCH).map((r: any) => ({
+        for (let i = 0; i < recordsDedup.length; i += BATCH) {
+          const batch = recordsDedup.slice(i, i + BATCH).map((r: any) => ({
             ...r,
             importado_por: userId,
             arquivo_importacao: fileName,
