@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 import { calcularComissao } from '@/lib/comissao';
+import { BatimentoCpfsPortalCard } from '@/components/BatimentoCpfsPortalCard';
 
 type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos' | 'ume_aporte' | 'ume_consolidado';
 
@@ -2508,6 +2509,8 @@ export default function ImportarDevedores() {
             </CardContent>
           </Card>
         )}
+
+        <BatimentoCpfsPortalCard />
 
         {/* Histórico de Importações */}
         <Card>
