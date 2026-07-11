@@ -100,6 +100,68 @@ const DESCRICOES: Record<CredorLayout, string> = {
 // Normaliza nome vindo de planilhas: colapsa espaços duplos/tabs e remove espaços nas pontas
 const normalizeNome = (v: unknown): string => String(v ?? '').replace(/\s+/g, ' ').trim();
 
+// Chave de deduplicação de parcela: mesmo CPF + contrato + descrição + vencimento
+type DevedorInsertRecord = {
+  cpf: string;
+  contrato: string | null;
+  descricao: string | null;
+  data_vencimento: string | null;
+  [k: string]: any;
+};
+
+const dedupeKey = (r: { cpf: any; contrato: any; descricao: any; data_vencimento: any }): string =>
+  `${String(r.cpf ?? '')}|${r.contrato ?? ''}|${r.descricao ?? ''}|${r.data_vencimento ?? ''}`;
+
+/**
+ * Remove das linhas a inserir aquelas cuja parcela (cpf+contrato+descricao+data_vencimento)
+ * já existe ativa em `devedores`. Também remove duplicatas internas dentro do próprio lote.
+ * Retorna { paraInserir, jaExistentes } — sem estourar o limite de 1000 linhas do PostgREST.
+ */
+async function filtrarParcelasNovas<T extends DevedorInsertRecord>(
+  records: T[]
+): Promise<{ paraInserir: T[]; jaExistentes: number }> {
+  if (records.length === 0) return { paraInserir: [], jaExistentes: 0 };
+
+  const cpfs = Array.from(new Set(records.map((r) => String(r.cpf)).filter(Boolean)));
+  const existentes = new Set<string>();
+  const CPF_CHUNK = 200;
+  const PAGE = 1000;
+
+  for (let i = 0; i < cpfs.length; i += CPF_CHUNK) {
+    const lote = cpfs.slice(i, i + CPF_CHUNK);
+    let from = 0;
+    // Paginar até esgotar (evita o limite de 1000 linhas por request)
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, error } = await (supabase as any)
+        .from('devedores')
+        .select('cpf, contrato, descricao, data_vencimento')
+        .eq('ativo', true)
+        .in('cpf', lote)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      for (const r of rows) existentes.add(dedupeKey(r));
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+
+  const vistas = new Set<string>();
+  const paraInserir: T[] = [];
+  let jaExistentes = 0;
+  for (const r of records) {
+    const k = dedupeKey(r);
+    if (existentes.has(k) || vistas.has(k)) {
+      jaExistentes++;
+      continue;
+    }
+    vistas.add(k);
+    paraInserir.push(r);
+  }
+  return { paraInserir, jaExistentes };
+}
+
 export default function ImportarDevedores() {
   const navigate = useNavigate();
   const { user } = useAuth();
