@@ -500,6 +500,21 @@ export default function ConfigurarMeta() {
                         </div>
                       </div>
                       <div className="flex gap-1 flex-wrap justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!inst.waba_id}
+                          onClick={() => {
+                            const bid = (inst as any).business_id;
+                            const url = bid
+                              ? `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id=${bid}&asset_id=${inst.waba_id}`
+                              : `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id=${inst.waba_id}`;
+                            window.open(url, "_blank", "noopener,noreferrer");
+                          }}
+                          title="Abrir no Gerenciador do WhatsApp da Meta"
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" /> WhatsApp Manager
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
                           {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
                         </Button>
