@@ -111,6 +111,36 @@ export default function BusinessManagersManager() {
     load();
   }
 
+  async function salvarNome(bm: BM) {
+    const novo = editNome.trim();
+    if (!novo) {
+      toast.error("Informe um nome");
+      return;
+    }
+    if (novo === bm.nome) {
+      setEditingId(null);
+      return;
+    }
+    const { error } = await supabase
+      .from("meta_business_managers")
+      .update({ nome: novo })
+      .eq("id", bm.id);
+    if (error) return toast.error(error.message);
+    toast.success("Nome atualizado");
+    setEditingId(null);
+    load();
+  }
+
+  function iniciarEdicao(bm: BM) {
+    setEditingId(bm.id);
+    setEditNome(bm.nome);
+  }
+
+  function cancelarEdicao() {
+    setEditingId(null);
+    setEditNome("");
+  }
+
   return (
     <div className="space-y-4">
       <Card>
