@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Star, StarOff } from "lucide-react";
+import { Loader2, Plus, Trash2, Star, StarOff, Pencil, Check, X } from "lucide-react";
 
 interface BM {
   id: string;
