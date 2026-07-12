@@ -1,19 +1,46 @@
 ## Objetivo
-Adicionar um botão **"Abrir WhatsApp Manager"** em cada card da aba **Instâncias** da página **Configurar Meta** (API Oficial Meta), abrindo direto o Gerenciador do WhatsApp da Meta em nova aba — mesmo comportamento que já existe no HookCloud.
 
-## Onde
-`src/pages/ConfigurarMeta.tsx`, no bloco de botões de ação do card (linhas ~502–515, junto de Testar / Templates / Power / Trash).
+Nos cards da aba "API Oficial Meta" (ConfigurarMeta):
 
-## Como
-- Novo `<Button size="sm" variant="outline">` com ícone `ExternalLink` e texto "WhatsApp Manager".
-- Ao clicar: `window.open(url, "_blank", "noopener,noreferrer")`.
-- URL construída a partir dos campos já existentes na `meta_whatsapp_instances`:
-  ```
-  https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id={inst.business_id}&asset_id={inst.waba_id}
-  ```
-- Se `business_id` estiver vazio, cai em fallback só com `asset_id` (a Meta ainda abre o gerenciador daquela WABA).
-- Se `waba_id` estiver vazio, o botão fica desabilitado.
+1. Poder **vincular cada número a uma Business Manager cadastrada** (usando as BMs de `meta_business_managers`).
+2. O botão **"WhatsApp Manager"** abrir automaticamente na URL da BM correta desse número.
+3. Poder **editar o número (display_phone)** direto no card, e esse valor refletir também na aba **Envio Meta (Massa)**.
+
+## Estado atual
+
+- Tabela `meta_whatsapp_instances` já tem a coluna `meta_bm_id uuid` (FK lógica para `meta_business_managers.id`) — só não está sendo usada na UI.
+- Tabela `meta_business_managers` tem `business_id` (Business ID) e `nome`.
+- Botão "WhatsApp Manager" hoje usa `inst.business_id` (o campo direto na instância), que pode não estar preenchido / não refletir a BM real.
+- Aba Envio Meta lê `display_phone` da mesma tabela `meta_whatsapp_instances`, então basta editar essa coluna que sincroniza automaticamente.
+
+## Mudanças
+
+### 1. Card da instância Meta (`src/pages/ConfigurarMeta.tsx`)
+
+Em cada card adicionar:
+
+- **Select "Business Manager"**: lista as BMs ativas de `meta_business_managers` (mesmo hook que já existe no `BusinessManagersManager`). Ao trocar, faz `UPDATE meta_whatsapp_instances SET meta_bm_id = ? WHERE id = ?`. Mostra o nome da BM vinculada abaixo do nome da instância como badge (ex.: `BM Certificadora`).
+- **Campo editável "Número (display_phone)"**: input inline com botão salvar/lápis. Ao salvar, `UPDATE meta_whatsapp_instances SET display_phone = ? WHERE id = ?`. Validação: só dígitos, mín. 10.
+- **Botão "WhatsApp Manager"** passa a resolver o `business_id` assim:
+  1. Se `inst.meta_bm_id` estiver setado → busca a BM correspondente e usa `bm.business_id`.
+  2. Senão, fallback para `inst.business_id` (comportamento atual).
+  3. URL: `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id={bmBusinessId}&asset_id={inst.waba_id}`.
+  4. Se não houver `business_id` resolvido, exibe toast "Vincule uma BM primeiro".
+
+### 2. Carregamento de BMs
+
+- No `ConfigurarMeta.tsx`, adicionar um `useEffect` que carrega `meta_business_managers` ativas uma vez (ordenadas por `padrao desc, nome`) e guarda em estado local para popular os selects. Após vincular/editar, dá `refetch` da lista de instâncias existente.
+
+### 3. Envio Meta (Massa)
+
+- **Nenhuma mudança de código.** A aba já lê `display_phone` de `meta_whatsapp_instances` — a edição feita no card se propaga automaticamente ao próximo carregamento do painel.
 
 ## Fora de escopo
-- Não altera nenhuma lógica de envio, sincronização, banco ou webhook.
-- Não mexe em outras páginas (Inbox Meta, Envio Meta, Pool). Se depois você quiser o mesmo botão lá, faço em outra passada.
+
+- Não alterar schema (coluna `meta_bm_id` já existe).
+- Não mexer em webhook, envio, saúde da instância, pool, ou em qualquer edge function.
+- Não editar `access_token`, `waba_id`, `phone_number_id` no card (fora do pedido).
+
+## Arquivos afetados
+
+- `src/pages/ConfigurarMeta.tsx` — único arquivo alterado.
