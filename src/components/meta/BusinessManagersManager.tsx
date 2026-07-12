@@ -215,6 +215,13 @@ export default function BusinessManagersManager() {
                     </div>
                     <Button
                       variant="outline" size="sm"
+                      onClick={() => iniciarEdicao(bm)}
+                      title="Editar nome"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline" size="sm"
                       onClick={() => definirPadrao(bm)}
                       disabled={bm.padrao}
                       title="Definir como BM padrão"
