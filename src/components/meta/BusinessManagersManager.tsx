@@ -31,6 +31,9 @@ export default function BusinessManagersManager() {
   const [businessId, setBusinessId] = useState("");
   const [descricao, setDescricao] = useState("");
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState("");
+
   async function load() {
     setLoading(true);
     const { data, error } = await supabase
