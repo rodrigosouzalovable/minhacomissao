@@ -197,7 +197,28 @@ export default function BusinessManagersManager() {
                 <div key={bm.id} className="flex flex-col md:flex-row md:items-center gap-3 border rounded-lg p-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{bm.nome}</span>
+                      {editingId === bm.id ? (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Input
+                            value={editNome}
+                            onChange={(e) => setEditNome(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") salvarNome(bm);
+                              if (e.key === "Escape") cancelarEdicao();
+                            }}
+                            className="h-8 text-sm flex-1 min-w-0"
+                            autoFocus
+                          />
+                          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => salvarNome(bm)}>
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancelarEdicao}>
+                            <X className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="font-medium">{bm.nome}</span>
+                      )}
                       {bm.padrao && <Badge className="bg-amber-500/15 text-amber-600">Padrão</Badge>}
                       {!bm.ativo && <Badge variant="outline">Inativa</Badge>}
                     </div>
