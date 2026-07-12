@@ -599,15 +599,19 @@ export default function ConfigurarMeta() {
                           variant="outline"
                           disabled={!inst.waba_id}
                           onClick={() => {
-                            const bid = (inst as any).business_id;
-                            const url = bid
-                              ? `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id=${bid}&asset_id=${inst.waba_id}`
-                              : `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id=${inst.waba_id}`;
+                            const bm = bms.find((b) => b.id === inst.meta_bm_id);
+                            const bid = bm?.business_id || (inst as any).business_id;
+                            if (!bid) {
+                              toast.error("Vincule uma BM com Business ID para abrir o WhatsApp Manager correto");
+                              return;
+                            }
+                            const url = `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id=${bid}&asset_id=${inst.waba_id}`;
                             window.open(url, "_blank", "noopener,noreferrer");
                           }}
-                          title="Abrir no Gerenciador do WhatsApp da Meta"
+                          title="Abrir no Gerenciador do WhatsApp da Meta (usa a BM vinculada)"
                         >
                           <ExternalLink className="h-3 w-3 mr-1" /> WhatsApp Manager
+                        </Button>
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
                           {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
