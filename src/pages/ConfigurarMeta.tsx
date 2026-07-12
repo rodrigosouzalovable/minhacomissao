@@ -38,6 +38,15 @@ type Instancia = {
   messaging_limit_manual?: string | null;
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
+  meta_bm_id?: string | null;
+};
+
+type BM = {
+  id: string;
+  nome: string;
+  business_id: string | null;
+  ativo: boolean;
+  padrao: boolean;
 };
 
 type Template = {
