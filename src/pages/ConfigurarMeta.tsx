@@ -38,6 +38,15 @@ type Instancia = {
   messaging_limit_manual?: string | null;
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
+  meta_bm_id?: string | null;
+};
+
+type BM = {
+  id: string;
+  nome: string;
+  business_id: string | null;
+  ativo: boolean;
+  padrao: boolean;
 };
 
 type Template = {
@@ -65,6 +74,9 @@ export default function ConfigurarMeta() {
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
   const [custosOpen, setCustosOpen] = useState(false);
+  const [bms, setBms] = useState<BM[]>([]);
+  const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
+  const [editPhoneValue, setEditPhoneValue] = useState("");
   
 
   const [assinando, setAssinando] = useState(false);
@@ -80,12 +92,14 @@ export default function ConfigurarMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t] = await Promise.all([
+    const [i, t, b] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").order("criado_em", { ascending: false }),
       supabase.from("meta_whatsapp_templates").select("*").order("sincronizado_em", { ascending: false }),
+      supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
     ]);
     if (i.data) setInstancias(i.data as Instancia[]);
     if (t.data) setTemplates(t.data as Template[]);
+    if (b.data) setBms(b.data as BM[]);
     setLoading(false);
   };
 
@@ -228,6 +242,25 @@ export default function ConfigurarMeta() {
     if (!confirm(`Excluir instância "${inst.nome}"?`)) return;
     await supabase.from("meta_whatsapp_instances").delete().eq("id", inst.id);
     toast.success("Instância excluída");
+    carregar();
+  };
+
+  const vincularBM = async (inst: Instancia, bmId: string) => {
+    const val = bmId === "__none__" ? null : bmId;
+    const { error } = await (supabase as any).from("meta_whatsapp_instances").update({ meta_bm_id: val }).eq("id", inst.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("BM vinculada");
+    carregar();
+  };
+
+  const salvarDisplayPhone = async (inst: Instancia) => {
+    const digits = editPhoneValue.replace(/\D+/g, "");
+    if (digits.length < 10) { toast.error("Número inválido (mín. 10 dígitos)"); return; }
+    const { error } = await (supabase as any).from("meta_whatsapp_instances").update({ display_phone: digits }).eq("id", inst.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Número atualizado — refletirá na aba Envio Meta");
+    setEditPhoneId(null);
+    setEditPhoneValue("");
     carregar();
   };
 
@@ -450,19 +483,80 @@ export default function ConfigurarMeta() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <h3 className="font-semibold">{inst.nome}</h3>
                           {inst.ativo ? (
                             <Badge variant="default" className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Ativa</Badge>
                           ) : (
                             <Badge variant="secondary"><XCircle className="h-3 w-3 mr-1" />Inativa</Badge>
                           )}
+                          {(() => {
+                            const bm = bms.find((b) => b.id === inst.meta_bm_id);
+                            return bm ? (
+                              <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600">
+                                BM: {bm.nome}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] border-dashed text-muted-foreground">
+                                Sem BM vinculada
+                              </Badge>
+                            );
+                          })()}
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
-                          <div><strong>Telefone:</strong> {inst.display_phone || "—"}</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground items-center">
+                          <div className="flex items-center gap-1">
+                            <strong>Telefone:</strong>{" "}
+                            {editPhoneId === inst.id ? (
+                              <>
+                                <Input
+                                  value={editPhoneValue}
+                                  onChange={(e) => setEditPhoneValue(e.target.value)}
+                                  className="h-6 text-xs w-32"
+                                  placeholder="5562..."
+                                />
+                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => salvarDisplayPhone(inst)}>OK</Button>
+                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEditPhoneId(null); setEditPhoneValue(""); }}>✕</Button>
+                              </>
+                            ) : (
+                              <>
+                                {inst.display_phone || "—"}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-5 px-1 text-[10px]"
+                                  onClick={() => { setEditPhoneId(inst.id); setEditPhoneValue(inst.display_phone || ""); }}
+                                >
+                                  editar
+                                </Button>
+                              </>
+                            )}
+                          </div>
                           <div><strong>Phone ID:</strong> <span className="font-mono">{inst.phone_number_id}</span></div>
                           <div><strong>WABA:</strong> <span className="font-mono">{inst.waba_id}</span></div>
                           <div><strong>Enviadas hoje:</strong> {inst.enviados_hoje}</div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-semibold">Business Manager:</span>
+                          <Select
+                            value={inst.meta_bm_id || "__none__"}
+                            onValueChange={(v) => vincularBM(inst, v)}
+                          >
+                            <SelectTrigger className="h-7 w-[240px] text-xs">
+                              <SelectValue placeholder="Selecionar BM" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— Não vinculada —</SelectItem>
+                              {bms.map((b) => (
+                                <SelectItem key={b.id} value={b.id}>
+                                  {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {bms.length === 0 && (
+                            <span className="text-[10px] text-muted-foreground">Cadastre BMs em "Business Managers" para vincular</span>
+                          )}
                         </div>
 
                         <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-2 text-xs">
@@ -505,13 +599,16 @@ export default function ConfigurarMeta() {
                           variant="outline"
                           disabled={!inst.waba_id}
                           onClick={() => {
-                            const bid = (inst as any).business_id;
-                            const url = bid
-                              ? `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id=${bid}&asset_id=${inst.waba_id}`
-                              : `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id=${inst.waba_id}`;
+                            const bm = bms.find((b) => b.id === inst.meta_bm_id);
+                            const bid = bm?.business_id || (inst as any).business_id;
+                            if (!bid) {
+                              toast.error("Vincule uma BM com Business ID para abrir o WhatsApp Manager correto");
+                              return;
+                            }
+                            const url = `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id=${bid}&asset_id=${inst.waba_id}`;
                             window.open(url, "_blank", "noopener,noreferrer");
                           }}
-                          title="Abrir no Gerenciador do WhatsApp da Meta"
+                          title="Abrir no Gerenciador do WhatsApp da Meta (usa a BM vinculada)"
                         >
                           <ExternalLink className="h-3 w-3 mr-1" /> WhatsApp Manager
                         </Button>
