@@ -483,19 +483,80 @@ export default function ConfigurarMeta() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <h3 className="font-semibold">{inst.nome}</h3>
                           {inst.ativo ? (
                             <Badge variant="default" className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Ativa</Badge>
                           ) : (
                             <Badge variant="secondary"><XCircle className="h-3 w-3 mr-1" />Inativa</Badge>
                           )}
+                          {(() => {
+                            const bm = bms.find((b) => b.id === inst.meta_bm_id);
+                            return bm ? (
+                              <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600">
+                                BM: {bm.nome}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] border-dashed text-muted-foreground">
+                                Sem BM vinculada
+                              </Badge>
+                            );
+                          })()}
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
-                          <div><strong>Telefone:</strong> {inst.display_phone || "—"}</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground items-center">
+                          <div className="flex items-center gap-1">
+                            <strong>Telefone:</strong>{" "}
+                            {editPhoneId === inst.id ? (
+                              <>
+                                <Input
+                                  value={editPhoneValue}
+                                  onChange={(e) => setEditPhoneValue(e.target.value)}
+                                  className="h-6 text-xs w-32"
+                                  placeholder="5562..."
+                                />
+                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => salvarDisplayPhone(inst)}>OK</Button>
+                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEditPhoneId(null); setEditPhoneValue(""); }}>✕</Button>
+                              </>
+                            ) : (
+                              <>
+                                {inst.display_phone || "—"}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-5 px-1 text-[10px]"
+                                  onClick={() => { setEditPhoneId(inst.id); setEditPhoneValue(inst.display_phone || ""); }}
+                                >
+                                  editar
+                                </Button>
+                              </>
+                            )}
+                          </div>
                           <div><strong>Phone ID:</strong> <span className="font-mono">{inst.phone_number_id}</span></div>
                           <div><strong>WABA:</strong> <span className="font-mono">{inst.waba_id}</span></div>
                           <div><strong>Enviadas hoje:</strong> {inst.enviados_hoje}</div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-semibold">Business Manager:</span>
+                          <Select
+                            value={inst.meta_bm_id || "__none__"}
+                            onValueChange={(v) => vincularBM(inst, v)}
+                          >
+                            <SelectTrigger className="h-7 w-[240px] text-xs">
+                              <SelectValue placeholder="Selecionar BM" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— Não vinculada —</SelectItem>
+                              {bms.map((b) => (
+                                <SelectItem key={b.id} value={b.id}>
+                                  {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {bms.length === 0 && (
+                            <span className="text-[10px] text-muted-foreground">Cadastre BMs em "Business Managers" para vincular</span>
+                          )}
                         </div>
 
                         <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-2 text-xs">
