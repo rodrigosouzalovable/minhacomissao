@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Star, StarOff } from "lucide-react";
+import { Loader2, Plus, Trash2, Star, StarOff, Pencil, Check, X } from "lucide-react";
 
 interface BM {
   id: string;
@@ -30,6 +30,9 @@ export default function BusinessManagersManager() {
   const [appId, setAppId] = useState("");
   const [businessId, setBusinessId] = useState("");
   const [descricao, setDescricao] = useState("");
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState("");
 
   async function load() {
     setLoading(true);
@@ -108,6 +111,36 @@ export default function BusinessManagersManager() {
     load();
   }
 
+  async function salvarNome(bm: BM) {
+    const novo = editNome.trim();
+    if (!novo) {
+      toast.error("Informe um nome");
+      return;
+    }
+    if (novo === bm.nome) {
+      setEditingId(null);
+      return;
+    }
+    const { error } = await supabase
+      .from("meta_business_managers")
+      .update({ nome: novo })
+      .eq("id", bm.id);
+    if (error) return toast.error(error.message);
+    toast.success("Nome atualizado");
+    setEditingId(null);
+    load();
+  }
+
+  function iniciarEdicao(bm: BM) {
+    setEditingId(bm.id);
+    setEditNome(bm.nome);
+  }
+
+  function cancelarEdicao() {
+    setEditingId(null);
+    setEditNome("");
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -164,7 +197,28 @@ export default function BusinessManagersManager() {
                 <div key={bm.id} className="flex flex-col md:flex-row md:items-center gap-3 border rounded-lg p-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{bm.nome}</span>
+                      {editingId === bm.id ? (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Input
+                            value={editNome}
+                            onChange={(e) => setEditNome(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") salvarNome(bm);
+                              if (e.key === "Escape") cancelarEdicao();
+                            }}
+                            className="h-8 text-sm flex-1 min-w-0"
+                            autoFocus
+                          />
+                          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => salvarNome(bm)}>
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancelarEdicao}>
+                            <X className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="font-medium">{bm.nome}</span>
+                      )}
                       {bm.padrao && <Badge className="bg-amber-500/15 text-amber-600">Padrão</Badge>}
                       {!bm.ativo && <Badge variant="outline">Inativa</Badge>}
                     </div>
@@ -180,6 +234,13 @@ export default function BusinessManagersManager() {
                     <div className="flex items-center gap-1 text-xs">
                       Ativa <Switch checked={bm.ativo} onCheckedChange={() => toggleAtivo(bm)} />
                     </div>
+                    <Button
+                      variant="outline" size="sm"
+                      onClick={() => iniciarEdicao(bm)}
+                      title="Editar nome"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
                     <Button
                       variant="outline" size="sm"
                       onClick={() => definirPadrao(bm)}
