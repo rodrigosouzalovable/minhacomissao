@@ -74,6 +74,9 @@ export default function ConfigurarMeta() {
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
   const [custosOpen, setCustosOpen] = useState(false);
+  const [bms, setBms] = useState<BM[]>([]);
+  const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
+  const [editPhoneValue, setEditPhoneValue] = useState("");
   
 
   const [assinando, setAssinando] = useState(false);
