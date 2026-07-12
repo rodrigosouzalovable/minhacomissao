@@ -245,6 +245,25 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  const vincularBM = async (inst: Instancia, bmId: string) => {
+    const val = bmId === "__none__" ? null : bmId;
+    const { error } = await (supabase as any).from("meta_whatsapp_instances").update({ meta_bm_id: val }).eq("id", inst.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("BM vinculada");
+    carregar();
+  };
+
+  const salvarDisplayPhone = async (inst: Instancia) => {
+    const digits = editPhoneValue.replace(/\D+/g, "");
+    if (digits.length < 10) { toast.error("Número inválido (mín. 10 dígitos)"); return; }
+    const { error } = await (supabase as any).from("meta_whatsapp_instances").update({ display_phone: digits }).eq("id", inst.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Número atualizado — refletirá na aba Envio Meta");
+    setEditPhoneId(null);
+    setEditPhoneValue("");
+    carregar();
+  };
+
   const salvarTierManual = async (inst: Instancia, valor: string) => {
     const patch: any = valor === "__auto__"
       ? { messaging_limit_manual: null, messaging_limit_source: inst.saude_tier ? "meta_api" : "default" }
