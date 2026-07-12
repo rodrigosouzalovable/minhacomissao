@@ -481,10 +481,11 @@ export default function ConfigurarMeta() {
               {instancias.map((inst) => (
                 <Card key={inst.id}>
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <h3 className="font-semibold">{inst.nome}</h3>
+                    <div className="flex flex-col gap-3">
+                      {/* Header: nome + badges à esquerda, botões de ação à direita */}
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <h3 className="font-semibold truncate">{inst.nome}</h3>
                           {inst.ativo ? (
                             <Badge variant="default" className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Ativa</Badge>
                           ) : (
@@ -503,126 +504,139 @@ export default function ConfigurarMeta() {
                             );
                           })()}
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground items-center">
-                          <div className="flex items-center gap-1">
-                            <strong>Telefone:</strong>{" "}
-                            {editPhoneId === inst.id ? (
-                              <>
-                                <Input
-                                  value={editPhoneValue}
-                                  onChange={(e) => setEditPhoneValue(e.target.value)}
-                                  className="h-6 text-xs w-32"
-                                  placeholder="5562..."
-                                />
-                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => salvarDisplayPhone(inst)}>OK</Button>
-                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEditPhoneId(null); setEditPhoneValue(""); }}>✕</Button>
-                              </>
-                            ) : (
-                              <>
-                                {inst.display_phone || "—"}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-5 px-1 text-[10px]"
-                                  onClick={() => { setEditPhoneId(inst.id); setEditPhoneValue(inst.display_phone || ""); }}
-                                >
-                                  editar
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                          <div><strong>Phone ID:</strong> <span className="font-mono">{inst.phone_number_id}</span></div>
-                          <div><strong>WABA:</strong> <span className="font-mono">{inst.waba_id}</span></div>
-                          <div><strong>Enviadas hoje:</strong> {inst.enviados_hoje}</div>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                          <span className="font-semibold">Business Manager:</span>
-                          <Select
-                            value={inst.meta_bm_id || "__none__"}
-                            onValueChange={(v) => vincularBM(inst, v)}
+                        <div className="flex gap-1 flex-wrap justify-end shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!inst.waba_id}
+                            onClick={() => {
+                              const bm = bms.find((b) => b.id === inst.meta_bm_id);
+                              const bid = bm?.business_id || (inst as any).business_id;
+                              if (!bid) {
+                                toast.error("Vincule uma BM com Business ID para abrir o WhatsApp Manager correto");
+                                return;
+                              }
+                              const url = `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id=${bid}&asset_id=${inst.waba_id}`;
+                              window.open(url, "_blank", "noopener,noreferrer");
+                            }}
+                            title="Abrir no Gerenciador do WhatsApp da Meta (usa a BM vinculada)"
                           >
-                            <SelectTrigger className="h-7 w-[240px] text-xs">
-                              <SelectValue placeholder="Selecionar BM" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">— Não vinculada —</SelectItem>
-                              {bms.map((b) => (
-                                <SelectItem key={b.id} value={b.id}>
-                                  {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {bms.length === 0 && (
-                            <span className="text-[10px] text-muted-foreground">Cadastre BMs em "Business Managers" para vincular</span>
-                          )}
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-2 text-xs">
-                          <span className="font-semibold">Limite de mensagens:</span>
-                          <Select
-                            value={inst.messaging_limit_manual || "__auto__"}
-                            onValueChange={(v) => salvarTierManual(inst, v)}
-                          >
-                            <SelectTrigger className="h-7 w-[210px] text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__auto__">
-                                🔄 Automático {inst.saude_tier ? `(Meta: ${inst.saude_tier.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "")})` : "(padrão TIER_1K)"}
-                              </SelectItem>
-                              <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
-                              <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
-                              <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
-                              <SelectItem value="TIER_10K">✋ TIER_10K (10.000/dia)</SelectItem>
-                              <SelectItem value="TIER_100K">✋ TIER_100K (100.000/dia)</SelectItem>
-                              <SelectItem value="TIER_UNLIMITED">✋ Ilimitado</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Badge variant="outline" className="text-[10px]">
-                            Fonte: {inst.messaging_limit_source === "manual" ? "manual" : inst.messaging_limit_source === "meta_api" ? "sync Meta" : "padrão"}
-                          </Badge>
-                          {inst.messaging_limit_synced_at && (
-                            <span className="text-muted-foreground text-[10px]">
-                              últ. sync: {new Date(inst.messaging_limit_synced_at).toLocaleString("pt-BR")}
-                            </span>
-                          )}
-                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => sincronizarSaude(inst)}>
-                            <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
+                            <ExternalLink className="h-3 w-3 mr-1" /> WhatsApp Manager
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
+                            {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
+                            {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => toggle(inst)} title={inst.ativo ? "Desativar" : "Ativar"}>
+                            <Power className="h-3 w-3" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => excluir(inst)} title="Excluir">
+                            <Trash2 className="h-3 w-3 text-destructive" />
                           </Button>
                         </div>
                       </div>
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!inst.waba_id}
-                          onClick={() => {
-                            const bm = bms.find((b) => b.id === inst.meta_bm_id);
-                            const bid = bm?.business_id || (inst as any).business_id;
-                            if (!bid) {
-                              toast.error("Vincule uma BM com Business ID para abrir o WhatsApp Manager correto");
-                              return;
-                            }
-                            const url = `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id=${bid}&asset_id=${inst.waba_id}`;
-                            window.open(url, "_blank", "noopener,noreferrer");
-                          }}
-                          title="Abrir no Gerenciador do WhatsApp da Meta (usa a BM vinculada)"
+
+                      {/* Identificação: rótulo em cima, valor embaixo */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Telefone</span>
+                          {editPhoneId === inst.id ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={editPhoneValue}
+                                onChange={(e) => setEditPhoneValue(e.target.value)}
+                                className="h-7 text-xs w-full sm:w-40"
+                                placeholder="5562..."
+                              />
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => salvarDisplayPhone(inst)}>OK</Button>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setEditPhoneId(null); setEditPhoneValue(""); }}>✕</Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-medium">{inst.display_phone || "—"}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                                onClick={() => { setEditPhoneId(inst.id); setEditPhoneValue(inst.display_phone || ""); }}
+                              >
+                                editar
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Phone ID</span>
+                          <span className="text-xs font-mono truncate" title={inst.phone_number_id}>{inst.phone_number_id}</span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">WABA</span>
+                          <span className="text-xs font-mono truncate" title={inst.waba_id}>{inst.waba_id}</span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Enviadas hoje</span>
+                          <span className="text-xs font-medium">{inst.enviados_hoje}</span>
+                        </div>
+                      </div>
+
+                      {/* Business Manager */}
+                      <div className="pt-3 border-t border-border/60 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-semibold">Business Manager:</span>
+                        <Select
+                          value={inst.meta_bm_id || "__none__"}
+                          onValueChange={(v) => vincularBM(inst, v)}
                         >
-                          <ExternalLink className="h-3 w-3 mr-1" /> WhatsApp Manager
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
-                          {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
-                          {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => toggle(inst)}>
-                          <Power className="h-3 w-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => excluir(inst)}>
-                          <Trash2 className="h-3 w-3 text-destructive" />
+                          <SelectTrigger className="h-7 w-full sm:w-[260px] text-xs">
+                            <SelectValue placeholder="Selecionar BM" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— Não vinculada —</SelectItem>
+                            {bms.map((b) => (
+                              <SelectItem key={b.id} value={b.id}>
+                                {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {bms.length === 0 && (
+                          <span className="text-[10px] text-muted-foreground">Cadastre BMs em "Business Managers" para vincular</span>
+                        )}
+                      </div>
+
+                      {/* Limite de mensagens */}
+                      <div className="pt-3 border-t border-border/60 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-semibold">Limite de mensagens:</span>
+                        <Select
+                          value={inst.messaging_limit_manual || "__auto__"}
+                          onValueChange={(v) => salvarTierManual(inst, v)}
+                        >
+                          <SelectTrigger className="h-7 w-full sm:w-[240px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__auto__">
+                              🔄 Automático {inst.saude_tier ? `(Meta: ${inst.saude_tier.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "")})` : "(padrão TIER_1K)"}
+                            </SelectItem>
+                            <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
+                            <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
+                            <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
+                            <SelectItem value="TIER_10K">✋ TIER_10K (10.000/dia)</SelectItem>
+                            <SelectItem value="TIER_100K">✋ TIER_100K (100.000/dia)</SelectItem>
+                            <SelectItem value="TIER_UNLIMITED">✋ Ilimitado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Badge variant="outline" className="text-[10px]">
+                          Fonte: {inst.messaging_limit_source === "manual" ? "manual" : inst.messaging_limit_source === "meta_api" ? "sync Meta" : "padrão"}
+                        </Badge>
+                        {inst.messaging_limit_synced_at && (
+                          <span className="text-muted-foreground text-[10px]">
+                            últ. sync: {new Date(inst.messaging_limit_synced_at).toLocaleString("pt-BR")}
+                          </span>
+                        )}
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => sincronizarSaude(inst)}>
+                          <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
                         </Button>
                       </div>
                     </div>

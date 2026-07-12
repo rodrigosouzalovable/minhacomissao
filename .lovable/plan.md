@@ -1,45 +1,45 @@
 ## Objetivo
 
-Nos cards da aba "API Oficial Meta" (ConfigurarMeta):
+Reorganizar o layout de cada card da aba "API Oficial Meta" (`src/pages/ConfigurarMeta.tsx`) para que as informações fiquem bem alinhadas, sem elementos sobrepostos ou "colados" (ex.: "Phone ID:" grudando no rótulo "editar" do telefone) e sem quebras visuais estranhas em telas menores.
 
-1. Poder **vincular cada número a uma Business Manager cadastrada** (usando as BMs de `meta_business_managers`).
-2. O botão **"WhatsApp Manager"** abrir automaticamente na URL da BM correta desse número.
-3. Poder **editar o número (display_phone)** direto no card, e esse valor refletir também na aba **Envio Meta (Massa)**.
+## Problemas atuais (visíveis no screenshot)
 
-## Estado atual
+- Grid de 4 colunas força "Phone ID" e "WABA" a ficarem colados quando o campo Telefone entra em modo de exibição com botão "editar" inline.
+- O botão "editar" fica pequeno e visualmente grudado ao valor do telefone.
+- Linha do Business Manager fica logo abaixo do grid sem separação clara.
+- Botões de ação à direita (WhatsApp Manager / Testar / Templates / Power / Trash) disputam espaço horizontal com o bloco de infos e podem sobrepor quando o nome da instância + badges é longo.
 
-- Tabela `meta_whatsapp_instances` já tem a coluna `meta_bm_id uuid` (FK lógica para `meta_business_managers.id`) — só não está sendo usada na UI.
-- Tabela `meta_business_managers` tem `business_id` (Business ID) e `nome`.
-- Botão "WhatsApp Manager" hoje usa `inst.business_id` (o campo direto na instância), que pode não estar preenchido / não refletir a BM real.
-- Aba Envio Meta lê `display_phone` da mesma tabela `meta_whatsapp_instances`, então basta editar essa coluna que sincroniza automaticamente.
+## Mudanças (só CSS/estrutura JSX, sem mudança de lógica)
 
-## Mudanças
+Em `src/pages/ConfigurarMeta.tsx`, dentro do `map((inst) => ...)` (linhas ~481–630):
 
-### 1. Card da instância Meta (`src/pages/ConfigurarMeta.tsx`)
+1. **Header do card em linha própria (full-width)**
+   - Trocar o wrapper externo `flex items-start justify-between` por um `flex flex-col gap-3`.
+   - Primeira linha: `flex flex-wrap items-center justify-between gap-2` contendo:
+     - Esquerda: nome + badges (Ativa/Inativa + BM vinculada/Sem BM).
+     - Direita: bloco de botões de ação (WhatsApp Manager, Testar, Templates, Power, Trash) em `flex flex-wrap gap-1 shrink-0`.
+   - Isso garante que os botões nunca "colem" nas informações e quebram para baixo em telas estreitas.
 
-Em cada card adicionar:
+2. **Bloco de identificação em grid estável**
+   - Substituir o grid `grid-cols-2 md:grid-cols-4` por `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2`.
+   - Cada célula fica em `flex flex-col` (rótulo em cima em `text-[10px] uppercase text-muted-foreground`, valor embaixo em `text-xs font-medium`) → elimina o efeito de "Phone ID" grudando no valor anterior.
+   - Campo Telefone continua editável inline, mas o botão "editar" vira um `IconButton` (ícone de lápis, `h-5 w-5`) à direita do valor, com `ml-1`.
 
-- **Select "Business Manager"**: lista as BMs ativas de `meta_business_managers` (mesmo hook que já existe no `BusinessManagersManager`). Ao trocar, faz `UPDATE meta_whatsapp_instances SET meta_bm_id = ? WHERE id = ?`. Mostra o nome da BM vinculada abaixo do nome da instância como badge (ex.: `BM Certificadora`).
-- **Campo editável "Número (display_phone)"**: input inline com botão salvar/lápis. Ao salvar, `UPDATE meta_whatsapp_instances SET display_phone = ? WHERE id = ?`. Validação: só dígitos, mín. 10.
-- **Botão "WhatsApp Manager"** passa a resolver o `business_id` assim:
-  1. Se `inst.meta_bm_id` estiver setado → busca a BM correspondente e usa `bm.business_id`.
-  2. Senão, fallback para `inst.business_id` (comportamento atual).
-  3. URL: `https://business.facebook.com/latest/whatsapp_manager/phone_numbers?business_id={bmBusinessId}&asset_id={inst.waba_id}`.
-  4. Se não houver `business_id` resolvido, exibe toast "Vincule uma BM primeiro".
+3. **Separação visual entre seções**
+   - Business Manager e Limite de mensagens continuam como estão, mas cada um envolvido por `div` com `pt-3 mt-3 border-t border-border/60` (hoje só o Limite tem border-t; padronizar ambos).
+   - Dentro de cada seção, `flex flex-wrap items-center gap-2` e o `<Select>` com `w-full sm:w-[240px]` (evita estourar em mobile).
 
-### 2. Carregamento de BMs
+4. **Larguras dos Selects e Inputs**
+   - Todos os `SelectTrigger` passam a usar `w-full sm:w-[240px]` (BM) e `w-full sm:w-[220px]` (Limite) para não estourarem em telas pequenas.
+   - Input de edição de telefone `w-full sm:w-40`.
 
-- No `ConfigurarMeta.tsx`, adicionar um `useEffect` que carrega `meta_business_managers` ativas uma vez (ordenadas por `padrao desc, nome`) e guarda em estado local para popular os selects. Após vincular/editar, dá `refetch` da lista de instâncias existente.
+5. **Sem mudanças em**: nomes de campos, handlers (`vincularBM`, `salvarDisplayPhone`, `salvarTierManual`, `sincronizarSaude`, `testar`, `sincronizar`, `toggle`, `excluir`), lógica do botão WhatsApp Manager, dados carregados, ou schema.
 
-### 3. Envio Meta (Massa)
+## Resultado esperado
 
-- **Nenhuma mudança de código.** A aba já lê `display_phone` de `meta_whatsapp_instances` — a edição feita no card se propaga automaticamente ao próximo carregamento do painel.
-
-## Fora de escopo
-
-- Não alterar schema (coluna `meta_bm_id` já existe).
-- Não mexer em webhook, envio, saúde da instância, pool, ou em qualquer edge function.
-- Não editar `access_token`, `waba_id`, `phone_number_id` no card (fora do pedido).
+- Cabeçalho: nome + status + BM na esquerda; botões de ação alinhados à direita, quebrando linha só quando necessário.
+- Bloco de identificação: 4 colunas em desktop, 2 em tablet, 1 em mobile, com rótulo em cima e valor embaixo — nada mais fica "grudado".
+- Business Manager e Limite de mensagens claramente separados por linha divisória e com selects que não estouram a largura do card.
 
 ## Arquivos afetados
 
