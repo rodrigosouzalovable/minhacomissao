@@ -92,12 +92,14 @@ export default function ConfigurarMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t] = await Promise.all([
+    const [i, t, b] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").order("criado_em", { ascending: false }),
       supabase.from("meta_whatsapp_templates").select("*").order("sincronizado_em", { ascending: false }),
+      supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
     ]);
     if (i.data) setInstancias(i.data as Instancia[]);
     if (t.data) setTemplates(t.data as Template[]);
+    if (b.data) setBms(b.data as BM[]);
     setLoading(false);
   };
 
