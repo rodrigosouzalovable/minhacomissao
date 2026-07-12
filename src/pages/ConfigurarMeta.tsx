@@ -612,7 +612,6 @@ export default function ConfigurarMeta() {
                         >
                           <ExternalLink className="h-3 w-3 mr-1" /> WhatsApp Manager
                         </Button>
-                        </Button>
                         <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
                           {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
                         </Button>
