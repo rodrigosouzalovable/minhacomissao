@@ -1584,3 +1584,27 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
     </div>
   );
 }
+
+function EnviosTotaisCards() {
+  const { data, isLoading } = useMetaEnviosTotais();
+  const fmt = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
+  const items = [
+    { label: "Envios de hoje", value: data?.hoje ?? 0 },
+    { label: "Últimos 7 dias", value: data?.ultimos7d ?? 0 },
+    { label: "Todos os envios", value: data?.total ?? 0 },
+  ];
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {items.map((it) => (
+        <Card key={it.label}>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">{it.label}</div>
+            <div className="text-2xl font-semibold mt-1">
+              {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : fmt(it.value)}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
