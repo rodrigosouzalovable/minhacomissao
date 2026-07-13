@@ -1025,19 +1025,78 @@ export default function EnvioMeta() {
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Textarea
-            rows={10}
-            value={recipientsRaw}
-            onChange={(e) => { setRecipientsRaw(e.target.value); setValidacaoPreview(null); setVarsByTel({}); }}
-            placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
-            className="font-mono text-xs"
-          />
-          {recipients.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Primeiro: <code>{recipients[0].telefone}</code>
-              {recipients[0].nome && <> • {recipients[0].nome}</>}
-              {recipients[0].cpf && <> • CNPJ/CPF: <code>{recipients[0].cpf}</code></>}
-            </p>
+          {recipientsHeaders.length > 0 && !editAsText ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Confira o mapeamento — cada coluna corresponde a um campo do template.
+                </p>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setEditAsText(true)}>
+                  Editar como texto
+                </Button>
+              </div>
+              <div className="rounded-md border overflow-auto max-h-80">
+                <table className="w-full text-xs font-mono">
+                  <thead className="bg-muted sticky top-0">
+                    <tr>
+                      {recipientsHeaders.map((h, i) => (
+                        <th key={i} className="text-left px-2 py-1.5 border-b whitespace-nowrap font-semibold">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recipientsRaw.split(/\r?\n/).filter(Boolean).map((linha, ri) => {
+                      const cells = linha.split(/[,;\t]/).map((c) => c.trim());
+                      return (
+                        <tr key={ri} className="border-b last:border-0 hover:bg-muted/40">
+                          {recipientsHeaders.map((_, ci) => (
+                            <td key={ci} className="px-2 py-1 align-top max-w-[280px] truncate" title={cells[ci] || ""}>
+                              {cells[ci] || <span className="text-muted-foreground/50">—</span>}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {recipients.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Primeiro: <code>{recipients[0].telefone}</code>
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <Textarea
+                rows={10}
+                value={recipientsRaw}
+                onChange={(e) => {
+                  setRecipientsRaw(e.target.value);
+                  setValidacaoPreview(null);
+                  setVarsByTel({});
+                  setRecipientsHeaders([]);
+                }}
+                placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
+                className="font-mono text-xs"
+              />
+              {recipientsHeaders.length > 0 && (
+                <div className="flex justify-end">
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditAsText(false)}>
+                    Voltar para tabela
+                  </Button>
+                </div>
+              )}
+              {recipients.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Primeiro: <code>{recipients[0].telefone}</code>
+                  {recipients[0].nome && <> • {recipients[0].nome}</>}
+                  {recipients[0].cpf && <> • CNPJ/CPF: <code>{recipients[0].cpf}</code></>}
+                </p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
