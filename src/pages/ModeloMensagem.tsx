@@ -679,10 +679,10 @@ export default function ModeloMensagem() {
 
           <TabsContent value="imagem" className="mt-4">
             <ColarImagemTab
-              template={template}
-              descVistaGlobal={descVistaGlobal}
-              descParceladoGlobal={descParceladoGlobal}
-              parceladoQtdGlobal={parceladoQtdGlobal}
+              template={template2}
+              descVistaGlobal={descVistaGlobal2}
+              descParceladoGlobal={descParceladoGlobal2}
+              parceladoQtdGlobal={parceladoQtdGlobal2}
             />
           </TabsContent>
         </Tabs>
