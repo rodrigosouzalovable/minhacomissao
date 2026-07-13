@@ -213,6 +213,7 @@ async function processarItem(job: any): Promise<ItemResult> {
     cpf: pend.cpf,
     atraso: pend.atraso,
     saldo: pend.saldo,
+    vars: (pend as any).vars || {},
   };
 
   let ok = false;
