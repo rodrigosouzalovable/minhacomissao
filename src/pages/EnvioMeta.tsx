@@ -70,6 +70,7 @@ type ClienteRow = {
   cpf?: string;
   atraso?: string;
   saldo?: number;
+  vars?: Record<string, string>;
 };
 
 function normalizeTelKey(t: string): string {
