@@ -597,6 +597,17 @@ export default function EnvioMeta() {
         custoRef.current?.refetch();
       },
     });
+
+    // Libera o formulário imediatamente após iniciar. O acompanhamento
+    // da campanha passa a acontecer apenas no botão flutuante "Campanhas".
+    setRecipientsRaw("");
+    setRecipientsHeaders([]);
+    setVarsByTel({});
+    setValidacaoPreview(null);
+    setNomeCampanha("");
+    limpar();
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+    toast.success("Campanha iniciada. Acompanhe no botão Campanhas.");
   };
 
   const enviarTeste = async () => {
@@ -1242,73 +1253,8 @@ export default function EnvioMeta() {
               {enviandoTeste ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
               {enviandoTeste ? "Enviando teste..." : "Enviar teste (1º número)"}
             </Button>
-
-            {enviando && (
-              <>
-                <Button type="button" variant="secondary" size="lg" onClick={togglePausa}>
-                  {pausado ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
-                  {pausado ? "Retomar" : "Pausar"}
-                </Button>
-                <Button type="button" variant="destructive" size="lg" onClick={cancelar}>
-                  <StopCircle className="h-4 w-4 mr-2" />
-                  Cancelar
-                </Button>
-              </>
-            )}
-            {!enviando && resultado && restantes > 0 && (
-              <Button type="button" size="lg" onClick={reativar} className="bg-green-600 hover:bg-green-700 text-white">
-                <Send className="h-4 w-4 mr-2" />
-                Reativar envio ({restantes} restantes)
-              </Button>
-            )}
-            {!enviando && (resultado || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
-              <Button type="button" variant="outline" size="lg" onClick={limpar}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                Limpar resultados
-              </Button>
-            )}
           </div>
 
-          {progresso && (
-            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">
-                  {pausado ? "⏸ Pausado" : "Enviando"} — {progresso.enviados + progresso.erros}/{progresso.total}
-                </span>
-                <span className="text-muted-foreground text-xs">
-                  ✅ {progresso.enviados} • ❌ {progresso.erros} • ⏳ {progresso.total - progresso.enviados - progresso.erros}
-                </span>
-              </div>
-              <div className="h-2 w-full bg-muted rounded overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${Math.round(((progresso.enviados + progresso.erros) / Math.max(progresso.total, 1)) * 100)}%` }}
-                />
-              </div>
-              <div className="text-xs text-muted-foreground space-y-0.5">
-                {progresso.atualTelefone && <div>Último: <code>{progresso.atualTelefone}</code> via <strong>{progresso.atualInstancia}</strong></div>}
-                {progresso.proximoEmSeg > 0 && !pausado && <div>Próximo envio em {progresso.proximoEmSeg}s</div>}
-              </div>
-            </div>
-          )}
-
-
-          {resultado && (
-            <div className="text-sm space-y-2">
-              {resultado.enviados === 0 && resultado.statusMotivo && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive">
-                  Nenhuma mensagem foi enviada: {resultado.statusMotivo}
-                </div>
-              )}
-              <Badge variant="default" className="bg-green-600 mr-2">{resultado.enviados} enviados</Badge>
-              {resultado.erros > 0 && <Badge variant="destructive" className="mr-2">{resultado.erros} erros</Badge>}
-              <span className="text-muted-foreground">de {resultado.total} contatos</span>
-            </div>
-          )}
-
-          {(enviando || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
-            <DetalhesEnvioPainel detalhes={detalhes} deliveryResumo={deliveryResumo} onRefresh={refreshStatus} />
-          )}
         </CardContent>
       </Card>
     </div>
