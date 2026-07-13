@@ -257,9 +257,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <span className="text-red-700 dark:text-red-400">
                   Erros <span className="text-muted-foreground font-normal">({detalhes.erros.length})</span>
                 </span>
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.erros.map((x) => x.telefone), "Erros"); }}>
-                  <Copy className="h-3 w-3 mr-1" /> Copiar
-                </Button>
+                <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.erros.map((x) => x.telefone), "Erros"); }}>
+                    <Copy className="h-3 w-3 mr-1" /> Copiar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarErros(); }}>
+                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  </Button>
+                </div>
               </summary>
               <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
                 {detalhes.erros.map((e, i) => (
