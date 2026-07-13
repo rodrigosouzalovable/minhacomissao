@@ -13,6 +13,7 @@ type Cliente = {
   cpf?: string;
   atraso?: string;
   saldo?: number;
+  vars?: Record<string, string>;
 };
 
 Deno.serve(async (req) => {
