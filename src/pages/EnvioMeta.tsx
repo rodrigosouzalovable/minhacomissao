@@ -849,33 +849,8 @@ export default function EnvioMeta() {
         {/* Instâncias */}
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle>2. Instâncias</CardTitle>
-                <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={instancias.length === 0}
-                  onClick={() => {
-                    if (instanciaIds.length === instancias.length) {
-                      setInstanciaIds([]);
-                    } else {
-                      setInstanciaIds(instancias.map((i) => i.id));
-                    }
-                  }}
-                >
-                  {instanciaIds.length === instancias.length && instancias.length > 0 ? "Limpar seleção" : "Selecionar todas"}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
-                  {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
-                  Verificar saúde
-                </Button>
-              </div>
-            </div>
+            <CardTitle>2. Instâncias</CardTitle>
+            <CardDescription>Marque as instâncias para distribuir em round-robin.</CardDescription>
           </CardHeader>
           <CardContent>
             {instancias.length === 0 ? (
@@ -883,131 +858,174 @@ export default function EnvioMeta() {
                 Nenhuma instância ativa. Cadastre em "API Oficial Meta".
               </p>
             ) : (
-              <>
-              {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
-                <div className="mb-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-medium mb-0.5">Nenhuma instância marcada está ativa no pool</div>
-                    <div>O disparo em massa está bloqueado. Use <strong>"Enviar teste (1º número)"</strong> abaixo para validar o template com 1 contato, ou ative as instâncias em Configurar Meta → Pool.</div>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-sm">
+                  <div className="font-medium">
+                    {instanciaIds.length} de {instancias.length} selecionadas
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Round-robin entre as instâncias marcadas.
                   </div>
                 </div>
-              )}
-
-              <div className="space-y-2">
-                {instancias.map((i) => {
-                  const isEditing = editingId === i.id;
-                  return (
-                  <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
-                    <Checkbox
-                      checked={instanciaIds.includes(i.id)}
-                      onCheckedChange={() => toggleInstancia(i.id)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      {isEditing ? (
-                        <div
-                          className="space-y-1.5"
-                          onClick={(e) => e.preventDefault()}
-                        >
-                          <Input
-                            value={editNome}
-                            onChange={(e) => setEditNome(e.target.value)}
-                            placeholder="Nome / apelido"
-                            className="h-7 text-sm"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <Input
-                            value={editPhone}
-                            onChange={(e) => setEditPhone(e.target.value)}
-                            placeholder="Telefone de exibição"
-                            className="h-7 text-xs"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          <div className="font-medium text-sm">{i.nome}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
-                          </div>
-                          {(i.saude_status || i.saude_quality) && (
-                            <div className="flex flex-wrap gap-1 mt-1 items-center">
-                              <SaudeBadgeStatus status={i.saude_status} />
-                              <SaudeBadgeQuality quality={i.saude_quality} />
-                              {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
-                              {i.saude_ban_info && (
-                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
-                                  <AlertTriangle className="h-3 w-3" /> BANIDO
-                                </Badge>
-                              )}
-                              <button
-                                type="button"
-                                className="text-[10px] text-primary underline ml-1"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDetalheSaude(i); }}
-                              >
-                                detalhes
-                              </button>
-                              {i.saude_checked_at && (
-                                <span className="text-[10px] text-muted-foreground ml-1">
-                                  {new Date(i.saude_checked_at).toLocaleTimeString()}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    {isEditing ? (
-                      <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          disabled={savingEdit}
-                          onClick={(e) => { e.stopPropagation(); salvarEdicao(i.id); }}
-                          title="Salvar"
-                        >
-                          {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={(e) => { e.stopPropagation(); cancelEdit(); }}
-                          title="Cancelar"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
-                          {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
-                        </Badge>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(i); }}
-                          title="Editar"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
-                  </label>
-                  );
-                })}
+                <Button type="button" onClick={() => setInstanciasDialogOpen(true)}>
+                  Acessar Instâncias
+                </Button>
               </div>
-              </>
             )}
-
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={instanciasDialogOpen} onOpenChange={setInstanciasDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Instâncias</DialogTitle>
+            <DialogDescription>Marque as instâncias para distribuir em round-robin.</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={instancias.length === 0}
+              onClick={() => {
+                if (instanciaIds.length === instancias.length) {
+                  setInstanciaIds([]);
+                } else {
+                  setInstanciaIds(instancias.map((i) => i.id));
+                }
+              }}
+            >
+              {instanciaIds.length === instancias.length && instancias.length > 0 ? "Limpar seleção" : "Selecionar todas"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
+              {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
+              Verificar saúde
+            </Button>
+          </div>
+          <div className="overflow-auto flex-1 -mx-1 px-1">
+          {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
+            <div className="mb-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium mb-0.5">Nenhuma instância marcada está ativa no pool</div>
+                <div>O disparo em massa está bloqueado. Ative as instâncias em Configurar Meta → Pool.</div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {instancias.map((i) => {
+              const isEditing = editingId === i.id;
+              return (
+              <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
+                <Checkbox
+                  checked={instanciaIds.includes(i.id)}
+                  onCheckedChange={() => toggleInstancia(i.id)}
+                />
+                <div className="flex-1 min-w-0">
+                  {isEditing ? (
+                    <div
+                      className="space-y-1.5"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <Input
+                        value={editNome}
+                        onChange={(e) => setEditNome(e.target.value)}
+                        placeholder="Nome / apelido"
+                        className="h-7 text-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Input
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        placeholder="Telefone de exibição"
+                        className="h-7 text-xs"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="font-medium text-sm">{i.nome}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
+                      </div>
+                      {(i.saude_status || i.saude_quality) && (
+                        <div className="flex flex-wrap gap-1 mt-1 items-center">
+                          <SaudeBadgeStatus status={i.saude_status} />
+                          <SaudeBadgeQuality quality={i.saude_quality} />
+                          {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
+                          {i.saude_ban_info && (
+                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> BANIDO
+                            </Badge>
+                          )}
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary underline ml-1"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDetalheSaude(i); }}
+                          >
+                            detalhes
+                          </button>
+                          {i.saude_checked_at && (
+                            <span className="text-[10px] text-muted-foreground ml-1">
+                              {new Date(i.saude_checked_at).toLocaleTimeString()}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                {isEditing ? (
+                  <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      disabled={savingEdit}
+                      onClick={(e) => { e.stopPropagation(); salvarEdicao(i.id); }}
+                      title="Salvar"
+                    >
+                      {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={(e) => { e.stopPropagation(); cancelEdit(); }}
+                      title="Cancelar"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
+                      {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
+                    </Badge>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(i); }}
+                      title="Editar"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
+              </label>
+              );
+            })}
+          </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Destinatários */}
       <Card>
