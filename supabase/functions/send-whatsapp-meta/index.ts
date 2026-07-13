@@ -155,7 +155,7 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
     const key = m[1];
     if (seen.has(key)) continue;
     seen.add(key);
-    const value = resolveNamedVar(key, cliente) || 'cliente';
+    const value = hasRowVar(key) ? rowVars[key] : (resolveNamedVar(key, cliente) || 'cliente');
     parameters.push({ type: 'text', text: value && value.trim() !== '' ? value : 'cliente' });
   }
   return { parameters, format: 'positional' };
