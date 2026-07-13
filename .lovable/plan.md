@@ -1,101 +1,78 @@
 ## Objetivo
 
-Reformular a apresentação das aulas da Consultoria WhatsApp API para que o conteúdo pareça premium, organizado e fácil de ler — transmitindo valor real ao cliente (Daniel).
+No fluxo "Importar planilha" da página Envio Meta, permitir que cada coluna do Excel seja associada diretamente a uma variável do template selecionado (ex.: `{{1}}` = Nome, `{{2}}` = CNPJ), além dos campos fixos (Telefone, Nome, CPF/CNPJ, Atraso, Saldo).
 
-Hoje o conteúdo está sendo renderizado como markdown "cru" dentro de um Card, sem hierarquia visual: títulos viram texto normal, tabelas quebram, listas ficam coladas, blocos importantes se perdem no meio do parágrafo.
+Assim o cliente pode importar uma planilha "5516... | YKOSTEN..." e mapear a coluna B como `{{2}}` do template, sem precisar reeditar as variáveis do template.
 
 ## Escopo
 
-Somente a experiência de leitura de aula em `/consultoria/aula/:modulo/:aula`:
+Somente o fluxo de importação → envio em massa Meta. Não altera envio de teste, envio manual, nem outros disparadores.
 
-1. **Renderização (frontend)** — `src/pages/consultoria/ConsultoriaAula.tsx`
-2. **Conteúdo das 28 aulas** — reescrever `conteudo_md` no banco via migration (UPDATE por `modulo_id + numero`)
+## Mudanças
 
-Sem mexer em auth, RLS, admin, materiais, dúvidas, progresso ou rotas.
+### 1. `MapearColunasImportDialog.tsx`
 
-## 1. Layout da página de aula
+- Nova prop opcional `template`: `{ nome_template, body_text, variaveis, placeholders: string[] }` (lista de chaves como `["1","2"]` ou nomeadas).
+- `ColRole` passa a aceitar também `tplvar:<key>` (ex.: `tplvar:1`).
+- Header do modal ganha um bloco compacto mostrando o corpo do template com os `{{N}}` destacados, para o usuário saber a que se refere cada variável.
+- Select de cada coluna passa a listar, além de Ignorar/Telefone/Nome/CPF/Atraso/Saldo, uma seção "Variáveis do template" com uma opção por placeholder (rótulo: `{{1}} — trecho ao redor`). O trecho ao redor é extraído do `body_text` para dar contexto (ex.: `{{1}} — "Olá * ... !"`).
+- Autodetecção: se `template.variaveis[k]` já mapeia para `{nome}`/`{cpf}`/etc, sugerir o mesmo ao encontrar cabeçalho equivalente.
+- Restrição: cada `tplvar:k` só pode ser atribuída a uma coluna.
+- Saída (`onConfirm`) evolui:
+  ```ts
+  onConfirm(
+    csvLines: string[],
+    stats: { total; ignorados; duplicados },
+    varsByTel: Record<string /* telKey */, Record<string /* placeholder */, string>>
+  )
+  ```
+  As colunas mapeadas para `tplvar:*` **não** entram no CSV; elas alimentam `varsByTel`, indexado pela chave normalizada do telefone (últimos 8 dígitos, mesmo padrão de dedup existente).
 
-Reestruturar o topo e o corpo para ficarem editoriais, não "wiki":
+### 2. `EnvioMeta.tsx`
 
-- **Hero da aula**: eyebrow "MÓDULO X · AULA Y", título grande em display font, subtítulo curto (1 linha resumindo a aula), e uma linha de metadados em chips: duração estimada, nível (Fundamento / Prático / Avançado), e ícone do tema (Zap, DollarSign, MessageSquare, Shield, Wrench).
-- **Grid 2 colunas** em desktop (`lg:grid-cols-[1fr_280px]`):
-  - Coluna principal: vídeo + conteúdo.
-  - Coluna lateral (sticky): "Nesta aula" (índice dos H2 gerado a partir do markdown), badge de status, botão "Marcar como concluída" fixo, e "Materiais desta aula" compacto.
-- Rodapé com Anterior / Próxima em cards maiores mostrando o título da aula vizinha, não só "Anterior/Próxima".
+- Novo state `varsByTel: Record<string, Record<string, string>>`.
+- Ao chamar o diálogo, passar o `template` selecionado com sua lista de placeholders (extraída do `body_text` via regex `/\{\{\s*([^}]+)\s*\}\}/g`).
+- `onConfirm` do diálogo: além de preencher `recipientsRaw`, guardar `varsByTel`. Limpar `varsByTel` quando o usuário limpar/recolar recipients manualmente.
+- Ao montar `clientesFinal` para `iniciar()`, anexar `vars` em cada `ClienteRow` a partir de `varsByTel[normalizeTelKey(...)]`.
+- Estender o tipo `ClienteRow` com `vars?: Record<string,string>`.
 
-## 2. Sistema de estilos para o markdown
+### 3. `envio-meta-massa-iniciar/index.ts`
 
-Substituir o `prose` genérico por componentes customizados via `components` do `react-markdown`, mapeando cada elemento para um design consistente com o resto do MEUS ACORDOS (tokens semânticos, sem cor hardcoded):
+- Aceitar `vars` no payload de cada cliente e persistir em `envio_meta_job_item.vars` (jsonb, novo campo).
 
-- `h1` → escondido (já mostrado no hero).
-- `h2` → título de seção com barra vertical colorida à esquerda + espaçamento generoso acima.
-- `h3` → subtítulo com ícone opcional.
-- `p` → line-height confortável, largura máxima de leitura.
-- `ul` / `ol` → bullets customizados (check verde para vantagens, ponto neutro para listas comuns).
-- `strong` → destaque com cor `primary`.
-- `code` inline → chip com background `muted`.
-- `pre` → bloco de código com header (linguagem + botão copiar).
-- `blockquote` → card "Dica do consultor" com ícone Lightbulb e fundo `accent/10`.
-- `table` → wrapper com scroll horizontal, header em `muted`, zebra nas linhas, bordas arredondadas, tipografia tabular. Resolve o problema principal da tabela quebrada do print.
-- `a` → sublinhado sutil + hover em `primary`.
-- `hr` → separador decorativo (não linha crua).
+### 4. Migração SQL
 
-## 3. Blocos especiais via convenção de markdown
+- Adicionar coluna `vars jsonb` em `public.envio_meta_job_item` (default `'{}'::jsonb`).
+- Nenhuma mudança de RLS/GRANT (tabela já existente).
 
-Interpretar padrões dentro do `conteudo_md` para virarem componentes visuais:
+### 5. `envio-meta-massa-tick/index.ts`
 
-- Linha começando com `> 💡` → Callout "Dica".
-- Linha começando com `> ⚠️` → Callout "Atenção".
-- Linha começando com `> ✅` → Callout "Boas práticas".
-- `## Checklist` → renderizar lista seguinte como checklist visual.
-- `## Passo a passo` → renderizar lista como stepper numerado.
+- Ao chamar `send-whatsapp-meta`, incluir `vars` do item no objeto `cliente` enviado.
 
-Isso é feito no `components.blockquote` e num pequeno pré-processamento do markdown antes de passar ao `ReactMarkdown` (regex simples, sem lib nova).
+### 6. `send-whatsapp-meta/index.ts` (substituição de variáveis)
 
-## 4. Reescrita do conteúdo das 28 aulas
+- Em `buildParameters` e no `bodyRendered.replace(/\{\{\s*(\d+)\s*\}\}/g, ...)`:
+  - **Prioridade nova**: se `cliente.vars?.[k]` existir e não for vazio, usar esse valor bruto.
+  - Fallback: comportamento atual (`variaveis[k]` → `inferFieldForPlaceholder` → `resolveNamedVar`).
+- Idem para placeholders nomeados (`{{nome_variavel}}`): se `cliente.vars?.[nome]` existir, usa.
 
-Migration `UPDATE consultoria_aulas SET conteudo_md = ...` para cada aula. Cada aula terá a mesma estrutura visual previsível:
+### Fora do escopo
 
-```
-## Visão geral
-1 parágrafo curto explicando o "porquê" da aula.
+- Não altera `EditarVariaveisTemplateDialog` (mapeamento default do template continua funcionando).
+- Não persiste o mapeamento escolhido no diálogo entre importações (é por importação).
+- Não altera a preview do template em `CustoEstimadoEnvio` etc.
 
-## Conceitos-chave
-Lista com 3–6 itens (bullets com strong no termo).
+## Diagrama de dados
 
-## Como funciona na prática
-Passo a passo numerado OU tabela comparativa (quando fizer sentido).
-
-> 💡 Dica do consultor: ...
-
-## Boas práticas
-Checklist de 4–8 itens acionáveis.
-
-> ⚠️ Atenção: ... (quando houver risco/pegadinha)
-
-## Resumo
-2–3 bullets fechando a aula.
+```text
+Planilha            MapearColunasImportDialog        EnvioMeta                envio_meta_job_item
+Col A (tel)  ---->  Telefone            ---------->  recipientsRaw (CSV)
+Col B (CNPJ) ---->  tplvar:2            ---------->  varsByTel[tel][2]  --->  vars = {"2":"12.345..."}
+Col C (Nome) ---->  Nome (ou tplvar:1)  ---------->  CSV nome / vars[1]
 ```
 
-Conteúdo tecnicamente igual/melhor ao rascunho atual, apenas reorganizado nessa estrutura + linguagem mais direta.
+## Testes manuais
 
-## 5. Detalhes técnicos
-
-- Continuar usando `react-markdown` + `remark-gfm` (já instalados).
-- Índice lateral gerado com um walker simples no AST (`remark-slug`-like manual) — extrair H2 do markdown com regex antes de renderizar, gerar `id` slugificado e passar via `components.h2`.
-- Sticky sidebar com `position: sticky; top: 5rem` só em `lg+`. Em mobile, esconder o índice (ou colapsar num `<details>` no topo).
-- Zero classes de cor cruas: tudo via tokens (`bg-card`, `text-foreground`, `text-primary`, `bg-muted`, `border-border`, `bg-accent/10`).
-- Manter dark mode funcional (o `prose dark:prose-invert` sai; validar contraste dos callouts e da tabela nos dois temas).
-- Sem novas libs. Sem mudanças em rotas, providers ou banco além do UPDATE de conteúdo.
-
-## Entregáveis
-
-1. `src/pages/consultoria/ConsultoriaAula.tsx` reescrito (layout + renderer customizado + índice lateral + rodapé rico).
-2. Componente auxiliar `src/pages/consultoria/aulaRenderer.tsx` com o mapa de `components` e utilitários (extrair H2, pré-processar callouts).
-3. Migration `supabase/migrations/<timestamp>_consultoria_aulas_conteudo_v2.sql` com os 28 UPDATEs.
-
-## Fora do escopo
-
-- Editor rico no admin (o admin continua editando markdown).
-- Player de vídeo customizado.
-- Comentários por aula, quiz, certificado — nada disso foi pedido.
+1. Importar planilha do exemplo (Tel/CNPJ/Nome), mapear B=`{{2}}` e C=Nome. Enviar teste para 1 contato — verificar no WhatsApp que `{{2}}` recebeu o CNPJ da linha.
+2. Importar sem mapear nenhum `tplvar:*` — comportamento antigo permanece igual.
+3. Trocar o template selecionado após abrir o diálogo — lista de placeholders atualiza.
