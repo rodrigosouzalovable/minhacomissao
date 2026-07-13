@@ -398,6 +398,21 @@ Deno.serve(async (req) => {
           ? `*Atendente ${atendenteNome}:*\n\n${previewBody}`
           : previewBody;
 
+        // Extrai botões do template (armazenados em variaveis._components) para exibir no Inbox
+        let templateBotoes: any[] | null = null;
+        try {
+          const comps = (template?.variaveis?._components || []) as any[];
+          const btnComp = Array.isArray(comps) ? comps.find((c) => String(c?.type || '').toUpperCase() === 'BUTTONS') : null;
+          if (btnComp && Array.isArray(btnComp.buttons) && btnComp.buttons.length > 0) {
+            templateBotoes = btnComp.buttons.map((b: any) => ({
+              type: String(b?.type || '').toUpperCase(),
+              text: b?.text || '',
+              url: b?.url || undefined,
+              phone_number: b?.phone_number || undefined,
+            }));
+          }
+        } catch { /* ignore */ }
+
         await supabase.from('meta_whatsapp_mensagens').insert({
           user_id: user_id || inst.user_id,
           instancia_id: inst.id,
@@ -410,6 +425,7 @@ Deno.serve(async (req) => {
           status_envio: 'enviada',
           wa_message_id: waId,
           template_nome: template.nome_template,
+          template_botoes: templateBotoes,
         } as any);
         let contatoIdFinal: string | null = null;
         const { data: ex } = await supabase
