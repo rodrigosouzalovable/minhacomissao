@@ -86,6 +86,62 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     toast.success(`${titulo}: ${arr.length} copiados`);
   };
 
+  const sanitize = (s: string) => (s || "").replace(/[^\w\-.]+/g, "_").slice(0, 60) || "campanha";
+  const stamp = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+  };
+  const deliveryLabel = (s?: string) => {
+    switch (s) {
+      case "read": case "lida": return "Lida";
+      case "delivered": case "entregue": return "Entregue";
+      case "sent": case "aceito": return "Aceito";
+      case "failed": case "falhou": return "Falhou";
+      default: return "Aguardando";
+    }
+  };
+  const baixarEnviados = async () => {
+    const rows = detalhes.enviados.map((e) => ({
+      telefone: e.telefone,
+      instancia: e.instancia || "",
+      enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
+      status_entrega: deliveryLabel(e.deliveryStatus),
+      erro_entrega: e.deliveryErro || "",
+    }));
+    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      rows,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "instancia", titulo: "Instância" },
+        { chave: "enviado_em", titulo: "Enviado em" },
+        { chave: "status_entrega", titulo: "Status entrega" },
+        { chave: "erro_entrega", titulo: "Erro entrega" },
+      ],
+      `enviados_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${rows.length} envios exportados`);
+  };
+  const baixarErros = async () => {
+    const rows = detalhes.erros.map((e) => ({
+      telefone: e.telefone,
+      instancia: e.instancia || "",
+      erro: e.erro || "",
+    }));
+    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      rows,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "instancia", titulo: "Instância" },
+        { chave: "erro", titulo: "Erro" },
+      ],
+      `erros_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${rows.length} erros exportados`);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
