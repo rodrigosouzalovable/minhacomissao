@@ -1694,6 +1694,7 @@ export type Database = {
           instancia_ids: string[]
           max_seg: number
           min_seg: number
+          nome_campanha: string | null
           proximo_em: string | null
           status: string
           status_motivo: string | null
@@ -1716,6 +1717,7 @@ export type Database = {
           instancia_ids?: string[]
           max_seg?: number
           min_seg?: number
+          nome_campanha?: string | null
           proximo_em?: string | null
           status?: string
           status_motivo?: string | null
@@ -1738,6 +1740,7 @@ export type Database = {
           instancia_ids?: string[]
           max_seg?: number
           min_seg?: number
+          nome_campanha?: string | null
           proximo_em?: string | null
           status?: string
           status_motivo?: string | null
