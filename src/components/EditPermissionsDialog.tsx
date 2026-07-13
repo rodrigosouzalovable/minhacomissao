@@ -94,8 +94,12 @@ export function EditPermissionsDialog({
 
     const saveMutation = useMutation({
     mutationFn: async () => {
+        // Garante que /admin/usuarios sempre esteja em abas_permitidas
+        const abasFinal = selectedTabs.includes('/admin/usuarios')
+          ? selectedTabs
+          : [...selectedTabs, '/admin/usuarios'];
         const payload = {
-            abas_permitidas: selectedTabs,
+            abas_permitidas: abasFinal,
             credores,
             visivel_ranking: visivelRanking,
             inbox_compartilhado: inboxCompartilhado,
