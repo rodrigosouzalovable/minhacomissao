@@ -667,7 +667,9 @@ export default function EnvioMeta() {
 
       <CustoEnvioCard ref={custoRef} />
 
-      <EscalonamentoPanel />
+      <EnviosTotaisCards />
+
+
 
 
 
