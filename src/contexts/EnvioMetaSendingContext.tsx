@@ -106,6 +106,7 @@ type Ctx = {
   reativarJob: (jobId: string) => Promise<void>;
   limparJob: (jobId: string) => Promise<void>;
   ensureItensLoaded: (jobId: string) => Promise<void>;
+  recarregarItensJob: (jobId: string) => Promise<void>;
 };
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
@@ -244,6 +245,11 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       await carregarLogs(jobId, j?.iniciado_em || null);
     }
   }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs]);
+
+  const recarregarItensJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    await Promise.all([carregarItens(jobId), carregarLogs(jobId, j?.iniciado_em || null)]);
+  }, [jobs, carregarItens, carregarLogs]);
 
   useEffect(() => { carregarJobs(); }, [carregarJobs]);
 
@@ -544,7 +550,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob,
       }}
     >
       {children}

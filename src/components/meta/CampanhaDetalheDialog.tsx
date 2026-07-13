@@ -3,9 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
+import { exportarParaExcel } from "@/lib/exportExcel";
 
 type Props = { jobId: string | null; open: boolean; onOpenChange: (v: boolean) => void };
 
@@ -35,14 +36,28 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     reativarJob,
     limparJob,
     ensureItensLoaded,
+    recarregarItensJob,
     refreshStatus,
   } = useEnvioMetaSending();
 
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
 
+  // Ao abrir o diálogo, sempre força um refetch dos itens (não só a primeira vez).
   useEffect(() => {
-    if (open && jobId) ensureItensLoaded(jobId);
-  }, [open, jobId, ensureItensLoaded]);
+    if (open && jobId) {
+      ensureItensLoaded(jobId);
+      recarregarItensJob(jobId);
+    }
+  }, [open, jobId, ensureItensLoaded, recarregarItensJob]);
+
+  // Polling leve enquanto o diálogo está aberto e o job segue rodando/pausado.
+  useEffect(() => {
+    if (!open || !jobId) return;
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j || (j.status !== "rodando" && j.status !== "pausado")) return;
+    const t = setInterval(() => { recarregarItensJob(jobId); }, 8000);
+    return () => clearInterval(t);
+  }, [open, jobId, jobs, recarregarItensJob]);
 
   if (!job) {
     return (
@@ -69,6 +84,62 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     if (arr.length === 0) return;
     navigator.clipboard.writeText(arr.join("\n"));
     toast.success(`${titulo}: ${arr.length} copiados`);
+  };
+
+  const sanitize = (s: string) => (s || "").replace(/[^\w\-.]+/g, "_").slice(0, 60) || "campanha";
+  const stamp = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+  };
+  const deliveryLabel = (s?: string) => {
+    switch (s) {
+      case "read": case "lida": return "Lida";
+      case "delivered": case "entregue": return "Entregue";
+      case "sent": case "aceito": return "Aceito";
+      case "failed": case "falhou": return "Falhou";
+      default: return "Aguardando";
+    }
+  };
+  const baixarEnviados = async () => {
+    const rows = detalhes.enviados.map((e) => ({
+      telefone: e.telefone,
+      instancia: e.instancia || "",
+      enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
+      status_entrega: deliveryLabel(e.deliveryStatus),
+      erro_entrega: e.deliveryErro || "",
+    }));
+    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      rows,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "instancia", titulo: "Instância" },
+        { chave: "enviado_em", titulo: "Enviado em" },
+        { chave: "status_entrega", titulo: "Status entrega" },
+        { chave: "erro_entrega", titulo: "Erro entrega" },
+      ],
+      `enviados_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${rows.length} envios exportados`);
+  };
+  const baixarErros = async () => {
+    const rows = detalhes.erros.map((e) => ({
+      telefone: e.telefone,
+      instancia: e.instancia || "",
+      erro: e.erro || "",
+    }));
+    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      rows,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "instancia", titulo: "Instância" },
+        { chave: "erro", titulo: "Erro" },
+      ],
+      `erros_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${rows.length} erros exportados`);
   };
 
   return (
@@ -146,7 +217,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Limpar
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => refreshStatus()}>
+            <Button size="sm" variant="ghost" onClick={() => { refreshStatus(); recarregarItensJob(job.id); }}>
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Atualizar
             </Button>
           </div>
@@ -158,9 +229,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 Enviados <span className="text-muted-foreground font-normal">({detalhes.enviados.length})</span>
               </span>
               {detalhes.enviados.length > 0 && (
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
-                  <Copy className="h-3 w-3 mr-1" /> Copiar
-                </Button>
+                <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
+                    <Copy className="h-3 w-3 mr-1" /> Copiar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarEnviados(); }}>
+                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  </Button>
+                </div>
               )}
             </summary>
             <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
@@ -181,9 +257,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <span className="text-red-700 dark:text-red-400">
                   Erros <span className="text-muted-foreground font-normal">({detalhes.erros.length})</span>
                 </span>
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.erros.map((x) => x.telefone), "Erros"); }}>
-                  <Copy className="h-3 w-3 mr-1" /> Copiar
-                </Button>
+                <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.erros.map((x) => x.telefone), "Erros"); }}>
+                    <Copy className="h-3 w-3 mr-1" /> Copiar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarErros(); }}>
+                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  </Button>
+                </div>
               </summary>
               <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
                 {detalhes.erros.map((e, i) => (
