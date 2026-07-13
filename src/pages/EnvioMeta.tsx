@@ -1329,13 +1329,21 @@ export default function EnvioMeta() {
         open={mapDlg.open}
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
-        onConfirm={(linhas, stats) => {
+        template={template ? {
+          nome_template: template.nome_template,
+          body_text: (template as any).body_text || "",
+          variaveis: template.variaveis || null,
+        } : null}
+        onConfirm={(linhas, stats, novosVars) => {
           setRecipientsRaw(linhas.join("\n"));
           setValidacaoPreview(null);
+          setVarsByTel(novosVars || {});
+          const varsCount = Object.keys(novosVars || {}).length;
           toast.success(
             `${stats.total} contato(s) importado(s)` +
             (stats.ignorados ? ` • ${stats.ignorados} ignorado(s)` : "") +
-            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "")
+            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "") +
+            (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "")
           );
         }}
       />
