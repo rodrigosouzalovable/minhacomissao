@@ -13,6 +13,7 @@ interface ClienteData {
   telefone: string;
   atraso?: string | number;
   saldo?: number;
+  vars?: Record<string, string>;
 }
 
 const formatPrimeiroNome = (nome: string): string => {
@@ -103,6 +104,9 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
     ? forceFormat === 'named'
     : (namedMatches.length > 0 && positionalMatches.length === 0);
 
+  const rowVars = (cliente.vars || {}) as Record<string, string>;
+  const hasRowVar = (k: string) => typeof rowVars[k] === 'string' && rowVars[k].trim() !== '';
+
   if (useNamed) {
     const seen = new Set<string>();
     const parameters: any[] = [];
@@ -110,7 +114,9 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
       const key = m[1];
       if (seen.has(key)) continue;
       seen.add(key);
-      const value = resolveNamedVar(key, cliente) || 'cliente';
+      const value = hasRowVar(key)
+        ? rowVars[key]
+        : (resolveNamedVar(key, cliente) || 'cliente');
       parameters.push({ type: 'text', parameter_name: key, text: value });
     }
     if (parameters.length === 0 && positionalMatches.length > 0) {
@@ -120,7 +126,9 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
         if (seen2.has(k)) continue;
         seen2.add(k);
         const field = variaveis[k] || inferFieldForPlaceholder(template, k) || 'name';
-        const value = resolveNamedVar(field.replace(/[{}]/g, ''), cliente) || 'cliente';
+        const value = hasRowVar(k)
+          ? rowVars[k]
+          : (resolveNamedVar(field.replace(/[{}]/g, ''), cliente) || 'cliente');
         parameters.push({ type: 'text', parameter_name: field.replace(/[{}]/g, '') || 'name', text: value });
       }
     }
@@ -131,10 +139,11 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
   if (sortedKeys.length > 0) {
     for (const k of sortedKeys) {
       const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
-      const value =
-        resolveVar(field, cliente) ||
-        resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
-        'cliente';
+      const value = hasRowVar(k)
+        ? rowVars[k]
+        : (resolveVar(field, cliente) ||
+           resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
+           'cliente');
       parameters.push({ type: 'text', text: value });
     }
     return { parameters, format: 'positional' };
@@ -146,7 +155,7 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
     const key = m[1];
     if (seen.has(key)) continue;
     seen.add(key);
-    const value = resolveNamedVar(key, cliente) || 'cliente';
+    const value = hasRowVar(key) ? rowVars[key] : (resolveNamedVar(key, cliente) || 'cliente');
     parameters.push({ type: 'text', text: value && value.trim() !== '' ? value : 'cliente' });
   }
   return { parameters, format: 'positional' };
@@ -363,8 +372,11 @@ Deno.serve(async (req) => {
         // Renderiza o corpo real do template com as variáveis substituídas
         let bodyRendered: string = template.body_text || '';
         const variaveis = (template.variaveis || {}) as Record<string, string>;
-        // Substitui {{1}}, {{2}}... via mapeamento variaveis
+        const rowVars = (cliente.vars || {}) as Record<string, string>;
+        const rowHas = (k: string) => typeof rowVars[k] === 'string' && rowVars[k].trim() !== '';
+        // Substitui {{1}}, {{2}}... — prioriza valor por linha vindo da planilha
         bodyRendered = bodyRendered.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, k) => {
+          if (rowHas(k)) return rowVars[k];
           const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
           return (
             resolveVar(field, cliente) ||
@@ -372,9 +384,9 @@ Deno.serve(async (req) => {
             (cliente.nome || 'cliente')
           );
         });
-        // Substitui {{nome}}, {{primeiro_nome}}, etc.
+        // Substitui {{nome}}, {{primeiro_nome}}, etc. (nomeadas)
         bodyRendered = bodyRendered.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_m, k) =>
-          resolveNamedVar(k, cliente) || (cliente.nome || 'cliente'),
+          rowHas(k) ? rowVars[k] : (resolveNamedVar(k, cliente) || (cliente.nome || 'cliente')),
         );
 
         const headerFormat = getHeaderFormat(template);

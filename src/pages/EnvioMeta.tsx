@@ -70,6 +70,7 @@ type ClienteRow = {
   cpf?: string;
   atraso?: string;
   saldo?: number;
+  vars?: Record<string, string>;
 };
 
 function normalizeTelKey(t: string): string {
@@ -204,6 +205,7 @@ export default function EnvioMeta() {
   };
 
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
+  const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
   const [editVarsOpen, setEditVarsOpen] = useState(false);
 
   const importarExcel = async (file: File) => {
@@ -556,11 +558,23 @@ export default function EnvioMeta() {
     );
     if (!okCusto) return;
 
+    const hasVars = Object.keys(varsByTel).length > 0;
+    const varKey = (tel: string) => {
+      const d = String(tel || "").replace(/\D/g, "");
+      return d.length >= 8 ? d.slice(-8) : d;
+    };
+    const clientesComVars: ClienteRow[] = hasVars
+      ? clientesFinal.map((c) => {
+          const v = varsByTel[varKey(c.telefone)];
+          return v ? { ...c, vars: v } : c;
+        })
+      : clientesFinal;
+
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
       instanciaIds,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
-      clientes: clientesFinal,
+      clientes: clientesComVars,
       minSec: lo,
       maxSec: hi,
       semWhatsapp: semWa,
@@ -1003,7 +1017,7 @@ export default function EnvioMeta() {
           <Textarea
             rows={10}
             value={recipientsRaw}
-            onChange={(e) => { setRecipientsRaw(e.target.value); setValidacaoPreview(null); }}
+            onChange={(e) => { setRecipientsRaw(e.target.value); setValidacaoPreview(null); setVarsByTel({}); }}
             placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
             className="font-mono text-xs"
           />
@@ -1328,13 +1342,21 @@ export default function EnvioMeta() {
         open={mapDlg.open}
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
-        onConfirm={(linhas, stats) => {
+        template={template ? {
+          nome_template: template.nome_template,
+          body_text: (template as any).body_text || "",
+          variaveis: template.variaveis || null,
+        } : null}
+        onConfirm={(linhas, stats, novosVars) => {
           setRecipientsRaw(linhas.join("\n"));
           setValidacaoPreview(null);
+          setVarsByTel(novosVars || {});
+          const varsCount = Object.keys(novosVars || {}).length;
           toast.success(
             `${stats.total} contato(s) importado(s)` +
             (stats.ignorados ? ` • ${stats.ignorados} ignorado(s)` : "") +
-            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "")
+            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "") +
+            (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "")
           );
         }}
       />

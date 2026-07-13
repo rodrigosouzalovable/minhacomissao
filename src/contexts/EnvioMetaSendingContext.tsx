@@ -40,6 +40,7 @@ type ClienteRow = {
   cpf?: string;
   atraso?: string;
   saldo?: number;
+  vars?: Record<string, string>;
 };
 
 type InstanciaMin = { id: string; nome: string };
