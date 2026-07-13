@@ -129,8 +129,3 @@ export default function ConsultoriaLayout({ children }: { children: ReactNode })
     </div>
   );
 }
-
-function navigate() {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return useNavigate();
-}
