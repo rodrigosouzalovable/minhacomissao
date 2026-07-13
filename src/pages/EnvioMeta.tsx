@@ -559,10 +559,13 @@ export default function EnvioMeta() {
     if (!okCusto) return;
 
     const hasVars = Object.keys(varsByTel).length > 0;
+    const varKey = (tel: string) => {
+      const d = String(tel || "").replace(/\D/g, "");
+      return d.length >= 8 ? d.slice(-8) : d;
+    };
     const clientesComVars: ClienteRow[] = hasVars
       ? clientesFinal.map((c) => {
-          const k = normalizeTelKey(c.telefone);
-          const v = varsByTel[k];
+          const v = varsByTel[varKey(c.telefone)];
           return v ? { ...c, vars: v } : c;
         })
       : clientesFinal;
