@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
         cpf: c.cpf ?? null,
         atraso: c.atraso ?? null,
         saldo: c.saldo ?? null,
+        vars: c.vars && Object.keys(c.vars).length > 0 ? c.vars : {},
         status: 'pendente',
       }));
       const { error } = await supabase.from('envio_meta_job_item').insert(slice);
