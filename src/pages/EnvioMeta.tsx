@@ -1004,7 +1004,7 @@ export default function EnvioMeta() {
           <Textarea
             rows={10}
             value={recipientsRaw}
-            onChange={(e) => { setRecipientsRaw(e.target.value); setValidacaoPreview(null); }}
+            onChange={(e) => { setRecipientsRaw(e.target.value); setValidacaoPreview(null); setVarsByTel({}); }}
             placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
             className="font-mono text-xs"
           />
