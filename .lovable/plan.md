@@ -1,31 +1,19 @@
 ## Diagnóstico
 
-Na tabela `envio_meta_job_item`, o campo `vars` chegou **vazio** (`{}`) mesmo o usuário tendo mapeado as colunas na planilha. Com `rowVars={}`, o `send-whatsapp-meta` cai no fallback `inferFieldForPlaceholder` para descobrir o campo de cada `{{n}}`.
+O sistema já recebeu mensagens de outras instâncias (LD 13, IPHONE B1, Novo Mundo 3144) nos últimos minutos, mas **nenhum webhook chegou pela WABA da LD 19** (`waba_id=1428755208708722`). A instância existe, está ativa, tem `access_token`, e envia mensagens normalmente — o que falha é a Meta entregar os **eventos de entrada** pra ela. Isso é sintoma clássico de WABA sem `subscribed_apps` apontando pro webhook do sistema (ou apontando pra um callback antigo).
 
-Corpo do template: `Olá *{{1}}*! O CNPJ {{2}} foi validado com sucesso...`
+Confirmado no banco:
+- Único registro em `meta_whatsapp_mensagens` da LD 19 hoje é a saída (template Soluti) — nenhuma entrada com sufixo `91672674`.
+- Logs do `meta-whatsapp-webhook` (últimos 10min) não mostram nenhum POST com `phone_number_id=1145666058620665`.
 
-Para `{{2}}`, a janela de 30 caracteres ANTES vira `*{{1}}*! O CNPJ ` — que contém tanto "Olá" quanto "CNPJ". Como o `inferFieldForPlaceholder` testa `{nome}` (olá/prezado/…) **antes** de `{cpf}`, `{{2}}` é resolvido incorretamente como `{nome}` → puxa `cliente.nome` (razão social) no lugar do CNPJ.
+Já existe a edge function `meta-subscribe-waba` que faz exatamente o `POST /{waba_id}/subscribed_apps` com `override_callback_uri` correto — só não está sendo chamada pra LD 19.
 
-Bug secundário: precisamos entender por que `vars` está `{}` nos itens (o mapeamento na tela está correto, mas não chegou ao worker). Isso é o que faria a substituição direta funcionar sem depender do inferência.
+## Correção
 
-## Correções
+1. **Invocar `meta-subscribe-waba` para a LD 19** (uma vez) passando `{ instancia_id: "cbe0a7fb-f979-4839-87e4-0221b7be1a78" }`. Isso re-inscreve a WABA no callback certo do projeto usando o `access_token` já salvo. Retorno inclui `subscribe_ok` e a lista atual de `subscribed_apps` pra confirmar.
 
-### 1. `supabase/functions/send-whatsapp-meta/index.ts` — `inferFieldForPlaceholder`
+2. **Verificar** com nova consulta em `meta_whatsapp_mensagens` (filtrando `instancia_id` da LD 19 e `direcao=entrada`) que a resposta do seu número pessoal aparece após o re-subscribe (pedir pra você mandar mais uma resposta pelo WhatsApp).
 
-- Trocar a janela "30 chars antes" pelo **rótulo imediato**: pegar apenas o texto entre o `}}` anterior (ou início do body) e o `{{n}}` atual. Assim `{{2}}` vê só `*! O CNPJ ` — sem contaminação com "Olá" do `{{1}}`.
-- Inverter a ordem dos testes: checar `cnpj|cpf|documento` **antes** de `olá|prezado|…`, para casos em que ambos aparecem no mesmo rótulo.
-- Manter os fallbacks posicionais atuais (`1→nome`, `2→cpf`, `3→saldo`).
+3. **Se ainda não chegar após o re-subscribe**, checar em `subscriptions` no retorno da função se o `callback_uri` bate exatamente com `${SUPABASE_URL}/functions/v1/meta-whatsapp-webhook` e se o app está listado. Se não bater, a causa é token da WABA sem permissão `whatsapp_business_messaging` + `whatsapp_business_management` — nesse caso é preciso regenerar o system-user token da BM dessa WABA.
 
-### 2. `supabase/functions/envio-meta-massa-iniciar/index.ts` — investigar vars
-
-Rodar consulta para confirmar se o payload que chega no `iniciar` já traz `vars` vazio, ou se o insert perde os dados. Se o payload já vem vazio, o bug está no cliente (`EnvioMeta.tsx` → `varsByTel` chave por telefone). Ajuste no chaveamento se necessário — não vou tocar nisso antes de confirmar via `code--exec`.
-
-*Prioridade:* aplicar a correção do `inferFieldForPlaceholder` primeiro, que já resolve o caso concreto reportado. Depois investigar o motivo do `vars` estar vazio na tabela para restabelecer a substituição direta.
-
-## Verificação
-
-Após o patch, testar mentalmente com o body real:
-- `{{1}}` → contexto imediato `Olá *` → matches `olá` → `{nome}` ✓
-- `{{2}}` → contexto imediato `*! O CNPJ ` → matches `cnpj` → `{cpf}` ✓
-
-Não é preciso migração/DB nem alteração de UI.
+Nenhuma alteração de código é necessária — a função de re-subscribe já existe e cobre o caso. A ação é operacional: rodar `meta-subscribe-waba` para a LD 19 e você reenviar uma mensagem-teste pra confirmar.
