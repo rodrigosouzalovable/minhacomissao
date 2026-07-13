@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Send, Pause, Play, Square } from "lucide-react";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import CampanhaDetalheDialog from "./CampanhaDetalheDialog";
 import { cn } from "@/lib/utils";
 
