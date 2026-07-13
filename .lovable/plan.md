@@ -1,37 +1,87 @@
-## Objetivo
+## Escopo
 
-1. Fazer o botão flutuante **Campanhas** aparecer apenas para admins (invisível para todos os outros usuários).
-2. Corrigir o bug em que, após iniciar uma campanha, o botão flutuante mostra o badge mas **não exibe a campanha ativa** no painel.
+Três correções na página de Envio em massa — Meta WhatsApp:
 
-## Diagnóstico do bug
+1. Campanhas não podem sumir ao serem canceladas — só somem se o usuário clicar em "Excluir".
+2. No Inbox, a mensagem enviada precisa mostrar imagem + texto + botões (hoje só aparece a imagem).
+3. Ao importar planilha, quando o template usa `{{1}}` `{{2}}` (mesmo sem body_text populado), esses campos precisam aparecer no seletor de mapeamento de colunas.
 
-Em `src/pages/EnvioMeta.tsx`, dentro de `enviar()` (linha ~608), após chamar `iniciar(...)` do contexto, o código chama `limpar()` do mesmo contexto para "resetar" a UI legada. Mas `limpar()` é um wrapper que executa `limparJob(currentJob.id)` — e `currentJob` acabou de virar a campanha recém-criada (via `lastStartedId`). O `limparJob`:
+---
 
-- Detecta que o job está `rodando`, dispara `toast.error("Não é possível limpar enquanto a campanha está em andamento")` e sai.
-- Mesmo saindo cedo, essa chamada é indevida e polui o fluxo.
+## 1) Botão flutuante "Campanhas" — persistir tudo + botão Excluir
 
-Além disso, `iniciar()` já chama `carregarJobs()` internamente, mas há uma corrida: a função edge retorna o `job_id` antes de todos os `job_item` serem inseridos, então o primeiro `carregarJobs()` traz o job com `total = 0` até o realtime disparar o próximo refresh. Isso pode fazer o card aparecer vazio/sem progresso por alguns segundos e reforça a percepção de "não apareceu nada".
+Arquivo: `src/components/meta/CampanhasFlutuante.tsx`
 
-## Mudanças
+- Remover o `.slice(0, 5)` de `finalizadasRecentes`. Mostrar todas as campanhas finalizadas (concluído / cancelado / erro) que ainda estão no `jobs` array (o context já carrega as 30 mais recentes).
+- Trocar o layout dos itens finalizados de `<button>` para um `div` com o mesmo conteúdo clicável (abre detalhes) + um ícone `Trash2` à direita.
+- O botão Excluir chama `limparJob(job.id)` com `confirm()` de segurança. `limparJob` já bloqueia se o job estiver `rodando/pausado`, então só aparece para finalizados.
+- Adicionar contador "Últimas finalizadas (N)" para deixar claro que a lista está completa.
+- Nenhuma alteração em `EnvioMetaSendingContext` — `cancelarJob` já preserva a linha (só atualiza status); `limparJob` já deleta com RLS/serviço.
 
-### 1. `src/components/meta/CampanhasFlutuante.tsx`
-- Importar `useUserRole` e retornar `null` enquanto `isLoading` for true ou quando `role !== "admin"`.
-- Não alterar mais nada do componente.
+Também no `CampanhaDetalheDialog.tsx` (já existente): o botão "Limpar" atual já faz `limparJob`, mantido como está.
 
-### 2. `src/pages/EnvioMeta.tsx`
-- Remover a chamada `limpar()` dentro de `enviar()` (linha ~608). O reset do formulário (`setRecipientsRaw`, `setRecipientsHeaders`, `setVarsByTel`, `setValidacaoPreview`, `setNomeCampanha`) continua igual.
-- Após `iniciar(...)`, agendar um `refreshStatus()` extra ~1.5s depois via `setTimeout` para garantir que o job apareça com `total` correto assim que a edge terminar de popular os `job_item` (mitiga a corrida).
+---
 
-### 3. Sem mudanças em
-- `EnvioMetaSendingContext.tsx` (a lógica de jobs, realtime, `jobsAtivos` está correta).
-- Edge functions.
-- `CampanhaDetalheDialog.tsx`.
-- `App.tsx` (a montagem global do widget continua — o gate é feito dentro do próprio componente).
+## 2) Inbox — renderizar imagem + texto + botões da mensagem enviada
 
-## Comportamento esperado após o fix
+### a) Persistir botões do template no envio
 
-- Somente admin vê o botão flutuante "Campanhas".
-- Ao clicar em "Disparar":
-  - O formulário é liberado imediatamente (sem toast de erro do `limpar`).
-  - O botão flutuante mostra a nova campanha em "Ativas" com nome, template, progresso e ações Pausar/Cancelar.
-  - Campanhas subsequentes empilham na mesma lista, cada uma independente.
+Arquivo: `supabase/functions/send-whatsapp-meta/index.ts` (bloco `meta_whatsapp_mensagens.insert`, ~linha 401)
+
+- Extrair botões de `template.variaveis._components` (procurar bloco `type === 'BUTTONS'`).
+- Adicionar campo `template_botoes` (jsonb) no insert.
+
+### b) Nova coluna na tabela
+
+Migration:
+
+```sql
+ALTER TABLE public.meta_whatsapp_mensagens
+  ADD COLUMN IF NOT EXISTS template_botoes jsonb;
+```
+
+Sem alteração de RLS/GRANT — herda da tabela.
+
+### c) Renderizar no ChatMessage
+
+Arquivo: `src/components/inbox/ChatMessage.tsx` (`tipo === 'imagem'`, ~linha 182)
+
+Substituir o `return` que devolve apenas a imagem por um bloco vertical:
+- Imagem (como hoje, `max-w-[250px]`).
+- Se `msg.conteudo` presente → `<p className="whitespace-pre-wrap ...">{msg.conteudo}</p>` abaixo da imagem.
+- Se `msg.template_botoes` (array) presente → lista de "pílulas" desabilitadas (mesmo visual do `TemplateWhatsAppPreview`) mostrando `text` de cada botão. Ícone diferente por tipo (URL / QUICK_REPLY / PHONE_NUMBER).
+
+Também estender o tipo `MetaMensagem` (onde estiver definido) para incluir `template_botoes?: any`. Ajustar a query do inbox que traz `meta_whatsapp_mensagens` para incluir a nova coluna (`select('*')` já cobre).
+
+O mesmo tratamento vale para `tipo === 'texto'` com botões: renderizar botões abaixo do texto.
+
+---
+
+## 3) Mapeamento de variáveis `{{1}} {{2}}` no import da planilha
+
+Arquivo: `src/components/meta/MapearColunasImportDialog.tsx`
+
+- Hoje `placeholders` sai só de `extractPlaceholders(template.body_text)`. Quando o `body_text` está vazio no DB (mesmo o template tendo variáveis conhecidas), o seletor não mostra `{{1}}`/`{{2}}`.
+- Mesclar duas fontes:
+  1. `extractPlaceholders(template.body_text)` (comportamento atual).
+  2. Chaves numéricas e nomeadas de `template.variaveis` (ignorando as internas que começam com `_`, ex.: `_components`, `_format`, `_header_image_url`).
+- Unir preservando a ordem: primeiro as do body_text, depois as extras de `variaveis` que não apareceram no body.
+
+Arquivo: `src/pages/EnvioMeta.tsx` (botão "Importar Excel", ~linha 1032)
+
+- Desabilitar o botão quando `!template` e mostrar tooltip "Selecione um template antes de importar" — evita o caso "usuário importa antes de escolher o template e não vê variáveis".
+
+---
+
+## Detalhes técnicos
+
+- Coluna nova `template_botoes` (jsonb, nullable). Formato esperado: `[{ type: 'URL'|'QUICK_REPLY'|'PHONE_NUMBER', text: string, url?: string, phone_number?: string }]`.
+- Nenhuma mudança em edge functions `envio-meta-massa-*`.
+- Nenhuma mudança em RLS/GRANT.
+- Sem alteração no fluxo do context de envio (`EnvioMetaSendingContext`).
+
+## Fora de escopo
+
+- Retenção/histórico além dos 30 jobs já carregados.
+- Renderizar botões em mensagens antigas já enviadas (não têm `template_botoes` — continuarão só com texto/imagem, como hoje).
+- Reprocessar campanhas canceladas (já existe "Reativar").
