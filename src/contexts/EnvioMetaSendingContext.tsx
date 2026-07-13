@@ -55,10 +55,30 @@ export type IniciarParams = {
   semWhatsapp?: string[];
   erroValidacao?: string[];
   templateIdByInstance?: Record<string, string>;
+  nomeCampanha?: string;
   onAfterEnvio?: () => void;
 };
 
+export type CampanhaJob = {
+  id: string;
+  status: 'rodando' | 'pausado' | 'concluido' | 'cancelado' | 'erro';
+  template_nome: string | null;
+  nome_campanha: string | null;
+  instancia_ids: string[] | null;
+  enviados: number;
+  erros: number;
+  total: number;
+  atual_telefone: string | null;
+  atual_instancia: string | null;
+  proximo_em: string | null;
+  iniciado_em: string | null;
+  concluido_em: string | null;
+  status_motivo: string | null;
+  restantes: number;
+};
+
 type Ctx = {
+  // ===== Legacy single-job API (aponta para o job "ativo" mais recente ou último iniciado nesta sessão) =====
   enviando: boolean;
   pausado: boolean;
   progresso: EnvioProgresso | null;
@@ -73,119 +93,177 @@ type Ctx = {
   reativar: () => void;
   limpar: () => void;
   refreshStatus: () => Promise<void>;
+
+  // ===== Multi-job API =====
+  jobs: CampanhaJob[];
+  jobsAtivos: CampanhaJob[];
+  getProgressoJob: (jobId: string) => EnvioProgresso | null;
+  getDetalhesJob: (jobId: string) => EnvioDetalhes;
+  getDeliveryResumoJob: (jobId: string) => DeliveryResumo;
+  getResultadoJob: (jobId: string) => EnvioResultado;
+  togglePausaJob: (jobId: string) => Promise<void>;
+  cancelarJob: (jobId: string) => Promise<void>;
+  reativarJob: (jobId: string) => Promise<void>;
+  limparJob: (jobId: string) => Promise<void>;
+  ensureItensLoaded: (jobId: string) => Promise<void>;
 };
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
 
 const EMPTY_DETALHES: EnvioDetalhes = { enviados: [], erros: [], semWhatsapp: [], erroValidacao: [] };
-const LOCAL_EXTRAS_KEY = "envio_meta_extras_v1"; // guarda apenas sem_whatsapp / erro_validacao (não voltam da server)
+const EMPTY_RESUMO: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
+const LOCAL_EXTRAS_KEY = "envio_meta_extras_multi_v1"; // { [jobId]: { semWhatsapp, erroValidacao } }
 
-type LocalExtras = { jobId?: string; semWhatsapp: string[]; erroValidacao: string[] };
+type ExtrasMap = Record<string, { semWhatsapp: string[]; erroValidacao: string[] }>;
 
-function loadExtras(): LocalExtras {
+function loadExtras(): ExtrasMap {
   try {
     const raw = localStorage.getItem(LOCAL_EXTRAS_KEY);
-    if (!raw) return { semWhatsapp: [], erroValidacao: [] };
-    return JSON.parse(raw);
-  } catch { return { semWhatsapp: [], erroValidacao: [] }; }
+    if (!raw) return {};
+    return JSON.parse(raw) || {};
+  } catch { return {}; }
 }
-function saveExtras(x: LocalExtras) {
+function saveExtras(x: ExtrasMap) {
   try { localStorage.setItem(LOCAL_EXTRAS_KEY, JSON.stringify(x)); } catch {}
+}
+
+function normTel(t: string): string {
+  const d = String(t || "").replace(/\D+/g, "");
+  if (!d) return "";
+  if (d.startsWith("55") && d.length >= 12) return d;
+  if (d.length === 10 || d.length === 11) return "55" + d;
+  return d;
+}
+
+function mapStatusMeta(s: string): DeliveryStatus {
+  const v = String(s || "").toLowerCase();
+  if (v === "delivered") return "delivered";
+  if (v === "read") return "read";
+  if (v === "failed") return "failed";
+  return "sent";
+}
+
+function rankDelivery(s: DeliveryStatus) {
+  return s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
+}
+
+function toCampanhaJob(j: any): CampanhaJob {
+  const total = j.total || 0;
+  const enviados = j.enviados || 0;
+  const erros = j.erros || 0;
+  return {
+    id: j.id,
+    status: j.status,
+    template_nome: j.template_nome ?? null,
+    nome_campanha: j.nome_campanha ?? null,
+    instancia_ids: j.instancia_ids ?? null,
+    enviados, erros, total,
+    atual_telefone: j.atual_telefone ?? null,
+    atual_instancia: j.atual_instancia ?? null,
+    proximo_em: j.proximo_em ?? null,
+    iniciado_em: j.iniciado_em ?? null,
+    concluido_em: j.concluido_em ?? null,
+    status_motivo: j.status_motivo ?? null,
+    restantes: Math.max(0, total - enviados - erros),
+  };
 }
 
 export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const uid = user?.id;
 
-  const [job, setJob] = useState<any | null>(null);
-  const [itens, setItens] = useState<any[]>([]);
-  const [logStatus, setLogStatus] = useState<Map<string, { status: DeliveryStatus; erro?: string }>>(new Map());
-  const [extras, setExtras] = useState<LocalExtras>(loadExtras());
+  const [jobs, setJobs] = useState<CampanhaJob[]>([]);
+  const [itensByJob, setItensByJob] = useState<Map<string, any[]>>(new Map());
+  const [logByJob, setLogByJob] = useState<Map<string, Map<string, { status: DeliveryStatus; erro?: string }>>>(new Map());
+  const [extras, setExtras] = useState<ExtrasMap>(loadExtras());
   const [tick, setTick] = useState(0);
-  const onAfterRef = useRef<(() => void) | undefined>();
+  const [lastStartedId, setLastStartedId] = useState<string | null>(null);
+  const onAfterRef = useRef<Record<string, (() => void) | undefined>>({});
+  const seenConcludedRef = useRef<Set<string>>(new Set());
 
-  function normTel(t: string): string {
-    const d = String(t || "").replace(/\D+/g, "");
-    if (!d) return "";
-    if (d.startsWith("55") && d.length >= 12) return d;
-    if (d.length === 10 || d.length === 11) return "55" + d;
-    return d;
-  }
-
-  const mapStatusMeta = (s: string): DeliveryStatus => {
-    const v = String(s || "").toLowerCase();
-    if (v === "delivered") return "delivered";
-    if (v === "read") return "read";
-    if (v === "failed") return "failed";
-    return "sent";
-  };
-
-  // Carrega job mais recente do usuário (rodando, pausado ou o último finalizado)
-  const carregar = useCallback(async () => {
-    if (!uid) { setJob(null); setItens([]); setLogStatus(new Map()); return; }
-    const { data: ativo } = await (supabase as any)
+  const carregarJobs = useCallback(async () => {
+    if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
+    const { data } = await (supabase as any)
       .from("envio_meta_job")
       .select("*")
       .eq("user_id", uid)
-      .in("status", ["rodando", "pausado"])
       .order("iniciado_em", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let j = ativo;
-    if (!j) {
-      const { data: ult } = await (supabase as any)
-        .from("envio_meta_job")
-        .select("*")
-        .eq("user_id", uid)
-        .order("iniciado_em", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      j = ult;
-    }
-    setJob(j || null);
-    if (j) {
-      const { data: its } = await (supabase as any)
-        .from("envio_meta_job_item")
-        .select("*")
-        .eq("job_id", j.id)
-        .in("status", ["enviado", "erro"])
-        .order("processado_em", { ascending: false })
-        .limit(2000);
-      setItens(its || []);
-
-      // Puxa status de entrega da Meta (webhook grava em meta_whatsapp_envios_log)
-      try {
-        const desde = j.iniciado_em || new Date(Date.now() - 7 * 86400_000).toISOString();
-        const { data: logs } = await (supabase as any)
-          .from("meta_whatsapp_envios_log")
-          .select("telefone,status,erro,enviado_em")
-          .eq("user_id", uid)
-          .gte("enviado_em", desde)
-          .order("enviado_em", { ascending: false })
-          .limit(5000);
-        const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
-        // Ordem: mais forte vence (read > delivered > sent; failed = terminal)
-        const rank = (s: DeliveryStatus) => s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
-        for (const l of logs || []) {
-          const key = normTel(l.telefone);
-          if (!key) continue;
-          const st = mapStatusMeta(l.status);
-          const prev = m.get(key);
-          if (!prev || rank(st) > rank(prev.status)) {
-            m.set(key, { status: st, erro: l.erro || undefined });
-          }
-        }
-        setLogStatus(m);
-      } catch { /* ignora */ }
-    } else {
-      setItens([]);
-      setLogStatus(new Map());
-    }
+      .limit(30);
+    const arr = (data || []).map(toCampanhaJob) as CampanhaJob[];
+    setJobs(arr);
   }, [uid]);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  const carregarItens = useCallback(async (jobId: string) => {
+    const { data } = await (supabase as any)
+      .from("envio_meta_job_item")
+      .select("*")
+      .eq("job_id", jobId)
+      .in("status", ["enviado", "erro"])
+      .order("processado_em", { ascending: false })
+      .limit(2000);
+    setItensByJob((prev) => {
+      const n = new Map(prev);
+      n.set(jobId, data || []);
+      return n;
+    });
+  }, []);
 
-  // Realtime: assina mudanças em job + itens do usuário
+  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null) => {
+    if (!uid) return;
+    const desde = desdeIso || new Date(Date.now() - 7 * 86400_000).toISOString();
+    const { data: logs } = await (supabase as any)
+      .from("meta_whatsapp_envios_log")
+      .select("telefone,status,erro,enviado_em")
+      .eq("user_id", uid)
+      .gte("enviado_em", desde)
+      .order("enviado_em", { ascending: false })
+      .limit(5000);
+    const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
+    for (const l of logs || []) {
+      const key = normTel(l.telefone);
+      if (!key) continue;
+      const st = mapStatusMeta(l.status);
+      const prev = m.get(key);
+      if (!prev || rankDelivery(st) > rankDelivery(prev.status)) {
+        m.set(key, { status: st, erro: l.erro || undefined });
+      }
+    }
+    setLogByJob((prev) => {
+      const n = new Map(prev);
+      n.set(jobId, m);
+      return n;
+    });
+  }, [uid]);
+
+  const ensureItensLoaded = useCallback(async (jobId: string) => {
+    const has = itensByJob.has(jobId);
+    if (!has) await carregarItens(jobId);
+    const hasLogs = logByJob.has(jobId);
+    if (!hasLogs) {
+      const j = jobs.find((x) => x.id === jobId);
+      await carregarLogs(jobId, j?.iniciado_em || null);
+    }
+  }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs]);
+
+  useEffect(() => { carregarJobs(); }, [carregarJobs]);
+
+  // Ao carregar jobs, pré-carrega itens+logs para os jobs ativos e o último iniciado
+  useEffect(() => {
+    const alvo = new Set<string>();
+    jobs.filter((j) => j.status === "rodando" || j.status === "pausado").forEach((j) => alvo.add(j.id));
+    if (lastStartedId) alvo.add(lastStartedId);
+    if (!lastStartedId && jobs[0]) alvo.add(jobs[0].id);
+    alvo.forEach((id) => {
+      if (!itensByJob.has(id)) carregarItens(id);
+      if (!logByJob.has(id)) {
+        const j = jobs.find((x) => x.id === id);
+        carregarLogs(id, j?.iniciado_em || null);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, lastStartedId]);
+
+  // Realtime
   useEffect(() => {
     if (!uid) return;
     const channel = supabase
@@ -193,14 +271,14 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "envio_meta_job", filter: `user_id=eq.${uid}` },
-        () => { carregar(); }
+        () => { carregarJobs(); }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "envio_meta_job_item" },
         (payload: any) => {
           const jobId = (payload.new || payload.old)?.job_id;
-          if (job && jobId === job.id) carregar();
+          if (jobId && itensByJob.has(jobId)) carregarItens(jobId);
         }
       )
       .on(
@@ -210,53 +288,70 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           const row = payload.new || payload.old;
           if (!row?.telefone || !row?.status) return;
           const key = normTel(row.telefone);
-          setLogStatus((prev) => {
-            const next = new Map(prev);
-            const st = mapStatusMeta(row.status);
-            const rank = (s: DeliveryStatus) => s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
-            const cur = next.get(key);
-            if (!cur || rank(st) > rank(cur.status)) {
-              next.set(key, { status: st, erro: row.erro || undefined });
+          const st = mapStatusMeta(row.status);
+          setLogByJob((prev) => {
+            const n = new Map(prev);
+            // aplica a todos jobs em cache (o telefone pertence ao user, então tudo bem)
+            for (const [jid, m] of n.entries()) {
+              const cur = m.get(key);
+              if (!cur || rankDelivery(st) > rankDelivery(cur.status)) {
+                const nm = new Map(m);
+                nm.set(key, { status: st, erro: row.erro || undefined });
+                n.set(jid, nm);
+              }
             }
-            return next;
+            return n;
           });
         }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [uid, job?.id, carregar]);
+  }, [uid, carregarJobs, carregarItens, itensByJob]);
 
   // Ticker para atualizar "próximo em Xs"
   useEffect(() => {
-    if (!job || job.status !== "rodando") return;
+    const hasRunning = jobs.some((j) => j.status === "rodando");
+    if (!hasRunning) return;
     const t = setInterval(() => setTick((x) => x + 1), 1000);
     return () => clearInterval(t);
-  }, [job?.status, job?.id]);
+  }, [jobs]);
 
-  const enviando = !!job && (job.status === "rodando" || job.status === "pausado");
-  const pausado = !!job && job.status === "pausado";
+  // Dispara onAfterEnvio quando um job específico conclui/cancela
+  useEffect(() => {
+    for (const j of jobs) {
+      if ((j.status === "concluido" || j.status === "cancelado") && !seenConcludedRef.current.has(j.id)) {
+        seenConcludedRef.current.add(j.id);
+        const cb = onAfterRef.current[j.id];
+        if (cb) { try { cb(); } catch {} }
+      }
+    }
+  }, [jobs]);
 
-  const progresso: EnvioProgresso | null = useMemo(() => {
-    if (!job || !enviando) return null;
-    const proximoMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
+  const getProgressoJob = useCallback((jobId: string): EnvioProgresso | null => {
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j) return null;
+    if (j.status !== "rodando" && j.status !== "pausado") return null;
+    const proximoMs = j.proximo_em ? new Date(j.proximo_em).getTime() - Date.now() : 0;
     return {
-      enviados: job.enviados || 0,
-      erros: job.erros || 0,
-      total: job.total || 0,
-      atualTelefone: job.atual_telefone || "",
-      atualInstancia: job.atual_instancia || "",
+      enviados: j.enviados,
+      erros: j.erros,
+      total: j.total,
+      atualTelefone: j.atual_telefone || "",
+      atualInstancia: j.atual_instancia || "",
       proximoEmSeg: Math.max(0, Math.ceil(proximoMs / 1000)),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job, enviando, tick]);
+  }, [jobs, tick]);
 
-  const detalhes: EnvioDetalhes = useMemo(() => {
+  const getDetalhesJob = useCallback((jobId: string): EnvioDetalhes => {
+    const its = itensByJob.get(jobId) || [];
+    const logs = logByJob.get(jobId) || new Map();
     const enviados: EnvioItem[] = [];
     const erros: EnvioItem[] = [];
-    for (const it of itens) {
+    for (const it of its) {
       const ts = it.processado_em ? new Date(it.processado_em).getTime() : Date.now();
       const key = normTel(it.telefone);
-      const dlv = logStatus.get(key);
+      const dlv = logs.get(key);
       if (it.status === "enviado") {
         enviados.push({
           telefone: it.telefone,
@@ -269,15 +364,14 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         erros.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts });
       }
     }
-    const extrasForJob = extras.jobId === job?.id
-      ? { semWhatsapp: extras.semWhatsapp, erroValidacao: extras.erroValidacao }
-      : { semWhatsapp: [], erroValidacao: [] };
-    return { enviados, erros, ...extrasForJob };
-  }, [itens, extras, job?.id, logStatus]);
+    const ex = extras[jobId] || { semWhatsapp: [], erroValidacao: [] };
+    return { enviados, erros, semWhatsapp: ex.semWhatsapp, erroValidacao: ex.erroValidacao };
+  }, [itensByJob, logByJob, extras]);
 
-  const deliveryResumo: DeliveryResumo = useMemo(() => {
+  const getDeliveryResumoJob = useCallback((jobId: string): DeliveryResumo => {
+    const det = getDetalhesJob(jobId);
     const r: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
-    for (const e of detalhes.enviados) {
+    for (const e of det.enviados) {
       const s = e.deliveryStatus;
       if (s === "delivered") r.entregue++;
       else if (s === "read") r.lida++;
@@ -286,27 +380,19 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       else r.aguardando++;
     }
     return r;
-  }, [detalhes.enviados]);
+  }, [getDetalhesJob]);
 
-  const resultado: EnvioResultado = useMemo(() => {
-    if (!job) return null;
-    if (["concluido", "cancelado", "erro"].includes(job.status)) {
-      return { enviados: job.enviados || 0, erros: job.erros || 0, total: job.total || 0, statusMotivo: job.status_motivo || undefined };
+  const getResultadoJob = useCallback((jobId: string): EnvioResultado => {
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j) return null;
+    if (["concluido", "cancelado", "erro"].includes(j.status)) {
+      return { enviados: j.enviados, erros: j.erros, total: j.total, statusMotivo: j.status_motivo || undefined };
     }
     return null;
-  }, [job]);
-
-  // Dispara callback quando o job conclui
-  useEffect(() => {
-    if (job && ["concluido", "cancelado"].includes(job.status)) {
-      onAfterRef.current?.();
-    }
-  }, [job?.status, job?.id]);
+  }, [jobs]);
 
   const iniciar = useCallback(async (p: IniciarParams) => {
     if (!uid) { toast.error("Faça login para iniciar o envio"); return; }
-    onAfterRef.current = p.onAfterEnvio;
-
     try {
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-iniciar", {
         body: {
@@ -316,110 +402,150 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           minSec: p.minSec,
           maxSec: p.maxSec,
           templateIdByInstance: p.templateIdByInstance ?? {},
+          nomeCampanha: p.nomeCampanha ?? null,
         },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha ao iniciar envio");
 
       const jobId = data.job_id as string;
-      const novo: LocalExtras = {
-        jobId,
-        semWhatsapp: p.semWhatsapp ?? [],
-        erroValidacao: p.erroValidacao ?? [],
-      };
-      setExtras(novo);
-      saveExtras(novo);
-      toast.success("Envio iniciado no servidor — vai continuar mesmo se você fechar o navegador");
-      carregar();
+      if (p.onAfterEnvio) onAfterRef.current[jobId] = p.onAfterEnvio;
+      setExtras((prev) => {
+        const next = { ...prev, [jobId]: { semWhatsapp: p.semWhatsapp ?? [], erroValidacao: p.erroValidacao ?? [] } };
+        saveExtras(next);
+        return next;
+      });
+      setLastStartedId(jobId);
+      toast.success("Campanha iniciada — roda em paralelo às demais");
+      carregarJobs();
     } catch (e: any) {
       toast.error("Erro ao iniciar envio: " + (e?.message || e));
     }
-  }, [uid, carregar]);
+  }, [uid, carregarJobs]);
 
-  const togglePausa = useCallback(async () => {
-    if (!job) return;
-    const acao = job.status === "rodando" ? "pausar" : "retomar";
+  const togglePausaJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j) return;
+    const acao = j.status === "rodando" ? "pausar" : "retomar";
     try {
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: job.id, acao },
+        body: { job_id: jobId, acao },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
-      toast.info(acao === "pausar" ? "Envio pausado" : "Envio retomado");
-      carregar();
+      toast.info(acao === "pausar" ? "Campanha pausada" : "Campanha retomada");
+      carregarJobs();
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
     }
-  }, [job, carregar]);
+  }, [jobs, carregarJobs]);
 
-  const cancelar = useCallback(async () => {
-    if (!job) return;
-    if (!confirm("Cancelar o envio? Os contatos restantes não serão disparados.")) return;
+  const cancelarJob = useCallback(async (jobId: string) => {
+    if (!confirm("Cancelar esta campanha? Os contatos restantes não serão disparados.")) return;
     try {
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: job.id, acao: "cancelar" },
+        body: { job_id: jobId, acao: "cancelar" },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
-      toast.warning("Envio cancelado");
-      carregar();
+      toast.warning("Campanha cancelada");
+      carregarJobs();
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
     }
-  }, [job, carregar]);
+  }, [carregarJobs]);
 
-  const limpar = useCallback(async () => {
-    if (!job) return;
-    if (["rodando", "pausado"].includes(job.status)) {
-      toast.error("Não é possível limpar enquanto o envio está em andamento");
+  const reativarJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j) return;
+    if (!["cancelado", "erro", "concluido"].includes(j.status)) {
+      toast.error("Só é possível reativar campanhas finalizadas");
       return;
     }
-    try {
-      await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: job.id, acao: "limpar" },
-      });
-      setJob(null);
-      setItens([]);
-      setExtras({ semWhatsapp: [], erroValidacao: [] });
-      saveExtras({ semWhatsapp: [], erroValidacao: [] });
-    } catch (e: any) {
-      toast.error("Erro: " + (e?.message || e));
-    }
-  }, [job]);
-
-  const templateNome = job?.template_nome || null;
-  const restantes = job ? Math.max(0, (job.total || 0) - (job.enviados || 0) - (job.erros || 0)) : 0;
-
-  const reativar = useCallback(async () => {
-    if (!job) return;
-    if (!["cancelado", "erro", "concluido"].includes(job.status)) {
-      toast.error("Só é possível reativar jobs finalizados");
-      return;
-    }
-    if (restantes <= 0) {
+    if (j.restantes <= 0) {
       toast.info("Não há contatos pendentes para reativar");
       return;
     }
     try {
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: job.id, acao: "reativar" },
+        body: { job_id: jobId, acao: "reativar" },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
-      toast.success(`Envio reativado — ${restantes} contatos restantes`);
-      carregar();
+      toast.success(`Campanha reativada — ${j.restantes} contatos restantes`);
+      carregarJobs();
     } catch (e: any) {
       toast.error("Erro ao reativar: " + (e?.message || e));
     }
-  }, [job, restantes, carregar]);
+  }, [jobs, carregarJobs]);
 
-  const refreshStatus = useCallback(async () => {
-    await carregar();
-  }, [carregar]);
+  const limparJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j) return;
+    if (["rodando", "pausado"].includes(j.status)) {
+      toast.error("Não é possível limpar enquanto a campanha está em andamento");
+      return;
+    }
+    try {
+      await supabase.functions.invoke("envio-meta-massa-control", {
+        body: { job_id: jobId, acao: "limpar" },
+      });
+      setExtras((prev) => {
+        const next = { ...prev };
+        delete next[jobId];
+        saveExtras(next);
+        return next;
+      });
+      setItensByJob((prev) => { const n = new Map(prev); n.delete(jobId); return n; });
+      setLogByJob((prev) => { const n = new Map(prev); n.delete(jobId); return n; });
+      if (lastStartedId === jobId) setLastStartedId(null);
+      carregarJobs();
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e));
+    }
+  }, [jobs, lastStartedId, carregarJobs]);
+
+  // ============ Legacy single-job derivations ============
+  const currentJob: CampanhaJob | null = useMemo(() => {
+    if (lastStartedId) {
+      const j = jobs.find((x) => x.id === lastStartedId);
+      if (j) return j;
+    }
+    // Preferir job ativo mais recente
+    const ativo = jobs.find((j) => j.status === "rodando" || j.status === "pausado");
+    if (ativo) return ativo;
+    return jobs[0] || null;
+  }, [jobs, lastStartedId]);
+
+  const jobsAtivos = useMemo(
+    () => jobs.filter((j) => j.status === "rodando" || j.status === "pausado"),
+    [jobs]
+  );
+
+  const enviando = !!currentJob && (currentJob.status === "rodando" || currentJob.status === "pausado");
+  const pausado = !!currentJob && currentJob.status === "pausado";
+  const progresso = currentJob ? getProgressoJob(currentJob.id) : null;
+  const detalhes = currentJob ? getDetalhesJob(currentJob.id) : EMPTY_DETALHES;
+  const deliveryResumo = currentJob ? getDeliveryResumoJob(currentJob.id) : EMPTY_RESUMO;
+  const resultado = currentJob ? getResultadoJob(currentJob.id) : null;
+  const templateNome = currentJob?.template_nome || null;
+  const restantes = currentJob?.restantes || 0;
+
+  const togglePausa = useCallback(() => { if (currentJob) togglePausaJob(currentJob.id); }, [currentJob, togglePausaJob]);
+  const cancelar = useCallback(() => { if (currentJob) cancelarJob(currentJob.id); }, [currentJob, cancelarJob]);
+  const reativar = useCallback(() => { if (currentJob) reativarJob(currentJob.id); }, [currentJob, reativarJob]);
+  const limpar = useCallback(() => { if (currentJob) limparJob(currentJob.id); }, [currentJob, limparJob]);
+  const refreshStatus = useCallback(async () => { await carregarJobs(); }, [carregarJobs]);
 
   return (
     <EnvioMetaSendingContext.Provider
-      value={{ enviando, pausado, progresso, detalhes, deliveryResumo, resultado, templateNome, restantes, iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus }}
+      value={{
+        enviando, pausado, progresso, detalhes, deliveryResumo, resultado, templateNome, restantes,
+        iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
+        jobs, jobsAtivos,
+        getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded,
+      }}
     >
       {children}
     </EnvioMetaSendingContext.Provider>
