@@ -58,6 +58,7 @@ interface MetaMensagem {
   direcao: string; timestamp_msg: string; tipo_conteudo?: string;
   media_url?: string | null; wa_message_id?: string | null; status_envio?: string | null;
   wa_message_id_reply?: string | null; conteudo_citado?: string | null;
+  template_botoes?: any[] | null;
 }
 
 const PAGE_SIZE = 200;
@@ -900,6 +901,7 @@ export default function InboxMeta() {
                                 media_url: m.media_url, whatsapp_msg_id: m.wa_message_id,
                                 status_envio: m.status_envio,
                                 conteudo_citado: m.conteudo_citado,
+                                template_botoes: (m as any).template_botoes ?? null,
                               } as any}
                               formatMsgTime={formatMsgTime}
                             />
