@@ -1164,7 +1164,7 @@ export default function EnvioMeta() {
             </Button>
             <Button
               onClick={enviarTeste}
-              disabled={enviando || validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
+              disabled={validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
               size="lg"
               variant="secondary"
               className="border-2 border-amber-500 bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 dark:border-amber-400 shadow-sm"
