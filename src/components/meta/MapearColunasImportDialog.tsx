@@ -207,18 +207,24 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       const cpf = idxCpf >= 0 ? String(arr[idxCpf] ?? "").replace(/\D/g, "") : "";
       const atraso = idxAtraso >= 0 ? String(arr[idxAtraso] ?? "").trim() : "";
       const saldo = idxSaldo >= 0 ? String(arr[idxSaldo] ?? "").trim().replace(/[^\d,.-]/g, "").replace(",", ".") : "";
-      const parts = [telRaw, nome, cpf, atraso, saldo];
+      // Coleta valores das variáveis do template na ordem dos placeholders para exibir no textarea
+      const tplValuesInOrder: string[] = [];
+      const rowVars: Record<string, string> = {};
+      if (tplvarCols.length > 0) {
+        const byKey = new Map(tplvarCols.map((t) => [t.key, t.col]));
+        for (const pk of placeholders) {
+          const col = byKey.get(pk);
+          const raw = col != null ? String(arr[col] ?? "").trim() : "";
+          tplValuesInOrder.push(raw);
+          if (raw) rowVars[pk] = raw;
+        }
+      }
+
+      const parts = [telRaw, nome, cpf, atraso, saldo, ...tplValuesInOrder];
       while (parts.length > 1 && !parts[parts.length - 1]) parts.pop();
       out.push(parts.join(", "));
 
-      if (tplvarCols.length > 0) {
-        const rowVars: Record<string, string> = {};
-        for (const { col, key: vk } of tplvarCols) {
-          const raw = String(arr[col] ?? "").trim();
-          if (raw) rowVars[vk] = raw;
-        }
-        if (Object.keys(rowVars).length > 0) varsByTel[key] = rowVars;
-      }
+      if (Object.keys(rowVars).length > 0) varsByTel[key] = rowVars;
     }
     if (out.length === 0) { toast.error("Nenhum telefone válido encontrado após mapeamento"); return; }
     onConfirm(out, { total: out.length, ignorados, duplicados }, varsByTel);
