@@ -82,19 +82,26 @@ function resolveNamedVar(name: string, c: ClienteData): string {
 
 function inferFieldForPlaceholder(template: any, key: string): string {
   const bodyText = String(template?.body_text || '');
-  // Rótulo em pt-BR normalmente PRECEDE o placeholder: "Olá {{1}}", "O CNPJ {{2}}",
-  // "Saldo: {{3}}". Olhar 30 chars antes é o sinal forte; só 3 chars depois (pontuação).
-  const rx = new RegExp(`(.{0,30})\\{\\{\\s*${key}\\s*\\}\\}(.{0,3})`, 'i');
-  const match = bodyText.match(rx);
-  const before = (match?.[1] || '').toLowerCase();
-  const after = (match?.[2] || '').toLowerCase();
+  // Pega SOMENTE o rótulo imediato: texto entre o }} anterior (ou início) e o {{n}} atual.
+  // Assim {{2}} em "Olá {{1}}! O CNPJ {{2}}" vê apenas "! O CNPJ " — sem contaminar com "Olá" do {{1}}.
+  const phRx = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`);
+  const idx = bodyText.search(phRx);
+  let before = '';
+  let after = '';
+  if (idx >= 0) {
+    const chunk = bodyText.slice(0, idx);
+    const lastClose = chunk.lastIndexOf('}}');
+    before = (lastClose >= 0 ? chunk.slice(lastClose + 2) : chunk).toLowerCase();
+    const match = bodyText.slice(idx).match(phRx);
+    const restStart = idx + (match ? match[0].length : 0);
+    after = bodyText.slice(restStart, restStart + 3).toLowerCase();
+  }
   const context = `${before} ${after}`;
-  // Ordem importa: nome antes de cnpj/cpf, porque "Olá {{1}}" tende a preceder
-  // "O CNPJ {{2}}" no mesmo trecho quando janelas se sobrepõem.
-  if (/(^|[^a-z])(ol[áa]|prezad[oa]|sr\.?|sra\.?|caro|nome|cliente|primeiro_nome)([^a-z]|$)/.test(context)) return '{nome}';
+  // Ordem: documentos ANTES de saudações, para casos como "Olá {{1}}! O CNPJ {{2}}".
   if (/cnpj|cpf|documento|\bdoc\b/.test(context)) return '{cpf}';
   if (/atraso|dias/.test(context)) return '{atraso}';
   if (/saldo|valor|d[ií]vida|montante|total/.test(context)) return '{saldo}';
+  if (/(^|[^a-z])(ol[áa]|prezad[oa]|sr\.?|sra\.?|caro|nome|cliente|primeiro_nome)([^a-z]|$)/.test(context)) return '{nome}';
   // Fallback por posição — convenção mais comum em templates de cobrança/validação.
   if (key === '1') return '{nome}';
   if (key === '2') return '{cpf}';
