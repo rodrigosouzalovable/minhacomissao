@@ -224,6 +224,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          <CampanhasFlutuante />
           </EnvioMetaSendingProvider>
           </VoiceCampaignSendingProvider>
           </WhatsAppSendingProvider>
