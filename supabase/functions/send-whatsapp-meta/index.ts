@@ -104,6 +104,9 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
     ? forceFormat === 'named'
     : (namedMatches.length > 0 && positionalMatches.length === 0);
 
+  const rowVars = (cliente.vars || {}) as Record<string, string>;
+  const hasRowVar = (k: string) => typeof rowVars[k] === 'string' && rowVars[k].trim() !== '';
+
   if (useNamed) {
     const seen = new Set<string>();
     const parameters: any[] = [];
@@ -111,7 +114,9 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
       const key = m[1];
       if (seen.has(key)) continue;
       seen.add(key);
-      const value = resolveNamedVar(key, cliente) || 'cliente';
+      const value = hasRowVar(key)
+        ? rowVars[key]
+        : (resolveNamedVar(key, cliente) || 'cliente');
       parameters.push({ type: 'text', parameter_name: key, text: value });
     }
     if (parameters.length === 0 && positionalMatches.length > 0) {
@@ -121,7 +126,9 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
         if (seen2.has(k)) continue;
         seen2.add(k);
         const field = variaveis[k] || inferFieldForPlaceholder(template, k) || 'name';
-        const value = resolveNamedVar(field.replace(/[{}]/g, ''), cliente) || 'cliente';
+        const value = hasRowVar(k)
+          ? rowVars[k]
+          : (resolveNamedVar(field.replace(/[{}]/g, ''), cliente) || 'cliente');
         parameters.push({ type: 'text', parameter_name: field.replace(/[{}]/g, '') || 'name', text: value });
       }
     }
@@ -132,10 +139,11 @@ function buildParameters(template: any, cliente: ClienteData, forceFormat?: 'nam
   if (sortedKeys.length > 0) {
     for (const k of sortedKeys) {
       const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
-      const value =
-        resolveVar(field, cliente) ||
-        resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
-        'cliente';
+      const value = hasRowVar(k)
+        ? rowVars[k]
+        : (resolveVar(field, cliente) ||
+           resolveNamedVar(field.replace(/[{}]/g, ''), cliente) ||
+           'cliente');
       parameters.push({ type: 'text', text: value });
     }
     return { parameters, format: 'positional' };
