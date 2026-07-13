@@ -372,8 +372,11 @@ Deno.serve(async (req) => {
         // Renderiza o corpo real do template com as variáveis substituídas
         let bodyRendered: string = template.body_text || '';
         const variaveis = (template.variaveis || {}) as Record<string, string>;
-        // Substitui {{1}}, {{2}}... via mapeamento variaveis
+        const rowVars = (cliente.vars || {}) as Record<string, string>;
+        const rowHas = (k: string) => typeof rowVars[k] === 'string' && rowVars[k].trim() !== '';
+        // Substitui {{1}}, {{2}}... — prioriza valor por linha vindo da planilha
         bodyRendered = bodyRendered.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, k) => {
+          if (rowHas(k)) return rowVars[k];
           const field = variaveis[k] || inferFieldForPlaceholder(template, k) || '';
           return (
             resolveVar(field, cliente) ||
@@ -381,9 +384,9 @@ Deno.serve(async (req) => {
             (cliente.nome || 'cliente')
           );
         });
-        // Substitui {{nome}}, {{primeiro_nome}}, etc.
+        // Substitui {{nome}}, {{primeiro_nome}}, etc. (nomeadas)
         bodyRendered = bodyRendered.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_m, k) =>
-          resolveNamedVar(k, cliente) || (cliente.nome || 'cliente'),
+          rowHas(k) ? rowVars[k] : (resolveNamedVar(k, cliente) || (cliente.nome || 'cliente')),
         );
 
         const headerFormat = getHeaderFormat(template);
