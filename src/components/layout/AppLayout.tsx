@@ -293,10 +293,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter((item) => {
-    if (isAdmin) return true;
+    // /admin/usuarios sempre visível para admin (fail-safe: não pode ser desabilitada)
+    if (isAdmin && item.href === '/admin/usuarios') return true;
     if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }
+    if (isAdmin) return true;
     if (item.adminOnly) return false;
     if (item.gestorOnly && !isGestor && !acordosCompartilhados) return false;
     return true;

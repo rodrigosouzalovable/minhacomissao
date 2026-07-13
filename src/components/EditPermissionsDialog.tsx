@@ -94,8 +94,12 @@ export function EditPermissionsDialog({
 
     const saveMutation = useMutation({
     mutationFn: async () => {
+        // Garante que /admin/usuarios sempre esteja em abas_permitidas
+        const abasFinal = selectedTabs.includes('/admin/usuarios')
+          ? selectedTabs
+          : [...selectedTabs, '/admin/usuarios'];
         const payload = {
-            abas_permitidas: selectedTabs,
+            abas_permitidas: abasFinal,
             credores,
             visivel_ranking: visivelRanking,
             inbox_compartilhado: inboxCompartilhado,
@@ -139,10 +143,12 @@ export function EditPermissionsDialog({
   });
 
   const toggleTab = (path: string) => {
+    if (path === '/admin/usuarios') return; // não pode ser desabilitada
     setSelectedTabs((prev) =>
       prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
     );
   };
+
 
   const toggleCredor = (value: string) => {
     setCredores((prev) =>
@@ -161,18 +167,22 @@ export function EditPermissionsDialog({
           <div className="space-y-6 py-4 pr-2">
             <div className="space-y-3">
               <Label className="text-sm font-medium">Abas visíveis</Label>
-              {AVAILABLE_TABS.map((tab) => (
-                <div key={tab.path} className="flex items-center gap-2">
-                  <Checkbox
-                    id={tab.path}
-                    checked={selectedTabs.includes(tab.path)}
-                    onCheckedChange={() => toggleTab(tab.path)}
-                  />
-                  <label htmlFor={tab.path} className="text-sm cursor-pointer">
-                    {tab.label}
-                  </label>
-                </div>
-              ))}
+              {AVAILABLE_TABS.map((tab) => {
+                const locked = tab.path === '/admin/usuarios';
+                return (
+                  <div key={tab.path} className="flex items-center gap-2">
+                    <Checkbox
+                      id={tab.path}
+                      checked={locked ? true : selectedTabs.includes(tab.path)}
+                      disabled={locked}
+                      onCheckedChange={() => toggleTab(tab.path)}
+                    />
+                    <label htmlFor={tab.path} className={`text-sm ${locked ? 'text-muted-foreground cursor-not-allowed' : 'cursor-pointer'}`}>
+                      {tab.label}{locked && ' (obrigatória)'}
+                    </label>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="space-y-3">

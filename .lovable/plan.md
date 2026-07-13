@@ -1,19 +1,37 @@
-## Diagnóstico
 
-O sistema já recebeu mensagens de outras instâncias (LD 13, IPHONE B1, Novo Mundo 3144) nos últimos minutos, mas **nenhum webhook chegou pela WABA da LD 19** (`waba_id=1428755208708722`). A instância existe, está ativa, tem `access_token`, e envia mensagens normalmente — o que falha é a Meta entregar os **eventos de entrada** pra ela. Isso é sintoma clássico de WABA sem `subscribed_apps` apontando pro webhook do sistema (ou apontando pra um callback antigo).
+## 1. Remover RODRIGO do rodízio de atendentes
 
-Confirmado no banco:
-- Único registro em `meta_whatsapp_mensagens` da LD 19 hoje é a saída (template Soluti) — nenhuma entrada com sufixo `91672674`.
-- Logs do `meta-whatsapp-webhook` (últimos 10min) não mostram nenhum POST com `phone_number_id=1145666058620665`.
+O rodízio em `meta-whatsapp-webhook` pega automaticamente **toda** etiqueta com nome começando por `Atendente:` do dono da instância. Enquanto existir a etiqueta `Atendente: RODRIGO`, novos contatos podem cair pra ela.
 
-Já existe a edge function `meta-subscribe-waba` que faz exatamente o `POST /{waba_id}/subscribed_apps` com `override_callback_uri` correto — só não está sendo chamada pra LD 19.
+Ação: apagar a etiqueta `Atendente: RODRIGO` (e os vínculos com contatos que já ficaram marcados com ela). A partir daí, o rodízio distribuirá apenas entre Anna Flavia, Fernanda, Wallace e Yasmim.
 
-## Correção
+- Remover linhas em `meta_whatsapp_contato_etiquetas` onde `etiqueta_id` pertence a etiquetas com `nome ilike 'Atendente: RODRIGO%'`.
+- Apagar a(s) etiqueta(s) `Atendente: RODRIGO` da tabela `meta_whatsapp_etiquetas`.
 
-1. **Invocar `meta-subscribe-waba` para a LD 19** (uma vez) passando `{ instancia_id: "cbe0a7fb-f979-4839-87e4-0221b7be1a78" }`. Isso re-inscreve a WABA no callback certo do projeto usando o `access_token` já salvo. Retorno inclui `subscribe_ok` e a lista atual de `subscribed_apps` pra confirmar.
+Observação: contatos que já estavam marcados com "Atendente: RODRIGO" perdem essa etiqueta e voltam para "sem atendente" — o próximo webhook de entrada os reatribui automaticamente pelo rodízio (menor carga). Se preferir manter os antigos com Rodrigo e apenas parar de receber novos, me avisa que faço variação.
 
-2. **Verificar** com nova consulta em `meta_whatsapp_mensagens` (filtrando `instancia_id` da LD 19 e `direcao=entrada`) que a resposta do seu número pessoal aparece após o re-subscribe (pedir pra você mandar mais uma resposta pelo WhatsApp).
+## 2. Permissões de abas realmente escondem as abas (menos "Usuários")
 
-3. **Se ainda não chegar após o re-subscribe**, checar em `subscriptions` no retorno da função se o `callback_uri` bate exatamente com `${SUPABASE_URL}/functions/v1/meta-whatsapp-webhook` e se o app está listado. Se não bater, a causa é token da WABA sem permissão `whatsapp_business_messaging` + `whatsapp_business_management` — nesse caso é preciso regenerar o system-user token da BM dessa WABA.
+Hoje o `AppLayout` faz `if (isAdmin) return true`, ou seja, admin **sempre** vê todas as abas — as checkboxes do dialog não têm efeito no próprio admin. E o dialog permite desmarcar qualquer aba, inclusive Usuários (o que trancaria o admin fora do painel).
 
-Nenhuma alteração de código é necessária — a função de re-subscribe já existe e cobre o caso. A ação é operacional: rodar `meta-subscribe-waba` para a LD 19 e você reenviar uma mensagem-teste pra confirmar.
+Mudanças:
+
+**`src/components/layout/AppLayout.tsx`**
+- Trocar a lógica de filtro para respeitar `abasPermitidas` também para admin. Regra final:
+  - `/admin/usuarios` sempre visível (fail-safe).
+  - Se existir `abasPermitidas`, mostrar somente as abas listadas + `/admin/usuarios`.
+  - Se não existir (usuário sem registro em `user_permissions`), manter comportamento atual: admin vê tudo; funcionário/gestor vê o que já via.
+
+**`src/components/EditPermissionsDialog.tsx`**
+- A checkbox de `/admin/usuarios` fica sempre marcada, `disabled`, com hint "Não pode ser desabilitada".
+- Ao salvar, garantir que `/admin/usuarios` esteja sempre em `abas_permitidas` (mesmo que o valor no estado tenha sido manipulado).
+- Ao inicializar (sem `permissions` prévias) já inclui `/admin/usuarios`.
+
+Nenhuma migração de schema é necessária — a coluna `abas_permitidas` já existe.
+
+## Verificação
+- Após salvar permissões desmarcando "Dashboard" para o próprio login, a aba some da sidebar; ao remarcar e salvar, volta.
+- "Usuários" continua visível independente do estado das outras checkboxes.
+- Depois da limpeza, uma nova mensagem de entrada em uma conversa nova não recebe mais a etiqueta `Atendente: RODRIGO`.
+
+Posso seguir?
