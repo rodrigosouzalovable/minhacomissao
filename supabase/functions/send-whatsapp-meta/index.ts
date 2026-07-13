@@ -13,6 +13,7 @@ interface ClienteData {
   telefone: string;
   atraso?: string | number;
   saldo?: number;
+  vars?: Record<string, string>;
 }
 
 const formatPrimeiroNome = (nome: string): string => {
