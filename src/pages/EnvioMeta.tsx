@@ -1371,8 +1371,10 @@ export default function EnvioMeta() {
           body_text: (template as any).body_text || "",
           variaveis: template.variaveis || null,
         } : null}
-        onConfirm={(linhas, stats, novosVars) => {
+        onConfirm={(linhas, stats, novosVars, headers) => {
           setRecipientsRaw(linhas.join("\n"));
+          setRecipientsHeaders(headers || []);
+          setEditAsText(false);
           setValidacaoPreview(null);
           setVarsByTel(novosVars || {});
           const varsCount = Object.keys(novosVars || {}).length;
