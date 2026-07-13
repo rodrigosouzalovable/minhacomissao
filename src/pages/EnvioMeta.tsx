@@ -263,19 +263,20 @@ export default function EnvioMeta() {
   const removerSemWhatsApp = () => {
     if (!validacaoPreview) return;
     const invalidSet = new Set(validacaoPreview.invalid.map((t) => normalizeTelKey(t)));
-    const rows = parseRecipients(recipientsRaw).filter((r) => !invalidSet.has(normalizeTelKey(r.telefone)));
-    const linhas = rows.map((r) => {
-      const key = normalizeTelKey(r.telefone);
-      const v = varsByTel[key];
-      const extras = v ? Object.values(v) : [];
-      const parts = [r.telefone, r.nome, r.cpf, r.atraso, r.saldo ? String(r.saldo) : "", ...extras];
-      while (parts.length > 1 && !parts[parts.length - 1]) parts.pop();
-      return parts.join(", ");
+    // Filtra as linhas cru do textarea preservando a ordem/colunas originais (tabela ou texto).
+    const linhas = recipientsRaw.split(/\r?\n/).filter((linha) => {
+      const trimmed = linha.trim();
+      if (!trimmed) return false;
+      const tel = trimmed.split(/[,;\t]/)[0]?.trim() || "";
+      const key = normalizeTelKey(tel);
+      if (!key) return false;
+      return !invalidSet.has(key);
     });
     setRecipientsRaw(linhas.join("\n"));
     setValidacaoPreview({ ...validacaoPreview, invalid: [] });
     toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
   };
+
 
 
   const verificarSaude = async () => {
