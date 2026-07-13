@@ -1279,47 +1279,6 @@ export default function EnvioMeta() {
               </Button>
             )}
           </div>
-
-          {progresso && (
-            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">
-                  {pausado ? "⏸ Pausado" : "Enviando"} — {progresso.enviados + progresso.erros}/{progresso.total}
-                </span>
-                <span className="text-muted-foreground text-xs">
-                  ✅ {progresso.enviados} • ❌ {progresso.erros} • ⏳ {progresso.total - progresso.enviados - progresso.erros}
-                </span>
-              </div>
-              <div className="h-2 w-full bg-muted rounded overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${Math.round(((progresso.enviados + progresso.erros) / Math.max(progresso.total, 1)) * 100)}%` }}
-                />
-              </div>
-              <div className="text-xs text-muted-foreground space-y-0.5">
-                {progresso.atualTelefone && <div>Último: <code>{progresso.atualTelefone}</code> via <strong>{progresso.atualInstancia}</strong></div>}
-                {progresso.proximoEmSeg > 0 && !pausado && <div>Próximo envio em {progresso.proximoEmSeg}s</div>}
-              </div>
-            </div>
-          )}
-
-
-          {resultado && (
-            <div className="text-sm space-y-2">
-              {resultado.enviados === 0 && resultado.statusMotivo && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive">
-                  Nenhuma mensagem foi enviada: {resultado.statusMotivo}
-                </div>
-              )}
-              <Badge variant="default" className="bg-green-600 mr-2">{resultado.enviados} enviados</Badge>
-              {resultado.erros > 0 && <Badge variant="destructive" className="mr-2">{resultado.erros} erros</Badge>}
-              <span className="text-muted-foreground">de {resultado.total} contatos</span>
-            </div>
-          )}
-
-          {(enviando || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
-            <DetalhesEnvioPainel detalhes={detalhes} deliveryResumo={deliveryResumo} onRefresh={refreshStatus} />
-          )}
         </CardContent>
       </Card>
     </div>
