@@ -82,13 +82,23 @@ function resolveNamedVar(name: string, c: ClienteData): string {
 
 function inferFieldForPlaceholder(template: any, key: string): string {
   const bodyText = String(template?.body_text || '');
-  const rx = new RegExp(`(.{0,40})\\{\\{\\s*${key}\\s*\\}\\}(.{0,40})`, 'i');
+  // Rótulo em pt-BR normalmente PRECEDE o placeholder: "Olá {{1}}", "O CNPJ {{2}}",
+  // "Saldo: {{3}}". Olhar 30 chars antes é o sinal forte; só 3 chars depois (pontuação).
+  const rx = new RegExp(`(.{0,30})\\{\\{\\s*${key}\\s*\\}\\}(.{0,3})`, 'i');
   const match = bodyText.match(rx);
-  const context = `${match?.[1] || ''} ${match?.[2] || ''}`.toLowerCase();
-  if (/cnpj|cpf|documento|doc\b/.test(context)) return '{cpf}';
-  if (/nome|cliente/.test(context)) return '{nome}';
+  const before = (match?.[1] || '').toLowerCase();
+  const after = (match?.[2] || '').toLowerCase();
+  const context = `${before} ${after}`;
+  // Ordem importa: nome antes de cnpj/cpf, porque "Olá {{1}}" tende a preceder
+  // "O CNPJ {{2}}" no mesmo trecho quando janelas se sobrepõem.
+  if (/(^|[^a-z])(ol[áa]|prezad[oa]|sr\.?|sra\.?|caro|nome|cliente|primeiro_nome)([^a-z]|$)/.test(context)) return '{nome}';
+  if (/cnpj|cpf|documento|\bdoc\b/.test(context)) return '{cpf}';
   if (/atraso|dias/.test(context)) return '{atraso}';
-  if (/saldo|valor|d[ií]vida/.test(context)) return '{saldo}';
+  if (/saldo|valor|d[ií]vida|montante|total/.test(context)) return '{saldo}';
+  // Fallback por posição — convenção mais comum em templates de cobrança/validação.
+  if (key === '1') return '{nome}';
+  if (key === '2') return '{cpf}';
+  if (key === '3') return '{saldo}';
   return '';
 }
 
