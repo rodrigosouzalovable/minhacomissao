@@ -23,6 +23,7 @@ function statusLabel(s: string) {
 }
 
 export default function CampanhasFlutuante() {
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { jobs, jobsAtivos, togglePausaJob, cancelarJob } = useEnvioMetaSending();
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
