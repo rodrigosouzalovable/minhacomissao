@@ -78,6 +78,7 @@ type Props = {
     csvLines: string[],
     stats: { total: number; ignorados: number; duplicados: number },
     varsByTel: Record<string, Record<string, string>>,
+    headers: string[],
   ) => void;
 };
 
