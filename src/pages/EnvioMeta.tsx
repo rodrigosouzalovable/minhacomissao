@@ -204,6 +204,7 @@ export default function EnvioMeta() {
   };
 
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
+  const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
   const [editVarsOpen, setEditVarsOpen] = useState(false);
 
   const importarExcel = async (file: File) => {
