@@ -17,7 +17,7 @@ import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/Cus
 import CustoEstimadoEnvio, { LIMITE_CUSTO_BRL_DEFAULT } from "@/components/meta/CustoEstimadoEnvio";
 import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import EscalonamentoPanel from "@/components/meta/escalonamento/EscalonamentoPanel";
+import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
 import { AgendarCampanhaBox, CampanhasAgendadasList } from "@/components/meta/CampanhaAgendadaSection";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
