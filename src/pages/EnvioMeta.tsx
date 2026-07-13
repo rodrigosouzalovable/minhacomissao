@@ -581,6 +581,7 @@ export default function EnvioMeta() {
       semWhatsapp: semWa,
       erroValidacao: erroVal,
       templateIdByInstance,
+      nomeCampanha: nomeCampanha.trim() || undefined,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
