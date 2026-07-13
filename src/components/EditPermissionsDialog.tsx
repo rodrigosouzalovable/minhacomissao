@@ -149,11 +149,6 @@ export function EditPermissionsDialog({
     );
   };
 
-  const _originalToggleTab = (path: string) => {
-    setSelectedTabs((prev) =>
-      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
-    );
-  };
 
   const toggleCredor = (value: string) => {
     setCredores((prev) =>
