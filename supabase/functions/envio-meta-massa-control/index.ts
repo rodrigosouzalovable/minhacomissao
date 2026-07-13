@@ -40,10 +40,18 @@ Deno.serve(async (req) => {
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job').select('*').eq('id', jobId).maybeSingle();
     if (jobErr) throw jobErr;
-    if (!job || job.user_id !== user.id) {
+    if (!job) {
       return new Response(JSON.stringify({ success: false, error: 'job não encontrado' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    if (job.user_id !== user.id) {
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ success: false, error: 'sem permissão' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     if (acao === 'pausar') {
