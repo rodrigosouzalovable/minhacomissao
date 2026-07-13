@@ -1029,7 +1029,14 @@ export default function EnvioMeta() {
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
               />
-              <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!template}
+                title={!template ? "Selecione um template antes de importar — assim as variáveis {{1}}, {{2}} do template aparecem no mapeamento." : "Importar planilha Excel"}
+              >
                 <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
                 Importar Excel
               </Button>
