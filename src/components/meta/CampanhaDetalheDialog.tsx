@@ -217,7 +217,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Limpar
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => refreshStatus()}>
+            <Button size="sm" variant="ghost" onClick={() => { refreshStatus(); recarregarItensJob(job.id); }}>
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Atualizar
             </Button>
           </div>
@@ -229,9 +229,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 Enviados <span className="text-muted-foreground font-normal">({detalhes.enviados.length})</span>
               </span>
               {detalhes.enviados.length > 0 && (
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
-                  <Copy className="h-3 w-3 mr-1" /> Copiar
-                </Button>
+                <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
+                    <Copy className="h-3 w-3 mr-1" /> Copiar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarEnviados(); }}>
+                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  </Button>
+                </div>
               )}
             </summary>
             <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
