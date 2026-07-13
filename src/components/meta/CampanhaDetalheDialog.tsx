@@ -36,14 +36,28 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     reativarJob,
     limparJob,
     ensureItensLoaded,
+    recarregarItensJob,
     refreshStatus,
   } = useEnvioMetaSending();
 
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
 
+  // Ao abrir o diálogo, sempre força um refetch dos itens (não só a primeira vez).
   useEffect(() => {
-    if (open && jobId) ensureItensLoaded(jobId);
-  }, [open, jobId, ensureItensLoaded]);
+    if (open && jobId) {
+      ensureItensLoaded(jobId);
+      recarregarItensJob(jobId);
+    }
+  }, [open, jobId, ensureItensLoaded, recarregarItensJob]);
+
+  // Polling leve enquanto o diálogo está aberto e o job segue rodando/pausado.
+  useEffect(() => {
+    if (!open || !jobId) return;
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j || (j.status !== "rodando" && j.status !== "pausado")) return;
+    const t = setInterval(() => { recarregarItensJob(jobId); }, 8000);
+    return () => clearInterval(t);
+  }, [open, jobId, jobs, recarregarItensJob]);
 
   if (!job) {
     return (
