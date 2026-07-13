@@ -178,6 +178,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
             <Route path="/inbox" element={<PermissionRoute><WhatsAppInbox /></PermissionRoute>} />
+            <Route path="/consultoria/*" element={<Consultoria />} />
             <Route path="/:creditor" element={<PortalConsulta />} />
             <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
             <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
