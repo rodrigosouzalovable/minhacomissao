@@ -168,6 +168,7 @@ export default function EnvioMeta() {
   const [editNome, setEditNome] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
+  const [instanciasDialogOpen, setInstanciasDialogOpen] = useState<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
