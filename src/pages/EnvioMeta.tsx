@@ -1253,32 +1253,8 @@ export default function EnvioMeta() {
               {enviandoTeste ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
               {enviandoTeste ? "Enviando teste..." : "Enviar teste (1º número)"}
             </Button>
-
-            {enviando && (
-              <>
-                <Button type="button" variant="secondary" size="lg" onClick={togglePausa}>
-                  {pausado ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
-                  {pausado ? "Retomar" : "Pausar"}
-                </Button>
-                <Button type="button" variant="destructive" size="lg" onClick={cancelar}>
-                  <StopCircle className="h-4 w-4 mr-2" />
-                  Cancelar
-                </Button>
-              </>
-            )}
-            {!enviando && resultado && restantes > 0 && (
-              <Button type="button" size="lg" onClick={reativar} className="bg-green-600 hover:bg-green-700 text-white">
-                <Send className="h-4 w-4 mr-2" />
-                Reativar envio ({restantes} restantes)
-              </Button>
-            )}
-            {!enviando && (resultado || detalhes.enviados.length > 0 || detalhes.erros.length > 0 || detalhes.semWhatsapp.length > 0 || detalhes.erroValidacao.length > 0) && (
-              <Button type="button" variant="outline" size="lg" onClick={limpar}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                Limpar resultados
-              </Button>
-            )}
           </div>
+
         </CardContent>
       </Card>
     </div>
