@@ -1767,6 +1767,7 @@ export type Database = {
           status: string
           telefone: string
           updated_at: string
+          vars: Json
         }
         Insert: {
           atraso?: string | null
@@ -1784,6 +1785,7 @@ export type Database = {
           status?: string
           telefone: string
           updated_at?: string
+          vars?: Json
         }
         Update: {
           atraso?: string | null
@@ -1801,6 +1803,7 @@ export type Database = {
           status?: string
           telefone?: string
           updated_at?: string
+          vars?: Json
         }
         Relationships: [
           {

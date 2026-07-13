@@ -1,0 +1,1 @@
+ALTER TABLE public.envio_meta_job_item ADD COLUMN IF NOT EXISTS vars jsonb NOT NULL DEFAULT '{}'::jsonb;
