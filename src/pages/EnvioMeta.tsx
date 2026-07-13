@@ -1144,10 +1144,23 @@ export default function EnvioMeta() {
           </div>
 
 
+          <div className="max-w-md space-y-1.5">
+            <Label>Nome da campanha (opcional)</Label>
+            <Input
+              placeholder="Ex.: Certificado Digital — Lote 1"
+              value={nomeCampanha}
+              onChange={(e) => setNomeCampanha(e.target.value)}
+              maxLength={120}
+            />
+            <p className="text-xs text-muted-foreground">
+              Rótulo curto para identificar esta campanha no painel de campanhas ativas. Você pode iniciar várias campanhas em paralelo.
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={enviando || validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
-              {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-              {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
+            <Button onClick={enviar} disabled={validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
+              {validando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              {validando ? "Validando WhatsApp..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
             <Button
               onClick={enviarTeste}
