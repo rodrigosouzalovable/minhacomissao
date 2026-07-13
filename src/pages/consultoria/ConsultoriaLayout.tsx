@@ -25,12 +25,12 @@ const nav = [
 export default function ConsultoriaLayout({ children }: { children: ReactNode }) {
   const { aluno, isAdmin } = useConsultoria();
   const { signOut } = useAuth();
-  const nav_ = navigate();
+  const navigateTo = useNavigate();
   const [open, setOpen] = useState(false);
 
   async function handleLogout() {
     await signOut();
-    nav_("/consultoria");
+    navigateTo("/consultoria");
   }
 
   const SideContent = (
