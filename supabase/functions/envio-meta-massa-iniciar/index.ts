@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
         max_seg: maxSec,
         total: clientes.length,
         proximo_em: new Date().toISOString(),
+        nome_campanha: nomeCampanha,
       })
       .select('id')
       .single();
