@@ -605,7 +605,7 @@ export default function EnvioMeta() {
     setVarsByTel({});
     setValidacaoPreview(null);
     setNomeCampanha("");
-    limpar();
+    setTimeout(() => { refreshStatus(); }, 1500);
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
     toast.success("Campanha iniciada. Acompanhe no botão Campanhas.");
   };
