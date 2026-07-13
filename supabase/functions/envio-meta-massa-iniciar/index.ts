@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
     const minSec = Math.max(1, Number(body?.minSec ?? 30));
     const maxSec = Math.max(minSec, Number(body?.maxSec ?? 90));
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
+    const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
 
     if (!template?.id) {
       return new Response(JSON.stringify({ success: false, error: 'template obrigatório' }), {
