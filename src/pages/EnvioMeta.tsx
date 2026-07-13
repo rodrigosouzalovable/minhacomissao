@@ -597,6 +597,17 @@ export default function EnvioMeta() {
         custoRef.current?.refetch();
       },
     });
+
+    // Libera o formulário imediatamente após iniciar. O acompanhamento
+    // da campanha passa a acontecer apenas no botão flutuante "Campanhas".
+    setRecipientsRaw("");
+    setRecipientsHeaders([]);
+    setVarsByTel({});
+    setValidacaoPreview(null);
+    setNomeCampanha("");
+    limpar();
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+    toast.success("Campanha iniciada. Acompanhe no botão Campanhas.");
   };
 
   const enviarTeste = async () => {
