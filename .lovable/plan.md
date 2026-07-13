@@ -1,78 +1,81 @@
 ## Objetivo
 
-No fluxo "Importar planilha" da página Envio Meta, permitir que cada coluna do Excel seja associada diretamente a uma variável do template selecionado (ex.: `{{1}}` = Nome, `{{2}}` = CNPJ), além dos campos fixos (Telefone, Nome, CPF/CNPJ, Atraso, Saldo).
+Permitir múltiplas campanhas Meta rodando em paralelo, cada uma com seu próprio conjunto de instâncias (números) e template, e um widget flutuante global para monitorar e abrir cada campanha em um dialog dedicado.
 
-Assim o cliente pode importar uma planilha "5516... | YKOSTEN..." e mapear a coluna B como `{{2}}` do template, sem precisar reeditar as variáveis do template.
-
-## Escopo
-
-Somente o fluxo de importação → envio em massa Meta. Não altera envio de teste, envio manual, nem outros disparadores.
+Sim, é totalmente viável — o backend já roda job-a-job (a função `envio-meta-massa-tick` já opera por `job_id`, e a tabela `envio_meta_job` suporta N jobs por usuário). O que precisa mudar é: (a) parar de cancelar jobs antigos ao iniciar um novo, (b) o contexto do frontend passar a listar N jobs em vez de 1, e (c) adicionar um mini painel flutuante.
 
 ## Mudanças
 
-### 1. `MapearColunasImportDialog.tsx`
+### 1. Backend — `envio-meta-massa-iniciar/index.ts`
 
-- Nova prop opcional `template`: `{ nome_template, body_text, variaveis, placeholders: string[] }` (lista de chaves como `["1","2"]` ou nomeadas).
-- `ColRole` passa a aceitar também `tplvar:<key>` (ex.: `tplvar:1`).
-- Header do modal ganha um bloco compacto mostrando o corpo do template com os `{{N}}` destacados, para o usuário saber a que se refere cada variável.
-- Select de cada coluna passa a listar, além de Ignorar/Telefone/Nome/CPF/Atraso/Saldo, uma seção "Variáveis do template" com uma opção por placeholder (rótulo: `{{1}} — trecho ao redor`). O trecho ao redor é extraído do `body_text` para dar contexto (ex.: `{{1}} — "Olá * ... !"`).
-- Autodetecção: se `template.variaveis[k]` já mapeia para `{nome}`/`{cpf}`/etc, sugerir o mesmo ao encontrar cabeçalho equivalente.
-- Restrição: cada `tplvar:k` só pode ser atribuída a uma coluna.
-- Saída (`onConfirm`) evolui:
-  ```ts
-  onConfirm(
-    csvLines: string[],
-    stats: { total; ignorados; duplicados },
-    varsByTel: Record<string /* telKey */, Record<string /* placeholder */, string>>
-  )
-  ```
-  As colunas mapeadas para `tplvar:*` **não** entram no CSV; elas alimentam `varsByTel`, indexado pela chave normalizada do telefone (últimos 8 dígitos, mesmo padrão de dedup existente).
+- Remover o trecho que cancela silenciosamente jobs `rodando`/`pausado` anteriores do mesmo usuário.
+- Manter o restante do fluxo (validação de template MARKETING, inserção do job + itens, primeiro tick + loop).
+- Adicionar `nome_campanha?: string` (opcional) no payload para o usuário identificar a campanha.
 
-### 2. `EnvioMeta.tsx`
+Nenhuma alteração em `envio-meta-massa-tick`, `pick-meta-instance`, `envio-meta-massa-control` (todas já operam por `job_id`).
 
-- Novo state `varsByTel: Record<string, Record<string, string>>`.
-- Ao chamar o diálogo, passar o `template` selecionado com sua lista de placeholders (extraída do `body_text` via regex `/\{\{\s*([^}]+)\s*\}\}/g`).
-- `onConfirm` do diálogo: além de preencher `recipientsRaw`, guardar `varsByTel`. Limpar `varsByTel` quando o usuário limpar/recolar recipients manualmente.
-- Ao montar `clientesFinal` para `iniciar()`, anexar `vars` em cada `ClienteRow` a partir de `varsByTel[normalizeTelKey(...)]`.
-- Estender o tipo `ClienteRow` com `vars?: Record<string,string>`.
+### 2. Migração SQL
 
-### 3. `envio-meta-massa-iniciar/index.ts`
+- `ALTER TABLE public.envio_meta_job ADD COLUMN nome_campanha text NULL;` (rótulo amigável para exibir no widget; opcional).
 
-- Aceitar `vars` no payload de cada cliente e persistir em `envio_meta_job_item.vars` (jsonb, novo campo).
+### 3. Frontend — `EnvioMetaSendingContext.tsx` (refactor para multi-job)
 
-### 4. Migração SQL
+- State passa de `job` (1) para `jobs: any[]` (todos ativos + últimos finalizados, digamos os 20 mais recentes).
+- `carregar()` lista todos os jobs do usuário nos status `rodando|pausado|concluido|cancelado|erro`, mais recentes primeiro.
+- `itens` e `logStatus` viram maps indexados por `job_id`: `itensByJob: Map<string, any[]>`, `logStatusByJob: Map<string, Map<string, {status, erro}>>`. Cada dashboard carrega sob demanda por job.
+- Realtime: o filtro atual já é por `user_id`, então continua funcionando; ao receber um evento em `envio_meta_job_item` recarregamos o job específico afetado.
+- API do contexto passa a expor:
+  - `jobs`: lista completa (com progresso derivado por job).
+  - `jobsAtivos`: filtro para `rodando|pausado`.
+  - `iniciar(p)`: idêntico ao atual, mas SEM aviso de "um envio já está rodando".
+  - `togglePausa(jobId)`, `cancelar(jobId)`, `limpar(jobId)`, `reativar(jobId)`, `refreshStatus(jobId?)`.
+  - `getDetalhes(jobId)`, `getDeliveryResumo(jobId)`, `getProgresso(jobId)`, `getResultado(jobId)`.
+- Mantém compat mínima para não quebrar `EnvioMeta.tsx`: expõe também getters equivalentes que aceitam `jobId` como argumento.
 
-- Adicionar coluna `vars jsonb` em `public.envio_meta_job_item` (default `'{}'::jsonb`).
-- Nenhuma mudança de RLS/GRANT (tabela já existente).
+### 4. Novo componente — `src/components/meta/CampanhasFlutuante.tsx`
 
-### 5. `envio-meta-massa-tick/index.ts`
+- Botão flutuante fixo no canto inferior direito (badge circular com número de campanhas ativas). Renderizado globalmente pelo `AppLayout` quando `jobsAtivos.length > 0`.
+- Ao clicar, abre um Popover/Sheet compacto com a lista de campanhas ativas + últimas 5 finalizadas: nome/template, instâncias em uso, progresso `X/Y`, próximo envio em `Ns`, status (rodando/pausado/concluido/cancelado), botões de ação rápidos (pausar/retomar/cancelar).
+- Cada linha tem "Ver detalhes" que abre `CampanhaDetalheDialog` (novo).
 
-- Ao chamar `send-whatsapp-meta`, incluir `vars` do item no objeto `cliente` enviado.
+### 5. Novo componente — `src/components/meta/CampanhaDetalheDialog.tsx`
 
-### 6. `send-whatsapp-meta/index.ts` (substituição de variáveis)
+- Dialog em tela cheia (max-w-5xl) exibindo tudo o que hoje aparece inline em `EnvioMeta.tsx` para um job:
+  - Header com nome/template/instâncias/status/progresso.
+  - Barra de progresso + próximo envio.
+  - Abas "Enviados", "Erros", "Sem WhatsApp" (essa aba vem só se `LocalExtras` conhece esse job).
+  - Delivery resumo (aceito/entregue/lida/falhou/aguardando).
+  - Controles: Pausar/Retomar, Cancelar, Reativar (se finalizado com pendentes), Limpar (se finalizado sem pendentes).
+- Recebe `jobId` e busca via `getDetalhes(jobId)` etc.
 
-- Em `buildParameters` e no `bodyRendered.replace(/\{\{\s*(\d+)\s*\}\}/g, ...)`:
-  - **Prioridade nova**: se `cliente.vars?.[k]` existir e não for vazio, usar esse valor bruto.
-  - Fallback: comportamento atual (`variaveis[k]` → `inferFieldForPlaceholder` → `resolveNamedVar`).
-- Idem para placeholders nomeados (`{{nome_variavel}}`): se `cliente.vars?.[nome]` existir, usa.
+### 6. `EnvioMeta.tsx`
 
-### Fora do escopo
+- Card de composição de envio (template + instâncias + destinatários) permanece igual.
+- Botão "Enviar em massa" NÃO bloqueia mais quando há campanha rodando; ele apenas cria um novo job.
+- Novo campo opcional "Nome da campanha" no card do template (usado para diferenciar no widget).
+- O painel de progresso inline atual continua funcionando, mas passa a mostrar somente o último job iniciado nesta sessão (`ultimoJobIdIniciado`), com um link "Ver todas as campanhas" que abre o widget flutuante expandido.
 
-- Não altera `EditarVariaveisTemplateDialog` (mapeamento default do template continua funcionando).
-- Não persiste o mapeamento escolhido no diálogo entre importações (é por importação).
-- Não altera a preview do template em `CustoEstimadoEnvio` etc.
+### 7. `App.tsx` / `AppLayout.tsx`
 
-## Diagrama de dados
+- Renderizar `<CampanhasFlutuante />` uma vez dentro do `EnvioMetaSendingProvider`, para ficar disponível em qualquer rota autenticada.
 
-```text
-Planilha            MapearColunasImportDialog        EnvioMeta                envio_meta_job_item
-Col A (tel)  ---->  Telefone            ---------->  recipientsRaw (CSV)
-Col B (CNPJ) ---->  tplvar:2            ---------->  varsByTel[tel][2]  --->  vars = {"2":"12.345..."}
-Col C (Nome) ---->  Nome (ou tplvar:1)  ---------->  CSV nome / vars[1]
-```
+## Regras / considerações
+
+- **Compartilhamento de instância**: se o usuário selecionar a mesma instância em duas campanhas concorrentes, o backend continua funcionando (o `pick-meta-instance` respeita cota diária/health por instância, então o round-robin de cada job simplesmente compete pelo pool). Nenhum lock exclusivo — é intencional para não engessar o usuário.
+- **Custo**: a confirmação de custo (dialog que exige digitar o valor em BRL) continua sendo feita por campanha antes de iniciar — cada campanha exige nova confirmação.
+- **Bloqueios globais** (domingo, fora do horário, tier cheio, pool pausado) continuam sendo aplicados pelo `pick-meta-instance` a cada tick, independente por job.
+- **Limites de custo**: templates MARKETING permanecem bloqueados para envio em massa (regra já existente na função iniciar).
+
+## Fora do escopo
+
+- Sem reordenação/priorização entre campanhas concorrentes; cada uma segue seu delay configurado.
+- Sem "clone campanha" ou reagendamento pelo widget (só controles básicos).
+- Sem alteração no `AgendarCampanhaBox` (agendamento multi-dia).
 
 ## Testes manuais
 
-1. Importar planilha do exemplo (Tel/CNPJ/Nome), mapear B=`{{2}}` e C=Nome. Enviar teste para 1 contato — verificar no WhatsApp que `{{2}}` recebeu o CNPJ da linha.
-2. Importar sem mapear nenhum `tplvar:*` — comportamento antigo permanece igual.
-3. Trocar o template selecionado após abrir o diálogo — lista de placeholders atualiza.
+1. Iniciar campanha A com instância X. Iniciar campanha B com instância Y sem cancelar A — confirmar que ambos rodam simultaneamente (badge mostra "2").
+2. Abrir o widget flutuante, clicar em A → dialog mostra progresso/detalhes de A; fechar; clicar em B → detalhes de B.
+3. Pausar A pelo dialog — B continua enviando.
+4. Iniciar campanha C compartilhando instância X com A — verificar que a instância vai sendo escolhida por ambas conforme cota disponível, sem duplicar envio.
+5. Concluir A — sumir dos "ativos", aparecer na lista de últimas 5 finalizadas do widget.

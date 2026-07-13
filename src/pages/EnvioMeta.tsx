@@ -155,6 +155,7 @@ export default function EnvioMeta() {
   const [templateId, setTemplateId] = useState<string>("");
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
+  const [nomeCampanha, setNomeCampanha] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
@@ -580,6 +581,7 @@ export default function EnvioMeta() {
       semWhatsapp: semWa,
       erroValidacao: erroVal,
       templateIdByInstance,
+      nomeCampanha: nomeCampanha.trim() || undefined,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -1142,14 +1144,27 @@ export default function EnvioMeta() {
           </div>
 
 
+          <div className="max-w-md space-y-1.5">
+            <Label>Nome da campanha (opcional)</Label>
+            <Input
+              placeholder="Ex.: Certificado Digital — Lote 1"
+              value={nomeCampanha}
+              onChange={(e) => setNomeCampanha(e.target.value)}
+              maxLength={120}
+            />
+            <p className="text-xs text-muted-foreground">
+              Rótulo curto para identificar esta campanha no painel de campanhas ativas. Você pode iniciar várias campanhas em paralelo.
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={enviando || validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
-              {(enviando || validando) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-              {validando ? "Validando WhatsApp..." : enviando ? "Enviando..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
+            <Button onClick={enviar} disabled={validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
+              {validando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              {validando ? "Validando WhatsApp..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
             <Button
               onClick={enviarTeste}
-              disabled={enviando || validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
+              disabled={validando || enviandoTeste || !template || instanciaIds.length === 0 || recipients.length === 0}
               size="lg"
               variant="secondary"
               className="border-2 border-amber-500 bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 dark:border-amber-400 shadow-sm"

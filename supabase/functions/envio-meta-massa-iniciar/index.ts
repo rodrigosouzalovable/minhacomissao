@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
     const minSec = Math.max(1, Number(body?.minSec ?? 30));
     const maxSec = Math.max(minSec, Number(body?.maxSec ?? 90));
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
+    const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
 
     if (!template?.id) {
       return new Response(JSON.stringify({ success: false, error: 'template obrigatório' }), {
@@ -86,17 +87,10 @@ Deno.serve(async (req) => {
     }
 
 
-    // Cancela silenciosamente jobs "rodando/pausado" antigos do mesmo usuário para não competir.
-    const { data: ativos } = await supabase
-      .from('envio_meta_job')
-      .select('id')
-      .eq('user_id', user.id)
-      .in('status', ['rodando', 'pausado']);
-    if (ativos && ativos.length > 0) {
-      await supabase.from('envio_meta_job')
-        .update({ status: 'cancelado', status_motivo: 'novo job iniciado', concluido_em: new Date().toISOString() })
-        .in('id', ativos.map((j: any) => j.id));
-    }
+    // Múltiplas campanhas simultâneas são permitidas: NÃO cancelar jobs anteriores.
+    // Cada job roda no seu próprio loop de tick e o pick-meta-instance respeita cota/health por instância.
+
+
 
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job')
@@ -111,6 +105,7 @@ Deno.serve(async (req) => {
         max_seg: maxSec,
         total: clientes.length,
         proximo_em: new Date().toISOString(),
+        nome_campanha: nomeCampanha,
       })
       .select('id')
       .single();
