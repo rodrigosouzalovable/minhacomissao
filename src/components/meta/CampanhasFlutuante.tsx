@@ -33,6 +33,7 @@ export default function CampanhasFlutuante() {
     .filter((j) => ["concluido", "cancelado", "erro"].includes(j.status))
     .slice(0, 5);
 
+  if (roleLoading || !isAdmin) return null;
   if (jobsAtivos.length === 0 && finalizadasRecentes.length === 0) return null;
 
   const abrirDetalhe = (id: string) => {
