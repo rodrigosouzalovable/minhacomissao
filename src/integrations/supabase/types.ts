@@ -3387,6 +3387,7 @@ export type Database = {
           media_url: string | null
           status_envio: string
           telefone: string
+          template_botoes: Json | null
           template_nome: string | null
           timestamp_msg: string
           tipo_conteudo: string
@@ -3408,6 +3409,7 @@ export type Database = {
           media_url?: string | null
           status_envio?: string
           telefone: string
+          template_botoes?: Json | null
           template_nome?: string | null
           timestamp_msg?: string
           tipo_conteudo?: string
@@ -3429,6 +3431,7 @@ export type Database = {
           media_url?: string | null
           status_envio?: string
           telefone?: string
+          template_botoes?: Json | null
           template_nome?: string | null
           timestamp_msg?: string
           tipo_conteudo?: string
