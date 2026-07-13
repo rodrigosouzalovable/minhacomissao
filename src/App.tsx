@@ -59,6 +59,7 @@ const EnvioMeta = lazy(() => import("./pages/EnvioMeta"));
 const InboxMeta = lazy(() => import("./pages/InboxMeta"));
 const MetaBilling = lazy(() => import("./pages/MetaBilling"));
 const MetaTemplates = lazy(() => import("./pages/MetaTemplates"));
+const Consultoria = lazy(() => import("./pages/Consultoria"));
 
 const queryClient = new QueryClient();
 
@@ -177,6 +178,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
             <Route path="/inbox" element={<PermissionRoute><WhatsAppInbox /></PermissionRoute>} />
+            <Route path="/consultoria/*" element={<Consultoria />} />
             <Route path="/:creditor" element={<PortalConsulta />} />
             <Route path="/consulta/:creditor/:cpf" element={<ConsultaResultado />} />
             <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />

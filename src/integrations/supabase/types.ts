@@ -1176,6 +1176,291 @@ export type Database = {
         }
         Relationships: []
       }
+      consultoria_alunos: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          email: string
+          empresa: string | null
+          id: string
+          is_admin_consultoria: boolean
+          nome: string
+          telefone: string | null
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          email: string
+          empresa?: string | null
+          id?: string
+          is_admin_consultoria?: boolean
+          nome: string
+          telefone?: string | null
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          email?: string
+          empresa?: string | null
+          id?: string
+          is_admin_consultoria?: boolean
+          nome?: string
+          telefone?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      consultoria_aulas: {
+        Row: {
+          atualizado_em: string
+          conteudo_md: string
+          criado_em: string
+          id: string
+          modulo_id: number
+          numero: number
+          ordem: number
+          titulo: string
+          video_url: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          conteudo_md?: string
+          criado_em?: string
+          id?: string
+          modulo_id: number
+          numero: number
+          ordem: number
+          titulo: string
+          video_url?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          conteudo_md?: string
+          criado_em?: string
+          id?: string
+          modulo_id?: number
+          numero?: number
+          ordem?: number
+          titulo?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultoria_aulas_modulo_id_fkey"
+            columns: ["modulo_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_modulos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consultoria_duvidas: {
+        Row: {
+          aluno_id: string
+          atualizado_em: string
+          aula_id: string | null
+          criado_em: string
+          id: string
+          modulo_id: number | null
+          pergunta: string
+          respondido_em: string | null
+          respondido_por: string | null
+          resposta: string | null
+          status: Database["public"]["Enums"]["consultoria_duvida_status"]
+        }
+        Insert: {
+          aluno_id: string
+          atualizado_em?: string
+          aula_id?: string | null
+          criado_em?: string
+          id?: string
+          modulo_id?: number | null
+          pergunta: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          resposta?: string | null
+          status?: Database["public"]["Enums"]["consultoria_duvida_status"]
+        }
+        Update: {
+          aluno_id?: string
+          atualizado_em?: string
+          aula_id?: string | null
+          criado_em?: string
+          id?: string
+          modulo_id?: number | null
+          pergunta?: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          resposta?: string | null
+          status?: Database["public"]["Enums"]["consultoria_duvida_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultoria_duvidas_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultoria_duvidas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultoria_duvidas_modulo_id_fkey"
+            columns: ["modulo_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_modulos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consultoria_materiais: {
+        Row: {
+          atualizado_em: string
+          aula_id: string | null
+          criado_em: string
+          descricao: string | null
+          id: string
+          modulo_id: number | null
+          nome: string
+          ordem: number
+          storage_path: string | null
+          tipo: Database["public"]["Enums"]["consultoria_material_tipo"]
+          url_externa: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          aula_id?: string | null
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          modulo_id?: number | null
+          nome: string
+          ordem?: number
+          storage_path?: string | null
+          tipo: Database["public"]["Enums"]["consultoria_material_tipo"]
+          url_externa?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          aula_id?: string | null
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          modulo_id?: number | null
+          nome?: string
+          ordem?: number
+          storage_path?: string | null
+          tipo?: Database["public"]["Enums"]["consultoria_material_tipo"]
+          url_externa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultoria_materiais_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultoria_materiais_modulo_id_fkey"
+            columns: ["modulo_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_modulos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consultoria_modulos: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          descricao: string | null
+          duracao: string | null
+          id: number
+          ordem: number
+          titulo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          descricao?: string | null
+          duracao?: string | null
+          id: number
+          ordem: number
+          titulo: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          descricao?: string | null
+          duracao?: string | null
+          id?: number
+          ordem?: number
+          titulo?: string
+        }
+        Relationships: []
+      }
+      consultoria_progresso: {
+        Row: {
+          aluno_id: string
+          atualizado_em: string
+          aula_id: string
+          criado_em: string
+          data_conclusao: string | null
+          data_inicio: string | null
+          id: string
+          progresso: number
+          status: Database["public"]["Enums"]["consultoria_status"]
+        }
+        Insert: {
+          aluno_id: string
+          atualizado_em?: string
+          aula_id: string
+          criado_em?: string
+          data_conclusao?: string | null
+          data_inicio?: string | null
+          id?: string
+          progresso?: number
+          status?: Database["public"]["Enums"]["consultoria_status"]
+        }
+        Update: {
+          aluno_id?: string
+          atualizado_em?: string
+          aula_id?: string
+          criado_em?: string
+          data_conclusao?: string | null
+          data_inicio?: string | null
+          id?: string
+          progresso?: number
+          status?: Database["public"]["Enums"]["consultoria_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultoria_progresso_aluno_id_fkey"
+            columns: ["aluno_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_alunos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultoria_progresso_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "consultoria_aulas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean
@@ -5867,6 +6152,8 @@ export type Database = {
         Returns: boolean
       }
       is_admin_user: { Args: { uid: string }; Returns: boolean }
+      is_consultoria_admin: { Args: { _uid: string }; Returns: boolean }
+      is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
       listar_credores_distintos: {
         Args: never
         Returns: {
@@ -5914,6 +6201,14 @@ export type Database = {
     }
     Enums: {
       app_role: "funcionario" | "gestor" | "admin"
+      consultoria_duvida_status: "pendente" | "respondida"
+      consultoria_material_tipo:
+        | "pdf"
+        | "planilha"
+        | "checklist"
+        | "video"
+        | "link"
+      consultoria_status: "nao_iniciado" | "em_andamento" | "concluido"
       personalidade_chip: "rapido" | "equilibrado" | "reflexivo" | "noturno"
     }
     CompositeTypes: {
@@ -6043,6 +6338,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["funcionario", "gestor", "admin"],
+      consultoria_duvida_status: ["pendente", "respondida"],
+      consultoria_material_tipo: [
+        "pdf",
+        "planilha",
+        "checklist",
+        "video",
+        "link",
+      ],
+      consultoria_status: ["nao_iniciado", "em_andamento", "concluido"],
       personalidade_chip: ["rapido", "equilibrado", "reflexivo", "noturno"],
     },
   },

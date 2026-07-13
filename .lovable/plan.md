@@ -1,46 +1,82 @@
-## Objetivo
 
-Reorganizar o layout de cada card da aba "API Oficial Meta" (`src/pages/ConfigurarMeta.tsx`) para que as informações fiquem bem alinhadas, sem elementos sobrepostos ou "colados" (ex.: "Phone ID:" grudando no rótulo "editar" do telefone) e sem quebras visuais estranhas em telas menores.
+# Consultoria WhatsApp API — página /consultoria
 
-## Problemas atuais (visíveis no screenshot)
+Área de curso independente do MEUS ACORDOS, com login próprio, 5 módulos, materiais, dúvidas e painel admin.
 
-- Grid de 4 colunas força "Phone ID" e "WABA" a ficarem colados quando o campo Telefone entra em modo de exibição com botão "editar" inline.
-- O botão "editar" fica pequeno e visualmente grudado ao valor do telefone.
-- Linha do Business Manager fica logo abaixo do grid sem separação clara.
-- Botões de ação à direita (WhatsApp Manager / Testar / Templates / Power / Trash) disputam espaço horizontal com o bloco de infos e podem sobrepor quando o nome da instância + badges é longo.
+## 1. Banco de dados
 
-## Mudanças (só CSS/estrutura JSX, sem mudança de lógica)
+Novo enum e role dedicada. **Não** mexe em `user_roles` (evita reescrever RLS existente); usa flag em `profiles` + tabela própria.
 
-Em `src/pages/ConfigurarMeta.tsx`, dentro do `map((inst) => ...)` (linhas ~481–630):
+Tabelas (todas em `public`, com GRANT + RLS):
 
-1. **Header do card em linha própria (full-width)**
-   - Trocar o wrapper externo `flex items-start justify-between` por um `flex flex-col gap-3`.
-   - Primeira linha: `flex flex-wrap items-center justify-between gap-2` contendo:
-     - Esquerda: nome + badges (Ativa/Inativa + BM vinculada/Sem BM).
-     - Direita: bloco de botões de ação (WhatsApp Manager, Testar, Templates, Power, Trash) em `flex flex-wrap gap-1 shrink-0`.
-   - Isso garante que os botões nunca "colem" nas informações e quebram para baixo em telas estreitas.
+- `consultoria_alunos` — `id`, `user_id` (FK `auth.users`, unique), `nome`, `email`, `empresa`, `telefone`, `ativo`, `is_admin_consultoria` bool, timestamps.
+- `consultoria_modulos` — `id` int PK (1–5), `titulo`, `descricao`, `duracao`, `ordem`.
+- `consultoria_aulas` — `id` uuid, `modulo_id` int FK, `numero` int, `titulo`, `conteudo_md` text (markdown rico), `video_url` text nullable, `ordem`, timestamps. Unique (`modulo_id`, `numero`).
+- `consultoria_materiais` — `id` uuid, `modulo_id` int nullable, `aula_id` uuid nullable, `tipo` (`pdf|planilha|checklist|video|link`), `nome`, `descricao`, `storage_path` text nullable, `url_externa` text nullable, timestamps.
+- `consultoria_progresso` — `id` uuid, `aluno_id` FK, `aula_id` FK, `status` (`nao_iniciado|em_andamento|concluido`), `progresso` int, `data_inicio`, `data_conclusao`, timestamps. Unique (`aluno_id`, `aula_id`).
+- `consultoria_duvidas` — `id`, `aluno_id`, `modulo_id` nullable, `aula_id` nullable, `pergunta`, `resposta`, `status` (`pendente|respondida`), `criado_em`, `respondido_em`, `respondido_por`.
 
-2. **Bloco de identificação em grid estável**
-   - Substituir o grid `grid-cols-2 md:grid-cols-4` por `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2`.
-   - Cada célula fica em `flex flex-col` (rótulo em cima em `text-[10px] uppercase text-muted-foreground`, valor embaixo em `text-xs font-medium`) → elimina o efeito de "Phone ID" grudando no valor anterior.
-   - Campo Telefone continua editável inline, mas o botão "editar" vira um `IconButton` (ícone de lápis, `h-5 w-5`) à direita do valor, com `ml-1`.
+RLS resumida (linguagem simples):
+- Aluno vê/edita **apenas seus próprios** registros de progresso e dúvidas.
+- Módulos, aulas e materiais: leitura para qualquer aluno autenticado ativo.
+- Admin da consultoria (`is_admin_consultoria=true` OU `has_role(admin)` no sistema atual) faz CRUD em tudo.
+- Trigger `handle_new_consultoria_user` cria linha em `consultoria_alunos` quando admin cadastra.
 
-3. **Separação visual entre seções**
-   - Business Manager e Limite de mensagens continuam como estão, mas cada um envolvido por `div` com `pt-3 mt-3 border-t border-border/60` (hoje só o Limite tem border-t; padronizar ambos).
-   - Dentro de cada seção, `flex flex-wrap items-center gap-2` e o `<Select>` com `w-full sm:w-[240px]` (evita estourar em mobile).
+Seed inicial: os 5 módulos + as 28 aulas listadas no briefing, com rascunho de conteúdo (markdown) por aula gerado a partir do briefing. Materiais entram vazios (upload pelo admin).
 
-4. **Larguras dos Selects e Inputs**
-   - Todos os `SelectTrigger` passam a usar `w-full sm:w-[240px]` (BM) e `w-full sm:w-[220px]` (Limite) para não estourarem em telas pequenas.
-   - Input de edição de telefone `w-full sm:w-40`.
+Storage: bucket privado `consultoria-materiais` + policy leitura para alunos autenticados, escrita para admin. URLs assinadas para download.
 
-5. **Sem mudanças em**: nomes de campos, handlers (`vincularBM`, `salvarDisplayPhone`, `salvarTierManual`, `sincronizarSaude`, `testar`, `sincronizar`, `toggle`, `excluir`), lógica do botão WhatsApp Manager, dados carregados, ou schema.
+## 2. Rotas frontend
 
-## Resultado esperado
+`/consultoria` decide sozinha: se deslogado, mostra formulário de login embutido; se logado como aluno, dashboard.
 
-- Cabeçalho: nome + status + BM na esquerda; botões de ação alinhados à direita, quebrando linha só quando necessário.
-- Bloco de identificação: 4 colunas em desktop, 2 em tablet, 1 em mobile, com rótulo em cima e valor embaixo — nada mais fica "grudado".
-- Business Manager e Limite de mensagens claramente separados por linha divisória e com selects que não estouram a largura do card.
+- `/consultoria` — login + dashboard (mesmo componente, condicional).
+- `/consultoria/modulo/:id` — lista de aulas do módulo.
+- `/consultoria/aula/:modulo/:aula` — conteúdo da aula (markdown), botão "marcar concluído", navegação anterior/próxima, materiais relacionados.
+- `/consultoria/materiais` — todos os materiais, filtro por módulo, botão download.
+- `/consultoria/duvidas` — formulário + histórico.
+- `/consultoria/admin` — só para admin consultoria: gerenciar alunos (criar via edge function `create-consultoria-aluno`), ver progresso, editar aulas (editor markdown), upload de materiais, responder dúvidas.
 
-## Arquivos afetados
+Guard próprio `ConsultoriaRoute` — não usa `AuthProvider` do sistema principal (para manter isolamento visual e não carregar hooks pesados de MEUS ACORDOS), mas reusa o mesmo cliente Supabase e sessão. Aluno com role `funcionario/gestor/admin` do MEUS ACORDOS ainda pode acessar se tiver linha em `consultoria_alunos`.
 
-- `src/pages/ConfigurarMeta.tsx` — único arquivo alterado.
+Adicionar as rotas em `src/App.tsx` **fora** dos providers pesados (`AutoSendProvider`, `WhatsAppSendingProvider`, etc.) — envolvidas só em `AuthProvider` + query client.
+
+## 3. Edge functions
+
+- `create-consultoria-aluno` — admin cria `auth.users` + `consultoria_alunos` com senha inicial (service role).
+- `consultoria-material-signed-url` — retorna URL assinada respeitando RLS.
+
+## 4. UI/UX
+
+- Layout limpo, cores da marca (reusa tokens de `index.css`).
+- Dashboard: card por módulo com barra de progresso animada, % total, botão "Continuar onde parei" (última aula com `em_andamento` ou primeira `nao_iniciado`).
+- Aula: renderer markdown (`react-markdown` já instalável), player de vídeo simples via `<video>` ou embed YouTube, sidebar com aulas do módulo.
+- Responsivo mobile-first, sheet lateral no mobile para navegação.
+- Feedback via `sonner` (toaster já existe).
+
+## 5. Detalhes técnicos
+
+- Markdown: adicionar `react-markdown` + `remark-gfm`.
+- Editor admin: `textarea` grande com preview markdown ao lado (sem depender de editor rico externo neste primeiro corte).
+- Progresso calculado no cliente a partir de `consultoria_progresso` × total de aulas do módulo.
+- Sem alteração em rotas/lógica do MEUS ACORDOS atual.
+
+## 6. Entrega em fases
+
+1. Migration (tabelas, RLS, GRANT, seed módulos+aulas com rascunho, bucket + policies).
+2. Rotas e guard, tela de login+dashboard em `/consultoria`.
+3. Página de módulo e aula com marcação de progresso.
+4. Materiais + dúvidas (aluno).
+5. Painel admin: alunos, upload de materiais, editor de aulas, respostas às dúvidas.
+
+## Diagrama de navegação
+
+```text
+/consultoria ──(deslogado)──> login inline
+     │
+     └──(logado)──> Dashboard
+                       ├── /consultoria/modulo/:id ── /consultoria/aula/:mod/:aula
+                       ├── /consultoria/materiais
+                       ├── /consultoria/duvidas
+                       └── /consultoria/admin  (só admin consultoria)
+```
