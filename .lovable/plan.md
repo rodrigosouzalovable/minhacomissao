@@ -1,60 +1,37 @@
 ## Objetivo
 
-Ao iniciar uma nova campanha na página `Envio Meta`, o formulário deve ficar imediatamente liberado para iniciar outra. O progresso, status e detalhamento da campanha em andamento devem aparecer **apenas** no botão flutuante "Campanhas" (canto inferior direito).
+1. Fazer o botão flutuante **Campanhas** aparecer apenas para admins (invisível para todos os outros usuários).
+2. Corrigir o bug em que, após iniciar uma campanha, o botão flutuante mostra o badge mas **não exibe a campanha ativa** no painel.
 
-## Comportamento atual
+## Diagnóstico do bug
 
-Depois de clicar em **Disparar**, a página continua "presa" à campanha ativa:
-- Mostra a barra `Enviando — 8/154`
-- Substitui **Disparar** por **Pausar / Cancelar**
-- Renderiza a seção **Detalhamento dos envios** (Enviados / Erros / Pendentes / Exportar CSV)
-- Mantém a lista de destinatários e template selecionados
+Em `src/pages/EnvioMeta.tsx`, dentro de `enviar()` (linha ~608), após chamar `iniciar(...)` do contexto, o código chama `limpar()` do mesmo contexto para "resetar" a UI legada. Mas `limpar()` é um wrapper que executa `limparJob(currentJob.id)` — e `currentJob` acabou de virar a campanha recém-criada (via `lastStartedId`). O `limparJob`:
 
-Só é possível começar outra campanha depois que a atual termina (ou cancelando).
+- Detecta que o job está `rodando`, dispara `toast.error("Não é possível limpar enquanto a campanha está em andamento")` e sai.
+- Mesmo saindo cedo, essa chamada é indevida e polui o fluxo.
 
-## Comportamento desejado
+Além disso, `iniciar()` já chama `carregarJobs()` internamente, mas há uma corrida: a função edge retorna o `job_id` antes de todos os `job_item` serem inseridos, então o primeiro `carregarJobs()` traz o job com `total = 0` até o realtime disparar o próximo refresh. Isso pode fazer o card aparecer vazio/sem progresso por alguns segundos e reforça a percepção de "não apareceu nada".
 
-Ao clicar em **Disparar** com sucesso:
+## Mudanças
 
-1. A campanha some da tela principal e passa a existir apenas no widget flutuante **Campanhas** (que já lista ativas + últimas finalizadas com barra de progresso, pausar/retomar/cancelar e detalhes).
-2. A página `Envio Meta` volta ao estado inicial pronto para uma nova campanha:
-   - Destinatários limpos (`recipientsText`, `recipientsHeaders`, `varsByTel`, contagens, validação)
-   - Nome da campanha limpo
-   - Template/instâncias/delays mantidos como padrão sensato (ou também resetados, ver seção Detalhes)
-   - Botão **Disparar** volta a aparecer (nada de Pausar/Cancelar inline)
-   - Seção "Detalhamento dos envios" **removida** da página
-3. O botão flutuante continua sendo a única fonte de verdade para acompanhar e controlar campanhas em andamento — clicar nele abre o detalhamento completo (o `CampanhaDetalheDialog` já existe e já mostra enviados/erros/pendentes/exportar CSV).
+### 1. `src/components/meta/CampanhasFlutuante.tsx`
+- Importar `useUserRole` e retornar `null` enquanto `isLoading` for true ou quando `role !== "admin"`.
+- Não alterar mais nada do componente.
 
-## Detalhes técnicos
+### 2. `src/pages/EnvioMeta.tsx`
+- Remover a chamada `limpar()` dentro de `enviar()` (linha ~608). O reset do formulário (`setRecipientsRaw`, `setRecipientsHeaders`, `setVarsByTel`, `setValidacaoPreview`, `setNomeCampanha`) continua igual.
+- Após `iniciar(...)`, agendar um `refreshStatus()` extra ~1.5s depois via `setTimeout` para garantir que o job apareça com `total` correto assim que a edge terminar de popular os `job_item` (mitiga a corrida).
 
-Arquivo: `src/pages/EnvioMeta.tsx`
+### 3. Sem mudanças em
+- `EnvioMetaSendingContext.tsx` (a lógica de jobs, realtime, `jobsAtivos` está correta).
+- Edge functions.
+- `CampanhaDetalheDialog.tsx`.
+- `App.tsx` (a montagem global do widget continua — o gate é feito dentro do próprio componente).
 
-1. **Remover renderização inline da campanha ativa**
-   - Remover o bloco da barra "Enviando — X/Y … LD …" que hoje aparece logo abaixo dos botões Disparar/Pausar/Cancelar.
-   - Remover a seção "Detalhamento dos envios" (Enviados/Aceitos/Erros/Pendentes + Exportar CSV) da página. Essa UI continua acessível via `CampanhaDetalheDialog` no widget flutuante.
+## Comportamento esperado após o fix
 
-2. **Botões de ação**
-   - Manter apenas **Disparar** e **Enviar teste (1º número)** na página.
-   - Remover **Pausar** e **Cancelar** da página (essas ações já existem por campanha dentro do widget flutuante).
-
-3. **Reset após disparar**
-   - Após `iniciarJob(...)` retornar sucesso, chamar um novo `resetFormulario()` que:
-     - Zera `recipientsText`, `recipientsHeaders`, `varsByTel`, `nomeCampanha`
-     - Zera resultados de validação de WhatsApp
-     - Rola para o topo do formulário
-     - Emite `toast.success("Campanha iniciada. Acompanhe no botão Campanhas.")`
-   - **Manter selecionados**: template principal, instâncias marcadas, `minSec/maxSec`, modo de validação — para facilitar disparar várias campanhas seguidas com a mesma configuração. (Se você preferir zerar tudo, ajusto.)
-
-4. **Contexto de envio (`EnvioMetaSendingContext`)** — nenhuma mudança. Ele já suporta múltiplos jobs em paralelo, o widget já lista todos os `jobsAtivos`, e o backend (`envio-meta-massa-iniciar`) já permite campanhas simultâneas.
-
-5. **Widget flutuante (`CampanhasFlutuante.tsx`)** — sem mudanças. Já mostra ativas, progresso, pausar/retomar/cancelar e abre o `CampanhaDetalheDialog`.
-
-## Fora de escopo
-
-- Nenhuma mudança em edge functions, banco ou lógica de envio.
-- Nenhuma mudança em templates, importação de planilha ou tabela de destinatários.
-- Widget flutuante e diálogo de detalhe continuam iguais.
-
-## Pergunta rápida antes de implementar
-
-Ao disparar, devo **também** limpar template, instâncias e delays, ou manter esses campos preenchidos para o próximo disparo (recomendação: manter)?
+- Somente admin vê o botão flutuante "Campanhas".
+- Ao clicar em "Disparar":
+  - O formulário é liberado imediatamente (sem toast de erro do `limpar`).
+  - O botão flutuante mostra a nova campanha em "Ativas" com nome, template, progresso e ações Pausar/Cancelar.
+  - Campanhas subsequentes empilham na mesma lista, cada uma independente.
