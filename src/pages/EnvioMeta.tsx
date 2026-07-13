@@ -155,6 +155,8 @@ export default function EnvioMeta() {
   const [templateId, setTemplateId] = useState<string>("");
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
+  const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
+  const [editAsText, setEditAsText] = useState<boolean>(false);
   const [nomeCampanha, setNomeCampanha] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
