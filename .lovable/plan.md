@@ -1,82 +1,101 @@
+## Objetivo
 
-# Consultoria WhatsApp API — página /consultoria
+Reformular a apresentação das aulas da Consultoria WhatsApp API para que o conteúdo pareça premium, organizado e fácil de ler — transmitindo valor real ao cliente (Daniel).
 
-Área de curso independente do MEUS ACORDOS, com login próprio, 5 módulos, materiais, dúvidas e painel admin.
+Hoje o conteúdo está sendo renderizado como markdown "cru" dentro de um Card, sem hierarquia visual: títulos viram texto normal, tabelas quebram, listas ficam coladas, blocos importantes se perdem no meio do parágrafo.
 
-## 1. Banco de dados
+## Escopo
 
-Novo enum e role dedicada. **Não** mexe em `user_roles` (evita reescrever RLS existente); usa flag em `profiles` + tabela própria.
+Somente a experiência de leitura de aula em `/consultoria/aula/:modulo/:aula`:
 
-Tabelas (todas em `public`, com GRANT + RLS):
+1. **Renderização (frontend)** — `src/pages/consultoria/ConsultoriaAula.tsx`
+2. **Conteúdo das 28 aulas** — reescrever `conteudo_md` no banco via migration (UPDATE por `modulo_id + numero`)
 
-- `consultoria_alunos` — `id`, `user_id` (FK `auth.users`, unique), `nome`, `email`, `empresa`, `telefone`, `ativo`, `is_admin_consultoria` bool, timestamps.
-- `consultoria_modulos` — `id` int PK (1–5), `titulo`, `descricao`, `duracao`, `ordem`.
-- `consultoria_aulas` — `id` uuid, `modulo_id` int FK, `numero` int, `titulo`, `conteudo_md` text (markdown rico), `video_url` text nullable, `ordem`, timestamps. Unique (`modulo_id`, `numero`).
-- `consultoria_materiais` — `id` uuid, `modulo_id` int nullable, `aula_id` uuid nullable, `tipo` (`pdf|planilha|checklist|video|link`), `nome`, `descricao`, `storage_path` text nullable, `url_externa` text nullable, timestamps.
-- `consultoria_progresso` — `id` uuid, `aluno_id` FK, `aula_id` FK, `status` (`nao_iniciado|em_andamento|concluido`), `progresso` int, `data_inicio`, `data_conclusao`, timestamps. Unique (`aluno_id`, `aula_id`).
-- `consultoria_duvidas` — `id`, `aluno_id`, `modulo_id` nullable, `aula_id` nullable, `pergunta`, `resposta`, `status` (`pendente|respondida`), `criado_em`, `respondido_em`, `respondido_por`.
+Sem mexer em auth, RLS, admin, materiais, dúvidas, progresso ou rotas.
 
-RLS resumida (linguagem simples):
-- Aluno vê/edita **apenas seus próprios** registros de progresso e dúvidas.
-- Módulos, aulas e materiais: leitura para qualquer aluno autenticado ativo.
-- Admin da consultoria (`is_admin_consultoria=true` OU `has_role(admin)` no sistema atual) faz CRUD em tudo.
-- Trigger `handle_new_consultoria_user` cria linha em `consultoria_alunos` quando admin cadastra.
+## 1. Layout da página de aula
 
-Seed inicial: os 5 módulos + as 28 aulas listadas no briefing, com rascunho de conteúdo (markdown) por aula gerado a partir do briefing. Materiais entram vazios (upload pelo admin).
+Reestruturar o topo e o corpo para ficarem editoriais, não "wiki":
 
-Storage: bucket privado `consultoria-materiais` + policy leitura para alunos autenticados, escrita para admin. URLs assinadas para download.
+- **Hero da aula**: eyebrow "MÓDULO X · AULA Y", título grande em display font, subtítulo curto (1 linha resumindo a aula), e uma linha de metadados em chips: duração estimada, nível (Fundamento / Prático / Avançado), e ícone do tema (Zap, DollarSign, MessageSquare, Shield, Wrench).
+- **Grid 2 colunas** em desktop (`lg:grid-cols-[1fr_280px]`):
+  - Coluna principal: vídeo + conteúdo.
+  - Coluna lateral (sticky): "Nesta aula" (índice dos H2 gerado a partir do markdown), badge de status, botão "Marcar como concluída" fixo, e "Materiais desta aula" compacto.
+- Rodapé com Anterior / Próxima em cards maiores mostrando o título da aula vizinha, não só "Anterior/Próxima".
 
-## 2. Rotas frontend
+## 2. Sistema de estilos para o markdown
 
-`/consultoria` decide sozinha: se deslogado, mostra formulário de login embutido; se logado como aluno, dashboard.
+Substituir o `prose` genérico por componentes customizados via `components` do `react-markdown`, mapeando cada elemento para um design consistente com o resto do MEUS ACORDOS (tokens semânticos, sem cor hardcoded):
 
-- `/consultoria` — login + dashboard (mesmo componente, condicional).
-- `/consultoria/modulo/:id` — lista de aulas do módulo.
-- `/consultoria/aula/:modulo/:aula` — conteúdo da aula (markdown), botão "marcar concluído", navegação anterior/próxima, materiais relacionados.
-- `/consultoria/materiais` — todos os materiais, filtro por módulo, botão download.
-- `/consultoria/duvidas` — formulário + histórico.
-- `/consultoria/admin` — só para admin consultoria: gerenciar alunos (criar via edge function `create-consultoria-aluno`), ver progresso, editar aulas (editor markdown), upload de materiais, responder dúvidas.
+- `h1` → escondido (já mostrado no hero).
+- `h2` → título de seção com barra vertical colorida à esquerda + espaçamento generoso acima.
+- `h3` → subtítulo com ícone opcional.
+- `p` → line-height confortável, largura máxima de leitura.
+- `ul` / `ol` → bullets customizados (check verde para vantagens, ponto neutro para listas comuns).
+- `strong` → destaque com cor `primary`.
+- `code` inline → chip com background `muted`.
+- `pre` → bloco de código com header (linguagem + botão copiar).
+- `blockquote` → card "Dica do consultor" com ícone Lightbulb e fundo `accent/10`.
+- `table` → wrapper com scroll horizontal, header em `muted`, zebra nas linhas, bordas arredondadas, tipografia tabular. Resolve o problema principal da tabela quebrada do print.
+- `a` → sublinhado sutil + hover em `primary`.
+- `hr` → separador decorativo (não linha crua).
 
-Guard próprio `ConsultoriaRoute` — não usa `AuthProvider` do sistema principal (para manter isolamento visual e não carregar hooks pesados de MEUS ACORDOS), mas reusa o mesmo cliente Supabase e sessão. Aluno com role `funcionario/gestor/admin` do MEUS ACORDOS ainda pode acessar se tiver linha em `consultoria_alunos`.
+## 3. Blocos especiais via convenção de markdown
 
-Adicionar as rotas em `src/App.tsx` **fora** dos providers pesados (`AutoSendProvider`, `WhatsAppSendingProvider`, etc.) — envolvidas só em `AuthProvider` + query client.
+Interpretar padrões dentro do `conteudo_md` para virarem componentes visuais:
 
-## 3. Edge functions
+- Linha começando com `> 💡` → Callout "Dica".
+- Linha começando com `> ⚠️` → Callout "Atenção".
+- Linha começando com `> ✅` → Callout "Boas práticas".
+- `## Checklist` → renderizar lista seguinte como checklist visual.
+- `## Passo a passo` → renderizar lista como stepper numerado.
 
-- `create-consultoria-aluno` — admin cria `auth.users` + `consultoria_alunos` com senha inicial (service role).
-- `consultoria-material-signed-url` — retorna URL assinada respeitando RLS.
+Isso é feito no `components.blockquote` e num pequeno pré-processamento do markdown antes de passar ao `ReactMarkdown` (regex simples, sem lib nova).
 
-## 4. UI/UX
+## 4. Reescrita do conteúdo das 28 aulas
 
-- Layout limpo, cores da marca (reusa tokens de `index.css`).
-- Dashboard: card por módulo com barra de progresso animada, % total, botão "Continuar onde parei" (última aula com `em_andamento` ou primeira `nao_iniciado`).
-- Aula: renderer markdown (`react-markdown` já instalável), player de vídeo simples via `<video>` ou embed YouTube, sidebar com aulas do módulo.
-- Responsivo mobile-first, sheet lateral no mobile para navegação.
-- Feedback via `sonner` (toaster já existe).
+Migration `UPDATE consultoria_aulas SET conteudo_md = ...` para cada aula. Cada aula terá a mesma estrutura visual previsível:
+
+```
+## Visão geral
+1 parágrafo curto explicando o "porquê" da aula.
+
+## Conceitos-chave
+Lista com 3–6 itens (bullets com strong no termo).
+
+## Como funciona na prática
+Passo a passo numerado OU tabela comparativa (quando fizer sentido).
+
+> 💡 Dica do consultor: ...
+
+## Boas práticas
+Checklist de 4–8 itens acionáveis.
+
+> ⚠️ Atenção: ... (quando houver risco/pegadinha)
+
+## Resumo
+2–3 bullets fechando a aula.
+```
+
+Conteúdo tecnicamente igual/melhor ao rascunho atual, apenas reorganizado nessa estrutura + linguagem mais direta.
 
 ## 5. Detalhes técnicos
 
-- Markdown: adicionar `react-markdown` + `remark-gfm`.
-- Editor admin: `textarea` grande com preview markdown ao lado (sem depender de editor rico externo neste primeiro corte).
-- Progresso calculado no cliente a partir de `consultoria_progresso` × total de aulas do módulo.
-- Sem alteração em rotas/lógica do MEUS ACORDOS atual.
+- Continuar usando `react-markdown` + `remark-gfm` (já instalados).
+- Índice lateral gerado com um walker simples no AST (`remark-slug`-like manual) — extrair H2 do markdown com regex antes de renderizar, gerar `id` slugificado e passar via `components.h2`.
+- Sticky sidebar com `position: sticky; top: 5rem` só em `lg+`. Em mobile, esconder o índice (ou colapsar num `<details>` no topo).
+- Zero classes de cor cruas: tudo via tokens (`bg-card`, `text-foreground`, `text-primary`, `bg-muted`, `border-border`, `bg-accent/10`).
+- Manter dark mode funcional (o `prose dark:prose-invert` sai; validar contraste dos callouts e da tabela nos dois temas).
+- Sem novas libs. Sem mudanças em rotas, providers ou banco além do UPDATE de conteúdo.
 
-## 6. Entrega em fases
+## Entregáveis
 
-1. Migration (tabelas, RLS, GRANT, seed módulos+aulas com rascunho, bucket + policies).
-2. Rotas e guard, tela de login+dashboard em `/consultoria`.
-3. Página de módulo e aula com marcação de progresso.
-4. Materiais + dúvidas (aluno).
-5. Painel admin: alunos, upload de materiais, editor de aulas, respostas às dúvidas.
+1. `src/pages/consultoria/ConsultoriaAula.tsx` reescrito (layout + renderer customizado + índice lateral + rodapé rico).
+2. Componente auxiliar `src/pages/consultoria/aulaRenderer.tsx` com o mapa de `components` e utilitários (extrair H2, pré-processar callouts).
+3. Migration `supabase/migrations/<timestamp>_consultoria_aulas_conteudo_v2.sql` com os 28 UPDATEs.
 
-## Diagrama de navegação
+## Fora do escopo
 
-```text
-/consultoria ──(deslogado)──> login inline
-     │
-     └──(logado)──> Dashboard
-                       ├── /consultoria/modulo/:id ── /consultoria/aula/:mod/:aula
-                       ├── /consultoria/materiais
-                       ├── /consultoria/duvidas
-                       └── /consultoria/admin  (só admin consultoria)
-```
+- Editor rico no admin (o admin continua editando markdown).
+- Player de vídeo customizado.
+- Comentários por aula, quiz, certificado — nada disso foi pedido.
