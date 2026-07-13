@@ -133,7 +133,7 @@ async function processarItem(job: any): Promise<ItemResult> {
 
   const { data: pend, error: pendErr } = await supabase
     .from('envio_meta_job_item')
-    .select('id, ordem, telefone, nome, cpf, atraso, saldo')
+    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars')
     .eq('job_id', job.id)
     .eq('status', 'pendente')
     .order('ordem', { ascending: true })
