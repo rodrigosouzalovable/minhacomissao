@@ -246,6 +246,11 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
   }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs]);
 
+  const recarregarItensJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    await Promise.all([carregarItens(jobId), carregarLogs(jobId, j?.iniciado_em || null)]);
+  }, [jobs, carregarItens, carregarLogs]);
+
   useEffect(() => { carregarJobs(); }, [carregarJobs]);
 
   // Ao carregar jobs, pré-carrega itens+logs para os jobs ativos e o último iniciado
