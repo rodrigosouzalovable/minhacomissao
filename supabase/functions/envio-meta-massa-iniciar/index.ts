@@ -87,17 +87,10 @@ Deno.serve(async (req) => {
     }
 
 
-    // Cancela silenciosamente jobs "rodando/pausado" antigos do mesmo usuário para não competir.
-    const { data: ativos } = await supabase
-      .from('envio_meta_job')
-      .select('id')
-      .eq('user_id', user.id)
-      .in('status', ['rodando', 'pausado']);
-    if (ativos && ativos.length > 0) {
-      await supabase.from('envio_meta_job')
-        .update({ status: 'cancelado', status_motivo: 'novo job iniciado', concluido_em: new Date().toISOString() })
-        .in('id', ativos.map((j: any) => j.id));
-    }
+    // Múltiplas campanhas simultâneas são permitidas: NÃO cancelar jobs anteriores.
+    // Cada job roda no seu próprio loop de tick e o pick-meta-instance respeita cota/health por instância.
+
+
 
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job')
