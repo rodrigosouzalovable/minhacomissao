@@ -109,10 +109,26 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     return digitos.length < 8;
   }, [firstRow]);
 
-  const placeholders = useMemo(
-    () => (template?.body_text ? extractPlaceholders(template.body_text) : []),
-    [template?.body_text],
-  );
+  const placeholders = useMemo(() => {
+    const fromBody = template?.body_text ? extractPlaceholders(template.body_text) : [];
+    const seen = new Set(fromBody);
+    // Também inclui variáveis declaradas no template (ex.: {{1}}, {{2}}) mesmo quando
+    // o body_text está vazio no banco — usuários precisam mapear essas colunas na planilha.
+    const fromVars: string[] = [];
+    if (template?.variaveis && typeof template.variaveis === "object") {
+      for (const k of Object.keys(template.variaveis)) {
+        if (k.startsWith("_")) continue; // metadados internos (_components, _format, ...)
+        if (!seen.has(k)) { seen.add(k); fromVars.push(k); }
+      }
+      // Ordena numericamente as chaves que parecem números (1,2,3...)
+      fromVars.sort((a, b) => {
+        const na = Number(a), nb = Number(b);
+        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+        return a.localeCompare(b);
+      });
+    }
+    return [...fromBody, ...fromVars];
+  }, [template?.body_text, template?.variaveis]);
 
   const [mapping, setMapping] = useState<ColRole[]>([]);
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Send, Pause, Play, Square } from "lucide-react";
+import { Send, Pause, Play, Square, Trash2 } from "lucide-react";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import CampanhaDetalheDialog from "./CampanhaDetalheDialog";
@@ -24,17 +24,23 @@ function statusLabel(s: string) {
 
 export default function CampanhasFlutuante() {
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { jobs, jobsAtivos, togglePausaJob, cancelarJob } = useEnvioMetaSending();
+  const { jobs, jobsAtivos, togglePausaJob, cancelarJob, limparJob } = useEnvioMetaSending();
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
 
-  // Mostra o widget se existirem campanhas ativas OU alguma finalizada recentemente exibível
-  const finalizadasRecentes = jobs
-    .filter((j) => ["concluido", "cancelado", "erro"].includes(j.status))
-    .slice(0, 5);
+  // Mostra TODAS as campanhas finalizadas (concluído / cancelado / erro) —
+  // só somem quando o usuário clica em "Excluir".
+  const finalizadasRecentes = jobs.filter((j) =>
+    ["concluido", "cancelado", "erro"].includes(j.status),
+  );
 
   if (roleLoading || !isAdmin) return null;
   if (jobsAtivos.length === 0 && finalizadasRecentes.length === 0) return null;
+
+  const excluirCampanha = async (id: string, nome: string) => {
+    if (!confirm(`Excluir a campanha "${nome}"?\n\nO histórico será removido do painel. Essa ação não pode ser desfeita.`)) return;
+    await limparJob(id);
+  };
 
   const abrirDetalhe = (id: string) => {
     setOpen(false);
@@ -124,24 +130,38 @@ export default function CampanhasFlutuante() {
 
             {finalizadasRecentes.length > 0 && (
               <div className="p-2 space-y-1 border-t">
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground px-1">Últimas finalizadas</div>
-                {finalizadasRecentes.map((j) => (
-                  <button
-                    key={j.id}
-                    onClick={() => abrirDetalhe(j.id)}
-                    className="w-full text-left rounded-md hover:bg-muted/60 p-2 flex items-center gap-2"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">
-                        {j.nome_campanha || j.template_nome || "Campanha"}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        ✅ {j.enviados} • ❌ {j.erros} de {j.total}
-                      </div>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground px-1">
+                  Finalizadas ({finalizadasRecentes.length})
+                </div>
+                {finalizadasRecentes.map((j) => {
+                  const nome = j.nome_campanha || j.template_nome || "Campanha";
+                  return (
+                    <div
+                      key={j.id}
+                      className="rounded-md hover:bg-muted/60 p-2 flex items-center gap-2"
+                    >
+                      <button
+                        onClick={() => abrirDetalhe(j.id)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div className="text-sm font-medium truncate">{nome}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          ✅ {j.enviados} • ❌ {j.erros} de {j.total}
+                        </div>
+                      </button>
+                      <Badge className={statusColor(j.status) + " text-[10px]"}>{statusLabel(j.status)}</Badge>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); excluirCampanha(j.id, nome); }}
+                        title="Excluir campanha"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <Badge className={statusColor(j.status) + " text-[10px]"}>{statusLabel(j.status)}</Badge>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </PopoverContent>
