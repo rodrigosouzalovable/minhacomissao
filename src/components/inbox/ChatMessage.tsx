@@ -187,24 +187,58 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       );
     }
 
-    if (tipo === 'imagem' && msg.media_url) {
-      if (imgLoading) {
-        return (
-          <div className="flex items-center justify-center p-4">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        );
-      }
-      if (imgError || !blobUrl) {
-        return (
-          <a href={msg.media_url} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 p-3 rounded bg-background/30 hover:bg-background/50 transition">
-            <ImageIcon className="h-5 w-5 shrink-0" />
-            <span className="text-xs underline">Abrir imagem</span>
-          </a>
-        );
-      }
+    // Renderiza a lista de botões do template (URL / QUICK_REPLY / PHONE_NUMBER)
+    const renderBotoes = () => {
+      const botoes = msg.template_botoes;
+      if (!Array.isArray(botoes) || botoes.length === 0) return null;
       return (
+        <div className="mt-2 pt-2 border-t border-border/30 flex flex-col gap-1">
+          {botoes.map((b, i) => {
+            const t = String(b.type || '').toUpperCase();
+            const Icon = t === 'URL' ? ExternalLink : t === 'PHONE_NUMBER' ? Phone : MessageSquare;
+            const label = b.text || (t === 'URL' ? b.url : t === 'PHONE_NUMBER' ? b.phone_number : 'Resposta');
+            const content = (
+              <span className="flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-medium text-primary hover:bg-primary/5 transition rounded">
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </span>
+            );
+            if (t === 'URL' && b.url) {
+              return (
+                <a key={i} href={b.url} target="_blank" rel="noopener noreferrer" className="block rounded border border-border/40 bg-background/40">
+                  {content}
+                </a>
+              );
+            }
+            if (t === 'PHONE_NUMBER' && b.phone_number) {
+              return (
+                <a key={i} href={`tel:${b.phone_number}`} className="block rounded border border-border/40 bg-background/40">
+                  {content}
+                </a>
+              );
+            }
+            return (
+              <div key={i} className="block rounded border border-border/40 bg-background/40">
+                {content}
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
+    if (tipo === 'imagem' && msg.media_url) {
+      const imgNode = imgLoading ? (
+        <div className="flex items-center justify-center p-4">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (imgError || !blobUrl) ? (
+        <a href={msg.media_url} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-2 p-3 rounded bg-background/30 hover:bg-background/50 transition">
+          <ImageIcon className="h-5 w-5 shrink-0" />
+          <span className="text-xs underline">Abrir imagem</span>
+        </a>
+      ) : (
         <div className="cursor-zoom-in" onClick={() => setShowLightbox(true)}>
           <img
             src={blobUrl}
@@ -214,23 +248,42 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
           />
         </div>
       );
+      return (
+        <div className="flex flex-col gap-2">
+          {imgNode}
+          {msg.conteudo && (
+            <p className="whitespace-pre-wrap break-words select-text cursor-text text-sm">
+              {msg.conteudo}
+            </p>
+          )}
+          {renderBotoes()}
+        </div>
+      );
     }
 
     if (tipo === 'documento' && msg.media_url) {
       return (
-        <a
-          href={msg.media_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 p-2 rounded bg-background/30 hover:bg-background/50 transition"
-        >
-          <FileText className="h-5 w-5 shrink-0" />
-          <span className="text-xs underline truncate">{msg.conteudo || 'Documento'}</span>
-        </a>
+        <div className="flex flex-col gap-2">
+          <a
+            href={msg.media_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 p-2 rounded bg-background/30 hover:bg-background/50 transition"
+          >
+            <FileText className="h-5 w-5 shrink-0" />
+            <span className="text-xs underline truncate">{msg.conteudo || 'Documento'}</span>
+          </a>
+          {renderBotoes()}
+        </div>
       );
     }
 
-    return <p className="whitespace-pre-wrap break-words select-text cursor-text">{msg.conteudo}</p>;
+    return (
+      <div className="flex flex-col">
+        <p className="whitespace-pre-wrap break-words select-text cursor-text">{msg.conteudo}</p>
+        {renderBotoes()}
+      </div>
+    );
   };
 
   const handleConfirmDelete = () => {
