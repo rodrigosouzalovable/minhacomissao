@@ -558,11 +558,20 @@ export default function EnvioMeta() {
     );
     if (!okCusto) return;
 
+    const hasVars = Object.keys(varsByTel).length > 0;
+    const clientesComVars: ClienteRow[] = hasVars
+      ? clientesFinal.map((c) => {
+          const k = normalizeTelKey(c.telefone);
+          const v = varsByTel[k];
+          return v ? { ...c, vars: v } : c;
+        })
+      : clientesFinal;
+
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
       instanciaIds,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
-      clientes: clientesFinal,
+      clientes: clientesComVars,
       minSec: lo,
       maxSec: hi,
       semWhatsapp: semWa,
