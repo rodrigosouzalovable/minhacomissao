@@ -142,9 +142,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     );
     toast.success(`${rows.length} erros exportados`);
   };
-
   const falhasEntrega = detalhes.enviados.filter(
-    (e) => e.deliveryStatus === "failed" || e.deliveryStatus === "falhou",
+    (e) => (e.deliveryStatus as string) === "failed" || (e.deliveryStatus as string) === "falhou",
   );
   const baixarFalhasEntrega = async () => {
     const rows = falhasEntrega.map((e) => ({
