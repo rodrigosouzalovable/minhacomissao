@@ -157,13 +157,21 @@ async function processarItem(job: any): Promise<ItemResult> {
 
 
 
+  // Remove instâncias auto-bloqueadas por falhas consecutivas neste job
+  const bloqueadasRun: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+  const instanciaIdsDisponiveis: string[] = (job.instancia_ids || []).filter((id: string) => !bloqueadasRun.includes(id));
+  if (instanciaIdsDisponiveis.length === 0) {
+    await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas foram ignoradas por falhas consecutivas');
+    return { advanced: false, stop: true };
+  }
+
   const pickResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/pick-meta-instance`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
     },
-    body: JSON.stringify({ instancia_ids: job.instancia_ids, user_id: job.user_id }),
+    body: JSON.stringify({ instancia_ids: instanciaIdsDisponiveis, user_id: job.user_id }),
   }).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
 
   if (!pickResp?.success) {
