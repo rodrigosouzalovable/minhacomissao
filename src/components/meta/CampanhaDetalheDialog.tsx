@@ -298,7 +298,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               {detalhes.enviados.map((e, i) => (
                 <div key={i} className="flex items-center justify-between gap-2 border-b border-border/40 py-0.5">
                   <span>{e.telefone}</span>
-                  <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                  <div className="flex items-center gap-2">
+                    {e.ts && <span className="text-muted-foreground text-[10px]">{new Date(e.ts).toLocaleString("pt-BR")}</span>}
+                    <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                  </div>
                 </div>
               ))}
               {detalhes.enviados.length === 0 && <div className="text-muted-foreground italic">Nenhum ainda.</div>}
@@ -323,12 +326,16 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               </summary>
               <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
                 {detalhes.erros.map((e, i) => (
-                  <div key={i} className="border-b border-border/40 py-0.5">
-                    <div className="flex justify-between">
+                  <div key={i} className="border-b border-border/40 py-1">
+                    <div className="flex justify-between gap-2">
                       <span>{e.telefone}</span>
-                      <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                      <div className="flex items-center gap-2">
+                        {e.ts && <span className="text-muted-foreground text-[10px]">{new Date(e.ts).toLocaleString("pt-BR")}</span>}
+                        <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                      </div>
                     </div>
-                    {e.erro && <div className="text-red-600 text-[10px] break-words">{e.erro}</div>}
+                    <div className="text-red-600 text-[11px] break-words mt-0.5 font-sans">{humanizarErroEnvio(e.erro)}</div>
+                    {e.erro && <div className="text-muted-foreground text-[10px] break-words mt-0.5">Detalhe técnico: {e.erro}</div>}
                   </div>
                 ))}
               </div>
@@ -353,12 +360,16 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               </summary>
               <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
                 {falhasEntrega.map((e, i) => (
-                  <div key={i} className="border-b border-border/40 py-0.5">
-                    <div className="flex justify-between">
+                  <div key={i} className="border-b border-border/40 py-1">
+                    <div className="flex justify-between gap-2">
                       <span>{e.telefone}</span>
-                      <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                      <div className="flex items-center gap-2">
+                        {e.ts && <span className="text-muted-foreground text-[10px]">{new Date(e.ts).toLocaleString("pt-BR")}</span>}
+                        <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                      </div>
                     </div>
-                    {e.deliveryErro && <div className="text-red-600 text-[10px] break-words">{e.deliveryErro}</div>}
+                    <div className="text-red-600 text-[11px] break-words mt-0.5 font-sans">{humanizarErroEnvio(e.deliveryErro)}</div>
+                    {e.deliveryErro && <div className="text-muted-foreground text-[10px] break-words mt-0.5">Detalhe técnico: {e.deliveryErro}</div>}
                   </div>
                 ))}
               </div>
