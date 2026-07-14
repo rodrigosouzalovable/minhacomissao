@@ -929,6 +929,46 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={!!editInst} onOpenChange={(o) => !o && setEditInst(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar instância{editInst ? ` — ${editInst.nome}` : ""}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome interno *</Label>
+              <Input value={editForm.nome} onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })} />
+            </div>
+            <div>
+              <Label>Phone Number ID *</Label>
+              <Input value={editForm.phone_number_id} onChange={(e) => setEditForm({ ...editForm, phone_number_id: e.target.value })} />
+            </div>
+            <div>
+              <Label>WABA ID *</Label>
+              <Input value={editForm.waba_id} onChange={(e) => setEditForm({ ...editForm, waba_id: e.target.value })} />
+            </div>
+            <div>
+              <Label>Business Manager ID (opcional)</Label>
+              <Input value={editForm.business_id} onChange={(e) => setEditForm({ ...editForm, business_id: e.target.value })} />
+            </div>
+            <div>
+              <Label>Access Token (deixe em branco para manter o atual)</Label>
+              <Input type="password" value={editForm.access_token} onChange={(e) => setEditForm({ ...editForm, access_token: e.target.value })} placeholder="EAAxxxxx..." />
+              <p className="text-xs text-muted-foreground mt-1">Só preencha se quiser substituir o token permanente.</p>
+            </div>
+            <div>
+              <Label>Tier diário</Label>
+              <Input type="number" value={editForm.tier_diario} onChange={(e) => setEditForm({ ...editForm, tier_diario: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditInst(null)} disabled={salvandoEdit}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={salvandoEdit}>
+              {salvandoEdit ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <TemplatePreviewDialog
         template={previewTpl}
         open={!!previewTpl}
