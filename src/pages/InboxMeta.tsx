@@ -24,6 +24,7 @@ import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/me
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemplateDialog';
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
+import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
