@@ -853,7 +853,7 @@ export default function InboxMeta() {
           onDrop={(e) => {
             e.preventDefault(); setDragOver(false);
             const f = e.dataTransfer.files?.[0];
-            if (f) enviarMidia(f);
+            if (f) solicitarConfirmacaoArquivo(f);
           }}>
           {!contatoAtivo ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
