@@ -1114,6 +1114,21 @@ export default function InboxMeta() {
         />
       )}
 
+      <ConfirmarEnvioArquivoDialog
+        file={arquivoParaConfirmar}
+        destinoLabel={
+          contatoAtivo
+            ? (contatoAtivo.nome ||
+               (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || 'Contato')))
+            : 'Contato'
+        }
+        enviando={enviandoArquivo}
+        onConfirmar={(f, caption) => enviarMidia(f, caption)}
+        onCancelar={() => setArquivoParaConfirmar(null)}
+      />
+
+
+
     </AppLayout>
   );
 }
