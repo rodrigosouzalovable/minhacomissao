@@ -238,6 +238,83 @@ export function NotificacoesCpfBell() {
     }
   };
 
+  const [exportando, setExportando] = useState(false);
+  const baixarExcel = async () => {
+    if (!user?.id) return;
+    setExportando(true);
+    try {
+      let query = supabase
+        .from("consulta_cpf_notificacoes" as any)
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!isAdmin) query = query.eq("assigned_user_id", user.id);
+      const { data, error } = await query;
+      if (error) throw error;
+      const rows = ((data as any) || []) as Notificacao[];
+      if (rows.length === 0) {
+        toast.info("Nenhuma consulta para exportar");
+        return;
+      }
+
+      let nomeMap: Record<string, string> = { ...nomesUsuarios };
+      if (isAdmin) {
+        const ids = Array.from(
+          new Set(rows.map((n) => n.assigned_user_id).filter(Boolean) as string[])
+        );
+        const faltantes = ids.filter((id) => !(id in nomeMap));
+        if (faltantes.length > 0) {
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("id, nome, email")
+            .in("id", faltantes);
+          for (const p of (profs || []) as any[]) {
+            nomeMap[p.id] = p.nome || p.email || p.id.slice(0, 8);
+          }
+        }
+      }
+
+      const fmtDT = (iso: string | null) =>
+        iso
+          ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+          : "";
+
+      const dados = rows.map((n) => ({
+        data_hora: fmtDT(n.created_at),
+        cpf: formatarCpf(n.cpf),
+        nome: n.nome || "",
+        credor: n.credor || "",
+        total_debitos: n.total_debitos ?? 0,
+        telefones: n.telefones || "",
+        atribuido: n.assigned_user_id ? nomeMap[n.assigned_user_id] || "" : "",
+        lida_em: fmtDT(n.lida_em),
+        cpf_copiado_em: fmtDT(n.cpf_copiado_em),
+      }));
+
+      const hoje = new Date().toISOString().slice(0, 10);
+      await exportarParaExcel(
+        dados,
+        [
+          { chave: "data_hora", titulo: "Data/Hora" },
+          { chave: "cpf", titulo: "CPF" },
+          { chave: "nome", titulo: "Nome" },
+          { chave: "credor", titulo: "Credor" },
+          { chave: "total_debitos", titulo: "Total de débitos" },
+          { chave: "telefones", titulo: "Telefone(s)" },
+          { chave: "atribuido", titulo: "Atribuído a" },
+          { chave: "lida_em", titulo: "Lida em" },
+          { chave: "cpf_copiado_em", titulo: "CPF copiado em" },
+        ],
+        `consultas-cpf-portal-${hoje}`
+      );
+      toast.success(`${rows.length} consulta(s) exportada(s)`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao exportar Excel");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
