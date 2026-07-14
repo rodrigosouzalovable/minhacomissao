@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Bell, Check, CheckCheck, Copy } from "lucide-react";
+import { Bell, Check, CheckCheck, Copy, Download } from "lucide-react";
+import { exportarParaExcel } from "@/lib/exportExcel";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
