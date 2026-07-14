@@ -143,6 +143,28 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     toast.success(`${rows.length} erros exportados`);
   };
 
+  const falhasEntrega = detalhes.enviados.filter(
+    (e) => e.deliveryStatus === "failed" || e.deliveryStatus === "falhou",
+  );
+  const baixarFalhasEntrega = async () => {
+    const rows = falhasEntrega.map((e) => ({
+      telefone: e.telefone,
+      instancia: e.instancia || "",
+      erro_entrega: e.deliveryErro || "",
+    }));
+    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      rows,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "instancia", titulo: "Instância" },
+        { chave: "erro_entrega", titulo: "Erro entrega" },
+      ],
+      `falhas_entrega_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${rows.length} falhas exportadas`);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
