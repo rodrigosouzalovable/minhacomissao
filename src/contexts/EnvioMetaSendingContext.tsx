@@ -75,6 +75,7 @@ export type CampanhaJob = {
   concluido_em: string | null;
   status_motivo: string | null;
   restantes: number;
+  instancias_bloqueadas_run: string[];
 };
 
 type Ctx = {
