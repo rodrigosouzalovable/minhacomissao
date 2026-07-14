@@ -600,7 +600,7 @@ export default function InboxMeta() {
       if (items[i].type.startsWith('image/')) {
         e.preventDefault();
         const f = items[i].getAsFile();
-        if (f) enviarMidia(new File([f], `clipboard-${Date.now()}.png`, { type: f.type }));
+        if (f) solicitarConfirmacaoArquivo(new File([f], `clipboard-${Date.now()}.png`, { type: f.type }));
         return;
       }
     }
