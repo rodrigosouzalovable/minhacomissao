@@ -241,6 +241,11 @@ export default function MonitorEnvios() {
         {/* Pool Meta Oficial */}
         <PoolMetaPanel />
 
+        {/* Números prontos pra subir de TIER */}
+        <RampupTierAvisoCard />
+
+
+
         {/* Summary Cards */}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
