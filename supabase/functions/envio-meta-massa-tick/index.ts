@@ -126,6 +126,7 @@ async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'err
         const fone = r.display_phone && r.nome ? ` (${r.display_phone})` : '';
         msg += `• ${label}${fone}\n`;
       }
+    }
 
     const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
     await notificarAdmin(supabase, {
