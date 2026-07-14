@@ -119,6 +119,7 @@ export default function InboxMeta() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [respondendo, setRespondendo] = useState<MetaMensagem | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [arquivoParaConfirmar, setArquivoParaConfirmar] = useState<File | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
