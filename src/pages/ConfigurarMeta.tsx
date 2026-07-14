@@ -154,16 +154,20 @@ export default function ConfigurarMeta() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase.from("meta_whatsapp_instances").insert({
-      user_id: user.id,
-      nome: form.nome,
-      phone_number_id: form.phone_number_id.trim(),
-      waba_id: form.waba_id.trim(),
-      business_id: form.business_id.trim() || null,
-      access_token: form.access_token.trim(),
-      tier_diario: parseInt(form.tier_diario) || 250,
-      webhook_verify_token: gerarToken(),
-    });
+    const { data: novaInst, error } = await supabase
+      .from("meta_whatsapp_instances")
+      .insert({
+        user_id: user.id,
+        nome: form.nome,
+        phone_number_id: form.phone_number_id.trim(),
+        waba_id: form.waba_id.trim(),
+        business_id: form.business_id.trim() || null,
+        access_token: form.access_token.trim(),
+        tier_diario: parseInt(form.tier_diario) || 250,
+        webhook_verify_token: gerarToken(),
+      })
+      .select("id")
+      .single();
     if (error) {
       toast.error("Erro: " + error.message);
       return;
@@ -172,6 +176,61 @@ export default function ConfigurarMeta() {
     setDialogOpen(false);
     setForm({ nome: "", phone_number_id: "", waba_id: "", business_id: "", access_token: "", tier_diario: "250" });
     carregar();
+
+    // Auto-inscrever webhook para começar a receber mensagens
+    if (novaInst?.id) {
+      const toastId = toast.loading("Inscrevendo webhook na Meta...");
+      try {
+        const { data: sub } = await supabase.functions.invoke("meta-subscribe-waba", {
+          body: { instancia_id: novaInst.id },
+        });
+        const r = sub?.resultados?.[0];
+        if (r?.subscribe_ok) {
+          toast.success("Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox", { id: toastId });
+        } else {
+          const raw = r?.subscribe_raw?.error?.message || "";
+          toast.error(
+            "Instância salva, mas o webhook não foi inscrito. " + humanizarErroSubscribe(raw) +
+            " Use o botão \"Reinscrever webhook\" no card após corrigir.",
+            { id: toastId, duration: 12000 },
+          );
+        }
+      } catch (e: any) {
+        toast.error("Falha ao inscrever webhook: " + (e?.message || e), { id: toastId });
+      }
+    }
+  };
+
+  const humanizarErroSubscribe = (msg: string): string => {
+    const m = (msg || "").toLowerCase();
+    if (m.includes("does not exist") || m.includes("missing permissions")) {
+      return "O Access Token permanente não tem acesso a essa WABA. Verifique se o token foi gerado pelo App/System User que administra a Business Manager dessa WABA e se possui as permissões whatsapp_business_management e whatsapp_business_messaging.";
+    }
+    if (m.includes("expired")) return "O Access Token expirou. Gere um novo token permanente na Meta.";
+    if (m.includes("invalid oauth")) return "Access Token inválido. Confira se foi copiado por completo.";
+    if (m.includes("permission")) return "Faltam permissões no token. Habilite whatsapp_business_management no App/System User.";
+    return msg ? `Detalhe da Meta: ${msg}` : "Verifique WABA ID e Access Token.";
+  };
+
+  const reinscreverWebhook = async (inst: Instancia) => {
+    setReinscrevendo(inst.id);
+    const toastId = toast.loading(`Inscrevendo webhook em ${inst.nome}...`);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-subscribe-waba", {
+        body: { instancia_id: inst.id },
+      });
+      if (error) throw error;
+      const r = data?.resultados?.[0];
+      if (r?.subscribe_ok) {
+        toast.success("Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox", { id: toastId });
+      } else {
+        const raw = r?.subscribe_raw?.error?.message || "";
+        toast.error(humanizarErroSubscribe(raw), { id: toastId, duration: 15000 });
+      }
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e), { id: toastId });
+    }
+    setReinscrevendo(null);
   };
 
   const testar = async (inst: Instancia) => {
