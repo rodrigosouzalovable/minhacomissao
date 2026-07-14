@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { useMonitorEnvios, InstanceStats } from '@/hooks/useMonitorEnvios';
 import { PoolMetaPanel } from '@/components/meta/PoolMetaPanel';
+import { RampupTierAvisoCard } from '@/components/meta/RampupTierAvisoCard';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -239,6 +240,11 @@ export default function MonitorEnvios() {
 
         {/* Pool Meta Oficial */}
         <PoolMetaPanel />
+
+        {/* Números prontos pra subir de TIER */}
+        <RampupTierAvisoCard />
+
+
 
         {/* Summary Cards */}
 

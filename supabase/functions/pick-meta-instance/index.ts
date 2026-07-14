@@ -91,6 +91,20 @@ Deno.serve(async (req) => {
     const hoje = new Date().toISOString().slice(0, 10);
     const nowIso = new Date().toISOString();
 
+    // Métricas de ontem por instância (guardrail ratio inbound e block-rate)
+    const ontem = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const { data: metricasOntem } = await supabase
+      .from('meta_instance_daily_metrics')
+      .select('instancia_id, enviadas, inbound, bloqueadas, falharam')
+      .in('instancia_id', instancia_ids)
+      .eq('data', ontem);
+    const metricaMap = new Map<string, any>();
+    (metricasOntem || []).forEach((m: any) => metricaMap.set(m.instancia_id, m));
+
+    const guardrailRatio = cfg?.guardrail_ratio_inbound !== false;
+    const ratioMinPct = Number(cfg?.guardrail_ratio_min_pct ?? 5);
+    const blockMaxPct = Number(cfg?.guardrail_block_rate_max_pct ?? 2);
+
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
     for (const inst of insts) {
@@ -106,13 +120,23 @@ Deno.serve(async (req) => {
         : 0;
       const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'livre';
 
-      // Cotas de ramp-up removidas: usuário controla volume via delay + planilha.
-      // Mantém bloqueios anti-ban reais (pool, pausa, qualidade, horário).
+      // Guardrails baseados em métricas de ontem
+      const mo = metricaMap.get(inst.id);
+      if (mo && mo.enviadas > 30) {
+        const blockRate = (mo.bloqueadas + mo.falharam) / Math.max(1, mo.enviadas) * 100;
+        if (blockRate > blockMaxPct) continue; // pula: número está tomando muita rejeição
+      }
+      let tetoQualidade = 1.0;
+      if (guardrailRatio && mo && mo.enviadas > 30) {
+        const ratio = mo.inbound / Math.max(1, mo.enviadas) * 100;
+        if (ratio < ratioMinPct) tetoQualidade = 0.3; // sem inbound = teto 30% da cota
+      }
       const q = pesoQualidade(inst.saude_quality);
       if (q === 0) continue;
+      if (String(inst.saude_quality || '').toUpperCase() === 'YELLOW') tetoQualidade = Math.min(tetoQualidade, 0.3);
       const tierEfetivo = inst.messaging_limit_manual || inst.saude_tier;
       // Score prioriza chips com menos uso hoje para distribuição no round-robin.
-      const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * (1 / (1 + uso));
+      const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * tetoQualidade * (1 / (1 + uso));
       candidates.push({ inst, score, fase, cota: 999999, uso, diasAtivo });
     }
 

@@ -2375,6 +2375,54 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_aquecimento_pares: {
+        Row: {
+          criado_em: string
+          emissor_id: string
+          id: string
+          receptor_id: string
+          trocas_hoje: number
+          trocas_total: number
+          ultima_troca_em: string | null
+          ultimo_reset: string | null
+        }
+        Insert: {
+          criado_em?: string
+          emissor_id: string
+          id?: string
+          receptor_id: string
+          trocas_hoje?: number
+          trocas_total?: number
+          ultima_troca_em?: string | null
+          ultimo_reset?: string | null
+        }
+        Update: {
+          criado_em?: string
+          emissor_id?: string
+          id?: string
+          receptor_id?: string
+          trocas_hoje?: number
+          trocas_total?: number
+          ultima_troca_em?: string | null
+          ultimo_reset?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_aquecimento_pares_emissor_id_fkey"
+            columns: ["emissor_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_aquecimento_pares_receptor_id_fkey"
+            columns: ["receptor_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_atendimento_estado: {
         Row: {
           atualizado_em: string
@@ -2736,6 +2784,9 @@ export type Database = {
       }
       meta_envio_pool_config: {
         Row: {
+          aquecimento_ativo: boolean
+          aquecimento_max_pares_dia: number
+          aquecimento_template_utility: string | null
           atualizado_em: string
           auto_pausa_red_waba: boolean
           auto_pausa_yellow: boolean
@@ -2749,11 +2800,17 @@ export type Database = {
           delay_min_entre_numeros_seg: number
           delay_min_mesmo_numero_seg: number
           duracao_pausa_yellow_horas: number
+          guardrail_block_rate_max_pct: number
+          guardrail_ratio_inbound: boolean
+          guardrail_ratio_min_pct: number
           horario_fim: string
           horario_inicio: string
           id: number
         }
         Insert: {
+          aquecimento_ativo?: boolean
+          aquecimento_max_pares_dia?: number
+          aquecimento_template_utility?: string | null
           atualizado_em?: string
           auto_pausa_red_waba?: boolean
           auto_pausa_yellow?: boolean
@@ -2767,11 +2824,17 @@ export type Database = {
           delay_min_entre_numeros_seg?: number
           delay_min_mesmo_numero_seg?: number
           duracao_pausa_yellow_horas?: number
+          guardrail_block_rate_max_pct?: number
+          guardrail_ratio_inbound?: boolean
+          guardrail_ratio_min_pct?: number
           horario_fim?: string
           horario_inicio?: string
           id?: number
         }
         Update: {
+          aquecimento_ativo?: boolean
+          aquecimento_max_pares_dia?: number
+          aquecimento_template_utility?: string | null
           atualizado_em?: string
           auto_pausa_red_waba?: boolean
           auto_pausa_yellow?: boolean
@@ -2785,6 +2848,9 @@ export type Database = {
           delay_min_entre_numeros_seg?: number
           delay_min_mesmo_numero_seg?: number
           duracao_pausa_yellow_horas?: number
+          guardrail_block_rate_max_pct?: number
+          guardrail_ratio_inbound?: boolean
+          guardrail_ratio_min_pct?: number
           horario_fim?: string
           horario_inicio?: string
           id?: number
@@ -2889,6 +2955,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      meta_instance_daily_metrics: {
+        Row: {
+          atualizado_em: string
+          bloqueadas: number
+          criado_em: string
+          data: string
+          entregues: number
+          enviadas: number
+          falharam: number
+          id: string
+          inbound: number
+          instancia_id: string
+          lidas: number
+        }
+        Insert: {
+          atualizado_em?: string
+          bloqueadas?: number
+          criado_em?: string
+          data: string
+          entregues?: number
+          enviadas?: number
+          falharam?: number
+          id?: string
+          inbound?: number
+          instancia_id: string
+          lidas?: number
+        }
+        Update: {
+          atualizado_em?: string
+          bloqueadas?: number
+          criado_em?: string
+          data?: string
+          entregues?: number
+          enviadas?: number
+          falharam?: number
+          id?: string
+          inbound?: number
+          instancia_id?: string
+          lidas?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_instance_daily_metrics_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_templates_instancia: {
         Row: {
@@ -6202,6 +6318,10 @@ export type Database = {
       meta_envios_resumo: {
         Args: { _ate?: string; _uid?: string }
         Returns: Json
+      }
+      meta_metric_bump: {
+        Args: { _campo: string; _inc?: number; _instancia_id: string }
+        Returns: undefined
       }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }

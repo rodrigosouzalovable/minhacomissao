@@ -375,6 +375,11 @@ serve(async (req) => {
             wa_message_id: m.id,
           } as any);
 
+          // Métrica diária (inbound orgânico melhora ratio anti-ban)
+          if (!isEcho && !msgError) {
+            supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'inbound', _inc: 1 }).then(() => {}, () => {});
+          }
+
           if (msgError) {
             const duplicate = String(msgError.message || '').toLowerCase().includes('duplicate') || msgError.code === '23505';
             if (!duplicate) console.error('[MetaWebhook] erro ao inserir mensagem', { field: fieldName, isEcho, erro: msgError.message });
@@ -547,6 +552,17 @@ serve(async (req) => {
             })
             .eq('wa_message_id', waId);
 
+          // Métrica diária por status
+          try {
+            const campo = status === 'sent' ? 'enviadas'
+              : status === 'delivered' ? 'entregues'
+              : status === 'read' ? 'lidas'
+              : status === 'failed' ? 'falharam' : null;
+            if (campo) {
+              supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: campo, _inc: 1 }).then(() => {}, () => {});
+            }
+          } catch {}
+
           // Compatibilidade com log de massa + pricing (para separar cobrado vs grátis CSW)
           // A Meta envia `pricing` em alguns eventos e `conversation.origin.type` em outros.
           // Lemos os dois e usamos como fallback um do outro para maximizar captura.
@@ -589,6 +605,7 @@ serve(async (req) => {
               restrictedKeywords.some((k) => errText.includes(k));
 
             if (isRestricted) {
+              supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'bloqueadas', _inc: 1 }).then(() => {}, () => {});
               const motivo = errTitle || `Restrição Meta (#${errCode})`;
               const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
               await supabase.from('meta_whatsapp_instances').update({
