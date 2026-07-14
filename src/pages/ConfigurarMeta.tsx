@@ -558,7 +558,11 @@ export default function ConfigurarMeta() {
                                 BM: {bm.nome}
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="text-[10px] border-dashed text-muted-foreground">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-dashed text-muted-foreground cursor-help"
+                                title="Vincular BM é opcional para receber mensagens. Só é necessário para faturamento consolidado."
+                              >
                                 Sem BM vinculada
                               </Badge>
                             );
