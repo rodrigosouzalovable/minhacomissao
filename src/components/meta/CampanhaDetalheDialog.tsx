@@ -7,6 +7,7 @@ import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, Help
 import { toast } from "sonner";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { exportarParaExcel } from "@/lib/exportExcel";
+import { humanizarErroEnvio } from "@/lib/humanizarErroEnvio";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Props = { jobId: string | null; open: boolean; onOpenChange: (v: boolean) => void };
@@ -128,7 +129,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     const rows = detalhes.erros.map((e) => ({
       telefone: e.telefone,
       instancia: e.instancia || "",
-      erro: e.erro || "",
+      enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
+      motivo: humanizarErroEnvio(e.erro),
+      erro_tecnico: e.erro || "",
     }));
     if (rows.length === 0) { toast.error("Nada para exportar"); return; }
     await exportarParaExcel(
@@ -136,7 +139,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       [
         { chave: "telefone", titulo: "Telefone" },
         { chave: "instancia", titulo: "Instância" },
-        { chave: "erro", titulo: "Erro" },
+        { chave: "enviado_em", titulo: "Data/Hora" },
+        { chave: "motivo", titulo: "Motivo (amigável)" },
+        { chave: "erro_tecnico", titulo: "Erro técnico" },
       ],
       `erros_${sanitize(nome)}_${stamp()}`,
     );
@@ -149,7 +154,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     const rows = falhasEntrega.map((e) => ({
       telefone: e.telefone,
       instancia: e.instancia || "",
-      erro_entrega: e.deliveryErro || "",
+      enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
+      motivo: humanizarErroEnvio(e.deliveryErro),
+      erro_tecnico: e.deliveryErro || "",
     }));
     if (rows.length === 0) { toast.error("Nada para exportar"); return; }
     await exportarParaExcel(
@@ -157,7 +164,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       [
         { chave: "telefone", titulo: "Telefone" },
         { chave: "instancia", titulo: "Instância" },
-        { chave: "erro_entrega", titulo: "Erro entrega" },
+        { chave: "enviado_em", titulo: "Data/Hora" },
+        { chave: "motivo", titulo: "Motivo (amigável)" },
+        { chave: "erro_tecnico", titulo: "Erro técnico" },
       ],
       `falhas_entrega_${sanitize(nome)}_${stamp()}`,
     );
