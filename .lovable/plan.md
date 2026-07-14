@@ -1,61 +1,42 @@
-# Inbox Meta — Persistência de conversas + Confirmação de envio de arquivo
+# Por que a mensagem não aparece no Inbox
 
-## 1. Conversas respondidas somem? (resposta + verificação)
+Enviar funciona só com o Phone ID + Access Token. **Receber** exige que a WABA esteja assinada no nosso webhook — isso é uma configuração do lado da Meta, não é automático quando você cadastra o número aqui.
 
-Analisei `src/pages/InboxMeta.tsx` (`fetchContatos`) e a listagem lateral. **Não existe nenhuma regra que esconda automaticamente conversas com resposta do cliente.**
+Faltam 3 passos do lado da Meta para o número `62981626668` (WABA `1706273477111603`):
 
-A listagem só filtra por um campo: `arquivado`. Uma conversa só sai da aba "Conversas" se:
-- Alguém clicar em **Arquivar** (individual ou em massa), OU
-- O contato for excluído manualmente.
+1. **Configurar Webhook da WABA** apontando para a URL do nosso endpoint `meta-whatsapp-webhook`, com o Verify Token que já está salvo em `meta_whatsapp_config`.
+2. **Subscrever o app à WABA** no campo `messages` (e demais eventos).
+3. **Confirmar** que o número aparece como inscrito.
 
-Ou seja: conversas iniciadas que receberam resposta **permanecem** na lista principal normalmente. Nada é apagado nem ocultado quando o cliente responde.
+Já existe a função `meta-subscribe-waba` que faz os passos 1 e 2 automaticamente via Graph API (usando `override_callback_uri` + `verify_token`). Só que ela não está sendo disparada quando você cadastra um número novo manualmente com token permanente próprio.
 
-Não farei nenhuma alteração aqui — o comportamento já é o que você quer. Se em algum momento você viu uma conversa sumir, provavelmente foi arquivada (aba "Arquivados" no topo da lista) ou excluída. Posso investigar um caso específico se quiser me passar o telefone/CPF.
+# Plano
 
-## 2. Confirmação antes de enviar arquivo (PDF/imagem)
+## 1. Rodar o subscribe para o número atual (imediato)
+- Executar `meta-subscribe-waba` passando `instancia_id = cd197b9f-d6a0-4fd1-98f1-78e5edddad8c` para inscrever a WABA `1706273477111603` no webhook.
+- Retornar o `subscriptions` da Meta para confirmar visualmente que a WABA aparece inscrita no nosso App ID.
+- Você manda uma mensagem de teste do seu número pessoal e deve cair no Inbox em segundos.
 
-Hoje, ao arrastar um arquivo para dentro da conversa (ou colar imagem, ou usar o clipe 📎), o sistema chama `enviarMidia(file)` **imediatamente**, sem pedir confirmação. Isso permite envios acidentais.
+## 2. UI: botão "Reinscrever webhook" no card da instância
+Na tela onde aparece esse card (`62981626668 | Ativa | Sem BM vinculada | WhatsApp Manager | Testar | Templates | ⏻ | 🗑`), adicionar um botão **"Reinscrever webhook"** ao lado de "Testar" que chama `meta-subscribe-waba` para aquela instância e mostra toast com:
+- ✅ "Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox"
+- ❌ mensagem humanizada em caso de erro (token sem permissão `whatsapp_business_management`, WABA de outra BM, etc.)
 
-### Mudança
+## 3. Auto-inscrever ao cadastrar instância nova
+No fluxo de cadastro manual de instância Meta (onde você colou Phone ID + WABA + Token), após o `INSERT` bem-sucedido, chamar `meta-subscribe-waba` com o `instancia_id` recém-criado. Se falhar, avisar em toast mas deixar a instância salva — o botão do passo 2 permite reinscrever depois.
 
-Adicionar um **diálogo de pré-visualização e confirmação** entre "usuário soltou o arquivo" e "envio para a Meta".
+## 4. Checklist visual "Sem BM vinculada"
+O badge cinza "Sem BM vinculada" no card é só informativo (não impede receber mensagens), mas vou trocar o tooltip para explicar: "Vincular BM é opcional para receber mensagens. Necessário só para faturamento consolidado."
 
-Fluxo novo:
-1. Usuário arrasta um PDF ou imagem para a área da conversa.
-2. Abre um dialog modal centralizado com:
-   - **Pré-visualização**: miniatura da imagem OU ícone de PDF + nome do arquivo + tamanho (KB/MB).
-   - Nome do contato / telefone de destino em destaque (para evitar mandar na conversa errada).
-   - Campo opcional de **legenda** (imagem/PDF suportam caption na Meta).
-   - Botão **Cancelar** (fecha, não envia).
-   - Botão **Enviar** (dispara `enviarMidia` com o arquivo + caption).
-3. Enquanto o envio acontece, o botão "Enviar" mostra spinner e bloqueia fechamento acidental.
-4. Após sucesso ou erro, o dialog fecha e o toast normal aparece.
+# Detalhes técnicos
 
-### Onde aplicar
+- Endpoint webhook: `${SUPABASE_URL}/functions/v1/meta-whatsapp-webhook`
+- Verify Token: linha `chave='webhook_verify_token'` em `meta_whatsapp_config`
+- Graph API: `POST /{waba_id}/subscribed_apps` com `override_callback_uri` + `verify_token` (já implementado em `meta-subscribe-waba/index.ts`)
+- Permissões que o token permanente precisa ter: `whatsapp_business_messaging` (envio) **+** `whatsapp_business_management` (subscribe). Se você gerou o token só com a primeira, o subscribe falhará com erro 200 — nesse caso preciso avisar você para gerar um novo token com as duas permissões.
 
-Aplicar o dialog em **todas** as entradas de arquivo para consistência (não só drag), porque o risco de "envio acidental" é o mesmo:
+# Fora do escopo
 
-- **Drop** na área da conversa (linha 830 de `InboxMeta.tsx`).
-- **Drop** no rodapé/composer (linha 1026).
-- **Paste** de imagem do clipboard (linha 580).
-- **Clique no clipe 📎** (seletor de arquivo dentro do `MetaComposer`).
-
-Se você preferir manter o clique no clipe 📎 com envio direto (fluxo mais rápido para quem já escolheu o arquivo num diálogo do SO) e aplicar a confirmação **só em drag + paste**, me avise no feedback deste plano.
-
-### Detalhes técnicos
-
-- Criar componente novo `src/components/inbox/meta/ConfirmarEnvioArquivoDialog.tsx` (dialog shadcn com preview + caption + botões).
-- Em `InboxMeta.tsx`:
-  - Novo state `arquivoParaConfirmar: { file: File } | null`.
-  - Handlers de drop/paste passam a fazer `setArquivoParaConfirmar({ file })` em vez de chamar `enviarMidia` direto.
-  - Renderizar `<ConfirmarEnvioArquivoDialog>` recebendo o arquivo, o nome do contato, callback `onConfirmar(file, caption)` que chama `enviarMidia(file, caption)`, e `onCancelar` que zera o state.
-- Ajustar `enviarMidia` para aceitar `caption?: string` opcional e repassar ao invoke da edge `send-whatsapp-meta-media` (o backend já suporta `caption` — vi em `supabase/functions/send-whatsapp-meta-media/index.ts`).
-- Para o clipe 📎 dentro de `MetaComposer`: expor via `MetaComposerHandle` ou emitir o `File` via prop `onArquivoSelecionado` para o pai abrir o mesmo dialog (evita duplicar UI).
-- Validação de tipo (imagem/PDF) e tamanho continua acontecendo antes de abrir o dialog — arquivo inválido nem chega a mostrar a confirmação, mostra toast.
-- Nada de mudança em edge function, RLS, migrations ou banco.
-
-### Fora do escopo
-
-- Não vou mexer em envio de áudio (gravação já tem seu próprio fluxo de revisão).
-- Não vou mexer em texto.
-- Não vou alterar a lógica de arquivar/desarquivar conversas.
+- Não vou mexer na função `meta-whatsapp-webhook` (recebimento em si já funciona — é só falta de subscribe).
+- Não vou tocar em RLS, migrations ou schema.
+- Fluxo de BM permanece opcional.
