@@ -211,6 +211,45 @@ export default function ConfigurarMeta() {
     }
   };
 
+  const abrirEdicao = (inst: Instancia) => {
+    setEditInst(inst);
+    setEditForm({
+      nome: inst.nome || "",
+      phone_number_id: inst.phone_number_id || "",
+      waba_id: inst.waba_id || "",
+      business_id: inst.business_id || "",
+      access_token: "",
+      tier_diario: String(inst.tier_diario || 250),
+    });
+  };
+
+  const salvarEdicao = async () => {
+    if (!editInst) return;
+    if (!editForm.nome || !editForm.phone_number_id || !editForm.waba_id) {
+      toast.error("Preencha nome, Phone Number ID e WABA ID");
+      return;
+    }
+    setSalvandoEdit(true);
+    const patch: any = {
+      nome: editForm.nome.trim(),
+      phone_number_id: editForm.phone_number_id.trim(),
+      waba_id: editForm.waba_id.trim(),
+      business_id: editForm.business_id.trim() || null,
+      tier_diario: parseInt(editForm.tier_diario) || 250,
+    };
+    if (editForm.access_token.trim()) patch.access_token = editForm.access_token.trim();
+    const { error } = await supabase
+      .from("meta_whatsapp_instances")
+      .update(patch)
+      .eq("id", editInst.id);
+    setSalvandoEdit(false);
+    if (error) { toast.error("Erro: " + error.message); return; }
+    toast.success("Instância atualizada");
+    setEditInst(null);
+    carregar();
+  };
+
+
   const humanizarErroSubscribe = (msg: string): string => {
     const m = (msg || "").toLowerCase();
     if (m.includes("does not exist") || m.includes("missing permissions")) {
