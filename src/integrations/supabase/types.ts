@@ -1689,9 +1689,11 @@ export type Database = {
           created_at: string
           enviados: number
           erros: number
+          falhas_por_instancia_run: Json
           id: string
           iniciado_em: string
           instancia_ids: string[]
+          instancias_bloqueadas_run: Json
           max_seg: number
           min_seg: number
           nome_campanha: string | null
@@ -1712,9 +1714,11 @@ export type Database = {
           created_at?: string
           enviados?: number
           erros?: number
+          falhas_por_instancia_run?: Json
           id?: string
           iniciado_em?: string
           instancia_ids?: string[]
+          instancias_bloqueadas_run?: Json
           max_seg?: number
           min_seg?: number
           nome_campanha?: string | null
@@ -1735,9 +1739,11 @@ export type Database = {
           created_at?: string
           enviados?: number
           erros?: number
+          falhas_por_instancia_run?: Json
           id?: string
           iniciado_em?: string
           instancia_ids?: string[]
+          instancias_bloqueadas_run?: Json
           max_seg?: number
           min_seg?: number
           nome_campanha?: string | null
