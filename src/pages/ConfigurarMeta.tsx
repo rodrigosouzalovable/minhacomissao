@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle, ExternalLink } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle, ExternalLink, Pencil } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
@@ -82,6 +82,16 @@ export default function ConfigurarMeta() {
   const [assinando, setAssinando] = useState(false);
   const [resultadosAssinatura, setResultadosAssinatura] = useState<any[] | null>(null);
   const [reinscrevendo, setReinscrevendo] = useState<string | null>(null);
+  const [editInst, setEditInst] = useState<Instancia | null>(null);
+  const [editForm, setEditForm] = useState({
+    nome: "",
+    phone_number_id: "",
+    waba_id: "",
+    business_id: "",
+    access_token: "",
+    tier_diario: "250",
+  });
+  const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
@@ -200,6 +210,45 @@ export default function ConfigurarMeta() {
       }
     }
   };
+
+  const abrirEdicao = (inst: Instancia) => {
+    setEditInst(inst);
+    setEditForm({
+      nome: inst.nome || "",
+      phone_number_id: inst.phone_number_id || "",
+      waba_id: inst.waba_id || "",
+      business_id: inst.business_id || "",
+      access_token: "",
+      tier_diario: String(inst.tier_diario || 250),
+    });
+  };
+
+  const salvarEdicao = async () => {
+    if (!editInst) return;
+    if (!editForm.nome || !editForm.phone_number_id || !editForm.waba_id) {
+      toast.error("Preencha nome, Phone Number ID e WABA ID");
+      return;
+    }
+    setSalvandoEdit(true);
+    const patch: any = {
+      nome: editForm.nome.trim(),
+      phone_number_id: editForm.phone_number_id.trim(),
+      waba_id: editForm.waba_id.trim(),
+      business_id: editForm.business_id.trim() || null,
+      tier_diario: parseInt(editForm.tier_diario) || 250,
+    };
+    if (editForm.access_token.trim()) patch.access_token = editForm.access_token.trim();
+    const { error } = await supabase
+      .from("meta_whatsapp_instances")
+      .update(patch)
+      .eq("id", editInst.id);
+    setSalvandoEdit(false);
+    if (error) { toast.error("Erro: " + error.message); return; }
+    toast.success("Instância atualizada");
+    setEditInst(null);
+    carregar();
+  };
+
 
   const humanizarErroSubscribe = (msg: string): string => {
     const m = (msg || "").toLowerCase();
@@ -606,6 +655,9 @@ export default function ConfigurarMeta() {
                           <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
                             {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
                           </Button>
+                          <Button size="sm" variant="ghost" onClick={() => abrirEdicao(inst)} title="Editar informações da instância">
+                            <Pencil className="h-3 w-3" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => toggle(inst)} title={inst.ativo ? "Desativar" : "Ativar"}>
                             <Power className="h-3 w-3" />
                           </Button>
@@ -874,6 +926,46 @@ export default function ConfigurarMeta() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={adicionar}>Adicionar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!editInst} onOpenChange={(o) => !o && setEditInst(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar instância{editInst ? ` — ${editInst.nome}` : ""}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome interno *</Label>
+              <Input value={editForm.nome} onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })} />
+            </div>
+            <div>
+              <Label>Phone Number ID *</Label>
+              <Input value={editForm.phone_number_id} onChange={(e) => setEditForm({ ...editForm, phone_number_id: e.target.value })} />
+            </div>
+            <div>
+              <Label>WABA ID *</Label>
+              <Input value={editForm.waba_id} onChange={(e) => setEditForm({ ...editForm, waba_id: e.target.value })} />
+            </div>
+            <div>
+              <Label>Business Manager ID (opcional)</Label>
+              <Input value={editForm.business_id} onChange={(e) => setEditForm({ ...editForm, business_id: e.target.value })} />
+            </div>
+            <div>
+              <Label>Access Token (deixe em branco para manter o atual)</Label>
+              <Input type="password" value={editForm.access_token} onChange={(e) => setEditForm({ ...editForm, access_token: e.target.value })} placeholder="EAAxxxxx..." />
+              <p className="text-xs text-muted-foreground mt-1">Só preencha se quiser substituir o token permanente.</p>
+            </div>
+            <div>
+              <Label>Tier diário</Label>
+              <Input type="number" value={editForm.tier_diario} onChange={(e) => setEditForm({ ...editForm, tier_diario: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditInst(null)} disabled={salvandoEdit}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={salvandoEdit}>
+              {salvandoEdit ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
