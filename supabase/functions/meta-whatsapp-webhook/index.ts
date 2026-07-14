@@ -605,6 +605,7 @@ serve(async (req) => {
               restrictedKeywords.some((k) => errText.includes(k));
 
             if (isRestricted) {
+              supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'bloqueadas', _inc: 1 }).then(() => {}, () => {});
               const motivo = errTitle || `Restrição Meta (#${errCode})`;
               const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
               await supabase.from('meta_whatsapp_instances').update({
