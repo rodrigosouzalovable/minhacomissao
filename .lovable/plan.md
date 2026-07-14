@@ -1,33 +1,61 @@
-## Objetivo
-Em "Envio Meta Massa", quando uma instância selecionada começar a dar erro durante a campanha, ignorá-la automaticamente e continuar os envios apenas com as demais instâncias funcionando — sem cancelar o job.
+# Inbox Meta — Persistência de conversas + Confirmação de envio de arquivo
 
-## Comportamento atual
-Hoje, se uma instância retorna erro no `send-whatsapp-meta`, o item é marcado como `erro` e no próximo tick o `pick-meta-instance` pode escolher a mesma instância de novo, gerando uma sequência de falhas. Só há bloqueio automático quando a Meta marca a instância como restrita (pausa_automatica_ate) ou quando qualidade cai (YELLOW/RED).
+## 1. Conversas respondidas somem? (resposta + verificação)
 
-## Mudança
-Adicionar uma "lista negra por job" em memória no próprio registro do job:
+Analisei `src/pages/InboxMeta.tsx` (`fetchContatos`) e a listagem lateral. **Não existe nenhuma regra que esconda automaticamente conversas com resposta do cliente.**
 
-1. Novo campo `instancias_bloqueadas_run` (jsonb array de UUIDs) em `envio_meta_job` — instâncias que falharam nesta execução e devem ser ignoradas até o job terminar.
+A listagem só filtra por um campo: `arquivado`. Uma conversa só sai da aba "Conversas" se:
+- Alguém clicar em **Arquivar** (individual ou em massa), OU
+- O contato for excluído manualmente.
 
-2. No `envio-meta-massa-tick`, ao chamar `pick-meta-instance`, passar `instancia_ids` filtrado removendo as bloqueadas do job.
+Ou seja: conversas iniciadas que receberam resposta **permanecem** na lista principal normalmente. Nada é apagado nem ocultado quando o cliente responde.
 
-3. Quando `send-whatsapp-meta` retorna falha real (não `tier_full`, não `pool_blocked`, não `domingo/horario`), contabilizar falhas consecutivas por instância dentro do job. Após **2 falhas consecutivas** da mesma instância, adicioná-la a `instancias_bloqueadas_run` e reenfileirar o item atual (voltar para `pendente`) para ser tentado por outra instância.
+Não farei nenhuma alteração aqui — o comportamento já é o que você quer. Se em algum momento você viu uma conversa sumir, provavelmente foi arquivada (aba "Arquivados" no topo da lista) ou excluída. Posso investigar um caso específico se quiser me passar o telefone/CPF.
 
-4. Se sobrarem instâncias válidas (selecionadas − bloqueadas), o loop continua normalmente. Se todas forem bloqueadas, o job encerra com status `erro` e motivo "Todas as instâncias falharam" (usando o fluxo `encerrarJobSemDisponibilidade` já existente), disparando a notificação com a lista de instâncias bloqueadas.
+## 2. Confirmação antes de enviar arquivo (PDF/imagem)
 
-5. Notificação de conclusão passa a listar também as instâncias que foram auto-ignoradas durante o envio (além das restringidas pela Meta).
+Hoje, ao arrastar um arquivo para dentro da conversa (ou colar imagem, ou usar o clipe 📎), o sistema chama `enviarMidia(file)` **imediatamente**, sem pedir confirmação. Isso permite envios acidentais.
 
-## Detalhes técnicos
-- Migration: `ALTER TABLE envio_meta_job ADD COLUMN instancias_bloqueadas_run jsonb NOT NULL DEFAULT '[]'::jsonb;` (sem novas RLS/GRANTs, tabela já existe).
-- Contador em memória por tick não persiste bem entre invocações → usar coluna auxiliar `falhas_por_instancia_run jsonb DEFAULT '{}'` mapeando `instancia_id → contador`.
-- Limite configurável no código: `MAX_FALHAS_CONSECUTIVAS = 2`.
-- Ao reenfileirar item por bloqueio de instância: `status=pendente`, `instancia_id=null`, `instancia_nome=null`, sem incrementar `erros`.
-- Falhas que resultam em bloqueio de instância continuam contando em `envio_meta_job_item.status='erro'` só se não houver mais instâncias para tentar; caso contrário o item volta para pendente.
-- Frontend (`CampanhaDetalheDialog.tsx`): mostrar chip informativo "Instâncias ignoradas nesta campanha: N" quando `instancias_bloqueadas_run.length > 0`, listando nomes.
+### Mudança
 
-## Arquivos afetados
-- Nova migration SQL (colunas em `envio_meta_job`).
-- `supabase/functions/envio-meta-massa-tick/index.ts` — filtro de instâncias, contador de falhas, reenfileiramento, atualização da notificação final.
-- `src/components/meta/CampanhaDetalheDialog.tsx` — badge/lista de instâncias auto-ignoradas.
+Adicionar um **diálogo de pré-visualização e confirmação** entre "usuário soltou o arquivo" e "envio para a Meta".
 
-Sem alterações em `pick-meta-instance` (já aceita qualquer `instancia_ids`), `send-whatsapp-meta`, RLS ou UI de iniciar campanha.
+Fluxo novo:
+1. Usuário arrasta um PDF ou imagem para a área da conversa.
+2. Abre um dialog modal centralizado com:
+   - **Pré-visualização**: miniatura da imagem OU ícone de PDF + nome do arquivo + tamanho (KB/MB).
+   - Nome do contato / telefone de destino em destaque (para evitar mandar na conversa errada).
+   - Campo opcional de **legenda** (imagem/PDF suportam caption na Meta).
+   - Botão **Cancelar** (fecha, não envia).
+   - Botão **Enviar** (dispara `enviarMidia` com o arquivo + caption).
+3. Enquanto o envio acontece, o botão "Enviar" mostra spinner e bloqueia fechamento acidental.
+4. Após sucesso ou erro, o dialog fecha e o toast normal aparece.
+
+### Onde aplicar
+
+Aplicar o dialog em **todas** as entradas de arquivo para consistência (não só drag), porque o risco de "envio acidental" é o mesmo:
+
+- **Drop** na área da conversa (linha 830 de `InboxMeta.tsx`).
+- **Drop** no rodapé/composer (linha 1026).
+- **Paste** de imagem do clipboard (linha 580).
+- **Clique no clipe 📎** (seletor de arquivo dentro do `MetaComposer`).
+
+Se você preferir manter o clique no clipe 📎 com envio direto (fluxo mais rápido para quem já escolheu o arquivo num diálogo do SO) e aplicar a confirmação **só em drag + paste**, me avise no feedback deste plano.
+
+### Detalhes técnicos
+
+- Criar componente novo `src/components/inbox/meta/ConfirmarEnvioArquivoDialog.tsx` (dialog shadcn com preview + caption + botões).
+- Em `InboxMeta.tsx`:
+  - Novo state `arquivoParaConfirmar: { file: File } | null`.
+  - Handlers de drop/paste passam a fazer `setArquivoParaConfirmar({ file })` em vez de chamar `enviarMidia` direto.
+  - Renderizar `<ConfirmarEnvioArquivoDialog>` recebendo o arquivo, o nome do contato, callback `onConfirmar(file, caption)` que chama `enviarMidia(file, caption)`, e `onCancelar` que zera o state.
+- Ajustar `enviarMidia` para aceitar `caption?: string` opcional e repassar ao invoke da edge `send-whatsapp-meta-media` (o backend já suporta `caption` — vi em `supabase/functions/send-whatsapp-meta-media/index.ts`).
+- Para o clipe 📎 dentro de `MetaComposer`: expor via `MetaComposerHandle` ou emitir o `File` via prop `onArquivoSelecionado` para o pai abrir o mesmo dialog (evita duplicar UI).
+- Validação de tipo (imagem/PDF) e tamanho continua acontecendo antes de abrir o dialog — arquivo inválido nem chega a mostrar a confirmação, mostra toast.
+- Nada de mudança em edge function, RLS, migrations ou banco.
+
+### Fora do escopo
+
+- Não vou mexer em envio de áudio (gravação já tem seu próprio fluxo de revisão).
+- Não vou mexer em texto.
+- Não vou alterar a lógica de arquivar/desarquivar conversas.
