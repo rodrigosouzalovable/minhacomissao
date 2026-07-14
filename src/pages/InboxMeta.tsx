@@ -24,6 +24,7 @@ import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/me
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemplateDialog';
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
+import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
@@ -118,6 +119,7 @@ export default function InboxMeta() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [respondendo, setRespondendo] = useState<MetaMensagem | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [arquivoParaConfirmar, setArquivoParaConfirmar] = useState<File | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -526,7 +528,7 @@ export default function InboxMeta() {
     }
   };
 
-  const enviarMidia = async (file: File) => {
+  const enviarMidia = async (file: File, caption?: string) => {
     if (!contatoAtivo) return;
     if (!janelaInfo.aberta) {
       toast({ title: 'Janela 24h expirada', variant: 'destructive' });
@@ -556,6 +558,7 @@ export default function InboxMeta() {
           media_url: urlData.publicUrl,
           type,
           file_name: file.name,
+          caption: caption || undefined,
           user_id: user?.id,
           reply_to_wa_id: respondendo?.wa_message_id,
           conteudo_citado: respondendo?.conteudo,
@@ -564,6 +567,7 @@ export default function InboxMeta() {
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || 'Falha');
       setRespondendo(null);
+      setArquivoParaConfirmar(null);
     } catch (e: any) {
       toast({ title: 'Erro ao enviar mídia', description: e.message, variant: 'destructive' });
     } finally {
@@ -571,13 +575,32 @@ export default function InboxMeta() {
     }
   };
 
+  // Helper: valida tipo e abre confirmação em vez de enviar direto.
+  const solicitarConfirmacaoArquivo = (file: File) => {
+    if (!contatoAtivo) return;
+    if (!janelaInfo.aberta) {
+      toast({ title: 'Janela 24h expirada', variant: 'destructive' });
+      return;
+    }
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+    const isAudio = file.type.startsWith('audio/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isPdf && !isAudio && !isVideo) {
+      toast({ title: 'Arquivo inválido', description: 'Envie imagem, áudio, vídeo ou PDF', variant: 'destructive' });
+      return;
+    }
+    setArquivoParaConfirmar(file);
+  };
+
+
   const onPaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items; if (!items) return;
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith('image/')) {
         e.preventDefault();
         const f = items[i].getAsFile();
-        if (f) enviarMidia(new File([f], `clipboard-${Date.now()}.png`, { type: f.type }));
+        if (f) solicitarConfirmacaoArquivo(new File([f], `clipboard-${Date.now()}.png`, { type: f.type }));
         return;
       }
     }
@@ -830,7 +853,7 @@ export default function InboxMeta() {
           onDrop={(e) => {
             e.preventDefault(); setDragOver(false);
             const f = e.dataTransfer.files?.[0];
-            if (f) enviarMidia(f);
+            if (f) solicitarConfirmacaoArquivo(f);
           }}>
           {!contatoAtivo ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
@@ -1023,7 +1046,7 @@ export default function InboxMeta() {
                       accept="image/*,audio/*,video/*,.pdf"
                       onChange={(e) => {
                         const f = e.target.files?.[0]; e.target.value = '';
-                        if (f) enviarMidia(f);
+                        if (f) solicitarConfirmacaoArquivo(f);
                       }} />
                     <Button variant="ghost" size="icon" className="shrink-0"
                       disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
@@ -1090,6 +1113,21 @@ export default function InboxMeta() {
           onSent={() => { if (contatoAtivo) fetchMensagens(contatoAtivo, false); }}
         />
       )}
+
+      <ConfirmarEnvioArquivoDialog
+        file={arquivoParaConfirmar}
+        destinoLabel={
+          contatoAtivo
+            ? (contatoAtivo.nome ||
+               (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || 'Contato')))
+            : 'Contato'
+        }
+        enviando={enviandoArquivo}
+        onConfirmar={(f, caption) => enviarMidia(f, caption)}
+        onCancelar={() => setArquivoParaConfirmar(null)}
+      />
+
+
 
     </AppLayout>
   );
