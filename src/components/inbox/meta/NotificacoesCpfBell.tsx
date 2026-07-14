@@ -337,17 +337,30 @@ export function NotificacoesCpfBell() {
           <div className="text-sm font-semibold">
             Consultas de CPF {isAdmin && <span className="text-xs text-muted-foreground font-normal">(todos)</span>}
           </div>
-          {naoLidas > 0 && (
+          <div className="flex items-center gap-1">
             <Button
               size="sm"
               variant="ghost"
               className="h-7 text-xs"
-              onClick={marcarTodasLidas}
+              onClick={baixarExcel}
+              disabled={exportando}
+              title="Baixar todas as consultas em Excel"
             >
-              <CheckCheck className="h-3.5 w-3.5 mr-1" />
-              Marcar todas
+              <Download className="h-3.5 w-3.5 mr-1" />
+              {exportando ? "Baixando..." : "Excel"}
             </Button>
-          )}
+            {naoLidas > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={marcarTodasLidas}
+              >
+                <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                Marcar todas
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Painel de estatísticas */}
