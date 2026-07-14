@@ -75,6 +75,7 @@ export type CampanhaJob = {
   concluido_em: string | null;
   status_motivo: string | null;
   restantes: number;
+  instancias_bloqueadas_run: string[];
 };
 
 type Ctx = {
@@ -166,6 +167,7 @@ function toCampanhaJob(j: any): CampanhaJob {
     concluido_em: j.concluido_em ?? null,
     status_motivo: j.status_motivo ?? null,
     restantes: Math.max(0, total - enviados - erros),
+    instancias_bloqueadas_run: Array.isArray(j.instancias_bloqueadas_run) ? j.instancias_bloqueadas_run : [],
   };
 }
 

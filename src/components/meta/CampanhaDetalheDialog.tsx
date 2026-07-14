@@ -203,6 +203,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             {resultado?.statusMotivo && resultado.enviados === 0 && (
               <div className="text-xs text-amber-600">Nenhuma mensagem foi enviada: {resultado.statusMotivo}</div>
             )}
+            {job.instancias_bloqueadas_run.length > 0 && (
+              <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+                ⚠️ {job.instancias_bloqueadas_run.length} instância(s) ignorada(s) automaticamente após falhas consecutivas. Envios continuam com as demais.
+              </div>
+            )}
           </div>
 
           {/* Delivery resumo */}
