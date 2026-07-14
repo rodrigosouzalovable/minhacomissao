@@ -321,6 +321,36 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             </details>
           )}
 
+          {/* Falharam na entrega */}
+          {falhasEntrega.length > 0 && (
+            <details className="rounded-md border bg-card" open>
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
+                <span className="text-red-700 dark:text-red-400">
+                  Falharam na entrega <span className="text-muted-foreground font-normal">({falhasEntrega.length})</span>
+                </span>
+                <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(falhasEntrega.map((x) => x.telefone), "Falharam na entrega"); }}>
+                    <Copy className="h-3 w-3 mr-1" /> Copiar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarFalhasEntrega(); }}>
+                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  </Button>
+                </div>
+              </summary>
+              <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
+                {falhasEntrega.map((e, i) => (
+                  <div key={i} className="border-b border-border/40 py-0.5">
+                    <div className="flex justify-between">
+                      <span>{e.telefone}</span>
+                      <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                    </div>
+                    {e.deliveryErro && <div className="text-red-600 text-[10px] break-words">{e.deliveryErro}</div>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
           {/* Sem WhatsApp */}
           {detalhes.semWhatsapp.length > 0 && (
             <details className="rounded-md border bg-card">
