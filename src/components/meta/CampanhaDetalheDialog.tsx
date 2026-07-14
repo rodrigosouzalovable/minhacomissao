@@ -207,14 +207,33 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
           {/* Delivery resumo */}
           {detalhes.enviados.length > 0 && (
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <Badge variant="secondary">Aceito: {resumo.aceito}</Badge>
               <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300">Entregue: {resumo.entregue}</Badge>
               <Badge className="bg-green-500/15 text-green-700 dark:text-green-300">Lida: {resumo.lida}</Badge>
               {resumo.falhou > 0 && <Badge variant="destructive">Falhou: {resumo.falhou}</Badge>}
               {resumo.aguardando > 0 && <Badge variant="outline">Aguardando: {resumo.aguardando}</Badge>}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="O que significam os status">
+                      <HelpCircle className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                    <div className="space-y-1">
+                      <div><strong>Aceito</strong> — o WhatsApp recebeu a mensagem do nosso lado (1 tique). Ainda não chegou no aparelho do destinatário.</div>
+                      <div><strong>Entregue</strong> — chegou no aparelho do destinatário (2 tiques cinza).</div>
+                      <div><strong>Lida</strong> — o destinatário abriu a conversa (2 tiques azuis).</div>
+                      <div><strong>Falhou</strong> — o WhatsApp devolveu falha na entrega (número não existe, bloqueou, conta banida etc.).</div>
+                      <div><strong>Aguardando</strong> — ainda não recebemos confirmação de entrega.</div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           )}
+
 
           {/* Ações */}
           <div className="flex flex-wrap items-center gap-2">
