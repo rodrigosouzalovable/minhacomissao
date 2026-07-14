@@ -590,6 +590,19 @@ export default function ConfigurarMeta() {
                           <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
                             {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => reinscreverWebhook(inst)}
+                            disabled={reinscrevendo === inst.id || !inst.waba_id}
+                            title="Reinscrever a WABA no webhook desta plataforma (necessário para receber mensagens no Inbox)"
+                          >
+                            {reinscrevendo === inst.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <><RefreshCw className="h-3 w-3 mr-1" />Webhook</>
+                            )}
+                          </Button>
                           <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
                             {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
                           </Button>
