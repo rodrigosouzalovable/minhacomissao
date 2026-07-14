@@ -113,6 +113,20 @@ async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'err
       msg += `✅ Nenhuma instância restringida.`;
     }
 
+    // Instâncias auto-ignoradas por falhas consecutivas neste job
+    const bloqRun: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+    if (bloqRun.length > 0) {
+      const { data: autoIgn } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, display_phone')
+        .in('id', bloqRun);
+      msg += `\n⚠️ *Instâncias auto-ignoradas por falhas consecutivas:*\n`;
+      for (const r of (autoIgn || []) as any[]) {
+        const label = r.nome || r.display_phone || 'instância';
+        const fone = r.display_phone && r.nome ? ` (${r.display_phone})` : '';
+        msg += `• ${label}${fone}\n`;
+      }
+
     const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
     await notificarAdmin(supabase, {
       tipo: 'envio_meta_concluido',
