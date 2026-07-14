@@ -3,10 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { exportarParaExcel } from "@/lib/exportExcel";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Props = { jobId: string | null; open: boolean; onOpenChange: (v: boolean) => void };
 
@@ -141,6 +142,27 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     );
     toast.success(`${rows.length} erros exportados`);
   };
+  const falhasEntrega = detalhes.enviados.filter(
+    (e) => (e.deliveryStatus as string) === "failed" || (e.deliveryStatus as string) === "falhou",
+  );
+  const baixarFalhasEntrega = async () => {
+    const rows = falhasEntrega.map((e) => ({
+      telefone: e.telefone,
+      instancia: e.instancia || "",
+      erro_entrega: e.deliveryErro || "",
+    }));
+    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      rows,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "instancia", titulo: "Instância" },
+        { chave: "erro_entrega", titulo: "Erro entrega" },
+      ],
+      `falhas_entrega_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${rows.length} falhas exportadas`);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,14 +207,33 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
           {/* Delivery resumo */}
           {detalhes.enviados.length > 0 && (
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <Badge variant="secondary">Aceito: {resumo.aceito}</Badge>
               <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300">Entregue: {resumo.entregue}</Badge>
               <Badge className="bg-green-500/15 text-green-700 dark:text-green-300">Lida: {resumo.lida}</Badge>
               {resumo.falhou > 0 && <Badge variant="destructive">Falhou: {resumo.falhou}</Badge>}
               {resumo.aguardando > 0 && <Badge variant="outline">Aguardando: {resumo.aguardando}</Badge>}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="O que significam os status">
+                      <HelpCircle className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                    <div className="space-y-1">
+                      <div><strong>Aceito</strong> — o WhatsApp recebeu a mensagem do nosso lado (1 tique). Ainda não chegou no aparelho do destinatário.</div>
+                      <div><strong>Entregue</strong> — chegou no aparelho do destinatário (2 tiques cinza).</div>
+                      <div><strong>Lida</strong> — o destinatário abriu a conversa (2 tiques azuis).</div>
+                      <div><strong>Falhou</strong> — o WhatsApp devolveu falha na entrega (número não existe, bloqueou, conta banida etc.).</div>
+                      <div><strong>Aguardando</strong> — ainda não recebemos confirmação de entrega.</div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           )}
+
 
           {/* Ações */}
           <div className="flex flex-wrap items-center gap-2">
@@ -274,6 +315,36 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                       <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
                     </div>
                     {e.erro && <div className="text-red-600 text-[10px] break-words">{e.erro}</div>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* Falharam na entrega */}
+          {falhasEntrega.length > 0 && (
+            <details className="rounded-md border bg-card" open>
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
+                <span className="text-red-700 dark:text-red-400">
+                  Falharam na entrega <span className="text-muted-foreground font-normal">({falhasEntrega.length})</span>
+                </span>
+                <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(falhasEntrega.map((x) => x.telefone), "Falharam na entrega"); }}>
+                    <Copy className="h-3 w-3 mr-1" /> Copiar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarFalhasEntrega(); }}>
+                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  </Button>
+                </div>
+              </summary>
+              <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
+                {falhasEntrega.map((e, i) => (
+                  <div key={i} className="border-b border-border/40 py-0.5">
+                    <div className="flex justify-between">
+                      <span>{e.telefone}</span>
+                      <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
+                    </div>
+                    {e.deliveryErro && <div className="text-red-600 text-[10px] break-words">{e.deliveryErro}</div>}
                   </div>
                 ))}
               </div>
