@@ -1046,7 +1046,7 @@ export default function InboxMeta() {
                       accept="image/*,audio/*,video/*,.pdf"
                       onChange={(e) => {
                         const f = e.target.files?.[0]; e.target.value = '';
-                        if (f) enviarMidia(f);
+                        if (f) solicitarConfirmacaoArquivo(f);
                       }} />
                     <Button variant="ghost" size="icon" className="shrink-0"
                       disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
