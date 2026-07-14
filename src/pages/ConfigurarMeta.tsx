@@ -81,6 +81,7 @@ export default function ConfigurarMeta() {
 
   const [assinando, setAssinando] = useState(false);
   const [resultadosAssinatura, setResultadosAssinatura] = useState<any[] | null>(null);
+  const [reinscrevendo, setReinscrevendo] = useState<string | null>(null);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
