@@ -264,11 +264,44 @@ async function processarItem(job: any): Promise<ItemResult> {
     erroMsg = e instanceof Error ? e.message : String(e);
   }
 
-  await supabase.from('envio_meta_job_item').update({
-    status: ok ? 'enviado' : 'erro',
-    erro: ok ? null : erroMsg,
-    processado_em: new Date().toISOString(),
-  }).eq('id', pend.id);
+  // Contadores por instância (para auto-ignorar instância que falha em sequência)
+  const MAX_FALHAS_CONSECUTIVAS = 2;
+  const falhasMap: Record<string, number> = (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
+    ? { ...job.falhas_por_instancia_run } : {};
+  const bloqueadasRunAtual: string[] = Array.isArray(job.instancias_bloqueadas_run)
+    ? [...job.instancias_bloqueadas_run] : [];
+
+  let instanciaAutoBloqueada = false;
+  if (ok) {
+    if (falhasMap[instId]) delete falhasMap[instId];
+  } else {
+    falhasMap[instId] = (falhasMap[instId] || 0) + 1;
+    if (falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
+      bloqueadasRunAtual.push(instId);
+      instanciaAutoBloqueada = true;
+      delete falhasMap[instId];
+    }
+  }
+
+  // Verifica se ainda restam instâncias disponíveis para tentar outra vez
+  const restantesDisponiveis = (job.instancia_ids || []).filter((id: string) => !bloqueadasRunAtual.includes(id));
+  const podeReenfileirar = !ok && instanciaAutoBloqueada && restantesDisponiveis.length > 0;
+
+  if (podeReenfileirar) {
+    // Devolve item para pendente — outra instância vai tentar
+    await supabase.from('envio_meta_job_item').update({
+      status: 'pendente',
+      instancia_id: null,
+      instancia_nome: null,
+      erro: erroMsg,
+    }).eq('id', pend.id);
+  } else {
+    await supabase.from('envio_meta_job_item').update({
+      status: ok ? 'enviado' : 'erro',
+      erro: ok ? null : erroMsg,
+      processado_em: new Date().toISOString(),
+    }).eq('id', pend.id);
+  }
 
   const lo = Math.max(1, job.min_seg || 30);
   const hi = Math.max(lo, job.max_seg || 90);
@@ -276,16 +309,29 @@ async function processarItem(job: any): Promise<ItemResult> {
   const delayMs = delaySec * 1000;
   const proximoEm = new Date(Date.now() + delayMs).toISOString();
 
+  // Persiste os contadores/bloqueios de instâncias no job
+  await supabase.from('envio_meta_job').update({
+    falhas_por_instancia_run: falhasMap,
+    instancias_bloqueadas_run: bloqueadasRunAtual,
+  }).eq('id', job.id);
+
+  // Se todas as instâncias foram bloqueadas → encerra o job
+  if (restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
+    await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas foram ignoradas por falhas consecutivas');
+    return { advanced: false, stop: true };
+  }
+
+  const contarErro = !ok && !podeReenfileirar;
   const { error: rpcErr } = await supabase.rpc('envio_meta_job_bump', {
     _job_id: job.id,
     _enviados_inc: ok ? 1 : 0,
-    _erros_inc: ok ? 0 : 1,
+    _erros_inc: contarErro ? 1 : 0,
     _proximo_em: proximoEm,
   });
   if (rpcErr) {
     await supabase.from('envio_meta_job').update({
       enviados: (job.enviados || 0) + (ok ? 1 : 0),
-      erros: (job.erros || 0) + (ok ? 0 : 1),
+      erros: (job.erros || 0) + (contarErro ? 1 : 0),
       proximo_em: proximoEm,
       status_motivo: null,
     }).eq('id', job.id);
