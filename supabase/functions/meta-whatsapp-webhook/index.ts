@@ -552,6 +552,17 @@ serve(async (req) => {
             })
             .eq('wa_message_id', waId);
 
+          // Métrica diária por status
+          try {
+            const campo = status === 'sent' ? 'enviadas'
+              : status === 'delivered' ? 'entregues'
+              : status === 'read' ? 'lidas'
+              : status === 'failed' ? 'falharam' : null;
+            if (campo) {
+              supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: campo, _inc: 1 }).then(() => {}, () => {});
+            }
+          } catch {}
+
           // Compatibilidade com log de massa + pricing (para separar cobrado vs grátis CSW)
           // A Meta envia `pricing` em alguns eventos e `conversation.origin.type` em outros.
           // Lemos os dois e usamos como fallback um do outro para maximizar captura.
