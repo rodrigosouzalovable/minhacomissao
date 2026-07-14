@@ -375,6 +375,11 @@ serve(async (req) => {
             wa_message_id: m.id,
           } as any);
 
+          // Métrica diária (inbound orgânico melhora ratio anti-ban)
+          if (!isEcho && !msgError) {
+            supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'inbound', _inc: 1 }).then(() => {}, () => {});
+          }
+
           if (msgError) {
             const duplicate = String(msgError.message || '').toLowerCase().includes('duplicate') || msgError.code === '23505';
             if (!duplicate) console.error('[MetaWebhook] erro ao inserir mensagem', { field: fieldName, isEcho, erro: msgError.message });
