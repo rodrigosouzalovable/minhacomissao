@@ -528,7 +528,7 @@ export default function InboxMeta() {
     }
   };
 
-  const enviarMidia = async (file: File) => {
+  const enviarMidia = async (file: File, caption?: string) => {
     if (!contatoAtivo) return;
     if (!janelaInfo.aberta) {
       toast({ title: 'Janela 24h expirada', variant: 'destructive' });
@@ -558,6 +558,7 @@ export default function InboxMeta() {
           media_url: urlData.publicUrl,
           type,
           file_name: file.name,
+          caption: caption || undefined,
           user_id: user?.id,
           reply_to_wa_id: respondendo?.wa_message_id,
           conteudo_citado: respondendo?.conteudo,
@@ -566,12 +567,32 @@ export default function InboxMeta() {
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || 'Falha');
       setRespondendo(null);
+      setArquivoParaConfirmar(null);
     } catch (e: any) {
       toast({ title: 'Erro ao enviar mídia', description: e.message, variant: 'destructive' });
     } finally {
       setEnviandoArquivo(false);
     }
   };
+
+  // Helper: valida tipo e abre confirmação em vez de enviar direto.
+  const solicitarConfirmacaoArquivo = (file: File) => {
+    if (!contatoAtivo) return;
+    if (!janelaInfo.aberta) {
+      toast({ title: 'Janela 24h expirada', variant: 'destructive' });
+      return;
+    }
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+    const isAudio = file.type.startsWith('audio/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isPdf && !isAudio && !isVideo) {
+      toast({ title: 'Arquivo inválido', description: 'Envie imagem, áudio, vídeo ou PDF', variant: 'destructive' });
+      return;
+    }
+    setArquivoParaConfirmar(file);
+  };
+
 
   const onPaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items; if (!items) return;
