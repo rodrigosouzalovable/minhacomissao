@@ -1207,7 +1207,56 @@ export default function ConfigurarMeta() {
         onOpenChange={(o) => !o && setPreviewTpl(null)}
         onSaved={carregar}
       />
+
+      {/* Dialog de confirmação de pagamento importado */}
+      <Dialog open={!!confirmPag} onOpenChange={(o) => !o && setConfirmPag(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar dados da fatura</DialogTitle>
+          </DialogHeader>
+          {confirmPag && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Confira os dados extraídos do PDF. Você pode ajustar antes de salvar. O PDF não será armazenado.
+              </p>
+              <div>
+                <Label className="text-xs">Data da transação</Label>
+                <Input
+                  type="date"
+                  value={confirmPag.data_transacao}
+                  onChange={(e) => setConfirmPag({ ...confirmPag, data_transacao: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Número de referência</Label>
+                <Input
+                  value={confirmPag.numero_referencia}
+                  onChange={(e) => setConfirmPag({ ...confirmPag, numero_referencia: e.target.value })}
+                  placeholder="AX3HGVZLU2"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Valor pago (US$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={confirmPag.valor_usd}
+                  onChange={(e) => setConfirmPag({ ...confirmPag, valor_usd: e.target.value })}
+                  placeholder="1.22"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmPag(null)}>Cancelar</Button>
+            <Button onClick={salvarPagamento} disabled={pag.inserir.isPending}>
+              {pag.inserir.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </AppLayout>
+
   );
 }
