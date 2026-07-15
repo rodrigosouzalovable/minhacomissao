@@ -675,11 +675,46 @@ export default function ConfigurarMeta() {
         </TabsList>
 
         <TabsContent value="instancias">
+          {/* Totalizador de faturas Meta importadas */}
+          <Card className="mb-4 border-emerald-500/40 bg-emerald-500/5">
+            <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-emerald-500/10 p-2">
+                  <CreditCard className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="font-semibold">Total gasto (faturas Meta importadas)</div>
+                  <p className="text-sm text-muted-foreground">
+                    Soma manual das faturas PDF importadas em cada instância. Use para conciliar com as cobranças do seu cartão.
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-emerald-700">
+                  US$ {pag.totalUsd.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {pag.pagamentos.length} fatura(s) registrada(s)
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Input escondido para importar PDF */}
+          <input
+            id="meta-pdf-input"
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={onPdfSelected}
+          />
+
           <div className="flex justify-end mb-3">
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" /> Nova instância
             </Button>
           </div>
+
 
           {loading ? (
             <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
