@@ -92,6 +92,8 @@ export default function InboxMeta() {
   const [contatoAtivo, setContatoAtivo] = useState<MetaContato | null>(null);
   const [mensagens, setMensagens] = useState<MetaMensagem[]>([]);
   const [busca, setBusca] = useState('');
+  const [buscaDebounced, setBuscaDebounced] = useState('');
+
   // texto local vive no Composer (evita re-render do inbox inteiro por tecla)
   const [enviando, setEnviando] = useState(false);
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
