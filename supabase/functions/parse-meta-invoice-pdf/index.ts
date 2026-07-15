@@ -20,16 +20,11 @@ function parseDataPt(raw: string): string | null {
   return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 
-async function extractText(base64: string): Promise<string> {
+async function extractPdfText(base64: string): Promise<string> {
   const bin = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const doc = await getDocument({ data: bin, useSystemFonts: true }).promise;
-  let out = '';
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const content = await page.getTextContent();
-    out += content.items.map((it: any) => it.str).join('\n') + '\n';
-  }
-  return out;
+  const pdf = await getDocumentProxy(bin);
+  const { text } = await extractText(pdf, { mergePages: true });
+  return Array.isArray(text) ? text.join('\n') : String(text || '');
 }
 
 Deno.serve(async (req) => {
