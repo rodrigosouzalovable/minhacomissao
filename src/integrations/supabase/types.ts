@@ -1461,6 +1461,51 @@ export type Database = {
           },
         ]
       }
+      cotacoes_minimas: {
+        Row: {
+          data_registro: string
+          moeda: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          data_registro: string
+          moeda: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          data_registro?: string
+          moeda?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      cotacoes_moedas: {
+        Row: {
+          created_at: string
+          data: string
+          eur: number
+          id: string
+          usd: number
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          eur: number
+          id?: string
+          usd: number
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          eur?: number
+          id?: string
+          usd?: number
+        }
+        Relationships: []
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean
