@@ -928,9 +928,81 @@ export default function ConfigurarMeta() {
                           <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
                         </Button>
                       </div>
+
+                      {/* Faturas Meta importadas — histórico + total */}
+                      <div className="pt-3 border-t border-border/60">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                            <span className="font-semibold">Faturas importadas:</span>
+                            <span className="font-bold text-emerald-700">
+                              US$ {pag.totalPorInstancia(inst.id).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-muted-foreground">
+                              ({pag.porInstancia(inst.id).length})
+                            </span>
+                          </div>
+                          {pag.porInstancia(inst.id).length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => setShowHistId(showHistId === inst.id ? null : inst.id)}
+                            >
+                              {showHistId === inst.id ? "Ocultar histórico" : "Ver histórico"}
+                            </Button>
+                          )}
+                        </div>
+                        {showHistId === inst.id && (
+                          <div className="mt-2 rounded-md border border-border/60 overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-xs">Data</TableHead>
+                                  <TableHead className="text-xs">Referência</TableHead>
+                                  <TableHead className="text-xs text-right">Valor (US$)</TableHead>
+                                  <TableHead className="w-10"></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {pag.porInstancia(inst.id).map((p) => (
+                                  <TableRow key={p.id}>
+                                    <TableCell className="text-xs">
+                                      {new Date(p.data_transacao + "T00:00:00").toLocaleDateString("pt-BR")}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono">{p.numero_referencia}</TableCell>
+                                    <TableCell className="text-xs text-right font-medium">
+                                      {Number(p.valor_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0"
+                                        onClick={async () => {
+                                          if (!confirm("Excluir este registro?")) return;
+                                          try {
+                                            await pag.remover.mutateAsync(p.id);
+                                            toast.success("Removido");
+                                          } catch (e: any) {
+                                            toast.error(e?.message || "Erro");
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-3 w-3 text-destructive" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
+
               ))}
             </div>
           )}
