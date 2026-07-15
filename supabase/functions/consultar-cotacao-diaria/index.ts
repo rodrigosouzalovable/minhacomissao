@@ -24,6 +24,14 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let forcar = false;
+  try {
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      forcar = Boolean(body?.forcar);
+    }
+  } catch (_) {}
+
   try {
     // Busca cotação AwesomeAPI (pública, sem chave)
     const res = await fetch("https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL");
