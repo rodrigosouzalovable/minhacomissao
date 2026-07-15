@@ -1,46 +1,49 @@
-## Objetivo
 
-1. Reexecutar manualmente a edge function `consultar-cotacao-diaria` para validar o envio das mensagens de cotação aos números 62991672674 e 62994300880.
-2. Criar nova aba **Cotações** no sistema para acompanhamento visual das moedas USD/EUR, destacando sempre o menor valor histórico.
+## Diagnóstico
 
----
+Confirmei o problema direto no banco:
 
-## 1) Teste de envio
+- O contato **Matheus Teixeira (55 62 8419-7883)** existe, **não está arquivado**, e teve última troca em **14/07/2026** (mensagem de entrada e de saída no mesmo dia). Ou seja: é uma conversa real com troca dos dois lados, deveria estar visível.
+- A tabela `meta_whatsapp_contatos` tem hoje **5.485 contatos não arquivados**, mas o Inbox Meta faz `SELECT ... ORDER BY ultima_mensagem_em DESC LIMIT 500` (arquivo `src/pages/InboxMeta.tsx`, função `fetchContatos`).
+- A busca do Inbox filtra apenas em cima da lista já carregada em memória. Então qualquer conversa mais antiga que as 500 mais recentes some da tela e também não é encontrada quando você digita o nome/telefone — foi exatamente o que aconteceu com o Matheus.
 
-- Invocar `consultar-cotacao-diaria` via `supabase--curl_edge_functions` (com idempotência do dia — se já foi enviado hoje, forçar via chave alternativa `cotacao-manual-<timestamp>` num parâmetro opcional).
-- Ajuste mínimo na função: aceitar body opcional `{ forcar?: boolean }` que ignora a idempotência quando `true`, permitindo reenvio manual sem esperar 24h.
-- Consultar `admin_notificacoes_log` após execução para confirmar entrega em ambos os números.
+Não existe hoje nenhuma rotina que apague/arquive contatos Meta automaticamente. O sumiço é 100% por causa desse `LIMIT 500` do lado do cliente.
 
-## 2) Nova aba "Cotações"
+## O que vou fazer
 
-### Página `src/pages/Cotacoes.tsx`
-- Header com título + subtítulo explicando o evento (data base 15/07/2026).
-- **2 cards de destaque grandes** (USD e EUR):
-  - Valor atual do dia
-  - Valor mínimo histórico (em destaque com borda/badge dourado ou verde, ícone TrendingDown)
-  - Data do mínimo registrado
-  - Variação % entre atual e mínimo
-- **Gráfico de linha** (recharts, já disponível) com histórico dos últimos 30 dias por moeda.
-- **Tabela** com histórico completo (data, USD, EUR), marcando linhas que bateram mínimo com badge "Menor registrado".
-- Botão "Atualizar cotação agora" (admin-only) que chama a edge function com `forcar:true`.
+### 1) Fim do "some depois de X conversas" no Inbox Meta
 
-### Roteamento e nav
-- Adicionar rota `/cotacoes` em `src/App.tsx`.
-- Adicionar item de menu "Cotações" (ícone `DollarSign` ou `TrendingUp`) em `src/components/layout/AppLayout.tsx`, restrito a admin (segue padrão das outras abas administrativas).
+Ajustar `fetchContatos` em `src/pages/InboxMeta.tsx` para:
 
-### Acesso
-- Query direta em `cotacoes_moedas` e `cotacoes_minimas` via cliente supabase. RLS já restringe a admin (via `has_role`).
+- **Buscar do servidor quando o usuário pesquisa.** Enquanto a busca (`busca`) tiver texto, disparar uma query paralela no Supabase usando `.or('nome.ilike.%X%,telefone.ilike.%digits%')` (respeitando `arquivado` e `filtroInstancia`), com um `LIMIT` maior (ex.: 200 resultados). O resultado é mesclado com a lista já carregada, deduplicando por `id`. Assim, mesmo que o contato não esteja nas 500 mais recentes, ele aparece assim que você digita "Matheus" ou "8419".
+- **Aumentar o teto da lista padrão** de 500 para 2000 contatos não arquivados (usa o índice `idx_meta_wa_contatos_arq_ult` que já existe, custo desprezível).
+- Debounce de ~250ms na busca para não martelar o banco a cada tecla.
 
----
+Isso resolve o sintoma imediato (Matheus e todas as conversas antigas voltam a aparecer na pesquisa) sem mexer em nenhum dado.
 
-## Detalhes técnicos
+### 2) Política de retenção conforme sua regra
 
-- Sem novas tabelas nem migrations — reusa `cotacoes_moedas` e `cotacoes_minimas` criadas anteriormente.
-- Sem novos cron jobs, sem polling. `useQuery` com `staleTime` alto (5min) — sem impacto de custo.
-- Edge function editada: `consultar-cotacao-diaria` (parâmetro `forcar`).
-- Arquivos criados: `src/pages/Cotacoes.tsx`.
-- Arquivos editados: `src/App.tsx`, `src/components/layout/AppLayout.tsx`, `supabase/functions/consultar-cotacao-diaria/index.ts`.
+Criar edge function nova `meta-inbox-retention` + cron diário (03:00 BRT). Regra:
 
-## Impacto de custo
+- **Nunca toca em conversa que teve mensagem de entrada** (`ultima_msg_entrada_em IS NOT NULL`). Essas ficam pra sempre.
+- **Nunca toca em conversa fixada** (`fixado = true`), com etiquetas aplicadas, ou com mensagens não lidas.
+- Só **arquiva** (não apaga — `arquivado = true`) conversas onde: `ultima_msg_entrada_em IS NULL` **E** `ultima_mensagem_em < now() - 3 dias`. Ou seja: aberta por nós, cliente nunca respondeu, mais de 3 dias.
+- Arquivar (não deletar) preserva o histórico — se um dia o cliente responder, o webhook `meta-whatsapp-webhook` já sabe reabrir/atualizar o contato e ele volta pra aba principal.
 
-Desprezível — página lê 2 tabelas pequenas sob demanda, sem realtime nem refetch automático.
+Adicionar cron via migration (`supabase/migrations/...retention.sql`) chamando a function 1x/dia. Volume esperado é baixo, custo desprezível (respeita a memória "Cloud Cost Awareness").
+
+### 3) Sem migração destrutiva
+
+Não vou apagar nem alterar nenhum registro existente. O Matheus (e qualquer outra conversa antiga) volta a aparecer só com o fix do item 1.
+
+## Arquivos afetados
+
+- editar `src/pages/InboxMeta.tsx` (query server-side na busca + limite 2000 + debounce)
+- criar `supabase/functions/meta-inbox-retention/index.ts`
+- criar migration com o cron job
+- editar `supabase/config.toml` para registrar a nova function
+
+## Fora de escopo
+
+- Não vou mexer no Inbox UAZAPI (`WhatsAppInbox.tsx`), só no Meta oficial.
+- Não vou apagar mensagens antigas do `meta_whatsapp_mensagens` — a limpeza de mídia expirada já é feita por `cleanup-inbox-media` e continua como está.
