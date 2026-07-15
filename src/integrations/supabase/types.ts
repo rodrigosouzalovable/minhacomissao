@@ -3051,6 +3051,47 @@ export type Database = {
           },
         ]
       }
+      meta_instance_pagamentos: {
+        Row: {
+          criado_em: string
+          data_transacao: string
+          id: string
+          instance_id: string
+          numero_referencia: string
+          user_id: string
+          valor_brl: number | null
+          valor_usd: number
+        }
+        Insert: {
+          criado_em?: string
+          data_transacao: string
+          id?: string
+          instance_id: string
+          numero_referencia: string
+          user_id: string
+          valor_brl?: number | null
+          valor_usd?: number
+        }
+        Update: {
+          criado_em?: string
+          data_transacao?: string
+          id?: string
+          instance_id?: string
+          numero_referencia?: string
+          user_id?: string
+          valor_brl?: number | null
+          valor_usd?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_instance_pagamentos_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_templates_instancia: {
         Row: {
           atualizado_em: string
