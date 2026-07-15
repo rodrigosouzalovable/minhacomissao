@@ -953,7 +953,7 @@ export default function InboxMeta() {
                     </div>
                     <p>
                       Enviar texto livre agora reclassifica a conversa como <strong>MARKETING (~R$ 0,35/msg)</strong>.
-                      Para reabrir, envie um <strong>template UTILITY aprovado</strong> em <strong>Envio Meta (massa)</strong> ou
+                      Para reabrir, envie um <strong>template UTILITY aprovado</strong> em <strong>Envio Meta</strong> ou
                       aguarde o cliente responder.
                     </p>
                   </div>
