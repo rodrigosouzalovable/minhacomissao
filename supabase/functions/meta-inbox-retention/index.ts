@@ -1,0 +1,71 @@
+// Retenção do Inbox Meta:
+// Arquiva (não apaga) conversas onde NÓS abrimos e o cliente NUNCA respondeu,
+// após 3 dias sem atividade. Conversas com qualquer mensagem de entrada
+// (ultima_msg_entrada_em preenchida) NUNCA são tocadas.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  try {
+    const corte = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Contatos candidatos: sem entrada, não fixados, não arquivados,
+    // sem não lidas, com ultima_mensagem_em < 3 dias.
+    const { data: candidatos, error } = await supabase
+      .from("meta_whatsapp_contatos")
+      .select("id")
+      .is("ultima_msg_entrada_em", null)
+      .eq("arquivado", false)
+      .eq("fixado", false)
+      .eq("nao_lido", 0)
+      .lt("ultima_mensagem_em", corte)
+      .limit(5000);
+
+    if (error) throw error;
+    if (!candidatos?.length) {
+      return json({ ok: true, arquivados: 0, motivo: "nenhum candidato" });
+    }
+
+    // Exclui contatos que possuem etiquetas aplicadas (marca gestão manual)
+    const ids = candidatos.map((c: any) => c.id);
+    const { data: comEtiq } = await supabase
+      .from("meta_whatsapp_contato_etiquetas")
+      .select("contato_id")
+      .in("contato_id", ids);
+    const bloqueados = new Set((comEtiq || []).map((r: any) => r.contato_id));
+    const paraArquivar = ids.filter((id) => !bloqueados.has(id));
+
+    let arquivados = 0;
+    for (let i = 0; i < paraArquivar.length; i += 500) {
+      const slice = paraArquivar.slice(i, i + 500);
+      const { error: upE } = await supabase
+        .from("meta_whatsapp_contatos")
+        .update({ arquivado: true })
+        .in("id", slice);
+      if (!upE) arquivados += slice.length;
+    }
+
+    return json({ ok: true, arquivados, candidatos: ids.length, bloqueados_etiqueta: bloqueados.size });
+  } catch (e) {
+    console.error("[meta-inbox-retention]", e);
+    return json({ ok: false, error: (e as Error).message }, 500);
+  }
+});
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
