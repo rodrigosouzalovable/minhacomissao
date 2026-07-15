@@ -1,8 +1,8 @@
 // Extrai valor pago (USD), número de referência e data da transação
 // de um PDF de fatura da Meta (WhatsApp Business). NÃO persiste o PDF.
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
-// @ts-ignore - deno esm
-import { getDocument } from 'https://esm.sh/pdfjs-serverless@0.5.0';
+// @ts-ignore - npm module
+import { extractText, getDocumentProxy } from 'npm:unpdf@0.12.1';
 
 const MESES: Record<string, number> = {
   jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
@@ -20,16 +20,11 @@ function parseDataPt(raw: string): string | null {
   return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 
-async function extractText(base64: string): Promise<string> {
+async function extractPdfText(base64: string): Promise<string> {
   const bin = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const doc = await getDocument({ data: bin, useSystemFonts: true }).promise;
-  let out = '';
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const content = await page.getTextContent();
-    out += content.items.map((it: any) => it.str).join('\n') + '\n';
-  }
-  return out;
+  const pdf = await getDocumentProxy(bin);
+  const { text } = await extractText(pdf, { mergePages: true });
+  return Array.isArray(text) ? text.join('\n') : String(text || '');
 }
 
 Deno.serve(async (req) => {
@@ -43,7 +38,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const texto = await extractText(pdf_base64);
+    const texto = await extractPdfText(pdf_base64);
 
     // Número de referência: "Número de referência: AX3HGVZLU2"
     const refMatch = texto.match(/N[úu]mero de refer[êe]ncia\s*:?\s*([A-Z0-9]{6,})/i);
