@@ -16,7 +16,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
 import CustosDetalhadosDialog from "@/components/meta/CustosDetalhadosDialog";
-import { DollarSign } from "lucide-react";
+import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
+import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -82,6 +83,102 @@ export default function ConfigurarMeta() {
   const [bms, setBms] = useState<BM[]>([]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
+
+  // Importação de PDF de fatura Meta
+  const pag = useMetaInstancePagamentos();
+  const [importInstId, setImportInstId] = useState<string | null>(null);
+  const [parsingPdf, setParsingPdf] = useState(false);
+  const [confirmPag, setConfirmPag] = useState<null | {
+    instance_id: string;
+    valor_usd: string;
+    numero_referencia: string;
+    data_transacao: string;
+  }>(null);
+  const [showHistId, setShowHistId] = useState<string | null>(null);
+
+  const abrirImportPdf = (instId: string) => {
+    setImportInstId(instId);
+    // Dispara input file oculto criado abaixo
+    const el = document.getElementById("meta-pdf-input") as HTMLInputElement | null;
+    if (el) {
+      el.value = "";
+      el.click();
+    }
+  };
+
+  const onPdfSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const instId = importInstId;
+    if (!file || !instId) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Selecione um arquivo PDF");
+      return;
+    }
+    setParsingPdf(true);
+    try {
+      const buf = await file.arrayBuffer();
+      // base64
+      let bin = "";
+      const bytes = new Uint8Array(buf);
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+      }
+      const b64 = btoa(bin);
+      const { data, error } = await supabase.functions.invoke("parse-meta-invoice-pdf", {
+        body: { pdf_base64: b64 },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha ao ler PDF");
+      setConfirmPag({
+        instance_id: instId,
+        valor_usd: data.valor_usd != null ? String(data.valor_usd) : "",
+        numero_referencia: data.numero_referencia || "",
+        data_transacao: data.data_transacao || "",
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "Falha ao processar PDF");
+    } finally {
+      setParsingPdf(false);
+      setImportInstId(null);
+    }
+  };
+
+  const salvarPagamento = async () => {
+    if (!confirmPag) return;
+    const valor = Number(confirmPag.valor_usd);
+    if (!valor || isNaN(valor)) return toast.error("Valor inválido");
+    if (!confirmPag.numero_referencia) return toast.error("Número de referência obrigatório");
+    if (!confirmPag.data_transacao) return toast.error("Data obrigatória");
+    try {
+      await pag.inserir.mutateAsync({
+        instance_id: confirmPag.instance_id,
+        valor_usd: valor,
+        numero_referencia: confirmPag.numero_referencia.trim(),
+        data_transacao: confirmPag.data_transacao,
+      });
+      toast.success("Pagamento registrado");
+      setConfirmPag(null);
+    } catch (err: any) {
+      if (String(err?.message || "").includes("duplicate")) {
+        toast.error("Esta fatura já foi importada (número de referência duplicado)");
+      } else {
+        toast.error(err?.message || "Erro ao salvar");
+      }
+    }
+  };
+
+  const abrirBillingHub = (inst: Instancia) => {
+    const bm = bms.find((b) => b.id === inst.meta_bm_id);
+    const bid = bm?.business_id || inst.business_id;
+    if (!bid) {
+      toast.error("Vincule uma BM com Business ID para abrir a atividade de pagamento");
+      return;
+    }
+    const url = `https://business.facebook.com/latest/billing_hub/payment_activity/?business_id=${bid}&asset_id=${inst.waba_id}&placement=BILLING_HUB_WHATSAPP_ACCOUNT_LIST`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   
 
   const [assinando, setAssinando] = useState(false);
@@ -578,11 +675,46 @@ export default function ConfigurarMeta() {
         </TabsList>
 
         <TabsContent value="instancias">
+          {/* Totalizador de faturas Meta importadas */}
+          <Card className="mb-4 border-emerald-500/40 bg-emerald-500/5">
+            <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-emerald-500/10 p-2">
+                  <CreditCard className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="font-semibold">Total gasto (faturas Meta importadas)</div>
+                  <p className="text-sm text-muted-foreground">
+                    Soma manual das faturas PDF importadas em cada instância. Use para conciliar com as cobranças do seu cartão.
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-emerald-700">
+                  US$ {pag.totalUsd.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {pag.pagamentos.length} fatura(s) registrada(s)
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Input escondido para importar PDF */}
+          <input
+            id="meta-pdf-input"
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={onPdfSelected}
+          />
+
           <div className="flex justify-end mb-3">
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" /> Nova instância
             </Button>
           </div>
+
 
           {loading ? (
             <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
@@ -641,6 +773,28 @@ export default function ConfigurarMeta() {
                             title="Abrir no Gerenciador do WhatsApp da Meta (usa a BM vinculada)"
                           >
                             <ExternalLink className="h-3 w-3 mr-1" /> WhatsApp Manager
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => abrirBillingHub(inst)}
+                            disabled={!inst.waba_id}
+                            title="Abrir Atividade de pagamento no Meta Business"
+                          >
+                            <CreditCard className="h-3 w-3 mr-1" /> Faturamento
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => abrirImportPdf(inst.id)}
+                            disabled={parsingPdf}
+                            title="Importar PDF de fatura e registrar valor pago"
+                          >
+                            {parsingPdf && importInstId === inst.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <><Upload className="h-3 w-3 mr-1" />Importar fatura</>
+                            )}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
                             {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
@@ -774,9 +928,81 @@ export default function ConfigurarMeta() {
                           <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
                         </Button>
                       </div>
+
+                      {/* Faturas Meta importadas — histórico + total */}
+                      <div className="pt-3 border-t border-border/60">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                            <span className="font-semibold">Faturas importadas:</span>
+                            <span className="font-bold text-emerald-700">
+                              US$ {pag.totalPorInstancia(inst.id).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-muted-foreground">
+                              ({pag.porInstancia(inst.id).length})
+                            </span>
+                          </div>
+                          {pag.porInstancia(inst.id).length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => setShowHistId(showHistId === inst.id ? null : inst.id)}
+                            >
+                              {showHistId === inst.id ? "Ocultar histórico" : "Ver histórico"}
+                            </Button>
+                          )}
+                        </div>
+                        {showHistId === inst.id && (
+                          <div className="mt-2 rounded-md border border-border/60 overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-xs">Data</TableHead>
+                                  <TableHead className="text-xs">Referência</TableHead>
+                                  <TableHead className="text-xs text-right">Valor (US$)</TableHead>
+                                  <TableHead className="w-10"></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {pag.porInstancia(inst.id).map((p) => (
+                                  <TableRow key={p.id}>
+                                    <TableCell className="text-xs">
+                                      {new Date(p.data_transacao + "T00:00:00").toLocaleDateString("pt-BR")}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono">{p.numero_referencia}</TableCell>
+                                    <TableCell className="text-xs text-right font-medium">
+                                      {Number(p.valor_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0"
+                                        onClick={async () => {
+                                          if (!confirm("Excluir este registro?")) return;
+                                          try {
+                                            await pag.remover.mutateAsync(p.id);
+                                            toast.success("Removido");
+                                          } catch (e: any) {
+                                            toast.error(e?.message || "Erro");
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-3 w-3 text-destructive" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
+
               ))}
             </div>
           )}
@@ -981,7 +1207,56 @@ export default function ConfigurarMeta() {
         onOpenChange={(o) => !o && setPreviewTpl(null)}
         onSaved={carregar}
       />
+
+      {/* Dialog de confirmação de pagamento importado */}
+      <Dialog open={!!confirmPag} onOpenChange={(o) => !o && setConfirmPag(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar dados da fatura</DialogTitle>
+          </DialogHeader>
+          {confirmPag && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Confira os dados extraídos do PDF. Você pode ajustar antes de salvar. O PDF não será armazenado.
+              </p>
+              <div>
+                <Label className="text-xs">Data da transação</Label>
+                <Input
+                  type="date"
+                  value={confirmPag.data_transacao}
+                  onChange={(e) => setConfirmPag({ ...confirmPag, data_transacao: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Número de referência</Label>
+                <Input
+                  value={confirmPag.numero_referencia}
+                  onChange={(e) => setConfirmPag({ ...confirmPag, numero_referencia: e.target.value })}
+                  placeholder="AX3HGVZLU2"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Valor pago (US$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={confirmPag.valor_usd}
+                  onChange={(e) => setConfirmPag({ ...confirmPag, valor_usd: e.target.value })}
+                  placeholder="1.22"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmPag(null)}>Cancelar</Button>
+            <Button onClick={salvarPagamento} disabled={pag.inserir.isPending}>
+              {pag.inserir.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </AppLayout>
+
   );
 }
