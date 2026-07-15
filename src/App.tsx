@@ -61,6 +61,7 @@ const InboxMeta = lazy(() => import("./pages/InboxMeta"));
 const MetaBilling = lazy(() => import("./pages/MetaBilling"));
 const MetaTemplates = lazy(() => import("./pages/MetaTemplates"));
 const Consultoria = lazy(() => import("./pages/Consultoria"));
+const Cotacoes = lazy(() => import("./pages/Cotacoes"));
 
 const queryClient = new QueryClient();
 
@@ -222,6 +223,7 @@ const App = () => (
             <Route path="/admin/inbox-meta" element={<PermissionRoute><InboxMeta /></PermissionRoute>} />
             <Route path="/admin/meta-billing" element={<AdminRoute><MetaBilling /></AdminRoute>} />
             <Route path="/admin/meta-templates" element={<AdminRoute><MetaTemplates /></AdminRoute>} />
+            <Route path="/admin/cotacoes" element={<AdminRoute><Cotacoes /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>

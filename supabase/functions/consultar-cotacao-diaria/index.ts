@@ -24,13 +24,37 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let forcar = false;
   try {
-    // Busca cotação AwesomeAPI (pública, sem chave)
-    const res = await fetch("https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL");
-    if (!res.ok) throw new Error(`AwesomeAPI HTTP ${res.status}`);
-    const data = await res.json();
-    const usd = parseFloat(data?.USDBRL?.bid);
-    const eur = parseFloat(data?.EURBRL?.bid);
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      forcar = Boolean(body?.forcar);
+    }
+  } catch (_) {}
+
+  try {
+    // Busca cotação: tenta AwesomeAPI primeiro, cai para open.er-api.com (BRL) se falhar
+    let usd = NaN;
+    let eur = NaN;
+    try {
+      const res = await fetch("https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL");
+      if (res.ok) {
+        const data = await res.json();
+        usd = parseFloat(data?.USDBRL?.bid);
+        eur = parseFloat(data?.EURBRL?.bid);
+      }
+    } catch (_) {}
+
+    if (!Number.isFinite(usd) || !Number.isFinite(eur)) {
+      // Fallback: open.er-api.com (BRL base) — retorna quanto 1 BRL vale em USD/EUR; invertemos
+      const res2 = await fetch("https://open.er-api.com/v6/latest/BRL");
+      if (!res2.ok) throw new Error(`fallback HTTP ${res2.status}`);
+      const d2 = await res2.json();
+      const usdRate = Number(d2?.rates?.USD);
+      const eurRate = Number(d2?.rates?.EUR);
+      if (usdRate > 0) usd = 1 / usdRate;
+      if (eurRate > 0) eur = 1 / eurRate;
+    }
     if (!Number.isFinite(usd) || !Number.isFinite(eur)) throw new Error("cotacao_invalida");
 
     const nowBrt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
@@ -77,7 +101,7 @@ Deno.serve(async (req) => {
     }
 
     const mensagem = linhas.join("\n");
-    const chave = `cotacao-${hoje}`;
+    const chave = forcar ? `cotacao-manual-${Date.now()}` : `cotacao-${hoje}`;
 
     const result = await notificarNumeros(supabase, {
       tipo: "cotacao_diaria",

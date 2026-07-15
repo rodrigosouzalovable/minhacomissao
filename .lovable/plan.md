@@ -1,90 +1,46 @@
 ## Objetivo
 
-1. **Relatório de aquecimento Meta** — WhatsApp diário às 12h e 18h BRT com status ping-pong dos números Meta.
-2. **Cotação USD/EUR** — consulta diária com notificação do valor atual e do menor valor histórico registrado (data-base 15/07/2026 fixa na mensagem).
-3. Ambos enviados para **62991672674** e **62994300880**.
+1. Reexecutar manualmente a edge function `consultar-cotacao-diaria` para validar o envio das mensagens de cotação aos números 62991672674 e 62994300880.
+2. Criar nova aba **Cotações** no sistema para acompanhamento visual das moedas USD/EUR, destacando sempre o menor valor histórico.
 
 ---
 
-## 1) Relatório de aquecimento Meta
+## 1) Teste de envio
 
-### Nova edge function: `meta-aquecimento-relatorio`
-Lê últimas 24h de `meta_aquecimento_pares` + `meta_instance_daily_metrics` + `meta_whatsapp_instances` e monta mensagem com:
+- Invocar `consultar-cotacao-diaria` via `supabase--curl_edge_functions` (com idempotência do dia — se já foi enviado hoje, forçar via chave alternativa `cotacao-manual-<timestamp>` num parâmetro opcional).
+- Ajuste mínimo na função: aceitar body opcional `{ forcar?: boolean }` que ignora a idempotência quando `true`, permitindo reenvio manual sem esperar 24h.
+- Consultar `admin_notificacoes_log` após execução para confirmar entrega em ambos os números.
 
-- Total de trocas nas últimas 24h e hoje
-- Por instância: nome, qualidade (GREEN/YELLOW/RED), estado_pool, quantas mensagens enviou/recebeu no aquecimento
-- Matriz emissor → receptor (quem mandou pra quem e quantas vezes)
-- Instâncias inelegíveis (pausadas, RED, banidas) com motivo
-- Se aquecimento está ativo/inativo e template configurado
+## 2) Nova aba "Cotações"
 
-Envio via helper `notificarAdmin` (round-robin UAZAPI) — mas mandando para os 2 números fixos definidos no código (não usa `admin_phone`), reaproveitando a lógica de escolha de instância conectada.
+### Página `src/pages/Cotacoes.tsx`
+- Header com título + subtítulo explicando o evento (data base 15/07/2026).
+- **2 cards de destaque grandes** (USD e EUR):
+  - Valor atual do dia
+  - Valor mínimo histórico (em destaque com borda/badge dourado ou verde, ícone TrendingDown)
+  - Data do mínimo registrado
+  - Variação % entre atual e mínimo
+- **Gráfico de linha** (recharts, já disponível) com histórico dos últimos 30 dias por moeda.
+- **Tabela** com histórico completo (data, USD, EUR), marcando linhas que bateram mínimo com badge "Menor registrado".
+- Botão "Atualizar cotação agora" (admin-only) que chama a edge function com `forcar:true`.
 
-### Agendamento
-`pg_cron` 2x/dia: `0 15 * * *` e `0 21 * * *` (12h e 18h BRT em UTC) → `net.http_post` para a função.
+### Roteamento e nav
+- Adicionar rota `/cotacoes` em `src/App.tsx`.
+- Adicionar item de menu "Cotações" (ícone `DollarSign` ou `TrendingUp`) em `src/components/layout/AppLayout.tsx`, restrito a admin (segue padrão das outras abas administrativas).
 
----
-
-## 2) Cotação USD/EUR + menor histórico
-
-### Nova tabela: `cotacoes_moedas`
-```
-id, data (date, unique), usd numeric, eur numeric, created_at
-```
-Grants padrão + RLS (admin-only leitura via `has_role`).
-
-### Nova tabela: `cotacoes_minimas`
-```
-moeda text pk ('USD','EUR'), valor numeric, data_registro date, updated_at
-```
-Guarda o menor valor histórico por moeda.
-
-### Nova edge function: `consultar-cotacao-diaria`
-- Busca cotação atual USD e EUR via API pública AwesomeAPI (`https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL`) — sem chave.
-- Insere em `cotacoes_moedas` (upsert por data).
-- Compara com `cotacoes_minimas`; se menor, atualiza.
-- Monta mensagem:
-  > 💱 *Cotação do dia*
-  > Hoje o valor do dólar é R$ 5,10 e o euro é R$ 5,83.
-  > Menor valor registrado: USD R$ 5,05 e EUR R$ 5,70, desde 15/07/2026.
-- Se bateu novo mínimo, adiciona "🎉 Novo mínimo histórico registrado hoje!".
-- Envia para os 2 números via helper compartilhado.
-
-### Agendamento
-`pg_cron` 1x/dia às 09h BRT (`0 12 * * *` UTC).
+### Acesso
+- Query direta em `cotacoes_moedas` e `cotacoes_minimas` via cliente supabase. RLS já restringe a admin (via `has_role`).
 
 ---
 
-## 3) Refactor do helper de envio
+## Detalhes técnicos
 
-Ajustar `_shared/notificar-admin.ts` (ou criar `_shared/notificar-numeros.ts`) para aceitar **lista de números** em vez de só ler `admin_phone`. Mantém round-robin de instâncias UAZAPI conectadas, idempotência via `admin_notificacoes_log`. Reutilizado pelas duas features.
+- Sem novas tabelas nem migrations — reusa `cotacoes_moedas` e `cotacoes_minimas` criadas anteriormente.
+- Sem novos cron jobs, sem polling. `useQuery` com `staleTime` alto (5min) — sem impacto de custo.
+- Edge function editada: `consultar-cotacao-diaria` (parâmetro `forcar`).
+- Arquivos criados: `src/pages/Cotacoes.tsx`.
+- Arquivos editados: `src/App.tsx`, `src/components/layout/AppLayout.tsx`, `supabase/functions/consultar-cotacao-diaria/index.ts`.
 
----
+## Impacto de custo
 
-## Estrutura técnica (para revisão)
-
-**Migrations:**
-- `cotacoes_moedas` + `cotacoes_minimas` (com GRANTs e RLS admin-only)
-- Seed em `cotacoes_minimas` com valores iniciais nulos (primeira execução preenche)
-- `pg_cron` jobs via `supabase--insert` (contém URL+anon key)
-
-**Edge functions novas:**
-- `meta-aquecimento-relatorio/index.ts`
-- `consultar-cotacao-diaria/index.ts`
-
-**Edge functions editadas:**
-- `_shared/notificar-admin.ts` — novo parâmetro opcional `destinatarios: string[]`
-
-**Config:**
-- `supabase/config.toml` — `verify_jwt = false` para as 2 novas funções
-
-**Sem alterações de UI** — tudo backend/agendado.
-
----
-
-## Alerta de custo (Cloud)
-
-- 2 novos cron jobs: aquecimento-relatorio (2x/dia = 60/mês) + cotacao (1x/dia = 30/mês). Baixo impacto (~90 execuções/mês somadas, cada uma < 5s).
-- API AwesomeAPI é gratuita e sem chave.
-- Sem polling novo no cliente, sem realtime channel novo.
-
-**Impacto estimado: desprezível.** Prossigo?
+Desprezível — página lê 2 tabelas pequenas sob demanda, sem realtime nem refetch automático.
