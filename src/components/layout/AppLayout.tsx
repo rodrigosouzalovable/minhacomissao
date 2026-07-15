@@ -31,7 +31,8 @@ import {
   Bell,
   MessageSquareText,
   Send,
-  CreditCard
+  CreditCard,
+  Coins
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -104,6 +105,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/notificacoes', label: 'Notificações', icon: Bell, adminOnly: true },
   { href: '/estrategias', label: 'Estratégias', icon: Target },
   { href: '/modelo-mensagem', label: 'Modelo Mensagem', icon: MessageSquareText },
+  { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
