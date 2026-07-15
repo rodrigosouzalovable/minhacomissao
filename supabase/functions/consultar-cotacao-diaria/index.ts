@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     }
 
     const mensagem = linhas.join("\n");
-    const chave = `cotacao-${hoje}`;
+    const chave = forcar ? `cotacao-manual-${Date.now()}` : `cotacao-${hoje}`;
 
     const result = await notificarNumeros(supabase, {
       tipo: "cotacao_diaria",
