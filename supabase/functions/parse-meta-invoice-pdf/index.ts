@@ -1,8 +1,8 @@
 // Extrai valor pago (USD), número de referência e data da transação
 // de um PDF de fatura da Meta (WhatsApp Business). NÃO persiste o PDF.
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
-// @ts-ignore - deno esm
-import { getDocument } from 'https://esm.sh/pdfjs-serverless@0.5.0';
+// @ts-ignore - npm module
+import { extractText, getDocumentProxy } from 'npm:unpdf@0.12.1';
 
 const MESES: Record<string, number> = {
   jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
