@@ -35,6 +35,10 @@ type Instancia = {
   criado_em: string;
   saude_tier?: string | null;
   saude_quality?: string | null;
+  saude_status?: string | null;
+  saude_ban_info?: any;
+  saude_name_status?: string | null;
+  saude_checked_at?: string | null;
   messaging_limit_manual?: string | null;
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
