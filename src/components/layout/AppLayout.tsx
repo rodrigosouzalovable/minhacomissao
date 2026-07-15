@@ -94,7 +94,7 @@ export const navItems: NavItem[] = [
   { href: '/monitor-envios', label: 'Monitor Envios', icon: Activity, adminOnly: true },
   { href: '/admin/configurar-meta', label: 'API Oficial Meta', icon: MessageSquare, adminOnly: true },
   { href: '/admin/inbox-meta', label: 'Inbox Meta Oficial', icon: MessageSquare, adminOnly: true },
-  { href: '/admin/envio-meta', label: 'Envio Meta (massa)', icon: Send, adminOnly: true },
+  { href: '/admin/envio-meta', label: 'Envio Meta', icon: Send, adminOnly: true },
   { href: '/admin/meta-billing', label: 'Cobranças Meta', icon: CreditCard, adminOnly: true },
   { href: '/admin/meta-templates', label: 'Templates Meta', icon: MessageSquareText, adminOnly: true },
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },

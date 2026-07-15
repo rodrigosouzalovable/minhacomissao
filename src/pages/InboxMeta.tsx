@@ -455,7 +455,7 @@ export default function InboxMeta() {
     const raw = (textoCustom ?? '').trim();
     if (!contatoAtivo || !raw || enviando) return;
     if (!janelaInfo.aberta) {
-      toast({ title: 'Janela 24h fechada', description: 'Envie um template UTILITY em Envio Meta (massa) para reabrir. Texto livre agora custaria como MARKETING.', variant: 'destructive' });
+      toast({ title: 'Janela 24h fechada', description: 'Envie um template UTILITY em Envio Meta para reabrir. Texto livre agora custaria como MARKETING.', variant: 'destructive' });
       return;
     }
     const t = formatarMensagemAtendente(raw);
@@ -953,7 +953,7 @@ export default function InboxMeta() {
                     </div>
                     <p>
                       Enviar texto livre agora reclassifica a conversa como <strong>MARKETING (~R$ 0,35/msg)</strong>.
-                      Para reabrir, envie um <strong>template UTILITY aprovado</strong> em <strong>Envio Meta (massa)</strong> ou
+                      Para reabrir, envie um <strong>template UTILITY aprovado</strong> em <strong>Envio Meta</strong> ou
                       aguarde o cliente responder.
                     </p>
                   </div>

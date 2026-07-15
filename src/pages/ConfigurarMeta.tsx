@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle, ExternalLink, Pencil } from "lucide-react";
+import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
@@ -35,6 +36,10 @@ type Instancia = {
   criado_em: string;
   saude_tier?: string | null;
   saude_quality?: string | null;
+  saude_status?: string | null;
+  saude_ban_info?: any;
+  saude_name_status?: string | null;
+  saude_checked_at?: string | null;
   messaging_limit_manual?: string | null;
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
@@ -616,6 +621,7 @@ export default function ConfigurarMeta() {
                               </Badge>
                             );
                           })()}
+                          <MetaHealthStatusRow inst={inst} />
                         </div>
                         <div className="flex gap-1 flex-wrap justify-end shrink-0">
                           <Button
