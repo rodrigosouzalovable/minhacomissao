@@ -92,6 +92,8 @@ export default function InboxMeta() {
   const [contatoAtivo, setContatoAtivo] = useState<MetaContato | null>(null);
   const [mensagens, setMensagens] = useState<MetaMensagem[]>([]);
   const [busca, setBusca] = useState('');
+  const [buscaDebounced, setBuscaDebounced] = useState('');
+
   // texto local vive no Composer (evita re-render do inbox inteiro por tecla)
   const [enviando, setEnviando] = useState(false);
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
@@ -214,15 +216,56 @@ export default function InboxMeta() {
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
+    const selectCols = 'id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado';
+    // Lista base: 2000 mais recentes (usa idx_meta_wa_contatos_arq_ult).
     let q = supabase.from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado')
+      .select(selectCols)
       .eq('arquivado', abaAtiva === 'arquivados')
       .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
-      .limit(500);
+      .limit(2000);
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
-    const { data } = await q;
-    setContatos((data as MetaContato[]) ?? []);
-  }, [user, filtroInstancia, abaAtiva]);
+    const { data: base } = await q;
+    let combinados: MetaContato[] = (base as MetaContato[]) ?? [];
+
+    // Busca server-side: se usuário digitou algo, procura no banco inteiro
+    // e mescla com a lista base para nunca "sumir" conversas antigas.
+    const bRaw = buscaDebounced.trim();
+
+    if (bRaw) {
+      const bDigits = bRaw.replace(/\D/g, '');
+      const orParts: string[] = [];
+      // ilike com escape básico de vírgulas e parênteses
+      const safeText = bRaw.replace(/[,()%]/g, ' ').trim();
+      if (safeText) orParts.push(`nome.ilike.%${safeText}%`);
+      if (bDigits) orParts.push(`telefone.ilike.%${bDigits}%`);
+      if (orParts.length) {
+        let qs = supabase.from('meta_whatsapp_contatos')
+          .select(selectCols)
+          .eq('arquivado', abaAtiva === 'arquivados')
+          .or(orParts.join(','))
+          .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
+          .limit(200);
+        if (filtroInstancia !== 'todas') qs = qs.eq('instancia_id', filtroInstancia);
+        const { data: extras } = await qs;
+        if (extras?.length) {
+          const seen = new Set(combinados.map(c => c.id));
+          for (const e of extras as MetaContato[]) {
+            if (!seen.has(e.id)) { combinados.push(e); seen.add(e.id); }
+          }
+        }
+      }
+    }
+
+    setContatos(combinados);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced]);
+
+  // Debounce da busca — evita bater no banco a cada tecla
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 250);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
