@@ -123,3 +123,9 @@ verify_jwt = false
 
 [functions.get-group-jid]
 verify_jwt = false
+
+[functions.meta-aquecimento-relatorio]
+verify_jwt = false
+
+[functions.consultar-cotacao-diaria]
+verify_jwt = false
