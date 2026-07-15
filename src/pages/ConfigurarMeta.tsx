@@ -83,6 +83,102 @@ export default function ConfigurarMeta() {
   const [bms, setBms] = useState<BM[]>([]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
+
+  // Importação de PDF de fatura Meta
+  const pag = useMetaInstancePagamentos();
+  const [importInstId, setImportInstId] = useState<string | null>(null);
+  const [parsingPdf, setParsingPdf] = useState(false);
+  const [confirmPag, setConfirmPag] = useState<null | {
+    instance_id: string;
+    valor_usd: string;
+    numero_referencia: string;
+    data_transacao: string;
+  }>(null);
+  const [showHistId, setShowHistId] = useState<string | null>(null);
+
+  const abrirImportPdf = (instId: string) => {
+    setImportInstId(instId);
+    // Dispara input file oculto criado abaixo
+    const el = document.getElementById("meta-pdf-input") as HTMLInputElement | null;
+    if (el) {
+      el.value = "";
+      el.click();
+    }
+  };
+
+  const onPdfSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const instId = importInstId;
+    if (!file || !instId) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Selecione um arquivo PDF");
+      return;
+    }
+    setParsingPdf(true);
+    try {
+      const buf = await file.arrayBuffer();
+      // base64
+      let bin = "";
+      const bytes = new Uint8Array(buf);
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+      }
+      const b64 = btoa(bin);
+      const { data, error } = await supabase.functions.invoke("parse-meta-invoice-pdf", {
+        body: { pdf_base64: b64 },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha ao ler PDF");
+      setConfirmPag({
+        instance_id: instId,
+        valor_usd: data.valor_usd != null ? String(data.valor_usd) : "",
+        numero_referencia: data.numero_referencia || "",
+        data_transacao: data.data_transacao || "",
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "Falha ao processar PDF");
+    } finally {
+      setParsingPdf(false);
+      setImportInstId(null);
+    }
+  };
+
+  const salvarPagamento = async () => {
+    if (!confirmPag) return;
+    const valor = Number(confirmPag.valor_usd);
+    if (!valor || isNaN(valor)) return toast.error("Valor inválido");
+    if (!confirmPag.numero_referencia) return toast.error("Número de referência obrigatório");
+    if (!confirmPag.data_transacao) return toast.error("Data obrigatória");
+    try {
+      await pag.inserir.mutateAsync({
+        instance_id: confirmPag.instance_id,
+        valor_usd: valor,
+        numero_referencia: confirmPag.numero_referencia.trim(),
+        data_transacao: confirmPag.data_transacao,
+      });
+      toast.success("Pagamento registrado");
+      setConfirmPag(null);
+    } catch (err: any) {
+      if (String(err?.message || "").includes("duplicate")) {
+        toast.error("Esta fatura já foi importada (número de referência duplicado)");
+      } else {
+        toast.error(err?.message || "Erro ao salvar");
+      }
+    }
+  };
+
+  const abrirBillingHub = (inst: Instancia) => {
+    const bm = bms.find((b) => b.id === inst.meta_bm_id);
+    const bid = bm?.business_id || inst.business_id;
+    if (!bid) {
+      toast.error("Vincule uma BM com Business ID para abrir a atividade de pagamento");
+      return;
+    }
+    const url = `https://business.facebook.com/latest/billing_hub/payment_activity/?business_id=${bid}&asset_id=${inst.waba_id}&placement=BILLING_HUB_WHATSAPP_ACCOUNT_LIST`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   
 
   const [assinando, setAssinando] = useState(false);
