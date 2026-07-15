@@ -16,7 +16,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
 import CustosDetalhadosDialog from "@/components/meta/CustosDetalhadosDialog";
-import { DollarSign } from "lucide-react";
+import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
+import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
