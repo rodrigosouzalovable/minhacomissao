@@ -1421,20 +1421,6 @@ export default function EnvioMeta() {
   );
 }
 
-function SaudeBadgeStatus({ status }: { status?: string | null }) {
-  if (!status) return null;
-  const s = status.toUpperCase();
-  const variant: any = s === "CONNECTED" ? "default" : (s === "FLAGGED" || s === "RESTRICTED" || s === "DISCONNECTED") ? "destructive" : "secondary";
-  const cls = s === "CONNECTED" ? "bg-green-600 hover:bg-green-600 text-white" : "";
-  return <Badge variant={variant} className={`text-[10px] px-1.5 py-0 ${cls}`}>{s}</Badge>;
-}
-
-function SaudeBadgeQuality({ quality }: { quality?: string | null }) {
-  if (!quality) return null;
-  const q = quality.toUpperCase();
-  const cls = q === "GREEN" ? "bg-green-600 text-white" : q === "YELLOW" ? "bg-yellow-500 text-white" : q === "RED" ? "bg-red-600 text-white" : "";
-  return <Badge className={`text-[10px] px-1.5 py-0 ${cls}`}>QUALIDADE {q}</Badge>;
-}
 
 function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
   detalhes: {
