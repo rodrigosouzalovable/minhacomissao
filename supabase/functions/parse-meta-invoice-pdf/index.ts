@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const texto = await extractText(pdf_base64);
+    const texto = await extractPdfText(pdf_base64);
 
     // Número de referência: "Número de referência: AX3HGVZLU2"
     const refMatch = texto.match(/N[úu]mero de refer[êe]ncia\s*:?\s*([A-Z0-9]{6,})/i);
