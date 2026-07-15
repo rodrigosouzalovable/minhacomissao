@@ -229,7 +229,8 @@ export default function InboxMeta() {
 
     // Busca server-side: se usuário digitou algo, procura no banco inteiro
     // e mescla com a lista base para nunca "sumir" conversas antigas.
-    const bRaw = busca.trim();
+    const bRaw = buscaDebounced.trim();
+
     if (bRaw) {
       const bDigits = bRaw.replace(/\D/g, '');
       const orParts: string[] = [];
