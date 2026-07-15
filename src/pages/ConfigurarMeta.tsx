@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle, ExternalLink, Pencil } from "lucide-react";
+import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
