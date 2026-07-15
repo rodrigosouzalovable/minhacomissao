@@ -621,6 +621,7 @@ export default function ConfigurarMeta() {
                               </Badge>
                             );
                           })()}
+                          <MetaHealthStatusRow inst={inst} />
                         </div>
                         <div className="flex gap-1 flex-wrap justify-end shrink-0">
                           <Button
