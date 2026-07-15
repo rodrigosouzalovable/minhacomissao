@@ -257,7 +257,14 @@ export default function InboxMeta() {
     }
 
     setContatos(combinados);
-  }, [user, filtroInstancia, abaAtiva, busca]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced]);
+
+  // Debounce da busca — evita bater no banco a cada tecla
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 250);
+    return () => clearTimeout(t);
+  }, [busca]);
+
 
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
