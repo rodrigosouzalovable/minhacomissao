@@ -30,11 +30,30 @@ serve(async (req) => {
       .select('*').eq('id', instancia_id).maybeSingle();
     if (ie || !inst) throw new Error('Instância não encontrada');
 
+    if (!inst.waba_id) {
+      return new Response(JSON.stringify({ success: false, error: 'WABA ID não configurado nesta instância', fallback: true }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const res = await fetch(`https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates?limit=200`, {
       headers: { Authorization: `Bearer ${inst.access_token}` },
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data?.error?.message || 'Falha ao buscar templates');
+    if (!res.ok) {
+      const msg = data?.error?.message || `HTTP ${res.status}`;
+      const code = data?.error?.code;
+      // Erros de permissão/objeto inexistente (100, 190, 200) — retorna 200 com fallback
+      // para não quebrar a UI. Usuário precisa revisar WABA ID / access token.
+      const isFallbackable = code === 100 || code === 190 || code === 200 || res.status === 400 || res.status === 401 || res.status === 403;
+      return new Response(JSON.stringify({
+        success: false,
+        error: msg,
+        fallback: isFallbackable,
+        hint: isFallbackable ? 'Verifique se o WABA ID e o Access Token da instância estão corretos e com permissões whatsapp_business_management.' : undefined,
+      }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const templates = data.data || [];
     let synced = 0;
