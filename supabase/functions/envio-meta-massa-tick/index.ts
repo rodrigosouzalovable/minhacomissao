@@ -329,10 +329,12 @@ async function processarItem(job: any): Promise<ItemResult> {
   const proximoEm = new Date(Date.now() + delayMs).toISOString();
 
   // Persiste os contadores/bloqueios de instâncias no job
-  await supabase.from('envio_meta_job').update({
+  const updateJob: Record<string, unknown> = {
     falhas_por_instancia_run: falhasMap,
     instancias_bloqueadas_run: bloqueadasRunAtual,
-  }).eq('id', job.id);
+  };
+  if (ok) updateJob.ultima_instancia_id = instId;
+  await supabase.from('envio_meta_job').update(updateJob).eq('id', job.id);
 
   // Se todas as instâncias foram bloqueadas → encerra o job
   if (restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
