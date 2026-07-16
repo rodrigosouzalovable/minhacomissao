@@ -73,6 +73,25 @@ Deno.serve(async (req) => {
         : null;
     const vinculo_confiavel = Boolean(wabaMatch || phoneMatch);
 
+    // Status do pagamento: procura próximo do rótulo "Status do pagamento"
+    // e também no texto geral. Normaliza para aprovado | pendente | falhou.
+    let status: 'aprovado' | 'pendente' | 'falhou' = 'aprovado';
+    let status_raw: string | null = null;
+    const stMatch = texto.match(/status[^\n:]{0,30}[:\-]?\s*(pendente|pending|aprovad[oa]|approved|pag[oa]|paid|conclu[ií]d[oa]|completed|falh[ao]u?|failed|cancelad[oa]|canceled|reembolsad[oa]|refunded)/i);
+    if (stMatch) {
+      status_raw = stMatch[1];
+      const s = stMatch[1].toLowerCase();
+      if (s.startsWith('pend')) status = 'pendente';
+      else if (s.startsWith('falh') || s.startsWith('fail') || s.startsWith('cancel') || s.startsWith('reemb') || s.startsWith('refun')) status = 'falhou';
+      else status = 'aprovado';
+    } else {
+      // Fallback: se o texto menciona apenas "Pendente" perto do valor, marca pendente.
+      if (/\bpendente\b/i.test(texto) && !/aprovad[oa]|\bpag[oa]\b|approved|\bpaid\b/i.test(texto)) {
+        status = 'pendente';
+        status_raw = 'Pendente (heurística)';
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -82,10 +101,13 @@ Deno.serve(async (req) => {
         tipo_documento,
         vinculo_confiavel,
         detalhe_vinculo,
+        status,
+        status_raw,
         preview_texto: texto.slice(0, 500),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
+
   } catch (err) {
     return new Response(
       JSON.stringify({ success: false, error: err instanceof Error ? err.message : 'erro' }),

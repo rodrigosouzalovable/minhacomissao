@@ -224,6 +224,7 @@ export function useMetaBillingConciliacao(
 
       const pagamentosByInst = new Map<string, { usd: number; count: number; primeira: string | null; ultima: string | null }>();
       for (const p of pagamentos) {
+        if ((p.status || "aprovado") !== "aprovado") continue;
         const cur = pagamentosByInst.get(p.instance_id) || { usd: 0, count: 0, primeira: null, ultima: null };
         cur.usd += num(p.valor_usd);
         cur.count += 1;
@@ -297,7 +298,7 @@ export function useMetaBillingConciliacao(
         .sort((a, b) => b.oficialUsd - a.oficialUsd);
 
       const totais = {
-        faturasUsd: pagamentos.reduce((s, p) => s + num(p.valor_usd), 0),
+        faturasUsd: pagamentos.filter((p) => (p.status || "aprovado") === "aprovado").reduce((s, p) => s + num(p.valor_usd), 0),
         oficialUsd: snapshots.reduce((s, r) => s + num(r.cost_usd), 0),
         oficialBrl: snapshots.reduce((s, r) => s + num(r.cost_brl), 0),
         diferencaUsd: 0,
