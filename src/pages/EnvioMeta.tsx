@@ -460,10 +460,32 @@ export default function EnvioMeta() {
         `Envio bloqueado: template "${templateGroup.nome}" é categoria MARKETING. Só templates UTILITY são permitidos. Peça ao admin liberar em Configurar Meta → Segurança de Custos.`,
       );
     }
+
+    // Filtro automático: remove instâncias com qualidade RED/YELLOW do disparo
+    const badQuality = instanciaIds.filter((id) => {
+      const inst = instancias.find((x) => x.id === id);
+      const q = String(inst?.saude_quality || "").toUpperCase();
+      return q === "RED" || q === "YELLOW";
+    });
+    const filteredInstanciaIds = instanciaIds.filter((id) => !badQuality.includes(id));
+    if (filteredInstanciaIds.length === 0) {
+      return toast.error("Nenhuma instância com qualidade GREEN/UNKNOWN disponível. RED/YELLOW são bloqueadas automaticamente.");
+    }
+    if (badQuality.length > 0) {
+      const nomes = badQuality
+        .map((id) => instancias.find((x) => x.id === id)?.nome || id)
+        .slice(0, 5)
+        .join(", ");
+      toast.warning(`${badQuality.length} instância(s) RED/YELLOW removidas automaticamente: ${nomes}`);
+    }
+
     if (instanciasIncompatíveis.length > 0) {
-      return toast.error(
-        `Este template não está aprovado em: ${instanciasIncompatíveis.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
-      );
+      const incompativelFiltrado = instanciasIncompatíveis.filter((i) => filteredInstanciaIds.includes(i.id));
+      if (incompativelFiltrado.length > 0) {
+        return toast.error(
+          `Este template não está aprovado em: ${incompativelFiltrado.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
+        );
+      }
     }
 
     // Deduplica destinatários antes de qualquer coisa
