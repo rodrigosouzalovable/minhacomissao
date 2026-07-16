@@ -1823,8 +1823,10 @@ export type Database = {
           saldo: number | null
           status: string
           telefone: string
+          tentativas: number
           updated_at: string
           vars: Json
+          wa_message_id: string | null
         }
         Insert: {
           atraso?: string | null
@@ -1841,8 +1843,10 @@ export type Database = {
           saldo?: number | null
           status?: string
           telefone: string
+          tentativas?: number
           updated_at?: string
           vars?: Json
+          wa_message_id?: string | null
         }
         Update: {
           atraso?: string | null
@@ -1859,8 +1863,10 @@ export type Database = {
           saldo?: number | null
           status?: string
           telefone?: string
+          tentativas?: number
           updated_at?: string
           vars?: Json
+          wa_message_id?: string | null
         }
         Relationships: [
           {
