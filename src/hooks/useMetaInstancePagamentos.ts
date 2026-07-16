@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export type MetaInstancePagamentoStatus = "aprovado" | "pendente" | "falhou";
+
 export type MetaInstancePagamento = {
   id: string;
   instance_id: string;
@@ -10,7 +12,11 @@ export type MetaInstancePagamento = {
   numero_referencia: string;
   data_transacao: string;
   criado_em: string;
+  status: MetaInstancePagamentoStatus;
 };
+
+const isAprovado = (p: MetaInstancePagamento) => (p.status || "aprovado") === "aprovado";
+const isPendente = (p: MetaInstancePagamento) => p.status === "pendente";
 
 export function useMetaInstancePagamentos() {
   const qc = useQueryClient();
@@ -24,7 +30,10 @@ export function useMetaInstancePagamentos() {
         .select("*")
         .order("data_transacao", { ascending: false });
       if (error) throw error;
-      return (data || []) as MetaInstancePagamento[];
+      return (data || []).map((r: any) => ({
+        ...r,
+        status: (r.status || "aprovado") as MetaInstancePagamentoStatus,
+      })) as MetaInstancePagamento[];
     },
   });
 
@@ -35,12 +44,14 @@ export function useMetaInstancePagamentos() {
       numero_referencia: string;
       data_transacao: string;
       valor_brl?: number | null;
+      status?: MetaInstancePagamentoStatus;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Não autenticado");
+      const payload = { ...row, user_id: user.id, status: row.status || "aprovado" };
       const { error } = await (supabase as any)
         .from("meta_instance_pagamentos")
-        .insert({ ...row, user_id: user.id });
+        .insert(payload);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meta-instance-pagamentos"] }),
@@ -57,24 +68,49 @@ export function useMetaInstancePagamentos() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meta-instance-pagamentos"] }),
   });
 
+  const atualizarStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: MetaInstancePagamentoStatus }) => {
+      const { error } = await (supabase as any)
+        .from("meta_instance_pagamentos")
+        .update({ status })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["meta-instance-pagamentos"] }),
+  });
+
   const pagamentos = query.data || [];
-  const totalUsd = pagamentos.reduce((s, p) => s + Number(p.valor_usd || 0), 0);
-  const totalBrl = pagamentos.reduce((s, p) => s + Number(p.valor_brl || 0), 0);
+  const aprovados = pagamentos.filter(isAprovado);
+  const pendentes = pagamentos.filter(isPendente);
+
+  const totalUsd = aprovados.reduce((s, p) => s + Number(p.valor_usd || 0), 0);
+  const totalBrl = aprovados.reduce((s, p) => s + Number(p.valor_brl || 0), 0);
+  const totalPendenteUsd = pendentes.reduce((s, p) => s + Number(p.valor_usd || 0), 0);
 
   const porInstancia = (instanceId: string) =>
     pagamentos.filter((p) => p.instance_id === instanceId);
 
   const totalPorInstancia = (instanceId: string) =>
-    porInstancia(instanceId).reduce((s, p) => s + Number(p.valor_usd || 0), 0);
+    porInstancia(instanceId).filter(isAprovado).reduce((s, p) => s + Number(p.valor_usd || 0), 0);
+
+  const totalPendentePorInstancia = (instanceId: string) =>
+    porInstancia(instanceId).filter(isPendente).reduce((s, p) => s + Number(p.valor_usd || 0), 0);
+
+  const countPendentePorInstancia = (instanceId: string) =>
+    porInstancia(instanceId).filter(isPendente).length;
 
   return {
     pagamentos,
     totalUsd,
     totalBrl,
+    totalPendenteUsd,
     porInstancia,
     totalPorInstancia,
+    totalPendentePorInstancia,
+    countPendentePorInstancia,
     inserir,
     remover,
+    atualizarStatus,
     isLoading: query.isLoading,
   };
 }
