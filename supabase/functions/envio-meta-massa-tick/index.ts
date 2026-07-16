@@ -148,7 +148,7 @@ async function processarItem(job: any): Promise<ItemResult> {
 
   const { data: pend, error: pendErr } = await supabase
     .from('envio_meta_job_item')
-    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars')
+    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars, tentativas')
     .eq('job_id', job.id)
     .eq('status', 'pendente')
     .order('ordem', { ascending: true })
@@ -243,7 +243,11 @@ async function processarItem(job: any): Promise<ItemResult> {
     vars: (pend as any).vars || {},
   };
 
+  const MAX_TENTATIVAS_ITEM = 3;
+  const tentativasAtual = Number((pend as any).tentativas || 0);
+
   let ok = false;
+  let waIdOk: string | null = null;
   let erroMsg: string | null = null;
   try {
     const sendResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-whatsapp-meta`, {
@@ -277,8 +281,12 @@ async function processarItem(job: any): Promise<ItemResult> {
       }).eq('id', job.id);
       return { advanced: false, waitMs };
     }
-    if (sendResp?.success) ok = true;
-    else erroMsg = sendResp?.error || 'falha';
+    if (sendResp?.success) {
+      ok = true;
+      waIdOk = sendResp?.waId || null;
+    } else {
+      erroMsg = sendResp?.error || 'falha';
+    }
   } catch (e) {
     erroMsg = e instanceof Error ? e.message : String(e);
   }
@@ -290,35 +298,39 @@ async function processarItem(job: any): Promise<ItemResult> {
   const bloqueadasRunAtual: string[] = Array.isArray(job.instancias_bloqueadas_run)
     ? [...job.instancias_bloqueadas_run] : [];
 
-  let instanciaAutoBloqueada = false;
   if (ok) {
     if (falhasMap[instId]) delete falhasMap[instId];
   } else {
     falhasMap[instId] = (falhasMap[instId] || 0) + 1;
     if (falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
       bloqueadasRunAtual.push(instId);
-      instanciaAutoBloqueada = true;
       delete falhasMap[instId];
     }
   }
 
   // Verifica se ainda restam instâncias disponíveis para tentar outra vez
   const restantesDisponiveis = (job.instancia_ids || []).filter((id: string) => !bloqueadasRunAtual.includes(id));
-  const podeReenfileirar = !ok && instanciaAutoBloqueada && restantesDisponiveis.length > 0;
+
+  // Retry por item: em QUALQUER falha, se ainda houver outra instância
+  // disponível e não estourou o teto, devolve pra fila pra outra instância tentar
+  const proximasTentativas = tentativasAtual + (ok ? 0 : 1);
+  const podeReenfileirar = !ok && proximasTentativas < MAX_TENTATIVAS_ITEM && restantesDisponiveis.length > 0;
 
   if (podeReenfileirar) {
-    // Devolve item para pendente — outra instância vai tentar
     await supabase.from('envio_meta_job_item').update({
       status: 'pendente',
       instancia_id: null,
       instancia_nome: null,
       erro: erroMsg,
+      tentativas: proximasTentativas,
     }).eq('id', pend.id);
   } else {
     await supabase.from('envio_meta_job_item').update({
       status: ok ? 'enviado' : 'erro',
       erro: ok ? null : erroMsg,
       processado_em: new Date().toISOString(),
+      tentativas: proximasTentativas,
+      wa_message_id: ok ? waIdOk : (pend as any).wa_message_id ?? null,
     }).eq('id', pend.id);
   }
 
