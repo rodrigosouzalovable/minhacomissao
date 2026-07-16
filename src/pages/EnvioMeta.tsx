@@ -570,7 +570,7 @@ export default function EnvioMeta() {
       setValidando(false);
     } else {
       if (!confirm(
-        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
+        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
     }
