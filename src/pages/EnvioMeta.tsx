@@ -1060,6 +1060,26 @@ export default function EnvioMeta() {
                     <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
                       {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
                     </Badge>
+                    {(i.estado_pool || "aguardando_templates") !== "ativo" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="default"
+                        className="h-7 px-2 text-xs"
+                        disabled={ativandoPoolId === i.id}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); ativarNoPool(i); }}
+                        title={i.estado_pool === "pausado" ? "Retomar envio pelo pool" : "Ativar esta instância no pool (Dia 1 = 20 msg)"}
+                      >
+                        {ativandoPoolId === i.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                            {i.estado_pool === "pausado" ? "Retomar" : "Ativar no pool"}
+                          </>
+                        )}
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="icon"
