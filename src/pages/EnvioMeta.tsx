@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
@@ -327,6 +327,37 @@ export default function EnvioMeta() {
     setInstancias((prev) => prev.map((x) => (x.id === id ? { ...x, nome: editNome.trim(), display_phone: editPhone.trim() || null } : x)));
     toast.success("Instância atualizada");
     cancelEdit();
+  };
+
+  const [ativandoPoolId, setAtivandoPoolId] = useState<string | null>(null);
+
+  const ativarNoPool = async (inst: Instancia) => {
+    const estado = inst.estado_pool || "aguardando_templates";
+    const isRetomar = estado === "pausado";
+    if (!isRetomar) {
+      if (!confirm(`Ativar "${inst.nome}" no pool? O ramp-up começa hoje (Dia 1 = 20 msg máx).`)) return;
+    }
+    setAtivandoPoolId(inst.id);
+    const patch: Record<string, any> = isRetomar
+      ? { estado_pool: "ativo", pausa_automatica_ate: null, pausa_automatica_motivo: null }
+      : {
+          estado_pool: "ativo",
+          data_ativacao_api: new Date().toISOString().slice(0, 10),
+          fase_rampup: "fase1",
+          pausa_automatica_ate: null,
+          pausa_automatica_motivo: null,
+        };
+    const { error } = await (supabase as any)
+      .from("meta_whatsapp_instances")
+      .update(patch)
+      .eq("id", inst.id);
+    setAtivandoPoolId(null);
+    if (error) {
+      toast.error("Erro ao ativar: " + error.message);
+      return;
+    }
+    toast.success(isRetomar ? `${inst.nome} retomado` : `${inst.nome} ativado no pool — Dia 1 iniciado`);
+    await carregar();
   };
 
   const carregar = async () => {
@@ -1029,6 +1060,26 @@ export default function EnvioMeta() {
                     <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
                       {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
                     </Badge>
+                    {(i.estado_pool || "aguardando_templates") !== "ativo" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="default"
+                        className="h-7 px-2 text-xs"
+                        disabled={ativandoPoolId === i.id}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); ativarNoPool(i); }}
+                        title={i.estado_pool === "pausado" ? "Retomar envio pelo pool" : "Ativar esta instância no pool (Dia 1 = 20 msg)"}
+                      >
+                        {ativandoPoolId === i.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                            {i.estado_pool === "pausado" ? "Retomar" : "Ativar no pool"}
+                          </>
+                        )}
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="icon"

@@ -1,42 +1,26 @@
-## Problema
+## Objetivo
+Adicionar botão **"Ativar no pool"** direto no modal de seleção de instâncias em `Envio Meta`, para instâncias com `estado_pool` diferente de `ativo`, sem precisar abrir `Configurar Meta → Pool`.
 
-CSIM 6: 47 falhas e 0 aceitos. Todas com erro `#131042 Business eligibility payment issue` — problema da conta Meta, não das instâncias. Mesmo assim o job segue "Rodando" porque:
+## Onde
+Arquivo: `src/pages/EnvioMeta.tsx` — dentro do `<Dialog>` de "Instâncias" (linhas ~940–1046), na linha de cada instância, logo ao lado do badge "restantes" / botão editar.
 
-- O retry por item (até 3 tentativas) reenfileira antes de todas as instâncias serem marcadas como bloqueadas.
-- Itens vão ciclando entre instâncias e acumulam erros individuais, mas `encerrarJobSemDisponibilidade` só dispara quando `bloqueadasRunAtual` cobre todas.
-- Como o job ainda tem "instâncias tecnicamente disponíveis" nesse cadastro, ele não para.
+## Comportamento
+- O botão aparece **apenas** quando `(inst.estado_pool || "aguardando_templates") !== "ativo"`.
+- Quando `pausado` → texto **"Retomar"**; quando `aguardando_templates` → **"Ativar no pool"**.
+- Ao clicar:
+  1. `confirm(...)` reaproveitando a mesma mensagem do `PoolMetaPanel` ("Dia 1 = 20 msg máx") só no fluxo de ativação inicial (não no retomar).
+  2. `UPDATE meta_whatsapp_instances` com os mesmos campos usados em `PoolMetaPanel.ativarNoPool` / `retomar`:
+     - Ativação inicial: `estado_pool='ativo'`, `data_ativacao_api=hoje`, `fase_rampup='fase1'`, `pausa_automatica_ate=null`, `pausa_automatica_motivo=null`.
+     - Retomar (estava `pausado`): só zera `estado_pool='ativo'`, `pausa_automatica_ate=null`, `pausa_automatica_motivo=null` (preserva `fase_rampup` / `data_ativacao_api`).
+  3. Toast de sucesso/erro (reaproveita `toast` já importado).
+  4. Recarrega a lista de instâncias chamando a função que já popula `instancias` no `EnvioMeta` (a mesma usada no `useEffect` inicial / após editar).
+- Estado local `ativandoPoolId` para desabilitar o botão e mostrar `<Loader2 className="animate-spin" />` durante o `UPDATE`.
+- `e.preventDefault(); e.stopPropagation();` no `onClick` para não disparar o `Checkbox` do `<label>`.
 
-## Solução — parar quando todas as instâncias falharem pelo menos 1 vez com 0 sucessos
+## Efeito colateral positivo
+Depois da ativação, o aviso amarelo "Nenhuma instância marcada está ativa no pool" (linha 930) some sozinho, pois é derivado de `estado_pool`. O botão de disparo em massa desbloqueia sem sair do modal.
 
-Alteração pontual em `supabase/functions/envio-meta-massa-tick/index.ts`, dentro de `processarItem`, logo após atualizar `falhasMap`/`bloqueadasRunAtual` e antes de decidir `podeReenfileirar`.
-
-### Regra
-
-Ao terminar o processamento de um item com falha:
-
-1. Considerar o conjunto `todasInstancias = job.instancia_ids`.
-2. Considerar `instanciasQueJaFalharam = union(bloqueadasRunAtual, keys(falhasMap))` — ou seja, instâncias que já registraram ≥1 falha neste job.
-3. Se `job.enviados === 0` **e** `instanciasQueJaFalharam.length >= todasInstancias.length` (todas já tentaram e falharam), encerrar imediatamente com motivo:
-   `"Nenhuma instância conseguiu enviar — todas falharam pelo menos uma vez sem nenhum sucesso"`.
-
-### Comportamento
-
-- Marca o item atual como `erro` (não reenfileira, não faz sentido).
-- Chama `encerrarJobSemDisponibilidade(job, motivo)` — que já existe e transita status para `erro`, notifica admin via WhatsApp e limpa `atual_*`.
-- Retorna `{ advanced:false, stop:true }` para interromper o loop.
-
-### Por que essa condição
-
-- `enviados === 0` garante que nenhuma instância provou funcionar; se ao menos uma já enviou, o problema não é global e vale continuar tentando.
-- Verificar por "já falhou pelo menos uma vez" (não só "bloqueada") acelera a parada: hoje `MAX_FALHAS_CONSECUTIVAS=1` já bloqueia após 1 falha, mas a checagem via união com `falhasMap` cobre casos em que o contador foi resetado antes do bloqueio.
-- Como o erro `#131042` retorna imediatamente na API, em poucos segundos todas as 26 instâncias baterão a condição — o job para logo no início ao invés de acumular 47+ falhas.
-
-### Escopo
-
-- **Só** `supabase/functions/envio-meta-massa-tick/index.ts`. Nenhuma migração, nenhuma mudança em UI, webhook, template, cron ou pool.
-- Notificação de encerramento reaproveita `notificarConclusao(..., 'erro', motivo)` que `encerrarJobSemDisponibilidade` já dispara.
-
-### Verificação após implementar
-
-- Rodar novo envio de teste com template ainda bloqueado por billing → job deve parar em segundos com status `erro` e motivo visível em `status_motivo`, sem acumular dezenas de falhas.
-- Envios normais (ao menos 1 aceito) continuam se comportando como hoje — a guarda `enviados === 0` protege esses casos.
+## Fora do escopo
+- Sem mudança em `PoolMetaPanel`, edge functions ou RLS.
+- Sem alterar lógica de ramp-up, tier ou saúde.
+- Nenhuma mudança de banco.
