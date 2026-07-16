@@ -1312,6 +1312,29 @@ export default function ConfigurarMeta() {
                   placeholder="1.22"
                 />
               </div>
+              <div>
+                <Label className="text-xs">Status na Meta</Label>
+                <Select
+                  value={confirmPag.status || "aprovado"}
+                  onValueChange={(v) => setConfirmPag({ ...confirmPag, status: v as any })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="aprovado">Aprovada / Paga — soma no total</SelectItem>
+                    <SelectItem value="pendente">Pendente — não soma (hold de cartão)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {confirmPag.status === "pendente" && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">
+                    ⚠️ Cobranças "Pendente" na Meta costumam ser autorizações de verificação do cartão (US$25) que caem/são estornadas em 5-15 dias úteis. Não vamos somar no total — se depois virar Paga, use o botão "Aprovar" no histórico.
+                  </p>
+                )}
+                {confirmPag.status_raw && (
+                  <p className="text-[10px] text-muted-foreground mt-1">Detectado no PDF: "{confirmPag.status_raw}"</p>
+                )}
+              </div>
             </div>
           )}
           <DialogFooter>
