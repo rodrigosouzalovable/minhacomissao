@@ -147,7 +147,12 @@ Deno.serve(async (req) => {
     }
 
     candidates.sort((a, b) => b.score - a.score);
-    const winner = candidates[0];
+    // Round-robin estrito: se o chamador passar excluir_id (última instância usada)
+    // e houver mais de um candidato, força alternância removendo essa instância do topo.
+    let winner = candidates[0];
+    if (excluir_id && candidates.length > 1 && winner.inst.id === excluir_id) {
+      winner = candidates[1];
+    }
 
     // Cacheia score
     await supabase.from('meta_whatsapp_instances').update({
