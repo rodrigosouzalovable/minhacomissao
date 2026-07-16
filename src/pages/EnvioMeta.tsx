@@ -580,7 +580,7 @@ export default function EnvioMeta() {
     // Mapa instância -> template_id específico daquela instância (mesmo nome/idioma)
     const templateIdByInstance: Record<string, string> = {};
     for (const r of templateGroup.rows) {
-      if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) {
+      if (r.status === "approved" && filteredInstanciaIds.includes(r.instancia_id)) {
         templateIdByInstance[r.instancia_id] = r.id;
       }
     }
