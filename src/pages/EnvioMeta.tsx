@@ -329,6 +329,37 @@ export default function EnvioMeta() {
     cancelEdit();
   };
 
+  const [ativandoPoolId, setAtivandoPoolId] = useState<string | null>(null);
+
+  const ativarNoPool = async (inst: Instancia) => {
+    const estado = inst.estado_pool || "aguardando_templates";
+    const isRetomar = estado === "pausado";
+    if (!isRetomar) {
+      if (!confirm(`Ativar "${inst.nome}" no pool? O ramp-up começa hoje (Dia 1 = 20 msg máx).`)) return;
+    }
+    setAtivandoPoolId(inst.id);
+    const patch: Record<string, any> = isRetomar
+      ? { estado_pool: "ativo", pausa_automatica_ate: null, pausa_automatica_motivo: null }
+      : {
+          estado_pool: "ativo",
+          data_ativacao_api: new Date().toISOString().slice(0, 10),
+          fase_rampup: "fase1",
+          pausa_automatica_ate: null,
+          pausa_automatica_motivo: null,
+        };
+    const { error } = await (supabase as any)
+      .from("meta_whatsapp_instances")
+      .update(patch)
+      .eq("id", inst.id);
+    setAtivandoPoolId(null);
+    if (error) {
+      toast.error("Erro ao ativar: " + error.message);
+      return;
+    }
+    toast.success(isRetomar ? `${inst.nome} retomado` : `${inst.nome} ativado no pool — Dia 1 iniciado`);
+    await carregar();
+  };
+
   const carregar = async () => {
     setLoading(true);
     const [i, t, u] = await Promise.all([
