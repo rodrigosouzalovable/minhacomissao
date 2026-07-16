@@ -557,7 +557,7 @@ export default function EnvioMeta() {
           `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
           `⚠️ ${totalErr} erros de validação (descartados)\n` +
           (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
-          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
         );
         if (!ok) { setValidando(false); return; }
 
