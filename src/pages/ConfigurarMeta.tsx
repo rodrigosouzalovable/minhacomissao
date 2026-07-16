@@ -99,6 +99,8 @@ export default function ConfigurarMeta() {
     tipo_documento?: string;
     vinculo_confiavel?: boolean;
     detalhe_vinculo?: string | null;
+    status?: "aprovado" | "pendente" | "falhou";
+    status_raw?: string | null;
   }>(null);
   const [showHistId, setShowHistId] = useState<string | null>(null);
 
@@ -136,6 +138,14 @@ export default function ConfigurarMeta() {
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha ao ler PDF");
+      const detectedStatus = (data.status as "aprovado" | "pendente" | "falhou") || "aprovado";
+      if (detectedStatus === "falhou") {
+        toast.error("A fatura consta como Falhou/Cancelada na Meta. Não será importada.");
+        return;
+      }
+      if (detectedStatus === "pendente") {
+        toast.warning("Fatura Pendente detectada — provável verificação de cartão (hold). Ela será salva, mas NÃO somará no total até virar Aprovada.", { duration: 8000 });
+      }
       setConfirmPag({
         instance_id: instId,
         valor_usd: data.valor_usd != null ? String(data.valor_usd) : "",
@@ -144,6 +154,8 @@ export default function ConfigurarMeta() {
         tipo_documento: data.tipo_documento || "atividade_pagamento",
         vinculo_confiavel: !!data.vinculo_confiavel,
         detalhe_vinculo: data.detalhe_vinculo || null,
+        status: detectedStatus,
+        status_raw: data.status_raw || null,
       });
     } catch (err: any) {
       toast.error(err?.message || "Falha ao processar PDF");
@@ -165,8 +177,13 @@ export default function ConfigurarMeta() {
         valor_usd: valor,
         numero_referencia: confirmPag.numero_referencia.trim(),
         data_transacao: confirmPag.data_transacao,
+        status: confirmPag.status || "aprovado",
       });
-      toast.success("Pagamento registrado");
+      toast.success(
+        confirmPag.status === "pendente"
+          ? "Fatura Pendente registrada (não soma no total)"
+          : "Pagamento registrado",
+      );
       setConfirmPag(null);
     } catch (err: any) {
       if (String(err?.message || "").includes("duplicate")) {
