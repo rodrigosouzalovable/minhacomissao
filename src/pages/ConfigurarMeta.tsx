@@ -935,15 +935,24 @@ export default function ConfigurarMeta() {
                       {/* Faturas Meta importadas — histórico + total */}
                       <div className="pt-3 border-t border-border/60">
                         <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2 text-xs">
+                          <div className="flex items-center gap-2 text-xs flex-wrap">
                             <FileText className="h-3.5 w-3.5 text-emerald-600" />
                             <span className="font-semibold">Faturas importadas:</span>
                             <span className="font-bold text-emerald-700">
                               US$ {pag.totalPorInstancia(inst.id).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                             <span className="text-muted-foreground">
-                              ({pag.porInstancia(inst.id).length})
+                              ({pag.porInstancia(inst.id).filter((p) => (p.status || "aprovado") === "aprovado").length})
                             </span>
+                            {pag.countPendentePorInstancia(inst.id) > 0 && (
+                              <span
+                                className="text-amber-700 dark:text-amber-400 text-[11px] font-medium"
+                                title="Cobranças em status Pendente na Meta — geralmente autorizações de verificação de cartão (US$25) que costumam ser estornadas em 5-15 dias. Não somam no total."
+                              >
+                                · Pendente: US$ {pag.totalPendentePorInstancia(inst.id).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {" "}({pag.countPendentePorInstancia(inst.id)})
+                              </span>
+                            )}
                           </div>
                           {pag.porInstancia(inst.id).length > 0 && (
                             <Button
@@ -963,40 +972,73 @@ export default function ConfigurarMeta() {
                                 <TableRow>
                                   <TableHead className="text-xs">Data</TableHead>
                                   <TableHead className="text-xs">Referência</TableHead>
+                                  <TableHead className="text-xs">Status</TableHead>
                                   <TableHead className="text-xs text-right">Valor (US$)</TableHead>
-                                  <TableHead className="w-10"></TableHead>
+                                  <TableHead className="w-20"></TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {pag.porInstancia(inst.id).map((p) => (
-                                  <TableRow key={p.id}>
+                                {pag.porInstancia(inst.id).map((p) => {
+                                  const st = (p.status || "aprovado") as "aprovado" | "pendente" | "falhou";
+                                  return (
+                                  <TableRow key={p.id} className={st === "pendente" ? "opacity-70" : ""}>
                                     <TableCell className="text-xs">
                                       {new Date(p.data_transacao + "T00:00:00").toLocaleDateString("pt-BR")}
                                     </TableCell>
                                     <TableCell className="text-xs font-mono">{p.numero_referencia}</TableCell>
-                                    <TableCell className="text-xs text-right font-medium">
+                                    <TableCell className="text-xs">
+                                      {st === "pendente" ? (
+                                        <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400 text-[10px]">Pendente</Badge>
+                                      ) : st === "falhou" ? (
+                                        <Badge variant="outline" className="border-destructive text-destructive text-[10px]">Falhou</Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-400 text-[10px]">Aprovada</Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className={`text-xs text-right font-medium ${st !== "aprovado" ? "line-through text-muted-foreground" : ""}`}>
                                       {Number(p.valor_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </TableCell>
                                     <TableCell>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-6 w-6 p-0"
-                                        onClick={async () => {
-                                          if (!confirm("Excluir este registro?")) return;
-                                          try {
-                                            await pag.remover.mutateAsync(p.id);
-                                            toast.success("Removido");
-                                          } catch (e: any) {
-                                            toast.error(e?.message || "Erro");
-                                          }
-                                        }}
-                                      >
-                                        <Trash2 className="h-3 w-3 text-destructive" />
-                                      </Button>
+                                      <div className="flex items-center justify-end gap-1">
+                                        {st === "pendente" && (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 px-1.5 text-[10px]"
+                                            title="Marcar como Aprovada — passa a somar no total"
+                                            onClick={async () => {
+                                              try {
+                                                await pag.atualizarStatus.mutateAsync({ id: p.id, status: "aprovado" });
+                                                toast.success("Fatura marcada como Aprovada");
+                                              } catch (e: any) {
+                                                toast.error(e?.message || "Erro");
+                                              }
+                                            }}
+                                          >
+                                            <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-600" /> Aprovar
+                                          </Button>
+                                        )}
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-6 w-6 p-0"
+                                          onClick={async () => {
+                                            if (!confirm("Excluir este registro?")) return;
+                                            try {
+                                              await pag.remover.mutateAsync(p.id);
+                                              toast.success("Removido");
+                                            } catch (e: any) {
+                                              toast.error(e?.message || "Erro");
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="h-3 w-3 text-destructive" />
+                                        </Button>
+                                      </div>
                                     </TableCell>
                                   </TableRow>
-                                ))}
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           </div>
@@ -1005,6 +1047,8 @@ export default function ConfigurarMeta() {
                     </div>
                   </CardContent>
                 </Card>
+
+
 
               ))}
             </div>
