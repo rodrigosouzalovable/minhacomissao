@@ -186,7 +186,11 @@ async function processarItem(job: any): Promise<ItemResult> {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
     },
-    body: JSON.stringify({ instancia_ids: instanciaIdsDisponiveis, user_id: job.user_id }),
+    body: JSON.stringify({
+      instancia_ids: instanciaIdsDisponiveis,
+      user_id: job.user_id,
+      excluir_id: job.ultima_instancia_id || null,
+    }),
   }).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
 
   if (!pickResp?.success) {
