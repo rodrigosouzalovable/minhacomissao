@@ -588,7 +588,7 @@ export default function EnvioMeta() {
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
     const okCusto = await pedirConfirmacaoCusto(
       clientesFinal.map((c) => c.telefone),
-      instanciaIds,
+      filteredInstanciaIds,
       templateGroup.categoria,
     );
     if (!okCusto) return;
