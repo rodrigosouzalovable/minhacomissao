@@ -746,7 +746,24 @@ export default function EnvioMeta() {
               </p>
             ) : (
               <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
+                <SelectTrigger className="h-10">
+                  {templateGroup ? (
+                    <div className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                      <span className="truncate">{templateGroup.nome}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">({templateGroup.idioma})</span>
+                      {templateGroup.categoria && (
+                        <Badge variant={templateGroup.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
+                          {templateGroup.categoria === 'MARKETING' ? 'Marketing' : templateGroup.categoria === 'UTILITY' ? 'Utilidade' : templateGroup.categoria}
+                        </Badge>
+                      )}
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                        {templateGroup.instanciasAprovadasIds.size}/{instanciaIds.length} inst.
+                      </Badge>
+                    </div>
+                  ) : (
+                    <SelectValue placeholder="Selecione um template" />
+                  )}
+                </SelectTrigger>
                 <SelectContent>
                   {templateGroups.map((g) => {
                     const total = instanciaIds.length;
