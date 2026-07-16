@@ -311,10 +311,43 @@ async function processarItem(job: any): Promise<ItemResult> {
   // Verifica se ainda restam instâncias disponíveis para tentar outra vez
   const restantesDisponiveis = (job.instancia_ids || []).filter((id: string) => !bloqueadasRunAtual.includes(id));
 
+  // Guardrail: se nenhuma instância ainda conseguiu enviar (enviados===0)
+  // e TODAS as instâncias já falharam ao menos uma vez, encerra o job.
+  const todasInstancias: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+  const instanciasQueJaFalharam = new Set<string>([
+    ...bloqueadasRunAtual,
+    ...Object.keys(falhasMap),
+  ]);
+  const todasFalharamSemSucesso =
+    !ok &&
+    (job.enviados || 0) === 0 &&
+    todasInstancias.length > 0 &&
+    todasInstancias.every((id) => instanciasQueJaFalharam.has(id));
+
+  if (todasFalharamSemSucesso) {
+    // Marca este item como erro definitivo e persiste contadores antes de encerrar
+    await supabase.from('envio_meta_job_item').update({
+      status: 'erro',
+      erro: erroMsg,
+      processado_em: new Date().toISOString(),
+      tentativas: tentativasAtual + 1,
+    }).eq('id', pend.id);
+    await supabase.from('envio_meta_job').update({
+      falhas_por_instancia_run: falhasMap,
+      instancias_bloqueadas_run: bloqueadasRunAtual,
+    }).eq('id', job.id);
+    await encerrarJobSemDisponibilidade(
+      job,
+      'Nenhuma instância conseguiu enviar — todas falharam pelo menos uma vez sem nenhum sucesso',
+    );
+    return { advanced: false, stop: true };
+  }
+
   // Retry por item: em QUALQUER falha, se ainda houver outra instância
   // disponível e não estourou o teto, devolve pra fila pra outra instância tentar
   const proximasTentativas = tentativasAtual + (ok ? 0 : 1);
   const podeReenfileirar = !ok && proximasTentativas < MAX_TENTATIVAS_ITEM && restantesDisponiveis.length > 0;
+
 
   if (podeReenfileirar) {
     await supabase.from('envio_meta_job_item').update({
