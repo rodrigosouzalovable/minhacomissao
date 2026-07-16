@@ -1,68 +1,75 @@
-# Envio Meta — Filtro de Qualidade, Auto-Exclusão em Erro e Round-Robin Estrito
 
-Ajustar o fluxo de disparo em massa da aba **Envio Meta** para:
+## Problema identificado
 
-1. **Excluir automaticamente instâncias RED/YELLOW** antes de iniciar o job.
-2. **Remover instância da fila no primeiro erro** (não mais após 2 falhas consecutivas).
-3. **Enviar exatamente 1 mensagem por ciclo de delay**, alternando entre as instâncias em **round-robin estrito** (nunca duas mensagens no mesmo segundo, nunca em rajada).
+Analisando a CSIM 4:
 
----
+- **78 "enviados"** = a API da Meta aceitou o POST → o item foi marcado como `enviado` no job.
+- **31 "Falharam na entrega"** = depois, via webhook, a Meta devolveu `status=failed` (ex.: `Business eligibility payment issue #131042`, o caso do `5592991447169`). Hoje esses casos **não voltam para a fila** — o job já considerou o item concluído no momento em que a API respondeu 200. Por isso a planilha só tem 46 entregues/aceitos: os 31 que caíram no webhook `failed` ficaram órfãos.
+- Além disso, mesmo nas falhas da própria chamada da API (`send-whatsapp-meta` retornando `success:false`), hoje só reenfileiramos se a instância for **auto-bloqueada no primeiro erro** E ainda houver outra instância disponível — se sobrar só uma, o item vai direto para `erro`, sem tentar de novo.
 
-## 1. Frontend — `src/pages/EnvioMeta.tsx`
+## O que muda
 
-Quando o usuário clica em **"Selecionar todas"** e depois em **Disparar**:
+### 1. Reenfileirar falhas de API imediatamente (não só quando a instância é bloqueada)
 
-- Antes de chamar `envio-meta-massa-iniciar`, filtrar `instanciaIds` removendo qualquer instância cuja `saude_quality` seja `RED` ou `YELLOW`.
-- Se sobrar zero instâncias, mostrar toast de erro (`"Nenhuma instância com qualidade GREEN/UNKNOWN disponível"`) e abortar.
-- Mostrar toast informativo listando quantas foram descartadas: `"X instância(s) RED/YELLOW removidas do disparo automaticamente"`.
-- No painel "Instâncias selecionadas", marcar visualmente RED/YELLOW como desabilitadas (checkbox travada + tooltip explicando).
+`supabase/functions/envio-meta-massa-tick/index.ts`
 
-## 2. Backend — `supabase/functions/envio-meta-massa-iniciar/index.ts`
+- Introduzir um contador `tentativas` por item (nova coluna) e uma constante `MAX_TENTATIVAS_ITEM = 3`.
+- Quando `sendResp.success = false` (fora dos casos já tratados `tier_full/pool_blocked/pool_paused/blocked`):
+  - Incrementar `tentativas` do item.
+  - Se `tentativas < MAX_TENTATIVAS_ITEM` **e existir ao menos uma outra instância não-bloqueada no job**, devolver o item para `status='pendente'` (limpando `instancia_id/instancia_nome`) e forçar `excluir_id = instância que falhou` no próximo `pick-meta-instance` (já suportado).
+  - Só marcar `status='erro'` quando estourar o teto ou não restar outra instância.
+- Manter a auto-exclusão da instância após 1 falha (já existente) — isso e o retry do item são independentes.
 
-- Após validar `instanciaIds`, consultar `meta_whatsapp_instances` e filtrar novamente RED/YELLOW no servidor (defesa em profundidade).
-- Persistir apenas as instâncias válidas em `envio_meta_job.instancia_ids`.
-- Se todas forem excluídas → retornar erro claro sem criar job.
+### 2. Reenfileirar quando a Meta devolver `status=failed` pelo webhook
 
-## 3. Backend — `supabase/functions/envio-meta-massa-tick/index.ts`
+`supabase/functions/meta-whatsapp-webhook/index.ts`
 
-### 3a. Auto-exclusão no primeiro erro
+Quando `status === 'failed'`, além do que já faz:
 
-- Reduzir `MAX_FALHAS_CONSECUTIVAS` de `2` para `1`.
-- Qualquer resposta com `success:false` de `send-whatsapp-meta` (que não seja `tier_full`/`pool_blocked`/`pool_paused`/`blocked`) marca a instância imediatamente em `instancias_bloqueadas_run` e reenfileira o item para outra instância tentar.
-- Se todas as instâncias forem bloqueadas → encerra o job com motivo detalhado (comportamento já existente).
+1. Localizar o `envio_meta_job_item` correspondente pelo `wa_message_id` já salvo em `meta_whatsapp_envios_log` (ou por sufixo do telefone + `job_id` associado ao log).
+2. Se o item existir, pertencer a um job com `status IN ('rodando','pausado','concluido')` e `tentativas < MAX_TENTATIVAS_ITEM`:
+   - Incrementar `tentativas`, limpar `instancia_id/instancia_nome/processado_em`, mudar `status` para `pendente`.
+   - Decrementar `enviados` do job e, se o job já estava `concluido`, voltá-lo para `rodando` com `proximo_em = agora` e disparar `envio-meta-massa-tick` (self-invoke).
+   - No próximo pick, o `ultima_instancia_id` do job já exclui quem acabou de falhar.
+3. Se restrições da Meta bloquearam a instância (código nos `restrictedCodes` já mapeados) → a instância já entra em `estado_pool='restrita'` e o `pick-meta-instance` naturalmente vai escolher outra.
 
-### 3b. Round-robin estrito (1 mensagem por delay)
+### 3. Coluna nova e link job_item ↔ envio_log
 
-Hoje `pick-meta-instance` escolhe por score `1/(1+uso)`, o que aproxima round-robin mas não garante alternância. Ajuste:
+Migration:
 
-- Adicionar campo `ultima_instancia_id` em `envio_meta_job` (via migration).
-- No tick, ao chamar `pick-meta-instance`, passar `ultima_instancia_id` como `excluir_id`.
-- Em `pick-meta-instance`, se `excluir_id` for informado e houver ao menos 2 candidatos, remover essa instância dos candidatos → força alternância.
-- Após envio bem-sucedido, gravar `ultima_instancia_id = instId` no job.
-- Delay já é aplicado ANTES do próximo item via `proximo_em` + `sleep(r.delayMs)` no loop; garantir que `processarItem` respeita `proxMs > 0` (já respeita). Sem paralelismo — o loop é estritamente sequencial dentro do tick, e o cron não dispara concorrência porque o self-invoke usa `proximo_em`.
+- `envio_meta_job_item`: adicionar `tentativas int not null default 0` e `wa_message_id text` (indexado) para permitir o webhook achar o item sem depender de sufixo de telefone.
+- No `send-whatsapp-meta` (ou no tick, após sucesso), preencher `wa_message_id` no item quando a Meta devolver o `messages[0].id`.
 
-### 3c. Garantia de "nunca no mesmo segundo"
+### 4. UI (`src/pages/EnvioMeta.tsx`)
 
-- Impor `delayMs = Math.max(delayMs, 1000)` (já é ≥1s pelo `min_seg`). Adicionar sanity check: se `Date.now() - ultimoEnvioMs < 1000`, aguardar o restante antes do próximo envio (proteção contra edge cases de reprocessamento).
+- Mostrar a coluna "tentativas" no painel de detalhes quando > 1 ("2ª tentativa via LD 07").
+- No resumo do job, separar visualmente:
+  - **Aceitos pela API** (o que existe hoje como "enviados")
+  - **Entregues** (webhook `delivered`)
+  - **Recuperados por retry** (item com `tentativas > 1` que terminou como `delivered/read`)
+  - **Falha definitiva** (item que estourou o teto de tentativas)
+- Contadores do job (`enviados`, `erros`) passam a refletir o resultado após retries, não a 1ª tentativa.
 
-## 4. Migration
+### 5. Notificação final
 
-```sql
-ALTER TABLE public.envio_meta_job
-  ADD COLUMN IF NOT EXISTS ultima_instancia_id uuid;
-```
+Ajustar `notificarConclusao` para citar quantos itens foram recuperados por retry e quantos falharam em definitivo após N tentativas.
 
-Sem novos índices — coluna é apenas leitura/escrita por job.
+## Fora de escopo
 
-## 5. Fora de escopo
+- Não vamos mexer em templates, cobrança, escalonamento nem no aquecimento.
+- Não vamos criar cron novo — o retry aproveita o próprio loop do tick e o self-invoke já existente (sem custo extra).
+- Não mexemos em regras de round-robin, delay randomizado, filtro RED/YELLOW nem no bloqueio de domingo (tudo continua igual).
 
-- Não alterar `send-whatsapp-meta` nem lógica de custo/billing.
-- Não mexer em campanhas agendadas (`process-campanha-meta-diaria`) — o pedido é apenas para o disparo manual da aba Envio Meta.
-- Sem novos crons, sem novos polling, sem Realtime adicional (respeita alerta de custo Lovable Cloud).
+## Teste de verificação
 
-## 6. Verificação
+Repetir uma campanha pequena com uma instância que sabidamente falha (ex.: `Business eligibility payment issue`). Esperado:
 
-- Após implementar, disparar teste com 3 instâncias (1 RED, 2 GREEN) e 6 contatos:
-  - RED some da fila no início.
-  - Msgs alternam A→B→A→B com delays randômicos ≥ `min_seg`.
-  - Se B der erro no 1º envio, B some da fila e A recebe os próximos.
+1. Chamada 1 → falha na API ou webhook devolve `failed`.
+2. Item volta para `pendente`, `tentativas=1`.
+3. Próximo tick pega outra instância (a que falhou é excluída via `excluir_id` + `instancias_bloqueadas_run`).
+4. Se entregar, item finaliza como `enviado` com `tentativas=2` — aparece na planilha final como entregue.
+5. Contador de "Falharam na entrega" no painel só inclui os que estouraram 3 tentativas.
+
+## Alerta de custo
+
+Mudança de baixo impacto: nenhum cron/polling novo. O único custo adicional é ~1 UPDATE + 1 self-invoke por item que falhar no webhook — proporcional ao volume de falhas, portanto marginal.

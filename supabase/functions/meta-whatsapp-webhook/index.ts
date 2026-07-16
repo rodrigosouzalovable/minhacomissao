@@ -630,6 +630,72 @@ serve(async (req) => {
                 console.log('[MetaWebhook] notificarAdmin falhou:', String(e).slice(0, 200));
               }
             }
+
+            // === RETRY AUTOMÁTICO: reenfileira o item da campanha em outra instância ===
+            try {
+              const MAX_TENTATIVAS_ITEM = 3;
+              const { data: item } = await supabase
+                .from('envio_meta_job_item')
+                .select('id, job_id, tentativas, status')
+                .eq('wa_message_id', waId)
+                .maybeSingle();
+
+              if (item && item.status !== 'pendente' && item.status !== 'processando') {
+                const tentativasAtual = Number(item.tentativas || 0);
+                if (tentativasAtual < MAX_TENTATIVAS_ITEM) {
+                  const { data: job } = await supabase
+                    .from('envio_meta_job')
+                    .select('id, status, instancia_ids, instancias_bloqueadas_run, enviados, erros')
+                    .eq('id', item.job_id)
+                    .maybeSingle();
+
+                  if (job && ['rodando', 'pausado', 'concluido'].includes(job.status)) {
+                    const bloqueadas: string[] = Array.isArray(job.instancias_bloqueadas_run)
+                      ? job.instancias_bloqueadas_run : [];
+                    const restantes = (job.instancia_ids || []).filter((id: string) => !bloqueadas.includes(id));
+
+                    if (restantes.length > 0) {
+                      // Devolve item pra fila
+                      await supabase.from('envio_meta_job_item').update({
+                        status: 'pendente',
+                        instancia_id: null,
+                        instancia_nome: null,
+                        wa_message_id: null,
+                        processado_em: null,
+                        erro: `Falha na entrega (Meta): ${errTitle || 'failed'}${errCode ? ` (#${errCode})` : ''}`,
+                        tentativas: tentativasAtual + 1,
+                      }).eq('id', item.id);
+
+                      // Ajusta contadores do job (o item tinha sido contado como enviado)
+                      const novoEnviados = Math.max(0, Number(job.enviados || 0) - 1);
+                      const patch: Record<string, unknown> = { enviados: novoEnviados };
+                      if (job.status === 'concluido') {
+                        patch.status = 'rodando';
+                        patch.concluido_em = null;
+                        patch.proximo_em = new Date().toISOString();
+                        patch.status_motivo = 'Retry automático após falha de entrega';
+                      }
+                      await supabase.from('envio_meta_job').update(patch).eq('id', job.id);
+
+                      // Dispara tick se o job voltou pra rodando
+                      if (job.status === 'concluido') {
+                        fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                          },
+                          body: JSON.stringify({ job_id: job.id }),
+                        }).catch(() => {});
+                      }
+                      console.log('[MetaWebhook] item reenfileirado para retry:', item.id, 'tentativa', tentativasAtual + 1);
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('[MetaWebhook] retry item falhou:', String(e).slice(0, 200));
+            }
           }
         }
 
