@@ -499,7 +499,7 @@ export default function EnvioMeta() {
 
     // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
     // dispara em modo teste automaticamente (bypassa ramp-up / horário / domingo).
-    const todasForaPool = instanciaIds.every((id) => {
+    const todasForaPool = filteredInstanciaIds.every((id) => {
       const inst = instancias.find((x) => x.id === id);
       return (inst?.estado_pool || "aguardando_templates") !== "ativo";
     });
