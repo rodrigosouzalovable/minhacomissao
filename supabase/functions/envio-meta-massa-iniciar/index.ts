@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
         template_id: template.id,
         template_nome: template.nome_template,
         template_id_by_instance: templateIdByInstance,
-        instancia_ids: instanciaIds,
+        instancia_ids: instanciaIdsFiltradas,
         min_seg: minSec,
         max_seg: maxSec,
         total: clientes.length,
