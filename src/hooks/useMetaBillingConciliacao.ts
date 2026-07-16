@@ -130,6 +130,7 @@ export function useMetaBillingConciliacao(
         (supabase as any)
           .from("meta_whatsapp_envios_log")
           .select("instancia_id,template_nome,status,foi_gratis,pricing_category,pricing_type")
+          .eq("status", "sent")
           .limit(100000),
         (supabase as any)
           .from("meta_whatsapp_templates")
