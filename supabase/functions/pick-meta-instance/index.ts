@@ -49,7 +49,7 @@ function faseFromDias(d: number): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { instancia_ids, user_id } = await req.json();
+    const { instancia_ids, user_id, excluir_id } = await req.json();
     if (!Array.isArray(instancia_ids) || instancia_ids.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'instancia_ids obrigatório' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
