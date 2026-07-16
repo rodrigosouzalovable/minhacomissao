@@ -58,12 +58,30 @@ Deno.serve(async (req) => {
     const dataMatch = texto.match(/\d{1,2}\s+de\s+[a-zç]{3,}\.?\s+de\s+\d{4}/i);
     const data_transacao = dataMatch ? parseDataPt(dataMatch[0]) : null;
 
+    const lower = texto.toLowerCase();
+    const tipo_documento = lower.includes('atividade de pagamento') || lower.includes('payment activity')
+      ? 'atividade_pagamento'
+      : lower.includes('recibo') || lower.includes('receipt')
+        ? 'recibo_pagamento'
+        : 'documento_meta';
+    const wabaMatch = texto.match(/(?:WABA|WhatsApp Business Account|Conta do WhatsApp Business|Conta do WhatsApp)\D{0,80}(\d{10,})/i);
+    const phoneMatch = texto.match(/(?:\+?55\s*)?(\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}/);
+    const detalhe_vinculo = wabaMatch
+      ? `WABA ${wabaMatch[1]}`
+      : phoneMatch
+        ? `telefone ${phoneMatch[0].replace(/\s+/g, ' ').trim()}`
+        : null;
+    const vinculo_confiavel = Boolean(wabaMatch || phoneMatch);
+
     return new Response(
       JSON.stringify({
         success: true,
         valor_usd,
         numero_referencia,
         data_transacao,
+        tipo_documento,
+        vinculo_confiavel,
+        detalhe_vinculo,
         preview_texto: texto.slice(0, 500),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

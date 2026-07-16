@@ -16,8 +16,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
 import CustosDetalhadosDialog from "@/components/meta/CustosDetalhadosDialog";
+import MetaBillingConciliacaoCard from "@/components/meta/MetaBillingConciliacaoCard";
 import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
+import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -86,6 +88,7 @@ export default function ConfigurarMeta() {
 
   // Importação de PDF de fatura Meta
   const pag = useMetaInstancePagamentos();
+  const conciliacao = useMetaBillingConciliacao(instancias, pag.pagamentos);
   const [importInstId, setImportInstId] = useState<string | null>(null);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [confirmPag, setConfirmPag] = useState<null | {
@@ -93,6 +96,9 @@ export default function ConfigurarMeta() {
     valor_usd: string;
     numero_referencia: string;
     data_transacao: string;
+    tipo_documento?: string;
+    vinculo_confiavel?: boolean;
+    detalhe_vinculo?: string | null;
   }>(null);
   const [showHistId, setShowHistId] = useState<string | null>(null);
 
@@ -135,6 +141,9 @@ export default function ConfigurarMeta() {
         valor_usd: data.valor_usd != null ? String(data.valor_usd) : "",
         numero_referencia: data.numero_referencia || "",
         data_transacao: data.data_transacao || "",
+        tipo_documento: data.tipo_documento || "atividade_pagamento",
+        vinculo_confiavel: !!data.vinculo_confiavel,
+        detalhe_vinculo: data.detalhe_vinculo || null,
       });
     } catch (err: any) {
       toast.error(err?.message || "Falha ao processar PDF");
@@ -675,30 +684,7 @@ export default function ConfigurarMeta() {
         </TabsList>
 
         <TabsContent value="instancias">
-          {/* Totalizador de faturas Meta importadas */}
-          <Card className="mb-4 border-emerald-500/40 bg-emerald-500/5">
-            <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-emerald-500/10 p-2">
-                  <CreditCard className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <div className="font-semibold">Total gasto (faturas Meta importadas)</div>
-                  <p className="text-sm text-muted-foreground">
-                    Soma manual das faturas PDF importadas em cada instância. Use para conciliar com as cobranças do seu cartão.
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-emerald-700">
-                  US$ {pag.totalUsd.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {pag.pagamentos.length} fatura(s) registrada(s)
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <MetaBillingConciliacaoCard conciliacao={conciliacao} />
 
           {/* Input escondido para importar PDF */}
           <input
@@ -1219,6 +1205,26 @@ export default function ConfigurarMeta() {
               <p className="text-xs text-muted-foreground">
                 Confira os dados extraídos do PDF. Você pode ajustar antes de salvar. O PDF não será armazenado.
               </p>
+              {(() => {
+                const inst = conciliacao.data?.instancias.find((i) => i.id === confirmPag.instance_id);
+                const valor = Number(confirmPag.valor_usd || 0);
+                const suspeito25 = valor >= 24.5 && (!inst || inst.oficialUsd < 1);
+                if (!suspeito25 && confirmPag.vinculo_confiavel) return null;
+                return (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-muted-foreground">
+                    <div className="font-semibold text-foreground flex items-center gap-2 mb-1">
+                      <AlertTriangle className="h-4 w-4" /> Atenção antes de atribuir esta fatura
+                    </div>
+                    {!confirmPag.vinculo_confiavel && (
+                      <p>O PDF parece ser atividade de pagamento/cobrança, mas não trouxe vínculo confiável com WABA ou telefone. Salve aqui apenas se você confirmou manualmente que pertence a esta instância.</p>
+                    )}
+                    {suspeito25 && (
+                      <p className="mt-1">O valor está perto de US$25, mas o custo oficial identificado para esta instância é baixo. Isso pode ser limite/cobrança do cartão no nível da conta de pagamento, não consumo real desta WABA.</p>
+                    )}
+                    {confirmPag.detalhe_vinculo && <p className="mt-1">Vínculo detectado: {confirmPag.detalhe_vinculo}</p>}
+                  </div>
+                );
+              })()}
               <div>
                 <Label className="text-xs">Data da transação</Label>
                 <Input
