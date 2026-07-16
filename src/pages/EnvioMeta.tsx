@@ -607,7 +607,7 @@ export default function EnvioMeta() {
 
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
-      instanciaIds,
+      instanciaIds: filteredInstanciaIds,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
       clientes: clientesComVars,
       minSec: lo,
