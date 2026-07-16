@@ -283,8 +283,8 @@ async function processarItem(job: any): Promise<ItemResult> {
     erroMsg = e instanceof Error ? e.message : String(e);
   }
 
-  // Contadores por instância (para auto-ignorar instância que falha em sequência)
-  const MAX_FALHAS_CONSECUTIVAS = 2;
+  // Contadores por instância — auto-ignora instância no PRIMEIRO erro
+  const MAX_FALHAS_CONSECUTIVAS = 1;
   const falhasMap: Record<string, number> = (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
     ? { ...job.falhas_por_instancia_run } : {};
   const bloqueadasRunAtual: string[] = Array.isArray(job.instancias_bloqueadas_run)
