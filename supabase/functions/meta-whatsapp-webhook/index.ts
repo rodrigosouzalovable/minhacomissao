@@ -17,6 +17,23 @@ function mapStatusMeta(s: string): string {
   }
 }
 
+function isMetaInstanceRestrictedError(errCode: number, errTextRaw: string): boolean {
+  const restrictedCodes = new Set([
+    131031, 131049, 368, 130429,
+    131042, 131050, 131056,
+    133000, 133004, 133005, 133006, 133008, 133009, 133010, 133016,
+    190, 10, 200, 803,
+  ]);
+  const errText = String(errTextRaw || '').toLowerCase();
+  const restrictedKeywords = [
+    'locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio',
+    'eligibility', 'payment', 'billing', 'not verified',
+    'permission', 'does not exist', 'cannot be loaded',
+    'two-step', 'pin locked', 'access token',
+  ];
+  return restrictedCodes.has(Number(errCode || 0)) || restrictedKeywords.some((k) => errText.includes(k));
+}
+
 function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_url: string | null } {
   const tipo = m.type || 'texto';
   if (m.text?.body) return { texto: m.text.body, tipo: 'texto', media_url: null };
@@ -598,11 +615,7 @@ serve(async (req) => {
 
           // Detecta bloqueio/restrição/banimento da instância
           if (status === 'failed') {
-            const restrictedCodes = new Set([131031, 131049, 368, 130429]);
-            const restrictedKeywords = ['locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio'];
-            const isRestricted =
-              restrictedCodes.has(errCode) ||
-              restrictedKeywords.some((k) => errText.includes(k));
+            const isRestricted = isMetaInstanceRestrictedError(errCode, errText);
 
             if (isRestricted) {
               supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'bloqueadas', _inc: 1 }).then(() => {}, () => {});
@@ -652,6 +665,12 @@ serve(async (req) => {
                   if (job && ['rodando', 'pausado', 'concluido'].includes(job.status)) {
                     const bloqueadas: string[] = Array.isArray(job.instancias_bloqueadas_run)
                       ? job.instancias_bloqueadas_run : [];
+                    if (isRestricted && !bloqueadas.includes(inst.id)) {
+                      bloqueadas.push(inst.id);
+                      await supabase.from('envio_meta_job')
+                        .update({ instancias_bloqueadas_run: bloqueadas })
+                        .eq('id', job.id);
+                    }
                     const restantes = (job.instancia_ids || []).filter((id: string) => !bloqueadas.includes(id));
 
                     if (restantes.length > 0) {
