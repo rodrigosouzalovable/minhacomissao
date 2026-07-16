@@ -1,0 +1,2 @@
+ALTER TABLE public.meta_instance_pagamentos ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'aprovado';
+CREATE INDEX IF NOT EXISTS idx_meta_instance_pagamentos_status_aprovado ON public.meta_instance_pagamentos(instance_id) WHERE status = 'aprovado';

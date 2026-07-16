@@ -3058,6 +3058,7 @@ export type Database = {
           id: string
           instance_id: string
           numero_referencia: string
+          status: string
           user_id: string
           valor_brl: number | null
           valor_usd: number
@@ -3068,6 +3069,7 @@ export type Database = {
           id?: string
           instance_id: string
           numero_referencia: string
+          status?: string
           user_id: string
           valor_brl?: number | null
           valor_usd?: number
@@ -3078,6 +3080,7 @@ export type Database = {
           id?: string
           instance_id?: string
           numero_referencia?: string
+          status?: string
           user_id?: string
           valor_brl?: number | null
           valor_usd?: number
