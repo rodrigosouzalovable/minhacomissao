@@ -615,11 +615,7 @@ serve(async (req) => {
 
           // Detecta bloqueio/restrição/banimento da instância
           if (status === 'failed') {
-            const restrictedCodes = new Set([131031, 131049, 368, 130429]);
-            const restrictedKeywords = ['locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio'];
-            const isRestricted =
-              restrictedCodes.has(errCode) ||
-              restrictedKeywords.some((k) => errText.includes(k));
+            const isRestricted = isMetaInstanceRestrictedError(errCode, errText);
 
             if (isRestricted) {
               supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'bloqueadas', _inc: 1 }).then(() => {}, () => {});
@@ -669,6 +665,12 @@ serve(async (req) => {
                   if (job && ['rodando', 'pausado', 'concluido'].includes(job.status)) {
                     const bloqueadas: string[] = Array.isArray(job.instancias_bloqueadas_run)
                       ? job.instancias_bloqueadas_run : [];
+                    if (isRestricted && !bloqueadas.includes(inst.id)) {
+                      bloqueadas.push(inst.id);
+                      await supabase.from('envio_meta_job')
+                        .update({ instancias_bloqueadas_run: bloqueadas })
+                        .eq('id', job.id);
+                    }
                     const restantes = (job.instancia_ids || []).filter((id: string) => !bloqueadas.includes(id));
 
                     if (restantes.length > 0) {
