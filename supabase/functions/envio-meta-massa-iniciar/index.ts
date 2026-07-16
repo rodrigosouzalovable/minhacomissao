@@ -64,6 +64,29 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Filtro server-side: remove instâncias com qualidade RED/YELLOW
+    const { data: instancesRows } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, nome, saude_quality')
+      .in('id', instanciaIds);
+    const badIds = new Set(
+      (instancesRows || [])
+        .filter((r: any) => {
+          const q = String(r.saude_quality || '').toUpperCase();
+          return q === 'RED' || q === 'YELLOW';
+        })
+        .map((r: any) => r.id),
+    );
+    const instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
+    if (instanciaIdsFiltradas.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
+      }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
     // Verifica todos os template_ids (por instância + o principal).
     const allTemplateIds = Array.from(new Set([
@@ -100,7 +123,7 @@ Deno.serve(async (req) => {
         template_id: template.id,
         template_nome: template.nome_template,
         template_id_by_instance: templateIdByInstance,
-        instancia_ids: instanciaIds,
+        instancia_ids: instanciaIdsFiltradas,
         min_seg: minSec,
         max_seg: maxSec,
         total: clientes.length,

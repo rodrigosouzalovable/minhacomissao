@@ -1749,6 +1749,7 @@ export type Database = {
           template_id_by_instance: Json
           template_nome: string | null
           total: number
+          ultima_instancia_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1774,6 +1775,7 @@ export type Database = {
           template_id_by_instance?: Json
           template_nome?: string | null
           total?: number
+          ultima_instancia_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1799,6 +1801,7 @@ export type Database = {
           template_id_by_instance?: Json
           template_nome?: string | null
           total?: number
+          ultima_instancia_id?: string | null
           updated_at?: string
           user_id?: string
         }

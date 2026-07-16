@@ -186,7 +186,11 @@ async function processarItem(job: any): Promise<ItemResult> {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
     },
-    body: JSON.stringify({ instancia_ids: instanciaIdsDisponiveis, user_id: job.user_id }),
+    body: JSON.stringify({
+      instancia_ids: instanciaIdsDisponiveis,
+      user_id: job.user_id,
+      excluir_id: job.ultima_instancia_id || null,
+    }),
   }).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
 
   if (!pickResp?.success) {
@@ -279,8 +283,8 @@ async function processarItem(job: any): Promise<ItemResult> {
     erroMsg = e instanceof Error ? e.message : String(e);
   }
 
-  // Contadores por instância (para auto-ignorar instância que falha em sequência)
-  const MAX_FALHAS_CONSECUTIVAS = 2;
+  // Contadores por instância — auto-ignora instância no PRIMEIRO erro
+  const MAX_FALHAS_CONSECUTIVAS = 1;
   const falhasMap: Record<string, number> = (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
     ? { ...job.falhas_por_instancia_run } : {};
   const bloqueadasRunAtual: string[] = Array.isArray(job.instancias_bloqueadas_run)
@@ -325,10 +329,12 @@ async function processarItem(job: any): Promise<ItemResult> {
   const proximoEm = new Date(Date.now() + delayMs).toISOString();
 
   // Persiste os contadores/bloqueios de instâncias no job
-  await supabase.from('envio_meta_job').update({
+  const updateJob: Record<string, unknown> = {
     falhas_por_instancia_run: falhasMap,
     instancias_bloqueadas_run: bloqueadasRunAtual,
-  }).eq('id', job.id);
+  };
+  if (ok) updateJob.ultima_instancia_id = instId;
+  await supabase.from('envio_meta_job').update(updateJob).eq('id', job.id);
 
   // Se todas as instâncias foram bloqueadas → encerra o job
   if (restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {

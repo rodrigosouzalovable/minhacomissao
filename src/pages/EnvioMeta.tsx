@@ -460,10 +460,32 @@ export default function EnvioMeta() {
         `Envio bloqueado: template "${templateGroup.nome}" é categoria MARKETING. Só templates UTILITY são permitidos. Peça ao admin liberar em Configurar Meta → Segurança de Custos.`,
       );
     }
+
+    // Filtro automático: remove instâncias com qualidade RED/YELLOW do disparo
+    const badQuality = instanciaIds.filter((id) => {
+      const inst = instancias.find((x) => x.id === id);
+      const q = String(inst?.saude_quality || "").toUpperCase();
+      return q === "RED" || q === "YELLOW";
+    });
+    const filteredInstanciaIds = instanciaIds.filter((id) => !badQuality.includes(id));
+    if (filteredInstanciaIds.length === 0) {
+      return toast.error("Nenhuma instância com qualidade GREEN/UNKNOWN disponível. RED/YELLOW são bloqueadas automaticamente.");
+    }
+    if (badQuality.length > 0) {
+      const nomes = badQuality
+        .map((id) => instancias.find((x) => x.id === id)?.nome || id)
+        .slice(0, 5)
+        .join(", ");
+      toast.warning(`${badQuality.length} instância(s) RED/YELLOW removidas automaticamente: ${nomes}`);
+    }
+
     if (instanciasIncompatíveis.length > 0) {
-      return toast.error(
-        `Este template não está aprovado em: ${instanciasIncompatíveis.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
-      );
+      const incompativelFiltrado = instanciasIncompatíveis.filter((i) => filteredInstanciaIds.includes(i.id));
+      if (incompativelFiltrado.length > 0) {
+        return toast.error(
+          `Este template não está aprovado em: ${incompativelFiltrado.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
+        );
+      }
     }
 
     // Deduplica destinatários antes de qualquer coisa
@@ -477,7 +499,7 @@ export default function EnvioMeta() {
 
     // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
     // dispara em modo teste automaticamente (bypassa ramp-up / horário / domingo).
-    const todasForaPool = instanciaIds.every((id) => {
+    const todasForaPool = filteredInstanciaIds.every((id) => {
       const inst = instancias.find((x) => x.id === id);
       return (inst?.estado_pool || "aguardando_templates") !== "ativo";
     });
@@ -535,7 +557,7 @@ export default function EnvioMeta() {
           `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
           `⚠️ ${totalErr} erros de validação (descartados)\n` +
           (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
-          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
         );
         if (!ok) { setValidando(false); return; }
 
@@ -548,7 +570,7 @@ export default function EnvioMeta() {
       setValidando(false);
     } else {
       if (!confirm(
-        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
+        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
     }
@@ -558,7 +580,7 @@ export default function EnvioMeta() {
     // Mapa instância -> template_id específico daquela instância (mesmo nome/idioma)
     const templateIdByInstance: Record<string, string> = {};
     for (const r of templateGroup.rows) {
-      if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) {
+      if (r.status === "approved" && filteredInstanciaIds.includes(r.instancia_id)) {
         templateIdByInstance[r.instancia_id] = r.id;
       }
     }
@@ -566,7 +588,7 @@ export default function EnvioMeta() {
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
     const okCusto = await pedirConfirmacaoCusto(
       clientesFinal.map((c) => c.telefone),
-      instanciaIds,
+      filteredInstanciaIds,
       templateGroup.categoria,
     );
     if (!okCusto) return;
@@ -585,7 +607,7 @@ export default function EnvioMeta() {
 
     await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
-      instanciaIds,
+      instanciaIds: filteredInstanciaIds,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
       clientes: clientesComVars,
       minSec: lo,

@@ -1,0 +1,1 @@
+ALTER TABLE public.envio_meta_job ADD COLUMN IF NOT EXISTS ultima_instancia_id uuid;
