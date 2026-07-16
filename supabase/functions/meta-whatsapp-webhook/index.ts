@@ -17,6 +17,23 @@ function mapStatusMeta(s: string): string {
   }
 }
 
+function isMetaInstanceRestrictedError(errCode: number, errTextRaw: string): boolean {
+  const restrictedCodes = new Set([
+    131031, 131049, 368, 130429,
+    131042, 131050, 131056,
+    133000, 133004, 133005, 133006, 133008, 133009, 133010, 133016,
+    190, 10, 200, 803,
+  ]);
+  const errText = String(errTextRaw || '').toLowerCase();
+  const restrictedKeywords = [
+    'locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio',
+    'eligibility', 'payment', 'billing', 'not verified',
+    'permission', 'does not exist', 'cannot be loaded',
+    'two-step', 'pin locked', 'access token',
+  ];
+  return restrictedCodes.has(Number(errCode || 0)) || restrictedKeywords.some((k) => errText.includes(k));
+}
+
 function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_url: string | null } {
   const tipo = m.type || 'texto';
   if (m.text?.body) return { texto: m.text.body, tipo: 'texto', media_url: null };
