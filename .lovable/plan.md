@@ -1,26 +1,32 @@
-## Objetivo
-Adicionar botão **"Ativar no pool"** direto no modal de seleção de instâncias em `Envio Meta`, para instâncias com `estado_pool` diferente de `ativo`, sem precisar abrir `Configurar Meta → Pool`.
+## Problema
+A instância "LD 06 FERNANDA" retornou erro `#131042 Business eligibility payment issue` e o sistema continuou tentando enviar por ela, porque esse código não está na lista de "erros que restringem" em `send-whatsapp-meta/index.ts` (hoje só cobre 131031, 131049, 368, 130429 e palavras tipo "locked/banned").
 
-## Onde
-Arquivo: `src/pages/EnvioMeta.tsx` — dentro do `<Dialog>` de "Instâncias" (linhas ~940–1046), na linha de cada instância, logo ao lado do badge "restantes" / botão editar.
+## Correção (mínima, só em `supabase/functions/send-whatsapp-meta/index.ts`)
 
-## Comportamento
-- O botão aparece **apenas** quando `(inst.estado_pool || "aguardando_templates") !== "ativo"`.
-- Quando `pausado` → texto **"Retomar"**; quando `aguardando_templates` → **"Ativar no pool"**.
-- Ao clicar:
-  1. `confirm(...)` reaproveitando a mesma mensagem do `PoolMetaPanel` ("Dia 1 = 20 msg máx") só no fluxo de ativação inicial (não no retomar).
-  2. `UPDATE meta_whatsapp_instances` com os mesmos campos usados em `PoolMetaPanel.ativarNoPool` / `retomar`:
-     - Ativação inicial: `estado_pool='ativo'`, `data_ativacao_api=hoje`, `fase_rampup='fase1'`, `pausa_automatica_ate=null`, `pausa_automatica_motivo=null`.
-     - Retomar (estava `pausado`): só zera `estado_pool='ativo'`, `pausa_automatica_ate=null`, `pausa_automatica_motivo=null` (preserva `fase_rampup` / `data_ativacao_api`).
-  3. Toast de sucesso/erro (reaproveita `toast` já importado).
-  4. Recarrega a lista de instâncias chamando a função que já popula `instancias` no `EnvioMeta` (a mesma usada no `useEffect` inicial / após editar).
-- Estado local `ativandoPoolId` para desabilitar o botão e mostrar `<Loader2 className="animate-spin" />` durante o `UPDATE`.
-- `e.preventDefault(); e.stopPropagation();` no `onClick` para não disparar o `Checkbox` do `<label>`.
+Ampliar o bloco `isRestricted` (linhas ~542–578) para cobrir também erros de **elegibilidade / pagamento / política / permissão** da Meta, que são causas permanentes de falha:
 
-## Efeito colateral positivo
-Depois da ativação, o aviso amarelo "Nenhuma instância marcada está ativa no pool" (linha 930) some sozinho, pois é derivado de `estado_pool`. O botão de disparo em massa desbloqueia sem sair do modal.
+1. **Adicionar códigos** à lista `restrictedCodes`:
+   - `131042` — Business eligibility payment issue (caso do usuário)
+   - `131050` — Business not verified
+   - `131056` — pair rate limit / política
+   - `133000`, `133004`, `133005`, `133006`, `133008`, `133009`, `133010`, `133016` — família "Registration / Two-step / Number pin locked"
+   - `190` — token inválido/expirado
+   - `10`, `200`, `803` — permissões/objeto não acessível (o `Object with ID ... does not exist ... missing permissions` do log do usuário cai aqui)
+
+2. **Adicionar palavras-chave** a `restrictedKeywords`:
+   - `eligibility`, `payment`, `billing`, `not verified`, `permission`, `does not exist`, `cannot be loaded`, `two-step`, `pin locked`, `access token`
+
+3. Ao detectar qualquer um desses, mantém o comportamento atual: `estado_pool='restrita'`, `pausa_automatica_ate = agora + 24h`, grava motivo, notifica admin, retorna `instance_restricted: true`.
+
+## Efeito no envio em massa
+O tick (`envio-meta-massa-tick`) já usa `pick-meta-instance`, que exclui instâncias com `estado_pool !== 'ativo'` e com `pausa_automatica_ate` no futuro. Ou seja, assim que a `LD 06 FERNANDA` cair para `restrita`, ela sai automaticamente do rodízio até o admin revisar — sem mais tentativas.
+
+Além disso, o tick já detecta instâncias restritas durante o job e mostra aviso ao admin (linhas 79–110 do tick).
 
 ## Fora do escopo
-- Sem mudança em `PoolMetaPanel`, edge functions ou RLS.
-- Sem alterar lógica de ramp-up, tier ou saúde.
-- Nenhuma mudança de banco.
+- Não pausar em erros transitórios (timeout, 5xx da Meta, rate limit temporário) — isso continua tentando com outra instância no round-robin.
+- Sem mudanças em UI, RLS, banco ou outras funções.
+- Sem alterar `pick-meta-instance`, `envio-meta-massa-tick`, `EnvioMeta.tsx`.
+
+## Arquivo alterado
+- `supabase/functions/send-whatsapp-meta/index.ts` — apenas as duas listas (`restrictedCodes` e `restrictedKeywords`) no bloco de tratamento de erro do envio.

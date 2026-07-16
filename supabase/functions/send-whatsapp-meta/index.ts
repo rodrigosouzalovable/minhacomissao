@@ -540,9 +540,19 @@ Deno.serve(async (req) => {
       });
 
       // Detecta bloqueio/restrição/banimento síncrono da Meta
-      const restrictedCodes = [131031, 131049, 368, 130429];
+      const restrictedCodes = [
+        131031, 131049, 368, 130429,
+        131042, 131050, 131056,
+        133000, 133004, 133005, 133006, 133008, 133009, 133010, 133016,
+        190, 10, 200, 803,
+      ];
       const lower = msg.toLowerCase();
-      const restrictedKeywords = ['locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio'];
+      const restrictedKeywords = [
+        'locked', 'restrict', 'banned', 'disabled', 'bloquead', 'bloqueio',
+        'eligibility', 'payment', 'billing', 'not verified',
+        'permission', 'does not exist', 'cannot be loaded',
+        'two-step', 'pin locked', 'access token',
+      ];
       const isRestricted =
         restrictedCodes.some((c) => msg.includes(`#${c}`)) ||
         restrictedKeywords.some((k) => lower.includes(k));
