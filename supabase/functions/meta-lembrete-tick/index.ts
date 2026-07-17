@@ -112,28 +112,33 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }
 
-    // Templates
-    const tplIds = [cfg.template_id_d3, cfg.template_id_d0].filter(Boolean);
-    const { data: tpls } = await supabase
+    // Template FIXO — buscamos por nome + instância no round-robin
+    const TEMPLATE_NOME = 'lembrete_envio_boleto';
+    const { data: tplsAprovados } = await supabase
       .from('meta_whatsapp_templates')
-      .select('*')
-      .in('id', tplIds as string[]);
-    const tplD3 = (tpls || []).find((t: any) => t.id === cfg.template_id_d3) || null;
-    const tplD0 = (tpls || []).find((t: any) => t.id === cfg.template_id_d0) || null;
+      .select('id, nome_template, idioma, categoria, status, body_text, instancia_id, meta_template_name, header_type, header_text, footer_text, botoes, variaveis')
+      .eq('nome_template', TEMPLATE_NOME)
+      .eq('status', 'approved')
+      .in('instancia_id', instanciaIds);
+    const tplPorInstancia = new Map<string, any>();
+    for (const t of tplsAprovados || []) tplPorInstancia.set(t.instancia_id, t);
 
-    // Datas alvo
+    if (tplPorInstancia.size === 0) {
+      await notifyAdmin(supabase, cfg.notificar_telefones || [],
+        `⚠️ Lembrete Meta ${isoDate(brt)}: nenhuma instância selecionada tem o template "${TEMPLATE_NOME}" aprovado.`,
+        instanciaIds[0]);
+      return new Response(JSON.stringify({ ok: false, error: 'template não aprovado em nenhuma instância' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+    }
+
+    // Datas alvo — D-3 e D0 sempre
     const hoje = isoDate(brt);
     const em3 = new Date(brt); em3.setDate(em3.getDate() + 3);
     const dataD3 = isoDate(em3);
-
-    const targets: Array<{ tipo: 'D-3'|'D0'; dataRef: string }> = [];
-    if (tplD3) targets.push({ tipo: 'D-3', dataRef: dataD3 });
-    if (tplD0) targets.push({ tipo: 'D0', dataRef: hoje });
-
-    if (targets.length === 0) {
-      return new Response(JSON.stringify({ ok: false, error: 'nenhum template configurado' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
-    }
+    const targets: Array<{ tipo: 'D-3'|'D0'; dataRef: string }> = [
+      { tipo: 'D-3', dataRef: dataD3 },
+      { tipo: 'D0', dataRef: hoje },
+    ];
 
     // Marca execução
     await supabase.from('meta_lembrete_config').update({ ultima_execucao: new Date().toISOString() })
@@ -145,9 +150,6 @@ Deno.serve(async (req) => {
     let rrIdx = 0;
 
     for (const t of targets) {
-      const template = t.tipo === 'D-3' ? tplD3 : tplD0;
-      const varMap = (t.tipo === 'D-3' ? cfg.variaveis_map_d3 : cfg.variaveis_map_d0) || {};
-
       // Pagamentos alvo
       const { data: pagamentos } = await supabase
         .from('pagamentos')
@@ -170,45 +172,29 @@ Deno.serve(async (req) => {
           .select('id').eq('pagamento_id', p.id).eq('tipo', t.tipo).eq('data_ref', hoje).maybeSingle();
         if (exist) { totalPulado++; continue; }
 
-        // Round-robin instância saudável ainda não bloqueada
+        // Round-robin: instância saudável, não bloqueada, E com o template aprovado
         let chosen: any = null;
+        let template: any = null;
         for (let i = 0; i < instRoundRobin.length; i++) {
           const cand = instRoundRobin[(rrIdx + i) % instRoundRobin.length];
-          if (!instBloqueadas.has(cand.id)) { chosen = cand; rrIdx = (rrIdx + i + 1) % instRoundRobin.length; break; }
-        }
-        if (!chosen) {
-          totalFalha++;
-          await notifyAdmin(supabase, cfg.notificar_telefones || [],
-            `⚠️ Lembrete Meta: todas as instâncias falharam. Interrompendo o lote em ${totalEnviado} enviados / ${totalFalha} falhas.`,
-            instanciaIds[0]);
+          if (instBloqueadas.has(cand.id)) continue;
+          const tpl = tplPorInstancia.get(cand.id);
+          if (!tpl) continue;
+          chosen = cand; template = tpl;
+          rrIdx = (rrIdx + i + 1) % instRoundRobin.length;
           break;
         }
+        if (!chosen) {
+          totalPulado++;
+          continue;
+        }
 
-        // Monta cliente com vars a partir do variaveis_map
+        // Vars fixas: {{1}} = nome, {{2}} = data de vencimento
         const nome = String(acordo?.cliente_nome || '').trim() || 'cliente';
         const cpf = String(acordo?.cliente_cpf || '');
         const dataVenc = formatBR(p.data_prevista);
-        const parcelaLabel = String(p.numero_parcela ?? '');
         const valor = Number(p.valor_parcela || 0);
-
-        const resolveField = (field: string) => {
-          switch (String(field)) {
-            case 'nome_cliente':
-            case 'nome': return nome;
-            case 'primeiro_nome': return nome.split(/\s+/)[0];
-            case 'data_vencimento': return dataVenc;
-            case 'numero_parcela': return parcelaLabel;
-            case 'valor_parcela': return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
-            case 'cpf': return cpf;
-            default: return '';
-          }
-        };
-
-        const vars: Record<string, string> = {};
-        for (const [ph, field] of Object.entries(varMap)) {
-          const val = resolveField(String(field));
-          if (val) vars[ph] = val;
-        }
+        const vars: Record<string, string> = { '1': nome, '2': dataVenc };
 
         if (dryRun) {
           totalEnviado++;
