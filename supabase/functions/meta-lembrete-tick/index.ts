@@ -150,9 +150,6 @@ Deno.serve(async (req) => {
     let rrIdx = 0;
 
     for (const t of targets) {
-      const template = t.tipo === 'D-3' ? tplD3 : tplD0;
-      const varMap = (t.tipo === 'D-3' ? cfg.variaveis_map_d3 : cfg.variaveis_map_d0) || {};
-
       // Pagamentos alvo
       const { data: pagamentos } = await supabase
         .from('pagamentos')
@@ -175,45 +172,29 @@ Deno.serve(async (req) => {
           .select('id').eq('pagamento_id', p.id).eq('tipo', t.tipo).eq('data_ref', hoje).maybeSingle();
         if (exist) { totalPulado++; continue; }
 
-        // Round-robin instância saudável ainda não bloqueada
+        // Round-robin: instância saudável, não bloqueada, E com o template aprovado
         let chosen: any = null;
+        let template: any = null;
         for (let i = 0; i < instRoundRobin.length; i++) {
           const cand = instRoundRobin[(rrIdx + i) % instRoundRobin.length];
-          if (!instBloqueadas.has(cand.id)) { chosen = cand; rrIdx = (rrIdx + i + 1) % instRoundRobin.length; break; }
-        }
-        if (!chosen) {
-          totalFalha++;
-          await notifyAdmin(supabase, cfg.notificar_telefones || [],
-            `⚠️ Lembrete Meta: todas as instâncias falharam. Interrompendo o lote em ${totalEnviado} enviados / ${totalFalha} falhas.`,
-            instanciaIds[0]);
+          if (instBloqueadas.has(cand.id)) continue;
+          const tpl = tplPorInstancia.get(cand.id);
+          if (!tpl) continue;
+          chosen = cand; template = tpl;
+          rrIdx = (rrIdx + i + 1) % instRoundRobin.length;
           break;
         }
+        if (!chosen) {
+          totalPulado++;
+          continue;
+        }
 
-        // Monta cliente com vars a partir do variaveis_map
+        // Vars fixas: {{1}} = nome, {{2}} = data de vencimento
         const nome = String(acordo?.cliente_nome || '').trim() || 'cliente';
         const cpf = String(acordo?.cliente_cpf || '');
         const dataVenc = formatBR(p.data_prevista);
-        const parcelaLabel = String(p.numero_parcela ?? '');
         const valor = Number(p.valor_parcela || 0);
-
-        const resolveField = (field: string) => {
-          switch (String(field)) {
-            case 'nome_cliente':
-            case 'nome': return nome;
-            case 'primeiro_nome': return nome.split(/\s+/)[0];
-            case 'data_vencimento': return dataVenc;
-            case 'numero_parcela': return parcelaLabel;
-            case 'valor_parcela': return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
-            case 'cpf': return cpf;
-            default: return '';
-          }
-        };
-
-        const vars: Record<string, string> = {};
-        for (const [ph, field] of Object.entries(varMap)) {
-          const val = resolveField(String(field));
-          if (val) vars[ph] = val;
-        }
+        const vars: Record<string, string> = { '1': nome, '2': dataVenc };
 
         if (dryRun) {
           totalEnviado++;
