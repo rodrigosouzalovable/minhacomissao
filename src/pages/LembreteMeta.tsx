@@ -311,13 +311,41 @@ export default function LembreteMeta() {
           <Button onClick={salvar} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>} Salvar configuração
           </Button>
-          <Button variant="outline" onClick={() => executarAgora(true)} disabled={running}>
+          <Button variant="outline" onClick={() => executarAgora(true)} disabled={running || testando}>
             <PlayCircle className="h-4 w-4"/> Simular (dry-run)
           </Button>
-          <Button variant="secondary" onClick={() => executarAgora(false)} disabled={running}>
+          <Button variant="outline" onClick={() => setTestDialogOpen(true)} disabled={running || testando || instanciaIds.length === 0}>
+            {testando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TestTube className="h-4 w-4"/>} Testar instâncias
+          </Button>
+          {temFalhas && !testando && (
+            <Button variant="destructive" onClick={desmarcarFalhadas}>
+              <XCircle className="h-4 w-4"/> Desmarcar falhadas
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => executarAgora(false)} disabled={running || testando}>
             {running ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>} Enviar agora
           </Button>
         </div>
+
+        <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Testar instâncias</DialogTitle>
+              <DialogDescription>
+                Vamos enviar 1 mensagem real do template <code className="font-mono">{TEMPLATE_NOME}</code> para o telefone abaixo, através de cada uma das {instanciaIds.length} instâncias marcadas. As que falharem ficarão sinalizadas em vermelho e poderão ser desmarcadas com um clique.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label>Telefone de teste (com DDD)</Label>
+              <Input value={testTelefone} onChange={(e) => setTestTelefone(e.target.value)} placeholder="62991672674"/>
+              <p className="text-xs text-muted-foreground">A variável {'{{1}}'} vai como "Teste" e {'{{2}}'} como a data de hoje.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTestDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={testarInstancias}><TestTube className="h-4 w-4"/> Testar agora</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>
