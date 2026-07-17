@@ -161,7 +161,52 @@ export default function LembreteMeta() {
     setInstanciaIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
-  return (
+  async function testarInstancias() {
+    if (instanciaIds.length === 0) { toast.error('Selecione ao menos 1 instância'); return; }
+    const tel = testTelefone.replace(/\D/g, '');
+    if (tel.length < 10) { toast.error('Telefone inválido'); return; }
+    localStorage.setItem('lembrete-meta-teste-tel', testTelefone);
+    setTestDialogOpen(false);
+    setTestando(true);
+    const initial: Record<string, { status: 'testing' | 'ok' | 'fail'; erro?: string }> = {};
+    instanciaIds.forEach(id => { initial[id] = { status: 'testing' }; });
+    setTestResultados(initial);
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-lembrete-teste-instancias', {
+        body: { instancia_ids: instanciaIds, telefone: tel },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Falha');
+      const next: Record<string, { status: 'ok' | 'fail'; erro?: string }> = {};
+      for (const r of data.resultados as any[]) {
+        next[r.instancia_id] = { status: r.ok ? 'ok' : 'fail', erro: r.erro || undefined };
+      }
+      setTestResultados(next);
+      const ok = data.ok_count ?? 0;
+      const fail = data.fail_count ?? 0;
+      if (fail === 0) toast.success(`Todas as ${ok} instâncias passaram no teste`);
+      else toast.warning(`${ok} passaram, ${fail} falharam`);
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao testar');
+      setTestResultados({});
+    } finally {
+      setTestando(false);
+    }
+  }
+
+  function desmarcarFalhadas() {
+    const falhadas = Object.entries(testResultados).filter(([, v]) => v.status === 'fail').map(([k]) => k);
+    if (falhadas.length === 0) return;
+    setInstanciaIds(prev => prev.filter(id => !falhadas.includes(id)));
+    setTestResultados(prev => {
+      const next = { ...prev };
+      falhadas.forEach(id => { delete next[id]; });
+      return next;
+    });
+    toast.success(`${falhadas.length} instância(s) desmarcada(s)`);
+  }
+
+  const temFalhas = Object.values(testResultados).some(v => v.status === 'fail');
     <AppLayout>
       <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
         <div className="flex items-center justify-between flex-wrap gap-3">
