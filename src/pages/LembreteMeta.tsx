@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Bell, Save, Send, Loader2, PlayCircle, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Bell, Save, Send, Loader2, PlayCircle, CheckCircle2, XCircle, AlertCircle, TestTube } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 const TEMPLATE_NOME = 'lembrete_envio_boleto';
 
@@ -36,6 +37,10 @@ export default function LembreteMeta() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [testando, setTestando] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testTelefone, setTestTelefone] = useState<string>(() => localStorage.getItem('lembrete-meta-teste-tel') || '62991672674');
+  const [testResultados, setTestResultados] = useState<Record<string, { status: 'testing' | 'ok' | 'fail'; erro?: string }>>({});
 
   const [ativo, setAtivo] = useState(false);
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
@@ -156,6 +161,53 @@ export default function LembreteMeta() {
     setInstanciaIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
+  async function testarInstancias() {
+    if (instanciaIds.length === 0) { toast.error('Selecione ao menos 1 instância'); return; }
+    const tel = testTelefone.replace(/\D/g, '');
+    if (tel.length < 10) { toast.error('Telefone inválido'); return; }
+    localStorage.setItem('lembrete-meta-teste-tel', testTelefone);
+    setTestDialogOpen(false);
+    setTestando(true);
+    const initial: Record<string, { status: 'testing' | 'ok' | 'fail'; erro?: string }> = {};
+    instanciaIds.forEach(id => { initial[id] = { status: 'testing' }; });
+    setTestResultados(initial);
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-lembrete-teste-instancias', {
+        body: { instancia_ids: instanciaIds, telefone: tel },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Falha');
+      const next: Record<string, { status: 'ok' | 'fail'; erro?: string }> = {};
+      for (const r of data.resultados as any[]) {
+        next[r.instancia_id] = { status: r.ok ? 'ok' : 'fail', erro: r.erro || undefined };
+      }
+      setTestResultados(next);
+      const ok = data.ok_count ?? 0;
+      const fail = data.fail_count ?? 0;
+      if (fail === 0) toast.success(`Todas as ${ok} instâncias passaram no teste`);
+      else toast.warning(`${ok} passaram, ${fail} falharam`);
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao testar');
+      setTestResultados({});
+    } finally {
+      setTestando(false);
+    }
+  }
+
+  function desmarcarFalhadas() {
+    const falhadas = Object.entries(testResultados).filter(([, v]) => v.status === 'fail').map(([k]) => k);
+    if (falhadas.length === 0) return;
+    setInstanciaIds(prev => prev.filter(id => !falhadas.includes(id)));
+    setTestResultados(prev => {
+      const next = { ...prev };
+      falhadas.forEach(id => { delete next[id]; });
+      return next;
+    });
+    toast.success(`${falhadas.length} instância(s) desmarcada(s)`);
+  }
+
+  const temFalhas = Object.values(testResultados).some(v => v.status === 'fail');
+
   return (
     <AppLayout>
       <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
@@ -209,15 +261,33 @@ export default function LembreteMeta() {
                 {(instancias || []).map(i => {
                   const q = String(i.saude_quality || '').toUpperCase();
                   const bad = q === 'RED' || q === 'YELLOW';
+                  const testRes = testResultados[i.id];
                   return (
-                    <label key={i.id} className={`flex items-center gap-2 rounded border p-2 cursor-pointer ${instanciaIds.includes(i.id) ? 'bg-primary/5 border-primary' : ''}`}>
+                    <label key={i.id} title={testRes?.erro || ''} className={`flex items-center gap-2 rounded border p-2 cursor-pointer ${
+                      testRes?.status === 'ok' ? 'border-green-500 bg-green-500/5'
+                      : testRes?.status === 'fail' ? 'border-red-500 bg-red-500/5'
+                      : testRes?.status === 'testing' ? 'border-amber-500 bg-amber-500/5'
+                      : instanciaIds.includes(i.id) ? 'bg-primary/5 border-primary' : ''
+                    }`}>
                       <Checkbox checked={instanciaIds.includes(i.id)} onCheckedChange={() => toggleInstancia(i.id)}/>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">{i.nome}</p>
-                        <div className="flex gap-1 flex-wrap">
+                        <div className="flex gap-1 flex-wrap items-center">
                           <Badge variant={bad ? 'destructive' : 'outline'} className="text-[10px]">{q || 'UNKNOWN'}</Badge>
                           <Badge variant="outline" className="text-[10px]">{i.estado_pool || '-'}</Badge>
+                          {testRes?.status === 'testing' && (
+                            <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-700"><Loader2 className="h-2.5 w-2.5 mr-1 animate-spin"/>Testando</Badge>
+                          )}
+                          {testRes?.status === 'ok' && (
+                            <Badge className="text-[10px] bg-green-600"><CheckCircle2 className="h-2.5 w-2.5 mr-1"/>OK</Badge>
+                          )}
+                          {testRes?.status === 'fail' && (
+                            <Badge variant="destructive" className="text-[10px]"><XCircle className="h-2.5 w-2.5 mr-1"/>Falhou</Badge>
+                          )}
                         </div>
+                        {testRes?.status === 'fail' && testRes.erro && (
+                          <p className="text-[10px] text-red-600 mt-1 line-clamp-2">{testRes.erro}</p>
+                        )}
                       </div>
                     </label>
                   );
@@ -241,13 +311,41 @@ export default function LembreteMeta() {
           <Button onClick={salvar} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>} Salvar configuração
           </Button>
-          <Button variant="outline" onClick={() => executarAgora(true)} disabled={running}>
+          <Button variant="outline" onClick={() => executarAgora(true)} disabled={running || testando}>
             <PlayCircle className="h-4 w-4"/> Simular (dry-run)
           </Button>
-          <Button variant="secondary" onClick={() => executarAgora(false)} disabled={running}>
+          <Button variant="outline" onClick={() => setTestDialogOpen(true)} disabled={running || testando || instanciaIds.length === 0}>
+            {testando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TestTube className="h-4 w-4"/>} Testar instâncias
+          </Button>
+          {temFalhas && !testando && (
+            <Button variant="destructive" onClick={desmarcarFalhadas}>
+              <XCircle className="h-4 w-4"/> Desmarcar falhadas
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => executarAgora(false)} disabled={running || testando}>
             {running ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>} Enviar agora
           </Button>
         </div>
+
+        <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Testar instâncias</DialogTitle>
+              <DialogDescription>
+                Vamos enviar 1 mensagem real do template <code className="font-mono">{TEMPLATE_NOME}</code> para o telefone abaixo, através de cada uma das {instanciaIds.length} instâncias marcadas. As que falharem ficarão sinalizadas em vermelho e poderão ser desmarcadas com um clique.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label>Telefone de teste (com DDD)</Label>
+              <Input value={testTelefone} onChange={(e) => setTestTelefone(e.target.value)} placeholder="62991672674"/>
+              <p className="text-xs text-muted-foreground">A variável {'{{1}}'} vai como "Teste" e {'{{2}}'} como a data de hoje.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTestDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={testarInstancias}><TestTube className="h-4 w-4"/> Testar agora</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>
