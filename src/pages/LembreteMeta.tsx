@@ -37,6 +37,10 @@ export default function LembreteMeta() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [testando, setTestando] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testTelefone, setTestTelefone] = useState<string>(() => localStorage.getItem('lembrete-meta-teste-tel') || '62991672674');
+  const [testResultados, setTestResultados] = useState<Record<string, { status: 'testing' | 'ok' | 'fail'; erro?: string }>>({});
 
   const [ativo, setAtivo] = useState(false);
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
