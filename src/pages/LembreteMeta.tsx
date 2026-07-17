@@ -78,6 +78,41 @@ export default function LembreteMeta() {
 
   const templatePreview = templatesAprovados?.[0] || null;
 
+  // Placeholders numerais detectados no body do template
+  const placeholders = useMemo(() => {
+    const body = templatePreview?.body_text || '';
+    const set = new Set<string>();
+    const re = /\{\{\s*(\d+)\s*\}\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body)) !== null) set.add(m[1]);
+    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+  }, [templatePreview?.body_text]);
+
+  // Inicializa defaults quando o diálogo abre / template carrega
+  useEffect(() => {
+    if (!testDialogOpen) return;
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    setTestVars(prev => {
+      const next = { ...prev };
+      for (const k of placeholders) {
+        if (next[k] === undefined || next[k] === '') {
+          next[k] = k === '1' ? 'Cliente Teste' : k === '2' ? hoje : '';
+        }
+      }
+      return next;
+    });
+  }, [testDialogOpen, placeholders]);
+
+  // Preview com substituição em tempo real
+  const previewRenderizado = useMemo(() => {
+    let txt = templatePreview?.body_text || '';
+    for (const k of placeholders) {
+      const val = testVars[k] ?? '';
+      txt = txt.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'g'), val || `{{${k}}}`);
+    }
+    return txt;
+  }, [templatePreview?.body_text, placeholders, testVars]);
+
   const { data: instancias } = useQuery<Instancia[]>({
     queryKey: ['meta-lembrete-instancias', Array.from(instanciaIdsAprovadas).sort().join(',')],
     queryFn: async () => {
