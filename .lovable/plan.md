@@ -1,32 +1,23 @@
-## Problema
-A instância "LD 06 FERNANDA" retornou erro `#131042 Business eligibility payment issue` e o sistema continuou tentando enviar por ela, porque esse código não está na lista de "erros que restringem" em `send-whatsapp-meta/index.ts` (hoje só cobre 131031, 131049, 368, 130429 e palavras tipo "locked/banned").
+## Objetivo
+Ao selecionar um template com placeholders numerais (`{{1}}`, `{{2}}`, ...) no diálogo "Nova conversa Meta", exibir um campo de input para cada variável, permitindo que o usuário preencha nome/número/valor livremente antes de disparar o template.
 
-## Correção (mínima, só em `supabase/functions/send-whatsapp-meta/index.ts`)
+## Onde
+`src/components/inbox/meta/MetaNovaConversaDialog.tsx`
 
-Ampliar o bloco `isRestricted` (linhas ~542–578) para cobrir também erros de **elegibilidade / pagamento / política / permissão** da Meta, que são causas permanentes de falha:
+## Comportamento
+1. Ao trocar `selectedTemplate`, extrair os placeholders numéricos únicos do `body_text` **e** do header TEXT (via `variaveis._components`), ordenados por índice (1, 2, 3...).
+2. Se houver ≥1 placeholder numeral, renderizar um `Input` por variável, rotulado como "Variável {{1}}", "Variável {{2}}"..., com dica opcional do campo mapeado (`variaveis["1"]` ex: `{nome}`) como placeholder.
+3. Estado local `sampleValues: Record<string,string>` resetado a cada troca de template.
+4. Passar esses valores no payload do envio como `cliente.vars` — o backend `send-whatsapp-meta` já consome `rowVars[k]` com prioridade sobre inferência automática (linhas 124-149 do `buildParameters`), então nenhuma mudança de backend é necessária.
+5. Passar também `sampleValues` (array indexado) ao `<TemplateWhatsAppPreview>` para o preview refletir os valores digitados em tempo real (o componente já aceita a prop `sampleValues`).
+6. Se o template só tiver placeholders nomeados (ex.: `{{name}}`) — comportamento atual (campo "Nome") permanece; não renderiza os inputs numerais.
+7. Botão "Enviar template" fica desabilitado enquanto qualquer variável numeral obrigatória estiver em branco.
 
-1. **Adicionar códigos** à lista `restrictedCodes`:
-   - `131042` — Business eligibility payment issue (caso do usuário)
-   - `131050` — Business not verified
-   - `131056` — pair rate limit / política
-   - `133000`, `133004`, `133005`, `133006`, `133008`, `133009`, `133010`, `133016` — família "Registration / Two-step / Number pin locked"
-   - `190` — token inválido/expirado
-   - `10`, `200`, `803` — permissões/objeto não acessível (o `Object with ID ... does not exist ... missing permissions` do log do usuário cai aqui)
+## Detalhes técnicos
+- Regex de extração: `/\{\{\s*(\d+)\s*\}\}/g` aplicada em `body_text` + `header.text` (quando `header.format === "TEXT"`).
+- Placeholder do input: usar `variaveis[k]` do template quando existir (mostra ao usuário o que aquela posição significa, ex.: `{nome}`, `{cpf}`).
+- Não alterar edge functions; não tocar em outros componentes.
 
-2. **Adicionar palavras-chave** a `restrictedKeywords`:
-   - `eligibility`, `payment`, `billing`, `not verified`, `permission`, `does not exist`, `cannot be loaded`, `two-step`, `pin locked`, `access token`
-
-3. Ao detectar qualquer um desses, mantém o comportamento atual: `estado_pool='restrita'`, `pausa_automatica_ate = agora + 24h`, grava motivo, notifica admin, retorna `instance_restricted: true`.
-
-## Efeito no envio em massa
-O tick (`envio-meta-massa-tick`) já usa `pick-meta-instance`, que exclui instâncias com `estado_pool !== 'ativo'` e com `pausa_automatica_ate` no futuro. Ou seja, assim que a `LD 06 FERNANDA` cair para `restrita`, ela sai automaticamente do rodízio até o admin revisar — sem mais tentativas.
-
-Além disso, o tick já detecta instâncias restritas durante o job e mostra aviso ao admin (linhas 79–110 do tick).
-
-## Fora do escopo
-- Não pausar em erros transitórios (timeout, 5xx da Meta, rate limit temporário) — isso continua tentando com outra instância no round-robin.
-- Sem mudanças em UI, RLS, banco ou outras funções.
-- Sem alterar `pick-meta-instance`, `envio-meta-massa-tick`, `EnvioMeta.tsx`.
-
-## Arquivo alterado
-- `supabase/functions/send-whatsapp-meta/index.ts` — apenas as duas listas (`restrictedCodes` e `restrictedKeywords`) no bloco de tratamento de erro do envio.
+## Fora de escopo
+- Templates com header IMAGE/VIDEO (imagem continua vinda do cadastro do template).
+- Persistir valores digitados entre aberturas do diálogo.
