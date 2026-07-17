@@ -271,7 +271,7 @@ export default function LembreteMeta() {
               <CardTitle>Template D0 (no dia do vencimento)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Select value={templateD0} onValueChange={(v) => { setTemplateD0(v); setVarMapD0({}); }}>
+              <Select value={templateD0 || 'none'} onValueChange={(v) => { setTemplateD0(v === 'none' ? '' : v); setVarMapD0({}); }}>
                 <SelectTrigger><SelectValue placeholder="Selecione um template..."/></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— Não enviar D0 —</SelectItem>
