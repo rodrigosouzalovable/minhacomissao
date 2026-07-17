@@ -25,7 +25,7 @@ function normalizePhone(raw: string) {
 
 async function invokeSendMeta(supabase: any, instancia_id: string, cliente: any, template: any) {
   return await supabase.functions.invoke('send-whatsapp-meta', {
-    body: { instancia_id, cliente, template },
+    body: { instancia_id, cliente, template, template_id: template?.id },
   });
 }
 

@@ -27,6 +27,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({} as any));
     const instancia_ids: string[] = Array.isArray(body?.instancia_ids) ? body.instancia_ids : [];
     const telefone = normalizePhone(String(body?.telefone || ''));
+    const varsInput: Record<string, string> = (body?.variaveis && typeof body.variaveis === 'object') ? body.variaveis : {};
 
     if (!telefone) {
       return new Response(JSON.stringify({ ok: false, error: 'Telefone inválido' }),
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const vars: Record<string, string> = { '1': 'Teste', '2': hoje };
+      const vars: Record<string, string> = { '1': 'Teste', '2': hoje, ...varsInput };
 
       let success = false;
       let waId: string | null = null;
@@ -94,7 +95,8 @@ Deno.serve(async (req) => {
         const { data: resp, error: sendErr } = await supabase.functions.invoke('send-whatsapp-meta', {
           body: {
             instancia_id: id,
-            cliente: { telefone, nome: 'Teste', cpf: '', saldo: 0, vars },
+            template_id: template.id,
+            cliente: { telefone, nome: vars['1'] || 'Teste', cpf: '', saldo: 0, vars },
             template,
           },
         });

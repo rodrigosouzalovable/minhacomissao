@@ -41,6 +41,7 @@ export default function LembreteMeta() {
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testTelefone, setTestTelefone] = useState<string>(() => localStorage.getItem('lembrete-meta-teste-tel') || '62991672674');
   const [testResultados, setTestResultados] = useState<Record<string, { status: 'testing' | 'ok' | 'fail'; erro?: string }>>({});
+  const [testVars, setTestVars] = useState<Record<string, string>>({});
 
   const [ativo, setAtivo] = useState(false);
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
@@ -76,6 +77,41 @@ export default function LembreteMeta() {
   );
 
   const templatePreview = templatesAprovados?.[0] || null;
+
+  // Placeholders numerais detectados no body do template
+  const placeholders = useMemo(() => {
+    const body = templatePreview?.body_text || '';
+    const set = new Set<string>();
+    const re = /\{\{\s*(\d+)\s*\}\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body)) !== null) set.add(m[1]);
+    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+  }, [templatePreview?.body_text]);
+
+  // Inicializa defaults quando o diálogo abre / template carrega
+  useEffect(() => {
+    if (!testDialogOpen) return;
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    setTestVars(prev => {
+      const next = { ...prev };
+      for (const k of placeholders) {
+        if (next[k] === undefined || next[k] === '') {
+          next[k] = k === '1' ? 'Cliente Teste' : k === '2' ? hoje : '';
+        }
+      }
+      return next;
+    });
+  }, [testDialogOpen, placeholders]);
+
+  // Preview com substituição em tempo real
+  const previewRenderizado = useMemo(() => {
+    let txt = templatePreview?.body_text || '';
+    for (const k of placeholders) {
+      const val = testVars[k] ?? '';
+      txt = txt.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'g'), val || `{{${k}}}`);
+    }
+    return txt;
+  }, [templatePreview?.body_text, placeholders, testVars]);
 
   const { data: instancias } = useQuery<Instancia[]>({
     queryKey: ['meta-lembrete-instancias', Array.from(instanciaIdsAprovadas).sort().join(',')],
@@ -173,7 +209,7 @@ export default function LembreteMeta() {
     setTestResultados(initial);
     try {
       const { data, error } = await supabase.functions.invoke('meta-lembrete-teste-instancias', {
-        body: { instancia_ids: instanciaIds, telefone: tel },
+        body: { instancia_ids: instanciaIds, telefone: tel, variaveis: testVars },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Falha');
@@ -328,17 +364,43 @@ export default function LembreteMeta() {
         </div>
 
         <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Testar instâncias</DialogTitle>
               <DialogDescription>
-                Vamos enviar 1 mensagem real do template <code className="font-mono">{TEMPLATE_NOME}</code> para o telefone abaixo, através de cada uma das {instanciaIds.length} instâncias marcadas. As que falharem ficarão sinalizadas em vermelho e poderão ser desmarcadas com um clique.
+                Envia 1 mensagem real do template <code className="font-mono">{TEMPLATE_NOME}</code> por cada uma das {instanciaIds.length} instâncias marcadas. As que falharem ficam sinalizadas em vermelho.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-2">
-              <Label>Telefone de teste (com DDD)</Label>
-              <Input value={testTelefone} onChange={(e) => setTestTelefone(e.target.value)} placeholder="62991672674"/>
-              <p className="text-xs text-muted-foreground">A variável {'{{1}}'} vai como "Teste" e {'{{2}}'} como a data de hoje.</p>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="space-y-2">
+                <Label>Telefone de teste (com DDD)</Label>
+                <Input value={testTelefone} onChange={(e) => setTestTelefone(e.target.value)} placeholder="62991672674"/>
+              </div>
+
+              {placeholders.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Variáveis do template</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {placeholders.map(k => (
+                      <div key={k} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Variável {'{{'}{k}{'}}'}</Label>
+                        <Input
+                          value={testVars[k] ?? ''}
+                          onChange={(e) => setTestVars(prev => ({ ...prev, [k]: e.target.value }))}
+                          placeholder={k === '1' ? 'Nome do cliente' : k === '2' ? 'Data de vencimento' : `Valor da variável ${k}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Preview da mensagem</Label>
+                <div className="rounded border bg-muted p-3 text-sm whitespace-pre-wrap">
+                  {previewRenderizado || <span className="text-muted-foreground italic">Sem template disponível</span>}
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setTestDialogOpen(false)}>Cancelar</Button>
