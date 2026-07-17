@@ -261,15 +261,33 @@ export default function LembreteMeta() {
                 {(instancias || []).map(i => {
                   const q = String(i.saude_quality || '').toUpperCase();
                   const bad = q === 'RED' || q === 'YELLOW';
+                  const testRes = testResultados[i.id];
                   return (
-                    <label key={i.id} className={`flex items-center gap-2 rounded border p-2 cursor-pointer ${instanciaIds.includes(i.id) ? 'bg-primary/5 border-primary' : ''}`}>
+                    <label key={i.id} title={testRes?.erro || ''} className={`flex items-center gap-2 rounded border p-2 cursor-pointer ${
+                      testRes?.status === 'ok' ? 'border-green-500 bg-green-500/5'
+                      : testRes?.status === 'fail' ? 'border-red-500 bg-red-500/5'
+                      : testRes?.status === 'testing' ? 'border-amber-500 bg-amber-500/5'
+                      : instanciaIds.includes(i.id) ? 'bg-primary/5 border-primary' : ''
+                    }`}>
                       <Checkbox checked={instanciaIds.includes(i.id)} onCheckedChange={() => toggleInstancia(i.id)}/>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">{i.nome}</p>
-                        <div className="flex gap-1 flex-wrap">
+                        <div className="flex gap-1 flex-wrap items-center">
                           <Badge variant={bad ? 'destructive' : 'outline'} className="text-[10px]">{q || 'UNKNOWN'}</Badge>
                           <Badge variant="outline" className="text-[10px]">{i.estado_pool || '-'}</Badge>
+                          {testRes?.status === 'testing' && (
+                            <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-700"><Loader2 className="h-2.5 w-2.5 mr-1 animate-spin"/>Testando</Badge>
+                          )}
+                          {testRes?.status === 'ok' && (
+                            <Badge className="text-[10px] bg-green-600"><CheckCircle2 className="h-2.5 w-2.5 mr-1"/>OK</Badge>
+                          )}
+                          {testRes?.status === 'fail' && (
+                            <Badge variant="destructive" className="text-[10px]"><XCircle className="h-2.5 w-2.5 mr-1"/>Falhou</Badge>
+                          )}
                         </div>
+                        {testRes?.status === 'fail' && testRes.erro && (
+                          <p className="text-[10px] text-red-600 mt-1 line-clamp-2">{testRes.erro}</p>
+                        )}
                       </div>
                     </label>
                   );
