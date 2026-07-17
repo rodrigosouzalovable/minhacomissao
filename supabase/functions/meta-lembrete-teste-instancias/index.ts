@@ -86,6 +86,10 @@ Deno.serve(async (req) => {
 
       const vars: Record<string, string> = { '1': 'Teste', '2': hoje };
 
+      let success = false;
+      let waId: string | null = null;
+      let errTxt: string | null = null;
+
       try {
         const { data: resp, error: sendErr } = await supabase.functions.invoke('send-whatsapp-meta', {
           body: {
@@ -94,26 +98,27 @@ Deno.serve(async (req) => {
             template,
           },
         });
-        const success = !sendErr && resp?.success !== false && !resp?.error;
-        const waId = resp?.waId || null;
-        const errTxt = sendErr ? String(sendErr.message || sendErr) : (resp?.error || null);
+        success = !sendErr && resp?.success !== false && !resp?.error;
+        waId = resp?.waId || null;
+        errTxt = sendErr ? String(sendErr.message || sendErr) : (resp?.error || null);
+        if (!success && !errTxt) errTxt = 'Falha desconhecida ao enviar (sem detalhe do provider)';
+      } catch (e) {
+        success = false;
+        errTxt = e instanceof Error ? e.message : String(e);
+      }
 
+      resultados.push({ instancia_id: id, nome, ok: success, erro: success ? null : errTxt, wa_message_id: waId });
+
+      // Log em tabela — nunca deve derrubar o resultado
+      try {
         await supabase.from('meta_lembrete_log').insert({
           pagamento_id: null, acordo_id: null, user_id: null,
           tipo: 'teste', data_ref: new Date().toISOString().slice(0, 10),
           instancia_id: id, instancia_nome: nome,
           telefone, sucesso: success, erro: errTxt, wa_message_id: waId,
         });
-
-        resultados.push({ instancia_id: id, nome, ok: success, erro: success ? null : (errTxt || 'Falha desconhecida'), wa_message_id: waId });
-      } catch (e) {
-        const err = e instanceof Error ? e.message : String(e);
-        resultados.push({ instancia_id: id, nome, ok: false, erro: err });
-        await supabase.from('meta_lembrete_log').insert({
-          tipo: 'teste', data_ref: new Date().toISOString().slice(0, 10),
-          instancia_id: id, instancia_nome: nome,
-          telefone, sucesso: false, erro: err,
-        });
+      } catch (logErr) {
+        console.error('[teste-instancias] falha ao gravar log', logErr);
       }
 
       if (i < instancia_ids.length - 1) await sleep(rnd(2000, 4000));
