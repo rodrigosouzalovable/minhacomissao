@@ -207,6 +207,8 @@ export default function LembreteMeta() {
   }
 
   const temFalhas = Object.values(testResultados).some(v => v.status === 'fail');
+
+  return (
     <AppLayout>
       <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
         <div className="flex items-center justify-between flex-wrap gap-3">
