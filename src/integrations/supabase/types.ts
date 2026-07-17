@@ -3179,7 +3179,7 @@ export type Database = {
           id: string
           instancia_id: string | null
           instancia_nome: string | null
-          pagamento_id: string
+          pagamento_id: string | null
           sucesso: boolean
           telefone: string | null
           tipo: string
@@ -3194,7 +3194,7 @@ export type Database = {
           id?: string
           instancia_id?: string | null
           instancia_nome?: string | null
-          pagamento_id: string
+          pagamento_id?: string | null
           sucesso?: boolean
           telefone?: string | null
           tipo: string
@@ -3209,7 +3209,7 @@ export type Database = {
           id?: string
           instancia_id?: string | null
           instancia_nome?: string | null
-          pagamento_id?: string
+          pagamento_id?: string | null
           sucesso?: boolean
           telefone?: string | null
           tipo?: string

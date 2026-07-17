@@ -1,44 +1,29 @@
-## Objetivo
+## Problema
 
-Manter o botão **"Simular (dry-run)"** e adicionar um novo botão **"Testar instâncias"** que roda um teste real em cada instância selecionada antes do disparo em massa, separando visualmente as que passaram das que falharam.
+O botão **"Testar instâncias"** sempre retorna "0 passaram, 1 falharam" e nenhuma linha aparece em "Últimos envios". A causa são duas restrições da tabela `meta_lembrete_log` que quebram o insert do teste:
 
-## Fluxo do novo botão "Testar instâncias"
+1. `pagamento_id` é `NOT NULL` — o teste passa `null` e o insert explode.
+2. Check `tipo IN ('D-3','D0')` — o valor `'teste'` é rejeitado.
 
-1. Usuário abre pequeno diálogo pedindo **telefone de teste** (default = primeiro número de `notificar_telefones`, ex: `62991672674`, persistido em `localStorage`).
-2. Ao confirmar, para **cada instância marcada** na configuração:
-   - Busca o template `lembrete_envio_boleto` aprovado nessa instância.
-   - Envia 1 mensagem real via `send-whatsapp-meta` com `{{1}} = "Teste"` e `{{2}} = data de hoje (BR)`.
-   - Aguarda 2–4s entre instâncias pra não estourar rate limit.
-   - Registra o resultado em memória: `{ instancia_id, nome, ok, erro, message_id }`.
-3. Mostra o resultado em tempo real na UI: cada card de instância ganha um badge:
-   - ✅ **OK** (verde) — chegou.
-   - ❌ **Falhou** (vermelho) com o texto do erro no tooltip.
-   - ⏳ **Testando…** enquanto roda.
-4. Ao fim, oferece botão **"Desmarcar instâncias com falha"** que remove as reprovadas da seleção (`instanciaIds`) e salva a config automaticamente. Assim o próximo "Enviar agora" só usa as que passaram.
-5. Cada envio de teste também vai pra tabela `meta_lembrete_log` com `tipo = 'teste'` pra aparecer no histórico.
+Quando o insert de log falha, a edge function `meta-lembrete-teste-instancias` lança exceção e devolve `ok:false`, mesmo se o `send-whatsapp-meta` real tiver funcionado. Além disso, hoje o erro de envio real fica escondido porque o insert falha antes do resultado voltar limpo para a UI.
 
-## Como fica implementado
+## Correção
 
-### Backend — nova edge function `meta-lembrete-teste-instancias`
-- Input: `{ instancia_ids: string[], telefone: string }`.
-- Para cada `instancia_id`:
-  - Confere `saude_quality` (marca falha imediata se RED/YELLOW, sem gastar template).
-  - Busca template `lembrete_envio_boleto` aprovado (falha se não achar).
-  - Chama `send-whatsapp-meta` com variáveis `Teste` + data de hoje.
-  - Grava em `meta_lembrete_log` (`tipo = 'teste'`).
-  - Retorna item do resultado.
-- Delay 2–4s aleatório entre chamadas.
-- Response: `{ resultados: [{ instancia_id, nome, ok, erro }] }`.
+Mudança mínima, só no fluxo de teste (não mexe no cron 08:30 nem no dry-run).
 
-### Frontend — `src/pages/LembreteMeta.tsx`
-- Novo botão **"Testar instâncias"** (ícone `TestTube`) ao lado de "Simular (dry-run)".
-- Diálogo simples com input de telefone (default do `notificar_telefones`, salvo em `localStorage`).
-- Estado `testeResultados: Record<instanciaId, {status, erro?}>` para pintar os cards.
-- Badge no card de cada instância (OK / Falhou / Testando).
-- Botão **"Desmarcar falhadas"** aparece só após o teste terminar, se houver ≥1 falha.
-- Toast final: "X passaram, Y falharam".
+### 1. Migration
+- `ALTER TABLE meta_lembrete_log ALTER COLUMN pagamento_id DROP NOT NULL`.
+- Substituir o check `tipo IN ('D-3','D0')` por `tipo IN ('D-3','D0','teste')`.
+- Ajustar a `UNIQUE (pagamento_id, tipo, data_ref)` para não bloquear múltiplos testes no mesmo dia (unique parcial: só quando `pagamento_id IS NOT NULL`), preservando a deduplicação real dos lembretes D-3/D0.
+
+### 2. Edge function `meta-lembrete-teste-instancias`
+- Envolver o `insert` em try/catch — falha de log **nunca** deve derrubar o resultado do teste.
+- Continuar registrando no log quando possível (agora com `tipo='teste'` válido), para o histórico "Últimos envios" mostrar os testes.
+- Garantir que o `resultados[]` reflita o resultado real do `send-whatsapp-meta`, incluindo mensagem de erro clara (ex.: template não aprovado, telefone inválido, instância sem token).
+
+### 3. Frontend `src/pages/LembreteMeta.tsx`
+- Nenhuma mudança de layout. Só assegurar que o tooltip/rodapé do badge ❌ mostre o `erro` que a função devolver, para você conseguir diagnosticar quando falhar.
 
 ## Fora do escopo
-- Remover ou alterar o dry-run.
-- Mudar template, variáveis ou lógica do cron 08:30.
-- Reordenar/redesenhar cards de instância.
+- Alterar cron 08:30, dry-run, template fixo `lembrete_envio_boleto` ou notificação admin.
+- Refatorar `send-whatsapp-meta`.
