@@ -31,6 +31,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   const [carregandoTemplates, setCarregandoTemplates] = useState(false);
   const [erroTemplates, setErroTemplates] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [numeralVars, setNumeralVars] = useState<Record<string, string>>({});
 
   useEffect(() => { if (defaultInstancia) setInstId(defaultInstancia); }, [defaultInstancia]);
 
@@ -65,17 +66,52 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
     [templates, templateName]
   );
 
+  // Extrai placeholders numéricos únicos ({{1}}, {{2}}...) do header TEXT + body
+  const numeralKeys = useMemo(() => {
+    if (!selectedTemplate) return [] as string[];
+    const components: any[] = Array.isArray(selectedTemplate.variaveis?._components)
+      ? selectedTemplate.variaveis._components : [];
+    const header = components.find((c: any) => c?.type === 'HEADER');
+    const headerText = header?.format === 'TEXT' ? (header?.text || '') : '';
+    const text = `${headerText}\n${selectedTemplate.body_text || ''}`;
+    const set = new Set<string>();
+    const re = /\{\{\s*(\d+)\s*\}\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) set.add(m[1]);
+    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+  }, [selectedTemplate]);
+
+  // Reset ao trocar de template
+  useEffect(() => { setNumeralVars({}); }, [templateName]);
+
+  const sampleValuesArr = useMemo(() => {
+    if (numeralKeys.length === 0) return undefined;
+    const max = Math.max(...numeralKeys.map(k => Number(k)));
+    const arr: string[] = [];
+    for (let i = 1; i <= max; i++) arr.push(numeralVars[String(i)] || '');
+    return arr;
+  }, [numeralKeys, numeralVars]);
+
+  const numeraisPreenchidos = numeralKeys.every(k => (numeralVars[k] || '').trim() !== '');
+
   const enviar = async () => {
     if (!instId || !tel.trim() || !templateName) return;
+    if (numeralKeys.length > 0 && !numeraisPreenchidos) return;
     setEnviando(true);
     try {
       const tpl = templates.find(t => t.nome_template === templateName);
       if (!tpl) throw new Error('Template não encontrado');
+      const vars: Record<string, string> = {};
+      for (const k of numeralKeys) vars[k] = numeralVars[k].trim();
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
         body: {
           template_id: tpl.id,
           instancia_id: instId,
-          cliente: { telefone: tel.replace(/\D/g, ''), nome: nome.trim() || undefined },
+          cliente: {
+            telefone: tel.replace(/\D/g, ''),
+            nome: nome.trim() || undefined,
+            ...(Object.keys(vars).length ? { vars } : {}),
+          },
           atendente_nome: atendenteNome?.trim() || undefined,
         },
       });
@@ -102,7 +138,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
       const waId: string | undefined = data?.waId;
       onSent(instId, telFormat);
       onOpenChange(false);
-      setTel(''); setNome(''); setTemplateName('');
+      setTel(''); setNome(''); setTemplateName(''); setNumeralVars({});
 
       // Polling assíncrono: se o webhook da Meta reportar falha (ex. Business Account locked),
       // avisa o funcionário com toast destrutivo.
@@ -187,13 +223,35 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           {erroTemplates && (
             <p className="text-xs text-destructive">Não foi possível carregar os templates: {erroTemplates}</p>
           )}
+          {numeralKeys.length > 0 && (
+            <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+              <p className="text-xs font-medium">
+                Este template usa {numeralKeys.length} variável{numeralKeys.length > 1 ? 'is' : ''} numérica{numeralKeys.length > 1 ? 's' : ''}. Preencha cada uma:
+              </p>
+              {numeralKeys.map(k => {
+                const hint = (selectedTemplate?.variaveis as any)?.[k];
+                return (
+                  <div key={k} className="space-y-1">
+                    <label className="text-xs text-muted-foreground">
+                      Variável {'{{'}{k}{'}}'}{hint ? ` — ${hint}` : ''}
+                    </label>
+                    <Input
+                      placeholder={hint ? `Valor para ${hint}` : `Valor da variável ${k}`}
+                      value={numeralVars[k] || ''}
+                      onChange={e => setNumeralVars(prev => ({ ...prev, [k]: e.target.value }))}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {selectedTemplate && (
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Pré-visualização</p>
-              <TemplateWhatsAppPreview template={selectedTemplate} sampleName={nome} />
+              <TemplateWhatsAppPreview template={selectedTemplate} sampleName={nome} sampleValues={sampleValuesArr} />
             </div>
           )}
-          <Button onClick={enviar} disabled={!instId || !tel.trim() || !templateName || enviando} className="w-full">
+          <Button onClick={enviar} disabled={!instId || !tel.trim() || !templateName || enviando || (numeralKeys.length > 0 && !numeraisPreenchidos)} className="w-full">
             {enviando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
             Enviar template
           </Button>
