@@ -223,13 +223,35 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           {erroTemplates && (
             <p className="text-xs text-destructive">Não foi possível carregar os templates: {erroTemplates}</p>
           )}
+          {numeralKeys.length > 0 && (
+            <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+              <p className="text-xs font-medium">
+                Este template usa {numeralKeys.length} variável{numeralKeys.length > 1 ? 'is' : ''} numérica{numeralKeys.length > 1 ? 's' : ''}. Preencha cada uma:
+              </p>
+              {numeralKeys.map(k => {
+                const hint = (selectedTemplate?.variaveis as any)?.[k];
+                return (
+                  <div key={k} className="space-y-1">
+                    <label className="text-xs text-muted-foreground">
+                      Variável {'{{'}{k}{'}}'}{hint ? ` — ${hint}` : ''}
+                    </label>
+                    <Input
+                      placeholder={hint ? `Valor para ${hint}` : `Valor da variável ${k}`}
+                      value={numeralVars[k] || ''}
+                      onChange={e => setNumeralVars(prev => ({ ...prev, [k]: e.target.value }))}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {selectedTemplate && (
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Pré-visualização</p>
-              <TemplateWhatsAppPreview template={selectedTemplate} sampleName={nome} />
+              <TemplateWhatsAppPreview template={selectedTemplate} sampleName={nome} sampleValues={sampleValuesArr} />
             </div>
           )}
-          <Button onClick={enviar} disabled={!instId || !tel.trim() || !templateName || enviando} className="w-full">
+          <Button onClick={enviar} disabled={!instId || !tel.trim() || !templateName || enviando || (numeralKeys.length > 0 && !numeraisPreenchidos)} className="w-full">
             {enviando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
             Enviar template
           </Button>
