@@ -27,6 +27,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({} as any));
     const instancia_ids: string[] = Array.isArray(body?.instancia_ids) ? body.instancia_ids : [];
     const telefone = normalizePhone(String(body?.telefone || ''));
+    const varsInput: Record<string, string> = (body?.variaveis && typeof body.variaveis === 'object') ? body.variaveis : {};
 
     if (!telefone) {
       return new Response(JSON.stringify({ ok: false, error: 'Telefone inválido' }),
