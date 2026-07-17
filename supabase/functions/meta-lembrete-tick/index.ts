@@ -112,28 +112,33 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }
 
-    // Templates
-    const tplIds = [cfg.template_id_d3, cfg.template_id_d0].filter(Boolean);
-    const { data: tpls } = await supabase
+    // Template FIXO — buscamos por nome + instância no round-robin
+    const TEMPLATE_NOME = 'lembrete_envio_boleto';
+    const { data: tplsAprovados } = await supabase
       .from('meta_whatsapp_templates')
-      .select('*')
-      .in('id', tplIds as string[]);
-    const tplD3 = (tpls || []).find((t: any) => t.id === cfg.template_id_d3) || null;
-    const tplD0 = (tpls || []).find((t: any) => t.id === cfg.template_id_d0) || null;
+      .select('id, nome_template, idioma, categoria, status, body_text, instancia_id, meta_template_name, header_type, header_text, footer_text, botoes, variaveis')
+      .eq('nome_template', TEMPLATE_NOME)
+      .eq('status', 'approved')
+      .in('instancia_id', instanciaIds);
+    const tplPorInstancia = new Map<string, any>();
+    for (const t of tplsAprovados || []) tplPorInstancia.set(t.instancia_id, t);
 
-    // Datas alvo
+    if (tplPorInstancia.size === 0) {
+      await notifyAdmin(supabase, cfg.notificar_telefones || [],
+        `⚠️ Lembrete Meta ${isoDate(brt)}: nenhuma instância selecionada tem o template "${TEMPLATE_NOME}" aprovado.`,
+        instanciaIds[0]);
+      return new Response(JSON.stringify({ ok: false, error: 'template não aprovado em nenhuma instância' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+    }
+
+    // Datas alvo — D-3 e D0 sempre
     const hoje = isoDate(brt);
     const em3 = new Date(brt); em3.setDate(em3.getDate() + 3);
     const dataD3 = isoDate(em3);
-
-    const targets: Array<{ tipo: 'D-3'|'D0'; dataRef: string }> = [];
-    if (tplD3) targets.push({ tipo: 'D-3', dataRef: dataD3 });
-    if (tplD0) targets.push({ tipo: 'D0', dataRef: hoje });
-
-    if (targets.length === 0) {
-      return new Response(JSON.stringify({ ok: false, error: 'nenhum template configurado' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
-    }
+    const targets: Array<{ tipo: 'D-3'|'D0'; dataRef: string }> = [
+      { tipo: 'D-3', dataRef: dataD3 },
+      { tipo: 'D0', dataRef: hoje },
+    ];
 
     // Marca execução
     await supabase.from('meta_lembrete_config').update({ ultima_execucao: new Date().toISOString() })
