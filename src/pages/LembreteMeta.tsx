@@ -364,17 +364,43 @@ export default function LembreteMeta() {
         </div>
 
         <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Testar instâncias</DialogTitle>
               <DialogDescription>
-                Vamos enviar 1 mensagem real do template <code className="font-mono">{TEMPLATE_NOME}</code> para o telefone abaixo, através de cada uma das {instanciaIds.length} instâncias marcadas. As que falharem ficarão sinalizadas em vermelho e poderão ser desmarcadas com um clique.
+                Envia 1 mensagem real do template <code className="font-mono">{TEMPLATE_NOME}</code> por cada uma das {instanciaIds.length} instâncias marcadas. As que falharem ficam sinalizadas em vermelho.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-2">
-              <Label>Telefone de teste (com DDD)</Label>
-              <Input value={testTelefone} onChange={(e) => setTestTelefone(e.target.value)} placeholder="62991672674"/>
-              <p className="text-xs text-muted-foreground">A variável {'{{1}}'} vai como "Teste" e {'{{2}}'} como a data de hoje.</p>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="space-y-2">
+                <Label>Telefone de teste (com DDD)</Label>
+                <Input value={testTelefone} onChange={(e) => setTestTelefone(e.target.value)} placeholder="62991672674"/>
+              </div>
+
+              {placeholders.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Variáveis do template</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {placeholders.map(k => (
+                      <div key={k} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Variável {'{{'}{k}{'}}'}</Label>
+                        <Input
+                          value={testVars[k] ?? ''}
+                          onChange={(e) => setTestVars(prev => ({ ...prev, [k]: e.target.value }))}
+                          placeholder={k === '1' ? 'Nome do cliente' : k === '2' ? 'Data de vencimento' : `Valor da variável ${k}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Preview da mensagem</Label>
+                <div className="rounded border bg-muted p-3 text-sm whitespace-pre-wrap">
+                  {previewRenderizado || <span className="text-muted-foreground italic">Sem template disponível</span>}
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setTestDialogOpen(false)}>Cancelar</Button>
