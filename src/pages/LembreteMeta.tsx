@@ -128,8 +128,8 @@ export default function LembreteMeta() {
     setInstanciaIds(config.instancia_ids || []);
     setTemplateD3(config.template_id_d3 || '');
     setTemplateD0(config.template_id_d0 || '');
-    setVarMapD3(config.variaveis_map_d3 || {});
-    setVarMapD0(config.variaveis_map_d0 || {});
+    setVarMapD3((config.variaveis_map_d3 as Record<string, string>) || {});
+    setVarMapD0((config.variaveis_map_d0 as Record<string, string>) || {});
     setMinSeg(config.min_seg ?? 30);
     setMaxSeg(config.max_seg ?? 60);
     setHoraInicio(config.hora_inicio || '08:30');
