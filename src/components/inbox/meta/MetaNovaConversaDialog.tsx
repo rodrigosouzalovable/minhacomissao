@@ -31,6 +31,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   const [carregandoTemplates, setCarregandoTemplates] = useState(false);
   const [erroTemplates, setErroTemplates] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [numeralVars, setNumeralVars] = useState<Record<string, string>>({});
 
   useEffect(() => { if (defaultInstancia) setInstId(defaultInstancia); }, [defaultInstancia]);
 
