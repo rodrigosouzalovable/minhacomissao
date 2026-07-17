@@ -3104,6 +3104,120 @@ export type Database = {
           },
         ]
       }
+      meta_lembrete_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          hora_inicio: string
+          id: string
+          instancia_ids: string[]
+          max_seg: number
+          min_seg: number
+          notificar_telefones: string[]
+          template_id_d0: string | null
+          template_id_d3: string | null
+          ultima_execucao: string | null
+          variaveis_map_d0: Json
+          variaveis_map_d3: Json
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          hora_inicio?: string
+          id?: string
+          instancia_ids?: string[]
+          max_seg?: number
+          min_seg?: number
+          notificar_telefones?: string[]
+          template_id_d0?: string | null
+          template_id_d3?: string | null
+          ultima_execucao?: string | null
+          variaveis_map_d0?: Json
+          variaveis_map_d3?: Json
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          hora_inicio?: string
+          id?: string
+          instancia_ids?: string[]
+          max_seg?: number
+          min_seg?: number
+          notificar_telefones?: string[]
+          template_id_d0?: string | null
+          template_id_d3?: string | null
+          ultima_execucao?: string | null
+          variaveis_map_d0?: Json
+          variaveis_map_d3?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_lembrete_config_template_id_d0_fkey"
+            columns: ["template_id_d0"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_lembrete_config_template_id_d3_fkey"
+            columns: ["template_id_d3"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_lembrete_log: {
+        Row: {
+          acordo_id: string | null
+          criado_em: string
+          data_ref: string
+          erro: string | null
+          id: string
+          instancia_id: string | null
+          instancia_nome: string | null
+          pagamento_id: string
+          sucesso: boolean
+          telefone: string | null
+          tipo: string
+          user_id: string | null
+          wa_message_id: string | null
+        }
+        Insert: {
+          acordo_id?: string | null
+          criado_em?: string
+          data_ref: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          instancia_nome?: string | null
+          pagamento_id: string
+          sucesso?: boolean
+          telefone?: string | null
+          tipo: string
+          user_id?: string | null
+          wa_message_id?: string | null
+        }
+        Update: {
+          acordo_id?: string | null
+          criado_em?: string
+          data_ref?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          instancia_nome?: string | null
+          pagamento_id?: string
+          sucesso?: boolean
+          telefone?: string | null
+          tipo?: string
+          user_id?: string | null
+          wa_message_id?: string | null
+        }
+        Relationships: []
+      }
       meta_templates_instancia: {
         Row: {
           atualizado_em: string
