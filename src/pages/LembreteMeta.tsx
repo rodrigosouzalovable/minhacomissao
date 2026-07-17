@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Bell, Save, Send, Loader2, PlayCircle, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Bell, Save, Send, Loader2, PlayCircle, CheckCircle2, XCircle, AlertCircle, TestTube } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 const TEMPLATE_NOME = 'lembrete_envio_boleto';
 
