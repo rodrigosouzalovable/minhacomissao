@@ -252,7 +252,7 @@ export default function LembreteMeta() {
               <CardTitle>Template D-3 (3 dias antes)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Select value={templateD3} onValueChange={(v) => { setTemplateD3(v); setVarMapD3({}); }}>
+              <Select value={templateD3 || 'none'} onValueChange={(v) => { setTemplateD3(v === 'none' ? '' : v); setVarMapD3({}); }}>
                 <SelectTrigger><SelectValue placeholder="Selecione um template..."/></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— Não enviar D-3 —</SelectItem>
