@@ -66,17 +66,52 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
     [templates, templateName]
   );
 
+  // Extrai placeholders numéricos únicos ({{1}}, {{2}}...) do header TEXT + body
+  const numeralKeys = useMemo(() => {
+    if (!selectedTemplate) return [] as string[];
+    const components: any[] = Array.isArray(selectedTemplate.variaveis?._components)
+      ? selectedTemplate.variaveis._components : [];
+    const header = components.find((c: any) => c?.type === 'HEADER');
+    const headerText = header?.format === 'TEXT' ? (header?.text || '') : '';
+    const text = `${headerText}\n${selectedTemplate.body_text || ''}`;
+    const set = new Set<string>();
+    const re = /\{\{\s*(\d+)\s*\}\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) set.add(m[1]);
+    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+  }, [selectedTemplate]);
+
+  // Reset ao trocar de template
+  useEffect(() => { setNumeralVars({}); }, [templateName]);
+
+  const sampleValuesArr = useMemo(() => {
+    if (numeralKeys.length === 0) return undefined;
+    const max = Math.max(...numeralKeys.map(k => Number(k)));
+    const arr: string[] = [];
+    for (let i = 1; i <= max; i++) arr.push(numeralVars[String(i)] || '');
+    return arr;
+  }, [numeralKeys, numeralVars]);
+
+  const numeraisPreenchidos = numeralKeys.every(k => (numeralVars[k] || '').trim() !== '');
+
   const enviar = async () => {
     if (!instId || !tel.trim() || !templateName) return;
+    if (numeralKeys.length > 0 && !numeraisPreenchidos) return;
     setEnviando(true);
     try {
       const tpl = templates.find(t => t.nome_template === templateName);
       if (!tpl) throw new Error('Template não encontrado');
+      const vars: Record<string, string> = {};
+      for (const k of numeralKeys) vars[k] = numeralVars[k].trim();
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
         body: {
           template_id: tpl.id,
           instancia_id: instId,
-          cliente: { telefone: tel.replace(/\D/g, ''), nome: nome.trim() || undefined },
+          cliente: {
+            telefone: tel.replace(/\D/g, ''),
+            nome: nome.trim() || undefined,
+            ...(Object.keys(vars).length ? { vars } : {}),
+          },
           atendente_nome: atendenteNome?.trim() || undefined,
         },
       });
