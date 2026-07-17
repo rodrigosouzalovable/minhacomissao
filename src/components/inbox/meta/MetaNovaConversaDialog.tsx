@@ -138,7 +138,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
       const waId: string | undefined = data?.waId;
       onSent(instId, telFormat);
       onOpenChange(false);
-      setTel(''); setNome(''); setTemplateName('');
+      setTel(''); setNome(''); setTemplateName(''); setNumeralVars({});
 
       // Polling assíncrono: se o webhook da Meta reportar falha (ex. Business Account locked),
       // avisa o funcionário com toast destrutivo.
