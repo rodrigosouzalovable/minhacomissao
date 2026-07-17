@@ -106,6 +106,7 @@ export const navItems: NavItem[] = [
   { href: '/estrategias', label: 'Estratégias', icon: Target },
   { href: '/modelo-mensagem', label: 'Modelo Mensagem', icon: MessageSquareText },
   { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
+  { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
