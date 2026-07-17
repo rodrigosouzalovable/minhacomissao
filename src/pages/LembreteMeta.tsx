@@ -174,7 +174,7 @@ export default function LembreteMeta() {
     setTestResultados(initial);
     try {
       const { data, error } = await supabase.functions.invoke('meta-lembrete-teste-instancias', {
-        body: { instancia_ids: instanciaIds, telefone: tel },
+        body: { instancia_ids: instanciaIds, telefone: tel, variaveis: testVars },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Falha');
