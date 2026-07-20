@@ -161,6 +161,7 @@ export default function EnvioMeta() {
   const [nomeCampanha, setNomeCampanha] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
+  const [modoRajada, setModoRajada] = useState<boolean>(false);
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
