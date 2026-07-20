@@ -15,7 +15,8 @@ type StatusLinha =
   | 'valor_divergente'
   | 'sem_acordo'
   | 'sem_parcela_pendente'
-  | 'ja_pago';
+  | 'ja_pago'
+  | 'erro_data';
 
 interface LinhaAvaliada extends LinhaPagamentoImportada {
   status: StatusLinha;
@@ -35,6 +36,7 @@ const statusLabel: Record<StatusLinha, string> = {
   sem_acordo: 'Sem acordo',
   sem_parcela_pendente: 'Sem parcela pendente',
   ja_pago: 'Já pago',
+  erro_data: 'Erro na Data',
 };
 
 const statusVariant: Record<StatusLinha, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -43,7 +45,13 @@ const statusVariant: Record<StatusLinha, 'default' | 'secondary' | 'destructive'
   sem_acordo: 'destructive',
   sem_parcela_pendente: 'outline',
   ja_pago: 'outline',
+  erro_data: 'destructive',
 };
+
+function mesAnoDe(dataIso: string): string {
+  // dataIso esperado no formato YYYY-MM-DD
+  return (dataIso || '').slice(0, 7);
+}
 
 export function ImportarPagosDialog({ onImported }: { onImported?: () => void }) {
   const { toast } = useToast();
@@ -126,49 +134,72 @@ export function ImportarPagosDialog({ onImported }: { onImported?: () => void })
         return { ...linha, status: 'sem_acordo' };
       }
 
-      // Tenta cada acordo (mais recente primeiro) até achar uma parcela candidata
+      const mesAlvo = mesAnoDe(linha.dataPagamento);
+
+      // Junta todas as parcelas de todos os acordos do CPF e filtra pelo mês/ano do pagamento
+      type ParcelaComAcordo = {
+        id: string; numero_parcela: number; valor_parcela: number;
+        status: string; data_prevista: string; acordo_id: string;
+      };
+      const parcelasDoMes: ParcelaComAcordo[] = [];
       for (const acordo of acordos) {
         const parcelas = pagamentosPorAcordo.get(acordo.id) ?? [];
-        if (parcelas.length === 0) continue;
-
-        // 1) Se a planilha traz o número da parcela e ela já está paga, retorna já pago imediatamente
-        if (linha.parcela) {
-          const jaPago = parcelas.find((p) => p.numero_parcela === linha.parcela && p.status === 'pago');
-          if (jaPago) {
-            return { ...linha, status: 'ja_pago', acordo_id: acordo.id, numero_parcela_sistema: jaPago.numero_parcela, valor_esperado: jaPago.valor_parcela };
+        for (const p of parcelas) {
+          if (mesAnoDe(p.data_prevista) === mesAlvo) {
+            parcelasDoMes.push({ ...p, acordo_id: acordo.id });
           }
         }
+      }
 
-        // 2) Se a planilha traz o número da parcela, tenta bater exatamente numa pendente
-        let candidato = linha.parcela
-          ? parcelas.find((p) => p.numero_parcela === linha.parcela && p.status === 'pendente' && !usados.has(p.id))
-          : undefined;
-
-        // 3) Senão, primeira pendente disponível em ordem
-        if (!candidato) {
-          candidato = parcelas.find((p) => p.status === 'pendente' && !usados.has(p.id));
-        }
-
-        if (!candidato) {
-          continue;
-        }
-
-        usados.add(candidato.id);
-        const diff = Math.abs(candidato.valor_parcela - linha.valorPago);
-        const status: StatusLinha = diff <= TOLERANCIA ? 'pronto' : 'valor_divergente';
+      // Nenhuma parcela vencendo naquele mês em nenhum acordo → erro de data
+      if (parcelasDoMes.length === 0) {
         return {
           ...linha,
-          status,
-          pagamento_id: candidato.id,
-          acordo_id: acordo.id,
-          numero_parcela_sistema: candidato.numero_parcela,
-          valor_esperado: candidato.valor_parcela,
-          data_prevista: candidato.data_prevista,
+          status: 'erro_data',
+          acordo_id: acordos[0].id,
+          detalhe: `Nenhuma parcela com vencimento em ${mesAlvo}`,
         };
       }
 
-      // Nenhum dos acordos tinha parcela pendente
-      return { ...linha, status: 'sem_parcela_pendente', acordo_id: acordos[0].id };
+      // 1) Se alguma parcela do mês já está paga (priorizando número informado) → já pago
+      const jaPagoMatch =
+        (linha.parcela && parcelasDoMes.find((p) => p.numero_parcela === linha.parcela && p.status === 'pago')) ||
+        parcelasDoMes.find((p) => p.status === 'pago');
+      if (jaPagoMatch) {
+        return {
+          ...linha,
+          status: 'ja_pago',
+          acordo_id: jaPagoMatch.acordo_id,
+          numero_parcela_sistema: jaPagoMatch.numero_parcela,
+          valor_esperado: jaPagoMatch.valor_parcela,
+          data_prevista: jaPagoMatch.data_prevista,
+        };
+      }
+
+      // 2) Escolhe pendente do mês (preferindo número da parcela informado)
+      let candidato = linha.parcela
+        ? parcelasDoMes.find((p) => p.numero_parcela === linha.parcela && p.status === 'pendente' && !usados.has(p.id))
+        : undefined;
+      if (!candidato) {
+        candidato = parcelasDoMes.find((p) => p.status === 'pendente' && !usados.has(p.id));
+      }
+
+      if (!candidato) {
+        return { ...linha, status: 'sem_parcela_pendente', acordo_id: parcelasDoMes[0].acordo_id };
+      }
+
+      usados.add(candidato.id);
+      const diff = Math.abs(candidato.valor_parcela - linha.valorPago);
+      const status: StatusLinha = diff <= TOLERANCIA ? 'pronto' : 'valor_divergente';
+      return {
+        ...linha,
+        status,
+        pagamento_id: candidato.id,
+        acordo_id: candidato.acordo_id,
+        numero_parcela_sistema: candidato.numero_parcela,
+        valor_esperado: candidato.valor_parcela,
+        data_prevista: candidato.data_prevista,
+      };
     });
 
     return result;
