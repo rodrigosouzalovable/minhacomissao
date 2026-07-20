@@ -966,13 +966,17 @@ export default function Acordos() {
     return datas.some(d => d === selectedStr);
   };
 
-  // Helper: check if an acordo was created on the selected date
+  // Helper: check if an acordo was created within the selected date range
   const matchesCriacaoFilter = (acordo: Acordo) => {
-    if (!filtroDataCriacao) return true;
+    if (!filtroDataCriacao || (!filtroDataCriacao.from && !filtroDataCriacao.to)) return true;
     if (!acordo.criado_em) return false;
-    const selectedStr = format(filtroDataCriacao, 'yyyy-MM-dd');
     const criadoStr = format(new Date(acordo.criado_em), 'yyyy-MM-dd');
-    return criadoStr === selectedStr;
+    const fromStr = filtroDataCriacao.from ? format(filtroDataCriacao.from, 'yyyy-MM-dd') : undefined;
+    const toStr = filtroDataCriacao.to ? format(filtroDataCriacao.to, 'yyyy-MM-dd') : undefined;
+    if (fromStr && !toStr) return criadoStr === fromStr;
+    if (fromStr && toStr) return criadoStr >= fromStr && criadoStr <= toStr;
+    if (!fromStr && toStr) return criadoStr <= toStr;
+    return true;
   };
 
   // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
