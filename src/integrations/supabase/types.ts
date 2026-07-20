@@ -1741,6 +1741,7 @@ export type Database = {
           instancias_bloqueadas_run: Json
           max_seg: number
           min_seg: number
+          modo_rajada: boolean
           nome_campanha: string | null
           proximo_em: string | null
           status: string
@@ -1767,6 +1768,7 @@ export type Database = {
           instancias_bloqueadas_run?: Json
           max_seg?: number
           min_seg?: number
+          modo_rajada?: boolean
           nome_campanha?: string | null
           proximo_em?: string | null
           status?: string
@@ -1793,6 +1795,7 @@ export type Database = {
           instancias_bloqueadas_run?: Json
           max_seg?: number
           min_seg?: number
+          modo_rajada?: boolean
           nome_campanha?: string | null
           proximo_em?: string | null
           status?: string
