@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { AcordosAbandonadosDialog } from '@/components/AcordosAbandonadosDialog';
+import { ImportarPagosDialog } from '@/components/ImportarPagosDialog';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
@@ -673,6 +674,9 @@ export default function EquipeAcordos() {
               <Download className="h-4 w-4" />
               Exportar
             </Button>
+            {isAdmin && (
+              <ImportarPagosDialog onImported={() => window.location.reload()} />
+            )}
             {isAdmin && (
               <Button
                 variant="outline"
