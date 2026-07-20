@@ -1,27 +1,51 @@
 ## Objetivo
-Adicionar um toggle por usuário em Admin > Usuários > Permissões chamado **"Pode marcar parcelas como pago"**. Somente usuários com esse toggle ATIVO poderão marcar/desmarcar parcelas como pagas em qualquer acordo. Admin sempre pode.
+Na aba **Acordos da equipe**, adicionar botão **"Importar pagos"** que lê uma planilha padrão Cob+ (aba `Pagamentos`) e marca automaticamente as parcelas correspondentes como pagas nos acordos do sistema, validando o valor.
 
-## Estado atual (verificado)
-- Já existe a coluna `pode_marcar_pago_global` em `user_permissions` e o hook `useUserPermissions` já a expõe como `podeMarcarPagoGlobal`.
-- Em `src/pages/AcordoDetalhe.tsx` a lógica atual é:  
-  `canMarcarPago = canEdit || podeMarcarPagoGlobal` — ou seja, hoje qualquer dono do próprio acordo pode marcar como pago, mesmo sem a flag. Isso precisa mudar.
-- O diálogo `EditPermissionsDialog.tsx` **não** possui esse toggle na UI.
+## Planilha (aba `Pagamentos`)
+Colunas usadas:
+- **B — CPF/CNPJ** → identifica o cliente
+- **J — VALOR PAGO** → valor a conferir contra `pagamentos.valor_parcela`
+- **N — DATA** → data real do pagamento (grava em `pagamentos.data_paga`)
+- **Q — PARCELA** → número da parcela (usado como desempate quando existe)
+- **D — CONTRATO** → desempate adicional quando o CPF tem mais de um acordo
 
-## Mudanças
+As outras abas (Cobrança, Telefones, etc.) são ignoradas.
 
-### 1. UI de permissões (`src/components/EditPermissionsDialog.tsx`)
-- Adicionar estado `podeMarcarPago` (default `false`).
-- Carregar/salvar a coluna `pode_marcar_pago_global` no `useEffect` e no payload do `saveMutation`.
-- Novo bloco Switch: **"Pode marcar parcelas como pago"** com descrição: "Se desativado, o usuário não conseguirá marcar/desmarcar parcelas como pagas. Admin sempre pode."
+## Fluxo de importação
 
-### 2. Regra de negócio (`src/pages/AcordoDetalhe.tsx`)
-- Alterar `canMarcarPago` para exigir a flag explicitamente:  
-  `canMarcarPago = isAdmin || (canEdit && podeMarcarPagoGlobal)`
-- Nos botões "Marcar como pago" / "Desmarcar" já governados por `canMarcarPago`, exibir mensagem discreta quando o usuário não tem permissão (reaproveitar o bloco existente em `pago && !canMarcarPago`).
+1. Botão **Importar pagos** em `src/pages/EquipeAcordos.tsx`, ao lado dos demais filtros/ações.
+2. Abre diálogo com upload `.xlsx` e um preview em tabela:
+   - CPF, Nome, Contrato, Parcela, Valor planilha, Data pagamento
+   - Status por linha: `pronto`, `sem_acordo`, `sem_parcela_pendente`, `valor_divergente`, `ja_pago`.
+3. Preview roda no navegador (`xlsx` já está no projeto — veja `parseCobmaisPlanilha.ts`), consultando `acordos` + `pagamentos` via Supabase para casar cada linha antes de confirmar.
+4. Botão **Confirmar importação** aplica os `UPDATE` em `pagamentos` para as linhas com status `pronto` (e, opcionalmente, `valor_divergente` se o usuário marcar "Marcar mesmo com valor divergente").
+5. Ao final, toast com resumo: X pagos aplicados, Y ignorados, Z divergências, W sem acordo. Também baixa CSV do relatório.
 
-### 3. Padrão em outros locais
-Verificar rapidamente se há outros pontos que marcam `status: 'pago'` (ex.: `EditarAcordo.tsx`) e aplicar a mesma checagem antes de permitir a ação. Apenas leitura de status permanece livre.
+## Regra de casamento (linha da planilha → parcela)
+
+Para cada linha:
+1. Normaliza CPF (só dígitos, com padding para 11).
+2. Busca `acordos` ativos desse CPF (`cliente_cpf = ?`, `status IN ('ativo','quebrado')`). Se não achar → `sem_acordo`.
+3. Se `CONTRATO` bater com `acordos.contrato_origem` (quando existir), prioriza esse acordo; senão usa o acordo ativo mais recente.
+4. Dentro do acordo, procura em `pagamentos` a parcela pendente:
+   - Se `PARCELA` da planilha existe e casa com `numero_parcela` e `status='pendente'` → usa essa.
+   - Senão, pega a primeira `status='pendente'` em ordem de `numero_parcela`.
+   - Se não houver pendente → `ja_pago` ou `sem_parcela_pendente`.
+5. Compara `VALOR PAGO` × `pagamentos.valor_parcela` com tolerância de **R$ 0,01**:
+   - Igual → `pronto`.
+   - Diferente → `valor_divergente` (mostra os dois valores lado a lado).
+
+## Permissão
+O botão fica visível para **admin/manager** (mesmo padrão dos outros botões dessa página). Não usa a nova flag `pode_marcar_pago_global` — é ação administrativa em massa.
+
+## Detalhes técnicos
+- Novo componente: `src/components/ImportarPagosDialog.tsx`.
+- Parser dedicado: `src/lib/parsePagamentosCobmais.ts` (lê aba `Pagamentos`, retorna linhas normalizadas). Não altera `parseCobmaisPlanilha.ts`.
+- Update final feito em lotes de 200 via `supabase.from('pagamentos').update({ status: 'pago', data_paga }).eq('id', ...)`.
+- Sem mudança de schema, sem edge function nova, sem cron.
+- PDF/arquivo não é armazenado; a planilha fica só em memória do navegador.
 
 ## Fora de escopo
-- Não alterar RLS do banco nesta tarefa (a trava é de UI/produto). Se quiser trava server-side depois, adicionamos uma policy no `pagamentos`.
-- Sem mudança de schema — a coluna já existe.
+- Não cria acordos novos a partir da planilha.
+- Não mexe em comissão manualmente — a trigger existente de `pagamentos` cuida disso quando o status vira `pago`.
+- Não altera parcelas de acordos `quitado` ou já `pago`.
