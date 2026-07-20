@@ -43,8 +43,9 @@ Deno.serve(async (req) => {
     const template = body?.template as { id: string; nome_template: string } | undefined;
     const instanciaIds: string[] = Array.isArray(body?.instanciaIds) ? body.instanciaIds : [];
     const clientes: Cliente[] = Array.isArray(body?.clientes) ? body.clientes : [];
-    const minSec = Math.max(1, Number(body?.minSec ?? 30));
-    const maxSec = Math.max(minSec, Number(body?.maxSec ?? 90));
+    const modoRajada: boolean = body?.modoRajada === true;
+    const minSec = modoRajada ? 0 : Math.max(1, Number(body?.minSec ?? 30));
+    const maxSec = modoRajada ? 0 : Math.max(minSec, Number(body?.maxSec ?? 90));
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
 
