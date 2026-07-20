@@ -1,33 +1,87 @@
-## Problema 1 — Falha "template não aprovado" na MEMU 25
 
-**Causa raiz confirmada** (via query no banco + leitura da edge function):
-- No banco, a instância `MEMU 25` **tem** o template `lembrete_envio_boleto` com `status='approved'` (idioma `pt_BR`).
-- A edge function `send-whatsapp-meta` (linha 267) só aceita `template_id` no body — ela ignora o objeto `template` e refaz a busca no banco.
-- Tanto `meta-lembrete-teste-instancias` quanto `meta-lembrete-tick` chamam `send-whatsapp-meta` passando `{ instancia_id, cliente, template }` (objeto), **sem** `template_id`. Isso faz o `send-whatsapp-meta` cair no erro de parâmetros / template não encontrado, cuja mensagem chega no frontend como falha do template.
+# Relatório: Webhook Meta WhatsApp Cloud API — Guia de Replicação
 
-**Correção:** passar `template_id: template.id` nas duas invocações (`meta-lembrete-teste-instancias/index.ts` e `meta-lembrete-tick/index.ts`), mantendo o restante do payload igual.
+Vou gerar um documento único (formato Markdown, entregue em uma mensagem no chat que seu amigo pode colar direto no prompt da Lovable dele) contendo tudo necessário para replicar o webhook oficial da Meta que roda neste projeto.
 
-## Problema 2 — Diálogo de teste com preview e variáveis editáveis
+## O que o relatório vai conter
 
-Hoje o botão "Testar instâncias" abre um diálogo com apenas o campo telefone e usa `{{1}}='Teste'` e `{{2}}=data de hoje` fixos.
+### 1. Visão geral da arquitetura
+- Papel de cada peça: Meta Cloud API → Edge Function (webhook) → tabelas do banco → Realtime → UI Inbox.
+- Fluxo GET (verificação do `hub.verify_token`) e POST (recebimento de mensagens/status/templates).
 
-**Novo diálogo em `src/pages/LembreteMeta.tsx`:**
-1. Campo **Telefone de teste** (mantém, com `localStorage`).
-2. **Preview do template** `lembrete_envio_boleto`: mostra o `body_text` com as variáveis substituídas em tempo real (usa o `templatePreview` já carregado).
-3. **Campos dinâmicos de variáveis** — detecta placeholders `{{n}}` no `body_text` via regex e renderiza um `<Input>` por variável, com defaults:
-   - `{{1}}` → "Teste"
-   - `{{2}}` → data de hoje (BR)
-   - demais → vazio (o usuário preenche)
-4. Botão **"Testar agora"** envia `{ instancia_ids, telefone, variaveis: { '1': ..., '2': ... } }` para a edge function.
+### 2. Pré-requisitos na Meta (Facebook Developers)
+- Criar App tipo Business, adicionar produto "WhatsApp".
+- Obter: `WABA_ID`, `PHONE_NUMBER_ID`, `System User Access Token` permanente, `App Secret`.
+- Registrar número, criar templates (ex.: `lembrete_envio_boleto` com `{{1}}` e `{{2}}`).
+- Configurar Webhook: URL da edge function, Verify Token (string qualquer criada por ele), assinar campos `messages`, `message_template_status_update`, `phone_number_quality_update`, `account_update`.
 
-**Backend `meta-lembrete-teste-instancias`:**
-- Aceita `variaveis` opcional no body; se ausente, mantém defaults `{ '1': 'Teste', '2': hoje }`.
-- Passa `template_id: template.id` na invocação de `send-whatsapp-meta` (corrigindo o Problema 1).
+### 3. Secrets/variáveis a configurar no Lovable Cloud
+Lista com nome, propósito e onde obter:
+- `META_VERIFY_TOKEN` (mesma string configurada no painel Meta)
+- `META_APP_SECRET` (validação `X-Hub-Signature-256`)
+- `META_SYSTEM_USER_TOKEN` (opcional, se ele quiser baixar mídia)
+- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (já vêm automáticas no Lovable Cloud)
 
-## Arquivos alterados
+### 4. Estrutura de banco de dados
+SQL completo de:
+- `meta_whatsapp_instances` (colunas principais que o webhook lê/atualiza: `id`, `waba_id`, `phone_number_id`, `display_phone`, `access_token`, `qualidade`, `saude_tier`, `ativo`).
+- `meta_whatsapp_mensagens` (armazena inbound/outbound, com `wa_message_id` como chave de deduplicação).
+- `meta_whatsapp_envios_log` (status callbacks: sent/delivered/read/failed).
+- `meta_whatsapp_contatos` (contatos, `pushName`, dedup por `phone_number_id + telefone`).
+- `meta_whatsapp_templates` (estado dos templates aprovados/rejeitados).
+- Índices, RLS e GRANTs necessários.
 
-- `supabase/functions/meta-lembrete-teste-instancias/index.ts` — aceitar `variaveis`, passar `template_id`.
-- `supabase/functions/meta-lembrete-tick/index.ts` — passar `template_id` em `invokeSendMeta`.
-- `src/pages/LembreteMeta.tsx` — novo diálogo com preview e inputs por variável.
+### 5. Código completo das Edge Functions
+Vou incluir o conteúdo integral (colável direto no Lovable) de:
 
-Sem mudanças de schema, tabelas ou cron.
+**a) `supabase/functions/meta-whatsapp-webhook/index.ts` (~733 linhas)**
+- Handler GET: valida `hub.mode=subscribe` + `hub.verify_token`.
+- Handler POST:
+  - Validação de assinatura HMAC SHA256 com `META_APP_SECRET`.
+  - Roteamento por `entry[].changes[].field`:
+    - `messages` → grava inbound/outbound, dedup por `wa_message_id`, download de mídia (Graph API `/v21.0/<mediaId>` → storage bucket `inbox-media`).
+    - `statuses` → atualiza `meta_whatsapp_envios_log` + detecção de instância bloqueada (`isMetaInstanceRestrictedError`).
+    - `message_template_status_update` → sincroniza `meta_whatsapp_templates`.
+    - `phone_number_quality_update` / `account_update` → atualiza qualidade e tier da instância.
+  - Match por sufixo de 8 dígitos (padrão do projeto).
+  - Sempre responde `200 OK` rapidamente (evita retries agressivos da Meta).
+
+**b) `supabase/functions/meta-subscribe-waba/index.ts`**
+- Faz a chamada Graph API para assinar `messages`, `message_template_status_update`, etc. no WABA do usuário. Usado uma vez por instância no onboarding.
+
+**c) `supabase/config.toml` — trecho relevante**
+```toml
+[functions.meta-whatsapp-webhook]
+verify_jwt = false
+```
+(webhook público — a autenticação é feita via assinatura HMAC).
+
+### 6. Passo a passo de deploy no projeto do amigo
+1. Criar as tabelas (rodar SQL fornecido).
+2. Colar as duas edge functions em `supabase/functions/...`.
+3. Adicionar `verify_jwt = false` no `config.toml`.
+4. Cadastrar os 3 secrets no Lovable Cloud (`META_VERIFY_TOKEN`, `META_APP_SECRET`, opcional token).
+5. Copiar a URL da função (`https://<project>.supabase.co/functions/v1/meta-whatsapp-webhook`) e colar no painel Meta → Webhook → Callback URL + Verify Token → clicar "Verify and Save".
+6. Assinar os campos desejados.
+7. Cadastrar cada instância na tabela `meta_whatsapp_instances` com `waba_id`, `phone_number_id`, `display_phone`, `access_token`.
+8. Chamar `meta-subscribe-waba` uma vez por WABA.
+9. Testar: enviar mensagem para o número → verificar row em `meta_whatsapp_mensagens` e log de mídia em `inbox-media`.
+
+### 7. Troubleshooting (erros mais comuns que já resolvemos aqui)
+- "hub.verify_token mismatch" → secret errado.
+- "Invalid signature" → `META_APP_SECRET` diferente do App Secret real (não confundir com token).
+- Mídia não baixa → `access_token` da instância expirou ou sem permissão `whatsapp_business_messaging`.
+- Mensagens duplicadas → conferir dedup por `wa_message_id` (unique constraint).
+- Status ficando "sent" e nunca "delivered" → webhook não está assinado no campo `messages` (statuses vêm no mesmo evento).
+- Conversa "sumindo" no inbox → política de retenção; incluímos como não deletar conversas com resposta do cliente.
+
+### 8. Notas de segurança
+- Nunca expor `access_token` no frontend.
+- Assinatura HMAC obrigatória em produção.
+- RLS restrita: apenas `service_role` escreve nas tabelas Meta; usuários leem via policies escopadas por `user_id` da instância.
+
+## Entrega
+- Uma única mensagem em Markdown, pronta para colar no chat da Lovable do amigo dele.
+- Sem alterações no seu projeto atual (é apenas leitura/exportação).
+
+Confirme para eu gerar o relatório completo.
