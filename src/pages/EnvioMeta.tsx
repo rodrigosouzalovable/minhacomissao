@@ -615,6 +615,12 @@ export default function EnvioMeta() {
       }
     }
 
+    // Gate universal para modo rajada — vale para todos os caminhos acima
+    if (modoRajada) {
+      const digitou = prompt(`⚡ RAJADA — confirma disparo IMEDIATO paralelo sem delay?\nDigite RAJADA (maiúsculas) para prosseguir:`);
+      if ((digitou || "").trim() !== "RAJADA") { toast.error("Confirmação cancelada"); return; }
+    }
+
 
 
     // Mapa instância -> template_id específico daquela instância (mesmo nome/idioma)
