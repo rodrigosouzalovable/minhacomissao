@@ -66,26 +66,30 @@ Deno.serve(async (req) => {
     }
 
     // Filtro server-side: remove instâncias com qualidade RED/YELLOW
-    const { data: instancesRows } = await supabase
-      .from('meta_whatsapp_instances')
-      .select('id, nome, saude_quality')
-      .in('id', instanciaIds);
-    const badIds = new Set(
-      (instancesRows || [])
-        .filter((r: any) => {
-          const q = String(r.saude_quality || '').toUpperCase();
-          return q === 'RED' || q === 'YELLOW';
-        })
-        .map((r: any) => r.id),
-    );
-    const instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
-    if (instanciaIdsFiltradas.length === 0) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
-      }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // (desligado no modo rajada — usuário aceita o risco)
+    let instanciaIdsFiltradas = instanciaIds;
+    if (!modoRajada) {
+      const { data: instancesRows } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, saude_quality')
+        .in('id', instanciaIds);
+      const badIds = new Set(
+        (instancesRows || [])
+          .filter((r: any) => {
+            const q = String(r.saude_quality || '').toUpperCase();
+            return q === 'RED' || q === 'YELLOW';
+          })
+          .map((r: any) => r.id),
+      );
+      instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
+      if (instanciaIdsFiltradas.length === 0) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
+        }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
