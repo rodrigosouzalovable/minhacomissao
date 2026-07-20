@@ -53,6 +53,7 @@ export function EditPermissionsDialog({
   const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
+  const [podeMarcarPago, setPodeMarcarPago] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -78,6 +79,7 @@ export function EditPermissionsDialog({
       setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
       setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
       setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
+      setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -87,6 +89,7 @@ export function EditPermissionsDialog({
       setPermiteCpfDuplicado(false);
       setPodeExcluirAcordos(false);
       setRecebeConsultaCpf(false);
+      setPodeMarcarPago(false);
     }
   }, [permissions, open]);
 
@@ -107,6 +110,7 @@ export function EditPermissionsDialog({
             permite_cpf_duplicado: permiteCpfDuplicado,
             pode_excluir_acordos: podeExcluirAcordos,
             recebe_consulta_cpf: recebeConsultaCpf,
+            pode_marcar_pago_global: podeMarcarPago,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
@@ -264,8 +268,20 @@ export function EditPermissionsDialog({
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Pode marcar parcelas como pago</Label>
+                <p className="text-xs text-muted-foreground">Se desativado, o usuário não conseguirá marcar/desmarcar parcelas de acordos como pagas. Admin sempre pode.</p>
+              </div>
+              <Switch
+                checked={podeMarcarPago}
+                onCheckedChange={setPodeMarcarPago}
+              />
+            </div>
+
           </div>
         </div>
+
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

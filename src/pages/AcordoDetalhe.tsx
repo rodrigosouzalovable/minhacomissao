@@ -55,7 +55,7 @@ export default function AcordoDetalhe() {
   const isOwner = acordo?.user_id === user?.id;
   const canEdit = isOwner || isAdmin || (acordosCompartilhados && acordo?.user_id === concedidoPor);
   // Permissão granular para marcar/desmarcar parcelas como pagas em qualquer acordo
-  const canMarcarPago = canEdit || podeMarcarPagoGlobal;
+  const canMarcarPago = isAdmin || (canEdit && podeMarcarPagoGlobal);
 
   useEffect(() => {
     async function loadAcordo() {
