@@ -820,6 +820,7 @@ export default function InboxMeta() {
                   contatoId={c.id}
                   etiquetas={etiquetas}
                   contatoEtiquetaIds={etIds}
+                  etiquetasBloqueadas={etiquetasBloqueadas[c.id] ?? new Set()}
                   fixado={c.fixado}
                   arquivado={c.arquivado}
                   onMarcarNaoLida={() => handleMarcarNaoLida(c.id)}
