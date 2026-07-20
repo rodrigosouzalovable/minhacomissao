@@ -46,6 +46,8 @@ export default function AcordoDetalhe() {
   const [novaDataPagamento, setNovaDataPagamento] = useState<string>('');
   const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
   const [novaComissao, setNovaComissao] = useState<string>('');
+  const [editandoValorParcela, setEditandoValorParcela] = useState<string | null>(null);
+  const [novoValorParcela, setNovoValorParcela] = useState<string>('');
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [editandoDataVencimento, setEditandoDataVencimento] = useState<string | null>(null);
   const [novaDataVencimento, setNovaDataVencimento] = useState<string>('');
@@ -384,6 +386,47 @@ export default function AcordoDetalhe() {
         title: 'Erro',
         description: 'Não foi possível atualizar a comissão.',
       });
+    }
+  };
+
+  const atualizarValorParcela = async (pagamentoId: string, novoValor: number) => {
+    if (!acordo) return;
+    if (isNaN(novoValor) || novoValor <= 0) {
+      toast({ variant: 'destructive', title: 'Valor inválido', description: 'Informe um valor maior que zero.' });
+      return;
+    }
+    try {
+      const { error: errParcela } = await supabase
+        .from('pagamentos')
+        .update({ valor_parcela: novoValor })
+        .eq('id', pagamentoId);
+      if (errParcela) throw errParcela;
+
+      const novoTotal = pagamentos.reduce(
+        (sum, p) => sum + (p.id === pagamentoId ? novoValor : Number(p.valor_parcela)),
+        0
+      );
+      const totalArred = Math.round(novoTotal * 100) / 100;
+
+      const { error: errAcordo } = await supabase
+        .from('acordos')
+        .update({ valor_total: totalArred })
+        .eq('id', acordo.id);
+      if (errAcordo) throw errAcordo;
+
+      setPagamentos(prev =>
+        prev.map(p => (p.id === pagamentoId ? { ...p, valor_parcela: novoValor } : p))
+      );
+      setAcordo(prev => (prev ? { ...prev, valor_total: totalArred } : prev));
+      setEditandoValorParcela(null);
+      setNovoValorParcela('');
+
+      toast({
+        title: 'Parcela atualizada!',
+        description: `Novo valor: ${formatarMoeda(novoValor)} • Total: ${formatarMoeda(totalArred)}`,
+      });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível atualizar o valor da parcela.' });
     }
   };
 
@@ -948,7 +991,54 @@ export default function AcordoDetalhe() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="font-medium">{formatarMoeda(pagamento.valor_parcela)}</p>
+                      {isAdmin && editandoValorParcela === pagamento.id ? (
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-sm text-muted-foreground">R$</span>
+                          <Input
+                            type="text"
+                            value={novoValorParcela}
+                            onChange={(e) => setNovoValorParcela(e.target.value)}
+                            className="h-7 w-24 text-sm text-right"
+                            placeholder="0,00"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-secondary hover:text-secondary"
+                            onClick={() => {
+                              const valor = parseFloat(novoValorParcela.replace(/\./g, '').replace(',', '.'));
+                              atualizarValorParcela(pagamento.id, valor);
+                            }}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => { setEditandoValorParcela(null); setNovoValorParcela(''); }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="font-medium flex items-center gap-1 justify-end">
+                          {formatarMoeda(pagamento.valor_parcela)}
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={() => {
+                                setEditandoValorParcela(pagamento.id);
+                                setNovoValorParcela(String(pagamento.valor_parcela).replace('.', ','));
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </p>
+                      )}
                       {isAdmin && (editandoComissao === pagamento.id ? (
                         <div className="flex items-center gap-1 justify-end">
                           <span className="text-sm text-muted-foreground">R$</span>
