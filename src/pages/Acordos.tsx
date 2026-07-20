@@ -504,7 +504,12 @@ export default function Acordos() {
   const [selectedUserId, setSelectedUserId] = useState<string>(initial.selectedUserId ?? 'todos');
   const [rankingAberto, setRankingAberto] = useState(false);
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
-  const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(parseDate(initial.filtroDataCriacao));
+  const [filtroDataCriacao, setFiltroDataCriacao] = useState<{ from?: Date; to?: Date } | undefined>(() => {
+    const from = parseDate(initial.filtroDataCriacaoFrom ?? initial.filtroDataCriacao);
+    const to = parseDate(initial.filtroDataCriacaoTo);
+    if (!from && !to) return undefined;
+    return { from, to };
+  });
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
   const [ultimaParcelaPagaPorAcordo, setUltimaParcelaPagaPorAcordo] = useState<Map<string, { numero: number; data_paga: string }>>(new Map());
   const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
@@ -518,7 +523,8 @@ export default function Acordos() {
         abaAtiva,
         selectedUserId,
         filtroDataVencimento: filtroDataVencimento ? filtroDataVencimento.toISOString() : null,
-        filtroDataCriacao: filtroDataCriacao ? filtroDataCriacao.toISOString() : null,
+        filtroDataCriacaoFrom: filtroDataCriacao?.from ? filtroDataCriacao.from.toISOString() : null,
+        filtroDataCriacaoTo: filtroDataCriacao?.to ? filtroDataCriacao.to.toISOString() : null,
       }));
     } catch {}
   }, [search, statusFilter, abaAtiva, selectedUserId, filtroDataVencimento, filtroDataCriacao]);
@@ -960,13 +966,17 @@ export default function Acordos() {
     return datas.some(d => d === selectedStr);
   };
 
-  // Helper: check if an acordo was created on the selected date
+  // Helper: check if an acordo was created within the selected date range
   const matchesCriacaoFilter = (acordo: Acordo) => {
-    if (!filtroDataCriacao) return true;
+    if (!filtroDataCriacao || (!filtroDataCriacao.from && !filtroDataCriacao.to)) return true;
     if (!acordo.criado_em) return false;
-    const selectedStr = format(filtroDataCriacao, 'yyyy-MM-dd');
     const criadoStr = format(new Date(acordo.criado_em), 'yyyy-MM-dd');
-    return criadoStr === selectedStr;
+    const fromStr = filtroDataCriacao.from ? format(filtroDataCriacao.from, 'yyyy-MM-dd') : undefined;
+    const toStr = filtroDataCriacao.to ? format(filtroDataCriacao.to, 'yyyy-MM-dd') : undefined;
+    if (fromStr && !toStr) return criadoStr === fromStr;
+    if (fromStr && toStr) return criadoStr >= fromStr && criadoStr <= toStr;
+    if (!fromStr && toStr) return criadoStr <= toStr;
+    return true;
   };
 
   // Mapa: cpf normalizado -> lista de acordos com esse CPF (apenas duplicados)
@@ -1244,38 +1254,44 @@ export default function Acordos() {
               )}
             </div>
 
-            {/* Filtro: Data de Criação */}
+            {/* Filtro: Data de Criação (intervalo) */}
             <div className="flex items-center gap-1">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
-                      "w-full sm:w-[210px] justify-start text-left font-normal",
-                      !filtroDataCriacao && "text-muted-foreground"
+                      "w-full sm:w-[280px] justify-start text-left font-normal",
+                      !filtroDataCriacao?.from && !filtroDataCriacao?.to && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filtroDataCriacao ? `Criação: ${format(filtroDataCriacao, "dd/MM/yyyy")}` : "Filtrar por criação"}
+                    {filtroDataCriacao?.from && filtroDataCriacao?.to
+                      ? `Criação: ${format(filtroDataCriacao.from, "dd/MM/yyyy")} → ${format(filtroDataCriacao.to, "dd/MM/yyyy")}`
+                      : filtroDataCriacao?.from
+                        ? `Criação: ${format(filtroDataCriacao.from, "dd/MM/yyyy")} →`
+                        : "Filtrar por criação"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
-                    mode="single"
-                    selected={filtroDataCriacao}
-                    onSelect={setFiltroDataCriacao}
+                    mode="range"
+                    selected={filtroDataCriacao as any}
+                    onSelect={(range: any) => setFiltroDataCriacao(range ? { from: range.from, to: range.to } : undefined)}
                     locale={ptBR}
+                    numberOfMonths={2}
                     initialFocus
                     className="p-3 pointer-events-auto"
                   />
                 </PopoverContent>
               </Popover>
-              {filtroDataCriacao && (
+              {(filtroDataCriacao?.from || filtroDataCriacao?.to) && (
                 <Button variant="ghost" size="icon" onClick={() => setFiltroDataCriacao(undefined)} title="Limpar filtro de criação">
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
+
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full sm:w-[170px]">
