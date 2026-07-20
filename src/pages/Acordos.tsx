@@ -523,7 +523,8 @@ export default function Acordos() {
         abaAtiva,
         selectedUserId,
         filtroDataVencimento: filtroDataVencimento ? filtroDataVencimento.toISOString() : null,
-        filtroDataCriacao: filtroDataCriacao ? filtroDataCriacao.toISOString() : null,
+        filtroDataCriacaoFrom: filtroDataCriacao?.from ? filtroDataCriacao.from.toISOString() : null,
+        filtroDataCriacaoTo: filtroDataCriacao?.to ? filtroDataCriacao.to.toISOString() : null,
       }));
     } catch {}
   }, [search, statusFilter, abaAtiva, selectedUserId, filtroDataVencimento, filtroDataCriacao]);
