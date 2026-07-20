@@ -609,10 +609,7 @@ export default function EnvioMeta() {
         `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
-      if (modoRajada) {
-        const digitou = prompt(`Confirme digitando RAJADA em maiúsculas para disparar ${recipientsDedup.length} msgs sem delay:`);
-        if ((digitou || "").trim() !== "RAJADA") { toast.error("Confirmação cancelada"); return; }
-      }
+    
     }
 
     // Gate universal para modo rajada — vale para todos os caminhos acima
