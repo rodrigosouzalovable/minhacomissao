@@ -601,10 +601,18 @@ export default function EnvioMeta() {
       }
       setValidando(false);
     } else {
+      const bloco = modoRajada
+        ? `⚡ MODO RAJADA — envio paralelo IMEDIATO, sem delay entre mensagens.\n⚠️ ALTO RISCO DE BAN dos números usados.\n\n`
+        : "";
+      const delayLinha = modoRajada ? "sem delay (rajada paralela)" : `delay ${lo}-${hi}s`;
       if (!confirm(
-        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
+        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
+      if (modoRajada) {
+        const digitou = prompt(`Confirme digitando RAJADA em maiúsculas para disparar ${recipientsDedup.length} msgs sem delay:`);
+        if ((digitou || "").trim() !== "RAJADA") { toast.error("Confirmação cancelada"); return; }
+      }
     }
 
 
