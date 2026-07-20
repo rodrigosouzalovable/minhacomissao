@@ -3403,18 +3403,21 @@ export type Database = {
           criado_em: string
           etiqueta_id: string
           id: string
+          origem: string
         }
         Insert: {
           contato_id: string
           criado_em?: string
           etiqueta_id: string
           id?: string
+          origem?: string
         }
         Update: {
           contato_id?: string
           criado_em?: string
           etiqueta_id?: string
           id?: string
+          origem?: string
         }
         Relationships: [
           {
