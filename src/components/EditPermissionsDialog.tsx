@@ -53,6 +53,7 @@ export function EditPermissionsDialog({
   const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
+  const [podeMarcarPago, setPodeMarcarPago] = useState(false);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
