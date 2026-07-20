@@ -33,7 +33,15 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
     setNome(''); setCor(CORES[0]); onChange();
   };
   const excluir = async (id: string) => {
-    await supabase.from('meta_whatsapp_etiquetas').delete().eq('id', id);
+    const { error } = await supabase.from('meta_whatsapp_etiquetas').delete().eq('id', id);
+    if (error) {
+      toast({
+        title: 'Não é possível remover',
+        description: 'Etiquetas de atendente aplicadas automaticamente só podem ser removidas por um administrador.',
+        variant: 'destructive',
+      });
+      return;
+    }
     onChange();
   };
 

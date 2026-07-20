@@ -194,15 +194,22 @@ export default function InboxMeta() {
     setEtiquetas((data as MetaEtiqueta[]) ?? []);
   }, [user]);
 
+  const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
   const fetchContatoEtiquetas = useCallback(async () => {
     const { data } = await supabase.from('meta_whatsapp_contato_etiquetas')
-      .select('contato_id, etiqueta_id');
+      .select('contato_id, etiqueta_id, origem');
     const map: Record<string, string[]> = {};
+    const bloq: Record<string, Set<string>> = {};
     (data ?? []).forEach((r: any) => {
       if (!map[r.contato_id]) map[r.contato_id] = [];
       map[r.contato_id].push(r.etiqueta_id);
+      if (r.origem === 'auto_atendente') {
+        if (!bloq[r.contato_id]) bloq[r.contato_id] = new Set();
+        bloq[r.contato_id].add(r.etiqueta_id);
+      }
     });
     setContatoEtiquetas(map);
+    setEtiquetasBloqueadas(bloq);
   }, []);
 
   const fetchMsgRapidas = useCallback(async () => {
@@ -813,6 +820,7 @@ export default function InboxMeta() {
                   contatoId={c.id}
                   etiquetas={etiquetas}
                   contatoEtiquetaIds={etIds}
+                  etiquetasBloqueadas={etiquetasBloqueadas[c.id] ?? new Set()}
                   fixado={c.fixado}
                   arquivado={c.arquivado}
                   onMarcarNaoLida={() => handleMarcarNaoLida(c.id)}

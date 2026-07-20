@@ -467,10 +467,10 @@ serve(async (req) => {
             contatoIdFinal = (inseridoContato as any)?.id ?? null;
           }
 
-          // ===== Rodízio de atendentes =====
-          // Se a mensagem é do cliente (entrada) e a conversa ainda não tem
-          // nenhuma etiqueta "Atendente: X", atribui automaticamente a etiqueta
-          // do atendente com menor carga atual (desempate alfabético).
+          // ===== Etiqueta do atendente =====
+          // 1) Se o telefone bate (últimos 8 dígitos, tolera "9" móvel) com algum acordo,
+          //    aplica a etiqueta "Atendente: <nome>" do usuário que lançou o acordo (LOCKED — só admin remove).
+          // 2) Caso contrário, cai no rodízio (round-robin por menor carga).
           if (!isEcho && contatoIdFinal) {
             try {
               const { data: atendentes } = await supabase
@@ -479,19 +479,82 @@ serve(async (req) => {
                 .eq('user_id', inst.user_id)
                 .ilike('nome', 'Atendente:%');
 
-              if (atendentes && atendentes.length > 0) {
-                const atendenteIds = atendentes.map((a: any) => a.id);
+              const atendenteIds = (atendentes || []).map((a: any) => a.id);
 
-                // Já tem atendente atribuído?
+              // Já tem atendente atribuído?
+              let jaTemAtendente = false;
+              if (atendenteIds.length > 0) {
                 const { data: jaAtribuido } = await supabase
                   .from('meta_whatsapp_contato_etiquetas')
                   .select('etiqueta_id')
                   .eq('contato_id', contatoIdFinal)
                   .in('etiqueta_id', atendenteIds)
                   .limit(1);
+                jaTemAtendente = !!(jaAtribuido && jaAtribuido.length > 0);
+              }
 
-                if (!jaAtribuido || jaAtribuido.length === 0) {
-                  // Conta carga de cada atendente
+              if (!jaTemAtendente) {
+                // ---- Match por acordo (prioritário) ----
+                let atendenteAcordoId: string | null = null;
+                let atendenteAcordoNome: string | null = null;
+                const sufixoContato = phoneSuffix(outroLado);
+                if (sufixoContato.length === 8) {
+                  const { data: acordoMatch } = await supabase
+                    .from('acordos')
+                    .select('user_id, criado_em, cliente_telefone')
+                    .filter('cliente_telefone', 'ilike', `%${sufixoContato}`)
+                    .order('criado_em', { ascending: false })
+                    .limit(20);
+
+                  const acordoOk = (acordoMatch || []).find((a: any) =>
+                    phoneSuffix(a.cliente_telefone) === sufixoContato
+                  );
+                  if (acordoOk?.user_id) {
+                    const { data: prof } = await supabase
+                      .from('profiles')
+                      .select('nome')
+                      .eq('id', acordoOk.user_id)
+                      .maybeSingle();
+                    const nomeAt = String((prof as any)?.nome || '').trim();
+                    if (nomeAt) {
+                      atendenteAcordoNome = nomeAt;
+                      const nomeEtiqueta = `Atendente: ${nomeAt}`;
+                      const jaExiste = (atendentes || []).find((a: any) =>
+                        String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
+                      );
+                      if (jaExiste) {
+                        atendenteAcordoId = (jaExiste as any).id;
+                      } else {
+                        const { data: novaEt } = await supabase
+                          .from('meta_whatsapp_etiquetas')
+                          .insert({ user_id: inst.user_id, nome: nomeEtiqueta, cor: '#25D366' } as any)
+                          .select('id')
+                          .maybeSingle();
+                        atendenteAcordoId = (novaEt as any)?.id || null;
+                      }
+                    }
+                  }
+                }
+
+                if (atendenteAcordoId) {
+                  const { error: linkErr } = await supabase
+                    .from('meta_whatsapp_contato_etiquetas')
+                    .insert({
+                      contato_id: contatoIdFinal,
+                      etiqueta_id: atendenteAcordoId,
+                      origem: 'auto_atendente',
+                    } as any);
+                  if (linkErr) {
+                    const dup = String(linkErr.message || '').toLowerCase().includes('duplicate') || linkErr.code === '23505';
+                    if (!dup) console.error('[MetaWebhook] falha ao aplicar etiqueta atendente (acordo)', linkErr.message);
+                  } else {
+                    console.log('[MetaWebhook] etiqueta atendente aplicada via acordo', {
+                      contato_id: contatoIdFinal,
+                      atendente: atendenteAcordoNome,
+                    });
+                  }
+                } else if (atendenteIds.length > 0) {
+                  // ---- Fallback: rodízio por menor carga ----
                   const { data: vinculos } = await supabase
                     .from('meta_whatsapp_contato_etiquetas')
                     .select('etiqueta_id')
@@ -503,35 +566,31 @@ serve(async (req) => {
                     const eid = (v as any).etiqueta_id;
                     if (eid in carga) carga[eid] += 1;
                   }
-
-                  const ordenados = [...atendentes].sort((a: any, b: any) => {
+                  const ordenados = [...(atendentes || [])].sort((a: any, b: any) => {
                     const ca = carga[a.id] ?? 0;
                     const cb = carga[b.id] ?? 0;
                     if (ca !== cb) return ca - cb;
                     return String(a.nome).localeCompare(String(b.nome));
                   });
                   const escolhido: any = ordenados[0];
-
-                  const { error: linkErr } = await supabase
-                    .from('meta_whatsapp_contato_etiquetas')
-                    .insert({ contato_id: contatoIdFinal, etiqueta_id: escolhido.id } as any);
-
-                  if (linkErr) {
-                    const dup = String(linkErr.message || '').toLowerCase().includes('duplicate') || linkErr.code === '23505';
-                    if (!dup) {
-                      console.error('[MetaWebhook] falha ao atribuir atendente', linkErr.message);
+                  if (escolhido) {
+                    const { error: linkErr } = await supabase
+                      .from('meta_whatsapp_contato_etiquetas')
+                      .insert({ contato_id: contatoIdFinal, etiqueta_id: escolhido.id, origem: 'manual' } as any);
+                    if (linkErr) {
+                      const dup = String(linkErr.message || '').toLowerCase().includes('duplicate') || linkErr.code === '23505';
+                      if (!dup) console.error('[MetaWebhook] falha ao atribuir atendente (rodízio)', linkErr.message);
+                    } else {
+                      console.log('[MetaWebhook] atendente atribuido via rodízio', {
+                        contato_id: contatoIdFinal,
+                        atendente: escolhido.nome,
+                      });
                     }
-                  } else {
-                    console.log('[MetaWebhook] atendente atribuido', {
-                      contato_id: contatoIdFinal,
-                      etiqueta_id: escolhido.id,
-                      atendente: escolhido.nome,
-                    });
                   }
                 }
               }
             } catch (e: any) {
-              console.error('[MetaWebhook] erro no rodízio de atendentes', e?.message || e);
+              console.error('[MetaWebhook] erro na atribuição de atendente', e?.message || e);
             }
           }
 

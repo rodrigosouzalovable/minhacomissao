@@ -1,36 +1,56 @@
-## Problema
+# Auto-etiqueta de atendente no Inbox Meta
 
-O acordo do REGINALDO (1ª parcela venceu 15/05, sem pagamento, 155 dias em atraso) continua com status `ativo` no banco. Por isso:
+## Objetivo
+Quando um cliente enviar ou responder mensagem no Inbox Meta, o sistema identifica se existe acordo cadastrado com esse telefone e aplica automaticamente uma etiqueta com o nome do atendente que lançou o acordo. A etiqueta fica travada — só admin remove. Se nenhum acordo for encontrado, a conversa segue para a fila normal de atendentes (sem etiqueta automática).
 
-1. O card mostra badge "Ativo" em vez de "QUEBRA DE ACORDO".
-2. O trigger de CPF duplicado bloqueia outro usuário de lançar um novo acordo, porque a regra "todos os anteriores quebrados" não é satisfeita (o antigo ainda está `ativo`).
+## Matching de telefone (tolerante ao "9" móvel)
 
-A causa é que a Edge Function `cleanup-acordos` hoje trata "10 dias sem nenhum pagamento" **excluindo o acordo** (e só marca como `quebrado` quando já houve alguma parcela paga e a próxima está 30+ dias atrasada). Como esse acordo foi lançado pelo admin, o usuário provavelmente espera que ele seja preservado como histórico de quebra — não apagado — e que a partir de 10 dias sem pagamento o status vire `quebrado` automaticamente.
+Regra global do projeto já é "sufixo de 8 dígitos". Aplicando aqui:
 
-## Mudança
+- Normalizar ambos os lados removendo tudo que não é dígito.
+- Comparar pelos **últimos 8 dígitos**. Isso resolve o caso (63) 98114-0477 (acordo) vs (63) 8114-0477 (WhatsApp): ambos terminam em `81140477`.
+- Filtro SQL:
+  ```sql
+  right(regexp_replace(cliente_telefone,'\D','','g'), 8)
+    = right(regexp_replace($telefone_da_mensagem,'\D','','g'), 8)
+  ```
+- Se houver mais de um acordo com esse sufixo, escolher o mais recente por `criado_em`.
 
-Alterar a Edge Function `supabase/functions/cleanup-acordos/index.ts`:
+## Fluxo
 
-- **Regra nova (10 dias sem nenhum pagamento):** em vez de excluir o acordo e reativar a dívida original, marcar o acordo como `quebrado`:
-  - `UPDATE acordos SET status = 'quebrado' WHERE id = ...`
-  - Excluir apenas as parcelas `pendente` desse acordo (mantém o histórico do acordo e das parcelas pagas — que aqui não existem).
-  - **Não** reativar `devedores` (a dívida original permanece "coberta" pelo registro de quebra; o novo acordo poderá ser lançado por qualquer usuário graças ao trigger já existente que permite duplicidade quando todos os anteriores estão `quebrado`).
-- **Regra existente (30+ dias com parcela pendente após ter pago algo):** permanece igual — marca como `quebrado`.
-- **Componente `AcordosAbandonadosDialog`:** hoje mostra acordos `ativo` sem pagamento com 10+ dias e permite excluir. Como o cleanup passará a quebrá-los automaticamente, a lista naturalmente esvazia. Mantenho o componente como está (ferramenta manual de exclusão continua útil para admin).
-- **Trigger de CPF duplicado:** já contempla o caso "todos quebrados" — sem alteração.
+1. **Detecção no webhook Meta** (`supabase/functions/meta-whatsapp-webhook/index.ts`)
+   - Após persistir uma mensagem inbound (cliente enviou/respondeu), disparar `aplicarEtiquetaAtendente(contato_id, telefone)`.
+   - Idempotente: se o contato já tem etiqueta automática, sai.
+   - Busca `acordos` pelo sufixo de 8 dígitos → pega `user_id` do atendente → lê `profiles.nome`.
+   - Se nada encontrado: não faz nada (fila padrão).
 
-## Execução imediata para o caso do REGINALDO
+2. **Aplicar etiqueta**
+   - Escopo (`user_id` da etiqueta): dono do contato (`meta_whatsapp_contatos.user_id`), mesmo padrão do sistema.
+   - `upsert` em `meta_whatsapp_etiquetas` com `nome = 'Atendente: <profile.nome>'`, cor fixa `#25D366`.
+   - `insert` em `meta_whatsapp_contato_etiquetas` com nova coluna `origem = 'auto_atendente'`.
 
-Após o deploy, rodar `cleanup-acordos` uma vez para que o acordo do REGINALDO (e outros na mesma situação) passe a `quebrado` imediatamente, liberando o novo lançamento.
+3. **Trava da etiqueta automática**
+   - Migração:
+     - `ALTER TABLE meta_whatsapp_contato_etiquetas ADD COLUMN origem text NOT NULL DEFAULT 'manual' CHECK (origem IN ('manual','auto_atendente'))`.
+     - Ajustar policy de `DELETE` para bloquear remoção quando `origem = 'auto_atendente'`, exceto se `has_role(auth.uid(),'admin')`.
+     - Policy de `DELETE` em `meta_whatsapp_etiquetas`: bloquear (não-admin) quando existir vínculo `auto_atendente` na etiqueta.
 
-## Fora do escopo
+4. **UI**
+   - `src/components/inbox/meta/MetaConversaContextMenu.tsx`: ícone de cadeado ao lado do nome da etiqueta automática; toggle no submenu mostra toast "Etiqueta do atendente — apenas admin pode remover" para não-admin. Admin remove normalmente.
+   - `src/components/inbox/meta/MetaEtiquetasDialog.tsx`: idem — botão excluir desabilitado para não-admin quando etiqueta tem vínculo automático.
+   - Detectar `isAdmin` via `useUserRole`.
+   - Carregar `origem` no fetch de `meta_whatsapp_contato_etiquetas` na página do Inbox Meta para passar aos componentes.
 
-- UI dos cards: quando o status virar `quebrado`, o badge "QUEBRA DE ACORDO" já é renderizado pela lógica atual — nada a mudar.
-- Cronograma do cleanup: permanece o agendamento atual.
-- Nenhuma mudança em RLS, storage, ou no fluxo de lembretes.
+5. **Backfill (uma execução)**
+   - SQL na migração: para cada `meta_whatsapp_contatos` sem etiqueta automática, cruzar por sufixo de 8 dígitos com o acordo mais recente daquele telefone, criar/reaproveitar `meta_whatsapp_etiquetas` do dono do contato com `nome = 'Atendente: <profile.nome>'` e inserir vínculo com `origem = 'auto_atendente'`.
 
-## Verificação
+## Detalhes técnicos
 
-1. Rodar `cleanup-acordos` e confirmar que o acordo do REGINALDO fica `status = 'quebrado'` e parcelas pendentes removidas.
-2. Como usuário não-admin, lançar novo acordo com o mesmo CPF → deve permitir.
-3. Card do acordo antigo deve exibir "QUEBRA DE ACORDO".
+- Nenhum cron novo — a lógica roda dentro do webhook já existente (custo desprezível).
+- Reaproveita `MetaAtendenteNotifier` (já busca etiquetas `Atendente: <nome>`), então o beep do atendente logado continua funcionando sem alteração.
+- Arquivos afetados:
+  - Migração SQL (coluna `origem`, policies, backfill).
+  - `supabase/functions/meta-whatsapp-webhook/index.ts`.
+  - `src/components/inbox/meta/MetaConversaContextMenu.tsx`.
+  - `src/components/inbox/meta/MetaEtiquetasDialog.tsx`.
+  - `src/pages/InboxMeta.tsx` (carregar `origem` no join de etiquetas).

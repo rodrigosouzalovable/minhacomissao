@@ -5,7 +5,8 @@ import {
 } from '@/components/ui/context-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore } from 'lucide-react';
+import { useUserRole } from '@/hooks/useUserRole';
+import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore, Lock } from 'lucide-react';
 import { MetaEtiquetasDialog, MetaEtiqueta } from './MetaEtiquetasDialog';
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
   contatoId: string;
   etiquetas: MetaEtiqueta[];
   contatoEtiquetaIds: string[];
+  etiquetasBloqueadas?: Set<string>;
   fixado: boolean;
   arquivado: boolean;
   onMarcarNaoLida: () => void;
@@ -24,10 +26,12 @@ interface Props {
 }
 
 export function MetaConversaContextMenu({
-  children, contatoId, etiquetas, contatoEtiquetaIds, fixado, arquivado,
+  children, contatoId, etiquetas, contatoEtiquetaIds, etiquetasBloqueadas,
+  fixado, arquivado,
   onMarcarNaoLida, onExcluirConversa, onEtiquetaToggle, onEtiquetasChange, onFixarToggle, onArquivarToggle,
 }: Props) {
   const { toast } = useToast();
+  const { isAdmin } = useUserRole();
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
 
   const handleMarcarNaoLida = async () => {
@@ -38,9 +42,22 @@ export function MetaConversaContextMenu({
 
   const handleToggleEtiqueta = async (etiquetaId: string) => {
     const ativo = contatoEtiquetaIds.includes(etiquetaId);
+    const travada = !!etiquetasBloqueadas?.has(etiquetaId);
+    if (ativo && travada && !isAdmin) {
+      toast({
+        title: 'Etiqueta bloqueada',
+        description: 'Etiqueta do atendente — apenas admin pode remover.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (ativo) {
-      await supabase.from('meta_whatsapp_contato_etiquetas').delete()
+      const { error } = await supabase.from('meta_whatsapp_contato_etiquetas').delete()
         .eq('contato_id', contatoId).eq('etiqueta_id', etiquetaId);
+      if (error) {
+        toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+        return;
+      }
     } else {
       await supabase.from('meta_whatsapp_contato_etiquetas').insert({ contato_id: contatoId, etiqueta_id: etiquetaId });
     }
@@ -69,18 +86,22 @@ export function MetaConversaContextMenu({
           <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger><Tag className="h-4 w-4 mr-2" />Etiquetas</ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-48">
+            <ContextMenuSubContent className="w-56">
               {etiquetas.length === 0 ? (
                 <ContextMenuItem disabled className="text-xs text-muted-foreground">Nenhuma etiqueta</ContextMenuItem>
-              ) : etiquetas.map(et => (
-                <ContextMenuItem key={et.id} onSelect={(e) => { e.preventDefault(); handleToggleEtiqueta(et.id); }}>
-                  <div className="flex items-center gap-2 w-full">
-                    <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
-                    <span className="flex-1 truncate">{et.nome}</span>
-                    {contatoEtiquetaIds.includes(et.id) && <Check className="h-4 w-4 text-primary shrink-0" />}
-                  </div>
-                </ContextMenuItem>
-              ))}
+              ) : etiquetas.map(et => {
+                const travada = !!etiquetasBloqueadas?.has(et.id) && contatoEtiquetaIds.includes(et.id);
+                return (
+                  <ContextMenuItem key={et.id} onSelect={(e) => { e.preventDefault(); handleToggleEtiqueta(et.id); }}>
+                    <div className="flex items-center gap-2 w-full">
+                      <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
+                      <span className="flex-1 truncate">{et.nome}</span>
+                      {travada && <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-label="Só admin remove" />}
+                      {contatoEtiquetaIds.includes(et.id) && <Check className="h-4 w-4 text-primary shrink-0" />}
+                    </div>
+                  </ContextMenuItem>
+                );
+              })}
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => setGerenciarOpen(true)}>
                 <Settings className="h-4 w-4 mr-2" /> Gerenciar etiquetas
