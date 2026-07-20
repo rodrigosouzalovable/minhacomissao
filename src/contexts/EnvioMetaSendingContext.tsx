@@ -412,6 +412,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           maxSec: p.maxSec,
           templateIdByInstance: p.templateIdByInstance ?? {},
           nomeCampanha: p.nomeCampanha ?? null,
+          modoRajada: p.modoRajada === true,
         },
       });
       if (error) throw error;
