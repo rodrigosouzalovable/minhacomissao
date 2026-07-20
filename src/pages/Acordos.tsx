@@ -504,7 +504,12 @@ export default function Acordos() {
   const [selectedUserId, setSelectedUserId] = useState<string>(initial.selectedUserId ?? 'todos');
   const [rankingAberto, setRankingAberto] = useState(false);
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
-  const [filtroDataCriacao, setFiltroDataCriacao] = useState<Date | undefined>(parseDate(initial.filtroDataCriacao));
+  const [filtroDataCriacao, setFiltroDataCriacao] = useState<{ from?: Date; to?: Date } | undefined>(() => {
+    const from = parseDate(initial.filtroDataCriacaoFrom ?? initial.filtroDataCriacao);
+    const to = parseDate(initial.filtroDataCriacaoTo);
+    if (!from && !to) return undefined;
+    return { from, to };
+  });
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
   const [ultimaParcelaPagaPorAcordo, setUltimaParcelaPagaPorAcordo] = useState<Map<string, { numero: number; data_paga: string }>>(new Map());
   const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
