@@ -56,6 +56,7 @@ export type IniciarParams = {
   erroValidacao?: string[];
   templateIdByInstance?: Record<string, string>;
   nomeCampanha?: string;
+  modoRajada?: boolean;
   onAfterEnvio?: () => void;
 };
 
