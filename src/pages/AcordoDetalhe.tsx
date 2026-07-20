@@ -599,6 +599,16 @@ export default function AcordoDetalhe() {
                 </Button>
               </>
             )}
+            {isAdmin && acordo.status !== 'ativo' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Editar (Admin)
+              </Button>
+            )}
             {/* Botão de excluir acordo: admin sempre; dono com permissão apenas se NÃO houver parcelas pagas */}
             {(isAdmin || (podeExcluirAcordos && isOwner && parcelasPagas === 0)) && (
               <AlertDialog>
