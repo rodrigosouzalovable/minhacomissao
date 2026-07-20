@@ -588,7 +588,7 @@ export default function InboxMeta() {
     setEnviandoArquivo(true);
     try {
       const ext = file.name.split('.').pop() || 'bin';
-      const path = `meta/${contatoAtivo.instancia_id}/${contatoAtivo.telefone}/${Date.now()}.${ext}`;
+      const path = `${contatoAtivo.instancia_id}/${contatoAtivo.telefone || contatoAtivo.bsuid}/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('inbox-media').upload(path, file, { contentType: file.type });
       if (upErr) throw upErr;
       const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(path);
