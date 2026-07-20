@@ -1,29 +1,25 @@
-## Bloqueio total de CPF duplicado (somente admin)
+## Problema
 
-Hoje o trigger `acordos_block_duplicate_cpf` já bloqueia CPFs repetidos, mas tem duas exceções que permitem funcionários lançarem mesmo assim:
+O drag-and-drop de arquivos no Inbox Meta faz upload no bucket `inbox-media` usando o caminho `meta/{instancia_id}/{telefone}/{timestamp}.{ext}`. As policies de storage (migration `20260720102109`) tentam validar a propriedade fazendo cast do **primeiro segmento da pasta** para `uuid` (`(storage.foldername(name))[1]::uuid`). Como o primeiro segmento é a string literal `"meta"`, o Postgres retorna:
 
-1. Permissão individual `user_permissions.permite_cpf_duplicado = true`
-2. Regra "último acordo quebrado" (`cpf_ultimo_acordo_quebrado`) — se o último acordo do CPF está quebrado/vencido há +10 dias, qualquer funcionário pode lançar de novo
+```
+invalid input syntax for type uuid: "meta"
+```
 
-O pedido é: **se já existe QUALQUER acordo com aquele CPF no sistema, só o admin pode lançar**. Sem exceções.
+## Correção
 
-### Mudança
+Em `src/pages/InboxMeta.tsx` (função `enviarMidia`, linha 591), remover o prefixo `meta/` para que o caminho fique no formato aceito pelas policies:
 
-Migration ajustando `public.acordos_block_duplicate_cpf()`:
+```
+{instancia_id}/{telefone}/{timestamp}.{ext}
+```
 
-- Mantém: se `is_admin_user(auth.uid())` → libera.
-- Remove: o `IF COALESCE(v_perm, false)` que libera por `permite_cpf_duplicado`.
-- Remove: o `IF cpf_ultimo_acordo_quebrado(...)` que libera quando o último acordo estava quebrado.
-- Mantém a checagem `EXISTS (SELECT 1 FROM acordos WHERE cpf_normalize(cliente_cpf) = ...)` — se existe qualquer acordo com o mesmo CPF (independente de status: ativo, concluído, quebrado, cancelado), bloqueia com a mesma mensagem atual informando quem lançou e quando.
+Isso alinha o Inbox Meta ao mesmo padrão já usado pelo `ChatInputBar` do inbox clássico (que funciona corretamente) e satisfaz a checagem `EXISTS (... WHERE i.id::text = foldername[1] AND i.user_id = auth.uid())`.
 
-Nome e status do acordo anterior continuam aparecendo na mensagem de erro para o funcionário saber para quem pedir liberação.
+Nenhuma alteração de banco, edge function ou policy é necessária — apenas o caminho no cliente.
 
-### Impactos colaterais
+## Detalhes técnicos
 
-- A flag `permite_cpf_duplicado` em `user_permissions` deixa de ter efeito prático. Não vou remover a coluna nem a UI que a controla neste passo (pode ser útil reativar no futuro); ela simplesmente será ignorada pelo trigger. Me avise se prefere que eu remova também.
-- A validação em tempo real de CPF no frontend (memo "CPF Validation") continua funcionando como está — ela só avisa; o bloqueio real é no trigger, que fica mais restrito.
-- Admin continua com liberdade total via `is_admin_user`.
-
-### Detalhes técnicos
-
-Arquivo alterado: apenas a função `public.acordos_block_duplicate_cpf()` via `supabase--migration` (CREATE OR REPLACE FUNCTION). Nenhum código frontend precisa mudar.
+- Arquivo alterado: `src/pages/InboxMeta.tsx` (apenas a linha do `path`).
+- Sem impacto em uploads anteriores (já enviados via outros fluxos).
+- Sem impacto em edge functions — `send-whatsapp-meta-media` recebe apenas a URL pública final.
