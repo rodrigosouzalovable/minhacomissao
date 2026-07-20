@@ -268,8 +268,20 @@ export function EditPermissionsDialog({
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Pode marcar parcelas como pago</Label>
+                <p className="text-xs text-muted-foreground">Se desativado, o usuário não conseguirá marcar/desmarcar parcelas de acordos como pagas. Admin sempre pode.</p>
+              </div>
+              <Switch
+                checked={podeMarcarPago}
+                onCheckedChange={setPodeMarcarPago}
+              />
+            </div>
+
           </div>
         </div>
+
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
