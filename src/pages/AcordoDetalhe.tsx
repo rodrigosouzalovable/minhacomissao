@@ -389,6 +389,47 @@ export default function AcordoDetalhe() {
     }
   };
 
+  const atualizarValorParcela = async (pagamentoId: string, novoValor: number) => {
+    if (!acordo) return;
+    if (isNaN(novoValor) || novoValor <= 0) {
+      toast({ variant: 'destructive', title: 'Valor inválido', description: 'Informe um valor maior que zero.' });
+      return;
+    }
+    try {
+      const { error: errParcela } = await supabase
+        .from('pagamentos')
+        .update({ valor_parcela: novoValor })
+        .eq('id', pagamentoId);
+      if (errParcela) throw errParcela;
+
+      const novoTotal = pagamentos.reduce(
+        (sum, p) => sum + (p.id === pagamentoId ? novoValor : Number(p.valor_parcela)),
+        0
+      );
+      const totalArred = Math.round(novoTotal * 100) / 100;
+
+      const { error: errAcordo } = await supabase
+        .from('acordos')
+        .update({ valor_total: totalArred })
+        .eq('id', acordo.id);
+      if (errAcordo) throw errAcordo;
+
+      setPagamentos(prev =>
+        prev.map(p => (p.id === pagamentoId ? { ...p, valor_parcela: novoValor } : p))
+      );
+      setAcordo(prev => (prev ? { ...prev, valor_total: totalArred } : prev));
+      setEditandoValorParcela(null);
+      setNovoValorParcela('');
+
+      toast({
+        title: 'Parcela atualizada!',
+        description: `Novo valor: ${formatarMoeda(novoValor)} • Total: ${formatarMoeda(totalArred)}`,
+      });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível atualizar o valor da parcela.' });
+    }
+  };
+
   const handleExcluirAcordo = async () => {
     if (!acordo) return;
 
