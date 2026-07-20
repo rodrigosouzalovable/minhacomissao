@@ -1,19 +1,38 @@
 ## Problema
 
-Na tela **Importar pagos**, todas as linhas aparecem como "Sem acordo" mesmo quando o acordo existe no sistema.
+Na importação de pagamentos, o cliente **Luiz Cosmo do Nascimento Filho** (parcela 1, já paga em 20/07/2026) aparece como **"Pronto para marcar"** contra a parcela 2 (`1 (sist. 2)` na coluna Parcela do preview), quando deveria aparecer como **"Já pago"**.
 
-## Causa raiz (verificada no banco)
+## Causa (confirmada em `src/components/ImportarPagosDialog.tsx`)
 
-- A planilha traz CPF como dígitos (`04985806366`).
-- Na tabela `acordos`, os CPFs estão salvos **formatados** (ex.: `049.858.063-66` — confirmado via query no acordo do Jardel Sena).
-- O `ImportarPagosDialog` faz `.in('cliente_cpf', [digitos...])`, que nunca casa com as strings formatadas → todos caem em `sem_acordo`.
+Na função `avaliarLinhas` (linhas 130-165), a ordem atual é:
+
+1. Procura parcela **pendente** com o número informado na planilha (parcela 1) → não acha (já está paga).
+2. **Fallback**: pega a primeira parcela pendente qualquer → acha parcela 2 → marca como "Pronto para marcar".
+3. Só verifica `ja_pago` se o fallback também falhar.
+
+Ou seja: quando o número da parcela da planilha bate com uma parcela **já paga** do sistema, o sistema ignora esse fato e casa a linha com outra parcela pendente qualquer.
 
 ## Correção
 
-Alterar apenas `src/components/ImportarPagosDialog.tsx`, função `avaliarLinhas`:
+Reordenar a lógica em `avaliarLinhas` para que, **quando `linha.parcela` é informado**, a verificação de "já pago" venha ANTES do fallback para "próxima pendente".
 
-1. Gerar, para cada CPF único, duas variantes: só-dígitos e formatada `XXX.XXX.XXX-XX`.
-2. Enviar as duas variantes no filtro `.in('cliente_cpf', lote)`.
-3. A normalização já existente ao popular o `Map` (linha 80) mantém a chave em dígitos, então o match posterior continua idêntico.
+Novo fluxo, para cada acordo do CPF:
 
-Nada mais muda: parser, matching de parcela, tolerância de valor, update final e UI permanecem como estão. Depois disso, linhas com acordo existente passam a mostrar a tag verde "Pronto para marcar" (ou "Valor divergente", conforme o caso).
+1. Se `linha.parcela` foi informado:
+   - Se a parcela exata está `pago` → retorna imediatamente `ja_pago`.
+   - Se a parcela exata está `pendente` e o valor bate → retorna `pronto` (ou `valor_divergente`).
+2. Só se `linha.parcela` não foi informado (ou o acordo não tem essa parcela), cair no fallback atual de "primeira pendente disponível em ordem".
+3. Se nenhum acordo tem candidato aplicável → mantém `sem_parcela_pendente`.
+
+## Detalhes técnicos
+
+- Arquivo único alterado: `src/components/ImportarPagosDialog.tsx`.
+- Nenhuma mudança de schema, RLS ou edge function.
+- Preserva o comportamento de `usados` para não reservar a mesma parcela duas vezes.
+- Mantém tolerância de R$ 0,01 e opção "marcar mesmo com valor divergente".
+
+## Validação
+
+- Reimportar a mesma planilha e conferir que Luiz Cosmo passa a mostrar **"Já pago"** e é removido da contagem "Pronto para marcar".
+- Os demais casos (Jardel Sena, Leide Daiane, etc., que estão pendentes) continuam como "Pronto para marcar".
+- Linhas sem número de parcela na planilha continuam usando a primeira pendente disponível.
