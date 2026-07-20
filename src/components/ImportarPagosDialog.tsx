@@ -131,22 +131,25 @@ export function ImportarPagosDialog({ onImported }: { onImported?: () => void })
         const parcelas = pagamentosPorAcordo.get(acordo.id) ?? [];
         if (parcelas.length === 0) continue;
 
-        // 1) Se a planilha traz o número da parcela, tenta bater exatamente
+        // 1) Se a planilha traz o número da parcela e ela já está paga, retorna já pago imediatamente
+        if (linha.parcela) {
+          const jaPago = parcelas.find((p) => p.numero_parcela === linha.parcela && p.status === 'pago');
+          if (jaPago) {
+            return { ...linha, status: 'ja_pago', acordo_id: acordo.id, numero_parcela_sistema: jaPago.numero_parcela, valor_esperado: jaPago.valor_parcela };
+          }
+        }
+
+        // 2) Se a planilha traz o número da parcela, tenta bater exatamente numa pendente
         let candidato = linha.parcela
           ? parcelas.find((p) => p.numero_parcela === linha.parcela && p.status === 'pendente' && !usados.has(p.id))
           : undefined;
 
-        // 2) Senão, primeira pendente disponível em ordem
+        // 3) Senão, primeira pendente disponível em ordem
         if (!candidato) {
           candidato = parcelas.find((p) => p.status === 'pendente' && !usados.has(p.id));
         }
 
         if (!candidato) {
-          // Verifica se a parcela específica já está paga
-          if (linha.parcela) {
-            const jaPago = parcelas.find((p) => p.numero_parcela === linha.parcela && p.status === 'pago');
-            if (jaPago) return { ...linha, status: 'ja_pago', acordo_id: acordo.id, numero_parcela_sistema: jaPago.numero_parcela, valor_esperado: jaPago.valor_parcela };
-          }
           continue;
         }
 
