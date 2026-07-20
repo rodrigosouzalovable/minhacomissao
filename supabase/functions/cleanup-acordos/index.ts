@@ -98,32 +98,31 @@ serve(async (req) => {
         if (prErr || !primeiraParcela || primeiraParcela.length === 0) continue;
 
         if (primeiraParcela[0].data_prevista <= dezDiasAtrasStr) {
-          // 10+ dias sem pagamento - excluir acordo, parcelas e reativar dívida original
-          console.log(`Excluindo acordo ${acordo.id} (sem pagamentos, vencido há 10+ dias)`);
-          
-          const { error: delPagErr } = await supabase
+          // 10+ dias sem pagamento - marcar como QUEBRADO (preserva histórico e libera novo lançamento)
+          console.log(`Quebrando acordo ${acordo.id} (sem pagamentos, 1ª parcela vencida há 10+ dias)`);
+
+          const { error: delPendErr } = await supabase
             .from('pagamentos')
             .delete()
-            .eq('acordo_id', acordo.id);
+            .eq('acordo_id', acordo.id)
+            .eq('status', 'pendente');
 
-          if (delPagErr) {
-            console.error(`Erro ao excluir pagamentos do acordo ${acordo.id}:`, delPagErr);
+          if (delPendErr) {
+            console.error(`Erro ao excluir parcelas pendentes do acordo ${acordo.id}:`, delPendErr);
             continue;
           }
 
-          const { error: delAcErr } = await supabase
+          const { error: updErr } = await supabase
             .from('acordos')
-            .delete()
+            .update({ status: 'quebrado' })
             .eq('id', acordo.id);
 
-          if (delAcErr) {
-            console.error(`Erro ao excluir acordo ${acordo.id}:`, delAcErr);
+          if (updErr) {
+            console.error(`Erro ao quebrar acordo ${acordo.id}:`, updErr);
             continue;
           }
 
-          await reativarDevedoresCpf((acordo as any).cliente_cpf);
-
-          excluidos++;
+          quebrados++;
         }
       } else {
         // ===== PASSO 2: Quebrar acordos com parcelas atrasadas =====
