@@ -168,22 +168,27 @@ export default function EditarAcordo() {
 
       // Atualizar acordo
       // Admin pode atualizar qualquer acordo
+      const updatePayload: any = {
+        empresa: empresa,
+        cliente_nome: validated.clienteNome,
+        cliente_cpf: validated.clienteCpf || null,
+        cliente_telefone: validated.clienteTelefone || null,
+        valor_total: validated.valorTotal,
+        parcelas: validated.parcelas,
+        valor_parcela: calculo.valorParcela,
+        data_primeiro_pagamento: validated.dataPrimeiroPagamento,
+        dias_atraso: validated.diasAtraso,
+        percentual_comissao: calculo.percentual,
+        comissao_total: calculo.comissaoTotal,
+        observacoes: validated.observacoes,
+      };
+      // Admin: reativar acordo se estava quebrado/cancelado
+      if (isAdmin) {
+        updatePayload.status = 'ativo';
+      }
       let updateQuery = supabase
         .from('acordos')
-        .update({
-          empresa: empresa,
-          cliente_nome: validated.clienteNome,
-          cliente_cpf: validated.clienteCpf || null,
-          cliente_telefone: validated.clienteTelefone || null,
-          valor_total: validated.valorTotal,
-          parcelas: validated.parcelas,
-          valor_parcela: calculo.valorParcela,
-          data_primeiro_pagamento: validated.dataPrimeiroPagamento,
-          dias_atraso: validated.diasAtraso,
-          percentual_comissao: calculo.percentual,
-          comissao_total: calculo.comissaoTotal,
-          observacoes: validated.observacoes,
-        })
+        .update(updatePayload)
         .eq('id', id);
 
       if (!isAdmin && !acordosCompartilhados) {

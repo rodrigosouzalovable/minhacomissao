@@ -1,38 +1,27 @@
-## Problema
+## Objetivo
+Permitir que o login admin edite qualquer acordo — inclusive os marcados como **Quebrado** — podendo mexer em valores, número de parcelas, adicionar e remover parcelas. Usuários comuns continuam com as regras atuais.
 
-Na importação de pagamentos, o cliente **Luiz Cosmo do Nascimento Filho** (parcela 1, já paga em 20/07/2026) aparece como **"Pronto para marcar"** contra a parcela 2 (`1 (sist. 2)` na coluna Parcela do preview), quando deveria aparecer como **"Já pago"**.
+## Mudanças
 
-## Causa (confirmada em `src/components/ImportarPagosDialog.tsx`)
+### 1. `src/pages/AcordoDetalhe.tsx`
+- Exibir o botão **Editar** também quando `acordo.status === 'quebrado'` (ou `cancelado`), **desde que o usuário seja admin**. Hoje a linha 573 só mostra Editar quando `status === 'ativo'`.
+- Ao clicar em Editar num acordo quebrado, o admin será levado para `/acordos/:id/editar` normalmente.
+- Manter para admin os botões de excluir parcela individual (já existem) — nada muda ali.
 
-Na função `avaliarLinhas` (linhas 130-165), a ordem atual é:
+### 2. `src/pages/EditarAcordo.tsx`
+- A carga do acordo já funciona para qualquer status (não filtra por status). Nenhuma mudança na leitura.
+- No `handleSubmit`, quando o usuário for admin:
+  - Se o acordo estava `quebrado` (ou `cancelado`), atualizar `status = 'ativo'` junto com os demais campos, para reativar o acordo editado.
+  - Continuar regenerando as parcelas pendentes preservando as pagas (fluxo atual do admin já faz isso, inclusive quando aumenta/diminui o número de parcelas).
+- Remover o aviso "campos financeiros bloqueados" quando o usuário é admin (já está condicionado a `!isAdmin`, apenas confirmar).
+- Nada muda para não-admin (regras atuais permanecem).
 
-1. Procura parcela **pendente** com o número informado na planilha (parcela 1) → não acha (já está paga).
-2. **Fallback**: pega a primeira parcela pendente qualquer → acha parcela 2 → marca como "Pronto para marcar".
-3. Só verifica `ja_pago` se o fallback também falhar.
+### 3. Backend / RLS
+- Verificar rapidamente que as policies de `acordos` e `pagamentos` já permitem `UPDATE`/`DELETE`/`INSERT` para admin em qualquer registro (via `has_role`). Se alguma policy restringir por `status`, ajustar via migration para admin. Não vou criar migration se as policies atuais já cobrem admin globalmente — apenas confirmarei via leitura do schema antes de codar.
 
-Ou seja: quando o número da parcela da planilha bate com uma parcela **já paga** do sistema, o sistema ignora esse fato e casa a linha com outra parcela pendente qualquer.
+## Fora do escopo
+- Nenhuma alteração para usuários não-admin.
+- Nenhuma alteração visual/comportamental em acordos `ativos` ou `concluídos`.
 
-## Correção
-
-Reordenar a lógica em `avaliarLinhas` para que, **quando `linha.parcela` é informado**, a verificação de "já pago" venha ANTES do fallback para "próxima pendente".
-
-Novo fluxo, para cada acordo do CPF:
-
-1. Se `linha.parcela` foi informado:
-   - Se a parcela exata está `pago` → retorna imediatamente `ja_pago`.
-   - Se a parcela exata está `pendente` e o valor bate → retorna `pronto` (ou `valor_divergente`).
-2. Só se `linha.parcela` não foi informado (ou o acordo não tem essa parcela), cair no fallback atual de "primeira pendente disponível em ordem".
-3. Se nenhum acordo tem candidato aplicável → mantém `sem_parcela_pendente`.
-
-## Detalhes técnicos
-
-- Arquivo único alterado: `src/components/ImportarPagosDialog.tsx`.
-- Nenhuma mudança de schema, RLS ou edge function.
-- Preserva o comportamento de `usados` para não reservar a mesma parcela duas vezes.
-- Mantém tolerância de R$ 0,01 e opção "marcar mesmo com valor divergente".
-
-## Validação
-
-- Reimportar a mesma planilha e conferir que Luiz Cosmo passa a mostrar **"Já pago"** e é removido da contagem "Pronto para marcar".
-- Os demais casos (Jardel Sena, Leide Daiane, etc., que estão pendentes) continuam como "Pronto para marcar".
-- Linhas sem número de parcela na planilha continuam usando a primeira pendente disponível.
+## Confirmação
+Ao editar um acordo **quebrado**, ele volta para status **ativo** automaticamente após salvar. Está ok? Se preferir manter o status "quebrado" mesmo depois da edição, me avise antes de eu implementar.
