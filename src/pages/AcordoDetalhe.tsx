@@ -991,7 +991,54 @@ export default function AcordoDetalhe() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="font-medium">{formatarMoeda(pagamento.valor_parcela)}</p>
+                      {isAdmin && editandoValorParcela === pagamento.id ? (
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-sm text-muted-foreground">R$</span>
+                          <Input
+                            type="text"
+                            value={novoValorParcela}
+                            onChange={(e) => setNovoValorParcela(e.target.value)}
+                            className="h-7 w-24 text-sm text-right"
+                            placeholder="0,00"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-secondary hover:text-secondary"
+                            onClick={() => {
+                              const valor = parseFloat(novoValorParcela.replace(/\./g, '').replace(',', '.'));
+                              atualizarValorParcela(pagamento.id, valor);
+                            }}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => { setEditandoValorParcela(null); setNovoValorParcela(''); }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="font-medium flex items-center gap-1 justify-end">
+                          {formatarMoeda(pagamento.valor_parcela)}
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={() => {
+                                setEditandoValorParcela(pagamento.id);
+                                setNovoValorParcela(String(pagamento.valor_parcela).replace('.', ','));
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </p>
+                      )}
                       {isAdmin && (editandoComissao === pagamento.id ? (
                         <div className="flex items-center gap-1 justify-end">
                           <span className="text-sm text-muted-foreground">R$</span>
