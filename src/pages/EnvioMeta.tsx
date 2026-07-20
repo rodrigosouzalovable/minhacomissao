@@ -161,6 +161,7 @@ export default function EnvioMeta() {
   const [nomeCampanha, setNomeCampanha] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
+  const [modoRajada, setModoRajada] = useState<boolean>(false);
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
@@ -600,10 +601,21 @@ export default function EnvioMeta() {
       }
       setValidando(false);
     } else {
+      const bloco = modoRajada
+        ? `⚡ MODO RAJADA — envio paralelo IMEDIATO, sem delay entre mensagens.\n⚠️ ALTO RISCO DE BAN dos números usados.\n\n`
+        : "";
+      const delayLinha = modoRajada ? "sem delay (rajada paralela)" : `delay ${lo}-${hi}s`;
       if (!confirm(
-        `Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?` +
+        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
+    
+    }
+
+    // Gate universal para modo rajada — vale para todos os caminhos acima
+    if (modoRajada) {
+      const digitou = prompt(`⚡ RAJADA — confirma disparo IMEDIATO paralelo sem delay?\nDigite RAJADA (maiúsculas) para prosseguir:`);
+      if ((digitou || "").trim() !== "RAJADA") { toast.error("Confirmação cancelada"); return; }
     }
 
 
@@ -647,6 +659,7 @@ export default function EnvioMeta() {
       erroValidacao: erroVal,
       templateIdByInstance,
       nomeCampanha: nomeCampanha.trim() || undefined,
+      modoRajada,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -1270,14 +1283,32 @@ export default function EnvioMeta() {
           <CardDescription>Delay aleatório entre envios (segundos). Recomendado 30-90s para volume seguro.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 max-w-sm">
+          <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={modoRajada}
+                onChange={(e) => setModoRajada(e.target.checked)}
+              />
+              <div className="text-sm">
+                <div className="font-semibold text-red-700 dark:text-red-300">⚡ Modo Rajada — disparar TUDO ao mesmo tempo (sem delay)</div>
+                <div className="text-xs text-red-700/80 dark:text-red-300/80">
+                  Envio paralelo IMEDIATO em cada instância marcada. Ignora delay e filtro de qualidade RED/YELLOW.
+                  Use somente com números descartáveis: risco alto de bloqueio permanente pela Meta.
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div className={"grid grid-cols-2 gap-3 max-w-sm " + (modoRajada ? "opacity-50" : "")}>
             <div>
               <Label>Mín. (s)</Label>
-              <Input type="number" min={1} value={minSec} onChange={(e) => setMinSec(e.target.value)} />
+              <Input type="number" min={1} value={minSec} onChange={(e) => setMinSec(e.target.value)} disabled={modoRajada} />
             </div>
             <div>
               <Label>Máx. (s)</Label>
-              <Input type="number" min={1} value={maxSec} onChange={(e) => setMaxSec(e.target.value)} />
+              <Input type="number" min={1} value={maxSec} onChange={(e) => setMaxSec(e.target.value)} disabled={modoRajada} />
             </div>
           </div>
 

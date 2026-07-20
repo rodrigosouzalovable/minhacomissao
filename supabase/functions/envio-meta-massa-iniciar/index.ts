@@ -43,8 +43,9 @@ Deno.serve(async (req) => {
     const template = body?.template as { id: string; nome_template: string } | undefined;
     const instanciaIds: string[] = Array.isArray(body?.instanciaIds) ? body.instanciaIds : [];
     const clientes: Cliente[] = Array.isArray(body?.clientes) ? body.clientes : [];
-    const minSec = Math.max(1, Number(body?.minSec ?? 30));
-    const maxSec = Math.max(minSec, Number(body?.maxSec ?? 90));
+    const modoRajada: boolean = body?.modoRajada === true;
+    const minSec = modoRajada ? 0 : Math.max(1, Number(body?.minSec ?? 30));
+    const maxSec = modoRajada ? 0 : Math.max(minSec, Number(body?.maxSec ?? 90));
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
 
@@ -65,26 +66,30 @@ Deno.serve(async (req) => {
     }
 
     // Filtro server-side: remove instâncias com qualidade RED/YELLOW
-    const { data: instancesRows } = await supabase
-      .from('meta_whatsapp_instances')
-      .select('id, nome, saude_quality')
-      .in('id', instanciaIds);
-    const badIds = new Set(
-      (instancesRows || [])
-        .filter((r: any) => {
-          const q = String(r.saude_quality || '').toUpperCase();
-          return q === 'RED' || q === 'YELLOW';
-        })
-        .map((r: any) => r.id),
-    );
-    const instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
-    if (instanciaIdsFiltradas.length === 0) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
-      }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // (desligado no modo rajada — usuário aceita o risco)
+    let instanciaIdsFiltradas = instanciaIds;
+    if (!modoRajada) {
+      const { data: instancesRows } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, saude_quality')
+        .in('id', instanciaIds);
+      const badIds = new Set(
+        (instancesRows || [])
+          .filter((r: any) => {
+            const q = String(r.saude_quality || '').toUpperCase();
+            return q === 'RED' || q === 'YELLOW';
+          })
+          .map((r: any) => r.id),
+      );
+      instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
+      if (instanciaIdsFiltradas.length === 0) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
+        }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
@@ -115,6 +120,16 @@ Deno.serve(async (req) => {
 
 
 
+    // Nomes das instâncias (para preencher no item quando modo rajada)
+    const { data: instNamesRows } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, nome, display_phone')
+      .in('id', instanciaIdsFiltradas);
+    const nomeById = new Map<string, string>();
+    for (const r of (instNamesRows || []) as any[]) {
+      nomeById.set(r.id, r.nome || r.display_phone || r.id);
+    }
+
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job')
       .insert({
@@ -129,31 +144,57 @@ Deno.serve(async (req) => {
         total: clientes.length,
         proximo_em: new Date().toISOString(),
         nome_campanha: nomeCampanha,
+        modo_rajada: modoRajada,
       })
       .select('id')
       .single();
     if (jobErr) throw jobErr;
 
-    // Insere itens em lotes de 500 para não estourar payload
+    // Insere itens em lotes de 500 para não estourar payload.
+    // Em modo rajada: pré-atribui instância em round-robin para permitir workers paralelos.
     const CHUNK = 500;
     for (let i = 0; i < clientes.length; i += CHUNK) {
-      const slice = clientes.slice(i, i + CHUNK).map((c, idx) => ({
-        job_id: job.id,
-        ordem: i + idx,
-        telefone: c.telefone,
-        nome: c.nome ?? null,
-        cpf: c.cpf ?? null,
-        atraso: c.atraso ?? null,
-        saldo: c.saldo ?? null,
-        vars: c.vars && Object.keys(c.vars).length > 0 ? c.vars : {},
-        status: 'pendente',
-      }));
+      const slice = clientes.slice(i, i + CHUNK).map((c, idx) => {
+        const globalIdx = i + idx;
+        const instId = modoRajada
+          ? instanciaIdsFiltradas[globalIdx % instanciaIdsFiltradas.length]
+          : null;
+        return {
+          job_id: job.id,
+          ordem: globalIdx,
+          telefone: c.telefone,
+          nome: c.nome ?? null,
+          cpf: c.cpf ?? null,
+          atraso: c.atraso ?? null,
+          saldo: c.saldo ?? null,
+          vars: c.vars && Object.keys(c.vars).length > 0 ? c.vars : {},
+          status: 'pendente',
+          instancia_id: instId,
+          instancia_nome: instId ? (nomeById.get(instId) ?? null) : null,
+        };
+      });
       const { error } = await supabase.from('envio_meta_job_item').insert(slice);
       if (error) throw error;
     }
 
-    // Executa somente a primeira tentativa agora. Se não houver instância disponível,
-    // o job encerra com motivo real em vez de ficar contando 60s sem enviar nada.
+    if (modoRajada) {
+      // Dispara um worker paralelo POR INSTÂNCIA — cada worker envia em rajada.
+      for (const instId of instanciaIdsFiltradas) {
+        fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ job_id: job.id, instancia_id: instId }),
+        }).catch(() => {});
+      }
+      return new Response(JSON.stringify({ success: true, job_id: job.id, modo: 'rajada' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Modo padrão (anti-ban serial): executa o tick agora e depois em background.
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -169,7 +210,6 @@ Deno.serve(async (req) => {
       clearTimeout(timer);
       if (!firstTick.ok) throw new Error('primeiro tick falhou');
     } catch {
-      // Se abortou/timeout, dispara novamente fire-and-forget para tentar a primeira execução.
       fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
         method: 'POST',
         headers: {
@@ -180,7 +220,6 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
 
-    // Continua o loop em background apenas se o primeiro envio realmente avançou.
     fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
       method: 'POST',
       headers: {

@@ -56,6 +56,7 @@ export type IniciarParams = {
   erroValidacao?: string[];
   templateIdByInstance?: Record<string, string>;
   nomeCampanha?: string;
+  modoRajada?: boolean;
   onAfterEnvio?: () => void;
 };
 
@@ -411,6 +412,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           maxSec: p.maxSec,
           templateIdByInstance: p.templateIdByInstance ?? {},
           nomeCampanha: p.nomeCampanha ?? null,
+          modoRajada: p.modoRajada === true,
         },
       });
       if (error) throw error;

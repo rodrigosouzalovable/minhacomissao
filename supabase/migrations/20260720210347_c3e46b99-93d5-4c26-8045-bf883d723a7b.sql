@@ -1,0 +1,1 @@
+ALTER TABLE public.envio_meta_job ADD COLUMN IF NOT EXISTS modo_rajada boolean NOT NULL DEFAULT false;
