@@ -64,11 +64,19 @@ export function ImportarPagosDialog({ onImported }: { onImported?: () => void })
     const cpfsUnicos = Array.from(new Set(base.map((l) => l.cpf)));
     if (cpfsUnicos.length === 0) return [];
 
+    const formatCpf = (d: string) =>
+      d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
+    // Acordos podem armazenar CPF como só-dígitos OU formatado (XXX.XXX.XXX-XX).
+    // Enviamos ambas as variantes no filtro IN e normalizamos no map.
+    const variantesCpf = Array.from(
+      new Set(cpfsUnicos.flatMap((d) => [d, formatCpf(d)])),
+    );
+
     // Buscar acordos ativos/quebrados desses CPFs (em lotes)
     const acordosPorCpf = new Map<string, Array<{ id: string; criado_em: string; parcelas: number; status: string }>>();
     const CHUNK = 200;
-    for (let i = 0; i < cpfsUnicos.length; i += CHUNK) {
-      const lote = cpfsUnicos.slice(i, i + CHUNK);
+    for (let i = 0; i < variantesCpf.length; i += CHUNK) {
+      const lote = variantesCpf.slice(i, i + CHUNK);
       const { data, error } = await supabase
         .from('acordos')
         .select('id, cliente_cpf, criado_em, parcelas, status')
