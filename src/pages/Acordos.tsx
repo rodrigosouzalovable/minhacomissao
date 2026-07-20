@@ -1254,38 +1254,44 @@ export default function Acordos() {
               )}
             </div>
 
-            {/* Filtro: Data de Criação */}
+            {/* Filtro: Data de Criação (intervalo) */}
             <div className="flex items-center gap-1">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
-                      "w-full sm:w-[210px] justify-start text-left font-normal",
-                      !filtroDataCriacao && "text-muted-foreground"
+                      "w-full sm:w-[280px] justify-start text-left font-normal",
+                      !filtroDataCriacao?.from && !filtroDataCriacao?.to && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filtroDataCriacao ? `Criação: ${format(filtroDataCriacao, "dd/MM/yyyy")}` : "Filtrar por criação"}
+                    {filtroDataCriacao?.from && filtroDataCriacao?.to
+                      ? `Criação: ${format(filtroDataCriacao.from, "dd/MM/yyyy")} → ${format(filtroDataCriacao.to, "dd/MM/yyyy")}`
+                      : filtroDataCriacao?.from
+                        ? `Criação: ${format(filtroDataCriacao.from, "dd/MM/yyyy")} →`
+                        : "Filtrar por criação"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
-                    mode="single"
-                    selected={filtroDataCriacao}
-                    onSelect={setFiltroDataCriacao}
+                    mode="range"
+                    selected={filtroDataCriacao as any}
+                    onSelect={(range: any) => setFiltroDataCriacao(range ? { from: range.from, to: range.to } : undefined)}
                     locale={ptBR}
+                    numberOfMonths={2}
                     initialFocus
                     className="p-3 pointer-events-auto"
                   />
                 </PopoverContent>
               </Popover>
-              {filtroDataCriacao && (
+              {(filtroDataCriacao?.from || filtroDataCriacao?.to) && (
                 <Button variant="ghost" size="icon" onClick={() => setFiltroDataCriacao(undefined)} title="Limpar filtro de criação">
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
+
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full sm:w-[170px]">
