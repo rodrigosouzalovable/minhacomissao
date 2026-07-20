@@ -15,7 +15,8 @@ type StatusLinha =
   | 'valor_divergente'
   | 'sem_acordo'
   | 'sem_parcela_pendente'
-  | 'ja_pago';
+  | 'ja_pago'
+  | 'erro_data';
 
 interface LinhaAvaliada extends LinhaPagamentoImportada {
   status: StatusLinha;
@@ -35,6 +36,7 @@ const statusLabel: Record<StatusLinha, string> = {
   sem_acordo: 'Sem acordo',
   sem_parcela_pendente: 'Sem parcela pendente',
   ja_pago: 'Já pago',
+  erro_data: 'Erro na Data',
 };
 
 const statusVariant: Record<StatusLinha, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -43,7 +45,13 @@ const statusVariant: Record<StatusLinha, 'default' | 'secondary' | 'destructive'
   sem_acordo: 'destructive',
   sem_parcela_pendente: 'outline',
   ja_pago: 'outline',
+  erro_data: 'destructive',
 };
+
+function mesAnoDe(dataIso: string): string {
+  // dataIso esperado no formato YYYY-MM-DD
+  return (dataIso || '').slice(0, 7);
+}
 
 export function ImportarPagosDialog({ onImported }: { onImported?: () => void }) {
   const { toast } = useToast();
